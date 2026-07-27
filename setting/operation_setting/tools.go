@@ -1,10 +1,14 @@
 package operation_setting
 
 import (
+	"encoding/json"
+	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync/atomic"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
@@ -18,6 +22,8 @@ import (
 //
 // Lookup order: longest prefix match → default → hardcoded fallback → 0
 // ---------------------------------------------------------------------------
+
+const ToolPriceOptionKey = "tool_price_setting.prices"
 
 var defaultToolPrices = map[string]float64{
 	"web_search":         10.0, // OpenAI web search (all models) / Claude web search
@@ -142,6 +148,45 @@ func GetToolPriceForModel(toolName, modelName string) float64 {
 // GetToolPrice is a convenience wrapper when no model name is needed.
 func GetToolPrice(toolName string) float64 {
 	return GetToolPriceForModel(toolName, "")
+}
+
+func ValidateToolPricesJSON(value string) error {
+	raw := json.RawMessage(strings.TrimSpace(value))
+	if common.GetJsonType(raw) != "object" {
+		return fmt.Errorf("工具价格必须是 JSON 对象")
+	}
+	var prices map[string]json.RawMessage
+	if err := common.Unmarshal(raw, &prices); err != nil {
+		return fmt.Errorf("解析工具价格失败: %w", err)
+	}
+	for name, rawPrice := range prices {
+		if common.GetJsonType(rawPrice) != "number" {
+			return fmt.Errorf("工具价格 %q 必须是非负数字", name)
+		}
+		var price float64
+		if err := common.Unmarshal(rawPrice, &price); err != nil {
+			return fmt.Errorf("解析工具价格 %q 失败: %w", name, err)
+		}
+		if price < 0 || math.IsNaN(price) || math.IsInf(price, 0) {
+			return fmt.Errorf("工具价格 %q 必须是有限的非负数字", name)
+		}
+	}
+	return nil
+}
+
+// SetToolPriceForTest injects a tool price and rebuilds the lookup index. Tests only.
+func SetToolPriceForTest(name string, price float64) {
+	if toolPriceSetting.Prices == nil {
+		toolPriceSetting.Prices = make(map[string]float64)
+	}
+	toolPriceSetting.Prices[name] = price
+	RebuildToolPriceIndex()
+}
+
+// DeleteToolPriceForTest removes an injected tool price and rebuilds the index. Tests only.
+func DeleteToolPriceForTest(name string) {
+	delete(toolPriceSetting.Prices, name)
+	RebuildToolPriceIndex()
 }
 
 // ---------------------------------------------------------------------------

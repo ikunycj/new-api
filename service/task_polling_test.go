@@ -11,9 +11,10 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
+	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,44 @@ type taskPollingFetchAdaptor struct {
 	blockOnce    sync.Once
 }
 
+type sunoFailurePollingAdaptor struct {
+	failReason string
+}
+
+func (a *sunoFailurePollingAdaptor) Init(_ *relaycommon.RelayInfo) {}
+
+func (a *sunoFailurePollingAdaptor) FetchTask(_ string, _ string, body map[string]any, _ string) (*http.Response, error) {
+	taskIDs, _ := body["ids"].([]string)
+	items := make([]taskdto.SunoDataResponse, 0, len(taskIDs))
+	for _, taskID := range taskIDs {
+		items = append(items, taskdto.SunoDataResponse{
+			TaskID:     taskID,
+			Status:     string(model.TaskStatusFailure),
+			FailReason: a.failReason,
+			FinishTime: time.Now().Unix(),
+		})
+	}
+
+	responseBody, err := common.Marshal(taskdto.TaskResponse[[]taskdto.SunoDataResponse]{
+		Code: taskdto.TaskSuccessCode,
+		Data: items,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}, nil
+}
+
+func (a *sunoFailurePollingAdaptor) ParseTaskResult([]byte) (*relaycommon.TaskInfo, error) {
+	return nil, nil
+}
+
+func (a *sunoFailurePollingAdaptor) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInfo) int {
+	return 0
+}
 func (a *taskPollingFetchAdaptor) Init(_ *relaycommon.RelayInfo) {}
 
 func (a *taskPollingFetchAdaptor) FetchTask(_ string, _ string, body map[string]any, _ string) (*http.Response, error) {
@@ -52,8 +91,8 @@ func (a *taskPollingFetchAdaptor) FetchTask(_ string, _ string, body map[string]
 		}
 	}
 
-	response := dto.TaskResponse[model.Task]{
-		Code: dto.TaskSuccessCode,
+	response := taskdto.TaskResponse[model.Task]{
+		Code: taskdto.TaskSuccessCode,
 		Data: model.Task{
 			TaskID:   taskID,
 			Status:   model.TaskStatusInProgress,

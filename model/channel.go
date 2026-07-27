@@ -12,9 +12,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -1251,6 +1251,11 @@ func (channel *Channel) ValidateSettings() error {
 	if channelOtherSettings.AdvancedCustom != nil {
 		if err := channelOtherSettings.AdvancedCustom.Validate(); err != nil {
 			return err
+		}
+		if channelOtherSettings.UpstreamModelUpdateCheckEnabled {
+			if _, ok := channelOtherSettings.AdvancedCustom.ModelListRoute(); !ok {
+				return fmt.Errorf("advanced_custom requires a /v1/models route when upstream model update checks are enabled")
+			}
 		}
 	}
 	return nil
