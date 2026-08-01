@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -134,6 +135,20 @@ func TestResolveChannelTestUserIDUsesRequestUser(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 2, userID)
+}
+
+func TestNormalizeChannelTestEndpointInfersImageGeneration(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+
+	require.Equal(t, string(constant.EndpointTypeImageGeneration), normalizeChannelTestEndpoint(channel, "gpt-image-2", ""))
+	require.Equal(t, "", normalizeChannelTestEndpoint(channel, "gpt-4o", ""))
+}
+
+func TestNormalizeChannelTestEndpointPreservesExplicitAndSpecialEndpoints(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeOpenAI}
+
+	require.Equal(t, string(constant.EndpointTypeOpenAI), normalizeChannelTestEndpoint(channel, "gpt-image-2", string(constant.EndpointTypeOpenAI)))
+	require.Equal(t, string(constant.EndpointTypeOpenAIResponse), normalizeChannelTestEndpoint(&model.Channel{Type: constant.ChannelTypeCodex}, "gpt-5-codex", ""))
 }
 
 func TestSelectChannelsForAutomaticTestPassiveRecoveryOnlyUsesAutoDisabled(t *testing.T) {
