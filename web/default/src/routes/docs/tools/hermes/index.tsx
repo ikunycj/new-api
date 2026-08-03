@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsHermes } from '@/features/docs/hermes-guide'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/tools/hermes/')({
-  component: DocsHermes,
+  component: () => <DocsPage route='/docs/tools/hermes' />,
 })

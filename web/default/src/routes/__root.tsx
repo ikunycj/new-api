@@ -16,28 +16,52 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type QueryClient } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import type { QueryClient } from '@tanstack/react-query'
 import {
   createRootRouteWithContext,
   Outlet,
   redirect,
 } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
-import { NavigationProgress } from '@/components/navigation-progress'
-import { Toaster } from '@/components/ui/sonner'
 import { ThemeCustomizationProvider } from '@/context/theme-customization-provider'
 import { saveAffiliateCode } from '@/features/auth/lib/storage'
 import { GeneralError } from '@/features/errors/general-error'
 import { NotFoundError } from '@/features/errors/not-found-error'
 import { getSetupStatus } from '@/features/setup/api'
+import { useHydrated } from '@/hooks/use-hydrated'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { ensureFullLocale } from '@/i18n/config'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
+
+const NavigationProgress = lazy(() =>
+  import('@/components/navigation-progress').then((module) => ({
+    default: module.NavigationProgress,
+  }))
+)
+const Toaster = lazy(() =>
+  import('@/components/ui/sonner').then((module) => ({
+    default: module.Toaster,
+  }))
+)
+const ReactQueryDevtools = lazy(() =>
+  import('@tanstack/react-query-devtools').then((module) => ({
+    default: module.ReactQueryDevtools,
+  }))
+)
+const TanStackRouterDevtools = lazy(() =>
+  import('@tanstack/react-router-devtools').then((module) => ({
+    default: module.TanStackRouterDevtools,
+  }))
+)
 
 function RootComponent() {
-  // Load system configuration (logo, system name, etc.) from backend
-  useSystemConfig({ autoLoad: true })
+  const hydrated = useHydrated()
+  const [enhancementsReady, setEnhancementsReady] = useState(false)
+  // One shared React Query request owns status refresh and system config sync.
+  useStatus()
+  useSystemConfig()
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()
@@ -46,16 +70,53 @@ function RootComponent() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!hydrated) return
+
+    const enableEnhancements = () => setEnhancementsReady(true)
+    const timeoutId = window.setTimeout(enableEnhancements, 3000)
+    window.addEventListener('pointerdown', enableEnhancements, {
+      once: true,
+      passive: true,
+    })
+    window.addEventListener('keydown', enableEnhancements, { once: true })
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.removeEventListener('pointerdown', enableEnhancements)
+      window.removeEventListener('keydown', enableEnhancements)
+    }
+  }, [hydrated])
+
   return (
     <ThemeCustomizationProvider>
-      <NavigationProgress />
-      <Outlet />
-      <Toaster closeButton duration={5000} position='top-center' richColors />
-      {import.meta.env.MODE === 'development' && (
-        <>
+      {enhancementsReady && (
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
+      )}
+      {import.meta.env.SSR ? (
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
+      ) : (
+        <Outlet />
+      )}
+      {enhancementsReady && (
+        <Suspense fallback={null}>
+          <Toaster
+            closeButton
+            duration={5000}
+            position='top-center'
+            richColors
+          />
+        </Suspense>
+      )}
+      {enhancementsReady && import.meta.env.MODE === 'development' && (
+        <Suspense fallback={null}>
           <ReactQueryDevtools buttonPosition='bottom-left' />
           <TanStackRouterDevtools position='bottom-right' />
-        </>
+        </Suspense>
       )}
     </ThemeCustomizationProvider>
   )
@@ -66,6 +127,8 @@ function RootComponent() {
 const SETUP_CHECKED_KEY = 'setup_status_checked'
 
 function getSetupStatusFromCache(): boolean {
+  if (getPublicBootstrap()?.setup) return true
+
   try {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem(SETUP_CHECKED_KEY) === 'true'
@@ -98,7 +161,14 @@ export const Route = createRootRouteWithContext<{
 }>()({
   // 应用初始化与路由解析前统一校验会话
   beforeLoad: async ({ location }) => {
+    if (typeof window === 'undefined') return
+
     const pathname = location?.pathname || ''
+    const isPublicRoute =
+      pathname === '/' || pathname === '/docs' || pathname.startsWith('/docs/')
+    if (!isPublicRoute) {
+      await ensureFullLocale()
+    }
     const needsSetupCheck =
       !setupStatusChecked && !pathname.startsWith('/setup')
 

@@ -18,33 +18,42 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
 
 import { isHttpUrl } from '@/lib/content-format'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
+import { showErrorToast } from '@/lib/toast'
 
 import { getHomePageContent } from '../api'
 import type { HomePageContentResult } from '../types'
 
 const STORAGE_KEY = 'home_page_content'
 
+function getCachedContent(): string {
+  const bootstrapContent = getPublicBootstrap()?.home_page_content
+  if (typeof bootstrapContent === 'string') return bootstrapContent
+
+  try {
+    return localStorage.getItem(STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
 /**
  * Hook to load and manage custom home page content
  * Supports both Markdown/HTML content and iframe URLs
  */
 export function useHomePageContent(): HomePageContentResult {
-  const [content, setContent] = useState<string>('')
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [content, setContent] = useState<string>(getCachedContent)
+  const bootstrapLoaded =
+    getPublicBootstrap()?.home_page_content_loaded === true
 
   useEffect(() => {
+    if (bootstrapLoaded) return
+
     let mounted = true
 
     const loadContent = async () => {
-      // Load from localStorage first for immediate display
-      const cached = localStorage.getItem(STORAGE_KEY)
-      if (cached && mounted) {
-        setContent(cached)
-      }
-
       try {
         const response = await getHomePageContent()
         const { success, data } = response
@@ -63,11 +72,7 @@ export function useHomePageContent(): HomePageContentResult {
         if (!mounted) return
         // eslint-disable-next-line no-console
         console.error('Failed to load home page content:', error)
-        toast.error(i18next.t('Failed to load home page content'))
-      } finally {
-        if (mounted) {
-          setIsLoaded(true)
-        }
+        showErrorToast(i18next.t('Failed to load home page content'))
       }
     }
 
@@ -76,9 +81,9 @@ export function useHomePageContent(): HomePageContentResult {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [bootstrapLoaded])
 
   const isUrl = isHttpUrl(content)
 
-  return { content, isLoaded, isUrl }
+  return { content, isLoaded: true, isUrl }
 }

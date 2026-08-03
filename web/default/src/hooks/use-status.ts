@@ -17,15 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 
 import type { SystemStatus } from '@/features/auth/types'
 import { getStatus } from '@/lib/api'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { useHydrated } from './use-hydrated'
 import { mapStatusDataToConfig } from './use-system-config'
 
 // Get initial cache from localStorage
 function getInitialStatus(): SystemStatus | undefined {
+  const bootstrapStatus = getPublicBootstrap()?.status
+  if (bootstrapStatus) return bootstrapStatus
+
   try {
     if (typeof window !== 'undefined') {
       const saved = window.localStorage.getItem('status')
@@ -38,6 +44,10 @@ function getInitialStatus(): SystemStatus | undefined {
 }
 
 export function useStatus() {
+  const hydrated = useHydrated()
+  const hasBootstrapStatus = !!getPublicBootstrap()?.status
+  const [networkEnabled, setNetworkEnabled] = useState(!hasBootstrapStatus)
+  const setLoading = useSystemConfigStore((state) => state.setLoading)
   const { data, isLoading, error } = useQuery({
     queryKey: ['status'],
     queryFn: async () => {
@@ -66,16 +76,46 @@ export function useStatus() {
       }
       return status as SystemStatus | null
     },
-    // Use localStorage data as initial data
-    placeholderData: getInitialStatus(),
+    // SSR/bootstrap data is authoritative for first paint. Refresh it only
+    // after the page is interactive so public APIs never compete with LCP.
+    initialData: getInitialStatus(),
+    initialDataUpdatedAt: 0,
+    enabled: networkEnabled,
     // Data becomes stale after 5 minutes
     staleTime: 5 * 60 * 1000,
     // Cache expires after 30 minutes
     gcTime: 30 * 60 * 1000,
   })
 
+  useEffect(() => {
+    if (!hasBootstrapStatus || networkEnabled) return
+
+    const enableNetwork = () => setNetworkEnabled(true)
+    const timeoutId = window.setTimeout(enableNetwork, 5000)
+    window.addEventListener('pointerdown', enableNetwork, {
+      once: true,
+      passive: true,
+    })
+    window.addEventListener('keydown', enableNetwork, { once: true })
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.removeEventListener('pointerdown', enableNetwork)
+      window.removeEventListener('keydown', enableNetwork)
+    }
+  }, [hasBootstrapStatus, networkEnabled])
+
+  useEffect(() => {
+    setLoading(isLoading)
+  }, [isLoading, setLoading])
+
+  let status = data ?? null
+  if (!hydrated && status) {
+    status = { ...status, HeaderNavModules: '' } as SystemStatus
+  }
+
   return {
-    status: data ?? null,
+    status,
     loading: isLoading,
     error,
   }

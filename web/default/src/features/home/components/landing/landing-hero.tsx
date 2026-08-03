@@ -21,10 +21,14 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import ribbonAnimation from '@/assets/home/alltokenapi-smooth-ribbon-loop-v3.webp'
+import ribbonPoster from '@/assets/home/alltokenapi-smooth-ribbon-poster.webp'
 import { Button } from '@/components/ui/button'
 
 import { ProviderMarquee } from './provider-marquee'
+
+const ribbonSource = import.meta.env.SSR
+  ? '__NEW_API_RIBBON_POSTER__'
+  : ribbonPoster
 
 interface LandingHeroProps {
   isAuthenticated: boolean
@@ -39,11 +43,12 @@ function HeroRibbonBackdrop() {
     >
       <div className='absolute inset-0 overflow-hidden'>
         <img
-          src={ribbonAnimation}
+          src={ribbonSource}
           alt=''
           width={1200}
           height={646}
           decoding='async'
+          fetchPriority='high'
           className='landing-hero-ribbon-source absolute top-[-12%] left-1/2 max-w-none -translate-x-1/2'
         />
       </div>
@@ -70,7 +75,7 @@ export function LandingHero(props: LandingHeroProps) {
     : t('Docs')
 
   return (
-    <section className='border-border/70 relative grid min-h-svh min-w-0 grid-rows-[31svh_auto_1fr] overflow-hidden border-b sm:grid-rows-[27svh_auto_1fr]'>
+    <section className='border-border/70 relative grid min-h-[calc(100svh-7rem)] min-w-0 grid-rows-[29svh_auto_1fr] overflow-hidden border-b sm:grid-rows-[25svh_auto_1fr]'>
       <HeroRibbonBackdrop />
 
       <div className='relative row-start-2 mx-auto flex w-full max-w-6xl min-w-0 flex-col items-center px-4 text-center sm:px-6'>

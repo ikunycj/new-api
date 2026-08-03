@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsOpenClaw } from '@/features/docs/openclaw-guide'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/tools/openclaw/')({
-  component: DocsOpenClaw,
+  component: () => <DocsPage route='/docs/tools/openclaw' />,
 })

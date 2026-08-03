@@ -17,19 +17,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { Bell } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { NotificationPopover } from '@/components/notification-popover'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -38,6 +38,20 @@ import type { TopNavLink } from '../types'
 import { HeaderLogo } from './header-logo'
 
 const AUTH_PROMPT_SECONDS = 5
+
+const Dialog = lazy(() =>
+  import('@/components/dialog').then((module) => ({ default: module.Dialog }))
+)
+const NotificationPopover = lazy(() =>
+  import('@/components/notification-popover').then((module) => ({
+    default: module.NotificationPopover,
+  }))
+)
+const ProfileDropdown = lazy(() =>
+  import('@/components/profile-dropdown').then((module) => ({
+    default: module.ProfileDropdown,
+  }))
+)
 
 type AuthPromptTarget = {
   title: string
@@ -82,18 +96,32 @@ export function PublicHeader(props: PublicHeaderProps) {
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
   const { auth } = useAuthStore()
+  const hydrated = useHydrated()
+  const systemConfig = useSystemConfig()
+  const bootstrapBrand = getPublicBootstrap()?.status
+  const initialBrand =
+    bootstrapBrand && (typeof window === 'undefined' || systemConfig.loading)
+      ? bootstrapBrand
+      : undefined
   const {
     systemName,
     logo: systemLogo,
     loading,
     logoLoaded,
-  } = useSystemConfig()
+  } = initialBrand
+    ? {
+        loading: false,
+        logo: String(initialBrand.logo || systemConfig.logo),
+        logoLoaded: true,
+        systemName: String(initialBrand.system_name || systemConfig.systemName),
+      }
+    : systemConfig
   const dynamicLinks = useTopNavLinks()
   const notifications = useNotifications()
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
-  const user = auth.user
+  const user = hydrated ? auth.user : null
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
@@ -173,6 +201,53 @@ export function PublicHeader(props: PublicHeaderProps) {
     [t]
   )
 
+  let logoContent: React.ReactNode = (
+    <HeaderLogo
+      src={systemLogo}
+      loading={loading}
+      logoLoaded={logoLoaded}
+      className='size-full rounded-lg object-contain'
+    />
+  )
+  if (customLogo) logoContent = customLogo
+  if (loading) logoContent = <Skeleton className='size-full rounded-lg' />
+
+  let authContent = (
+    <Button
+      size='sm'
+      className='h-8 rounded-lg px-3.5 text-xs font-medium'
+      render={<Link to='/sign-in' />}
+    >
+      {t('Sign in')}
+    </Button>
+  )
+  if (isAuthenticated) {
+    authContent = (
+      <Suspense fallback={<Skeleton className='size-6 rounded-full' />}>
+        <ProfileDropdown />
+      </Suspense>
+    )
+  }
+  if (loading) authContent = <Skeleton className='h-8 w-20 rounded-lg' />
+
+  const notificationButton = (
+    <Button
+      type='button'
+      variant='ghost'
+      size='icon'
+      className='relative size-9'
+      aria-label={t('Notifications')}
+      onClick={() => notifications.openPopover()}
+    >
+      <Bell className='size-[1.2rem]' />
+      {notifications.unreadCount > 0 ? (
+        <span className='bg-destructive text-destructive-foreground absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums'>
+          {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
+        </span>
+      ) : null}
+    </Button>
+  )
+
   return (
     <>
       <header className='pointer-events-none fixed inset-x-0 top-0 z-50'>
@@ -196,18 +271,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               className='group flex shrink-0 items-center gap-2.5'
             >
               <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
-                {loading ? (
-                  <Skeleton className='size-full rounded-lg' />
-                ) : customLogo ? (
-                  customLogo
-                ) : (
-                  <HeaderLogo
-                    src={systemLogo}
-                    loading={loading}
-                    logoLoaded={logoLoaded}
-                    className='size-full rounded-lg object-contain'
-                  />
-                )}
+                {logoContent}
               </div>
               <span className='text-sm font-semibold tracking-tight'>
                 {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
@@ -216,12 +280,12 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Desktop nav */}
             <div className='hidden items-center gap-0.5 sm:flex'>
-              {links.map((link, i) => {
+              {links.map((link) => {
                 const isActive = pathname === link.href
                 if (link.external) {
                   return (
                     <a
-                      key={i}
+                      key={link.href}
                       href={link.href}
                       target='_blank'
                       rel='noopener noreferrer'
@@ -239,7 +303,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                 }
                 return (
                   <Link
-                    key={i}
+                    key={link.href}
                     to={link.href}
                     disabled={link.disabled}
                     onClick={(event) => handleNavLinkClick(event, link)}
@@ -264,35 +328,30 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
-              {showNotifications && (
-                <NotificationPopover
-                  open={notifications.popoverOpen}
-                  onOpenChange={notifications.setPopoverOpen}
-                  unreadCount={notifications.unreadCount}
-                  activeTab={notifications.activeTab}
-                  onTabChange={notifications.setActiveTab}
-                  notice={notifications.notice}
-                  announcements={notifications.announcements}
-                  loading={notifications.loading}
-                />
-              )}
+              {showNotifications &&
+                (notifications.popoverOpen ? (
+                  <Suspense fallback={notificationButton}>
+                    <NotificationPopover
+                      open={notifications.popoverOpen}
+                      onOpenChange={notifications.setPopoverOpen}
+                      unreadCount={notifications.unreadCount}
+                      activeTab={notifications.activeTab}
+                      onTabChange={notifications.setActiveTab}
+                      notice={notifications.notice}
+                      announcements={notifications.announcements}
+                      loading={notifications.loading}
+                    />
+                  </Suspense>
+                ) : (
+                  notificationButton
+                ))}
 
               {showAuthButtons && (
                 <>
                   <div className='bg-border/40 mx-1 h-4 w-px' />
-                  {loading ? (
-                    <Skeleton className='h-8 w-20 rounded-lg' />
-                  ) : isAuthenticated ? (
-                    <ProfileDropdown />
-                  ) : (
-                    <Button
-                      size='sm'
-                      className='h-8 rounded-lg px-3.5 text-xs font-medium'
-                      render={<Link to='/sign-in' />}
-                    >
-                      {t('Sign in')}
-                    </Button>
-                  )}
+                  <div className='flex min-w-[4.5rem] justify-end'>
+                    {authContent}
+                  </div>
                 </>
               )}
             </div>
@@ -364,7 +423,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               if (link.external) {
                 return (
                   <a
-                    key={i}
+                    key={link.href}
                     href={link.href}
                     target='_blank'
                     rel='noopener noreferrer'
@@ -380,7 +439,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               }
               return (
                 <Link
-                  key={i}
+                  key={link.href}
                   to={link.href}
                   disabled={link.disabled}
                   onClick={(event) => handleNavLinkClick(event, link, true)}
@@ -415,34 +474,38 @@ export function PublicHeader(props: PublicHeaderProps) {
         </div>
       </div>
 
-      <Dialog
-        open={!!authPromptTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeAuthPrompt()
-          }
-        }}
-        title={t('Sign in required')}
-        description={t('Please sign in to view {{module}}.', {
-          module: authPromptTarget?.title || '',
-        })}
-        contentClassName='sm:max-w-md'
-        contentHeight='auto'
-        footer={
-          <>
-            <Button variant='outline' onClick={closeAuthPrompt}>
-              {t('Cancel')}
-            </Button>
-            <Button onClick={navigateToSignIn}>{t('Sign in now')}</Button>
-          </>
-        }
-      >
-        <div className='bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-sm'>
-          {t('Redirecting to sign in in {{seconds}} seconds.', {
-            seconds: authPromptSecondsLeft,
-          })}
-        </div>
-      </Dialog>
+      {authPromptTarget ? (
+        <Suspense fallback={null}>
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) {
+                closeAuthPrompt()
+              }
+            }}
+            title={t('Sign in required')}
+            description={t('Please sign in to view {{module}}.', {
+              module: authPromptTarget.title,
+            })}
+            contentClassName='sm:max-w-md'
+            contentHeight='auto'
+            footer={
+              <>
+                <Button variant='outline' onClick={closeAuthPrompt}>
+                  {t('Cancel')}
+                </Button>
+                <Button onClick={navigateToSignIn}>{t('Sign in now')}</Button>
+              </>
+            }
+          >
+            <div className='bg-muted/40 text-muted-foreground rounded-lg px-3 py-2 text-sm'>
+              {t('Redirecting to sign in in {{seconds}} seconds.', {
+                seconds: authPromptSecondsLeft,
+              })}
+            </div>
+          </Dialog>
+        </Suspense>
+      ) : null}
     </>
   )
 }

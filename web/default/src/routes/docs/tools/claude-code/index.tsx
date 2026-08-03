@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsClaudeCode } from '@/features/docs/claude-code-guide'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/tools/claude-code/')({
-  component: DocsClaudeCode,
+  component: () => <DocsPage route='/docs/tools/claude-code' />,
 })

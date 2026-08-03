@@ -25,21 +25,26 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { AxiosError } from 'axios'
 import i18next from 'i18next'
 import { StrictMode } from 'react'
-import ReactDOM from 'react-dom/client'
-import { toast } from 'sonner'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 
-import { getStatus } from '@/lib/api'
 import { installBuildMetadata } from '@/lib/build-metadata'
+import { installChunkLoadRecovery } from '@/lib/chunk-load-recovery'
+import { LEGACY_DEFAULT_LOGO } from '@/lib/constants'
 import { applyFaviconToDom } from '@/lib/dom-utils'
 import '@/lib/dayjs'
 import { initializeFrontendCache } from '@/lib/frontend-cache'
 import { handleServerError } from '@/lib/handle-server-error'
+import {
+  getPublicBootstrap,
+  initializePublicBootstrap,
+} from '@/lib/public-bootstrap'
+import { showErrorToast } from '@/lib/toast'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
 import { ThemeProvider } from './context/theme-provider'
-import './i18n/config'
+import i18n, { i18nReady } from './i18n/config'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
 
@@ -50,6 +55,8 @@ import './styles/index.css'
 // VChart theme is driven by our ThemeProvider (html.light/html.dark) via per-chart `theme` prop.
 initializeFrontendCache()
 installBuildMetadata()
+installChunkLoadRecovery()
+initializePublicBootstrap()
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,7 +83,7 @@ const queryClient = new QueryClient({
 
         if (error instanceof AxiosError) {
           if (error.response?.status === 304) {
-            toast.error(i18next.t('Content not modified!'))
+            showErrorToast(i18next.t('Content not modified!'))
           }
         }
       },
@@ -86,13 +93,13 @@ const queryClient = new QueryClient({
     onError: (error) => {
       if (error instanceof AxiosError) {
         if (error.response?.status === 401) {
-          toast.error(i18next.t('Session expired!'))
+          showErrorToast(i18next.t('Session expired!'))
           useAuthStore.getState().auth.reset()
           const redirect = `${router.history.location.href}`
           router.navigate({ to: '/sign-in', search: { redirect } })
         }
         if (error.response?.status === 500) {
-          toast.error(i18next.t('Internal Server Error!'))
+          showErrorToast(i18next.t('Internal Server Error!'))
           router.navigate({ to: '/500' })
         }
       }
@@ -116,7 +123,11 @@ declare module '@tanstack/react-router' {
 }
 
 // Render the app
-const rootElement = document.getElementById('root')!
+const rootElementNode = document.querySelector<HTMLElement>('#root')
+if (!rootElementNode) {
+  throw new Error('Root element not found')
+}
+const rootElement = rootElementNode
 // Set document.title and favicon from cached status, then refresh from network
 ;(function initSystemBranding() {
   try {
@@ -134,34 +145,30 @@ const rootElement = document.getElementById('root')!
       if (saved) {
         const s = JSON.parse(saved)
         if (s?.system_name) apply(s.system_name)
-        if (s?.logo) applyFaviconToDom(s.logo)
+        if (s?.logo && s.logo !== LEGACY_DEFAULT_LOGO) {
+          applyFaviconToDom(s.logo)
+        }
       }
     } catch {
       /* empty */
     }
-    // Background refresh
-    getStatus()
-      .then((s) => {
-        if (s?.system_name) {
-          apply(s.system_name as string)
-          try {
-            localStorage.setItem('status', JSON.stringify(s))
-          } catch {
-            /* empty */
-          }
-        }
-        if (s?.logo) applyFaviconToDom(s.logo as string)
-      })
-      .catch(() => {
-        /* empty */
-      })
   } catch {
     /* empty */
   }
 })()
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement)
-  root.render(
+
+async function renderApp(): Promise<void> {
+  await i18nReady
+  const bootstrapLocale = getPublicBootstrap()?.locale
+  if (bootstrapLocale && i18n.resolvedLanguage !== bootstrapLocale) {
+    await i18n.changeLanguage(bootstrapLocale)
+  }
+  initializePublicBootstrap()
+  const shouldHydrate = rootElement.dataset.prerendered === 'true'
+  if (shouldHydrate) {
+    await router.load()
+  }
+  const app = (
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
@@ -174,4 +181,13 @@ if (!rootElement.innerHTML) {
       </QueryClientProvider>
     </StrictMode>
   )
+
+  if (shouldHydrate) {
+    hydrateRoot(rootElement, app)
+    return
+  }
+
+  createRoot(rootElement).render(app)
 }
+
+void renderApp()

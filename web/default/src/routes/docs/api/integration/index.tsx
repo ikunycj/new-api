@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsApiIntegration } from '@/features/docs/ai-model-api'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/api/integration/')({
-  component: DocsApiIntegration,
+  component: () => <DocsPage route='/docs/api/integration' />,
 })

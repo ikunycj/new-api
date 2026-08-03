@@ -33,6 +33,22 @@
 
 其中前两组改动很小，却决定 SSR 后能否同时获得较快的可见时间和可交互时间。
 
+### 1.1 SSR 后的 API 边界
+
+`/` 使用 SSR 后，目标是“首屏可见内容不依赖任何 API”，不是“页面生命周期内不再请求 API”。各请求的处理如下：
+
+| 数据 | SSR/首屏处理 | hydration 后处理 |
+| --- | --- | --- |
+| setup | Go 路由直接读取进程状态，未完成时重定向 `/setup` | `/`、`/docs/*` 不再请求 setup API |
+| 站点名、Logo、服务地址、导航模块 | Go 注入小型公开 bootstrap | `status` 最多后台刷新一次，不阻塞显示 |
+| 默认/自定义首页模式 | Go 直接判断；默认首页输出 SSR，自定义首页保持 SPA | 默认首页不请求 `home_page_content` |
+| pricing/catalog | 不进入 SSR，不影响 Hero | 价格区接近视口后才请求 |
+| notice/announcements | 不进入 SSR | 浏览器空闲或用户打开通知时请求 |
+| 登录态、用户、钱包 | 不注入公开 HTML | hydration 后按现有会话更新 |
+| 文档正文 | 直达时已经包含在 SSR HTML | 写入 IndexedDB，空闲时只校验 manifest 文件名 |
+
+因此，SSR 消除的是 `HTML -> JS -> setup -> route chunk -> API -> 首次绘制` 这条阻塞链。JavaScript 体积、hydration、语言包、图标、大图、缓存错误和发布期旧 chunk 仍必须分别治理。
+
 ## 2. 线上复测基线
 
 ### 2.1 测试说明
@@ -289,23 +305,27 @@ interface HomeBootstrap {
 
 现有 DOMPurify、Markdown 处理和 iframe sandbox 保持不变。
 
-### 7.5 语言包按语言加载
+### 7.5 公共路由专用语言包与完整词典补载
 
-`i18n/config.ts` 不再静态导入七个 JSON。使用明确的 loader map：
+`i18n/config.ts` 不再静态导入七个完整 JSON，而是维护公共词典和完整词典两组 loader：
 
 ```ts
-const localeLoaders = {
+const publicLocaleLoaders = {
+  en: () => import('./public-locales/en.json'),
+  zhCN: () => import('./public-locales/zhCN.json'),
+  // 其余语言同理
+}
+
+const fullLocaleLoaders = {
   en: () => import('./locales/en.json'),
   zhCN: () => import('./locales/zh.json'),
-  zhTW: () => import('./locales/zh-TW.json'),
-  fr: () => import('./locales/fr.json'),
-  ja: () => import('./locales/ja.json'),
-  ru: () => import('./locales/ru.json'),
-  vi: () => import('./locales/vi.json'),
+  // 其余语言同理
 }
 ```
 
-只加载当前语言；需要 fallback 时再加载英文。当前七个语言文件合计约 3.50 MB 原始 / 977 KB gzip，按语言拆分可从入口移除大部分体积。
+`scripts/build-public-locales.ts` 在构建前扫描首页、文档、认证入口和公共布局源码，从完整词典的 6022 个键中生成 966 个公共键，并验证七种语言都存在对应翻译。`/` 和 `/docs*` 首次只加载当前语言的公共词典；进入其它路由前，根路由通过 `ensureFullLocale()` 补载并覆盖为当前语言的完整词典。
+
+公共词典最大约 31.5 KB gzip，中文约 26.9 KB gzip；原中文完整词典约 140.3 KB gzip。由于翻译键本身就是英文源文案，并且构建时会校验多语言键完整性，`fallbackLng` 设为 `false`，避免非英文用户首次访问时再并发下载一份英文 fallback。首页跳转 `/sign-in` 的浏览器验收已确认会补载完整中文词典，页面文案正常。
 
 SSR 语言选择顺序：
 
@@ -394,6 +414,12 @@ LandingHero 和 PublicHeader 优先改造成“纯视图 + 客户端增强”，
 
 SSR 和首次 hydration 一律按未登录状态输出稳定 CTA。hydration 完成后，如果本地认证状态有效，再通过普通 state 更新成 Dashboard CTA。不得在首次 render 中直接读取 localStorage 改变 SSR 树。
 
+客户端发现 `data-prerendered="true"` 时，必须先 `await router.load()`，等 TanStack Router 得到与当前 URL 对应的 route match 后再执行 `hydrateRoot`；否则客户端会用尚未加载的路由树核对服务端 HTML。构建时的预渲染 router 必须设置 `isServer: true`，根 `Outlet` 在服务端和客户端首次 render 中也必须保留一致的 `Suspense` 边界。
+
+登录态、运行时导航模块、`NavigationProgress` 和 `Toaster` 都属于 hydration 后增强：服务端和客户端首次 render 不输出依赖本地会话的差异内容，hydration 完成后再挂载或更新。开发环境 Devtools 不作为生产 hydration 树的一部分。
+
+路由生成器会让所有 route 文件参与客户端入口图，因此 route 顶层依赖也属于首屏预算。`beforeLoad` 所需的 section ID、默认 section 和白名单必须放在不含 JSX 的轻量配置文件中，不能从后台设置页的 `section-registry.tsx` 读取。公共首页也必须直接导入 `public-layout`，不能通过同时导出认证后台布局的 layout barrel。否则即使页面组件本身是 lazy，KaTeX、React Hook Form、Zod 和后台设置 UI 仍可能被共享 chunk 拉回首页。
+
 ### 8.3 API 时序
 
 默认首页目标时序：
@@ -413,16 +439,12 @@ hydration -> 最多一次 status 后台刷新
 
 ### 9.1 内容产物
 
-保留 `DocsShell`、导航、面包屑、目录、上一篇/下一篇和 CodeBlock 交互。只把正文从 TSX 拆为内容文件：
-
-```text
-web/default/src/content/docs/{locale}/{page-id}.md
-```
+为减少迁移范围，现阶段保留已有文档 TSX 作为构建时内容源，不先迁移 Markdown。构建脚本在 Bun 中使用现有组件和 i18n 渲染每个语言版本，提取 `DocsShell` 内部 HTML，再生成 SSR 页面和 hash payload。浏览器路由只打包通用 `DocsPage`，不再打包每篇 TSX 正文。
 
 构建时生成：
 
 ```text
-dist/ssr/docs/{locale}/{page-id}.html
+dist/prerender/{locale}/docs/{route}.html
 dist/static/docs/manifest.json
 dist/static/docs/{locale}/{page-id}.{hash}.json
 ```
@@ -431,15 +453,11 @@ payload 示例：
 
 ```json
 {
-  "pageId": "codex",
-  "title": "Codex",
-  "description": "...",
-  "toc": [],
-  "html": "<section>...</section>"
+  "html": "<div>导航、标题、正文、目录和翻页内容</div>"
 }
 ```
 
-Markdown 在构建阶段转换并过滤。复杂交互不写入任意 HTML，复制代码等交互由 DocsShell hydration 后增强。
+payload 只来自仓库内可信 TSX 和翻译文件，不接受运行时用户 HTML。复制代码、文档内 SPA 导航和移动端文档选择器由通用客户端壳通过事件委托增强。
 
 ### 9.2 文件名 hash
 
@@ -450,9 +468,9 @@ Markdown 在构建阶段转换并过滤。复杂交互不写入任意 HTML，复
 
 hash 输入包含：
 
-- Markdown 正文；
-- title、description、toc；
-- 影响最终 HTML 的转换器版本。
+- 当前语言最终渲染出的完整文档内容；
+- 标题、说明、导航、目录和代码示例；
+- 会改变 payload JSON 的构建逻辑。
 
 使用 SHA-256 前 12 或 16 个十六进制字符。浏览器只比较文件名，不下载后重新计算内容 hash，不比较更新时间和 ETag。
 
@@ -462,9 +480,9 @@ hash 输入包含：
 {
   "version": 1,
   "locales": {
-    "zh": {
-      "introduction": "introduction.12ab34cd56ef.json",
-      "codex": "codex.90ef12ab34cd.json"
+    "zhCN": {
+      "/docs": "introduction.12ab34cd56ef.json",
+      "/docs/tools/codex": "codex.90ef12ab34cd.json"
     }
   }
 }
@@ -486,9 +504,9 @@ Cache-Control: public, max-age=31536000, immutable
 
 ```ts
 interface CachedDoc {
-  key: `${locale}:${pageId}`
+  key: `${locale}:${route}`
   fileName: string
-  payload: DocsPayload
+  html: string
   savedAt: number
 }
 ```
@@ -502,8 +520,8 @@ interface CachedDoc {
 ```text
 Go 返回包含完整正文的 SSR HTML
   -> 页面立即可读
-  -> hydration 读取 SSR 标记的 fileName
-  -> 将 SSR payload 写入 IndexedDB
+  -> hydration 从现有 DOM 读取正文和 bootstrap fileName
+  -> 将正文模板写入 IndexedDB
   -> 空闲时重新验证 manifest
 ```
 
@@ -512,8 +530,9 @@ Go 返回包含完整正文的 SSR HTML
 SPA 文档导航：
 
 ```text
-读取 manifest 当前 fileName
-  -> IndexedDB 命中同名文件：立即显示
+先读取 IndexedDB 中该语言和路由的旧缓存并立即显示
+  -> 后台读取 manifest 当前 fileName
+  -> IndexedDB 命中同名文件：不下载正文
   -> fileName 不同：后台请求新 hash 文件
   -> 成功：原子替换页面和缓存
   -> 失败：保留旧文档，显示轻量重试状态
@@ -527,34 +546,29 @@ SPA 文档导航：
 
 ```text
 dist/index.html                              现有 SPA
-dist/ssr/home/{locale}.html                 首页
-dist/ssr/docs/{locale}/{page-id}.html       文档
+dist/prerender/{locale}/home.html           首页
+dist/prerender/{locale}/docs/{route}.html   文档
 dist/static/docs/manifest.json
 dist/static/docs/{locale}/{page-id}.{hash}.json
 ```
 
-建议新增：
+当前实现的核心文件：
 
 ```text
-web/default/src/ssr/home-document.tsx
-web/default/src/ssr/docs-document.tsx
-web/default/src/ssr/render-context.tsx
-web/default/src/features/docs/content-loader.ts
 web/default/src/features/docs/docs-cache.ts
-web/default/scripts/build-ssr-pages.mjs
-web/default/scripts/build-doc-content.mjs
+web/default/src/features/docs/docs-page.tsx
+web/default/src/entry-prerender.tsx
+web/default/scripts/build-prerender.ts
 ```
 
 ### 10.2 Go 返回逻辑
 
-`ThemeAssets` 增加首页和文档预渲染索引，但保留现有 Default Build FS：
+`ThemeAssets` 保持现有 `fs.FS` 接口。`SetWebRouter` 启动时从嵌入文件系统读取预渲染模板和文档 manifest，不增加生产 Node 服务，也不在每个请求中读取磁盘：
 
 ```go
 type ThemeAssets struct {
-    DefaultBuildFS   embed.FS
+    DefaultBuildFS   fs.FS
     DefaultIndexPage []byte
-    HomeIndexPages   map[string][]byte
-    DocsIndexPages   map[string][]byte
 }
 ```
 
@@ -566,7 +580,7 @@ type ThemeAssets struct {
 4. `/` 按语言返回 home HTML；
 5. `/docs/*` 按语言和 page ID 返回 docs HTML；
 6. 其它前端路由返回现有 SPA index；
-7. 不存在的文档 page ID 返回文档 404，不伪装成首页。
+7. 未纳入预渲染映射的其它应用路由继续使用 SPA fallback。
 
 Go 只替换经过 JSON 安全编码的小型公开 bootstrap 占位符，不把用户数据写入 HTML。
 
@@ -613,7 +627,7 @@ Go 只替换经过 JSON 安全编码的小型公开 bootstrap 占位符，不把
 
 hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录返回 `/static/`，未命中再返回真实 404，不回退 SPA。
 
-客户端可为 ChunkLoadError 增加“每个 build version 最多一次”的受控刷新，但它只是兜底，不能通过无限 reload 掩盖缺失资源。
+客户端已通过 `src/lib/chunk-load-recovery.ts` 增加受控恢复：识别 ChunkLoadError、动态 import 失败和静态脚本加载失败，并按当前入口 build hash 在 `sessionStorage` 中限制为每个版本最多刷新一次。它只是兜底，不能替代上一版本静态资源保留，也不能通过无限 reload 掩盖缺失资源。
 
 ### 11.3 压缩和网络
 
@@ -622,7 +636,33 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 本次从当前工作站到源站的冷请求 TTFB 中位数约 0.74 秒，TokenHub 约 0.18 秒。应用优化完成后，如果主要用户仍跨境访问洛杉矶源站，静态资源 CDN、对象存储或更近的区域节点会成为进一步降低 p75 LCP 的主要手段。CDN 只缓存 `/static` 和公开图片；`/api`、`/v1`、HTML、鉴权和用户数据必须绕过缓存。
 
 ## 12. 实施顺序与收益
-同条件完整方案目标为 FCP <=4s、LCP <=5s、首屏传输 <=500KB。本次只修改了方案文档，没有修改业务代码或部署线上；git diff --check 已通过，文档当前尚未跟踪。本次复测与方案修订约 35 分钟。
+
+同条件完整方案目标为 FCP <=4s、LCP <=5s、首屏传输 <=500KB。当前分支已经完成 P0-P3 的本地实现与生产构建，但尚未部署线上，因此线上 FCP/LCP 仍必须在明确授权发布后重新测量，不能把构建体积直接当作生产指标。
+
+### 12.1 当前分支本地验收结果
+
+2026-08-03 使用与线上基线相同的 1.6 Mbps 下载、750 Kbps 上传、150 ms 延迟和 4 倍 CPU 降速，对 production build 的本地 gzip HTTP fixture 进行了五次冷缓存测试，以下为中位数：
+
+| 项目 | 桌面 | 移动端 |
+| --- | ---: | ---: |
+| FCP | 2.272 s | 2.028 s |
+| LCP | 2.272 s | 2.028 s |
+| CLS | 0.00210 | 0.00048 |
+| 最大长任务 | 241 ms | 250 ms |
+| LCP 前传输 | 326 KB | 298 KB |
+| 10 秒总传输 | 471 KB | 471 KB |
+| hydration 必需 JS gzip | 235.5 KiB | 235.5 KiB |
+| Console/Page error | 0/5 | 0/5 |
+
+LCP 元素稳定为 19.4 KB 的 Ribbon WebP 静态首帧，726 KB 动画请求为 0。默认首页与文档直达在验收窗口内的 `status`、`notice`、`pricing` 和 `home_page_content` 请求均为 0；`status` 只会在首次交互或 5 秒延迟后后台刷新。首页未滚动时只挂载首屏 section，滚动后再加载下半页。
+
+导航 Logo 使用 56 x 56、1.67 KB 的 WebP，favicon 使用 28 x 28、688 B 的 WebP。Rsbuild 的 favicon 配置已显式指向小图，避免模板图标之外又自动注入并下载原 49.7 KB 的 `favicon.ico`。
+
+本轮还发现并移除了多条隐藏的首屏依赖：系统设置 route 的 `beforeLoad` 原本从 JSX registry 读取常量，使初始 JS 约 640 KB gzip；拆出轻量 route 配置后降到约 312 KB。随后将首页的 `PublicLayout` 改为直接文件导入，避免 hydration 后再请求约 162 KB gzip 的认证后台共享块。公共路由词典把首次词典降到最多约 31.5 KB gzip；Base UI/Radix 的合并块改为只处理异步 chunk，约 106 KB gzip 的后台 UI primitives 不再成为首页同步入口依赖，初始同步 JS 进一步降到约 206 KB gzip。
+
+4 倍 CPU 下的最大长任务仍为 241-250 ms，发生在约 2 秒的初始 hydration 阶段，已经满足本阶段不超过 300 ms 的验收线，但尚未达到低于 200 ms 的进阶目标。继续拆分公共 Header 的访客静态视图和语言、主题、通知、登录菜单增强，可以进一步减少主线程工作，但会扩大 hydration、首个交互和 CLS 的回归面；当前 LCP 已约 2.03 秒，因此不把这项高风险重构作为本轮上线前置条件。上线后若 RUM 的 INP 或长任务仍不合格，再根据真实设备证据实施。
+
+构建流程已接入 `scripts/check-first-screen-budget.ts`。脚本读取 prerender HTML 和实际产物，计算 gzip 体积与首屏资源集合，任何预算超限都会令 `bun run build` 失败。
 
 
 ### P0：正确性和可观测性
@@ -631,7 +671,7 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 | --- | --- | --- | --- |
 | 缺失 `/static` 返回 404 | `router/web-router.go` | 消除伪 200 和白屏误诊 | 低 |
 | 分类缓存头 | `middleware/cache.go` | hash 资源长期复用 | 低 |
-| 构建输出 gzip 体积报告和预算 | `rsbuild.config.ts`、构建脚本 | 防止回归 | 低 |
+| 构建输出 gzip 体积报告和预算 | `scripts/check-first-screen-budget.ts` | 超限直接阻断构建 | 低 |
 | 记录 FCP/LCP/CLS/INP/build version | 前端性能采样 | 获得真实 p75 | 低至中 |
 
 ### P1：小改动高收益
@@ -641,7 +681,7 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 | 公共路由 setup 改为 Go 判定 | 删除一段首屏网络屏障 |
 | status 请求去重 | 3 次降为最多 1 次 |
 | 默认首页不等 home content | 删除全屏 Loading 和最后一段 API 屏障 |
-| 语言包动态加载 | 从入口移除约 0.75-0.89 MB gzip，具体取决于语言 |
+| 公共路由专用词典，非公共路由补载完整词典 | 公共首屏词典最大约 31.5 KB gzip，并取消英文 fallback 首次下载 |
 | 首页绕开全量 Lobe icons | 避免约 1.00 MB gzip / 5.31 MB 解压块 |
 | Hero 静态首帧和小 Logo | 首屏图片从约 861 KB 降到目标 100 KB 内 |
 | 非首屏区块按可见性加载 | 避免首屏并发下载和执行全部营销区块 |
@@ -656,7 +696,7 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 
 ### P3：文档构建时 SSR/SSG 和 IndexedDB
 
-- 正文迁移为内容文件；
+- 保留 TSX 作为构建源，客户端正文改为 hash payload；
 - 生成 docs HTML、manifest 和 hash JSON；
 - 实现文件名校验、IndexedDB 和失败回退；
 - 保持 DocsShell 和 SPA 文档导航。
@@ -668,39 +708,42 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 - 结合 RUM 决定是否给 `/static` 接 CDN或迁移更近节点；
 - 不在没有数据时先进行全站基础设施重构。
 
+P4 涉及生产发布目录、OpenResty 能力和真实用户数据，本分支尚未部署，因此以上三项均是发布阶段待办，不能标记为已经完成。当前代码只完成真实静态 404、分类缓存头和客户端一次性 ChunkLoadError 恢复。
+
 ## 13. 性能预算
 
 ### 13.1 构建预算
 
-| 项目 | 目标 |
-| --- | ---: |
-| 首页 SSR HTML gzip | <= 50 KB |
-| 文档 SSR HTML gzip | <= 100 KB，超长正文单独评估 |
-| 首屏关键 CSS gzip | <= 80 KB |
-| 首屏 LCP 图片 | <= 80 KB |
-| 首页渲染前必须下载的 JS | 0 B |
-| 首页 hydration 必需 JS gzip | <= 450 KB |
-| 单个初始 JS chunk gzip | <= 250 KB |
-| 首页首屏同步 API | 0 |
-| hydration 后 status 请求 | <= 1 |
-| 默认首页 home content 请求 | 0 |
-| 未到价格区块时 pricing 请求 | 0 |
+| 项目 | 当前产物 | 预算 |
+| --- | ---: | ---: |
+| 首页 SSR HTML gzip | 6.0 KiB | <= 50 KiB |
+| 最大文档 SSR HTML gzip | 8.9 KiB | <= 100 KiB |
+| 首屏关键 CSS gzip | 60.4 KiB | <= 80 KiB |
+| 首屏 LCP 图片 | 18.9 KiB | <= 80 KiB |
+| 首页渲染前必须下载的 JS | 0 B | 0 B |
+| 首页 hydration 必需 JS gzip（含最大公共词典） | 235.5 KiB | <= 450 KiB |
+| 最大初始 JS chunk gzip | 70.9 KiB | <= 250 KiB |
+| 公共首屏预算传输 | 322.5 KiB | <= 500 KiB |
+| 首页首屏同步 API | 0 | 0 |
+| hydration 后 status 请求 | 最多 1 | <= 1 |
+| 默认首页 home content 请求 | 0 | 0 |
+| 未到价格区块时 pricing 请求 | 0 | 0 |
 
-预算应由构建脚本读取产物并失败退出，不能只写在文档中。
+前八项由 `scripts/check-first-screen-budget.ts` 读取实际构建产物并失败退出；请求项由浏览器验收覆盖，不能只依赖文档约定。
 
 ### 13.2 实验室目标
 
 使用本次同一移动端配置和冷缓存，取至少五次中位数：
 
-| 指标 | 当前 | 第一阶段目标 | 完整方案目标 |
+| 指标 | 线上旧基线 | 当前分支本地 | 本轮验收线 |
 | --- | ---: | ---: | ---: |
-| FCP | 15.75 s | <= 8 s | <= 4 s |
-| LCP | 16.74 s | <= 9 s | <= 5 s |
-| CLS | 0.0037 | <= 0.1 | <= 0.1 |
-| 最长长任务 | 610 ms | <= 300 ms | <= 200 ms |
-| 首屏传输 | 2.97 MB | <= 1.2 MB | <= 500 KB |
+| FCP | 15.75 s | 2.028 s | <= 4 s |
+| LCP | 16.74 s | 2.028 s | <= 5 s |
+| CLS | 0.0037 | 0.00048 | <= 0.1 |
+| 最长长任务 | 610 ms | 250 ms | <= 300 ms；进阶目标 <= 200 ms |
+| 传输 | 2.97 MB | LCP 前 298 KB；10 秒共 471 KB | 公共首屏预算 <= 500 KB |
 
-第一阶段指 P0+P1，完整方案指 P0-P3。若源站网络抖动导致绝对时间不稳定，同时比较资源体积、请求顺序和至少五次中位数。
+P0-P3 的功能和本地性能验收已经完成。绝对时间可能受本地 fixture 和源站网络差异影响，因此上线后仍需用同一脚本重新记录至少五次中位数；250 ms 长任务通过本轮验收，但不能表述为已经达到 200 ms 进阶目标。
 
 ### 13.3 真实用户目标
 
@@ -730,7 +773,9 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 - 默认首页首屏不请求 setup、home content、pricing；
 - status 最多一次且不阻止 SSR 内容显示；
 - 首屏不加载全量 `@lobehub/icons`；
-- 首屏不加载七个语言包；
+- 首屏只加载当前语言的公共词典，不加载七个完整语言包或英文 fallback；
+- 从公共页进入非公共路由时，先补载当前语言完整词典；
+- Base UI/Radix 后台 primitives 不进入首页同步入口；
 - Ribbon 动画不会成为 LCP 请求；
 - 非首屏区块未接近视口时不下载其脚本和图片；
 - 缺失 hash 静态文件返回真实 404；
@@ -746,6 +791,8 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 - 浏览器不计算正文 hash，不使用 ETag 判断版本。
 
 ### 发布
+
+以下条目是发布阶段验收清单，本轮未部署：
 
 - 新静态资源先于新 HTML 可访问；
 - 上一版本 HTML 引用的 chunk 仍可访问；

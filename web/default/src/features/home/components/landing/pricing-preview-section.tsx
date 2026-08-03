@@ -34,9 +34,9 @@ import {
 } from '@/components/ui/table'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 import { formatPrice, formatRequestPrice } from '@/features/pricing/lib/price'
-import { getLobeIcon } from '@/lib/lobe-icon'
 
 import type { HomeCatalogModel } from '../../lib/catalog'
+import { HomeProviderIcon } from './home-provider-icon'
 import { SectionHeading } from './section-heading'
 
 interface PricingPreviewSectionProps {
@@ -135,7 +135,11 @@ export function PricingPreviewSection(props: PricingPreviewSectionProps) {
                       <TableCell>
                         <div className='flex min-w-0 items-center gap-2.5'>
                           <span className='bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg'>
-                            {getLobeIcon(iconKey, 20)}
+                            <HomeProviderIcon
+                              icon={iconKey}
+                              provider={model.vendor_name}
+                              size={20}
+                            />
                           </span>
                           <span className='max-w-40 truncate font-medium'>
                             {model.model_name}

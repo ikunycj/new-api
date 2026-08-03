@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsGemini } from '@/features/docs/gemini-guide'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/tools/gemini/')({
-  component: DocsGemini,
+  component: () => <DocsPage route='/docs/tools/gemini' />,
 })

@@ -19,9 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import type { PricingVendor } from '@/features/pricing/types'
-import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { fillProviderMarquee } from '../../lib/catalog'
+import { HomeProviderIcon } from './home-provider-icon'
 
 type ProviderMarqueeItem = {
   key: string
@@ -55,7 +55,11 @@ function ProviderGroup(props: { items: ProviderMarqueeItem[] }) {
           className='text-foreground flex shrink-0 items-center gap-2.5 text-sm font-medium'
         >
           <span className='border-border/70 bg-card flex size-9 items-center justify-center overflow-hidden rounded-lg border shadow-xs'>
-            {getLobeIcon(item.vendor.icon || item.vendor.name, 25)}
+            <HomeProviderIcon
+              icon={item.vendor.icon}
+              provider={item.vendor.name}
+              size={25}
+            />
           </span>
           <span className='max-w-40 truncate'>{item.vendor.name}</span>
         </div>

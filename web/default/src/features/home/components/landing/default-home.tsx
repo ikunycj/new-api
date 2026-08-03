@@ -18,50 +18,46 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { lazy, Suspense } from 'react'
 
-import { useHomeCatalog } from '../../hooks'
-import { AiClientsSection } from './ai-clients-section'
-import { CapabilitiesSection } from './capabilities-section'
-import { ConsolePreviewSection } from './console-preview-section'
-import { FaqSection } from './faq-section'
-import { FeaturedModelsSection } from './featured-models-section'
-import { GatewaySection } from './gateway-section'
-import { HomeCtaSection } from './home-cta-section'
+import { useStatus } from '@/hooks/use-status'
+import { getModuleAccessFromStatus } from '@/lib/nav-modules'
+
+import { DeferUntilVisible } from './defer-until-visible'
 import { LandingHero } from './landing-hero'
-import { PricingPreviewSection } from './pricing-preview-section'
+
+const BelowFoldHome = lazy(() =>
+  import('./below-fold-home').then((module) => ({
+    default: module.BelowFoldHome,
+  }))
+)
 
 interface DefaultHomeProps {
   isAuthenticated: boolean
 }
 
-const AffiliateCampaignBanner = lazy(() =>
-  import('@/features/affiliate-campaign').then((module) => ({
-    default: module.AffiliateCampaignBanner,
-  }))
-)
-
 export function DefaultHome(props: DefaultHomeProps) {
-  const catalog = useHomeCatalog()
+  const { status } = useStatus()
+  const pricingAccess = getModuleAccessFromStatus(
+    status as Record<string, unknown> | null,
+    'pricing'
+  )
+  const catalogAvailable =
+    pricingAccess.enabled &&
+    (!pricingAccess.requireAuth || props.isAuthenticated)
 
   return (
     <main>
       <LandingHero
         isAuthenticated={props.isAuthenticated}
-        catalogAvailable={catalog.isAvailable}
+        catalogAvailable={catalogAvailable}
       />
-      <Suspense fallback={null}>
-        <AffiliateCampaignBanner />
-      </Suspense>
-      <AiClientsSection />
-      <FeaturedModelsSection catalogAvailable={catalog.isAvailable} />
-      <CapabilitiesSection />
-      <ConsolePreviewSection models={catalog.models} />
-      <GatewaySection />
-      <PricingPreviewSection
-        models={catalog.models}
-        isLoading={catalog.isLoading}
-      />
-      <FaqSection />
-      <HomeCtaSection isAuthenticated={props.isAuthenticated} />
+      <DeferUntilVisible waitForScroll>
+        <Suspense fallback={<div className='bg-muted/30 min-h-20' />}>
+          <BelowFoldHome
+            catalogAvailable={catalogAvailable}
+            isAuthenticated={props.isAuthenticated}
+          />
+        </Suspense>
+      </DeferUntilVisible>
     </main>
   )
 }

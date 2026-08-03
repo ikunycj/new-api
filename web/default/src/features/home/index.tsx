@@ -16,25 +16,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useRef } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
-import { RichContent } from '@/components/rich-content'
+import { PublicLayout } from '@/components/layout/components/public-layout'
 import { useTheme } from '@/context/theme-provider'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { DefaultHome } from './components'
-import { useHomePageContent } from './hooks'
+import { DefaultHome } from './components/landing/default-home'
+import { useHomePageContent } from './hooks/use-home-page-content'
+
+const RichContent = lazy(() =>
+  import('@/components/rich-content').then((module) => ({
+    default: module.RichContent,
+  }))
+)
 
 export function Home() {
   const { i18n, t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { resolvedTheme } = useTheme()
   const { auth } = useAuthStore()
-  const isAuthenticated = !!auth.user
+  const hydrated = useHydrated()
+  const isAuthenticated = hydrated && !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
 
   const syncIframePreferences = useCallback(() => {
@@ -97,12 +103,14 @@ export function Home() {
     if (contentIsHtml) {
       return (
         <PublicLayout showMainContainer={false}>
-          <RichContent
-            mode='html'
-            htmlVariant='isolated'
-            content={content}
-            className='custom-home-content'
-          />
+          <Suspense fallback={null}>
+            <RichContent
+              mode='html'
+              htmlVariant='isolated'
+              content={content}
+              className='custom-home-content'
+            />
+          </Suspense>
         </PublicLayout>
       )
     }
@@ -110,11 +118,13 @@ export function Home() {
     return (
       <PublicLayout>
         <div className='mx-auto max-w-6xl px-4 py-8'>
-          <RichContent
-            mode='markdown'
-            content={content}
-            className='custom-home-content'
-          />
+          <Suspense fallback={null}>
+            <RichContent
+              mode='markdown'
+              content={content}
+              className='custom-home-content'
+            />
+          </Suspense>
         </div>
       </PublicLayout>
     )
@@ -123,7 +133,6 @@ export function Home() {
   return (
     <PublicLayout showMainContainer={false}>
       <DefaultHome isAuthenticated={isAuthenticated} />
-      <Footer />
     </PublicLayout>
   )
 }

@@ -17,7 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from 'zustand/middleware'
 
 import { DEFAULT_SYSTEM_NAME, DEFAULT_LOGO } from '@/lib/constants'
 
@@ -65,6 +69,12 @@ interface SystemConfigState {
   setLoading: (loading: boolean) => void
 }
 
+const ssrStorage: StateStorage = {
+  getItem: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+}
+
 /**
  * System configuration store with automatic persistence
  * Manages system name, logo, footer HTML and loading states
@@ -86,7 +96,7 @@ export const useSystemConfigStore = create<SystemConfigState>()(
             ...newConfig,
             currency: {
               ...state.config.currency,
-              ...(newConfig.currency ?? {}),
+              ...newConfig.currency,
             },
           },
         })),
@@ -95,6 +105,9 @@ export const useSystemConfigStore = create<SystemConfigState>()(
     }),
     {
       name: 'system-config-storage',
+      storage: createJSONStorage(() =>
+        typeof window === 'undefined' ? ssrStorage : window.localStorage
+      ),
       partialize: (state) => ({
         config: state.config,
         loadedLogoUrl: state.loadedLogoUrl,

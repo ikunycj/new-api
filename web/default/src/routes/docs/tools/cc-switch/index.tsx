@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsCcSwitch } from '@/features/docs/cc-switch-guide'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/tools/cc-switch/')({
-  component: DocsCcSwitch,
+  component: () => <DocsPage route='/docs/tools/cc-switch' />,
 })

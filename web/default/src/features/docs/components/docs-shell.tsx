@@ -135,6 +135,7 @@ function DocsMobileNavigation(props: {
         aria-hidden='true'
       />
       <select
+        data-doc-navigation='true'
         value={currentItem?.href ?? '/docs'}
         aria-label={props.ariaLabel}
         onChange={(event) => {
@@ -220,136 +221,140 @@ export function DocsShell(props: DocsShellProps) {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <div className='border-border bg-background/95 sticky top-16 z-30 mt-16 border-y px-4 py-2 backdrop-blur md:hidden'>
-        <DocsMobileNavigation
-          currentPageId={props.pageId}
-          groups={navigationGroups}
-          ariaLabel={t('Documentation')}
-        />
-      </div>
+      <div data-doc-page-source='true'>
+        <div className='border-border bg-background/95 sticky top-16 z-30 mt-16 border-y px-4 py-2 backdrop-blur md:hidden'>
+          <DocsMobileNavigation
+            currentPageId={props.pageId}
+            groups={navigationGroups}
+            ariaLabel={t('Documentation')}
+          />
+        </div>
 
-      <div className='mx-auto grid w-full max-w-[1400px] grid-cols-1 px-4 md:grid-cols-[232px_minmax(0,1fr)] md:gap-10 md:px-6 md:pt-16 xl:grid-cols-[232px_minmax(0,760px)_190px] xl:gap-12'>
-        <aside className='hidden md:block'>
-          <div className='border-border bg-card sticky top-24 mt-8 rounded-lg border p-3'>
-            <div className='text-muted-foreground mb-3 flex items-center gap-2 px-2 text-xs font-semibold'>
-              <HugeiconsIcon
-                icon={BookOpen01Icon}
-                className='size-4'
-                aria-hidden='true'
+        <div className='mx-auto grid w-full max-w-[1400px] grid-cols-1 px-4 md:grid-cols-[232px_minmax(0,1fr)] md:gap-10 md:px-6 md:pt-16 xl:grid-cols-[232px_minmax(0,760px)_190px] xl:gap-12'>
+          <aside className='hidden md:block'>
+            <div className='border-border bg-card sticky top-24 mt-8 rounded-lg border p-3'>
+              <div className='text-muted-foreground mb-3 flex items-center gap-2 px-2 text-xs font-semibold'>
+                <HugeiconsIcon
+                  icon={BookOpen01Icon}
+                  className='size-4'
+                  aria-hidden='true'
+                />
+                {t('Documentation')}
+              </div>
+              <DocsNavigation
+                currentPageId={props.pageId}
+                groups={navigationGroups}
+                ariaLabel={t('Documentation')}
               />
-              {t('Documentation')}
             </div>
-            <DocsNavigation
-              currentPageId={props.pageId}
-              groups={navigationGroups}
-              ariaLabel={t('Documentation')}
-            />
-          </div>
-        </aside>
+          </aside>
 
-        <main className='min-w-0 py-8 md:py-12'>
-          <nav
-            aria-label={t('Breadcrumb')}
-            className='text-muted-foreground mb-8 flex items-center gap-2 text-sm'
-          >
-            <Link to='/' className='hover:text-foreground transition-colors'>
-              {t('Home')}
-            </Link>
-            <span aria-hidden='true'>/</span>
-            <Link
-              to='/docs'
-              className='hover:text-foreground transition-colors'
+          <main className='min-w-0 py-8 md:py-12'>
+            <nav
+              aria-label={t('Breadcrumb')}
+              className='text-muted-foreground mb-8 flex items-center gap-2 text-sm'
             >
-              {t('Documentation')}
-            </Link>
-            {props.pageId !== 'introduction' && (
-              <>
-                <span aria-hidden='true'>/</span>
-                <span className='text-foreground truncate'>{props.title}</span>
-              </>
-            )}
-          </nav>
-
-          <header>
-            <h1 className='text-3xl font-semibold'>{props.title}</h1>
-            <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
-              {props.description}
-            </p>
-          </header>
-
-          <Separator className='my-8' />
-
-          <article className='flex flex-col gap-12'>{props.children}</article>
-
-          <Separator className='mt-12 mb-6' />
-          <nav
-            aria-label={t('Document pagination')}
-            className='grid min-h-16 grid-cols-2 gap-4'
-          >
-            <div>
-              {previous && (
-                <Link
-                  to={previous.href}
-                  className='group text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition-colors'
-                >
-                  <HugeiconsIcon
-                    icon={ArrowLeft01Icon}
-                    className='size-4 transition-transform group-hover:-translate-x-0.5'
-                    aria-hidden='true'
-                  />
-                  <span>
-                    <span className='block text-xs'>{t('Previous')}</span>
-                    <span className='text-foreground font-medium'>
-                      {previous.label}
-                    </span>
+              <Link to='/' className='hover:text-foreground transition-colors'>
+                {t('Home')}
+              </Link>
+              <span aria-hidden='true'>/</span>
+              <Link
+                to='/docs'
+                className='hover:text-foreground transition-colors'
+              >
+                {t('Documentation')}
+              </Link>
+              {props.pageId !== 'introduction' && (
+                <>
+                  <span aria-hidden='true'>/</span>
+                  <span className='text-foreground truncate'>
+                    {props.title}
                   </span>
-                </Link>
+                </>
               )}
-            </div>
-            <div className='text-right'>
-              {next && (
-                <Link
-                  to={next.href}
-                  className='group text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-left text-sm transition-colors'
-                >
-                  <span>
-                    <span className='block text-xs'>{t('Next')}</span>
-                    <span className='text-foreground font-medium'>
-                      {next.label}
-                    </span>
-                  </span>
-                  <HugeiconsIcon
-                    icon={ArrowRight01Icon}
-                    className='size-4 transition-transform group-hover:translate-x-0.5'
-                    aria-hidden='true'
-                  />
-                </Link>
-              )}
-            </div>
-          </nav>
-        </main>
+            </nav>
 
-        <aside className='hidden xl:block'>
-          <nav
-            aria-label={t('On this page')}
-            className='border-border sticky top-24 mt-12 border-l pl-5'
-          >
-            <p className='text-muted-foreground mb-3 text-xs font-semibold'>
-              {t('On this page')}
-            </p>
-            <div className='flex flex-col gap-2.5'>
-              {props.toc.map((item) => (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  className='text-muted-foreground hover:text-foreground text-sm transition-colors'
-                >
-                  {item.label}
-                </a>
-              ))}
-            </div>
-          </nav>
-        </aside>
+            <header>
+              <h1 className='text-3xl font-semibold'>{props.title}</h1>
+              <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
+                {props.description}
+              </p>
+            </header>
+
+            <Separator className='my-8' />
+
+            <article className='flex flex-col gap-12'>{props.children}</article>
+
+            <Separator className='mt-12 mb-6' />
+            <nav
+              aria-label={t('Document pagination')}
+              className='grid min-h-16 grid-cols-2 gap-4'
+            >
+              <div>
+                {previous && (
+                  <Link
+                    to={previous.href}
+                    className='group text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition-colors'
+                  >
+                    <HugeiconsIcon
+                      icon={ArrowLeft01Icon}
+                      className='size-4 transition-transform group-hover:-translate-x-0.5'
+                      aria-hidden='true'
+                    />
+                    <span>
+                      <span className='block text-xs'>{t('Previous')}</span>
+                      <span className='text-foreground font-medium'>
+                        {previous.label}
+                      </span>
+                    </span>
+                  </Link>
+                )}
+              </div>
+              <div className='text-right'>
+                {next && (
+                  <Link
+                    to={next.href}
+                    className='group text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-left text-sm transition-colors'
+                  >
+                    <span>
+                      <span className='block text-xs'>{t('Next')}</span>
+                      <span className='text-foreground font-medium'>
+                        {next.label}
+                      </span>
+                    </span>
+                    <HugeiconsIcon
+                      icon={ArrowRight01Icon}
+                      className='size-4 transition-transform group-hover:translate-x-0.5'
+                      aria-hidden='true'
+                    />
+                  </Link>
+                )}
+              </div>
+            </nav>
+          </main>
+
+          <aside className='hidden xl:block'>
+            <nav
+              aria-label={t('On this page')}
+              className='border-border sticky top-24 mt-12 border-l pl-5'
+            >
+              <p className='text-muted-foreground mb-3 text-xs font-semibold'>
+                {t('On this page')}
+              </p>
+              <div className='flex flex-col gap-2.5'>
+                {props.toc.map((item) => (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    className='text-muted-foreground hover:text-foreground text-sm transition-colors'
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            </nav>
+          </aside>
+        </div>
       </div>
     </PublicLayout>
   )

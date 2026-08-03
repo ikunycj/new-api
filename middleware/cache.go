@@ -1,17 +1,24 @@
 package middleware
 
 import (
+	"regexp"
+	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
 )
 
+var hashedAssetPattern = regexp.MustCompile(`(?:^|[.-])[0-9a-f]{8,64}(?:[.-]|$)`)
+
 func Cache() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		if c.Request.RequestURI == "/" {
-			c.Header("Cache-Control", "no-cache")
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/static/") && hashedAssetPattern.MatchString(path) {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
-			c.Header("Cache-Control", "max-age=604800") // one week
+			c.Header("Cache-Control", "no-cache, must-revalidate")
 		}
-		c.Header("Cache-Version", "b688f2fb5be447c25e5aa3bd063087a83db32a288bf6a4f35f2d8db310e40b14")
+		c.Header("Cache-Version", common.Version)
 		c.Next()
 	}
 }

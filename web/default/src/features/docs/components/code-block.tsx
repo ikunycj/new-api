@@ -41,12 +41,20 @@ export function CodeBlock(props: CodeBlockProps) {
   }
 
   return (
-    <div className='border-border bg-muted/20 overflow-hidden rounded-lg border'>
+    <div
+      data-doc-code-block='true'
+      className='border-border bg-muted/20 overflow-hidden rounded-lg border'
+    >
       <div className='border-border bg-muted/40 flex min-h-10 items-center justify-between gap-3 border-b px-3'>
         <span className='text-muted-foreground font-mono text-xs'>
           {props.label ?? t('Example')}
         </span>
-        <Button variant='ghost' size='sm' onClick={copyCode}>
+        <Button
+          variant='ghost'
+          size='sm'
+          data-doc-copy='true'
+          onClick={copyCode}
+        >
           <HugeiconsIcon icon={Copy01Icon} data-icon='inline-start' />
           {t('Copy')}
         </Button>

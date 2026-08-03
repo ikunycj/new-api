@@ -28,8 +28,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { getLobeIcon } from '@/lib/lobe-icon'
 
+import { HomeProviderIcon } from './home-provider-icon'
 import { SectionHeading } from './section-heading'
 
 interface FeaturedModel {
@@ -104,7 +104,11 @@ function ModelPreviewCard(props: { model: FeaturedModel }) {
     <Card className='h-full min-h-72 rounded-lg' data-card-hover='true'>
       <CardHeader>
         <div className='border-border/70 bg-background mb-3 flex size-11 items-center justify-center overflow-hidden rounded-lg border shadow-xs'>
-          {getLobeIcon(props.model.icon, 30)}
+          <HomeProviderIcon
+            icon={props.model.icon}
+            provider={props.model.provider}
+            size={30}
+          />
         </div>
         <CardTitle className='truncate text-lg'>
           {props.model.modelName}

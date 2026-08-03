@@ -39,7 +39,10 @@ export default defineConfig(({ envMode }) => {
         'vendor-ui-primitives': {
           test: /node_modules[\\/](@base-ui|@radix-ui)[\\/]/,
           name: 'vendor-ui-primitives',
-          chunks: 'all',
+          // Keep route-only UI primitives out of the public entry. Grouping all
+          // of them eagerly makes a single Button pull every admin primitive
+          // into the homepage hydration path.
+          chunks: 'async',
           priority: 0,
           enforce: true,
         },
@@ -64,6 +67,7 @@ export default defineConfig(({ envMode }) => {
     },
     html: {
       template: './index.html',
+      favicon: './public/logo-28.webp',
     },
     server: {
       host: '0.0.0.0',

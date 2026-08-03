@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "rsbuild dev",
-    "build": "rsbuild build",
-    "build:check": "tsgo -b && rsbuild build",
+    "build": "bun run i18n:public && bun run build:client && bun run build:prerender && bun run build:budget",
+    "build:budget": "bun scripts/check-first-screen-budget.ts",
+    "build:client": "rsbuild build",
+    "build:prerender": "bun scripts/build-prerender.ts",
+    "build:check": "bun run i18n:public && tsgo -b && rsbuild build",
     "typecheck": "tsgo -b",
     "lint": "oxlint -c .oxlintrc.json .",
     "lint:fix": "oxlint -c .oxlintrc.json . --fix",
@@ -15,7 +18,8 @@
     "format": "node scripts/format-with-protected-headers.mjs --write",
     "copyright:check": "node scripts/add-copyright.mjs --check",
     "copyright": "node scripts/add-copyright.mjs",
-    "i18n:sync": "node scripts/sync-i18n.mjs",
+    "i18n:sync": "node scripts/sync-i18n.mjs && bun run i18n:public",
+    "i18n:public": "bun scripts/build-public-locales.ts",
     "knip": "knip"
   },
   "dependencies": {

@@ -1,10 +1,10 @@
 package common
 
 import (
-	"embed"
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-contrib/static"
 )
@@ -24,7 +24,7 @@ func (e *embedFileSystem) Exists(prefix string, path string) bool {
 }
 
 func (e *embedFileSystem) Open(name string) (http.File, error) {
-	if name == "/" {
+	if name == "/" || name == "/prerender" || strings.HasPrefix(name, "/prerender/") {
 		// This will make sure the index page goes to NoRouter handler,
 		// which will use the replaced index bytes with analytic codes.
 		return nil, os.ErrNotExist
@@ -32,7 +32,7 @@ func (e *embedFileSystem) Open(name string) (http.File, error) {
 	return e.FileSystem.Open(name)
 }
 
-func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
+func EmbedFolder(fsEmbed fs.FS, targetPath string) static.ServeFileSystem {
 	efs, err := fs.Sub(fsEmbed, targetPath)
 	if err != nil {
 		panic(err)

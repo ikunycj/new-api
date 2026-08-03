@@ -16,35 +16,110 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import i18n from 'i18next'
+import i18n, { type BackendModule } from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import { convertDetectedLanguage } from './languages'
-import en from './locales/en.json'
-import fr from './locales/fr.json'
-import ja from './locales/ja.json'
-import ru from './locales/ru.json'
-import vi from './locales/vi.json'
-import zhTW from './locales/zh-TW.json'
-import zhCN from './locales/zh.json'
+import {
+  convertDetectedLanguage,
+  normalizeInterfaceLanguage,
+  type InterfaceLanguageCode,
+} from './languages'
 
-export const resources = {
-  en,
-  zhCN,
-  fr,
-  ru,
-  ja,
-  vi,
-  zhTW,
-} as const
+interface LocaleModule {
+  default: {
+    translation: Record<string, string>
+  }
+}
 
-i18n
+const fullLocaleLoaders: Record<
+  InterfaceLanguageCode,
+  () => Promise<LocaleModule>
+> = {
+  en: () => import('./locales/en.json'),
+  fr: () => import('./locales/fr.json'),
+  ja: () => import('./locales/ja.json'),
+  ru: () => import('./locales/ru.json'),
+  vi: () => import('./locales/vi.json'),
+  zhCN: () => import('./locales/zh.json'),
+  zhTW: () => import('./locales/zh-TW.json'),
+}
+
+const publicLocaleLoaders: Record<
+  InterfaceLanguageCode,
+  () => Promise<LocaleModule>
+> = {
+  en: () => import('./public-locales/en.json'),
+  fr: () => import('./public-locales/fr.json'),
+  ja: () => import('./public-locales/ja.json'),
+  ru: () => import('./public-locales/ru.json'),
+  vi: () => import('./public-locales/vi.json'),
+  zhCN: () => import('./public-locales/zhCN.json'),
+  zhTW: () => import('./public-locales/zhTW.json'),
+}
+
+const fullLocales = new Set<InterfaceLanguageCode>()
+
+function isPublicRoute(): boolean {
+  if (typeof window === 'undefined') return true
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+  return (
+    pathname === '/' || pathname === '/docs' || pathname.startsWith('/docs/')
+  )
+}
+
+const localeBackend: BackendModule = {
+  type: 'backend',
+  init: () => undefined,
+  read(language, _namespace, callback) {
+    const locale = normalizeInterfaceLanguage(language) as InterfaceLanguageCode
+    const usePublicLocale = isPublicRoute()
+    const loader = usePublicLocale
+      ? publicLocaleLoaders[locale]
+      : fullLocaleLoaders[locale]
+    return loader().then(
+      (module) => {
+        if (!usePublicLocale) fullLocales.add(locale)
+        // The i18next backend contract is callback-based around an async loader.
+        // eslint-disable-next-line promise/no-callback-in-promise
+        callback(null, module.default.translation)
+      },
+      (error: unknown) => {
+        // eslint-disable-next-line promise/no-callback-in-promise
+        callback(
+          error instanceof Error ? error : new Error(String(error)),
+          false
+        )
+      }
+    )
+  },
+}
+
+export async function ensureFullLocale(language?: string): Promise<void> {
+  const locale = normalizeInterfaceLanguage(
+    language || i18n.resolvedLanguage || i18n.language
+  ) as InterfaceLanguageCode
+  if (fullLocales.has(locale)) return
+
+  const module = await fullLocaleLoaders[locale]()
+  i18n.addResourceBundle(
+    locale,
+    'translation',
+    module.default.translation,
+    true,
+    true
+  )
+  fullLocales.add(locale)
+}
+
+export const i18nReady = i18n
   .use(LanguageDetector)
+  .use(localeBackend)
   .use(initReactI18next)
   .init({
-    resources,
-    fallbackLng: 'en',
+    // Translation keys are English source text and locale parity is enforced by
+    // i18n:sync, so loading a second full English catalog is unnecessary.
+    fallbackLng: false,
     supportedLngs: ['en', 'zhCN', 'fr', 'ru', 'ja', 'vi', 'zhTW'],
     load: 'currentOnly',
     nsSeparator: false, // Allow literal colons in keys (e.g., URLs, labels)
@@ -53,8 +128,8 @@ i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
+      order: ['localStorage', 'cookie', 'navigator'],
+      caches: ['localStorage', 'cookie'],
       // Browsers report `zh-CN`/`zh-TW`/`zh`; map them onto our `zhCN`/`zhTW`
       // codes (non-Chinese codes pass through for normal supportedLngs matching).
       convertDetectedLanguage,

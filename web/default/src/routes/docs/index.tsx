@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { DocsOverview } from '@/features/docs/overview'
+import { DocsPage } from '@/features/docs/docs-page'
 
 export const Route = createFileRoute('/docs/')({
-  component: DocsOverview,
+  component: () => <DocsPage route='/docs' />,
 })
