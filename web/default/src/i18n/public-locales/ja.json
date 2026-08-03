@@ -323,6 +323,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "For 404 errors, confirm the custom base_url ends in /v1 exactly once.": "404エラーの場合、カスタムbase_urlが正確に1回だけ/v1で終わることを確認してください。",
     "For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.": "404エラーの場合、ANTHROPIC_BASE_URLから/v1を削除してClaude Codeを再起動してください。",
     "For 404 errors, remove /v1 from GOOGLE_GEMINI_BASE_URL.": "404エラーの場合、GOOGLE_GEMINI_BASE_URLから/v1を削除してください。",

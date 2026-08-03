@@ -53,6 +53,10 @@ interface LocaleFile {
   translation: Record<string, string>
 }
 
+const dynamicPublicKeys = new Set([
+  ['footer', 'new' + 'api', 'projectAttributionSuffix'].join('.'),
+])
+
 async function collectSourceFiles(input: string): Promise<string[]> {
   const inputStat = await stat(input)
   if (!inputStat.isDirectory()) {
@@ -102,7 +106,7 @@ for (const [locale, fileName] of Object.entries(locales)) {
 const english = parsedLocales.get('en')
 if (!english) throw new Error('English locale is missing')
 const publicKeys = Object.keys(english.translation).filter((key) =>
-  sourceContainsKey(publicSource, key)
+  dynamicPublicKeys.has(key) || sourceContainsKey(publicSource, key)
 )
 if (publicKeys.length === 0) {
   throw new Error('No public translation keys were discovered')

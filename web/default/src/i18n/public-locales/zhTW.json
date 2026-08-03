@@ -323,6 +323,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相關項目",
     "footer.defaultCopyright": "版權所有。",
+    "footer.newapi.projectAttributionSuffix": "版權所有，由項目貢獻者設計與開發。",
     "For 404 errors, confirm the custom base_url ends in /v1 exactly once.": "對於 404 錯誤，確認自訂 base_url 僅以 /v1 結尾一次。",
     "For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.": "對於 404 錯誤，從 ANTHROPIC_BASE_URL 中移除 /v1 並重新啟動 Claude Code。",
     "For 404 errors, remove /v1 from GOOGLE_GEMINI_BASE_URL.": "對於 404 錯誤，從 GOOGLE_GEMINI_BASE_URL 中移除 /v1。",

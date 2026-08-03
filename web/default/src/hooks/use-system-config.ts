@@ -66,42 +66,62 @@ export function mapStatusDataToConfig(
 ): Partial<SystemConfig> {
   if (!data) return {}
 
-  const quotaDisplayType =
-    (data.quota_display_type as CurrencyDisplayType | undefined) ??
-    DEFAULT_CURRENCY_CONFIG.quotaDisplayType
+  const has = (key: keyof StatusApiResponse['data']) =>
+    Object.prototype.hasOwnProperty.call(data, key)
+  const nextConfig: Partial<SystemConfig> = {}
 
-  const currency: CurrencyConfig = {
-    displayInCurrency:
-      data.display_in_currency ?? DEFAULT_CURRENCY_CONFIG.displayInCurrency,
-    quotaDisplayType,
-    quotaPerUnit: toNumber(
-      data.quota_per_unit,
-      DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-    ),
-    usdExchangeRate: toNumber(
-      data.usd_exchange_rate,
-      DEFAULT_CURRENCY_CONFIG.usdExchangeRate
-    ),
-    customCurrencySymbol:
-      data.custom_currency_symbol?.trim() ||
-      DEFAULT_CURRENCY_CONFIG.customCurrencySymbol,
-    customCurrencyExchangeRate: toNumber(
-      data.custom_currency_exchange_rate,
-      DEFAULT_CURRENCY_CONFIG.customCurrencyExchangeRate
-    ),
+  if (has('system_name')) {
+    nextConfig.systemName = data.system_name || DEFAULT_SYSTEM_NAME
   }
-
-  return {
-    systemName: data.system_name || DEFAULT_SYSTEM_NAME,
-    logo:
+  if (has('logo')) {
+    nextConfig.logo =
       !data.logo || data.logo === LEGACY_DEFAULT_LOGO
         ? DEFAULT_LOGO
-        : data.logo,
-    footerHtml: data.footer_html,
-    demoSiteEnabled: data.demo_site_enabled,
-    displayTokenStatEnabled: data.display_token_stat_enabled,
-    currency,
+        : data.logo
   }
+  if (has('footer_html')) nextConfig.footerHtml = data.footer_html
+  if (has('demo_site_enabled')) {
+    nextConfig.demoSiteEnabled = data.demo_site_enabled
+  }
+  if (has('display_token_stat_enabled')) {
+    nextConfig.displayTokenStatEnabled = data.display_token_stat_enabled
+  }
+
+  const currencyFields: (keyof StatusApiResponse['data'])[] = [
+    'display_in_currency',
+    'quota_display_type',
+    'quota_per_unit',
+    'usd_exchange_rate',
+    'custom_currency_symbol',
+    'custom_currency_exchange_rate',
+  ]
+  if (currencyFields.some((key) => has(key))) {
+    const currency: CurrencyConfig = {
+      displayInCurrency:
+        data.display_in_currency ?? DEFAULT_CURRENCY_CONFIG.displayInCurrency,
+      quotaDisplayType:
+        (data.quota_display_type as CurrencyDisplayType | undefined) ??
+        DEFAULT_CURRENCY_CONFIG.quotaDisplayType,
+      quotaPerUnit: toNumber(
+        data.quota_per_unit,
+        DEFAULT_CURRENCY_CONFIG.quotaPerUnit
+      ),
+      usdExchangeRate: toNumber(
+        data.usd_exchange_rate,
+        DEFAULT_CURRENCY_CONFIG.usdExchangeRate
+      ),
+      customCurrencySymbol:
+        data.custom_currency_symbol?.trim() ||
+        DEFAULT_CURRENCY_CONFIG.customCurrencySymbol,
+      customCurrencyExchangeRate: toNumber(
+        data.custom_currency_exchange_rate,
+        DEFAULT_CURRENCY_CONFIG.customCurrencyExchangeRate
+      ),
+    }
+    nextConfig.currency = currency
+  }
+
+  return nextConfig
 }
 
 // Preload image and return cleanup function

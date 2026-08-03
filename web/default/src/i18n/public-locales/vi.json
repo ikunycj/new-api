@@ -323,6 +323,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
+    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "For 404 errors, confirm the custom base_url ends in /v1 exactly once.": "Đối với lỗi 404, xác nhận base_url tùy chỉnh kết thúc bằng /v1 đúng một lần.",
     "For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.": "Đối với lỗi 404, xóa /v1 khỏi ANTHROPIC_BASE_URL và khởi động lại Claude Code.",
     "For 404 errors, remove /v1 from GOOGLE_GEMINI_BASE_URL.": "Đối với lỗi 404, xóa /v1 khỏi GOOGLE_GEMINI_BASE_URL.",

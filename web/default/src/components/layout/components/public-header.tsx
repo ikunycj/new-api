@@ -360,7 +360,9 @@ export function PublicHeader(props: PublicHeaderProps) {
             <div className='flex items-center gap-2 sm:hidden'>
               {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
-                <ProfileDropdown />
+                <Suspense fallback={<Skeleton className='size-6 rounded-full' />}>
+                  <ProfileDropdown />
+                </Suspense>
               )}
               <Button
                 type='button'

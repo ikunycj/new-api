@@ -51,7 +51,7 @@ export function DefaultHome(props: DefaultHomeProps) {
         catalogAvailable={catalogAvailable}
       />
       <DeferUntilVisible waitForScroll>
-        <Suspense fallback={<div className='bg-muted/30 min-h-20' />}>
+        <Suspense fallback={<div className='bg-muted/30 min-h-32' />}>
           <BelowFoldHome
             catalogAvailable={catalogAvailable}
             isAuthenticated={props.isAuthenticated}

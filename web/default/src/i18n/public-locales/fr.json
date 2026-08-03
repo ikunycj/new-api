@@ -323,6 +323,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Projets liés",
     "footer.defaultCopyright": "Tous droits réservés.",
+    "footer.newapi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
     "For 404 errors, confirm the custom base_url ends in /v1 exactly once.": "Pour les erreurs 404, confirmez que le base_url personnalisé se termine exactement une fois par /v1.",
     "For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.": "Pour les erreurs 404, retirez /v1 de ANTHROPIC_BASE_URL et redémarrez Claude Code.",
     "For 404 errors, remove /v1 from GOOGLE_GEMINI_BASE_URL.": "Pour les erreurs 404, retirez /v1 de GOOGLE_GEMINI_BASE_URL.",

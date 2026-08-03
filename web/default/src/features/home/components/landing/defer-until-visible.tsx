@@ -34,9 +34,31 @@ export function DeferUntilVisible(props: DeferUntilVisibleProps) {
         return
       }
 
-      const reveal = () => setVisible(true)
+      let idleCallbackId: number | undefined
+      const fallbackTimerId = window.setTimeout(() => {
+        if ('requestIdleCallback' in window) {
+          idleCallbackId = window.requestIdleCallback(reveal, { timeout: 1000 })
+          return
+        }
+
+        reveal()
+      }, 2000)
+
+      function cleanup() {
+        window.removeEventListener('scroll', reveal)
+        window.clearTimeout(fallbackTimerId)
+        if (idleCallbackId !== undefined) {
+          window.cancelIdleCallback(idleCallbackId)
+        }
+      }
+
+      function reveal() {
+        cleanup()
+        setVisible(true)
+      }
+
       window.addEventListener('scroll', reveal, { once: true, passive: true })
-      return () => window.removeEventListener('scroll', reveal)
+      return cleanup
     }
 
     const marker = markerRef.current
@@ -62,6 +84,6 @@ export function DeferUntilVisible(props: DeferUntilVisibleProps) {
   if (visible) return props.children
 
   return (
-    <div ref={markerRef} className='bg-muted/30 min-h-20' aria-hidden='true' />
+    <div ref={markerRef} className='bg-muted/30 min-h-32' aria-hidden='true' />
   )
 }

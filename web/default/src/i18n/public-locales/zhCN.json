@@ -323,6 +323,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "For 404 errors, confirm the custom base_url ends in /v1 exactly once.": "对于 404 错误，请确认自定义 base_url 仅以 /v1 结尾一次。",
     "For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.": "对于 404 错误，从 ANTHROPIC_BASE_URL 中删除 /v1 并重新启动 Claude Code。",
     "For 404 errors, remove /v1 from GOOGLE_GEMINI_BASE_URL.": "对于 404 错误，从 GOOGLE_GEMINI_BASE_URL 中删除 /v1。",

@@ -385,12 +385,19 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
     const url = new URL(anchor.href, window.location.origin)
     if (
       url.origin !== window.location.origin ||
-      !url.pathname.startsWith('/docs')
+      url.pathname.startsWith('/api/') ||
+      url.pathname.startsWith('/v1/') ||
+      url.pathname.startsWith('/static/')
     ) {
       return
     }
     event.preventDefault()
-    await navigate({ to: url.pathname as DocsRoutePath, hash: url.hash })
+    const search = Object.fromEntries(url.searchParams.entries())
+    await navigate({
+      to: url.pathname as never,
+      ...(Object.keys(search).length > 0 ? { search: search as never } : {}),
+      hash: url.hash,
+    })
   }
 
   const handleChange = (event: React.FormEvent<HTMLDivElement>) => {
