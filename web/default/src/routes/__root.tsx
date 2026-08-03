@@ -32,7 +32,6 @@ import { getSetupStatus } from '@/features/setup/api'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { ensureFullLocale } from '@/i18n/config'
 import { getPublicBootstrap } from '@/lib/public-bootstrap'
 
 const NavigationProgress = lazy(() =>
@@ -164,11 +163,6 @@ export const Route = createRootRouteWithContext<{
     if (typeof window === 'undefined') return
 
     const pathname = location?.pathname || ''
-    const isPublicRoute =
-      pathname === '/' || pathname === '/docs' || pathname.startsWith('/docs/')
-    if (!isPublicRoute) {
-      await ensureFullLocale()
-    }
     const needsSetupCheck =
       !setupStatusChecked && !pathname.startsWith('/setup')
 

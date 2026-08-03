@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Footer } from '@/components/layout/components/footer'
-import { AffiliateCampaignBanner } from '@/features/affiliate-campaign'
+import { AffiliateCampaignBanner } from '@/features/affiliate-campaign/banner'
 
 import { useHomeCatalog } from '../../hooks/use-home-catalog'
 import { AiClientsSection } from './ai-clients-section'

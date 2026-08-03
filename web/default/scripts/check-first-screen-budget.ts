@@ -109,7 +109,7 @@ const criticalCssGzip = (
   )
 ).reduce((total, size) => total + size, 0)
 
-const localeDirectory = path.join(projectRoot, 'src/i18n/public-locales')
+const localeDirectory = path.join(projectRoot, 'src/i18n/locales')
 const localeFiles = (await readdir(localeDirectory))
   .filter((file) => file.endsWith('.json') && !file.startsWith('_'))
   .map((file) => path.join(localeDirectory, file))

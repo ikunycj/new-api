@@ -45,41 +45,13 @@ const fullLocaleLoaders: Record<
   zhTW: () => import('./locales/zh-TW.json'),
 }
 
-const publicLocaleLoaders: Record<
-  InterfaceLanguageCode,
-  () => Promise<LocaleModule>
-> = {
-  en: () => import('./public-locales/en.json'),
-  fr: () => import('./public-locales/fr.json'),
-  ja: () => import('./public-locales/ja.json'),
-  ru: () => import('./public-locales/ru.json'),
-  vi: () => import('./public-locales/vi.json'),
-  zhCN: () => import('./public-locales/zhCN.json'),
-  zhTW: () => import('./public-locales/zhTW.json'),
-}
-
-const fullLocales = new Set<InterfaceLanguageCode>()
-
-function isPublicRoute(): boolean {
-  if (typeof window === 'undefined') return true
-  const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
-  return (
-    pathname === '/' || pathname === '/docs' || pathname.startsWith('/docs/')
-  )
-}
-
 const localeBackend: BackendModule = {
   type: 'backend',
   init: () => undefined,
   read(language, _namespace, callback) {
     const locale = normalizeInterfaceLanguage(language) as InterfaceLanguageCode
-    const usePublicLocale = isPublicRoute()
-    const loader = usePublicLocale
-      ? publicLocaleLoaders[locale]
-      : fullLocaleLoaders[locale]
-    return loader().then(
+    return fullLocaleLoaders[locale]().then(
       (module) => {
-        if (!usePublicLocale) fullLocales.add(locale)
         // The i18next backend contract is callback-based around an async loader.
         // eslint-disable-next-line promise/no-callback-in-promise
         callback(null, module.default.translation)
@@ -93,23 +65,6 @@ const localeBackend: BackendModule = {
       }
     )
   },
-}
-
-export async function ensureFullLocale(language?: string): Promise<void> {
-  const locale = normalizeInterfaceLanguage(
-    language || i18n.resolvedLanguage || i18n.language
-  ) as InterfaceLanguageCode
-  if (fullLocales.has(locale)) return
-
-  const module = await fullLocaleLoaders[locale]()
-  i18n.addResourceBundle(
-    locale,
-    'translation',
-    module.default.translation,
-    true,
-    true
-  )
-  fullLocales.add(locale)
 }
 
 export const i18nReady = i18n
