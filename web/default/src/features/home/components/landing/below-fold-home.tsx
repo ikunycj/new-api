@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Footer } from '@/components/layout/components/footer'
 import { AffiliateCampaignBanner } from '@/features/affiliate-campaign/banner'
 
 import { useHomeCatalog } from '../../hooks/use-home-catalog'
@@ -62,7 +61,6 @@ export function BelowFoldHome(props: BelowFoldHomeProps) {
       </DeferUntilVisible>
       <FaqSection />
       <HomeCtaSection isAuthenticated={props.isAuthenticated} />
-      <Footer />
     </>
   )
 }

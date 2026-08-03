@@ -45,8 +45,6 @@ export interface CurrencyConfig {
 export interface SystemConfig {
   systemName: string
   logo: string
-  footerHtml?: string
-  demoSiteEnabled?: boolean
   displayTokenStatEnabled?: boolean
   currency: CurrencyConfig
 }
@@ -77,7 +75,7 @@ const ssrStorage: StateStorage = {
 
 /**
  * System configuration store with automatic persistence
- * Manages system name, logo, footer HTML and loading states
+ * Manages system name, logo, currency and loading states
  */
 export const useSystemConfigStore = create<SystemConfigState>()(
   persist(
@@ -121,6 +119,3 @@ export const getSystemName = () =>
   useSystemConfigStore.getState().config.systemName
 
 export const getLogo = () => useSystemConfigStore.getState().config.logo
-
-export const getFooterHtml = () =>
-  useSystemConfigStore.getState().config.footerHtml

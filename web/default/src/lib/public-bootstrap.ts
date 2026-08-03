@@ -26,10 +26,8 @@ export interface PublicStatus {
   [key: string]: unknown
   custom_currency_exchange_rate?: number
   custom_currency_symbol?: string
-  demo_site_enabled?: boolean
   display_in_currency?: boolean
   display_token_stat_enabled?: boolean
-  footer_html?: string
   logo?: string
   quota_display_type?: CurrencyDisplayType
   quota_per_unit?: number
