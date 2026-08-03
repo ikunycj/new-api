@@ -51,6 +51,12 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
 		return string(constant.EndpointTypeOpenAIResponse)
 	}
+	if channel != nil {
+		endpointTypes := common.GetEndpointTypesByChannelType(channel.Type, modelName)
+		if len(endpointTypes) > 0 && endpointTypes[0] == constant.EndpointTypeImageGeneration {
+			return string(constant.EndpointTypeImageGeneration)
+		}
+	}
 	return normalized
 }
 
