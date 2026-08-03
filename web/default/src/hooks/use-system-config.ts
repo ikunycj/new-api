@@ -37,6 +37,8 @@ interface StatusApiResponse {
   data: {
     system_name?: string
     logo?: string
+    footer_html?: string
+    demo_site_enabled?: boolean
     display_token_stat_enabled?: boolean
     display_in_currency?: boolean
     quota_display_type?: CurrencyDisplayType
@@ -73,7 +75,13 @@ export function mapStatusDataToConfig(
   }
   if (has('logo')) {
     nextConfig.logo =
-      !data.logo || data.logo === LEGACY_DEFAULT_LOGO ? DEFAULT_LOGO : data.logo
+      !data.logo || data.logo === LEGACY_DEFAULT_LOGO
+        ? DEFAULT_LOGO
+        : data.logo
+  }
+  if (has('footer_html')) nextConfig.footerHtml = data.footer_html
+  if (has('demo_site_enabled')) {
+    nextConfig.demoSiteEnabled = data.demo_site_enabled
   }
   if (has('display_token_stat_enabled')) {
     nextConfig.displayTokenStatEnabled = data.display_token_stat_enabled

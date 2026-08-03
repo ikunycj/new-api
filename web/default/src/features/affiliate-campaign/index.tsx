@@ -22,6 +22,7 @@ import { ArrowRight, CalendarClock, Gift, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
+import { Footer } from '@/components/layout/components/footer'
 import { Button } from '@/components/ui/button'
 import { formatTimestampToDate } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
@@ -123,6 +124,7 @@ export function AffiliateCampaignPage() {
           </div>
         </section>
       </main>
+      <Footer />
     </PublicLayout>
   )
 }
