@@ -29,6 +29,10 @@ type ModelRequest struct {
 	Group string `json:"group,omitempty"`
 }
 
+func isPlaygroundRequest(path string) bool {
+	return strings.HasPrefix(path, "/pg/")
+}
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
@@ -83,8 +87,7 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
+				if isPlaygroundRequest(c.Request.URL.Path) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
