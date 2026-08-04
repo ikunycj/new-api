@@ -26,7 +26,7 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 
-import { getSubmittableInputText } from '../../lib'
+import { getSubmittableInputText, isImageGenerationModel } from '../../lib'
 import type {
   ModelOption,
   GroupOption,
@@ -117,6 +117,7 @@ export function PlaygroundInput({
             groups={groups}
             groupValue={groupValue}
             isGenerating={isGenerating}
+            isImageGeneration={isImageGenerationModel(config.model)}
             isModelLoading={isModelLoading}
             models={models}
             modelValue={modelValue}

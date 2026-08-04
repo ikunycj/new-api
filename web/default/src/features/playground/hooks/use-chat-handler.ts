@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { sendChatCompletion } from '../api'
+import { generateImage, sendChatCompletion } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import {
   applyStreamingChunk,
@@ -30,7 +30,9 @@ import {
   parseRequestErrorDetails,
   applyChatCompletionResponse,
   completeAssistantMessage,
+  getMessageContent,
   hasChatCompletionChoice,
+  isImageGenerationModel,
   isAssistantMessageFinal,
   isAssistantMessagePending,
 } from '../lib'
@@ -279,16 +281,89 @@ export function useChatHandler({
     [config, parameterEnabled, onMessageUpdate, handleStreamError]
   )
 
+  const sendImageGeneration = useCallback(
+    async (messages: Message[]) => {
+      const promptMessage = [...messages]
+        .reverse()
+        .find((message) => message.from === 'user')
+      const prompt = promptMessage ? getMessageContent(promptMessage).trim() : ''
+
+      if (!prompt) {
+        handleStreamError(ERROR_MESSAGES.API_REQUEST_ERROR)
+        return
+      }
+
+      const requestId = requestIdRef.current + 1
+      const abortController = new AbortController()
+      requestIdRef.current = requestId
+
+      try {
+        setIsRequesting(true)
+        const response = await generateImage(
+          {
+            model: config.model,
+            group: config.group,
+            prompt,
+            n: Math.min(128, Math.max(1, Math.trunc(config.imageN))),
+            size: config.imageSize,
+            quality: config.imageQuality,
+            response_format: 'b64_json',
+          },
+          abortController.signal
+        )
+
+        if (abortController.signal.aborted) return
+
+        const images = (response.data ?? [])
+          .map((image) => ({
+            url:
+              image.url ||
+              (image.b64_json
+                ? `data:image/png;base64,${image.b64_json}`
+                : ''),
+            revisedPrompt: image.revised_prompt,
+          }))
+          .filter((image) => image.url)
+
+        if (images.length === 0) {
+          throw new Error(t('Image generation returned no images'))
+        }
+
+        onMessageUpdate((prev) =>
+          updateLastAssistantMessage(prev, (message) =>
+            completeAssistantMessage({ ...message, images })
+          )
+        )
+      } catch (error: unknown) {
+        if (abortController.signal.aborted) return
+
+        const { errorCode, errorMessage } = parseRequestErrorDetails(error)
+        handleStreamError(errorMessage, errorCode)
+      } finally {
+        if (requestIdRef.current === requestId) {
+          abortControllerRef.current = null
+          setIsRequesting(false)
+        }
+      }
+    },
+    [config, handleStreamError, onMessageUpdate, t]
+  )
+
   // Send chat request (stream or non-stream based on config)
   const sendChat = useCallback(
     (messages: Message[]) => {
+      if (isImageGenerationModel(config.model)) {
+        void sendImageGeneration(messages)
+        return
+      }
+
       if (config.stream) {
         sendStreamingChat(messages)
       } else {
         sendNonStreamingChat(messages)
       }
     },
-    [config.stream, sendStreamingChat, sendNonStreamingChat]
+    [config.model, config.stream, sendImageGeneration, sendStreamingChat, sendNonStreamingChat]
   )
 
   // Stop generation
