@@ -1,0 +1,48 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import type { ComponentType } from 'react'
+
+import { DocsApiIntegration } from './ai-model-api'
+import { DocsCcSwitch } from './cc-switch-guide'
+import { DocsClaudeCode } from './claude-code-guide'
+import { DocsCodex } from './codex-guide'
+import type { DocsRoutePath } from './docs-config'
+import { DocsGemini } from './gemini-guide'
+import { DocsHermes } from './hermes-guide'
+import { DocsModelPricing } from './model-pricing'
+import { DocsOpenClaw } from './openclaw-guide'
+import { DocsOpenCode } from './opencode-guide'
+import { DocsOverview } from './overview'
+import { DocsPayment } from './payment'
+import { DocsReferralRewards } from './referral-rewards'
+
+export const DOCS_PRERENDER_SOURCES = {
+  '/docs': DocsOverview,
+  '/docs/api/integration': DocsApiIntegration,
+  '/docs/model-pricing': DocsModelPricing,
+  '/docs/payment': DocsPayment,
+  '/docs/referral-rewards': DocsReferralRewards,
+  '/docs/tools/cc-switch': DocsCcSwitch,
+  '/docs/tools/claude-code': DocsClaudeCode,
+  '/docs/tools/codex': DocsCodex,
+  '/docs/tools/gemini': DocsGemini,
+  '/docs/tools/hermes': DocsHermes,
+  '/docs/tools/openclaw': DocsOpenClaw,
+  '/docs/tools/opencode': DocsOpenCode,
+} satisfies Record<DocsRoutePath, ComponentType>

@@ -1,0 +1,130 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+export const DOCS_LOCALE = 'zhCN'
+
+const DOCS_GROUPS = [
+  { id: 'overview', label: '概览' },
+  { id: 'tools', label: '工具使用与接入' },
+  { id: 'api-start', label: 'API 集成' },
+] as const
+
+export const DOCS_ROUTES = [
+  {
+    id: 'introduction',
+    group: 'overview',
+    label: '中转站介绍',
+    path: '/docs',
+    file: 'docs/index.html',
+  },
+  {
+    id: 'payment',
+    group: 'overview',
+    label: '计费与支付',
+    path: '/docs/payment',
+    file: 'docs/payment.html',
+  },
+  {
+    id: 'model-pricing',
+    group: 'overview',
+    label: '模型定价与消耗',
+    path: '/docs/model-pricing',
+    file: 'docs/model-pricing.html',
+  },
+  {
+    id: 'referral-rewards',
+    group: 'overview',
+    label: '推荐奖励',
+    path: '/docs/referral-rewards',
+    file: 'docs/referral-rewards.html',
+  },
+  {
+    id: 'cc-switch',
+    group: 'tools',
+    label: 'CC Switch 一键导入',
+    path: '/docs/tools/cc-switch',
+    file: 'docs/tools/cc-switch.html',
+  },
+  {
+    id: 'codex',
+    group: 'tools',
+    label: 'Codex',
+    path: '/docs/tools/codex',
+    file: 'docs/tools/codex.html',
+  },
+  {
+    id: 'claude-code',
+    group: 'tools',
+    label: 'Claude Code',
+    path: '/docs/tools/claude-code',
+    file: 'docs/tools/claude-code.html',
+  },
+  {
+    id: 'openclaw',
+    group: 'tools',
+    label: 'OpenClaw',
+    path: '/docs/tools/openclaw',
+    file: 'docs/tools/openclaw.html',
+  },
+  {
+    id: 'hermes',
+    group: 'tools',
+    label: 'Hermes',
+    path: '/docs/tools/hermes',
+    file: 'docs/tools/hermes.html',
+  },
+  {
+    id: 'opencode',
+    group: 'tools',
+    label: 'OpenCode',
+    path: '/docs/tools/opencode',
+    file: 'docs/tools/opencode.html',
+  },
+  {
+    id: 'gemini',
+    group: 'tools',
+    label: 'Gemini CLI',
+    path: '/docs/tools/gemini',
+    file: 'docs/tools/gemini.html',
+  },
+  {
+    id: 'api-integration',
+    group: 'api-start',
+    label: 'API 模型接口',
+    path: '/docs/api/integration',
+    file: 'docs/api/integration.html',
+  },
+] as const
+
+export type DocsPageId = (typeof DOCS_ROUTES)[number]['id']
+export type DocsRoutePath = (typeof DOCS_ROUTES)[number]['path']
+export type DocsNavigationItem = (typeof DOCS_ROUTES)[number]
+
+export type DocsNavigationGroup = {
+  id: (typeof DOCS_GROUPS)[number]['id']
+  label: string
+  items: DocsNavigationItem[]
+}
+
+export const DOCS_NAVIGATION_GROUPS: DocsNavigationGroup[] = DOCS_GROUPS.map(
+  (group) => ({
+    ...group,
+    items: DOCS_ROUTES.filter((route) => route.group === group.id),
+  })
+)

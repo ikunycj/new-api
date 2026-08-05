@@ -16,14 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export { DocsApiIntegration } from './ai-model-api'
-export { DocsCcSwitch } from './cc-switch-guide'
-export { DocsClaudeCode } from './claude-code-guide'
-export { DocsCodex } from './codex-guide'
-export { DocsGemini } from './gemini-guide'
-export { DocsHermes } from './hermes-guide'
-export { DocsModelPricing } from './model-pricing'
-export { DocsOpenClaw } from './openclaw-guide'
-export { DocsOpenCode } from './opencode-guide'
-export { DocsOverview } from './overview'
-export { DocsPayment } from './payment'
+import { createFileRoute } from '@tanstack/react-router'
+
+import { DocsPage } from '@/features/docs/docs-page'
+
+export const Route = createFileRoute('/docs/referral-rewards/')({
+  component: () => <DocsPage route='/docs/referral-rewards' />,
+})

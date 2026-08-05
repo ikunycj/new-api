@@ -29,56 +29,16 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { DOCS_LOCALE, DOCS_ROUTES } from '../src/features/docs/docs-config'
+
 const LANGUAGES = ['en', 'zhCN', 'zhTW', 'fr', 'ja', 'ru', 'vi'] as const
 const ROUTES = [
   { file: 'home.html', path: '/' },
-  { docId: 'introduction', file: 'docs/index.html', path: '/docs' },
-  { docId: 'payment', file: 'docs/payment.html', path: '/docs/payment' },
-  {
-    docId: 'model-pricing',
-    file: 'docs/model-pricing.html',
-    path: '/docs/model-pricing',
-  },
-  {
-    docId: 'cc-switch',
-    file: 'docs/tools/cc-switch.html',
-    path: '/docs/tools/cc-switch',
-  },
-  {
-    docId: 'codex',
-    file: 'docs/tools/codex.html',
-    path: '/docs/tools/codex',
-  },
-  {
-    docId: 'claude-code',
-    file: 'docs/tools/claude-code.html',
-    path: '/docs/tools/claude-code',
-  },
-  {
-    docId: 'openclaw',
-    file: 'docs/tools/openclaw.html',
-    path: '/docs/tools/openclaw',
-  },
-  {
-    docId: 'hermes',
-    file: 'docs/tools/hermes.html',
-    path: '/docs/tools/hermes',
-  },
-  {
-    docId: 'opencode',
-    file: 'docs/tools/opencode.html',
-    path: '/docs/tools/opencode',
-  },
-  {
-    docId: 'gemini',
-    file: 'docs/tools/gemini.html',
-    path: '/docs/tools/gemini',
-  },
-  {
-    docId: 'api-integration',
-    file: 'docs/api/integration.html',
-    path: '/docs/api/integration',
-  },
+  ...DOCS_ROUTES.map((route) => ({
+    docId: route.id,
+    file: route.file,
+    path: route.path,
+  })),
 ] as const
 
 interface DocsPayload {
@@ -157,13 +117,15 @@ try {
   const manifest: {
     locales: Record<string, Record<string, string>>
     version: number
-  } = { locales: {}, version: 1 }
+  } = { locales: { [DOCS_LOCALE]: {} }, version: 1 }
 
   for (const language of LANGUAGES) {
-    manifest.locales[language] = {}
     for (const route of ROUTES) {
+      const isDocsRoute = 'docId' in route
+      if (isDocsRoute && language !== DOCS_LOCALE) continue
+
       let docsPayload: PrerenderDocsPayload | undefined
-      if ('docId' in route) {
+      if (isDocsRoute) {
         const payload = await renderer.prepareDocsRoute(route.path, language)
         const serializedPayload = JSON.stringify(payload)
         const hash = createHash('sha256')
@@ -177,7 +139,7 @@ try {
           locale: language,
           route: route.path,
         }
-        manifest.locales[language][route.path] = fileName
+        manifest.locales[DOCS_LOCALE][route.path] = fileName
 
         const payloadPath = path.join(
           distRoot,

@@ -22,7 +22,6 @@ import {
   lazy,
   Suspense,
   useEffect,
-  useRef,
   useState,
   type ComponentType,
   type LazyExoticComponent,
@@ -32,7 +31,6 @@ import { toast } from 'sonner'
 
 import { PublicLayout } from '@/components/layout/components/public-layout'
 import { Button } from '@/components/ui/button'
-import { normalizeInterfaceLanguage } from '@/i18n/languages'
 import { getPublicBootstrap } from '@/lib/public-bootstrap'
 
 import {
@@ -40,35 +38,93 @@ import {
   putCachedDocsPage,
   type CachedDocsPage,
 } from './docs-cache'
+import { DOCS_LOCALE, type DocsRoutePath } from './docs-config'
+import {
+  getDocsRouteFromPathname,
+  installDocsVisibilityResume,
+  loadDocsRoute,
+  preloadDocsRoute,
+  startDocsBackgroundWarmup,
+} from './docs-loader'
 import { getPrerenderDocsPayload } from './docs-prerender-state'
 
-export type DocsRoutePath =
-  | '/docs'
-  | '/docs/payment'
-  | '/docs/model-pricing'
-  | '/docs/tools/cc-switch'
-  | '/docs/tools/codex'
-  | '/docs/tools/claude-code'
-  | '/docs/tools/openclaw'
-  | '/docs/tools/hermes'
-  | '/docs/tools/opencode'
-  | '/docs/tools/gemini'
-  | '/docs/api/integration'
-
-export interface DocsPayload {
-  html: string
-}
-
-interface DocsManifest {
-  locales: Record<string, Partial<Record<DocsRoutePath, string>>>
-  version: number
-}
+export type { DocsRoutePath } from './docs-config'
+export type { DocsPayload } from './docs-loader'
 
 interface DocsPageState {
   cacheKey: string
   error: boolean
   fileName: string
   rawHtml: string
+}
+
+let lastVisibleDocsPage: DocsPageState | undefined
+
+function DocsPendingOverlay(props: { error?: boolean; onRetry?: () => void }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='bg-background/60 absolute inset-0 z-10 flex items-start justify-center pt-3 backdrop-blur-[1px]'>
+      {props.error && props.onRetry ? (
+        <div className='border-border bg-card/95 text-muted-foreground flex items-center gap-3 rounded-md border px-3 py-2 text-sm shadow-sm'>
+          <span>{t('Failed to load')}</span>
+          <Button size='sm' variant='outline' onClick={props.onRetry}>
+            {t('Retry')}
+          </Button>
+        </div>
+      ) : (
+        <div className='bg-primary/70 h-0.5 w-32 animate-pulse rounded-full' />
+      )}
+    </div>
+  )
+}
+
+function DocsLoadingSkeleton(props: { error?: boolean; onRetry?: () => void }) {
+  const { t } = useTranslation()
+
+  if (props.error && props.onRetry) {
+    return (
+      <PublicLayout showMainContainer={false}>
+        <main className='flex min-h-svh items-center justify-center px-4 pt-16'>
+          <div className='flex flex-col items-center gap-3'>
+            <p className='text-muted-foreground text-sm'>
+              {t('Failed to load')}
+            </p>
+            <Button size='sm' onClick={props.onRetry}>
+              {t('Retry')}
+            </Button>
+          </div>
+        </main>
+      </PublicLayout>
+    )
+  }
+
+  return (
+    <PublicLayout showMainContainer={false}>
+      <main
+        aria-busy='true'
+        aria-label={t('Loading...')}
+        className='mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-8 px-4 pt-24 md:grid-cols-[256px_minmax(0,760px)] md:px-6 xl:grid-cols-[256px_minmax(0,760px)_190px] xl:gap-12'
+      >
+        <aside className='hidden md:block'>
+          <div className='border-border bg-card h-96 animate-pulse rounded-lg border p-4' />
+        </aside>
+        <section className='min-w-0 animate-pulse space-y-6'>
+          <div className='bg-muted h-4 w-28 rounded' />
+          <div className='bg-muted h-10 w-2/3 rounded' />
+          <div className='space-y-3'>
+            <div className='bg-muted h-4 w-full rounded' />
+            <div className='bg-muted h-4 w-5/6 rounded' />
+            <div className='bg-muted h-4 w-3/4 rounded' />
+          </div>
+          <div className='bg-muted h-56 w-full rounded-lg' />
+        </section>
+        <aside className='hidden xl:block'>
+          <div className='border-border h-48 animate-pulse border-l pl-5' />
+        </aside>
+      </main>
+    </PublicLayout>
+  )
 }
 
 const developmentDocsLoaders = import.meta.env.DEV
@@ -87,6 +143,10 @@ const developmentDocsLoaders = import.meta.env.DEV
         })),
       '/docs/payment': () =>
         import('./payment').then((module) => ({ default: module.DocsPayment })),
+      '/docs/referral-rewards': () =>
+        import('./referral-rewards').then((module) => ({
+          default: module.DocsReferralRewards,
+        })),
       '/docs/tools/cc-switch': () =>
         import('./cc-switch-guide').then((module) => ({
           default: module.DocsCcSwitch,
@@ -122,6 +182,17 @@ const developmentDocsComponents = new Map<
   DocsRoutePath,
   LazyExoticComponent<ComponentType>
 >()
+let lastDevelopmentComponent: LazyExoticComponent<ComponentType> | undefined
+
+function LoadedDevelopmentDocs(props: {
+  component: LazyExoticComponent<ComponentType>
+}) {
+  useEffect(() => {
+    lastDevelopmentComponent = props.component
+  }, [props.component])
+  const Component = props.component
+  return <Component />
+}
 
 function DevelopmentDocsPage(props: { route: DocsRoutePath }) {
   const loader = developmentDocsLoaders?.[props.route]
@@ -132,9 +203,22 @@ function DevelopmentDocsPage(props: { route: DocsRoutePath }) {
     Component = lazy(loader)
     developmentDocsComponents.set(props.route, Component)
   }
+
+  const PreviousComponent = lastDevelopmentComponent
   return (
-    <Suspense fallback={null}>
-      <Component />
+    <Suspense
+      fallback={
+        PreviousComponent ? (
+          <div className='relative'>
+            <PreviousComponent />
+            <DocsPendingOverlay />
+          </div>
+        ) : (
+          <DocsLoadingSkeleton />
+        )
+      }
+    >
+      <LoadedDevelopmentDocs component={Component} />
     </Suspense>
   )
 }
@@ -170,12 +254,12 @@ function restoreServerAddressMarker(html: string): string {
     : html
 }
 
-function getInitialState(route: DocsRoutePath, locale: string): DocsPageState {
-  const cacheKey = `${locale}:${route}`
+function getInitialState(route: DocsRoutePath): DocsPageState {
+  const cacheKey = `${DOCS_LOCALE}:${route}`
   const prerenderDocsPayload = getPrerenderDocsPayload()
   if (
     prerenderDocsPayload?.route === route &&
-    prerenderDocsPayload.locale === locale
+    prerenderDocsPayload.locale === DOCS_LOCALE
   ) {
     return {
       cacheKey,
@@ -201,95 +285,23 @@ function getInitialState(route: DocsRoutePath, locale: string): DocsPageState {
   return { cacheKey, error: false, fileName: '', rawHtml: '' }
 }
 
-async function getManifestFileName(
-  locale: string,
-  route: DocsRoutePath
-): Promise<string> {
-  const response = await fetch('/static/docs/manifest.json', {
-    cache: 'no-cache',
-    credentials: 'same-origin',
-  })
-  if (!response.ok) throw new Error('Documentation manifest unavailable')
-  const manifest = (await response.json()) as DocsManifest
-  const fileName = manifest.locales?.[locale]?.[route]
-  if (!fileName) throw new Error('Documentation route missing from manifest')
-  return fileName
-}
-
-async function fetchDocsPayload(
-  locale: string,
-  fileName: string
-): Promise<DocsPayload> {
-  const response = await fetch(`/static/docs/${locale}/${fileName}`, {
-    cache: 'force-cache',
-    credentials: 'same-origin',
-  })
-  if (!response.ok) throw new Error('Documentation payload unavailable')
-  const payload = (await response.json()) as DocsPayload
-  if (typeof payload.html !== 'string') {
-    throw new Error('Documentation payload is invalid')
-  }
-  return payload
-}
-
 function CachedDocsPage(props: { route: DocsRoutePath }) {
-  const { i18n, t } = useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
-  const locale = normalizeInterfaceLanguage(
-    i18n.resolvedLanguage || i18n.language
-  )
-  const cacheKey = `${locale}:${props.route}`
+  const cacheKey = `${DOCS_LOCALE}:${props.route}`
   const [retryKey, setRetryKey] = useState(0)
-  const [page, setPage] = useState<DocsPageState>(() =>
-    getInitialState(props.route, locale)
-  )
-  const pageRef = useRef(page)
-  pageRef.current = page
+  const [initialPage] = useState(() => getInitialState(props.route))
+  const [page, setPage] = useState<DocsPageState>(initialPage)
+  const [isLoading, setIsLoading] = useState(!initialPage.rawHtml)
+  const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
     let active = true
-    let idleId: number | undefined
-
-    const refresh = async (cached: CachedDocsPage | undefined) => {
-      try {
-        const currentFileName = await getManifestFileName(locale, props.route)
-        if (!active) return
-
-        const visible = pageRef.current
-        if (
-          cached?.fileName === currentFileName ||
-          (visible.cacheKey === cacheKey &&
-            visible.fileName === currentFileName &&
-            visible.rawHtml)
-        ) {
-          return
-        }
-
-        const payload = await fetchDocsPayload(locale, currentFileName)
-        if (!active) return
-        const nextPage: CachedDocsPage = {
-          fileName: currentFileName,
-          html: payload.html,
-          key: cacheKey,
-          savedAt: Date.now(),
-        }
-        setPage({
-          cacheKey,
-          error: false,
-          fileName: nextPage.fileName,
-          rawHtml: nextPage.html,
-        })
-        await putCachedDocsPage(nextPage)
-      } catch {
-        if (active && !pageRef.current.rawHtml) {
-          setPage({ cacheKey, error: true, fileName: '', rawHtml: '' })
-        }
-      }
-    }
 
     const load = async () => {
-      const initial =
-        pageRef.current.cacheKey === cacheKey ? pageRef.current : undefined
+      if (!initialPage.rawHtml) setIsLoading(true)
+      setHasError(false)
+      const initial = initialPage.rawHtml ? initialPage : undefined
       if (initial?.rawHtml && initial.fileName) {
         await putCachedDocsPage({
           fileName: initial.fileName,
@@ -301,54 +313,60 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
 
       const cached = await getCachedDocsPage(cacheKey)
       if (!active) return
-      if (!initial?.rawHtml && cached) {
+      const initialCachedPage: CachedDocsPage | undefined = initial
+        ? {
+            key: cacheKey,
+            fileName: initial.fileName,
+            html: initial.rawHtml,
+            savedAt: Date.now(),
+          }
+        : undefined
+      const visibleCachedPage = initialCachedPage ?? cached
+      if (visibleCachedPage?.html) {
         setPage({
           cacheKey,
           error: false,
-          fileName: cached.fileName,
-          rawHtml: cached.html,
+          fileName: visibleCachedPage.fileName,
+          rawHtml: visibleCachedPage.html,
         })
+        setIsLoading(false)
       }
 
-      if (initial?.rawHtml || cached?.html) {
-        const idleWindow = window as Window & {
-          requestIdleCallback?: (
-            callback: IdleRequestCallback,
-            options?: IdleRequestOptions
-          ) => number
-        }
-        if (idleWindow.requestIdleCallback) {
-          idleId = idleWindow.requestIdleCallback(
-            () => {
-              void refresh(cached)
-            },
-            { timeout: 2000 }
-          )
-        } else {
-          idleId = window.setTimeout(() => {
-            void refresh(cached)
-          }, 500)
-        }
-        return
+      try {
+        const loaded = await loadDocsRoute(props.route, visibleCachedPage)
+        if (!active) return
+        setPage({
+          cacheKey,
+          error: false,
+          fileName: loaded.fileName,
+          rawHtml: loaded.html,
+        })
+        setIsLoading(false)
+        setHasError(false)
+        startDocsBackgroundWarmup(props.route)
+      } catch {
+        if (!active) return
+        setIsLoading(false)
+        setHasError(true)
       }
-
-      await refresh(cached)
     }
 
     void load()
     return () => {
       active = false
-      if (idleId === undefined) return
-      const idleWindow = window as Window & {
-        cancelIdleCallback?: (handle: number) => void
-      }
-      if (idleWindow.cancelIdleCallback) {
-        idleWindow.cancelIdleCallback(idleId)
-      } else {
-        window.clearTimeout(idleId)
-      }
     }
-  }, [cacheKey, locale, props.route, retryKey])
+  }, [cacheKey, initialPage, props.route, retryKey])
+
+  useEffect(() => {
+    installDocsVisibilityResume()
+    if (
+      typeof window !== 'undefined' &&
+      page.cacheKey === cacheKey &&
+      page.rawHtml
+    ) {
+      lastVisibleDocsPage = page
+    }
+  }, [cacheKey, page])
 
   const handleClick = async (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target
@@ -391,6 +409,10 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
     ) {
       return
     }
+    const targetRoute = getDocsRouteFromPathname(url.pathname)
+    if (targetRoute && targetRoute !== props.route) {
+      preloadDocsRoute(targetRoute)
+    }
     event.preventDefault()
     const search = Object.fromEntries(url.searchParams.entries())
     await navigate({
@@ -408,44 +430,61 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
     ) {
       return
     }
+    const targetRoute = getDocsRouteFromPathname(target.value)
+    if (targetRoute && targetRoute !== props.route) {
+      preloadDocsRoute(targetRoute)
+    }
     void navigate({ to: target.value as DocsRoutePath })
   }
 
-  const visiblePage = page.cacheKey === cacheKey ? page : undefined
+  const handleIntent = (
+    event: React.MouseEvent<HTMLDivElement> | React.FocusEvent<HTMLDivElement>
+  ) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const anchor = target.closest<HTMLAnchorElement>('a[href]')
+    if (!anchor) return
+    const route = getDocsRouteFromPathname(
+      new URL(anchor.href, window.location.origin).pathname
+    )
+    if (route && route !== props.route) preloadDocsRoute(route)
+  }
+
+  const currentPage =
+    page.cacheKey === cacheKey && page.rawHtml ? page : undefined
+  const visiblePage = currentPage ?? lastVisibleDocsPage
   if (!visiblePage?.rawHtml) {
-    return (
-      <PublicLayout showMainContainer={false}>
-        <main className='flex min-h-svh items-center justify-center pt-16'>
-          {visiblePage?.error ? (
-            <div className='flex flex-col items-center gap-3'>
-              <p className='text-muted-foreground text-sm'>
-                {t('Failed to load')}
-              </p>
-              <Button
-                size='sm'
-                onClick={() => setRetryKey((value) => value + 1)}
-              >
-                {t('Retry')}
-              </Button>
-            </div>
-          ) : (
-            <p className='text-muted-foreground text-sm'>{t('Loading...')}</p>
-          )}
-        </main>
-      </PublicLayout>
+    return hasError ? (
+      <DocsLoadingSkeleton
+        error
+        onRetry={() => setRetryKey((value) => value + 1)}
+      />
+    ) : (
+      <DocsLoadingSkeleton />
     )
   }
 
   return (
     <PublicLayout showMainContainer={false}>
-      <div
-        data-doc-content-host={props.route}
-        onClick={(event) => void handleClick(event)}
-        onChange={handleChange}
-        dangerouslySetInnerHTML={{
-          __html: resolveDocsHtml(visiblePage.rawHtml),
-        }}
-      />
+      <div className='relative'>
+        <div
+          aria-busy={isLoading || hasError}
+          data-doc-content-host={props.route}
+          onClick={(event) => void handleClick(event)}
+          onChange={handleChange}
+          onMouseOver={handleIntent}
+          onFocusCapture={handleIntent}
+          dangerouslySetInnerHTML={{
+            __html: resolveDocsHtml(visiblePage.rawHtml),
+          }}
+        />
+        {(isLoading || hasError) && (
+          <DocsPendingOverlay
+            error={hasError}
+            onRetry={() => setRetryKey((value) => value + 1)}
+          />
+        )}
+      </div>
     </PublicLayout>
   )
 }

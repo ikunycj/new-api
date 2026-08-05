@@ -38,6 +38,7 @@ import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
+import { Route as DocsReferralRewardsIndexRouteImport } from './routes/docs/referral-rewards/index'
 import { Route as DocsPaymentIndexRouteImport } from './routes/docs/payment/index'
 import { Route as DocsModelPricingIndexRouteImport } from './routes/docs/model-pricing/index'
 import { Route as DocsIntegrationsIndexRouteImport } from './routes/docs/integrations/index'
@@ -230,6 +231,12 @@ const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   path: '/pricing/$modelId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsReferralRewardsIndexRoute =
+  DocsReferralRewardsIndexRouteImport.update({
+    id: '/docs/referral-rewards/',
+    path: '/docs/referral-rewards/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DocsPaymentIndexRoute = DocsPaymentIndexRouteImport.update({
   id: '/docs/payment/',
   path: '/docs/payment/',
@@ -550,6 +557,7 @@ export interface FileRoutesByFullPath {
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
   '/docs/payment/': typeof DocsPaymentIndexRoute
+  '/docs/referral-rewards/': typeof DocsReferralRewardsIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -625,6 +633,7 @@ export interface FileRoutesByTo {
   '/docs/integrations': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing': typeof DocsModelPricingIndexRoute
   '/docs/payment': typeof DocsPaymentIndexRoute
+  '/docs/referral-rewards': typeof DocsReferralRewardsIndexRoute
   '/pricing/$modelId': typeof PricingModelIdIndexRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -704,6 +713,7 @@ export interface FileRoutesById {
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
   '/docs/payment/': typeof DocsPaymentIndexRoute
+  '/docs/referral-rewards/': typeof DocsReferralRewardsIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
   '/_authenticated/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/_authenticated/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -782,6 +792,7 @@ export interface FileRouteTypes {
     | '/docs/integrations/'
     | '/docs/model-pricing/'
     | '/docs/payment/'
+    | '/docs/referral-rewards/'
     | '/pricing/$modelId/'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
@@ -857,6 +868,7 @@ export interface FileRouteTypes {
     | '/docs/integrations'
     | '/docs/model-pricing'
     | '/docs/payment'
+    | '/docs/referral-rewards'
     | '/pricing/$modelId'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
@@ -935,6 +947,7 @@ export interface FileRouteTypes {
     | '/docs/integrations/'
     | '/docs/model-pricing/'
     | '/docs/payment/'
+    | '/docs/referral-rewards/'
     | '/pricing/$modelId/'
     | '/_authenticated/system-settings/auth/$section'
     | '/_authenticated/system-settings/billing/$section'
@@ -984,6 +997,7 @@ export interface RootRouteChildren {
   DocsIntegrationsIndexRoute: typeof DocsIntegrationsIndexRoute
   DocsModelPricingIndexRoute: typeof DocsModelPricingIndexRoute
   DocsPaymentIndexRoute: typeof DocsPaymentIndexRoute
+  DocsReferralRewardsIndexRoute: typeof DocsReferralRewardsIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
   DocsApiIntegrationIndexRoute: typeof DocsApiIntegrationIndexRoute
   DocsToolsCcSwitchIndexRoute: typeof DocsToolsCcSwitchIndexRoute
@@ -1198,6 +1212,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing/$modelId'
       fullPath: '/pricing/$modelId/'
       preLoaderRoute: typeof PricingModelIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/referral-rewards/': {
+      id: '/docs/referral-rewards/'
+      path: '/docs/referral-rewards'
+      fullPath: '/docs/referral-rewards/'
+      preLoaderRoute: typeof DocsReferralRewardsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/payment/': {
@@ -1693,6 +1714,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsIntegrationsIndexRoute: DocsIntegrationsIndexRoute,
   DocsModelPricingIndexRoute: DocsModelPricingIndexRoute,
   DocsPaymentIndexRoute: DocsPaymentIndexRoute,
+  DocsReferralRewardsIndexRoute: DocsReferralRewardsIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
   DocsApiIntegrationIndexRoute: DocsApiIntegrationIndexRoute,
   DocsToolsCcSwitchIndexRoute: DocsToolsCcSwitchIndexRoute,

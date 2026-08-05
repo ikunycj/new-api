@@ -16,371 +16,170 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowRight01Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Key01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
-import { ApiEndpointSection } from './components/api-endpoint-section'
 import { CodeBlock } from './components/code-block'
 import { DocsShell } from './components/docs-shell'
+import { DocsTable } from './components/docs-table'
 import { NumberedSteps } from './components/numbered-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 export function DocsApiIntegration() {
-  const { t } = useTranslation()
   const baseUrl = useDocsBaseUrl()
+  const serviceAddress = `${baseUrl}`
   const listModels = `curl "${baseUrl}/v1/models" \\
   -H "Authorization: Bearer sk-your-api-key"`
-  const chatCompletions = `curl "${baseUrl}/v1/chat/completions" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "your-model-id",
-    "messages": [
-      {"role": "user", "content": "Hello"}
-    ],
-    "stream": false
-  }'`
-  const responses = `curl "${baseUrl}/v1/responses" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "your-model-id",
-    "input": "Summarize the benefits of a unified AI gateway."
-  }'`
-  const anthropicMessages = `curl "${baseUrl}/v1/messages" \\
-  -H "x-api-key: sk-your-api-key" \\
-  -H "anthropic-version: 2023-06-01" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "your-model-id",
-    "max_tokens": 256,
-    "messages": [
-      {"role": "user", "content": "Hello"}
-    ]
-  }'`
-  const geminiGenerateContent = `curl "${baseUrl}/v1beta/models/your-model-id:generateContent" \\
-  -H "x-goog-api-key: sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "contents": [
-      {
-        "role": "user",
-        "parts": [{"text": "Hello"}]
-      }
-    ]
-  }'`
-  const embeddings = `curl "${baseUrl}/v1/embeddings" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "your-embedding-model-id",
-    "input": "A short document to embed"
-  }'`
-  const streamingRequest = `curl -N "${baseUrl}/v1/chat/completions" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "your-model-id",
-    "messages": [
-      {"role": "user", "content": "Count from one to five"}
-    ],
-    "stream": true
-  }'`
 
   return (
     <DocsShell
       pageId='api-integration'
-      title={t('API integration guide')}
-      description={t(
-        'Create an API key, choose the protocol required by the model, send a test request, and verify the result.'
-      )}
+      title='API 模型接口'
+      description='All Token API 的主要模型接口、认证方式和协议选择入口。'
       toc={[
-        { id: 'quick-start', label: t('Quick start') },
-        { id: 'choose-protocol', label: t('Choose an API protocol') },
-        { id: 'authentication', label: t('Authentication') },
-        { id: 'list-models', label: t('List models') },
-        { id: 'chat-completions', label: t('Chat completions') },
-        { id: 'responses-api', label: t('Responses API') },
-        { id: 'anthropic-messages', label: t('Anthropic Messages API') },
-        { id: 'gemini-api', label: t('Gemini generateContent API') },
-        { id: 'embeddings', label: t('Embeddings') },
-        { id: 'streaming', label: t('Verify streaming') },
-        { id: 'errors', label: t('Errors and request IDs') },
+        { id: 'service-address', label: '服务地址' },
+        { id: 'authentication', label: '认证方式' },
+        { id: 'choose-endpoint', label: '选择正确的接口' },
+        { id: 'status-codes', label: '常见状态码' },
       ]}
     >
-      <section id='quick-start' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Quick start')}</h2>
-        <NumberedSteps
-          items={[
-            t('Create an API key and keep it on your application server.'),
-            t('List the models available to that key.'),
-            t('Check the selected model endpoint type on the pricing page.'),
-            t('Replace the placeholder model ID in the matching example.'),
-            t('Send a small request and verify its usage log.'),
-          ]}
-        />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            {t('Open API keys')}
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
-          </Button>
-          <Button variant='outline' render={<Link to='/pricing' />}>
-            {t('Open model pricing')}
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
-          </Button>
-          <Button variant='outline' render={<Link to='/usage-logs' />}>
-            {t('Open usage logs')}
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
-          </Button>
-        </div>
-      </section>
-
-      <section id='choose-protocol' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          {t('Choose an API protocol')}
-        </h2>
+      <section id='service-address' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>服务地址</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Use the endpoint type shown for the model. A model name alone does not guarantee that every protocol is available.'
-          )}
+          以下示例使用当前站点地址。不同客户端对 Base URL 的要求不同：OpenAI
+          兼容 SDK 通常使用带
+          <code className='mx-1'>/v1</code>
+          的地址，Claude Code 和 Gemini CLI 通常使用不带版本路径的服务根地址。
         </p>
-        <div className='border-border mt-5 overflow-x-auto rounded-lg border'>
-          <table className='w-full min-w-[620px] text-left text-sm'>
-            <thead className='bg-muted/40 text-muted-foreground'>
-              <tr>
-                <th className='px-4 py-3 font-medium'>{t('Protocol')}</th>
-                <th className='px-4 py-3 font-medium'>{t('Endpoint')}</th>
-                <th className='px-4 py-3 font-medium'>{t('Typical use')}</th>
-              </tr>
-            </thead>
-            <tbody className='divide-border divide-y'>
-              <tr>
-                <td className='px-4 py-3'>OpenAI Chat Completions</td>
-                <td className='px-4 py-3 font-mono'>/v1/chat/completions</td>
-                <td className='px-4 py-3'>
-                  {t('OpenAI-compatible chat clients and SDKs')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3'>OpenAI Responses</td>
-                <td className='px-4 py-3 font-mono'>/v1/responses</td>
-                <td className='px-4 py-3'>
-                  {t('Responses-compatible agents and tools')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3'>Anthropic Messages</td>
-                <td className='px-4 py-3 font-mono'>/v1/messages</td>
-                <td className='px-4 py-3'>
-                  {t('Claude and Anthropic-compatible clients')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3'>Gemini</td>
-                <td className='px-4 py-3 font-mono'>/v1beta/models/...</td>
-                <td className='px-4 py-3'>{t('Gemini SDKs and Gemini CLI')}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div className='mt-5'>
+          <CodeBlock code={serviceAddress} label='服务根地址' />
         </div>
       </section>
 
       <section id='authentication' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Authentication')}</h2>
+        <h2 className='text-2xl font-semibold'>认证方式</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Send your API key as a Bearer token with every OpenAI-compatible request. Keep keys on the server and never expose them in browser code.'
-          )}
-        </p>
-        <Alert className='mt-5'>
-          <HugeiconsIcon icon={Key01Icon} aria-hidden='true' />
-          <AlertTitle>{t('Authorization header')}</AlertTitle>
-          <AlertDescription>
-            <code>Authorization: Bearer sk-your-api-key</code>
-          </AlertDescription>
-        </Alert>
-        <p className='text-muted-foreground mt-4 leading-7'>
-          {t(
-            'Anthropic-compatible requests use x-api-key together with anthropic-version. Gemini requests can use x-goog-api-key; using a header avoids placing the secret in the request URL.'
-          )}
-        </p>
-      </section>
-
-      <ApiEndpointSection
-        id='list-models'
-        title={t('List models')}
-        description={t(
-          'Returns the models currently available to the authenticated API key.'
-        )}
-        method='GET'
-        path='/v1/models'
-      >
-        <CodeBlock code={listModels} label='cURL' />
-      </ApiEndpointSection>
-
-      <ApiEndpointSection
-        id='chat-completions'
-        title={t('Chat completions')}
-        description={t(
-          'Creates a model response from a conversation and supports streaming when stream is true.'
-        )}
-        method='POST'
-        path='/v1/chat/completions'
-      >
-        <CodeBlock code={chatCompletions} label='cURL' />
-        <div className='border-border overflow-x-auto rounded-lg border'>
-          <table className='w-full min-w-[560px] text-left text-sm'>
-            <thead className='bg-muted/40 text-muted-foreground'>
-              <tr>
-                <th className='px-4 py-3 font-medium'>{t('Field')}</th>
-                <th className='px-4 py-3 font-medium'>{t('Type')}</th>
-                <th className='px-4 py-3 font-medium'>{t('Description')}</th>
-              </tr>
-            </thead>
-            <tbody className='divide-border divide-y'>
-              <tr>
-                <td className='px-4 py-3 font-mono'>model</td>
-                <td className='text-muted-foreground px-4 py-3'>string</td>
-                <td className='px-4 py-3'>{t('Exact model ID to use.')}</td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>messages</td>
-                <td className='text-muted-foreground px-4 py-3'>array</td>
-                <td className='px-4 py-3'>
-                  {t('Conversation messages in chronological order.')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>stream</td>
-                <td className='text-muted-foreground px-4 py-3'>boolean</td>
-                <td className='px-4 py-3'>
-                  {t('Streams incremental events when enabled.')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>temperature</td>
-                <td className='text-muted-foreground px-4 py-3'>number</td>
-                <td className='px-4 py-3'>
-                  {t('Controls response randomness when supported.')}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </ApiEndpointSection>
-
-      <ApiEndpointSection
-        id='responses-api'
-        title={t('Responses API')}
-        description={t(
-          'Uses the Responses format for text generation and tool-enabled workflows.'
-        )}
-        method='POST'
-        path='/v1/responses'
-      >
-        <CodeBlock code={responses} label='cURL' />
-      </ApiEndpointSection>
-
-      <ApiEndpointSection
-        id='anthropic-messages'
-        title={t('Anthropic Messages API')}
-        description={t(
-          'Sends Anthropic-format messages. Use a model that supports the Anthropic endpoint type and include max_tokens.'
-        )}
-        method='POST'
-        path='/v1/messages'
-      >
-        <CodeBlock code={anthropicMessages} label='cURL' />
-      </ApiEndpointSection>
-
-      <ApiEndpointSection
-        id='gemini-api'
-        title={t('Gemini generateContent API')}
-        description={t(
-          'Sends Gemini-format contents to generateContent. Put the exact model ID in the request path.'
-        )}
-        method='POST'
-        path='/v1beta/models/{model}:generateContent'
-      >
-        <CodeBlock code={geminiGenerateContent} label='cURL' />
-      </ApiEndpointSection>
-
-      <ApiEndpointSection
-        id='embeddings'
-        title={t('Embeddings')}
-        description={t(
-          'Converts text into vectors for semantic search, clustering, and retrieval.'
-        )}
-        method='POST'
-        path='/v1/embeddings'
-      >
-        <CodeBlock code={embeddings} label='cURL' />
-      </ApiEndpointSection>
-
-      <section id='streaming' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Verify streaming')}</h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Use curl -N and stream: true. A working stream returns incremental server-sent events before the request finishes.'
-          )}
+          不同协议使用不同的认证请求头。API Key
+          只应保存在服务端、受信任的本地客户端或安全的环境变量中。
         </p>
         <div className='mt-5'>
-          <CodeBlock code={streamingRequest} label='cURL' />
+          <DocsTable
+            headers={['协议', '认证方式']}
+            rows={[
+              {
+                key: 'openai',
+                cells: [
+                  'OpenAI 兼容接口',
+                  <code key='openai-auth'>
+                    Authorization: Bearer sk-your-api-key
+                  </code>,
+                ],
+              },
+              {
+                key: 'anthropic',
+                cells: [
+                  'Anthropic Messages',
+                  <span key='anthropic-auth'>
+                    <code>x-api-key: sk-your-api-key</code>，并提供{' '}
+                    <code>anthropic-version</code>
+                  </span>,
+                ],
+              },
+              {
+                key: 'gemini',
+                cells: [
+                  'Gemini 原生接口',
+                  <code key='gemini-auth'>
+                    x-goog-api-key: sk-your-api-key
+                  </code>,
+                ],
+              },
+            ]}
+          />
+        </div>
+        <Alert className='mt-5'>
+          <HugeiconsIcon icon={Key01Icon} aria-hidden='true' />
+          <AlertTitle>先用当前密钥获取模型</AlertTitle>
+          <AlertDescription>
+            不同 API Key
+            的分组和模型限制可能不同。使用生产密钥请求模型列表，才能看到它实际可调用的范围。
+          </AlertDescription>
+        </Alert>
+        <div className='mt-5'>
+          <CodeBlock code={listModels} label='cURL' />
         </div>
       </section>
 
-      <section id='errors' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          {t('Errors and request IDs')}
-        </h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Record the HTTP status, response message, request ID, timestamp, model, and endpoint when diagnosing a failed request.'
-          )}
-        </p>
-        <div className='border-border mt-5 overflow-x-auto rounded-lg border'>
-          <table className='w-full min-w-[520px] text-left text-sm'>
-            <thead className='bg-muted/40 text-muted-foreground'>
-              <tr>
-                <th className='px-4 py-3 font-medium'>{t('Status')}</th>
-                <th className='px-4 py-3 font-medium'>{t('Meaning')}</th>
-              </tr>
-            </thead>
-            <tbody className='divide-border divide-y'>
-              <tr>
-                <td className='px-4 py-3 font-mono'>400</td>
-                <td className='px-4 py-3'>
-                  {t('The request body or selected model is not valid.')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>401</td>
-                <td className='px-4 py-3'>
-                  {t('The API key is missing or invalid.')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>429</td>
-                <td className='px-4 py-3'>
-                  {t('The rate limit or available quota was exceeded.')}
-                </td>
-              </tr>
-              <tr>
-                <td className='px-4 py-3 font-mono'>5xx</td>
-                <td className='px-4 py-3'>
-                  {t(
-                    'The gateway or an upstream provider could not complete the request.'
-                  )}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <section id='choose-endpoint' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>选择正确的接口</h2>
+        <NumberedSteps
+          items={[
+            '使用当前 API Key 请求模型列表。',
+            '在模型定价页确认模型支持的端点类型。',
+            '使用与端点匹配的请求格式，不要仅根据模型名称推测兼容性。',
+            '先发送小型非流式请求，再启用流式输出、工具调用或多模态内容。',
+          ]}
+        />
+        <div className='mt-5 flex flex-wrap gap-3'>
+          <Button nativeButton={false} render={<Link to='/keys' />}>
+            打开 API 密钥
+          </Button>
+          <Button
+            nativeButton={false}
+            variant='outline'
+            render={<Link to='/pricing' />}
+          >
+            打开模型定价
+          </Button>
         </div>
+      </section>
+
+      <section id='status-codes' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>常见状态码</h2>
+        <div className='mt-5'>
+          <DocsTable
+            headers={['状态码', '含义']}
+            rows={[
+              {
+                key: '400',
+                cells: [
+                  <code key='400'>400</code>,
+                  '请求格式、参数或模型不正确',
+                ],
+              },
+              {
+                key: '401',
+                cells: [<code key='401'>401</code>, 'API Key 缺失或无效'],
+              },
+              {
+                key: '404',
+                cells: [<code key='404'>404</code>, '接口、模型或任务不存在'],
+              },
+              {
+                key: '429',
+                cells: [
+                  <code key='429'>429</code>,
+                  '触发速率限制或可用额度不足',
+                ],
+              },
+              {
+                key: '5xx',
+                cells: [
+                  <code key='5xx'>5xx</code>,
+                  '中转站或上游模型服务未能完成请求',
+                ],
+              },
+            ]}
+          />
+        </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          排查失败请求时，请记录请求时间、HTTP 状态码、错误消息、Request
+          ID、模型和端点，并在使用日志中核对。
+        </p>
       </section>
     </DocsShell>
   )

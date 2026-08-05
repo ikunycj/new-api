@@ -1,6 +1,8 @@
 package router
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"html"
 	"io/fs"
 	"net/http"
@@ -19,22 +21,12 @@ import (
 	"golang.org/x/text/language"
 )
 
-var publicPageFiles = map[string]string{
-	"/":                       "home.html",
-	"/docs":                   "docs/index.html",
-	"/docs/payment":           "docs/payment.html",
-	"/docs/model-pricing":     "docs/model-pricing.html",
-	"/docs/tools/cc-switch":   "docs/tools/cc-switch.html",
-	"/docs/tools/codex":       "docs/tools/codex.html",
-	"/docs/tools/claude-code": "docs/tools/claude-code.html",
-	"/docs/tools/openclaw":    "docs/tools/openclaw.html",
-	"/docs/tools/hermes":      "docs/tools/hermes.html",
-	"/docs/tools/opencode":    "docs/tools/opencode.html",
-	"/docs/tools/gemini":      "docs/tools/gemini.html",
-	"/docs/api/integration":   "docs/api/integration.html",
-}
-
 var publicPageLocales = []string{"en", "zhCN", "zhTW", "fr", "ja", "ru", "vi"}
+
+const (
+	documentationLocale = "zhCN"
+	publicHomeFile      = "home.html"
+)
 
 var publicPageLanguageMatcher = language.NewMatcher([]language.Tag{
 	language.English,
@@ -57,28 +49,73 @@ type docsManifest struct {
 	Version int                          `json:"version"`
 }
 
-func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
-	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
-	prerenderPages := make(map[string][]byte, len(publicPageFiles)*len(publicPageLocales))
-	for _, locale := range publicPageLocales {
-		for routePath, fileName := range publicPageFiles {
-			page, err := fs.ReadFile(
-				assets.DefaultBuildFS,
-				path.Join("web/default/dist/prerender", locale, fileName),
-			)
-			if err == nil {
-				prerenderPages[locale+":"+routePath] = page
-			}
+func contentETag(data []byte) string {
+	digest := sha256.Sum256(data)
+	return `"` + hex.EncodeToString(digest[:]) + `"`
+}
+
+func matchesETag(header, etag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == etag {
+			return true
 		}
 	}
+	return false
+}
+
+func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
+	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
 	manifest := docsManifest{}
+	manifestETag := ""
 	if manifestJSON, err := fs.ReadFile(assets.DefaultBuildFS, "web/default/dist/static/docs/manifest.json"); err == nil {
+		manifestETag = contentETag(manifestJSON)
 		_ = common.Unmarshal(manifestJSON, &manifest)
+	}
+	documentationRoutes := manifest.Locales[documentationLocale]
+	publicPageRoutes := make(map[string]struct{}, len(documentationRoutes)+1)
+	publicPageRoutes["/"] = struct{}{}
+	prerenderPages := make(map[string][]byte, len(publicPageLocales)+len(documentationRoutes))
+	for _, locale := range publicPageLocales {
+		page, err := fs.ReadFile(
+			assets.DefaultBuildFS,
+			path.Join("web/default/dist/prerender", locale, publicHomeFile),
+		)
+		if err == nil {
+			prerenderPages[locale+":/"] = page
+		}
+	}
+	for routePath := range documentationRoutes {
+		fileName, ok := documentationPrerenderFile(routePath)
+		if !ok {
+			continue
+		}
+		publicPageRoutes[routePath] = struct{}{}
+		page, err := fs.ReadFile(
+			assets.DefaultBuildFS,
+			path.Join("web/default/dist/prerender", documentationLocale, fileName),
+		)
+		if err == nil {
+			prerenderPages[documentationLocale+":"+routePath] = page
+		}
 	}
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	router.Use(func(c *gin.Context) {
+		if c.Request.URL.Path != "/static/docs/manifest.json" || manifestETag == "" {
+			c.Next()
+			return
+		}
+
+		c.Header("ETag", manifestETag)
+		if matchesETag(c.GetHeader("If-None-Match"), manifestETag) {
+			c.AbortWithStatus(http.StatusNotModified)
+			return
+		}
+		c.Next()
+	})
 	router.Use(static.Serve("/", defaultFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
@@ -105,7 +142,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			return
 		}
 
-		if _, isPublicPage := publicPageFiles[canonicalPath]; isPublicPage {
+		if _, isPublicPage := publicPageRoutes[canonicalPath]; isPublicPage {
 			if !constant.Setup {
 				c.Redirect(http.StatusTemporaryRedirect, "/setup")
 				return
@@ -122,6 +159,9 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			}
 
 			locale := selectPublicPageLocale(c)
+			if strings.HasPrefix(canonicalPath, "/docs") {
+				locale = documentationLocale
+			}
 			if template, ok := prerenderPages[locale+":"+canonicalPath]; ok {
 				logo := strings.TrimSpace(common.Logo)
 				if logo == "" || logo == "/logo.png" {
@@ -175,6 +215,16 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 		c.Header("Cache-Control", "no-cache, must-revalidate")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
 	})
+}
+
+func documentationPrerenderFile(routePath string) (string, bool) {
+	if routePath == "/docs" {
+		return "docs/index.html", true
+	}
+	if !strings.HasPrefix(routePath, "/docs/") || path.Clean(routePath) != routePath || strings.Contains(routePath, "\\") {
+		return "", false
+	}
+	return strings.TrimPrefix(routePath, "/") + ".html", true
 }
 
 func selectPublicPageLocale(c *gin.Context) string {

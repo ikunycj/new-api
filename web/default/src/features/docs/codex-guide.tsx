@@ -23,22 +23,42 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
 import { CodeBlock } from './components/code-block'
-import { DocsShell } from './components/docs-shell'
+import { DocsShell, type DocsTocItem } from './components/docs-shell'
 import { NumberedSteps } from './components/numbered-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
 const CODEX_CONFIG_REFERENCE_URL =
   'https://developers.openai.com/codex/config-reference'
+const CODEX_LINK_CLASS =
+  'text-primary font-medium underline-offset-4 hover:underline'
+
+const CODEX_TOC: DocsTocItem[] = [
+  { id: 'cc-switch-import', label: '1. 使用 CC Switch 一键导入' },
+  { id: 'manual-config', label: '2. 手动配置 config.toml' },
+  { id: 'faq', label: '常见问题' },
+]
+
+const CODEX_IMPORT_STEPS = [
+  '安装 CC Switch，并确认系统已注册 ccswitch:// 协议。',
+  '打开 API Key 页面，找到要使用的密钥。',
+  '打开该行的操作菜单，选择 CC Switch 导入。',
+  '选择 Codex，再选择当前 API Key 可用的主模型，并保留自动生成的 /v1 地址。',
+  '确认浏览器提示，然后在 CC Switch 中检查并保存导入的服务商。',
+]
+
+const CODEX_VERIFY_STEPS = [
+  '保存 config.toml，然后重启终端以及正在运行的 Codex 应用或 IDE 扩展。',
+  '在新的终端中运行 codex，发起一个测试任务。',
+  '如启动失败，请检查环境变量、模型名称和 Base URL 后重试。',
+]
 
 export function DocsCodex() {
-  const { t } = useTranslation()
   const baseUrl = useDocsBaseUrl()
   const codexConfig = `model = "gpt-5.6-sol"
 model_provider = "alltokenapi"
@@ -60,48 +80,20 @@ wire_api = "responses"`
     <DocsShell
       pageId='codex'
       title='Codex'
-      description={t(
-        'Choose CC Switch one-click import or edit config.toml manually to connect Codex.'
-      )}
-      toc={[
-        {
-          id: 'cc-switch-import',
-          label: t('1. Import with CC Switch'),
-        },
-        {
-          id: 'manual-config',
-          label: t('2. Configure config.toml manually'),
-        },
-      ]}
+      description='可选择 CC Switch 一键导入，或手动修改 config.toml 接入 Codex。'
+      toc={CODEX_TOC}
     >
       <section id='cc-switch-import' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          {t('1. Import with CC Switch')}
-        </h2>
+        <h2 className='text-2xl font-semibold'>1. 使用 CC Switch 一键导入</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'CC Switch is the fastest setup path. It imports the API key, selected model, and Codex service endpoint without editing TOML by hand.'
-          )}
+          CC Switch 是最快的接入方式，无需手动编辑 TOML，即可导入 API
+          Key、所选模型和 Codex 服务地址。
         </p>
-        <NumberedSteps
-          items={[
-            t(
-              'Install CC Switch and confirm that the ccswitch:// protocol is registered.'
-            ),
-            t('Open the API keys page and locate the key you want to use.'),
-            t('Open the row actions and choose the CC Switch import action.'),
-            t(
-              'Select Codex, choose a primary model available to the API key, and keep the generated /v1 endpoint.'
-            ),
-            t(
-              'Confirm the browser prompt, then review and save the imported provider in CC Switch.'
-            ),
-          ]}
-        />
+        <NumberedSteps items={CODEX_IMPORT_STEPS} />
         <div className='mt-6 flex flex-wrap gap-3'>
           <Button render={<Link to='/keys' />}>
             <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            {t('Open API keys')}
+            打开 API Key
           </Button>
           <Button
             variant='outline'
@@ -114,94 +106,100 @@ wire_api = "responses"`
             }
           >
             <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
-            {t('Download CC Switch')}
+            下载 CC Switch
           </Button>
         </div>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>{t('Imported settings')}</AlertTitle>
+          <AlertTitle>导入的配置</AlertTitle>
           <AlertDescription>
-            {t(
-              'The Codex import includes the selected API key, primary model, and service endpoint ending in /v1. Only approve the import on your own device.'
-            )}
+            Codex 导入内容包含所选 API Key、主模型和以 /v1
+            结尾的服务地址。请仅在自己的设备上确认导入。
           </AlertDescription>
         </Alert>
       </section>
 
       <section id='manual-config' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          {t('2. Configure config.toml manually')}
-        </h2>
+        <h2 className='text-2xl font-semibold'>2. 手动配置 config.toml</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Codex reads user settings from the configuration file in your user directory.'
-          )}
+          Codex 从用户目录中的配置文件读取设置。不同系统的配置文件路径如下：
         </p>
         <div className='mt-4 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code={windowsConfigPath} label='Windows' />
           <CodeBlock code='~/.codex/config.toml' label='macOS / Linux' />
         </div>
 
-        <h3 className='mt-8 text-lg font-semibold'>
-          {t('Set the API key environment variable')}
-        </h3>
+        <h3 className='mt-8 text-lg font-semibold'>设置 API Key 环境变量</h3>
         <p className='text-muted-foreground mt-2 leading-7'>
-          {t(
-            'Store the API key in a dedicated environment variable instead of writing the secret into config.toml.'
-          )}
+          将 API Key 保存到独立的环境变量中，不要把密钥直接写入 config.toml。
         </p>
         <div className='mt-4 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code={powershellApiKey} label='PowerShell' />
           <CodeBlock code={shellApiKey} label='macOS / Linux' />
         </div>
 
-        <h3 className='mt-8 text-lg font-semibold'>{t('Edit config.toml')}</h3>
+        <h3 className='mt-8 text-lg font-semibold'>编辑 config.toml</h3>
         <p className='text-muted-foreground mt-2 leading-7'>
-          {t(
-            'Keep any existing Codex settings and merge the provider block below. Replace the example model with one available to your API key when needed.'
-          )}
+          保留现有 Codex
+          配置，并合并下面的服务商配置块。需要时，将示例模型替换为当前 API Key
+          可用的模型。
         </p>
         <div className='mt-4'>
           <CodeBlock code={codexConfig} label='config.toml' />
         </div>
 
-        <h3 className='mt-8 text-lg font-semibold'>
-          {t('Restart and verify')}
-        </h3>
-        <NumberedSteps
-          items={[
-            t(
-              'Save config.toml, then restart the terminal and any running Codex app or IDE extension.'
-            ),
-            t('Run codex in a new terminal to start a test task.'),
-            t(
-              'If startup fails, confirm the environment variable, model name, and base URL before retrying.'
-            ),
-          ]}
-        />
+        <h3 className='mt-8 text-lg font-semibold'>重启并验证</h3>
+        <NumberedSteps items={CODEX_VERIFY_STEPS} />
         <div className='mt-5'>
-          <CodeBlock code='codex' label={t('Terminal')} />
+          <CodeBlock code='codex' label='终端' />
         </div>
 
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>{t('Configuration notes')}</AlertTitle>
+          <AlertTitle>配置说明</AlertTitle>
           <AlertDescription>
-            <span>
-              {t(
-                'Keep wire_api set to responses and keep /v1 at the end of the base URL for this service.'
-              )}
-            </span>{' '}
+            请保持
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              wire_api = &quot;responses&quot;
+            </code>
+            ，并确保本服务的 Base URL 以
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              /v1
+            </code>
+            结尾。配置字段的完整说明请参考{' '}
             <a
               href={CODEX_CONFIG_REFERENCE_URL}
               target='_blank'
               rel='noopener noreferrer'
-              className='text-foreground underline underline-offset-4'
+              className={CODEX_LINK_CLASS}
             >
-              {t('Codex configuration reference')}
+              Codex 配置参考
             </a>
+            。
           </AlertDescription>
         </Alert>
+      </section>
+
+      <section id='faq' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>常见问题</h2>
+        <h3 className='mt-6 text-lg font-semibold'>启动失败或请求没有发出</h3>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>确认环境变量名称为 ALLTOKEN_API_KEY，且终端能读取到它。</li>
+          <li>
+            确认 config.toml 中的模型名称是当前 API Key 可用的准确模型 ID。
+          </li>
+          <li>确认 Base URL 使用服务地址并以 /v1 结尾。</li>
+          <li>修改配置后，重启终端以及正在运行的 Codex 应用或 IDE 扩展。</li>
+        </ul>
+        <h3 className='mt-6 text-lg font-semibold'>如何确认请求是否成功</h3>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          在新的终端运行 codex，发送一个简短测试任务；然后打开
+          <Link to='/usage-logs' className={CODEX_LINK_CLASS}>
+            使用日志
+          </Link>
+          ，核对请求使用的模型、状态和费用。不要把完整 API Key
+          粘贴到终端输出、截图或反馈信息中。
+        </p>
       </section>
     </DocsShell>
   )

@@ -20,6 +20,8 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 
+import { DOCS_LOCALE } from '../src/features/docs/docs-config'
+
 const projectRoot = path.resolve(import.meta.dir, '..')
 const distRoot = path.join(projectRoot, 'dist')
 const prerenderRoot = path.join(distRoot, 'prerender')
@@ -71,6 +73,54 @@ const docsFiles = prerenderFiles.filter(
 )
 if (homeFiles.length === 0 || docsFiles.length === 0) {
   throw new Error('Prerendered home or documentation HTML is missing')
+}
+
+const unexpectedDocsLocales = docsFiles.filter(
+  (file) =>
+    path.relative(prerenderRoot, file).split(path.sep)[0] !== DOCS_LOCALE
+)
+if (unexpectedDocsLocales.length > 0) {
+  throw new Error(
+    `Documentation HTML must only be prerendered for ${DOCS_LOCALE}: ${unexpectedDocsLocales.join(', ')}`
+  )
+}
+
+const docsPayloadRoot = path.join(distRoot, 'static/docs')
+const docsPayloadFiles = await listFiles(docsPayloadRoot)
+const manifestPath = path.join(docsPayloadRoot, 'manifest.json')
+const docsManifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+  locales: Record<string, Record<string, string>>
+}
+const manifestLocales = Object.keys(docsManifest.locales)
+if (manifestLocales.length !== 1 || manifestLocales[0] !== DOCS_LOCALE) {
+  throw new Error(
+    `Documentation manifest must only contain ${DOCS_LOCALE}, received: ${manifestLocales.join(', ')}`
+  )
+}
+
+const localizedDocsPayloadFiles = docsPayloadFiles.filter(
+  (file) => file !== manifestPath
+)
+const unexpectedPayloadLocales = localizedDocsPayloadFiles.filter(
+  (file) =>
+    path.relative(docsPayloadRoot, file).split(path.sep)[0] !== DOCS_LOCALE
+)
+if (unexpectedPayloadLocales.length > 0) {
+  throw new Error(
+    `Documentation payloads must only be generated for ${DOCS_LOCALE}: ${unexpectedPayloadLocales.join(', ')}`
+  )
+}
+
+const manifestRouteCount = Object.keys(
+  docsManifest.locales[DOCS_LOCALE] ?? {}
+).length
+if (
+  docsFiles.length !== manifestRouteCount ||
+  localizedDocsPayloadFiles.length !== manifestRouteCount
+) {
+  throw new Error(
+    `Documentation artifact count mismatch: html=${docsFiles.length}, payloads=${localizedDocsPayloadFiles.length}, manifest=${manifestRouteCount}`
+  )
 }
 
 const homeHtml = await readFile(homeFiles[0], 'utf8')

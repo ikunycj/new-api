@@ -97,11 +97,11 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		"web/default/dist/prerender/zhCN/home.html": {
 			Data: page("zhCN", "chinese-home"),
 		},
-		"web/default/dist/prerender/zhTW/docs/tools/codex.html": {
-			Data: page("zhTW", "traditional-codex"),
+		"web/default/dist/prerender/zhCN/docs/tools/codex.html": {
+			Data: page("zhCN", "chinese-codex"),
 		},
 		"web/default/dist/static/docs/manifest.json": {
-			Data: []byte(`{"version":1,"locales":{"zhTW":{"/docs/tools/codex":"codex.0123abcdef.json"}}}`),
+			Data: []byte(`{"version":1,"locales":{"zhCN":{"/docs":"introduction.0123abcdef.json","/docs/tools/codex":"codex.0123abcdef.json"}}}`),
 		},
 	}
 	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
@@ -142,14 +142,36 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 
 	t.Run("serves a prerendered docs route", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "/docs/tools/codex", nil)
-		request.AddCookie(&http.Cookie{Name: "i18next", Value: "zhTW"})
+		request.AddCookie(&http.Cookie{Name: "i18next", Value: "en"})
+		request.Header.Set("Accept-Language", "fr-FR,fr;q=0.9")
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, request)
 
 		require.Equal(t, http.StatusOK, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), "traditional-codex")
-		assert.Contains(t, recorder.Body.String(), `"home_page_content_loaded":false`)
-		assert.Contains(t, recorder.Body.String(), `"file_name":"codex.0123abcdef.json"`)
+		body := recorder.Body.String()
+		assert.Contains(t, body, "chinese-codex")
+		assert.Contains(t, body, `"home_page_content_loaded":false`)
+		assert.Contains(t, body, `"file_name":"codex.0123abcdef.json"`)
+		assert.Contains(t, body, `"locale":"zhCN"`)
+	})
+
+	t.Run("serves the docs manifest with conditional caching", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/static/docs/manifest.json", nil)
+		first := httptest.NewRecorder()
+		engine.ServeHTTP(first, request)
+
+		require.Equal(t, http.StatusOK, first.Code)
+		etag := first.Header().Get("ETag")
+		require.NotEmpty(t, etag)
+		assert.Equal(t, "no-cache, must-revalidate", first.Header().Get("Cache-Control"))
+
+		request = httptest.NewRequest(http.MethodGet, "/static/docs/manifest.json", nil)
+		request.Header.Set("If-None-Match", etag)
+		second := httptest.NewRecorder()
+		engine.ServeHTTP(second, request)
+
+		assert.Equal(t, http.StatusNotModified, second.Code)
+		assert.Equal(t, etag, second.Header().Get("ETag"))
 	})
 
 	t.Run("keeps custom homepage on the SPA path", func(t *testing.T) {

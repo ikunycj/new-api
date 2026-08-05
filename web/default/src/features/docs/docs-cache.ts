@@ -78,3 +78,44 @@ export async function putCachedDocsPage(page: CachedDocsPage): Promise<void> {
     transaction.addEventListener('abort', () => resolve())
   })
 }
+
+export async function getAllCachedDocsPages(): Promise<CachedDocsPage[]> {
+  const database = await openDocsDatabase()
+  if (!database) return []
+
+  return new Promise((resolve) => {
+    const request = database
+      .transaction(STORE_NAME, 'readonly')
+      .objectStore(STORE_NAME)
+      .getAll()
+    request.addEventListener('success', () =>
+      resolve((request.result as CachedDocsPage[]) ?? [])
+    )
+    request.addEventListener('error', () => resolve([]))
+  })
+}
+
+export async function deleteCachedDocsPage(key: string): Promise<void> {
+  const database = await openDocsDatabase()
+  if (!database) return
+
+  await new Promise<void>((resolve) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    transaction.objectStore(STORE_NAME).delete(key)
+    transaction.addEventListener('complete', () => resolve())
+    transaction.addEventListener('error', () => resolve())
+    transaction.addEventListener('abort', () => resolve())
+  })
+}
+
+export async function requestDocsStoragePersistence(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.persist) {
+    return false
+  }
+
+  try {
+    return await navigator.storage.persist()
+  } catch {
+    return false
+  }
+}

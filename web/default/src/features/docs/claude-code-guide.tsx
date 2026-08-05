@@ -16,158 +16,409 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { InformationCircleIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import {
+  Alert02Icon,
+  ArrowRight01Icon,
+  Download04Icon,
+  InformationCircleIcon,
+  Key01Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 import { CodeBlock } from './components/code-block'
-import { DocsShell } from './components/docs-shell'
+import { DocsShell, type DocsTocItem } from './components/docs-shell'
 import { NumberedSteps } from './components/numbered-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
-const CLAUDE_ENV_REFERENCE_URL = 'https://code.claude.com/docs/en/env-vars'
+const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
+const CLAUDE_LLM_GATEWAY_REFERENCE_URL =
+  'https://code.claude.com/docs/en/llm-gateway-connect'
 const CLAUDE_MODEL_REFERENCE_URL =
   'https://code.claude.com/docs/en/model-config'
+const CLAUDE_SETTINGS_REFERENCE_URL = 'https://code.claude.com/docs/en/settings'
+const CLAUDE_LINK_CLASS =
+  'text-primary font-medium underline-offset-4 hover:underline'
+
+const CLAUDE_TOC: DocsTocItem[] = [
+  { id: 'prepare', label: '1. 准备 API Key 和模型' },
+  { id: 'cc-switch-import', label: '2. 使用 CC Switch 一键导入' },
+  { id: 'manual-configuration', label: '3. 手动配置' },
+  { id: 'verify', label: '4. 启动并验证' },
+  { id: 'troubleshooting', label: '5. 常见问题' },
+  { id: 'references', label: '6. 官方参考' },
+]
+
+const CLAUDE_PREPARE_STEPS = [
+  '在 API Key 页面创建或复制密钥。',
+  '在模型定价页面复制一个支持 Anthropic Messages 接口的准确模型 ID。',
+  '更新 Claude Code，避免旧版本缺少网关或模型配置能力。',
+]
+
+const CLAUDE_IMPORT_STEPS = [
+  '安装并打开 CC Switch。',
+  '在 API Key 页打开密钥的操作菜单，选择 CC Switch 导入。',
+  '客户端选择 Claude，模型选择刚才确认的 Claude 模型。',
+  '保留生成的服务根地址，不要手动添加 /v1。',
+  '在 CC Switch 中保存并启用服务商，然后完全退出并重新打开 Claude Code。',
+]
+
+const CLAUDE_VERIFY_STEPS = [
+  '使用与配置相同的终端启动 claude。',
+  '如果出现登录页，说明网关凭据没有被读取；不要选择 Claude 订阅登录，先检查配置文件路径和 JSON 格式。',
+  '进入会话后运行 /status，核对服务地址、认证变量和当前模型。',
+  '发送一个简短测试请求，再到使用日志确认请求模型和状态。',
+]
 
 export function DocsClaudeCode() {
-  const { t } = useTranslation()
   const baseUrl = useDocsBaseUrl()
-  const powershellConfig = `[Environment]::SetEnvironmentVariable(
-  "ANTHROPIC_AUTH_TOKEN",
-  "sk-your-api-key",
-  "User"
-)
-[Environment]::SetEnvironmentVariable(
-  "ANTHROPIC_BASE_URL",
-  "${baseUrl}",
-  "User"
-)
-[Environment]::SetEnvironmentVariable(
-  "ANTHROPIC_MODEL",
-  "your-claude-model-id",
-  "User"
-)`
-  const shellConfig = `export ANTHROPIC_AUTH_TOKEN="sk-your-api-key"
+  const settingsJson = `{
+  "env": {
+    "ANTHROPIC_BASE_URL": "${baseUrl}",
+    "ANTHROPIC_AUTH_TOKEN": "此处替换为 API Key"
+  },
+  "model": "此处替换为准确的模型 ID"
+}`
+  const shellConfig = `export ANTHROPIC_AUTH_TOKEN="此处替换为 API Key"
 export ANTHROPIC_BASE_URL="${baseUrl}"
-export ANTHROPIC_MODEL="your-claude-model-id"`
+export ANTHROPIC_MODEL="此处替换为准确的模型 ID"`
+  const powershellConfig = `$env:ANTHROPIC_AUTH_TOKEN = "此处替换为 API Key"
+$env:ANTHROPIC_BASE_URL = "${baseUrl}"
+$env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
+  const windowsSettingsPath = '%USERPROFILE%\\.claude\\settings.json'
 
   return (
     <DocsShell
       pageId='claude-code'
       title='Claude Code'
-      description={t(
-        'Connect Claude Code through CC Switch or Anthropic-compatible environment variables.'
-      )}
-      toc={[
-        { id: 'cc-switch-import', label: t('Import with CC Switch') },
-        { id: 'manual-configuration', label: t('Manual configuration') },
-        { id: 'verify', label: t('Restart and verify') },
-        { id: 'troubleshooting', label: t('Troubleshooting') },
-      ]}
+      description='可通过 CC Switch 一键导入，或使用 Claude Code 官方支持的 LLM Gateway 环境变量手动接入。'
+      toc={CLAUDE_TOC}
     >
+      <Alert>
+        <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
+        <AlertTitle>配置核验</AlertTitle>
+        <AlertDescription>
+          本文根据 Claude Code 官方的 LLM Gateway 与模型配置文档核验。All Token
+          API 使用 Bearer Token，因此手动配置使用
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            ANTHROPIC_AUTH_TOKEN
+          </code>
+          。
+        </AlertDescription>
+      </Alert>
+
+      <section id='prepare' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>1. 准备 API Key 和模型</h2>
+        <NumberedSteps items={CLAUDE_PREPARE_STEPS} />
+        <div className='mt-5 flex flex-wrap gap-3'>
+          <Button render={<Link to='/keys' />}>
+            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
+            打开 API Key 页面
+          </Button>
+          <Button variant='outline' render={<Link to='/pricing' />}>
+            查看模型定价
+            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
+          </Button>
+        </div>
+        <div className='mt-5'>
+          <CodeBlock code='claude update' label='终端' />
+        </div>
+      </section>
+
       <section id='cc-switch-import' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Import with CC Switch')}</h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'The API key page can send Claude Code settings directly to CC Switch, including the service root, API key, and selected model.'
-          )}
+        <h2 className='text-2xl font-semibold'>2. 使用 CC Switch 一键导入</h2>
+        <NumberedSteps items={CLAUDE_IMPORT_STEPS} />
+        <p className='text-muted-foreground mt-4 leading-7'>
+          导入界面中的服务根地址应为
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            {baseUrl}
+          </code>
+          ，不要添加 /v1。详细操作可以继续阅读
+          <Link to='/docs/tools/cc-switch' className={CLAUDE_LINK_CLASS}>
+            CC Switch 一键导入指南
+          </Link>
+          。
         </p>
-        <NumberedSteps
-          items={[
-            t('Open the API keys page and choose the CC Switch action.'),
-            t(
-              'Select Claude (used by Claude Code) and choose an available Claude model.'
-            ),
-            t('Approve the import, save the provider, and switch to it.'),
-            t('Restart Claude Code so it reads the new configuration.'),
-          ]}
-        />
-        <Button className='mt-5' render={<Link to='/keys' />}>
-          <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-          {t('Open API keys')}
-        </Button>
+        <div className='mt-5 flex flex-wrap gap-3'>
+          <Button render={<Link to='/keys' />}>
+            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
+            打开 API Key 页面
+          </Button>
+          <Button
+            variant='outline'
+            render={
+              <a
+                href={CCSWITCH_RELEASES_URL}
+                target='_blank'
+                rel='noopener noreferrer'
+              />
+            }
+          >
+            <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
+            下载 CC Switch
+          </Button>
+        </div>
       </section>
 
       <section id='manual-configuration' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Manual configuration')}</h2>
+        <h2 className='text-2xl font-semibold'>3. 手动配置</h2>
+
+        <h3 className='mt-6 text-lg font-semibold'>
+          3.1 推荐：写入用户 settings.json
+        </h3>
         <p className='text-muted-foreground mt-3 leading-7'>
-          {t(
-            'Set the Anthropic authentication token, service root, and exact model ID in the terminal that starts Claude Code.'
-          )}
+          用户配置对所有项目生效，也能被 Claude Code 的后台 Agent
+          读取。不同系统的用户配置文件路径如下：
         </p>
-        <div className='mt-5 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code={powershellConfig} label='PowerShell' />
+        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
+          <CodeBlock code={windowsSettingsPath} label='Windows' />
+          <CodeBlock code='~/.claude/settings.json' label='macOS / Linux' />
+        </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          将以下字段合并到现有 JSON 中，不要删除原有的权限、插件或 MCP 配置：
+        </p>
+        <div className='mt-4'>
+          <CodeBlock code={settingsJson} label='settings.json' />
+        </div>
+        <Alert className='mt-6' variant='destructive'>
+          <HugeiconsIcon icon={Alert02Icon} aria-hidden='true' />
+          <AlertTitle>不要提交密钥</AlertTitle>
+          <AlertDescription>
+            不要把密钥写入项目共享的
+            <code className='mx-1 rounded px-1.5 py-0.5 text-sm'>
+              .claude/settings.json
+            </code>
+            。如需项目级配置，应使用已加入
+            <code className='mx-1 rounded px-1.5 py-0.5 text-sm'>
+              .gitignore
+            </code>
+            的
+            <code className='mx-1 rounded px-1.5 py-0.5 text-sm'>
+              .claude/settings.local.json
+            </code>
+            。
+          </AlertDescription>
+        </Alert>
+
+        <h3 className='mt-8 text-lg font-semibold'>
+          3.2 临时测试：设置当前终端环境变量
+        </h3>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          这些变量只对当前终端及其启动的进程生效，适合先验证再写入配置文件。
+        </p>
+        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code={shellConfig} label='macOS / Linux' />
+          <CodeBlock code={powershellConfig} label='PowerShell' />
+        </div>
+
+        <h3 className='mt-8 text-lg font-semibold'>
+          3.3 为什么 Base URL 不带 /v1
+        </h3>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          Claude Code 会在
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            ANTHROPIC_BASE_URL
+          </code>
+          后请求
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            /v1/messages
+          </code>
+          。如果 Base URL 已经包含 /v1，最终可能形成重复路径并返回 404。
+        </p>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          Claude Code 的凭据变量与请求头对应关系如下：
+        </p>
+        <div className='mt-5 rounded-lg border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>变量</TableHead>
+                <TableHead>请求头</TableHead>
+                <TableHead>适用场景</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>
+                  <code>ANTHROPIC_AUTH_TOKEN</code>
+                </TableCell>
+                <TableCell>
+                  <code>Authorization: Bearer ...</code>
+                </TableCell>
+                <TableCell>All Token API、Bearer Token 网关</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>
+                  <code>ANTHROPIC_API_KEY</code>
+                </TableCell>
+                <TableCell>
+                  <code>x-api-key: ...</code>
+                </TableCell>
+                <TableCell>明确要求 Anthropic x-api-key 的网关</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>{t('Base URL requirement')}</AlertTitle>
+          <AlertTitle>不要同时设置两个凭据变量</AlertTitle>
           <AlertDescription>
-            {t(
-              'Use the service root shown above without /v1. Claude Code appends Anthropic API paths itself.'
-            )}
+            本站使用 ANTHROPIC_AUTH_TOKEN。不要同时设置 ANTHROPIC_AUTH_TOKEN 和
+            ANTHROPIC_API_KEY，以免出现认证来源冲突。
           </AlertDescription>
         </Alert>
       </section>
 
       <section id='verify' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Restart and verify')}</h2>
-        <NumberedSteps
-          items={[
-            t(
-              'Open a new terminal after saving persistent variables; keep using the current terminal when you used export.'
-            ),
-            t('Run claude and start a new session with a short prompt.'),
-            t(
-              'Open usage logs and confirm the request used the intended model.'
-            ),
-          ]}
-        />
-        <div className='mt-5'>
-          <CodeBlock code='claude' label={t('Terminal')} />
+        <h2 className='text-2xl font-semibold'>4. 启动并验证</h2>
+        <NumberedSteps items={CLAUDE_VERIFY_STEPS} />
+        <p className='text-muted-foreground mt-5 leading-7'>
+          在
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            /status
+          </code>
+          中应确认以下内容：
+        </p>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>
+            Anthropic base URL 为 <code>{baseUrl}</code>；
+          </li>
+          <li>
+            Auth token or API key 显示
+            <code className='mx-1'>ANTHROPIC_AUTH_TOKEN</code>；
+          </li>
+          <li>当前模型为预期的准确模型 ID。</li>
+        </ul>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          也可以在启动时临时指定模型：
+        </p>
+        <div className='mt-4'>
+          <CodeBlock
+            code='claude --model "此处替换为准确的模型 ID"'
+            label='终端'
+          />
         </div>
+        <Button
+          className='mt-5'
+          variant='outline'
+          render={<Link to='/usage-logs' />}
+        >
+          打开使用日志
+          <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
+        </Button>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>{t('Troubleshooting')}</h2>
-        <NumberedSteps
-          items={[
-            t(
-              'For authentication errors, confirm ANTHROPIC_AUTH_TOKEN is visible in the same terminal.'
-            ),
-            t(
-              'For model errors, copy the exact model ID from the pricing page instead of using a display name.'
-            ),
-            t(
-              'For 404 errors, remove /v1 from ANTHROPIC_BASE_URL and restart Claude Code.'
-            ),
-            t(
-              'If a remote tool or beta feature fails, verify that the selected channel supports that Anthropic capability.'
-            ),
-          ]}
-        />
-        <div className='mt-5 flex flex-wrap gap-4'>
-          <a
-            href={CLAUDE_ENV_REFERENCE_URL}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='text-foreground underline underline-offset-4'
-          >
-            {t('Claude Code environment variables')}
-          </a>
-          <a
-            href={CLAUDE_MODEL_REFERENCE_URL}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='text-foreground underline underline-offset-4'
-          >
-            {t('Claude Code model configuration')}
-          </a>
-        </div>
+        <h2 className='text-2xl font-semibold'>5. 常见问题</h2>
+
+        <h3 className='mt-6 text-lg font-semibold'>启动后仍要求登录</h3>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>
+            确认配置写在 <code>~/.claude/settings.json</code>
+            ，而不是其他同名文件。
+          </li>
+          <li>
+            确认 <code>env</code> 位于 JSON 顶层。
+          </li>
+          <li>如果只使用了 Shell 环境变量，请从同一个终端启动 Claude Code。</li>
+          <li>
+            运行 <code>/logout</code> 可清除与网关凭据冲突的历史登录状态。
+          </li>
+        </ul>
+
+        <h3 className='mt-6 text-lg font-semibold'>
+          401、Unauthorized 或 Incorrect API key
+        </h3>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>确认密钥没有多余空格或引号。</li>
+          <li>
+            All Token API 应使用 <code>ANTHROPIC_AUTH_TOKEN</code>
+            ，不要误用只发送 <code>x-api-key</code> 的
+            <code className='ms-1'>ANTHROPIC_API_KEY</code>。
+          </li>
+          <li>
+            确认密钥未过期，并在
+            <Link to='/keys' className={CLAUDE_LINK_CLASS}>
+              API Key 页面
+            </Link>
+            检查其分组和模型权限。
+          </li>
+        </ul>
+
+        <h3 className='mt-6 text-lg font-semibold'>404 Not Found</h3>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>
+            <code>ANTHROPIC_BASE_URL</code> 应为 <code>{baseUrl}</code>
+            ，不要带 /v1 或 /v1/messages。
+          </li>
+          <li>所选模型必须支持 Anthropic Messages 接口。</li>
+        </ul>
+
+        <h3 className='mt-6 text-lg font-semibold'>模型不可用</h3>
+        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
+          <li>
+            使用
+            <Link to='/pricing' className={CLAUDE_LINK_CLASS}>
+              模型定价页面
+            </Link>
+            显示的完整模型 ID，不要使用展示名称。
+          </li>
+          <li>
+            可用 <code>claude --model &lt;模型ID&gt;</code>
+            排除已保存模型选择的影响。
+          </li>
+          <li>
+            自定义网关只保证其声明支持的接口；部分
+            Beta、文件上传或远程功能可能无法透传。
+          </li>
+        </ul>
+      </section>
+
+      <section id='references' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>6. 官方参考</h2>
+        <ul className='mt-4 flex list-disc flex-col gap-3 ps-6 leading-7'>
+          <li>
+            <a
+              href={CLAUDE_LLM_GATEWAY_REFERENCE_URL}
+              target='_blank'
+              rel='noopener noreferrer'
+              className={CLAUDE_LINK_CLASS}
+            >
+              连接 Claude Code 到 LLM Gateway
+            </a>
+          </li>
+          <li>
+            <a
+              href={CLAUDE_MODEL_REFERENCE_URL}
+              target='_blank'
+              rel='noopener noreferrer'
+              className={CLAUDE_LINK_CLASS}
+            >
+              Claude Code 模型配置
+            </a>
+          </li>
+          <li>
+            <a
+              href={CLAUDE_SETTINGS_REFERENCE_URL}
+              target='_blank'
+              rel='noopener noreferrer'
+              className={CLAUDE_LINK_CLASS}
+            >
+              Claude Code 设置文件
+            </a>
+          </li>
+        </ul>
       </section>
     </DocsShell>
   )

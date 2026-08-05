@@ -28,22 +28,12 @@ import { renderToString } from 'react-dom/server'
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
 import { ThemeProvider } from './context/theme-provider'
-import { DocsApiIntegration } from './features/docs/ai-model-api'
-import { DocsCcSwitch } from './features/docs/cc-switch-guide'
-import { DocsClaudeCode } from './features/docs/claude-code-guide'
-import { DocsCodex } from './features/docs/codex-guide'
 import type { DocsPayload, DocsRoutePath } from './features/docs/docs-page'
+import { DOCS_PRERENDER_SOURCES } from './features/docs/docs-prerender-sources'
 import {
   setPrerenderDocsPayload,
   type PrerenderDocsPayload,
 } from './features/docs/docs-prerender-state'
-import { DocsGemini } from './features/docs/gemini-guide'
-import { DocsHermes } from './features/docs/hermes-guide'
-import { DocsModelPricing } from './features/docs/model-pricing'
-import { DocsOpenClaw } from './features/docs/openclaw-guide'
-import { DocsOpenCode } from './features/docs/opencode-guide'
-import { DocsOverview } from './features/docs/overview'
-import { DocsPayment } from './features/docs/payment'
 import i18n, { i18nReady } from './i18n/config'
 import {
   initializePublicBootstrap,
@@ -57,20 +47,6 @@ const PRERENDER_STATUS = {
   logo: '__NEW_API_LOGO__',
   server_address: '__NEW_API_SERVER_ADDRESS__',
   system_name: '__NEW_API_SYSTEM_NAME__',
-}
-
-const DOCS_SOURCE_COMPONENTS: Record<DocsRoutePath, React.ComponentType> = {
-  '/docs': DocsOverview,
-  '/docs/api/integration': DocsApiIntegration,
-  '/docs/model-pricing': DocsModelPricing,
-  '/docs/payment': DocsPayment,
-  '/docs/tools/cc-switch': DocsCcSwitch,
-  '/docs/tools/claude-code': DocsClaudeCode,
-  '/docs/tools/codex': DocsCodex,
-  '/docs/tools/gemini': DocsGemini,
-  '/docs/tools/hermes': DocsHermes,
-  '/docs/tools/openclaw': DocsOpenClaw,
-  '/docs/tools/opencode': DocsOpenCode,
 }
 
 async function initializeRender(
@@ -167,7 +143,7 @@ export async function prepareDocsRoute(
   pathname: DocsRoutePath,
   locale: string
 ): Promise<DocsPayload> {
-  const source = DOCS_SOURCE_COMPONENTS[pathname]
+  const source = DOCS_PRERENDER_SOURCES[pathname]
   const render = await initializeRender(pathname, locale)
   const Source = source
   const markup = renderToString(
