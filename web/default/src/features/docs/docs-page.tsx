@@ -422,21 +422,6 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
     })
   }
 
-  const handleChange = (event: React.FormEvent<HTMLDivElement>) => {
-    const target = event.target
-    if (
-      !(target instanceof HTMLSelectElement) ||
-      target.dataset.docNavigation !== 'true'
-    ) {
-      return
-    }
-    const targetRoute = getDocsRouteFromPathname(target.value)
-    if (targetRoute && targetRoute !== props.route) {
-      preloadDocsRoute(targetRoute)
-    }
-    void navigate({ to: target.value as DocsRoutePath })
-  }
-
   const handleIntent = (
     event: React.MouseEvent<HTMLDivElement> | React.FocusEvent<HTMLDivElement>
   ) => {
@@ -471,7 +456,6 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
           aria-busy={isLoading || hasError}
           data-doc-content-host={props.route}
           onClick={(event) => void handleClick(event)}
-          onChange={handleChange}
           onMouseOver={handleIntent}
           onFocusCapture={handleIntent}
           dangerouslySetInnerHTML={{

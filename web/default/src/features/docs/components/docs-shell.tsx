@@ -5,7 +5,7 @@ import {
   BookOpen01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -24,7 +24,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout/components/public-layout'
@@ -35,10 +34,7 @@ import {
   DOCS_NAVIGATION_GROUPS,
   type DocsNavigationGroup,
   type DocsPageId,
-  type DocsRoutePath,
 } from '../docs-config'
-
-const DOCS_NAVIGATION_STORAGE_KEY = 'new-api-docs-expanded-groups-v2'
 
 export type DocsTocItem = {
   id: string
@@ -58,72 +54,6 @@ function DocsNavigation(props: {
   groups: DocsNavigationGroup[]
   ariaLabel: string
 }) {
-  const activeGroupId = props.groups.find((group) =>
-    group.items.some((item) => item.id === props.currentPageId)
-  )?.id
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(() =>
-    props.groups.map((group) => group.id)
-  )
-  const [hasHydrated, setHasHydrated] = useState(false)
-
-  useEffect(() => {
-    let storedGroups: string[] = []
-    let hasStoredGroups = false
-
-    try {
-      const stored = window.localStorage.getItem(DOCS_NAVIGATION_STORAGE_KEY)
-      const parsed: unknown = stored ? JSON.parse(stored) : undefined
-      if (Array.isArray(parsed)) {
-        hasStoredGroups = true
-        storedGroups = parsed.filter(
-          (groupId): groupId is string => typeof groupId === 'string'
-        )
-      }
-    } catch {
-      storedGroups = []
-    }
-
-    setExpandedGroups(() => {
-      const validGroupIds = new Set(props.groups.map((group) => group.id))
-      const defaultGroups = props.groups.map((group) => group.id)
-      const nextGroups = new Set(
-        (hasStoredGroups ? storedGroups : defaultGroups).filter((groupId) =>
-          validGroupIds.has(groupId as DocsNavigationGroup['id'])
-        )
-      )
-      if (activeGroupId) {
-        nextGroups.add(activeGroupId)
-      }
-      return [...nextGroups].filter((groupId) =>
-        validGroupIds.has(groupId as DocsNavigationGroup['id'])
-      )
-    })
-    setHasHydrated(true)
-  }, [activeGroupId, props.groups])
-
-  useEffect(() => {
-    if (!hasHydrated) {
-      return
-    }
-
-    try {
-      window.localStorage.setItem(
-        DOCS_NAVIGATION_STORAGE_KEY,
-        JSON.stringify(expandedGroups)
-      )
-    } catch {
-      // Ignore storage failures; navigation remains usable without persistence.
-    }
-  }, [expandedGroups, hasHydrated])
-
-  const toggleGroup = (groupId: DocsNavigationGroup['id']) => {
-    setExpandedGroups((currentGroups) =>
-      currentGroups.includes(groupId)
-        ? currentGroups.filter((currentGroupId) => currentGroupId !== groupId)
-        : [...currentGroups, groupId]
-    )
-  }
-
   return (
     <nav aria-label={props.ariaLabel} className='flex flex-col'>
       <Link
@@ -143,35 +73,24 @@ function DocsNavigation(props: {
       </Link>
 
       {props.groups.map((group) => {
-        const isExpanded = expandedGroups.includes(group.id)
         const contentId = `docs-group-${group.id}`
 
         return (
-          <section key={group.id} className='mt-1.5'>
-            <button
-              type='button'
-              aria-expanded={isExpanded}
+          <details key={group.id} open className='group/docs-section mt-1.5'>
+            <summary
               aria-controls={contentId}
-              onClick={() => toggleGroup(group.id)}
-              className='text-foreground hover:bg-muted/50 focus-visible:ring-ring/50 group flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm font-semibold transition-colors outline-none focus-visible:ring-3'
+              className='text-foreground hover:bg-muted/50 focus-visible:ring-ring/50 flex min-h-10 cursor-pointer list-none items-center rounded-md px-3 text-left text-sm font-semibold transition-colors outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden'
             >
               <span>{group.label}</span>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
                 strokeWidth={2}
                 aria-hidden='true'
-                className={cn(
-                  'text-muted-foreground ml-auto size-3.5 transition-transform',
-                  !isExpanded && '-rotate-90'
-                )}
+                className='text-muted-foreground ml-auto size-3.5 -rotate-90 transition-transform group-open/docs-section:rotate-0'
               />
-            </button>
+            </summary>
 
-            <div
-              id={contentId}
-              hidden={!isExpanded}
-              className='border-border/70 ml-2 border-l pl-3'
-            >
+            <div id={contentId} className='border-border/70 ml-2 border-l pl-3'>
               <div className='flex flex-col gap-px'>
                 {group.items.map((item) => {
                   const isActive = item.id === props.currentPageId
@@ -194,7 +113,7 @@ function DocsNavigation(props: {
                 })}
               </div>
             </div>
-          </section>
+          </details>
         )
       })}
     </nav>
@@ -206,38 +125,73 @@ function DocsMobileNavigation(props: {
   groups: DocsNavigationGroup[]
   ariaLabel: string
 }) {
-  const navigate = useNavigate()
   const currentItem = props.groups
     .flatMap((group) => group.items)
     .find((item) => item.id === props.currentPageId)
 
   return (
-    <div className='mx-auto flex w-full max-w-[1400px] items-center gap-2'>
-      <HugeiconsIcon
-        icon={BookOpen01Icon}
-        className='text-muted-foreground size-4 shrink-0'
-        aria-hidden='true'
-      />
-      <select
-        data-doc-navigation='true'
-        value={currentItem?.path ?? '/docs'}
+    <details className='group/docs-mobile relative mx-auto w-full max-w-[1400px]'>
+      <summary
         aria-label={props.ariaLabel}
-        onChange={(event) => {
-          void navigate({ to: event.target.value as DocsRoutePath })
-        }}
-        className='border-border bg-background text-foreground focus-visible:ring-ring h-9 min-w-0 flex-1 rounded-md border px-3 text-sm outline-none focus-visible:ring-2'
+        className='border-border bg-background/90 focus-visible:ring-ring/50 flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-lg border px-2.5 py-1.5 shadow-sm backdrop-blur-xl outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden'
+      >
+        <span className='bg-muted flex size-8 shrink-0 items-center justify-center rounded-md'>
+          <HugeiconsIcon
+            icon={BookOpen01Icon}
+            className='text-muted-foreground size-4'
+            aria-hidden='true'
+          />
+        </span>
+        <span className='flex min-w-0 flex-1 flex-col gap-0.5 text-left'>
+          <span className='text-muted-foreground text-[11px] leading-none font-medium'>
+            {props.ariaLabel}
+          </span>
+          <span className='truncate text-sm leading-5 font-semibold'>
+            {currentItem?.label ?? props.ariaLabel}
+          </span>
+        </span>
+        <HugeiconsIcon
+          icon={ArrowDown01Icon}
+          strokeWidth={2}
+          aria-hidden='true'
+          className='text-muted-foreground mr-1 size-4 transition-transform group-open/docs-mobile:rotate-180'
+        />
+      </summary>
+
+      <nav
+        aria-label={props.ariaLabel}
+        className='border-border bg-popover absolute inset-x-0 top-[calc(100%+0.375rem)] max-h-[min(68svh,36rem)] overflow-y-auto rounded-lg border p-2 shadow-lg'
       >
         {props.groups.map((group) => (
-          <optgroup key={group.label} label={group.label}>
-            {group.items.map((item) => (
-              <option key={item.id} value={item.path}>
-                {item.label}
-              </option>
-            ))}
-          </optgroup>
+          <section key={group.id} className='py-1'>
+            <p className='text-muted-foreground px-2.5 py-1.5 text-xs font-semibold'>
+              {group.label}
+            </p>
+            <div className='flex flex-col gap-px'>
+              {group.items.map((item) => {
+                const isActive = item.id === props.currentPageId
+                return (
+                  <Link
+                    key={item.id}
+                    to={item.path}
+                    activeOptions={{ exact: true }}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      'rounded-md px-2.5 py-2.5 text-sm leading-5 transition-colors',
+                      isActive
+                        ? 'bg-muted text-foreground font-semibold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </section>
         ))}
-      </select>
-    </div>
+      </nav>
+    </details>
   )
 }
 
@@ -254,12 +208,14 @@ export function DocsShell(props: DocsShellProps) {
   return (
     <PublicLayout showMainContainer={false}>
       <div data-doc-page-source='true'>
-        <div className='border-border bg-background/95 sticky top-16 z-30 mt-16 border-y px-4 py-2 backdrop-blur md:hidden'>
-          <DocsMobileNavigation
-            currentPageId={props.pageId}
-            groups={DOCS_NAVIGATION_GROUPS}
-            ariaLabel={t('Documentation')}
-          />
+        <div className='pointer-events-none sticky top-16 z-30 mt-16 px-3 pt-2 md:hidden'>
+          <div className='pointer-events-auto'>
+            <DocsMobileNavigation
+              currentPageId={props.pageId}
+              groups={DOCS_NAVIGATION_GROUPS}
+              ariaLabel={t('Documentation')}
+            />
+          </div>
         </div>
 
         <div className='mx-auto grid w-full max-w-[1400px] grid-cols-1 px-4 md:grid-cols-[256px_minmax(0,1fr)] md:gap-10 md:px-6 md:pt-16 xl:grid-cols-[256px_minmax(0,760px)_190px] xl:gap-12'>
