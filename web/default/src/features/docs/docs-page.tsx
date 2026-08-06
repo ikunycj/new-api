@@ -137,6 +137,18 @@ const developmentDocsLoaders = import.meta.env.DEV
         import('./ai-model-api').then((module) => ({
           default: module.DocsApiIntegration,
         })),
+      '/docs/api/text-chat': () =>
+        import('./api-text-chat').then((module) => ({
+          default: module.DocsApiTextChat,
+        })),
+      '/docs/api/multimodal': () =>
+        import('./api-multimodal').then((module) => ({
+          default: module.DocsApiMultimodal,
+        })),
+      '/docs/api/compatibility': () =>
+        import('./api-compatibility').then((module) => ({
+          default: module.DocsApiCompatibility,
+        })),
       '/docs/model-pricing': () =>
         import('./model-pricing').then((module) => ({
           default: module.DocsModelPricing,

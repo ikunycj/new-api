@@ -71,7 +71,10 @@ import { Route as DocsToolsGeminiIndexRouteImport } from './routes/docs/tools/ge
 import { Route as DocsToolsCodexIndexRouteImport } from './routes/docs/tools/codex/index'
 import { Route as DocsToolsClaudeCodeIndexRouteImport } from './routes/docs/tools/claude-code/index'
 import { Route as DocsToolsCcSwitchIndexRouteImport } from './routes/docs/tools/cc-switch/index'
+import { Route as DocsApiTextChatIndexRouteImport } from './routes/docs/api/text-chat/index'
+import { Route as DocsApiMultimodalIndexRouteImport } from './routes/docs/api/multimodal/index'
 import { Route as DocsApiIntegrationIndexRouteImport } from './routes/docs/api/integration/index'
+import { Route as DocsApiCompatibilityIndexRouteImport } from './routes/docs/api/compatibility/index'
 import { Route as AuthenticatedSystemSettingsSiteIndexRouteImport } from './routes/_authenticated/system-settings/site/index'
 import { Route as AuthenticatedSystemSettingsSecurityIndexRouteImport } from './routes/_authenticated/system-settings/security/index'
 import { Route as AuthenticatedSystemSettingsOperationsIndexRouteImport } from './routes/_authenticated/system-settings/operations/index'
@@ -415,11 +418,27 @@ const DocsToolsCcSwitchIndexRoute = DocsToolsCcSwitchIndexRouteImport.update({
   path: '/docs/tools/cc-switch/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsApiTextChatIndexRoute = DocsApiTextChatIndexRouteImport.update({
+  id: '/docs/api/text-chat/',
+  path: '/docs/api/text-chat/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsApiMultimodalIndexRoute = DocsApiMultimodalIndexRouteImport.update({
+  id: '/docs/api/multimodal/',
+  path: '/docs/api/multimodal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsApiIntegrationIndexRoute = DocsApiIntegrationIndexRouteImport.update({
   id: '/docs/api/integration/',
   path: '/docs/api/integration/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsApiCompatibilityIndexRoute =
+  DocsApiCompatibilityIndexRouteImport.update({
+    id: '/docs/api/compatibility/',
+    path: '/docs/api/compatibility/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedSystemSettingsSiteIndexRoute =
   AuthenticatedSystemSettingsSiteIndexRouteImport.update({
     id: '/site/',
@@ -573,7 +592,10 @@ export interface FileRoutesByFullPath {
   '/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/docs/api/compatibility/': typeof DocsApiCompatibilityIndexRoute
   '/docs/api/integration/': typeof DocsApiIntegrationIndexRoute
+  '/docs/api/multimodal/': typeof DocsApiMultimodalIndexRoute
+  '/docs/api/text-chat/': typeof DocsApiTextChatIndexRoute
   '/docs/tools/cc-switch/': typeof DocsToolsCcSwitchIndexRoute
   '/docs/tools/claude-code/': typeof DocsToolsClaudeCodeIndexRoute
   '/docs/tools/codex/': typeof DocsToolsCodexIndexRoute
@@ -649,7 +671,10 @@ export interface FileRoutesByTo {
   '/system-settings/operations': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/system-settings/security': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/system-settings/site': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/docs/api/compatibility': typeof DocsApiCompatibilityIndexRoute
   '/docs/api/integration': typeof DocsApiIntegrationIndexRoute
+  '/docs/api/multimodal': typeof DocsApiMultimodalIndexRoute
+  '/docs/api/text-chat': typeof DocsApiTextChatIndexRoute
   '/docs/tools/cc-switch': typeof DocsToolsCcSwitchIndexRoute
   '/docs/tools/claude-code': typeof DocsToolsClaudeCodeIndexRoute
   '/docs/tools/codex': typeof DocsToolsCodexIndexRoute
@@ -729,7 +754,10 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/_authenticated/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/_authenticated/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/docs/api/compatibility/': typeof DocsApiCompatibilityIndexRoute
   '/docs/api/integration/': typeof DocsApiIntegrationIndexRoute
+  '/docs/api/multimodal/': typeof DocsApiMultimodalIndexRoute
+  '/docs/api/text-chat/': typeof DocsApiTextChatIndexRoute
   '/docs/tools/cc-switch/': typeof DocsToolsCcSwitchIndexRoute
   '/docs/tools/claude-code/': typeof DocsToolsClaudeCodeIndexRoute
   '/docs/tools/codex/': typeof DocsToolsCodexIndexRoute
@@ -808,7 +836,10 @@ export interface FileRouteTypes {
     | '/system-settings/operations/'
     | '/system-settings/security/'
     | '/system-settings/site/'
+    | '/docs/api/compatibility/'
     | '/docs/api/integration/'
+    | '/docs/api/multimodal/'
+    | '/docs/api/text-chat/'
     | '/docs/tools/cc-switch/'
     | '/docs/tools/claude-code/'
     | '/docs/tools/codex/'
@@ -884,7 +915,10 @@ export interface FileRouteTypes {
     | '/system-settings/operations'
     | '/system-settings/security'
     | '/system-settings/site'
+    | '/docs/api/compatibility'
     | '/docs/api/integration'
+    | '/docs/api/multimodal'
+    | '/docs/api/text-chat'
     | '/docs/tools/cc-switch'
     | '/docs/tools/claude-code'
     | '/docs/tools/codex'
@@ -963,7 +997,10 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/operations/'
     | '/_authenticated/system-settings/security/'
     | '/_authenticated/system-settings/site/'
+    | '/docs/api/compatibility/'
     | '/docs/api/integration/'
+    | '/docs/api/multimodal/'
+    | '/docs/api/text-chat/'
     | '/docs/tools/cc-switch/'
     | '/docs/tools/claude-code/'
     | '/docs/tools/codex/'
@@ -999,7 +1036,10 @@ export interface RootRouteChildren {
   DocsPaymentIndexRoute: typeof DocsPaymentIndexRoute
   DocsReferralRewardsIndexRoute: typeof DocsReferralRewardsIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
+  DocsApiCompatibilityIndexRoute: typeof DocsApiCompatibilityIndexRoute
   DocsApiIntegrationIndexRoute: typeof DocsApiIntegrationIndexRoute
+  DocsApiMultimodalIndexRoute: typeof DocsApiMultimodalIndexRoute
+  DocsApiTextChatIndexRoute: typeof DocsApiTextChatIndexRoute
   DocsToolsCcSwitchIndexRoute: typeof DocsToolsCcSwitchIndexRoute
   DocsToolsClaudeCodeIndexRoute: typeof DocsToolsClaudeCodeIndexRoute
   DocsToolsCodexIndexRoute: typeof DocsToolsCodexIndexRoute
@@ -1445,11 +1485,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsToolsCcSwitchIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/api/text-chat/': {
+      id: '/docs/api/text-chat/'
+      path: '/docs/api/text-chat'
+      fullPath: '/docs/api/text-chat/'
+      preLoaderRoute: typeof DocsApiTextChatIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/api/multimodal/': {
+      id: '/docs/api/multimodal/'
+      path: '/docs/api/multimodal'
+      fullPath: '/docs/api/multimodal/'
+      preLoaderRoute: typeof DocsApiMultimodalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs/api/integration/': {
       id: '/docs/api/integration/'
       path: '/docs/api/integration'
       fullPath: '/docs/api/integration/'
       preLoaderRoute: typeof DocsApiIntegrationIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/api/compatibility/': {
+      id: '/docs/api/compatibility/'
+      path: '/docs/api/compatibility'
+      fullPath: '/docs/api/compatibility/'
+      preLoaderRoute: typeof DocsApiCompatibilityIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/system-settings/site/': {
@@ -1716,7 +1777,10 @@ const rootRouteChildren: RootRouteChildren = {
   DocsPaymentIndexRoute: DocsPaymentIndexRoute,
   DocsReferralRewardsIndexRoute: DocsReferralRewardsIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
+  DocsApiCompatibilityIndexRoute: DocsApiCompatibilityIndexRoute,
   DocsApiIntegrationIndexRoute: DocsApiIntegrationIndexRoute,
+  DocsApiMultimodalIndexRoute: DocsApiMultimodalIndexRoute,
+  DocsApiTextChatIndexRoute: DocsApiTextChatIndexRoute,
   DocsToolsCcSwitchIndexRoute: DocsToolsCcSwitchIndexRoute,
   DocsToolsClaudeCodeIndexRoute: DocsToolsClaudeCodeIndexRoute,
   DocsToolsCodexIndexRoute: DocsToolsCodexIndexRoute,

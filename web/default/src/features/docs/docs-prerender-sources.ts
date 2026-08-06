@@ -19,6 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ComponentType } from 'react'
 
 import { DocsApiIntegration } from './ai-model-api'
+import { DocsApiCompatibility } from './api-compatibility'
+import { DocsApiMultimodal } from './api-multimodal'
+import { DocsApiTextChat } from './api-text-chat'
 import { DocsCcSwitch } from './cc-switch-guide'
 import { DocsClaudeCode } from './claude-code-guide'
 import { DocsCodex } from './codex-guide'
@@ -35,6 +38,9 @@ import { DocsReferralRewards } from './referral-rewards'
 export const DOCS_PRERENDER_SOURCES = {
   '/docs': DocsOverview,
   '/docs/api/integration': DocsApiIntegration,
+  '/docs/api/text-chat': DocsApiTextChat,
+  '/docs/api/multimodal': DocsApiMultimodal,
+  '/docs/api/compatibility': DocsApiCompatibility,
   '/docs/model-pricing': DocsModelPricing,
   '/docs/payment': DocsPayment,
   '/docs/referral-rewards': DocsReferralRewards,

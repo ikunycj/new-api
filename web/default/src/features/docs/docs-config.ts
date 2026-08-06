@@ -110,6 +110,27 @@ export const DOCS_ROUTES = [
     path: '/docs/api/integration',
     file: 'docs/api/integration.html',
   },
+  {
+    id: 'api-text-chat',
+    group: 'api-start',
+    label: '文本与对话',
+    path: '/docs/api/text-chat',
+    file: 'docs/api/text-chat.html',
+  },
+  {
+    id: 'api-multimodal',
+    group: 'api-start',
+    label: '多模态接口',
+    path: '/docs/api/multimodal',
+    file: 'docs/api/multimodal.html',
+  },
+  {
+    id: 'api-compatibility',
+    group: 'api-start',
+    label: '兼容性与限制',
+    path: '/docs/api/compatibility',
+    file: 'docs/api/compatibility.html',
+  },
 ] as const
 
 export type DocsPageId = (typeof DOCS_ROUTES)[number]['id']
