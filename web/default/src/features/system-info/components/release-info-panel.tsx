@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { GitCommitHorizontal, PackageCheck } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -44,6 +45,14 @@ export function ReleaseInfoPanel() {
   const commit = valueOrFallback(status?.build_commit)
   const buildTime = valueOrFallback(status?.build_time)
   const version = valueOrFallback(status?.version)
+  let buildTimeContent: ReactNode
+  if (loading) {
+    buildTimeContent = <Skeleton className='h-4 w-36' />
+  } else if (buildTime === '-') {
+    buildTimeContent = '-'
+  } else {
+    buildTimeContent = formatBuildTime(buildTime)
+  }
 
   return (
     <section className='bg-card overflow-hidden rounded-lg border shadow-xs'>
@@ -96,13 +105,7 @@ export function ReleaseInfoPanel() {
         <div className='min-w-0'>
           <div className='text-muted-foreground text-xs'>{t('Built at')}</div>
           <div className='mt-1 truncate font-mono text-xs'>
-            {loading ? (
-              <Skeleton className='h-4 w-36' />
-            ) : buildTime === '-' ? (
-              '-'
-            ) : (
-              formatBuildTime(buildTime)
-            )}
+            {buildTimeContent}
           </div>
         </div>
       </div>

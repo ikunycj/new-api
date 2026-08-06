@@ -59,6 +59,12 @@ export function VendorMutateDialog({
   const queryClient = useQueryClient()
   const isEdit = Boolean(currentVendor?.id)
   const [isSaving, setIsSaving] = useState(false)
+  let submitLabel = t('Create')
+  if (isSaving) {
+    submitLabel = t('Saving...')
+  } else if (isEdit) {
+    submitLabel = t('Update')
+  }
 
   const form = useForm({
     resolver: zodResolver(vendorFormSchema),
@@ -91,11 +97,17 @@ export function VendorMutateDialog({
   }, [open, isEdit, currentVendor, form])
 
   const onSubmit = async (values: Record<string, unknown>) => {
+    if (isEdit && !currentVendor) return
+
     setIsSaving(true)
     try {
-      const response = isEdit
-        ? await updateVendor({ ...values, id: currentVendor!.id })
-        : await createVendor(values)
+      let response
+      if (isEdit) {
+        if (!currentVendor) return
+        response = await updateVendor({ ...values, id: currentVendor.id })
+      } else {
+        response = await createVendor(values)
+      }
 
       if (response.success) {
         toast.success(
@@ -146,7 +158,7 @@ export function VendorMutateDialog({
             {isSaving ? (
               <Loader2 className='mr-2 h-4 w-4 animate-spin' />
             ) : null}
-            {isSaving ? t('Saving...') : isEdit ? t('Update') : t('Create')}
+            {submitLabel}
           </Button>
         </>
       }

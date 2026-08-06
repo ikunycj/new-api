@@ -55,6 +55,14 @@ export function ResetPasswordConfirm({
   } = useCountdown({ initialSeconds: 30 })
 
   const isValidResetLink = Boolean(email && token)
+  let primaryButtonLabel = t('auth.resetPasswordConfirm.confirm')
+  if (newPassword) {
+    primaryButtonLabel = t('auth.resetPasswordConfirm.backToLogin')
+  } else if (isActive) {
+    primaryButtonLabel = t('auth.resetPasswordConfirm.retry', {
+      seconds: secondsLeft,
+    })
+  }
 
   async function handleSubmit() {
     if (!isValidResetLink || !email || !token) {
@@ -179,13 +187,7 @@ export function ResetPasswordConfirm({
               newPassword ? false : loading || isActive || !isValidResetLink
             }
           >
-            {newPassword
-              ? t('auth.resetPasswordConfirm.backToLogin')
-              : isActive
-                ? t('auth.resetPasswordConfirm.retry', {
-                    seconds: secondsLeft,
-                  })
-                : t('auth.resetPasswordConfirm.confirm')}
+            {primaryButtonLabel}
           </Button>
 
           {!newPassword && (

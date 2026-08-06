@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -325,27 +325,29 @@ export function SetupWizard() {
               {STEPS.map((step, index) => {
                 const isActive = currentStep === index
                 const isCompleted = currentStep > index
+                let stepClass = 'border-muted bg-card'
+                if (isActive) {
+                  stepClass = 'border-primary ring-primary/20 ring-2'
+                } else if (isCompleted) {
+                  stepClass = 'border-primary/40 bg-primary/5'
+                }
+                const indicatorClass =
+                  isActive || isCompleted
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-muted-foreground/40 text-muted-foreground'
                 return (
                   <li
                     key={step.titleKey}
                     className={cn(
                       'rounded-xl border p-3',
-                      isActive
-                        ? 'border-primary ring-primary/20 ring-2'
-                        : isCompleted
-                          ? 'border-primary/40 bg-primary/5'
-                          : 'border-muted bg-card'
+                      stepClass
                     )}
                   >
                     <div className='flex items-start gap-3'>
                       <span
                         className={cn(
                           'flex size-6 items-center justify-center rounded-md border text-xs font-semibold',
-                          isActive
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : isCompleted
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-muted-foreground/40 text-muted-foreground'
+                          indicatorClass
                         )}
                       >
                         {index + 1}
@@ -364,23 +366,31 @@ export function SetupWizard() {
               })}
             </ol>
 
-            {isLoading ? (
-              <LoadingState message={t('Loading setup status…')} />
-            ) : isError ? (
-              <ErrorState
-                title={t('We could not load the setup status.')}
-                onRetry={() => refetch()}
-              />
-            ) : (
-              <Form {...form}>
-                <form
-                  className='space-y-6'
-                  onSubmit={(event) => event.preventDefault()}
-                >
-                  {currentStepComponent}
-                </form>
-              </Form>
-            )}
+            {(() => {
+              let content: ReactNode
+              if (isLoading) {
+                content = <LoadingState message={t('Loading setup status…')} />
+              } else if (isError) {
+                content = (
+                  <ErrorState
+                    title={t('We could not load the setup status.')}
+                    onRetry={() => refetch()}
+                  />
+                )
+              } else {
+                content = (
+                  <Form {...form}>
+                    <form
+                      className='space-y-6'
+                      onSubmit={(event) => event.preventDefault()}
+                    >
+                      {currentStepComponent}
+                    </form>
+                  </Form>
+                )
+              }
+              return content
+            })()}
           </CardContent>
 
           {!isLoading && !isError && (

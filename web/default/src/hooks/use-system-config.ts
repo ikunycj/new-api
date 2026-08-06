@@ -67,7 +67,7 @@ export function mapStatusDataToConfig(
   if (!data) return {}
 
   const has = (key: keyof StatusApiResponse['data']) =>
-    Object.prototype.hasOwnProperty.call(data, key)
+    Object.hasOwn(data, key)
   const nextConfig: Partial<SystemConfig> = {}
 
   if (has('system_name')) {
