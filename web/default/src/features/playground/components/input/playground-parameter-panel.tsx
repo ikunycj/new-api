@@ -37,6 +37,10 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -51,6 +55,7 @@ import {
   PLAYGROUND_PARAMETER_PANEL_SCROLL_CLASS,
   type PlaygroundParameterKey,
 } from '../../lib/parameters/playground-parameters'
+import { isImageGenerationModel } from '../../lib'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
 
 type PlaygroundParameterPanelProps = {
@@ -101,6 +106,58 @@ function PlaygroundParameterContent({
         compact ? 'px-4 pb-4' : 'p-1'
       )}
     >
+      {isImageGenerationModel(config.model) && (
+        <div className='border-border/70 bg-background/60 grid gap-3 rounded-lg border p-3'>
+          <div className='space-y-1'>
+            <div className='text-sm font-semibold'>{t('Image generation settings')}</div>
+            <div className='text-muted-foreground text-xs leading-4'>
+              {t('Configure the output before generating an image.')}
+            </div>
+          </div>
+          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-size'>
+            <span className='font-medium'>{t('Image size')}</span>
+            <NativeSelect
+              disabled={disabled}
+              id='playground-image-size'
+              onChange={(event) => onConfigChange('imageSize', event.target.value)}
+              value={config.imageSize}
+            >
+              <NativeSelectOption value='1024x1024'>1024x1024</NativeSelectOption>
+              <NativeSelectOption value='1536x1024'>1536x1024</NativeSelectOption>
+              <NativeSelectOption value='1024x1536'>1024x1536</NativeSelectOption>
+            </NativeSelect>
+          </label>
+          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-quality'>
+            <span className='font-medium'>{t('Image quality')}</span>
+            <NativeSelect
+              disabled={disabled}
+              id='playground-image-quality'
+              onChange={(event) => onConfigChange('imageQuality', event.target.value)}
+              value={config.imageQuality}
+            >
+              <NativeSelectOption value='auto'>Auto</NativeSelectOption>
+              <NativeSelectOption value='low'>Low</NativeSelectOption>
+              <NativeSelectOption value='medium'>Medium</NativeSelectOption>
+              <NativeSelectOption value='high'>High</NativeSelectOption>
+            </NativeSelect>
+          </label>
+          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-count'>
+            <span className='font-medium'>{t('Number of images')}</span>
+            <Input
+              disabled={disabled}
+              id='playground-image-count'
+              max={4}
+              min={1}
+              onChange={(event) => {
+                const value = Number.parseInt(event.target.value, 10)
+                onConfigChange('imageN', Number.isFinite(value) ? Math.min(4, Math.max(1, value)) : 1)
+              }}
+              type='number'
+              value={config.imageN}
+            />
+          </label>
+        </div>
+      )}
       {PLAYGROUND_PARAMETER_CONTROLS.map((control) => {
         const enabled = parameterEnabled[control.key]
         const value = config[control.key]
@@ -200,7 +257,7 @@ export function PlaygroundParameterPanel(props: PlaygroundParameterPanelProps) {
   const isMobile = useIsMobile()
   const activeCount = PLAYGROUND_PARAMETER_CONTROLS.filter(
     (control) => props.parameterEnabled[control.key]
-  ).length
+  ).length + (isImageGenerationModel(props.config.model) ? 1 : 0)
 
   const trigger = (
     <PromptInputButton

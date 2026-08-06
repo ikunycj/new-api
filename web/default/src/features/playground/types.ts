@@ -28,6 +28,11 @@ export interface MessageVersion {
   content: string
 }
 
+export interface GeneratedImage {
+  url: string
+  revisedPrompt?: string
+}
+
 export interface Message {
   key: string
   from: MessageRole
@@ -49,6 +54,7 @@ export interface Message {
   isContentComplete?: boolean
   status?: MessageStatus
   errorCode?: string | null
+  images?: GeneratedImage[]
 }
 
 // API payload types
@@ -115,6 +121,25 @@ export interface ChatCompletionResponse {
   }
 }
 
+export interface ImageGenerationRequest {
+  model: string
+  group?: string
+  prompt: string
+  n: number
+  size: string
+  quality: string
+  response_format: 'b64_json'
+}
+
+export interface ImageGenerationResponse {
+  created: number
+  data: Array<{
+    url?: string
+    b64_json?: string
+    revised_prompt?: string
+  }>
+}
+
 // Configuration types
 export interface PlaygroundConfig {
   model: string
@@ -126,6 +151,9 @@ export interface PlaygroundConfig {
   presence_penalty: number
   seed: number | null
   stream: boolean
+  imageSize: string
+  imageQuality: string
+  imageN: number
 }
 
 export interface ParameterEnabled {
