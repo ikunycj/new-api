@@ -5,6 +5,7 @@ import { Counter, Rate, Trend } from 'k6/metrics';
 const profile = __ENV.LOAD_PROFILE || 'smoke';
 const baseURL = __ENV.BASE_URL || 'http://new-api:3000';
 const userCount = numberEnv('LOADTEST_USERS', 1000);
+const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
 const smokeVUs = numberEnv('SMOKE_VUS', 10);
 const burstMaxDuration = __ENV.BURST_MAX_DURATION || '5m';
@@ -117,8 +118,11 @@ function recordResponse(response, name) {
 
 function headersForVU() {
   const tokenNumber = ((__VU - 1) % userCount) + 1;
+  const token = loadTestTokens.length > 0
+    ? loadTestTokens[(__VU - 1) % loadTestTokens.length]
+    : `sk-loadtest${String(tokenNumber).padStart(5, '0')}`;
   return {
-    Authorization: `Bearer sk-loadtest${String(tokenNumber).padStart(5, '0')}`,
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'X-Load-Test-ID': `${profile}-${__VU}-${__ITER}`,
   };
@@ -260,6 +264,18 @@ function numberListEnv(name, fallback) {
   const values = raw.split(',').map((value) => Number(value.trim()));
   if (values.length === 0 || values.some((value) => !Number.isInteger(value) || value < 1)) {
     throw new Error(`${name} must be a comma-separated list of positive integers`);
+  }
+  return values;
+}
+
+function tokenListEnv(name) {
+  const raw = __ENV[name];
+  if (!raw) {
+    return [];
+  }
+  const values = raw.split(',').map((value) => value.trim()).filter(Boolean);
+  if (values.length === 0) {
+    throw new Error(`${name} must contain at least one non-empty token`);
   }
   return values;
 }

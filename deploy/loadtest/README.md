@@ -61,6 +61,21 @@ CAPACITY_STAGE_DURATION=30s \
 
 For a capacity result suitable for planning, keep each step for at least two minutes and repeat the highest passing rate for 30 minutes. Do not point this profile at a paid or production provider until the account, cost ceiling, rate limit, and maintenance window have been approved.
 
+### Local k6 against a remote API
+
+The load generator can run locally while the target API is remote. Use dedicated remote test tokens and an explicit confirmation gate:
+
+```sh
+CONFIRM_REMOTE_LOADTEST=yes \
+REMOTE_BASE_URL=https://approved-test-api.example.com \
+LOADTEST_TOKENS=sk-test-1,sk-test-2,sk-test-3 \
+K6_PROMETHEUS_RW_SERVER_URL=https://approved-prometheus.example.com/api/v1/write \
+CAPACITY_RATES=100,200,300 \
+./run-remote.sh capacity
+```
+
+`run-remote.sh` does not start or seed the local new-api/PostgreSQL/Redis services; it only runs k6 on the existing Compose network. The remote Prometheus endpoint must accept authenticated remote-write traffic, or keep the default local endpoint and inspect only local k6 metrics. To see remote CPU, memory, Go, PostgreSQL and Redis panels, the remote Prometheus must scrape the corresponding remote exporters and the remote Grafana must use that Prometheus. Keep metrics and exporter endpoints on a private network or VPN; never expose them publicly just for a load test.
+
 The startup scripts build `new-api` before pulling the monitoring images and use `goproxy.cn` by default. The Go proxy is configurable in `.env`; for a private mirror set `GOPROXY`, `GOSUMDB`, and optionally `GOTOOLCHAIN` there. A successful `go mod download` is cached by the legacy Docker layer keyed by `go.mod` and `go.sum`, so source-only changes do not download modules again. Host ports are bound to `127.0.0.1` so the stack stays local. On Colima, the scripts also repair missing SSH port forwards for long-lived VMs.
 
 `Dockerfile.dev` builds for the container's native architecture and does not enable experimental Go runtime features. This avoids emulation overhead on Apple Silicon and keeps profiling stable during long runs.

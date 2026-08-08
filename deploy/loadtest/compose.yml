@@ -223,15 +223,16 @@ services:
     image: grafana/k6:0.57.0
     profiles: ["runner"]
     environment:
-      BASE_URL: http://new-api:3000
+      BASE_URL: ${BASE_URL:-http://new-api:3000}
       LOAD_PROFILE: ${LOAD_PROFILE:-smoke}
       LOADTEST_USERS: ${LOADTEST_USERS:-1000}
+      LOADTEST_TOKENS: ${LOADTEST_TOKENS:-}
       CAPACITY_RATES: ${CAPACITY_RATES:-100,200,300,400,500,600,700,800}
       CAPACITY_RAMP_DURATION: ${CAPACITY_RAMP_DURATION:-30s}
       CAPACITY_STAGE_DURATION: ${CAPACITY_STAGE_DURATION:-2m}
       CAPACITY_PREALLOCATED_VUS: ${CAPACITY_PREALLOCATED_VUS:-500}
       CAPACITY_MAX_VUS: ${CAPACITY_MAX_VUS:-2000}
-      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_SERVER_URL: ${K6_PROMETHEUS_RW_SERVER_URL:-http://prometheus:9090/api/v1/write}
       K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,max
     ulimits:
       nofile:

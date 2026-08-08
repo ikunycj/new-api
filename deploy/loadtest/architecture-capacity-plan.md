@@ -85,6 +85,12 @@ total_token_tps  = (prompt_tokens + completion_tokens) / 测试窗口秒数
 
 ## 4. 压测设计
 
+### 4.0 本地发压、远程观测
+
+压测机可以在本地，目标 API 可以在线上或测试环境。此时必须把职责分开：本地 k6 负责产生流量并记录客户端延迟、错误率和 Token TPS；远程 Prometheus 负责抓取 API 网关、渠道代理、PostgreSQL、Redis 和主机 exporter，远程 Grafana 才能展示服务端资源曲线。远程 `/metrics`、数据库、Redis 和 exporter 只允许通过内网或 VPN 访问。
+
+仓库提供 `run-remote.sh`，要求设置专用远程 Token、目标 URL 和 `CONFIRM_REMOTE_LOADTEST=yes`，用于防止误把压测打到未审批的生产地址。远程压测前还要设置预算、Provider 限额、停止条件和维护窗口。
+
 ### 4.1 流量模型
 
 至少准备四类请求：
@@ -260,4 +266,3 @@ ceil(10,000 / 2,000 / 0.7) + 1 = 9 台（含冗余）
 | 版本/配置 | 稳定并发 | 稳定 RPS | 输入 Token TPS | 输出 Token TPS | P95 | 错误率 | 首个瓶颈 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 待线上实测 | - | - | - | - | - | - | - |
-
