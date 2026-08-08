@@ -4,15 +4,17 @@
 FROM golang:1.26.1-alpine AS builder
 
 ENV GO111MODULE=on CGO_ENABLED=0
-ARG TARGETOS
-ARG TARGETARCH
-ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64}
-ENV GOEXPERIMENT=greenteagc
+# Keep module downloads reproducible while allowing deployments to override the
+# proxy for a private mirror or a different network region.
+ARG GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.google.cn
+ARG GOTOOLCHAIN=local
+ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB} GOTOOLCHAIN=${GOTOOLCHAIN}
 
 WORKDIR /build
 
 ADD go.mod go.sum ./
-RUN go mod download
+RUN go env GOPROXY GOSUMDB GOTOOLCHAIN && go mod download
 
 COPY . .
 

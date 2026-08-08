@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: local-alert-sink
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 15m
+
+receivers:
+  - name: local-alert-sink
+    webhook_configs:
+      - url: http://alert-sink:8080/alerts
+        send_resolved: true

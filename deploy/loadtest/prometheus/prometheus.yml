@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    environment: loadtest
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
+scrape_configs:
+  - job_name: new-api
+    static_configs:
+      - targets: [new-api:8006]
+
+  - job_name: mock-upstream
+    static_configs:
+      - targets: [mock-upstream:8080]
+
+  - job_name: postgres
+    static_configs:
+      - targets: [postgres-exporter:9187]
+
+  - job_name: redis
+    static_configs:
+      - targets: [redis-exporter:9121]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: [cadvisor:8080]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [prometheus:9090]
