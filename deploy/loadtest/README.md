@@ -74,6 +74,8 @@ CAPACITY_RATES=100,200,300 \
 ./run-remote.sh capacity
 ```
 
+For a local token file, use `LOADTEST_TOKEN_FILE=/absolute/path/tokens.txt`; each line may be either a token or `name token`. The file is read locally and is not part of the repository. A URL ending in `/v1` is normalized automatically, so both `https://host` and `https://host/v1` are accepted.
+
 `run-remote.sh` does not start or seed the local new-api/PostgreSQL/Redis services; it only runs k6 on the existing Compose network. The remote Prometheus endpoint must accept authenticated remote-write traffic, or keep the default local endpoint and inspect only local k6 metrics. To see remote CPU, memory, Go, PostgreSQL and Redis panels, the remote Prometheus must scrape the corresponding remote exporters and the remote Grafana must use that Prometheus. Keep metrics and exporter endpoints on a private network or VPN; never expose them publicly just for a load test.
 
 The startup scripts build `new-api` before pulling the monitoring images and use `goproxy.cn` by default. The Go proxy is configurable in `.env`; for a private mirror set `GOPROXY`, `GOSUMDB`, and optionally `GOTOOLCHAIN` there. A successful `go mod download` is cached by the legacy Docker layer keyed by `go.mod` and `go.sum`, so source-only changes do not download modules again. Host ports are bound to `127.0.0.1` so the stack stays local. On Colima, the scripts also repair missing SSH port forwards for long-lived VMs.

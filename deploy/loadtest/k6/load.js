@@ -3,7 +3,7 @@ import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
 const profile = __ENV.LOAD_PROFILE || 'smoke';
-const baseURL = __ENV.BASE_URL || 'http://new-api:3000';
+const baseURL = normalizeBaseURL(__ENV.BASE_URL || 'http://new-api:3000');
 const userCount = numberEnv('LOADTEST_USERS', 1000);
 const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
@@ -278,4 +278,8 @@ function tokenListEnv(name) {
     throw new Error(`${name} must contain at least one non-empty token`);
   }
   return values;
+}
+
+function normalizeBaseURL(value) {
+  return value.replace(/\/+$/, '').replace(/\/v1$/, '');
 }

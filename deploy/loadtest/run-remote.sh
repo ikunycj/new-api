@@ -14,7 +14,25 @@ case "$profile" in
 esac
 
 : "${REMOTE_BASE_URL:?Set REMOTE_BASE_URL to the approved remote API URL}"
-: "${LOADTEST_TOKENS:?Set LOADTEST_TOKENS to dedicated remote test tokens, comma-separated}"
+if [ -n "${LOADTEST_TOKEN_FILE:-}" ]; then
+  if [ ! -f "$LOADTEST_TOKEN_FILE" ]; then
+    echo "Token file does not exist: $LOADTEST_TOKEN_FILE" >&2
+    exit 2
+  fi
+  token_values=$(awk 'NF {if (NF > 2) exit 2; print (NF == 2 ? $2 : $1)}' "$LOADTEST_TOKEN_FILE") || {
+    echo "Token file must contain one token per line or a name followed by a token." >&2
+    exit 2
+  }
+  token_count=$(printf '%s\n' "$token_values" | awk 'NF {count++} END {print count + 0}')
+  if [ "$token_count" -lt 1 ]; then
+    echo "Token file contains no tokens." >&2
+    exit 2
+  fi
+  LOADTEST_TOKENS=$(printf '%s\n' "$token_values" | paste -sd, -)
+  export LOADTEST_TOKENS
+else
+  : "${LOADTEST_TOKENS:?Set LOADTEST_TOKENS or LOADTEST_TOKEN_FILE to dedicated remote test tokens}"
+fi
 if [ "${CONFIRM_REMOTE_LOADTEST:-}" != "yes" ]; then
   echo "Refusing remote load test: set CONFIRM_REMOTE_LOADTEST=yes after approving target, cost, rate limit, and test window." >&2
   exit 2
