@@ -18,6 +18,8 @@ ENV GOPROXY=${GOPROXY}
 
 ARG GOSUMDB=sum.golang.google.cn
 ENV GOSUMDB=${GOSUMDB}
+ARG GOTOOLCHAIN=local
+ENV GOTOOLCHAIN=${GOTOOLCHAIN}
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -27,7 +29,7 @@ ENV GOEXPERIMENT=greenteagc
 WORKDIR /build
 
 ADD go.mod go.sum ./
-RUN go mod download
+RUN go env GOPROXY GOSUMDB GOTOOLCHAIN && go mod download
 
 COPY . .
 COPY --from=builder /build/web/default/dist ./web/default/dist

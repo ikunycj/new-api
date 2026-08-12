@@ -38,6 +38,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
+import { PackageComparison } from './components/packages/package-comparison'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
@@ -189,6 +190,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   users: {
     titleKey: 'User Analytics',
   },
+  packages: {
+    titleKey: 'Package comparison',
+  },
 }
 
 export function Dashboard() {
@@ -248,7 +252,9 @@ export function Dashboard() {
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
+        (section) =>
+          section !== 'overview' &&
+          ((section !== 'users' && section !== 'packages') || isAdmin)
       ),
     [isAdmin]
   )
@@ -398,6 +404,11 @@ export function Dashboard() {
                   onFiltersChange={setUserChartsFilters}
                 />
               </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'packages' && isAdmin && (
+            <FadeIn>
+              <PackageComparison />
             </FadeIn>
           )}
           {activeSection === 'flow' && (

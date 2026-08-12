@@ -457,6 +457,12 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
 		return err
 	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS subscription_plan_id Int32 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS subscription_plan_title String DEFAULT ''").Error; err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 
@@ -505,6 +511,8 @@ CREATE TABLE IF NOT EXISTS logs (
 	ip String DEFAULT '',
 	request_id String DEFAULT '',
 	upstream_request_id String DEFAULT '',
+	subscription_plan_id Int32 DEFAULT 0,
+	subscription_plan_title String DEFAULT '',
 	other String DEFAULT ''
 )
 ENGINE = MergeTree()

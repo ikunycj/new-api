@@ -1,0 +1,146 @@
+groups:
+  - name: new-api-availability
+    rules:
+      - alert: NewAPIInstanceDown
+        expr: up{job="new-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "new-api metrics endpoint is unavailable"
+          description: "Prometheus has failed to scrape new-api for 30 seconds."
+
+      - alert: NewAPIHighErrorRate
+        expr: |
+          sum(rate(new_api_http_requests_total{route_tag="relay",status=~"5.."}[2m]))
+          /
+          clamp_min(sum(rate(new_api_http_requests_total{route_tag="relay"}[2m])), 0.001)
+          > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "new-api relay error rate exceeds 5%"
+          description: "The two-minute relay HTTP 5xx ratio has remained above 5% for one minute."
+
+      - alert: NewAPIHighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(new_api_http_request_duration_seconds_bucket{route="/v1/chat/completions"}[5m]))
+          ) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api chat P95 latency exceeds 2 seconds"
+          description: "P95 latency has remained above 2 seconds for two minutes. Compare it with mock-upstream latency and pool saturation."
+
+      - alert: NewAPIHighInFlightRequests
+        expr: new_api_http_requests_in_flight > 900
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api has more than 900 in-flight requests"
+          description: "Sustained high concurrency can indicate downstream queuing or a connection bottleneck."
+
+  - name: new-api-runtime
+    rules:
+      - alert: NewAPIHighHeapUsage
+        expr: go_memstats_heap_alloc_bytes{job="new-api"} > 1.5e9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api heap allocation exceeds 1.5 GB"
+          description: "Inspect the Pyroscope memory profile and compare heap after load returns to zero."
+
+      - alert: NewAPIHighGoroutineCount
+        expr: go_goroutines{job="new-api"} > 5000
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api goroutine count exceeds 5000"
+          description: "Inspect the goroutine profile for blocked relay, database, or network operations."
+
+      - alert: NewAPIDatabasePoolSaturated
+        expr: |
+          new_api_database_connections{database="main",state="in_use"}
+          /
+          clamp_min(new_api_database_connections{database="main",state="max_open"}, 1)
+          > 0.85
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api main database pool exceeds 85% utilization"
+          description: "Check database query latency, locks, and connection wait rate before increasing the pool."
+
+      - alert: NewAPIDatabaseConnectionWaits
+        expr: rate(new_api_database_wait_count_total{database="main"}[2m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api is waiting for database connections"
+          description: "More than one database pool wait per second indicates pool saturation or slow queries."
+
+      - alert: NewAPIRedisPoolTimeouts
+        expr: rate(new_api_redis_pool_timeouts_total[2m]) > 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "new-api Redis client pool is timing out"
+          description: "Inspect Redis latency, server CPU, and REDIS_POOL_SIZE."
+
+  - name: new-api-dependencies
+    rules:
+      - alert: PostgreSQLExporterDown
+        expr: up{job="postgres"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL metrics are unavailable"
+          description: "The PostgreSQL exporter cannot be scraped."
+
+      - alert: RedisExporterDown
+        expr: up{job="redis"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis metrics are unavailable"
+          description: "The Redis exporter cannot be scraped."
+
+      - alert: PostgreSQLConnectionPressure
+        expr: |
+          sum(pg_stat_activity_count)
+          /
+          clamp_min(pg_settings_max_connections, 1)
+          > 0.85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection use exceeds 85%"
+          description: "Database-wide connection pressure is high. Check active queries and connection pool sizing."
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[2m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis rejected client connections"
+          description: "Redis reached a connection or resource limit during the load test."
+
+      - alert: MockUpstreamUnexpectedErrors
+        expr: rate(mock_openai_errors_total[2m]) > 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mock upstream is returning errors"
+          description: "Verify whether MOCK_ERROR_RATE was intentionally configured."

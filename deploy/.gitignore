@@ -2,3 +2,5 @@
 *
 !.gitignore
 !README.md
+!loadtest/
+!loadtest/**
