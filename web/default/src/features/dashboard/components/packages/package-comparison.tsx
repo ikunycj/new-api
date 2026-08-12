@@ -19,6 +19,7 @@ import {
   getAdminPlans,
   getPackageComparison,
 } from '@/features/dashboard/api'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
 
 const TIME_RANGES = [
@@ -68,7 +69,7 @@ export function PackageComparison() {
       }),
   })
   const stats = comparisonQuery.data?.data?.plans ?? []
-  const locale = i18n.language || undefined
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   let comparisonContent: ReactNode
   if (plansQuery.isLoading || comparisonQuery.isLoading) {
     comparisonContent = (
