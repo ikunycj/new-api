@@ -1,11 +1,28 @@
 ---
 name: deploy-new-api
-description: Build, deploy, verify, diagnose, and roll back QuantumNous/new-api from the Windows workstation to the low-memory Aliyun 1Panel production host, using a locally cross-compiled Linux binary and the existing Docker image. Use for new-api releases to alltokenapi.com, the `aliyun` SSH host, `/opt/new-api`, 1Panel PostgreSQL/Redis coexistence, artifact upload, failed remote Docker builds, production health checks, or rollback work.
+description: Build, deploy, verify, diagnose, and roll back QuantumNous/new-api from the Windows workstation to the selected SSH deployment host (`aliyun` for development or `alltokenapi` for production), using a locally cross-compiled Linux binary and the existing Docker image. Use for new-api releases, `/opt/new-api`, 1Panel PostgreSQL/Redis coexistence, artifact upload, failed remote Docker builds, production health checks, or rollback work.
 ---
 
 # Deploy new-api
 
-Deploy an exact committed revision without compiling on the production server. Reuse the existing runtime image and 1Panel data services, then prove that the running binary matches the local artifact.
+Deploy the latest `origin/master` commit without compiling on the target server. Reuse the existing runtime image and 1Panel data services, then prove that the running binary matches the local artifact.
+
+## Select the deployment host first
+
+Before every deployment, ask the user explicitly: `部署到 aliyun（开发）还是 alltokenapi（生产）？` Do not infer the target from the current branch, historical notes, DNS, or the last deployment. Set the selected SSH alias as `$deployHost` and use it consistently for all remote commands.
+
+- `aliyun`: development server. Follow the development-node constraints in `AGENTS.md`, including `NODE_TYPE=slave` and isolated PostgreSQL/Redis.
+- `alltokenapi`: production server. This is the current production deployment host and must use the production authorization gate, live DNS verification, and rollback checks below.
+
+## Require the latest master
+
+Deploy only the latest commit on `origin/master`. Before building or uploading anything, fetch `origin master` and require all three SHAs to be identical:
+
+- local `refs/heads/master`
+- fetched `refs/remotes/origin/master`
+- live `refs/heads/master` returned by `git ls-remote origin`
+
+Stop if local `master` is missing, any SHA differs, the remote query fails, or the worktree contains uncommitted changes that are intended for the release. Never deploy the current feature branch, another branch, a tag, an arbitrary commit, or a locally ahead/behind `master`. Build the verified master SHA from a detached clean worktree; do not require switching the user's current worktree to `master`.
 
 ## Load the right context
 
@@ -15,8 +32,8 @@ Deploy an exact committed revision without compiling on the production server. R
 
 ## Enforce the safety contract
 
-1. Require explicit authorization in the current conversation before a remote write, image retag, container recreation, or production restart. Read-only inspection and local builds are allowed without that gate.
-2. Inspect repository instructions and `git status` first. Preserve unrelated dirty files; build only an exact commit from a detached clean worktree.
+1. Require the selected deployment host in the current conversation before any deployment. For `alltokenapi`, also require explicit authorization before a remote write, image retag, container recreation, or production restart. Read-only inspection and local builds are allowed after the host is selected.
+2. Inspect repository instructions and `git status` first. Preserve unrelated dirty files; build only the verified latest `origin/master` commit from a detached clean worktree.
 3. Never print, upload, replace, or commit `.env` values. Never overwrite `/opt/new-api/.env`, `data`, or `logs`.
 4. Never add or recreate PostgreSQL or Redis. The production app must reuse the existing 1Panel containers and external `1panel-network`.
 5. Never run a source or multi-stage Docker build on the production host. Its memory is insufficient and a failed build can OOM-kill Docker.
@@ -25,7 +42,7 @@ Deploy an exact committed revision without compiling on the production server. R
 
 ## Execute the release
 
-1. Establish the intended file scope, run relevant tests, create or identify the exact release commit, and push that commit. Verify the remote branch resolves to the same SHA.
+1. Fetch `origin master`, verify local `master`, `origin/master`, and live remote `master` resolve to the same SHA, and use only that SHA as the release commit. Stop on any mismatch.
 2. Use `scripts/build-release.ps1` to create a same-drive detached worktree, install the exact locked frontend dependencies in that worktree, build the default frontend, create the classic placeholder, cross-compile the Linux binary, and emit a SHA-256 manifest plus archive.
 3. Inspect the artifact's ELF magic, `go version -m` metadata, commit, and SHA. Upload only the artifact archive and remote deploy script.
 4. Verify the uploaded archive SHA before extraction. Run the binary with `--help` before wrapping it into an image.
@@ -38,15 +55,15 @@ Deploy an exact committed revision without compiling on the production server. R
 Run the local preflight without creating anything:
 
 ```powershell
-$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-& "$codexHome\skills\deploy-new-api\scripts\build-release.ps1" -ValidateOnly
+$repoRoot = git rev-parse --show-toplevel
+& "$repoRoot\.codex\skills\deploy-new-api\scripts\build-release.ps1" -ValidateOnly
 ```
 
 Build an exact revision:
 
 ```powershell
-$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-& "$codexHome\skills\deploy-new-api\scripts\build-release.ps1" -Commit <full-commit-sha>
+$repoRoot = git rev-parse --show-toplevel
+& "$repoRoot\.codex\skills\deploy-new-api\scripts\build-release.ps1" -Commit <verified-master-sha>
 ```
 
 Display remote deploy arguments:

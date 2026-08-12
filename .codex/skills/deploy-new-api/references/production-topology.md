@@ -1,12 +1,21 @@
-# Production topology
+# Deployment topology
 
 This is a last-known snapshot from 2026-07-21. Verify every mutable value on the host before using it.
+
+## Deployment host selection
+
+Ask before every deployment whether the target is `aliyun` (development) or `alltokenapi` (production). The current production machine is the `alltokenapi` SSH host; `aliyun` is now a development server.
+
+| Environment | SSH alias | Host | Deployment scope |
+| --- | --- | --- | --- |
+| Development | `aliyun` | Verify from local SSH config | Development-only checks; keep `NODE_TYPE=slave` and isolated test PostgreSQL/Redis. |
+| Production | `alltokenapi` | `154.37.213.1` (verify live) | Production release and rollback workflow below. |
 
 ## Service map
 
 | Role | Last-known value | Required behavior |
 | --- | --- | --- |
-| SSH alias | `aliyun` | Use the configured local SSH host alias. |
+| SSH alias | `alltokenapi` | Use the selected alias from the host-selection gate; do not assume this value for development deployments. |
 | Public site | `https://alltokenapi.com` | Verify status and the changed user route after local health passes. |
 | Deploy directory | `/opt/new-api` | Preserve `.env`, `data`, and `logs`. |
 | App container/service | `new-api` | Recreate only this service. |

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Repository = 'F:\Project\My-Project\new-api',
-    [string]$Commit = 'HEAD',
+    [string]$Commit = 'master',
     [string]$OutputDirectory = '',
     [switch]$KeepWorktree,
     [switch]$ForceRebuild,
@@ -60,6 +60,28 @@ $repoRoot = (Resolve-Path -LiteralPath $Repository).Path
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'go.mod'))) {
     throw "Not a new-api repository: $repoRoot"
 }
+
+Invoke-Native -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'fetch', 'origin',
+    '+refs/heads/master:refs/remotes/origin/master'
+) -WorkingDirectory $repoRoot
+$localMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/heads/master'
+) -WorkingDirectory $repoRoot
+$fetchedMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/remotes/origin/master'
+) -WorkingDirectory $repoRoot
+$remoteMasterLine = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'ls-remote', 'origin', 'refs/heads/master'
+) -WorkingDirectory $repoRoot
+if ($remoteMasterLine -notmatch '(?m)^([0-9a-f]{40})\s+refs/heads/master$') {
+    throw "Could not verify live origin/master: $remoteMasterLine"
+}
+$remoteMaster = $Matches[1]
+if ($localMaster -ne $fetchedMaster -or $localMaster -ne $remoteMaster) {
+    throw "master mismatch: local=$localMaster fetched=$fetchedMaster remote=$remoteMaster"
+}
+
 $buildScriptSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $bunVersion = Invoke-NativeCapture -Command 'bun' -Arguments @('--version') -WorkingDirectory $repoRoot
 if ($bunVersion -notmatch '^\d+\.\d+\.\d+') {
@@ -69,6 +91,9 @@ if ($bunVersion -notmatch '^\d+\.\d+\.\d+') {
 $commitSha = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'rev-parse', "${Commit}^{commit}") -WorkingDirectory $repoRoot
 if ($commitSha -notmatch '^[0-9a-f]{40}$') {
     throw "Could not resolve a single commit: $commitSha"
+}
+if ($commitSha -ne $remoteMaster) {
+    throw "Only the latest origin/master may be built: requested=$commitSha master=$remoteMaster"
 }
 
 $dockerfile = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'show', "${commitSha}:Dockerfile") -WorkingDirectory $repoRoot

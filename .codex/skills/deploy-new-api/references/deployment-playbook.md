@@ -12,7 +12,7 @@
 
 ## 1. Gate and baseline
 
-Confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, and capture a read-only server baseline from `production-topology.md`.
+First ask: `部署到 aliyun（开发）还是 alltokenapi（生产）？` Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. For `alltokenapi`, confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, and capture a read-only server baseline from `production-topology.md`.
 
 Check workstation tools:
 
@@ -27,33 +27,42 @@ tar --version
 
 Re-read `Dockerfile` before every release. Match its Go version and build experiment rather than trusting an old note. The successful 2026-07-21 build used Go 1.26.1, `GOEXPERIMENT=greenteagc`, Linux amd64, and `CGO_ENABLED=0`.
 
-## 2. Freeze and push an exact commit
+## 2. Verify the latest master
 
-Do not package the current dirty directory. Stage only intended files, review the staged diff, run proportional tests, and commit.
+Deploy only the latest `origin/master`. Do not package the current dirty directory and do not deploy the current feature branch, another branch, tag, or arbitrary commit. Preserve unrelated dirty files in the user's current worktree.
+
+Fetch the remote tracking ref, then compare the local branch, fetched tracking ref, and a live remote query:
 
 ```powershell
 git status --short --branch
-git diff -- <intended-paths>
-git diff --cached --check
-git diff --cached --stat
-git rev-parse HEAD
-git push origin HEAD
-git ls-remote origin refs/heads/<branch>
+git fetch origin master
+$localMaster = git rev-parse --verify refs/heads/master
+$fetchedMaster = git rev-parse --verify refs/remotes/origin/master
+$remoteMasterLine = git ls-remote origin refs/heads/master
+if ($LASTEXITCODE -ne 0 -or -not $remoteMasterLine) { throw 'Cannot verify origin/master' }
+$remoteMaster = ($remoteMasterLine -split '\s+')[0]
+if ($localMaster -ne $fetchedMaster -or $localMaster -ne $remoteMaster) {
+    throw "master mismatch: local=$localMaster fetched=$fetchedMaster remote=$remoteMaster"
+}
+$releaseCommit = $localMaster
 ```
 
-If GitHub HTTPS repeatedly times out, use the workstation's GitHub key over SSH port 443 without changing `origin`:
+If local `master` is missing, ahead, or behind, stop. Update it to exactly match `origin/master`, then rerun the full check. Do not silently force-move a branch or substitute `origin/master` while reporting that local and remote match.
+
+If GitHub HTTPS repeatedly times out, use the workstation's GitHub key over SSH port 443 without changing `origin`, then fetch and query the same `master` ref:
 
 ```powershell
 $env:GIT_SSH_COMMAND = 'ssh -i C:/Users/86139/.ssh/id_ed25519_github -o IdentitiesOnly=yes -o HostKeyAlias=github.com -p 443'
-git push 'ssh://git@ssh.github.com:443/ikunycj/new-api.git' HEAD:refs/heads/<branch>
+git fetch 'ssh://git@ssh.github.com:443/ikunycj/new-api.git' master:refs/remotes/origin/master
+git ls-remote 'ssh://git@ssh.github.com:443/ikunycj/new-api.git' refs/heads/master
 Remove-Item Env:GIT_SSH_COMMAND
 ```
 
-Use this only as a fallback and still verify the remote SHA.
+Use this only as a fallback and still require all three SHAs to match.
 
 ## 3. Build on the workstation
 
-Run `scripts/build-release.ps1 -Commit <sha>`. Its important invariants are:
+Run `scripts/build-release.ps1 -Commit $releaseCommit`. Its important invariants are:
 
 - Create a detached worktree from the commit, not from working-tree files.
 - Put the worktree on the same drive as the repository. A `C:` worktree linked to `F:` dependencies caused Rspack font paths such as `F:Project...` and failed the build.
@@ -80,16 +89,16 @@ The binary must start with ELF magic `7f454c46`.
 Upload the archive and remote script to a staging path, not over the live binary:
 
 ```powershell
-scp <archive> aliyun:/opt/new-api/
-$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
-scp "$codexHome/skills/deploy-new-api/scripts/deploy-binary.sh" aliyun:/opt/new-api/
+scp <archive> ${deployHost}:/opt/new-api/
+$repoRoot = git rev-parse --show-toplevel
+scp "$repoRoot/.codex/skills/deploy-new-api/scripts/deploy-binary.sh" ${deployHost}:/opt/new-api/
 ```
 
 Compare the local and remote archive hashes before extraction:
 
 ```powershell
 Get-FileHash -Algorithm SHA256 <archive>
-ssh aliyun "sha256sum /opt/new-api/<archive-name>"
+ssh $deployHost "sha256sum /opt/new-api/<archive-name>"
 ```
 
 Do not print `.env` while checking the directory.
