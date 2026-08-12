@@ -41,7 +41,6 @@ const CODEX_LINK_CLASS =
 const CODEX_TOC: DocsTocItem[] = [
   { id: 'cc-switch-import', label: '1. 使用 CC Switch 一键导入' },
   { id: 'manual-config', label: '2. 手动配置 config.toml' },
-  { id: 'faq', label: '常见问题' },
 ]
 
 const CODEX_IMPORT_STEPS = [
@@ -178,28 +177,6 @@ wire_api = "responses"`
             。
           </AlertDescription>
         </Alert>
-      </section>
-
-      <section id='faq' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>常见问题</h2>
-        <h3 className='mt-6 text-lg font-semibold'>启动失败或请求没有发出</h3>
-        <ul className='mt-3 flex list-disc flex-col gap-2 ps-6 leading-7'>
-          <li>确认环境变量名称为 ALLTOKEN_API_KEY，且终端能读取到它。</li>
-          <li>
-            确认 config.toml 中的模型名称是当前 API Key 可用的准确模型 ID。
-          </li>
-          <li>确认 Base URL 使用服务地址并以 /v1 结尾。</li>
-          <li>修改配置后，重启终端以及正在运行的 Codex 应用或 IDE 扩展。</li>
-        </ul>
-        <h3 className='mt-6 text-lg font-semibold'>如何确认请求是否成功</h3>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          在新的终端运行 codex，发送一个简短测试任务；然后打开
-          <Link to='/usage-logs' className={CODEX_LINK_CLASS}>
-            使用日志
-          </Link>
-          ，核对请求使用的模型、状态和费用。不要把完整 API Key
-          粘贴到终端输出、截图或反馈信息中。
-        </p>
       </section>
     </DocsShell>
   )

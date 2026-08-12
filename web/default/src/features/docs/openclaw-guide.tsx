@@ -157,6 +157,12 @@ export function DocsOpenClaw() {
           OpenClaw 会读取父进程环境变量、当前目录的 .env，以及
           ~/.openclaw/.env。Gateway 以服务方式运行时，使用全局 .env 最稳定。
         </p>
+        <p className='text-muted-foreground mt-5 leading-7'>
+          macOS / Linux 先创建配置目录：
+        </p>
+        <div className='mt-4'>
+          <CodeBlock code='mkdir -p ~/.openclaw' label='macOS / Linux' />
+        </div>
         <div className='mt-5 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code='~/.openclaw/.env' label='macOS / Linux' />
           <CodeBlock code='%USERPROFILE%\.openclaw\.env' label='Windows' />
@@ -164,7 +170,9 @@ export function DocsOpenClaw() {
         <div className='mt-4'>
           <CodeBlock code={dotenvConfig} label='.env' />
         </div>
-        <h3 className='mt-8 text-lg font-semibold'>临时设置环境变量</h3>
+        <p className='text-muted-foreground mt-8 leading-7'>
+          也可以临时设置环境变量：
+        </p>
         <div className='mt-4 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code={shellApiKey} label='macOS / Linux' />
           <CodeBlock code={powershellApiKey} label='PowerShell' />
@@ -283,11 +291,17 @@ openclaw doctor`}
           <div>
             <h3 className='text-lg font-semibold'>模型显示但无法调用</h3>
             <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
-              <li>检查服务商模型 ID 与默认模型中的 ID 是否完全一致。</li>
+              <li>
+                检查 models.providers.alltokenapi.models[].id 与默认模型中的 ID
+                是否完全一致。
+              </li>
               <li>
                 确认模型支持工具调用；能普通对话不代表能完成 Agent 工具循环。
               </li>
-              <li>运行真实请求探测，区分认证、格式和模型错误。</li>
+              <li>
+                运行 openclaw models status --probe --probe-provider
+                alltokenapi，区分认证、格式和模型错误。
+              </li>
             </ul>
           </div>
           <div>

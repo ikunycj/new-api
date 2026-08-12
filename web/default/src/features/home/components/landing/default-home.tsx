@@ -46,10 +46,7 @@ export function DefaultHome(props: DefaultHomeProps) {
 
   return (
     <main>
-      <LandingHero
-        isAuthenticated={props.isAuthenticated}
-        catalogAvailable={catalogAvailable}
-      />
+      <LandingHero isAuthenticated={props.isAuthenticated} />
       <DeferUntilVisible waitForScroll>
         <Suspense fallback={<div className='bg-muted/30 min-h-32' />}>
           <BelowFoldHome

@@ -30,8 +30,8 @@ import { NumberedSteps } from './components/numbered-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const HERMES_TOC: DocsTocItem[] = [
-  { id: 'prepare', label: '1. 准备 API Key 和接口' },
-  { id: 'wizard', label: '2. 使用 hermes model 向导' },
+  { id: 'prepare', label: '1. 准备 API Key、模型和接口类型' },
+  { id: 'wizard', label: '2. 推荐：使用 hermes model 向导' },
   { id: 'manual', label: '3. 手动配置' },
   { id: 'verify', label: '4. 验证配置' },
   { id: 'reload', label: '5. 配置何时生效' },
@@ -236,8 +236,18 @@ model:
           />
         </div>
         <p className='text-muted-foreground mt-5 leading-7'>
-          也可以使用 api_key: $&#123;ALLTOKEN_API_KEY&#125;
-          直接引用环境变量，不过 key_env: ALLTOKEN_API_KEY 更适合当前 providers
+          如果希望在配置中直接引用环境变量，也支持：
+        </p>
+        <div className='mt-4'>
+          <CodeBlock
+            code={`providers:
+  alltokenapi:
+    api_key: \${ALLTOKEN_API_KEY}`}
+            label='config.yaml'
+          />
+        </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          不过 key_env: ALLTOKEN_API_KEY 更适合当前 providers
           格式。$&#123;VAR&#125; 和 $&#123;env:VAR&#125; 都能解析；变量缺失时
           Hermes 会保留占位符并记录警告，而不是静默使用空值。
         </p>

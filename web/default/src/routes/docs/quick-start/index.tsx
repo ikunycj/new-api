@@ -20,6 +20,6 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { DocsPage } from '@/features/docs/docs-page'
 
-export const Route = createFileRoute('/docs/referral-rewards/')({
-  component: () => <DocsPage route='/docs/referral-rewards' />,
+export const Route = createFileRoute('/docs/quick-start/')({
+  component: () => <DocsPage route='/docs/quick-start' />,
 })

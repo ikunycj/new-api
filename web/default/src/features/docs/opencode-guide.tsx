@@ -31,10 +31,10 @@ import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const OPENCODE_TOC: DocsTocItem[] = [
   { id: 'scope', label: '1. 选择配置范围' },
-  { id: 'prepare', label: '2. 准备模型和接口' },
-  { id: 'connect', label: '3. 使用 /connect 保存密钥' },
+  { id: 'prepare', label: '2. 准备模型和接口类型' },
+  { id: 'connect', label: '3. 推荐：使用 /connect 保存密钥' },
   { id: 'config', label: '4. 编辑 opencode.json' },
-  { id: 'environment', label: '5. 使用环境变量' },
+  { id: 'environment', label: '5. 备选：使用环境变量，不保存到 auth.json' },
   { id: 'verify', label: '6. 选择并验证模型' },
   { id: 'troubleshooting', label: '7. 常见问题' },
   { id: 'references', label: '8. 官方参考' },
@@ -225,7 +225,9 @@ export function DocsOpenCode() {
       </section>
 
       <section id='environment' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>5. 备选：使用环境变量</h2>
+        <h2 className='text-2xl font-semibold'>
+          5. 备选：使用环境变量，不保存到 auth.json
+        </h2>
         <p className='text-muted-foreground mt-3 leading-7'>
           如果不希望将凭据保存到 auth.json，可以先在启动 OpenCode
           的终端中设置密钥：
@@ -307,8 +309,8 @@ export function DocsOpenCode() {
                 环境变量方式：确认从包含 ALLTOKEN_API_KEY 的终端启动 OpenCode。
               </li>
               <li>
-                排障时只保留一种凭据来源，避免错误的 auth.json
-                凭据与正确环境变量同时存在。
+                不要同时保留错误的 auth.json
+                凭据和正确的环境变量而不确认实际优先级；排障时只保留一种来源。
               </li>
             </ul>
           </div>

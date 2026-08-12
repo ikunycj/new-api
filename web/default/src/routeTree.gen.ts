@@ -22,7 +22,6 @@ import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
-import { Route as CampaignReferralRouteImport } from './routes/campaign/referral'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
@@ -38,8 +37,7 @@ import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
-import { Route as DocsReferralRewardsIndexRouteImport } from './routes/docs/referral-rewards/index'
-import { Route as DocsPaymentIndexRouteImport } from './routes/docs/payment/index'
+import { Route as DocsQuickStartIndexRouteImport } from './routes/docs/quick-start/index'
 import { Route as DocsModelPricingIndexRouteImport } from './routes/docs/model-pricing/index'
 import { Route as DocsIntegrationsIndexRouteImport } from './routes/docs/integrations/index'
 import { Route as DocsAiModelIndexRouteImport } from './routes/docs/ai-model/index'
@@ -153,11 +151,6 @@ const ConsoleLogRoute = ConsoleLogRouteImport.update({
   path: '/console/log',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CampaignReferralRoute = CampaignReferralRouteImport.update({
-  id: '/campaign/referral',
-  path: '/campaign/referral',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
   id: '/chat2link',
   path: '/chat2link',
@@ -234,15 +227,9 @@ const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   path: '/pricing/$modelId/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DocsReferralRewardsIndexRoute =
-  DocsReferralRewardsIndexRouteImport.update({
-    id: '/docs/referral-rewards/',
-    path: '/docs/referral-rewards/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const DocsPaymentIndexRoute = DocsPaymentIndexRouteImport.update({
-  id: '/docs/payment/',
-  path: '/docs/payment/',
+const DocsQuickStartIndexRoute = DocsQuickStartIndexRouteImport.update({
+  id: '/docs/quick-start/',
+  path: '/docs/quick-start/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsModelPricingIndexRoute = DocsModelPricingIndexRouteImport.update({
@@ -542,7 +529,6 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/chat2link': typeof AuthenticatedChat2linkRoute
-  '/campaign/referral': typeof CampaignReferralRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -575,8 +561,7 @@ export interface FileRoutesByFullPath {
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
-  '/docs/payment/': typeof DocsPaymentIndexRoute
-  '/docs/referral-rewards/': typeof DocsReferralRewardsIndexRoute
+  '/docs/quick-start/': typeof DocsQuickStartIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -621,7 +606,6 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/chat2link': typeof AuthenticatedChat2linkRoute
-  '/campaign/referral': typeof CampaignReferralRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -654,8 +638,7 @@ export interface FileRoutesByTo {
   '/docs/ai-model': typeof DocsAiModelIndexRoute
   '/docs/integrations': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing': typeof DocsModelPricingIndexRoute
-  '/docs/payment': typeof DocsPaymentIndexRoute
-  '/docs/referral-rewards': typeof DocsReferralRewardsIndexRoute
+  '/docs/quick-start': typeof DocsQuickStartIndexRoute
   '/pricing/$modelId': typeof PricingModelIdIndexRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -704,7 +687,6 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
-  '/campaign/referral': typeof CampaignReferralRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -737,8 +719,7 @@ export interface FileRoutesById {
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
-  '/docs/payment/': typeof DocsPaymentIndexRoute
-  '/docs/referral-rewards/': typeof DocsReferralRewardsIndexRoute
+  '/docs/quick-start/': typeof DocsQuickStartIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
   '/_authenticated/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/_authenticated/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -786,7 +767,6 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/chat2link'
-    | '/campaign/referral'
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
@@ -819,8 +799,7 @@ export interface FileRouteTypes {
     | '/docs/ai-model/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
-    | '/docs/payment/'
-    | '/docs/referral-rewards/'
+    | '/docs/quick-start/'
     | '/pricing/$modelId/'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
@@ -865,7 +844,6 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/chat2link'
-    | '/campaign/referral'
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
@@ -898,8 +876,7 @@ export interface FileRouteTypes {
     | '/docs/ai-model'
     | '/docs/integrations'
     | '/docs/model-pricing'
-    | '/docs/payment'
-    | '/docs/referral-rewards'
+    | '/docs/quick-start'
     | '/pricing/$modelId'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
@@ -947,7 +924,6 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/chat2link'
-    | '/campaign/referral'
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
@@ -980,8 +956,7 @@ export interface FileRouteTypes {
     | '/docs/ai-model/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
-    | '/docs/payment/'
-    | '/docs/referral-rewards/'
+    | '/docs/quick-start/'
     | '/pricing/$modelId/'
     | '/_authenticated/system-settings/auth/$section'
     | '/_authenticated/system-settings/billing/$section'
@@ -1021,7 +996,6 @@ export interface RootRouteChildren {
   errors404Route: typeof errors404Route
   errors500Route: typeof errors500Route
   errors503Route: typeof errors503Route
-  CampaignReferralRoute: typeof CampaignReferralRoute
   ConsoleLogRoute: typeof ConsoleLogRoute
   ConsoleTopupRoute: typeof ConsoleTopupRoute
   OauthProviderRoute: typeof OauthProviderRoute
@@ -1033,8 +1007,7 @@ export interface RootRouteChildren {
   DocsAiModelIndexRoute: typeof DocsAiModelIndexRoute
   DocsIntegrationsIndexRoute: typeof DocsIntegrationsIndexRoute
   DocsModelPricingIndexRoute: typeof DocsModelPricingIndexRoute
-  DocsPaymentIndexRoute: typeof DocsPaymentIndexRoute
-  DocsReferralRewardsIndexRoute: typeof DocsReferralRewardsIndexRoute
+  DocsQuickStartIndexRoute: typeof DocsQuickStartIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
   DocsApiCompatibilityIndexRoute: typeof DocsApiCompatibilityIndexRoute
   DocsApiIntegrationIndexRoute: typeof DocsApiIntegrationIndexRoute
@@ -1142,13 +1115,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleLogRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/campaign/referral': {
-      id: '/campaign/referral'
-      path: '/campaign/referral'
-      fullPath: '/campaign/referral'
-      preLoaderRoute: typeof CampaignReferralRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/chat2link': {
       id: '/_authenticated/chat2link'
       path: '/chat2link'
@@ -1254,18 +1220,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingModelIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/docs/referral-rewards/': {
-      id: '/docs/referral-rewards/'
-      path: '/docs/referral-rewards'
-      fullPath: '/docs/referral-rewards/'
-      preLoaderRoute: typeof DocsReferralRewardsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/docs/payment/': {
-      id: '/docs/payment/'
-      path: '/docs/payment'
-      fullPath: '/docs/payment/'
-      preLoaderRoute: typeof DocsPaymentIndexRouteImport
+    '/docs/quick-start/': {
+      id: '/docs/quick-start/'
+      path: '/docs/quick-start'
+      fullPath: '/docs/quick-start/'
+      preLoaderRoute: typeof DocsQuickStartIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/model-pricing/': {
@@ -1762,7 +1721,6 @@ const rootRouteChildren: RootRouteChildren = {
   errors404Route: errors404Route,
   errors500Route: errors500Route,
   errors503Route: errors503Route,
-  CampaignReferralRoute: CampaignReferralRoute,
   ConsoleLogRoute: ConsoleLogRoute,
   ConsoleTopupRoute: ConsoleTopupRoute,
   OauthProviderRoute: OauthProviderRoute,
@@ -1774,8 +1732,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsAiModelIndexRoute: DocsAiModelIndexRoute,
   DocsIntegrationsIndexRoute: DocsIntegrationsIndexRoute,
   DocsModelPricingIndexRoute: DocsModelPricingIndexRoute,
-  DocsPaymentIndexRoute: DocsPaymentIndexRoute,
-  DocsReferralRewardsIndexRoute: DocsReferralRewardsIndexRoute,
+  DocsQuickStartIndexRoute: DocsQuickStartIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
   DocsApiCompatibilityIndexRoute: DocsApiCompatibilityIndexRoute,
   DocsApiIntegrationIndexRoute: DocsApiIntegrationIndexRoute,

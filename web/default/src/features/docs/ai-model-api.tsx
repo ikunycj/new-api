@@ -16,12 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Key01Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
-
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
 import { CodeBlock } from './components/code-block'
 import { DocsShell } from './components/docs-shell'
@@ -32,11 +27,12 @@ const DOC_LINK_CLASS =
   'text-primary font-medium underline-offset-4 hover:underline'
 
 const API_TOC = [
-  { id: 'prepare', label: '准备信息' },
-  { id: 'model-id', label: '获取模型 ID' },
-  { id: 'choose-endpoint', label: '选择接口' },
-  { id: 'first-request', label: '第一次请求' },
+  { id: 'prepare', label: '1. 准备信息' },
+  { id: 'model-id', label: '2. 获取模型 ID' },
+  { id: 'choose-endpoint', label: '3. 选择接口' },
+  { id: 'first-request', label: '4. 第一次请求' },
   { id: 'authentication', label: '认证头' },
+  { id: 'details', label: '详细说明' },
 ]
 
 export function DocsApiIntegration() {
@@ -46,6 +42,10 @@ export function DocsApiIntegration() {
   -H "Authorization: Bearer sk-your-api-key"`
   const geminiModels = `curl "${baseUrl}/v1beta/models" \\
   -H "x-goog-api-key: sk-your-api-key"`
+  const openAiModelExample = `{
+  "id": "your-model-id",
+  "object": "model"
+}`
   const firstRequest = `curl "${openAiBaseUrl}/chat/completions" \\
   -H "Authorization: Bearer sk-your-api-key" \\
   -H "Content-Type: application/json" \\
@@ -73,7 +73,7 @@ print(response.choices[0].message.content)`
       toc={API_TOC}
     >
       <section id='prepare' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>准备信息</h2>
+        <h2 className='text-2xl font-semibold'>1. 准备信息</h2>
         <ul className='text-muted-foreground mt-4 flex list-disc flex-col gap-2 ps-6 leading-7'>
           <li>在 API Key 页面创建一枚密钥。</li>
           <li>从对应协议的模型列表接口复制模型 ID。</li>
@@ -114,20 +114,23 @@ print(response.choices[0].message.content)`
       </section>
 
       <section id='model-id' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>获取模型 ID</h2>
+        <h2 className='text-2xl font-semibold'>2. 获取模型 ID</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
           OpenAI 兼容接口和 Claude 使用 <code>/v1/models</code>；Gemini
-          原生接口使用 <code>/v1beta/models</code>。不同 API Key
-          返回的模型可能不同。
+          原生接口使用 <code>/v1beta/models</code>。不要把 Gemini 的{' '}
+          <code>x-goog-api-key</code> 请求发到 <code>/v1/models</code>。
         </p>
         <div className='mt-5 grid gap-5 lg:grid-cols-2'>
           <CodeBlock code={openAiModels} label='OpenAI / Claude' />
           <CodeBlock code={geminiModels} label='Gemini 原生接口' />
         </div>
+        <p className='text-muted-foreground mt-5 leading-7'>
+          OpenAI 兼容格式复制响应中的 <code>data[].id</code>，例如：
+        </p>
+        <div className='mt-4'>
+          <CodeBlock code={openAiModelExample} label='JSON' />
+        </div>
         <ul className='text-muted-foreground mt-5 flex list-disc flex-col gap-2 ps-6 leading-7'>
-          <li>
-            OpenAI 格式复制响应中的 <code>data[].id</code>。
-          </li>
           <li>
             Gemini 格式复制响应中的 <code>models[].name</code>
             ，调用时使用其中的模型 ID。
@@ -137,10 +140,13 @@ print(response.choices[0].message.content)`
             ，接口报能力不匹配时先检查该字段。
           </li>
         </ul>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          模型 ID 必须完全一致。不同 API Key 返回的模型可能不同。
+        </p>
       </section>
 
       <section id='choose-endpoint' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>选择接口</h2>
+        <h2 className='text-2xl font-semibold'>3. 选择接口</h2>
         <p className='text-muted-foreground mt-3 leading-7'>
           本站只补充地址、鉴权和最小请求。字段含义、完整参数和响应结构请以官方文档为准。
         </p>
@@ -216,22 +222,6 @@ print(response.choices[0].message.content)`
                 ],
               },
               {
-                key: 'embeddings',
-                cells: [
-                  '向量',
-                  <code key='embedding-path'>POST /v1/embeddings</code>,
-                  <a
-                    key='embedding-link'
-                    className={DOC_LINK_CLASS}
-                    href='https://platform.openai.com/docs/api-reference/embeddings'
-                    target='_blank'
-                    rel='noreferrer'
-                  >
-                    OpenAI Embeddings
-                  </a>,
-                ],
-              },
-              {
                 key: 'images',
                 cells: [
                   '图片',
@@ -250,7 +240,7 @@ print(response.choices[0].message.content)`
               {
                 key: 'audio',
                 cells: [
-                  '音频',
+                  '音频（暂无模型）',
                   <code key='audio-path'>POST /v1/audio/speech</code>,
                   <a
                     key='audio-link'
@@ -266,7 +256,7 @@ print(response.choices[0].message.content)`
               {
                 key: 'video',
                 cells: [
-                  '异步视频',
+                  '视频（暂无模型）',
                   <code key='video-path'>POST /v1/videos</code>,
                   <a
                     key='video-link'
@@ -285,11 +275,7 @@ print(response.choices[0].message.content)`
       </section>
 
       <section id='first-request' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>第一次请求</h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          先发送一个小型非流式 Chat Completions
-          请求，确认密钥、模型和余额均可用，再启用流式、工具调用或多模态参数。
-        </p>
+        <h2 className='text-2xl font-semibold'>4. 第一次请求</h2>
         <div className='mt-5'>
           <CodeBlock code={firstRequest} label='cURL' />
         </div>
@@ -333,32 +319,27 @@ print(response.choices[0].message.content)`
             },
           ]}
         />
-        <Alert className='mt-5'>
-          <HugeiconsIcon icon={Key01Icon} aria-hidden='true' />
-          <AlertTitle>继续阅读对应协议</AlertTitle>
-          <AlertDescription>
+      </section>
+
+      <section id='details' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>详细说明</h2>
+        <ul className='mt-4 list-disc space-y-2 ps-6 leading-7'>
+          <li>
             <Link className={DOC_LINK_CLASS} to='/docs/api/text-chat'>
               文本与对话
-            </Link>{' '}
-            和{' '}
+            </Link>
+          </li>
+          <li>
             <Link className={DOC_LINK_CLASS} to='/docs/api/multimodal'>
               多模态接口
-            </Link>{' '}
-            提供本站路由与最小请求；完整参数请查看官方文档。
-          </AlertDescription>
-        </Alert>
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button nativeButton={false} render={<Link to='/keys' />}>
-            打开 API 密钥
-          </Button>
-          <Button
-            nativeButton={false}
-            variant='outline'
-            render={<Link to='/pricing' />}
-          >
-            打开模型定价
-          </Button>
-        </div>
+            </Link>
+          </li>
+          <li>
+            <Link className={DOC_LINK_CLASS} to='/docs/api/compatibility'>
+              兼容性与限制
+            </Link>
+          </li>
+        </ul>
       </section>
     </DocsShell>
   )

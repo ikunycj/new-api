@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { InformationCircleIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import {
+  Download04Icon,
+  InformationCircleIcon,
+  Key01Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
@@ -42,6 +46,9 @@ const references = [
   ['Gemini CLI 官方仓库', 'https://github.com/google-gemini/gemini-cli'],
 ] as const
 
+const CC_SWITCH_RELEASES_URL =
+  'https://github.com/farion1231/cc-switch/releases'
+
 export function DocsGemini() {
   const baseUrl = useDocsBaseUrl()
   const dotenvConfig = `GEMINI_API_KEY=此处替换为 API Key
@@ -60,12 +67,12 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
       title='Gemini CLI'
       description='通过 CC Switch 一键导入，或使用 Gemini CLI 官方支持的 API Key、模型和自定义 Base URL 环境变量手动接入。'
       toc={[
-        { id: 'prepare', label: '准备 API Key 和模型' },
-        { id: 'cc-switch', label: '使用 CC Switch 导入' },
-        { id: 'manual', label: '手动配置' },
-        { id: 'verify', label: '启动并验证' },
-        { id: 'troubleshooting', label: '常见问题' },
-        { id: 'references', label: '官方参考' },
+        { id: 'prepare', label: '1. 准备 API Key 和模型' },
+        { id: 'cc-switch', label: '2. 使用 CC Switch 一键导入' },
+        { id: 'manual', label: '3. 手动配置' },
+        { id: 'verify', label: '4. 启动并验证' },
+        { id: 'troubleshooting', label: '5. 常见问题' },
+        { id: 'references', label: '6. 官方参考' },
       ]}
     >
       <section id='prepare' className='scroll-mt-28'>
@@ -92,7 +99,7 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
         </div>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>认证方式限制</AlertTitle>
+          <AlertTitle>配置核验</AlertTitle>
           <AlertDescription>
             Gemini CLI 仅在 gemini-api-key 认证方式下使用
             GOOGLE_GEMINI_BASE_URL。本文配置不适用于 Google 登录或 Vertex AI
@@ -112,19 +119,36 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
             '保存并启用服务商，完全退出并重新打开 Gemini CLI。',
           ]}
         />
-        <Button
-          nativeButton={false}
-          className='mt-5'
-          variant='outline'
-          render={<Link to='/docs/tools/cc-switch' />}
-        >
-          查看 CC Switch 详细步骤
-        </Button>
+        <div className='mt-5 flex flex-wrap gap-3'>
+          <Button
+            nativeButton={false}
+            variant='outline'
+            render={
+              <a
+                href={CC_SWITCH_RELEASES_URL}
+                target='_blank'
+                rel='noopener noreferrer'
+              />
+            }
+          >
+            <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
+            下载 CC Switch
+          </Button>
+          <Button
+            nativeButton={false}
+            variant='outline'
+            render={<Link to='/docs/tools/cc-switch' />}
+          >
+            查看 CC Switch 详细步骤
+          </Button>
+        </div>
       </section>
 
       <section id='manual' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>3. 手动配置</h2>
-        <h3 className='mt-5 text-lg font-semibold'>推荐：写入用户 .env</h3>
+        <h3 className='mt-5 text-lg font-semibold'>
+          3.1 推荐：写入 Gemini CLI 的用户 .env
+        </h3>
         <div className='mt-4'>
           <DocsTable
             headers={['系统', '用户环境文件']}
@@ -152,21 +176,35 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
         <p className='text-muted-foreground mt-4 leading-7'>
           Gemini CLI 从当前目录向上查找 .env，再读取用户级
           ~/.gemini/.env，并使用找到的第一份环境文件，而不是合并所有文件。
+          如果项目目录已有 .env，请确认它没有覆盖或遗漏上述变量。
         </p>
-        <h3 className='mt-7 text-lg font-semibold'>临时测试：当前终端变量</h3>
+        <h3 className='mt-7 text-lg font-semibold'>
+          3.2 临时测试：设置当前终端环境变量
+        </h3>
         <div className='mt-4 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code={shellConfig} label='macOS / Linux' />
           <CodeBlock code={powershellConfig} label='PowerShell' />
         </div>
-        <h3 className='mt-7 text-lg font-semibold'>Base URL 和认证头</h3>
+        <h3 className='mt-7 text-lg font-semibold'>
+          3.3 Base URL 和认证头说明
+        </h3>
         <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
-          <li>GOOGLE_GEMINI_BASE_URL 使用服务根地址，不带 /v1 或 /v1beta。</li>
+          <li>
+            GOOGLE_GEMINI_BASE_URL 使用服务根地址，不带 /v1 或 /v1beta；Google
+            Gen AI SDK 会自行拼接 API 版本和模型路径。
+          </li>
           <li>默认按 Gemini 原生方式发送 x-goog-api-key。</li>
           <li>
-            只有网关明确要求 Bearer Token 时，才设置
-            GEMINI_API_KEY_AUTH_MECHANISM=bearer。
+            只有网关明确要求 Authorization: Bearer
+            时，才额外设置下面的认证机制。
           </li>
         </ul>
+        <div className='mt-4'>
+          <CodeBlock code='GEMINI_API_KEY_AUTH_MECHANISM=bearer' label='.env' />
+        </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          不要在没有认证错误的情况下随意切换认证头。
+        </p>
       </section>
 
       <section id='verify' className='scroll-mt-28'>
@@ -189,6 +227,14 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
           模型选择优先级为：--model、GEMINI_MODEL、settings.json 中的
           model.name、默认模型。
         </p>
+        <Button
+          nativeButton={false}
+          className='mt-5'
+          variant='outline'
+          render={<Link to='/usage-logs' />}
+        >
+          打开使用日志
+        </Button>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>
@@ -203,17 +249,26 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
           </div>
           <div>
             <h3 className='font-semibold'>401 或 Invalid API key</h3>
-            <p className='text-muted-foreground mt-2 leading-7'>
-              确认密钥、分组和模型权限有效。默认先用
-              x-goog-api-key，仅在网关明确要求时改为 Bearer。
-            </p>
+            <ul className='text-muted-foreground mt-2 list-disc space-y-2 pl-5 leading-7'>
+              <li>确认密钥、分组和模型权限有效。</li>
+              <li>
+                默认先使用 x-goog-api-key；如果使用日志或网关说明明确要求 Bearer
+                Token，再设置 GEMINI_API_KEY_AUTH_MECHANISM=bearer。
+              </li>
+              <li>
+                不要同时用 GOOGLE_API_KEY 配置 Vertex AI，这会改变认证路径。
+              </li>
+            </ul>
           </div>
           <div>
             <h3 className='font-semibold'>404 Not Found</h3>
-            <p className='text-muted-foreground mt-2 leading-7'>
-              GOOGLE_GEMINI_BASE_URL 不要带 API 版本路径；模型必须支持 Gemini
-              原生接口。
-            </p>
+            <ul className='text-muted-foreground mt-2 list-disc space-y-2 pl-5 leading-7'>
+              <li>GOOGLE_GEMINI_BASE_URL 不要带 API 版本路径。</li>
+              <li>
+                模型必须支持 Gemini 原生接口；OpenAI 兼容模型不能只靠修改模型 ID
+                在 Gemini CLI 中使用。
+              </li>
+            </ul>
           </div>
           <div>
             <h3 className='font-semibold'>自定义地址被拒绝</h3>

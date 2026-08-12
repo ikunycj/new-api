@@ -129,9 +129,13 @@ function DocsLoadingSkeleton(props: { error?: boolean; onRetry?: () => void }) {
 
 const developmentDocsLoaders = import.meta.env.DEV
   ? {
-      '/docs': () =>
-        import('./overview').then((module) => ({
-          default: module.DocsOverview,
+      '/docs/quick-start': () =>
+        import('./quick-start').then((module) => ({
+          default: module.DocsQuickStart,
+        })),
+      '/docs/integrations': () =>
+        import('./integration-guide').then((module) => ({
+          default: module.DocsIntegrationGuide,
         })),
       '/docs/api/integration': () =>
         import('./ai-model-api').then((module) => ({
@@ -152,12 +156,6 @@ const developmentDocsLoaders = import.meta.env.DEV
       '/docs/model-pricing': () =>
         import('./model-pricing').then((module) => ({
           default: module.DocsModelPricing,
-        })),
-      '/docs/payment': () =>
-        import('./payment').then((module) => ({ default: module.DocsPayment })),
-      '/docs/referral-rewards': () =>
-        import('./referral-rewards').then((module) => ({
-          default: module.DocsReferralRewards,
         })),
       '/docs/tools/cc-switch': () =>
         import('./cc-switch-guide').then((module) => ({

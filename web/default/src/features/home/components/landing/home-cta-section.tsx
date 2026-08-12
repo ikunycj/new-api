@@ -30,7 +30,9 @@ interface HomeCtaSectionProps {
 export function HomeCtaSection(props: HomeCtaSectionProps) {
   const { t } = useTranslation()
   const path = props.isAuthenticated ? '/dashboard' : '/sign-up'
-  const label = props.isAuthenticated ? t('Go to Dashboard') : t('Get Started')
+  const label = props.isAuthenticated
+    ? t('Connect AI clients in one click')
+    : t('Get Started')
 
   return (
     <section className='bg-primary/5 px-4 py-16 sm:px-6 sm:py-20'>

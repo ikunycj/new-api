@@ -170,7 +170,6 @@ export interface AffiliateBalanceTransfersQuery {
 }
 
 export type AffiliateSummaryResponse = ApiResponse<AffiliateSummary>
-export type AffiliateCampaignResponse = ApiResponse<AffiliateCampaign>
 export type AffiliateInviteeTopUpsResponse = ApiResponse<
   PaginatedData<AffiliateInviteeTopUp>
 >

@@ -59,15 +59,7 @@ function DocsNavigation(props: {
       <Link
         to='/docs'
         activeOptions={{ exact: true }}
-        aria-current={
-          props.currentPageId === 'introduction' ? 'page' : undefined
-        }
-        className={cn(
-          'rounded-md border px-3 py-2 text-sm font-semibold transition-colors',
-          props.currentPageId === 'introduction'
-            ? 'border-border bg-gradient-to-br from-background to-muted/80 text-foreground'
-            : 'border-transparent text-foreground hover:bg-muted/50'
-        )}
+        className='text-foreground hover:bg-muted/50 rounded-md border border-transparent px-3 py-2 text-sm font-semibold transition-colors'
       >
         {props.ariaLabel}
       </Link>
@@ -244,14 +236,8 @@ export function DocsShell(props: DocsShellProps) {
               >
                 {t('Documentation')}
               </Link>
-              {props.pageId !== 'introduction' && (
-                <>
-                  <span aria-hidden='true'>/</span>
-                  <span className='text-foreground truncate'>
-                    {props.title}
-                  </span>
-                </>
-              )}
+              <span aria-hidden='true'>/</span>
+              <span className='text-foreground truncate'>{props.title}</span>
             </nav>
 
             <header>

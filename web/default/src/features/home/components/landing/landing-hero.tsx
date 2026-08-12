@@ -32,7 +32,6 @@ const ribbonSource = import.meta.env.SSR
 
 interface LandingHeroProps {
   isAuthenticated: boolean
-  catalogAvailable: boolean
 }
 
 function HeroRibbonBackdrop() {
@@ -67,12 +66,10 @@ export function LandingHero(props: LandingHeroProps) {
   const { t } = useTranslation()
   const primaryPath = props.isAuthenticated ? '/dashboard' : '/sign-up'
   const primaryLabel = props.isAuthenticated
-    ? t('Go to Dashboard')
+    ? t('Connect AI clients in one click')
     : t('Get Started')
-  const secondaryPath = props.catalogAvailable ? '/pricing' : '/docs'
-  const secondaryLabel = props.catalogAvailable
-    ? t('Explore models')
-    : t('Docs')
+  const secondaryPath = '/playground'
+  const secondaryLabel = t('Start a web chat')
 
   return (
     <section className='border-border/70 relative grid min-h-[calc(100svh-7rem)] min-w-0 grid-rows-[29svh_auto_1fr] overflow-hidden border-b sm:grid-rows-[25svh_auto_1fr]'>

@@ -28,22 +28,16 @@ import { DocsCodex } from './codex-guide'
 import type { DocsRoutePath } from './docs-config'
 import { DocsGemini } from './gemini-guide'
 import { DocsHermes } from './hermes-guide'
+import { DocsIntegrationGuide } from './integration-guide'
 import { DocsModelPricing } from './model-pricing'
 import { DocsOpenClaw } from './openclaw-guide'
 import { DocsOpenCode } from './opencode-guide'
-import { DocsOverview } from './overview'
-import { DocsPayment } from './payment'
-import { DocsReferralRewards } from './referral-rewards'
+import { DocsQuickStart } from './quick-start'
 
 export const DOCS_PRERENDER_SOURCES = {
-  '/docs': DocsOverview,
-  '/docs/api/integration': DocsApiIntegration,
-  '/docs/api/text-chat': DocsApiTextChat,
-  '/docs/api/multimodal': DocsApiMultimodal,
-  '/docs/api/compatibility': DocsApiCompatibility,
+  '/docs/quick-start': DocsQuickStart,
   '/docs/model-pricing': DocsModelPricing,
-  '/docs/payment': DocsPayment,
-  '/docs/referral-rewards': DocsReferralRewards,
+  '/docs/integrations': DocsIntegrationGuide,
   '/docs/tools/cc-switch': DocsCcSwitch,
   '/docs/tools/claude-code': DocsClaudeCode,
   '/docs/tools/codex': DocsCodex,
@@ -51,4 +45,8 @@ export const DOCS_PRERENDER_SOURCES = {
   '/docs/tools/hermes': DocsHermes,
   '/docs/tools/openclaw': DocsOpenClaw,
   '/docs/tools/opencode': DocsOpenCode,
+  '/docs/api/integration': DocsApiIntegration,
+  '/docs/api/text-chat': DocsApiTextChat,
+  '/docs/api/multimodal': DocsApiMultimodal,
+  '/docs/api/compatibility': DocsApiCompatibility,
 } satisfies Record<DocsRoutePath, ComponentType>

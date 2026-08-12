@@ -28,7 +28,6 @@ const DOC_LINK_CLASS =
   'text-primary font-medium underline-offset-4 hover:underline'
 
 const MULTIMODAL_TOC = [
-  { id: 'embeddings', label: 'Embeddings' },
   { id: 'images', label: '图片' },
   { id: 'audio', label: '音频' },
   { id: 'rerank', label: '重排序' },
@@ -40,14 +39,6 @@ const MULTIMODAL_TOC = [
 export function DocsApiMultimodal() {
   const baseUrl = useDocsBaseUrl()
   const openAiBaseUrl = `${baseUrl}/v1`
-  const openAiEmbedding = `curl "${openAiBaseUrl}/embeddings" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"your-embedding-model-id","input":["第一段文本","第二段文本"]}'`
-  const geminiEmbedding = `curl "${baseUrl}/v1beta/models/your-gemini-embedding-model:embedContent" \\
-  -H "x-goog-api-key: sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
-  -d '{"content":{"parts":[{"text":"需要转成向量的文本"}]},"taskType":"RETRIEVAL_DOCUMENT"}'`
   const imageGeneration = `curl "${openAiBaseUrl}/images/generations" \\
   -H "Authorization: Bearer sk-your-api-key" \\
   -H "Content-Type: application/json" \\
@@ -93,48 +84,13 @@ curl -L "${openAiBaseUrl}/videos/video_task_xxx/content" \\
     <DocsShell
       pageId='api-multimodal'
       title='多模态接口'
-      description='向量、图片、音频、重排序、内容审核、Realtime 和异步视频的本站路径与最小请求。'
+      description='图片、音频、重排序、内容审核、Realtime 和异步视频的本站路径与最小请求。'
       toc={MULTIMODAL_TOC}
     >
-      <section id='embeddings' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>Embeddings</h2>
-        <p className='mt-3 leading-7'>
-          官方文档：{' '}
-          <a
-            className={DOC_LINK_CLASS}
-            href='https://platform.openai.com/docs/api-reference/embeddings'
-            target='_blank'
-            rel='noreferrer'
-          >
-            OpenAI Embeddings
-          </a>{' '}
-          |{' '}
-          <a
-            className={DOC_LINK_CLASS}
-            href='https://ai.google.dev/api/embeddings'
-            target='_blank'
-            rel='noreferrer'
-          >
-            Gemini Embeddings
-          </a>
-        </p>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          OpenAI 格式使用 <code>POST /v1/embeddings</code>，请求体包含{' '}
-          <code>model</code> 和 <code>input</code>。
-        </p>
-        <div className='mt-5'>
-          <CodeBlock code={openAiEmbedding} label='OpenAI 格式' />
-        </div>
-        <p className='text-muted-foreground mt-5 leading-7'>
-          Gemini 原生格式使用 <code>embedContent</code> 或{' '}
-          <code>batchEmbedContents</code>，请求体不要改成 OpenAI 的{' '}
-          <code>input</code> 字段。
-        </p>
-        <div className='mt-5'>
-          <CodeBlock code={geminiEmbedding} label='Gemini 原生格式' />
-        </div>
-      </section>
-
+      <p className='text-muted-foreground leading-7'>
+        开始调用前，先用 <code>GET /v1/models</code> 确认模型
+        ID，再确认该模型支持目标能力。模型能完成文本对话，不代表同时支持图片、音频或视频。
+      </p>
       <section id='images' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>图片</h2>
         <p className='mt-3 leading-7'>

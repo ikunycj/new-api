@@ -30,7 +30,6 @@ const DOC_LINK_CLASS =
 const TEXT_CHAT_TOC = [
   { id: 'chat-completions', label: 'Chat Completions' },
   { id: 'responses', label: 'Responses' },
-  { id: 'responses-compact', label: 'Responses Compact' },
   { id: 'claude-messages', label: 'Claude Messages' },
   { id: 'gemini', label: 'Gemini 原生对话' },
   { id: 'completions', label: '传统 Completions' },
@@ -74,7 +73,7 @@ export function DocsApiTextChat() {
   -H "Content-Type: application/json" \\
   -d '{"model":"your-model-id","prompt":"Once upon a time","max_tokens":64}'`
   const claudeCodeConfig = `ANTHROPIC_BASE_URL=${baseUrl}
-ANTHROPIC_API_KEY=sk-your-api-key`
+ANTHROPIC_AUTH_TOKEN=sk-your-api-key`
 
   return (
     <DocsShell
@@ -139,23 +138,10 @@ ANTHROPIC_API_KEY=sk-your-api-key`
           <code>reasoning</code> 和 <code>previous_response_id</code>
           。请先确认模型列表中的端点类型包含 Responses。
         </p>
-      </section>
-
-      <section id='responses-compact' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>Responses Compact</h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          <strong className='text-foreground'>Responses Compact：</strong>
           请求路径为 <code>POST /v1/responses/compact</code>
-          。只对模型列表中明确支持该端点的 OpenAI/Codex
-          模型使用；字段和响应结构参考{' '}
-          <a
-            className={DOC_LINK_CLASS}
-            href='https://platform.openai.com/docs/api-reference/responses'
-            target='_blank'
-            rel='noreferrer'
-          >
-            Responses 官方文档
-          </a>
-          。
+          ，仅对模型列表中明确支持该端点的 OpenAI/Codex 模型使用。
         </p>
       </section>
 
@@ -186,7 +172,8 @@ ANTHROPIC_API_KEY=sk-your-api-key`
         </div>
         <p className='text-muted-foreground mt-4 leading-7'>
           Claude Code 使用服务根地址，不要把 <code>/v1</code> 拼到{' '}
-          <code>ANTHROPIC_BASE_URL</code> 后面。
+          <code>ANTHROPIC_BASE_URL</code> 后面；All Token API 的 Claude Code
+          配置使用 <code>ANTHROPIC_AUTH_TOKEN</code>，对应 Bearer Token。
         </p>
       </section>
 
