@@ -6,6 +6,15 @@ DO NOT send optional commentary
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
 
+## Deployment Environments
+
+- `ssh aliyun` (`47.251.84.204`) is the test environment. Its `new-api` and OpenResty services are expected to remain running unless the user explicitly asks to stop them.
+- The test environment must use the exact lowercase value `NODE_TYPE=slave`. Never run it as a second master while another environment is active, because master-only migrations and scheduled tasks include channel monitoring, subscription resets, system tasks, and Codex credential refresh.
+- Keep the test PostgreSQL and Redis physically isolated from production. Slave nodes skip database migrations, so verify test schema compatibility before deploying a different binary. Keep `CHANNEL_UPDATE_FREQUENCY` unset because that updater is not protected by the master/slave check.
+- `ssh alltokenapi` (`154.37.213.1`) is the production environment. Its infrastructure is managed by `/opt/new-api-infra/docker-compose.yml`, and its application is managed by `/opt/new-api/docker-compose.1panel.yml`.
+- Always verify live DNS before deployment or cutover work, and never infer the active environment from historical DNS state. Do not change `alltokenapi.com` DNS without explicit user authorization.
+- The test host is memory-constrained. Never run `docker system df` there because it has previously caused dockerd OOM restarts.
+
 ## Tech Stack
 
 - **Backend**: Go 1.22+, Gin web framework, GORM v2 ORM
