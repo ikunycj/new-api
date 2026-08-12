@@ -137,11 +137,6 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			c.Redirect(http.StatusTemporaryRedirect, "/docs/api/integration")
 			return
 		}
-		if canonicalPath == "/docs/integrations" {
-			c.Redirect(http.StatusTemporaryRedirect, "/docs/tools/cc-switch")
-			return
-		}
-
 		if _, isPublicPage := publicPageRoutes[canonicalPath]; isPublicPage {
 			if !constant.Setup {
 				c.Redirect(http.StatusTemporaryRedirect, "/setup")

@@ -100,8 +100,11 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		"web/default/dist/prerender/zhCN/docs/tools/codex.html": {
 			Data: page("zhCN", "chinese-codex"),
 		},
+		"web/default/dist/prerender/zhCN/docs/integrations.html": {
+			Data: page("zhCN", "chinese-integrations"),
+		},
 		"web/default/dist/static/docs/manifest.json": {
-			Data: []byte(`{"version":1,"locales":{"zhCN":{"/docs":"introduction.0123abcdef.json","/docs/tools/codex":"codex.0123abcdef.json"}}}`),
+			Data: []byte(`{"version":1,"locales":{"zhCN":{"/docs":"introduction.0123abcdef.json","/docs/integrations":"integrations.0123abcdef.json","/docs/tools/codex":"codex.0123abcdef.json"}}}`),
 		},
 	}
 	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
@@ -153,6 +156,17 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		assert.Contains(t, body, `"home_page_content_loaded":false`)
 		assert.Contains(t, body, `"file_name":"codex.0123abcdef.json"`)
 		assert.Contains(t, body, `"locale":"zhCN"`)
+	})
+
+	t.Run("serves the integrations guide without redirecting", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/docs/integrations", nil)
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		assert.Empty(t, recorder.Header().Get("Location"))
+		assert.Contains(t, recorder.Body.String(), "chinese-integrations")
+		assert.Contains(t, recorder.Body.String(), `"file_name":"integrations.0123abcdef.json"`)
 	})
 
 	t.Run("serves the docs manifest with conditional caching", func(t *testing.T) {
