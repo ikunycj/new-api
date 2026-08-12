@@ -72,7 +72,7 @@ export function LandingHero(props: LandingHeroProps) {
   const secondaryLabel = t('Start a web chat')
 
   return (
-    <section className='border-border/70 relative grid min-h-[calc(100svh-7rem)] min-w-0 grid-rows-[29svh_auto_1fr] overflow-hidden border-b sm:grid-rows-[25svh_auto_1fr]'>
+    <section className='border-border/70 relative grid min-h-svh min-w-0 grid-rows-[29svh_auto_1fr] overflow-hidden border-b sm:grid-rows-[25svh_auto_1fr]'>
       <HeroRibbonBackdrop />
 
       <div className='relative row-start-2 mx-auto flex w-full max-w-6xl min-w-0 flex-col items-center px-4 text-center sm:px-6'>

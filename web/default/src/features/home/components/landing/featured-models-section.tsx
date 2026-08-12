@@ -37,9 +37,8 @@ interface FeaturedModel {
   provider: string
   icon: string
   inputPrice: string
-  outputPrice?: string
+  outputPrice: string
   endpoint: string
-  billingMode?: 'request'
 }
 
 interface FeaturedModelsSectionProps {
@@ -51,48 +50,48 @@ const FEATURED_MODELS: FeaturedModel[] = [
     modelName: 'gpt-5.6-sol',
     provider: 'OpenAI',
     icon: "OpenAI.Avatar.type={'gpt5'}.shape={'square'}",
-    inputPrice: '$0.50',
-    outputPrice: '$3.00',
+    inputPrice: '¥0.53',
+    outputPrice: '¥4.20',
     endpoint: '/v1/responses',
   },
   {
     modelName: 'claude-opus-4-6',
     provider: 'Anthropic',
     icon: 'Claude.Color',
-    inputPrice: '$0.50',
-    outputPrice: '$2.50',
+    inputPrice: '¥1.75',
+    outputPrice: '¥8.75',
     endpoint: '/v1/messages',
   },
   {
     modelName: 'claude-fable-5',
     provider: 'Anthropic',
     icon: 'Claude.Color',
-    inputPrice: '$1.00',
-    outputPrice: '$5.00',
+    inputPrice: '¥1.05',
+    outputPrice: '¥6.48',
     endpoint: '/v1/messages',
   },
   {
     modelName: 'grok-4.5',
     provider: 'xAI',
     icon: "Grok.Avatar.shape={'square'}",
-    inputPrice: '$0.20',
-    outputPrice: '$0.60',
+    inputPrice: '¥0.70',
+    outputPrice: '¥2.10',
     endpoint: '/v1/responses',
   },
   {
     modelName: 'gpt-image-2',
     provider: 'OpenAI',
     icon: 'Dalle.Color',
-    inputPrice: '$0.50',
+    inputPrice: '¥1.75',
+    outputPrice: '¥10.50',
     endpoint: '/v1/images/generations',
-    billingMode: 'request',
   },
   {
     modelName: 'gemini-3.1-pro-preview',
     provider: 'Google',
     icon: 'Gemini.Color',
-    inputPrice: '$0.20',
-    outputPrice: '$1.20',
+    inputPrice: '¥0.70',
+    outputPrice: '¥4.20',
     endpoint: '/v1beta/models/{model}:generateContent',
   },
 ]
@@ -120,30 +119,22 @@ function ModelPreviewCard(props: { model: FeaturedModel }) {
 
       <CardContent className='mt-auto grid grid-cols-2 gap-4'>
         <div>
-          <p className='text-muted-foreground text-xs'>
-            {props.model.billingMode === 'request' ? t('Price') : t('Input')}
-          </p>
+          <p className='text-muted-foreground text-xs'>{t('Input')}</p>
           <p className='mt-1 font-mono text-sm font-semibold tabular-nums'>
             {props.model.inputPrice}
           </p>
         </div>
         <div>
-          <p className='text-muted-foreground text-xs'>
-            {props.model.billingMode === 'request' ? t('Billing') : t('Output')}
-          </p>
+          <p className='text-muted-foreground text-xs'>{t('Output')}</p>
           <p className='mt-1 truncate font-mono text-sm font-semibold tabular-nums'>
-            {props.model.billingMode === 'request'
-              ? t('Per request')
-              : props.model.outputPrice}
+            {props.model.outputPrice}
           </p>
         </div>
       </CardContent>
 
       <CardFooter className='justify-between gap-3'>
         <span className='text-muted-foreground text-xs'>
-          {props.model.billingMode === 'request'
-            ? t('Image')
-            : t('Per 1M tokens')}
+          {t('Per 1M tokens')} · {t('CNY')}
         </span>
         <span
           className='text-muted-foreground max-w-40 truncate text-xs'
