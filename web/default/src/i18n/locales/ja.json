@@ -6066,6 +6066,21 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Actual cost": "実コスト",
+    "Actual cost (USD)": "実コスト（USD）",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "実コストは手動入力され、選択期間に按分されます。推定コストはゲートウェイの課金スナップショットから計算されます。",
+    "Channel Reconciliation": "チャネル照合",
+    "Cost entries": "コスト期間",
+    "Cost entry saved": "コストを保存しました",
+    "Estimate variance": "推定差額",
+    "Gross margin": "粗利益差額",
+    "Inbound endpoints": "受信エンドポイント",
+    "No cost entries": "コスト期間なし",
+    "Record cost": "コストを記録",
+    "Upstream endpoints": "上流エンドポイント",
+    "Usage breakdown": "利用内訳",
+    "User charge": "ユーザー請求額",
+    "Daily cost trend": "日別コスト推移"
   }
 }

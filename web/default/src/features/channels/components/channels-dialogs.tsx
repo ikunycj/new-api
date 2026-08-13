@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { lazy, Suspense } from 'react'
+
 import { useChannels } from './channels-provider'
 import { BalanceQueryDialog } from './dialogs/balance-query-dialog'
 import { ChannelTestDialog } from './dialogs/channel-test-dialog'
@@ -27,6 +29,12 @@ import { OllamaModelsDialog } from './dialogs/ollama-models-dialog'
 import { TagBatchEditDialog } from './dialogs/tag-batch-edit-dialog'
 import { UpstreamUpdateDialog } from './dialogs/upstream-update-dialog'
 import { ChannelMutateDrawer } from './drawers/channel-mutate-drawer'
+
+const ChannelReconciliationDialog = lazy(() =>
+  import('./dialogs/channel-reconciliation-dialog').then((module) => ({
+    default: module.ChannelReconciliationDialog,
+  }))
+)
 
 export function ChannelsDialogs() {
   const { open, setOpen, currentRow, upstream } = useChannels()
@@ -75,6 +83,15 @@ export function ChannelsDialogs() {
         open={open === 'multi-key-manage'}
         onOpenChange={(v) => !v && setOpen(null)}
       />
+
+      {open === 'channel-reconciliation' && (
+        <Suspense fallback={null}>
+          <ChannelReconciliationDialog
+            open
+            onOpenChange={(v) => !v && setOpen(null)}
+          />
+        </Suspense>
+      )}
 
       {/* Tag Batch Edit Dialog */}
       <TagBatchEditDialog

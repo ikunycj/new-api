@@ -6066,6 +6066,21 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Actual cost": "Chi phí thực tế",
+    "Actual cost (USD)": "Chi phí thực tế (USD)",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "Chi phí thực tế được nhập thủ công và phân bổ theo khoảng thời gian đã chọn. Chi phí ước tính được cổng tính từ ảnh chụp dữ liệu thanh toán.",
+    "Channel Reconciliation": "Đối soát kênh",
+    "Cost entries": "Kỳ chi phí",
+    "Cost entry saved": "Đã lưu chi phí",
+    "Estimate variance": "Chênh lệch ước tính",
+    "Gross margin": "Chênh lệch lợi nhuận gộp",
+    "Inbound endpoints": "Điểm cuối đầu vào",
+    "No cost entries": "Chưa có kỳ chi phí",
+    "Record cost": "Ghi nhận chi phí",
+    "Upstream endpoints": "Điểm cuối upstream",
+    "Usage breakdown": "Phân tích sử dụng",
+    "User charge": "Phí người dùng",
+    "Daily cost trend": "Xu hướng chi phí hằng ngày"
   }
 }

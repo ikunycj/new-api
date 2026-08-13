@@ -38,6 +38,7 @@ import type {
   SearchChannelsParams,
   SearchChannelsResponse,
   TagOperationParams,
+  ChannelReconciliationResponse,
 } from './types'
 
 const channelActionConfig = (
@@ -230,6 +231,39 @@ export async function updateChannelBalance(
   const res = await api.get(
     `/api/channel/update_balance/${id}`,
     channelActionConfig()
+  )
+  return res.data
+}
+
+export async function getChannelReconciliation(
+  id: number,
+  params: { start_timestamp: number; end_timestamp: number }
+): Promise<ChannelReconciliationResponse> {
+  const res = await api.get(`/api/channel/${id}/reconciliation`, { params })
+  return res.data
+}
+
+export async function createChannelCostEntry(
+  id: number,
+  data: {
+    start_at: number
+    end_at: number
+    amount_usd: number
+    currency?: string
+    source?: string
+    note?: string
+  }
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.post(`/api/channel/${id}/reconciliation/costs`, data)
+  return res.data
+}
+
+export async function deleteChannelCostEntry(
+  id: number,
+  costId: number
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.delete(
+    `/api/channel/${id}/reconciliation/costs/${costId}`
   )
   return res.data
 }

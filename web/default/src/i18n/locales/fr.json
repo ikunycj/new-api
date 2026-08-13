@@ -6066,6 +6066,21 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Actual cost": "Coût réel",
+    "Actual cost (USD)": "Coût réel (USD)",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "Les coûts réels sont saisis manuellement et répartis sur la période sélectionnée. Les coûts estimés sont calculés par la passerelle à partir des instantanés de facturation.",
+    "Channel Reconciliation": "Rapprochement du canal",
+    "Cost entries": "Périodes de coût",
+    "Cost entry saved": "Coût enregistré",
+    "Estimate variance": "Écart estimé",
+    "Gross margin": "Marge brute",
+    "Inbound endpoints": "Points d’entrée",
+    "No cost entries": "Aucune période de coût",
+    "Record cost": "Saisir un coût",
+    "Upstream endpoints": "Points de sortie",
+    "Usage breakdown": "Répartition de l’utilisation",
+    "User charge": "Facturation utilisateur",
+    "Daily cost trend": "Tendance quotidienne des coûts"
   }
 }

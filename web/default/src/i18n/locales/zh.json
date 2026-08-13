@@ -6066,6 +6066,21 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Actual cost": "实际成本",
+    "Actual cost (USD)": "实际成本（USD）",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "实际成本由管理员手工录入，并按所选时间段分摊。估算成本由网关根据计费快照计算。",
+    "Channel Reconciliation": "渠道对账",
+    "Cost entries": "成本账期",
+    "Cost entry saved": "成本记录已保存",
+    "Estimate variance": "估算差额",
+    "Gross margin": "毛利差额",
+    "Inbound endpoints": "入站端点",
+    "No cost entries": "暂无成本账期",
+    "Record cost": "录入成本",
+    "Upstream endpoints": "上游端点",
+    "Usage breakdown": "使用明细",
+    "User charge": "用户扣费",
+    "Daily cost trend": "每日成本趋势"
   }
 }

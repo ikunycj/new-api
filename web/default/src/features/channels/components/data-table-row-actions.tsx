@@ -33,6 +33,7 @@ import {
   Trash2,
   RefreshCw,
   Loader2,
+  Scale,
 } from 'lucide-react'
 import { useContext, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -141,6 +142,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const handleManageKeys = () => {
     setCurrentRow(channel)
     setOpen('multi-key-manage')
+  }
+
+  const handleReconciliation = () => {
+    setCurrentRow(channel)
+    setOpen('channel-reconciliation')
   }
 
   const handleToggleStatus = async (
@@ -286,6 +292,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             {t('Query Balance')}
             <DropdownMenuShortcut>
               <DollarSign size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={handleReconciliation}>
+            {t('Channel Reconciliation')}
+            <DropdownMenuShortcut>
+              <Scale size={16} />
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 

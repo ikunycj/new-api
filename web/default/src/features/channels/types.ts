@@ -197,6 +197,61 @@ export interface ChannelBalanceResponse {
   currency?: string
 }
 
+export interface ChannelReconciliationBucket {
+  name: string
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  user_charge_usd: number
+  estimated_cost_usd: number
+  actual_cost_usd: number
+}
+
+export interface ChannelCostEntry {
+  id: number
+  channel_id: number
+  start_at: number
+  end_at: number
+  amount_usd: number
+  currency: string
+  source: string
+  note: string
+  created_by: number
+  created_at: number
+  updated_at: number
+}
+
+export interface ChannelReconciliationResponse {
+  success: boolean
+  message?: string
+  data?: {
+    channel: { id: number; name: string }
+    range: { start_timestamp: number; end_timestamp: number }
+    summary: {
+      requests: number
+      prompt_tokens: number
+      completion_tokens: number
+      cache_read_tokens: number
+      cache_write_tokens: number
+      user_charge_usd: number
+      estimated_cost_usd: number
+      actual_cost_usd: number
+      gross_margin_usd: number
+      estimate_variance_usd: number
+      average_latency_ms: number
+      active_days: number
+      cost_source: string
+    }
+    daily: ChannelReconciliationBucket[]
+    models: ChannelReconciliationBucket[]
+    inbound_endpoints: ChannelReconciliationBucket[]
+    upstream_endpoints: ChannelReconciliationBucket[]
+    cost_entries: ChannelCostEntry[]
+  }
+}
+
 export interface FetchModelsResponse {
   success: boolean
   message?: string

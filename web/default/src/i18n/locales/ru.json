@@ -6066,6 +6066,21 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Actual cost": "Фактическая стоимость",
+    "Actual cost (USD)": "Фактическая стоимость (USD)",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "Фактические затраты вводятся вручную и распределяются по выбранному периоду. Расчётная стоимость вычисляется шлюзом по снимкам биллинга.",
+    "Channel Reconciliation": "Сверка канала",
+    "Cost entries": "Периоды затрат",
+    "Cost entry saved": "Затраты сохранены",
+    "Estimate variance": "Отклонение оценки",
+    "Gross margin": "Валовая маржа",
+    "Inbound endpoints": "Входные точки",
+    "No cost entries": "Нет периодов затрат",
+    "Record cost": "Записать затраты",
+    "Upstream endpoints": "Внешние точки",
+    "Usage breakdown": "Разбивка использования",
+    "User charge": "Списание с пользователя",
+    "Daily cost trend": "Динамика затрат по дням"
   }
 }

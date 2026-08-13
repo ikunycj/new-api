@@ -6066,6 +6066,21 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Actual cost": "Actual cost",
+    "Actual cost (USD)": "Actual cost (USD)",
+    "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.": "Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.",
+    "Channel Reconciliation": "Channel Reconciliation",
+    "Cost entries": "Cost entries",
+    "Cost entry saved": "Cost entry saved",
+    "Estimate variance": "Estimate variance",
+    "Gross margin": "Gross margin",
+    "Inbound endpoints": "Inbound endpoints",
+    "No cost entries": "No cost entries",
+    "Record cost": "Record cost",
+    "Upstream endpoints": "Upstream endpoints",
+    "Usage breakdown": "Usage breakdown",
+    "User charge": "User charge",
+    "Daily cost trend": "Daily cost trend"
   }
 }
