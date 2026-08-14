@@ -5911,7 +5911,7 @@
     "Use search and the Provider and Pricing group filters to narrow the model list.": "使用搜索以及“供应商”和“计费分组”筛选缩小模型列表。",
     "Use secure connection when sending emails": "发送电子邮件时使用安全连接",
     "Use sidebar shortcut": "使用侧边栏快捷方式",
-    "Use the built-in playground to try a live conversation.": "使用内置对话生图开始实时对话。",
+    "Use the built-in playground to try a live conversation.": "使用内置 Playground 开始实时对话。",
     "Use the correct URL": "使用正确的地址",
     "Use the dedicated guide for each application to verify its model and endpoint requirements after importing.": "导入后使用每个应用的专用指南来验证其模型和端点要求。",
     "Use the endpoint type shown for the model. A model name alone does not guarantee that every protocol is available.": "使用为模型显示的端点类型。仅有模型名称并不能保证每种协议都可用。",
@@ -6265,6 +6265,12 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "自动切换到 gpt-image-2，并生成一只小猫。",
     "让 AI 帮你生成图片（多模态）": "让 AI 帮你生成图片（多模态）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "让你自己的程序调用 AI，适合开发者和企业使用。"
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "让你自己的程序调用 AI，适合开发者和企业使用。",
+    "Request preview": "请求预览",
+    "Send a test request": "发送测试请求",
+    "How it works": "工作流程",
+    "From first key to first response.": "从第一个密钥到第一个响应。",
+    "One endpoint.": "一个端点。",
+    "Every model.": "每一个模型。"
   }
 }

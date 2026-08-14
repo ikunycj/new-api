@@ -6265,6 +6265,12 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Automatically switches to gpt-image-2 and generates a kitten.",
     "让 AI 帮你生成图片（多模态）": "Generate images with AI (multimodal)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Let Codex or Claude Code read project files, write code, and complete tasks.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Let your own application call AI, suitable for developers and businesses."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Let your own application call AI, suitable for developers and businesses.",
+    "Request preview": "Request preview",
+    "Send a test request": "Send a test request",
+    "How it works": "How it works",
+    "From first key to first response.": "From first key to first response.",
+    "One endpoint.": "One endpoint.",
+    "Every model.": "Every model."
   }
 }

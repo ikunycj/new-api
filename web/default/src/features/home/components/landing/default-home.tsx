@@ -16,19 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { lazy, Suspense } from 'react'
-
 import { useStatus } from '@/hooks/use-status'
 import { getModuleAccessFromStatus } from '@/lib/nav-modules'
 
-import { DeferUntilVisible } from './defer-until-visible'
-import { LandingHero } from './landing-hero'
-
-const BelowFoldHome = lazy(() =>
-  import('./below-fold-home').then((module) => ({
-    default: module.BelowFoldHome,
-  }))
-)
+import { IkunHome } from './ikun-home'
 
 interface DefaultHomeProps {
   isAuthenticated: boolean
@@ -45,16 +36,9 @@ export function DefaultHome(props: DefaultHomeProps) {
     (!pricingAccess.requireAuth || props.isAuthenticated)
 
   return (
-    <main>
-      <LandingHero isAuthenticated={props.isAuthenticated} />
-      <DeferUntilVisible waitForScroll>
-        <Suspense fallback={<div className='bg-muted/30 min-h-32' />}>
-          <BelowFoldHome
-            catalogAvailable={catalogAvailable}
-            isAuthenticated={props.isAuthenticated}
-          />
-        </Suspense>
-      </DeferUntilVisible>
-    </main>
+    <IkunHome
+      catalogAvailable={catalogAvailable}
+      isAuthenticated={props.isAuthenticated}
+    />
   )
 }

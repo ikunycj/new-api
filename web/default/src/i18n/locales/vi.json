@@ -6265,6 +6265,12 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Tự động chuyển sang gpt-image-2 và tạo ảnh một chú mèo con.",
     "让 AI 帮你生成图片（多模态）": "Tạo ảnh bằng AI (đa phương thức)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
+    "Request preview": "Xem trước yêu cầu",
+    "Send a test request": "Gửi yêu cầu thử nghiệm",
+    "How it works": "Cách hoạt động",
+    "From first key to first response.": "Từ khóa đầu tiên đến phản hồi đầu tiên.",
+    "One endpoint.": "Một endpoint.",
+    "Every model.": "Mọi mô hình."
   }
 }
