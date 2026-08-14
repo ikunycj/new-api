@@ -3,6 +3,7 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   BookOpen01Icon,
+  CashbackIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
@@ -86,6 +87,7 @@ function DocsNavigation(props: {
               <div className='flex flex-col gap-px'>
                 {group.items.map((item) => {
                   const isActive = item.id === props.currentPageId
+                  const isReferralRewards = item.id === 'referral-rewards'
                   return (
                     <Link
                       key={item.id}
@@ -93,13 +95,31 @@ function DocsNavigation(props: {
                       activeOptions={{ exact: true }}
                       aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'rounded-md border px-2.5 py-2 text-[13px] font-medium leading-5 transition-colors',
-                        isActive
-                          ? 'border-border bg-muted text-foreground font-semibold'
-                          : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                        'flex items-center gap-2 rounded-md border px-2.5 py-2 text-[13px] font-medium leading-5 transition-colors',
+                        isActive &&
+                          !isReferralRewards &&
+                          'border-border bg-muted text-foreground font-semibold',
+                        !isActive &&
+                          !isReferralRewards &&
+                          'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+                        isActive &&
+                          isReferralRewards &&
+                          'border-success/40 bg-success/15 text-success font-semibold',
+                        !isActive &&
+                          isReferralRewards &&
+                          'border-success/25 bg-success/10 text-foreground hover:bg-success/15'
                       )}
                     >
-                      {item.label}
+                      <span>{item.label}</span>
+                      {isReferralRewards && (
+                        <span className='bg-success/15 text-success ml-auto flex size-6 shrink-0 items-center justify-center rounded-md'>
+                          <HugeiconsIcon
+                            icon={CashbackIcon}
+                            className='size-4'
+                            aria-hidden='true'
+                          />
+                        </span>
+                      )}
                     </Link>
                   )
                 })}
@@ -162,6 +182,7 @@ function DocsMobileNavigation(props: {
             <div className='flex flex-col gap-px'>
               {group.items.map((item) => {
                 const isActive = item.id === props.currentPageId
+                const isReferralRewards = item.id === 'referral-rewards'
                 return (
                   <Link
                     key={item.id}
@@ -169,13 +190,31 @@ function DocsMobileNavigation(props: {
                     activeOptions={{ exact: true }}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'rounded-md px-2.5 py-2.5 text-sm leading-5 transition-colors',
-                      isActive
-                        ? 'bg-muted text-foreground font-semibold'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      'flex items-center gap-2 rounded-md border px-2.5 py-2.5 text-sm leading-5 transition-colors',
+                      isActive &&
+                        !isReferralRewards &&
+                        'border-transparent bg-muted text-foreground font-semibold',
+                      !isActive &&
+                        !isReferralRewards &&
+                        'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+                      isActive &&
+                        isReferralRewards &&
+                        'border-success/40 bg-success/15 text-success font-semibold',
+                      !isActive &&
+                        isReferralRewards &&
+                        'border-success/25 bg-success/10 text-foreground hover:bg-success/15'
                     )}
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    {isReferralRewards && (
+                      <span className='bg-success/15 text-success ml-auto flex size-6 shrink-0 items-center justify-center rounded-md'>
+                        <HugeiconsIcon
+                          icon={CashbackIcon}
+                          className='size-4'
+                          aria-hidden='true'
+                        />
+                      </span>
+                    )}
                   </Link>
                 )
               })}

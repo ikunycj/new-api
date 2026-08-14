@@ -32,11 +32,15 @@ import { DocsIntegrationGuide } from './integration-guide'
 import { DocsModelPricing } from './model-pricing'
 import { DocsOpenClaw } from './openclaw-guide'
 import { DocsOpenCode } from './opencode-guide'
+import { DocsOverview } from './overview'
 import { DocsQuickStart } from './quick-start'
+import { DocsReferralRewards } from './referral-rewards'
 
 export const DOCS_PRERENDER_SOURCES = {
+  '/docs': DocsOverview,
   '/docs/quick-start': DocsQuickStart,
   '/docs/model-pricing': DocsModelPricing,
+  '/docs/referral-rewards': DocsReferralRewards,
   '/docs/integrations': DocsIntegrationGuide,
   '/docs/tools/cc-switch': DocsCcSwitch,
   '/docs/tools/claude-code': DocsClaudeCode,

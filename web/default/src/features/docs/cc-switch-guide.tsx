@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Download04Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import {
+  ArrowRight01Icon,
+  Download04Icon,
+  Key01Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
@@ -108,9 +112,11 @@ export function DocsCcSwitch() {
   return (
     <DocsShell
       pageId='cc-switch'
-      title='CC Switch 一键配置'
-      description='从本站 API Key 页面一键导入 Claude Code、Codex 和 Gemini CLI，或在 CC Switch 中手动添加模型供应商。'
+      title='AI Agent 工具与 CC Switch'
+      description='先了解 Codex、Claude Code 这类 AI Agent 工具，再通过 CC Switch 一键导入 API Key、模型和服务地址。'
       toc={[
+        { id: 'ai-agent-tools', label: 'Codex 与 Claude Code' },
+        { id: 'why-cc-switch', label: '为什么推荐 CC Switch' },
         { id: 'download', label: '1. 下载 CC Switch' },
         { id: 'usage', label: '2. 使用和导入' },
         { id: 'one-click-import', label: '2.1 一键导入配置' },
@@ -118,20 +124,57 @@ export function DocsCcSwitch() {
         { id: 'advanced', label: '高级用法' },
       ]}
     >
-      <p className='text-muted-foreground leading-7'>
-        CC Switch 是一款为 Agent 客户端一键配置大模型供应商的软件。
-      </p>
-      <p className='text-muted-foreground mt-3 leading-7'>
+      <section id='ai-agent-tools' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>Codex 与 Claude Code 是什么</h2>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          Codex 和 Claude Code 都是 AI Agent
+          工具。与只在网页里聊天不同，它们可以在你的电脑上读取项目文件、修改代码、运行命令，并根据结果继续完成后续步骤。
+        </p>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          Codex 由 OpenAI 提供，Claude Code 由 Anthropic
+          提供。两者都适合编程、排查问题和处理项目文件，但使用的配置文件和接入方式不同。
+        </p>
+        <div className='mt-5 flex flex-wrap gap-3'>
+          <Button nativeButton={false} render={<Link to='/docs/tools/codex' />}>
+            查看 Codex 接入指南
+            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
+          </Button>
+          <Button
+            nativeButton={false}
+            variant='outline'
+            render={<Link to='/docs/tools/claude-code' />}
+          >
+            查看 Claude Code 接入指南
+            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
+          </Button>
+        </div>
+      </section>
+
+      <section id='why-cc-switch' className='scroll-mt-28'>
+        <h2 className='text-2xl font-semibold'>为什么推荐 CC Switch</h2>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          Agent 工具需要知道三项信息：使用哪个 API Key、调用哪个模型，以及向哪个
+          Base URL 发送请求。Codex 通常读取 config.toml，Claude Code 则使用
+          settings.json 或环境变量，新手手动填写时很容易漏字段或重复添加 /v1。
+        </p>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          CC Switch 是一款跨平台配置管理工具。通过本站 API Key
+          页面的一键导入，它会按 Codex 或 Claude Code
+          的要求自动带入密钥、模型和服务地址，不需要手动查找并编辑配置文件；以后切换模型或服务商时，也可以直接切换已保存的配置。
+        </p>
+        <p className='text-muted-foreground mt-3 leading-7'>
+          CC Switch 不是使用 Agent
+          的必需软件，但对第一次接入的用户更省步骤，也更不容易填错。熟悉配置后，仍可以按照对应工具文档手动设置。
+        </p>
         <a
           href='https://ccswitch.io/zh/'
           target='_blank'
           rel='noopener noreferrer'
-          className='text-primary font-medium underline-offset-4 hover:underline'
+          className='text-primary mt-4 inline-flex font-medium underline-offset-4 hover:underline'
         >
           前往 CC Switch 官网
         </a>
-        ，了解更多产品细节。
-      </p>
+      </section>
 
       <section id='download' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>1. 下载 CC Switch</h2>

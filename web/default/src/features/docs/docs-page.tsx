@@ -47,6 +47,7 @@ import {
   startDocsBackgroundWarmup,
 } from './docs-loader'
 import { getPrerenderDocsPayload } from './docs-prerender-state'
+import { resolveDocsBaseUrl } from './hooks/use-docs-base-url'
 
 export type { DocsRoutePath } from './docs-config'
 export type { DocsPayload } from './docs-loader'
@@ -129,6 +130,10 @@ function DocsLoadingSkeleton(props: { error?: boolean; onRetry?: () => void }) {
 
 const developmentDocsLoaders = import.meta.env.DEV
   ? {
+      '/docs': () =>
+        import('./overview').then((module) => ({
+          default: module.DocsOverview,
+        })),
       '/docs/quick-start': () =>
         import('./quick-start').then((module) => ({
           default: module.DocsQuickStart,
@@ -156,6 +161,10 @@ const developmentDocsLoaders = import.meta.env.DEV
       '/docs/model-pricing': () =>
         import('./model-pricing').then((module) => ({
           default: module.DocsModelPricing,
+        })),
+      '/docs/referral-rewards': () =>
+        import('./referral-rewards').then((module) => ({
+          default: module.DocsReferralRewards,
         })),
       '/docs/tools/cc-switch': () =>
         import('./cc-switch-guide').then((module) => ({
@@ -244,10 +253,7 @@ function escapeHtml(value: string): string {
 
 function getServerAddress(): string {
   const configured = getPublicBootstrap()?.status.server_address
-  if (typeof configured === 'string' && configured.trim()) {
-    return configured.trim().replace(/\/+$/, '')
-  }
-  return typeof window === 'undefined' ? '' : window.location.origin
+  return resolveDocsBaseUrl(configured)
 }
 
 function resolveDocsHtml(rawHtml: string): string {

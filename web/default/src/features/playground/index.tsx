@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect, useRef } from 'react'
+
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
 import {
@@ -25,7 +27,18 @@ import {
   usePlaygroundState,
 } from './hooks'
 
-export function Playground() {
+type PlaygroundProps = {
+  initialModel?: string
+  initialGroup?: string
+  autoSendPrompt?: string
+  onAutoSendHandled?: () => void
+}
+
+export function Playground(props: PlaygroundProps) {
+  const hasHandledAutoSendRef = useRef(false)
+  const initialModel = props.initialModel
+  const autoSendPrompt = props.autoSendPrompt
+  const onAutoSendHandled = props.onAutoSendHandled
   const {
     config,
     parameterEnabled,
@@ -39,7 +52,7 @@ export function Playground() {
     updateConfig,
     updateParameterEnabled,
     clearMessages,
-  } = usePlaygroundState()
+  } = usePlaygroundState(props.initialModel, props.initialGroup)
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
@@ -69,10 +82,41 @@ export function Playground() {
   const { isLoadingModels } = usePlaygroundOptions({
     currentGroup: config.group,
     currentModel: config.model,
+    preferredModel: initialModel,
     setGroups,
     setModels,
     updateConfig,
   })
+
+  useEffect(() => {
+    const prompt = autoSendPrompt?.trim()
+    if (
+      hasHandledAutoSendRef.current ||
+      !prompt ||
+      !initialModel ||
+      isLoadingMessages ||
+      isLoadingModels ||
+      isGenerating ||
+      config.model !== initialModel ||
+      !models.some((model) => model.value === initialModel)
+    ) {
+      return
+    }
+
+    hasHandledAutoSendRef.current = true
+    onAutoSendHandled?.()
+    handleSendMessage(prompt)
+  }, [
+    autoSendPrompt,
+    config.model,
+    handleSendMessage,
+    initialModel,
+    isGenerating,
+    isLoadingMessages,
+    isLoadingModels,
+    models,
+    onAutoSendHandled,
+  ])
 
   return (
     <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>

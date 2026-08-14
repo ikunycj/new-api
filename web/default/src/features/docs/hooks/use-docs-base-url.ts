@@ -18,9 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useStatus } from '@/hooks/use-status'
 
-export function useDocsBaseUrl(): string {
-  const { status } = useStatus()
-  const configuredAddress = status?.server_address
+export const DOCS_PRODUCTION_BASE_URL = 'https://alltokenapi.com'
+
+export function resolveDocsBaseUrl(configuredAddress?: unknown): string {
+  if (import.meta.env.PROD) {
+    return DOCS_PRODUCTION_BASE_URL
+  }
 
   if (
     typeof configuredAddress === 'string' &&
@@ -30,4 +33,9 @@ export function useDocsBaseUrl(): string {
   }
 
   return typeof window === 'undefined' ? '' : window.location.origin
+}
+
+export function useDocsBaseUrl(): string {
+  const { status } = useStatus()
+  return resolveDocsBaseUrl(status?.server_address)
 }

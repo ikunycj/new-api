@@ -6081,6 +6081,19 @@
     "Upstream endpoints": "Điểm cuối upstream",
     "Usage breakdown": "Phân tích sử dụng",
     "User charge": "Phí người dùng",
-    "Daily cost trend": "Xu hướng chi phí hằng ngày"
+    "Daily cost trend": "Xu hướng chi phí hằng ngày",
+    "AI 使用指南": "Hướng dẫn sử dụng AI",
+    "从网页聊天、图片生成、AI Agent 工具或 API 接入中，选择适合你的开始方式。": "Chọn cách bắt đầu phù hợp: trò chuyện trên web, tạo ảnh, công cụ AI Agent hoặc tích hợp API.",
+    "从这里开始使用 AI": "Bắt đầu sử dụng AI tại đây",
+    "如果你平时只用过豆包或 ChatGPT 网页版，可以先按自己的目标选择一种方式。": "Nếu bạn mới chỉ dùng Doubao hoặc ChatGPT trên web, hãy chọn một cách phù hợp với mục tiêu của mình.",
+    "像豆包或 ChatGPT 一样聊天、写作": "Trò chuyện và viết như với Doubao hoặc ChatGPT",
+    "直接和 AI 对话，写文章、翻译和总结内容。": "Trò chuyện với AI để viết, dịch và tóm tắt nội dung.",
+    "让 AI 帮你生成图片（多模态）": "Tạo ảnh bằng AI (đa phương thức)",
+    "自动切换到 gpt-image-2，并生成一只小猫。": "Tự động chuyển sang gpt-image-2 và tạo ảnh một chú mèo con.",
+    "使用 AI Agent 工具（Codex、Claude Code）": "Sử dụng công cụ AI Agent (Codex, Claude Code)",
+    "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
+    "将 AI 接入自己的网站或业务系统（API）": "Kết nối AI với trang web hoặc hệ thống nghiệp vụ của bạn (API)",
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
+    "了解并开始": "Tìm hiểu và bắt đầu"
   }
 }

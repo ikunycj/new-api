@@ -6081,6 +6081,19 @@
     "Upstream endpoints": "Upstream endpoints",
     "Usage breakdown": "Usage breakdown",
     "User charge": "User charge",
-    "Daily cost trend": "Daily cost trend"
+    "Daily cost trend": "Daily cost trend",
+    "AI 使用指南": "AI Usage Guide",
+    "从网页聊天、图片生成、AI Agent 工具或 API 接入中，选择适合你的开始方式。": "Choose how to begin with web chat, image generation, AI Agent tools, or API integration.",
+    "从这里开始使用 AI": "Start using AI here",
+    "如果你平时只用过豆包或 ChatGPT 网页版，可以先按自己的目标选择一种方式。": "If you have only used Doubao or ChatGPT in a browser, start by choosing an option based on your goal.",
+    "像豆包或 ChatGPT 一样聊天、写作": "Chat and write like Doubao or ChatGPT",
+    "直接和 AI 对话，写文章、翻译和总结内容。": "Chat with AI to write, translate, and summarize content.",
+    "让 AI 帮你生成图片（多模态）": "Generate images with AI (multimodal)",
+    "自动切换到 gpt-image-2，并生成一只小猫。": "Automatically switches to gpt-image-2 and generates a kitten.",
+    "使用 AI Agent 工具（Codex、Claude Code）": "Use AI Agent tools (Codex, Claude Code)",
+    "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Let Codex or Claude Code read project files, write code, and complete tasks.",
+    "将 AI 接入自己的网站或业务系统（API）": "Connect AI to your website or business system (API)",
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Let your own application call AI, suitable for developers and businesses.",
+    "了解并开始": "Learn more and get started"
   }
 }

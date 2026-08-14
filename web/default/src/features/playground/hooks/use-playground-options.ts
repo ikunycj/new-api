@@ -33,6 +33,7 @@ import type { GroupOption, ModelOption, PlaygroundConfig } from '../types'
 type UsePlaygroundOptionsParams = {
   currentGroup: string
   currentModel: string
+  preferredModel?: string
   setGroups: (groups: GroupOption[]) => void
   setModels: (models: ModelOption[]) => void
   updateConfig: <K extends keyof PlaygroundConfig>(
@@ -44,6 +45,7 @@ type UsePlaygroundOptionsParams = {
 export function usePlaygroundOptions({
   currentGroup,
   currentModel,
+  preferredModel,
   setGroups,
   setModels,
   updateConfig,
@@ -68,6 +70,45 @@ export function usePlaygroundOptions({
   } = useQuery({
     queryKey: ['playground-groups'],
     queryFn: getUserGroups,
+  })
+
+  const shouldResolvePreferredGroup = Boolean(
+    preferredModel &&
+    currentModel === preferredModel &&
+    modelsData &&
+    !modelsData.some((model) => model.value === preferredModel)
+  )
+  const hasLoadedGroups = groupsData !== undefined
+  const candidateGroups =
+    groupsData?.filter((group) => group.value !== currentGroup) ?? []
+  const {
+    data: preferredGroup,
+    isFetched: hasResolvedPreferredGroup,
+    isFetching: isResolvingPreferredGroup,
+  } = useQuery({
+    queryKey: [
+      'playground-preferred-model-group',
+      preferredModel,
+      currentGroup,
+      candidateGroups.map((group) => group.value),
+    ],
+    queryFn: async () => {
+      if (!preferredModel) return null
+
+      const modelsByGroup = await Promise.all(
+        candidateGroups.map(async (group) => ({
+          group: group.value,
+          models: await getUserModels(group.value),
+        }))
+      )
+
+      return (
+        modelsByGroup.find(({ models }) =>
+          models.some((model) => model.value === preferredModel)
+        )?.group ?? null
+      )
+    },
+    enabled: shouldResolvePreferredGroup && candidateGroups.length > 0,
   })
 
   useEffect(() => {
@@ -96,6 +137,20 @@ export function usePlaygroundOptions({
     if (!modelsData) return
 
     setModels(modelsData)
+
+    if (shouldResolvePreferredGroup) {
+      if (!hasLoadedGroups) return
+
+      const hasGroupsToCheck = candidateGroups.length > 0
+      if (
+        preferredGroup ||
+        (hasGroupsToCheck &&
+          (!hasResolvedPreferredGroup || isResolvingPreferredGroup))
+      ) {
+        return
+      }
+    }
+
     const fallback = getModelFallback(modelsData, currentModel)
 
     if (fallback) {
@@ -106,7 +161,30 @@ export function usePlaygroundOptions({
     if (shouldClearModelForGroup(modelsData, currentModel)) {
       updateConfig('model', '')
     }
-  }, [modelsData, currentModel, setModels, updateConfig])
+  }, [
+    candidateGroups.length,
+    currentModel,
+    hasLoadedGroups,
+    hasResolvedPreferredGroup,
+    isResolvingPreferredGroup,
+    modelsData,
+    preferredGroup,
+    setModels,
+    shouldResolvePreferredGroup,
+    updateConfig,
+  ])
+
+  useEffect(() => {
+    if (
+      !preferredGroup ||
+      preferredGroup === currentGroup ||
+      currentModel !== preferredModel
+    ) {
+      return
+    }
+
+    updateConfig('group', preferredGroup)
+  }, [currentGroup, currentModel, preferredGroup, preferredModel, updateConfig])
 
   useEffect(() => {
     if (!groupsData) return
@@ -120,6 +198,6 @@ export function usePlaygroundOptions({
   }, [groupsData, currentGroup, setGroups, updateConfig])
 
   return {
-    isLoadingModels,
+    isLoadingModels: isLoadingModels || isResolvingPreferredGroup,
   }
 }

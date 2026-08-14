@@ -27,6 +27,13 @@ const DOCS_GROUPS = [
 
 export const DOCS_ROUTES = [
   {
+    id: 'introduction',
+    group: 'overview',
+    label: 'AI 使用指南',
+    path: '/docs',
+    file: 'docs/index.html',
+  },
+  {
     id: 'quick-start',
     group: 'overview',
     label: '快速开始',
@@ -41,6 +48,13 @@ export const DOCS_ROUTES = [
     file: 'docs/model-pricing.html',
   },
   {
+    id: 'referral-rewards',
+    group: 'overview',
+    label: '推荐奖励',
+    path: '/docs/referral-rewards',
+    file: 'docs/referral-rewards.html',
+  },
+  {
     id: 'integration-guide',
     group: 'tools',
     label: '集成指南',
@@ -50,7 +64,7 @@ export const DOCS_ROUTES = [
   {
     id: 'cc-switch',
     group: 'tools',
-    label: 'CC Switch 一键配置',
+    label: 'AI Agent 与 CC Switch',
     path: '/docs/tools/cc-switch',
     file: 'docs/tools/cc-switch.html',
   },
