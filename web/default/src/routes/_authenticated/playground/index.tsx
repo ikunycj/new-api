@@ -18,18 +18,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback } from 'react'
-import { z } from 'zod'
 
 import { Main } from '@/components/layout'
 import { Playground } from '@/features/playground'
+import { playgroundSearchSchema } from '@/features/playground/lib/search'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
-
-const playgroundSearchSchema = z.object({
-  model: z.string().optional(),
-  group: z.string().optional(),
-  prompt: z.string().optional(),
-  autoSend: z.boolean().optional(),
-})
 
 export const Route = createFileRoute('/_authenticated/playground/')({
   validateSearch: playgroundSearchSchema,
