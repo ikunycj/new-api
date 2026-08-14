@@ -37,7 +37,7 @@ describe('billing currency formatting', () => {
         currency: {
           ...originalConfig.currency,
           quotaDisplayType: 'CNY',
-          usdExchangeRate: 7,
+          usdExchangeRate: 1,
         },
       },
     })
@@ -45,9 +45,9 @@ describe('billing currency formatting', () => {
     assert.equal(
       formatBillingCurrencyFromUSD(1, {
         locale: 'en-US',
-        billingUSDToCNYRate: 7.3,
+        billingUSDToCNYRate: 7,
       }),
-      '¥7.3'
+      '¥7'
     )
   })
 

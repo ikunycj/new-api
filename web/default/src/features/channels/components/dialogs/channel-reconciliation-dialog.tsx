@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useStatus } from '@/hooks/use-status'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 
@@ -56,14 +57,21 @@ function rangeFor(key: RangeKey) {
   return { start_timestamp: end - seconds, end_timestamp: end }
 }
 
-function money(value: number) {
+function money(value: number, billingUSDToCNYRate: number) {
   return formatBillingCurrencyFromUSD(value || 0, {
     digitsLarge: 4,
     digitsSmall: 6,
+    billingUSDToCNYRate,
   })
 }
 
-function BucketTable({ buckets }: { buckets: ChannelReconciliationBucket[] }) {
+function BucketTable({
+  buckets,
+  billingUSDToCNYRate,
+}: {
+  buckets: ChannelReconciliationBucket[]
+  billingUSDToCNYRate: number
+}) {
   const { t } = useTranslation()
   if (!buckets.length) {
     return (
@@ -95,8 +103,12 @@ function BucketTable({ buckets }: { buckets: ChannelReconciliationBucket[] }) {
                 bucket.prompt_tokens + bucket.completion_tokens
               ).toLocaleString()}
             </TableCell>
-            <TableCell>{money(bucket.estimated_cost_usd)}</TableCell>
-            <TableCell>{money(bucket.actual_cost_usd)}</TableCell>
+            <TableCell>
+              {money(bucket.estimated_cost_usd, billingUSDToCNYRate)}
+            </TableCell>
+            <TableCell>
+              {money(bucket.actual_cost_usd, billingUSDToCNYRate)}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -107,6 +119,7 @@ function BucketTable({ buckets }: { buckets: ChannelReconciliationBucket[] }) {
 export function ChannelReconciliationDialog(props: Props) {
   const { t } = useTranslation()
   const { currentRow } = useChannels()
+  const { status } = useStatus()
   const [rangeKey, setRangeKey] = useState<RangeKey>('7d')
   const [data, setData] =
     useState<Awaited<ReturnType<typeof getChannelReconciliation>>['data']>()
@@ -147,6 +160,11 @@ export function ChannelReconciliationDialog(props: Props) {
   }, [props.open, load])
 
   const summary = data?.summary
+  const configuredBillingRate = Number(status?.billing_usd_to_cny_rate ?? 1)
+  const billingUSDToCNYRate =
+    Number.isFinite(configuredBillingRate) && configuredBillingRate > 0
+      ? configuredBillingRate
+      : 1
   const formValid = useMemo(() => {
     const start = Date.parse(form.start_at)
     const end = Date.parse(form.end_at)
@@ -310,13 +328,28 @@ export function ChannelReconciliationDialog(props: Props) {
                   (summary?.prompt_tokens || 0) +
                     (summary?.completion_tokens || 0),
                 ],
-                [t('User charge'), money(summary?.user_charge_usd || 0)],
-                [t('Estimated cost'), money(summary?.estimated_cost_usd || 0)],
-                [t('Actual cost'), money(summary?.actual_cost_usd || 0)],
-                [t('Gross margin'), money(summary?.gross_margin_usd || 0)],
+                [
+                  t('User charge'),
+                  money(summary?.user_charge_usd || 0, billingUSDToCNYRate),
+                ],
+                [
+                  t('Estimated cost'),
+                  money(summary?.estimated_cost_usd || 0, billingUSDToCNYRate),
+                ],
+                [
+                  t('Actual cost'),
+                  money(summary?.actual_cost_usd || 0, billingUSDToCNYRate),
+                ],
+                [
+                  t('Gross margin'),
+                  money(summary?.gross_margin_usd || 0, billingUSDToCNYRate),
+                ],
                 [
                   t('Estimate variance'),
-                  money(summary?.estimate_variance_usd || 0),
+                  money(
+                    summary?.estimate_variance_usd || 0,
+                    billingUSDToCNYRate
+                  ),
                 ],
                 [
                   t('Average latency'),
@@ -355,7 +388,9 @@ export function ChannelReconciliationDialog(props: Props) {
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          formatter={(value) => money(Number(value))}
+                          formatter={(value) =>
+                            money(Number(value), billingUSDToCNYRate)
+                          }
                         />
                       }
                     />
@@ -407,16 +442,28 @@ export function ChannelReconciliationDialog(props: Props) {
                 <TabsTrigger value='daily'>{t('Daily')}</TabsTrigger>
               </TabsList>
               <TabsContent value='models'>
-                <BucketTable buckets={data.models} />
+                <BucketTable
+                  buckets={data.models}
+                  billingUSDToCNYRate={billingUSDToCNYRate}
+                />
               </TabsContent>
               <TabsContent value='inbound'>
-                <BucketTable buckets={data.inbound_endpoints} />
+                <BucketTable
+                  buckets={data.inbound_endpoints}
+                  billingUSDToCNYRate={billingUSDToCNYRate}
+                />
               </TabsContent>
               <TabsContent value='upstream'>
-                <BucketTable buckets={data.upstream_endpoints} />
+                <BucketTable
+                  buckets={data.upstream_endpoints}
+                  billingUSDToCNYRate={billingUSDToCNYRate}
+                />
               </TabsContent>
               <TabsContent value='daily'>
-                <BucketTable buckets={data.daily} />
+                <BucketTable
+                  buckets={data.daily}
+                  billingUSDToCNYRate={billingUSDToCNYRate}
+                />
               </TabsContent>
             </Tabs>
             <div>
@@ -441,7 +488,9 @@ export function ChannelReconciliationDialog(props: Props) {
                           {formatTimestampToDate(entry.start_at)} ~{' '}
                           {formatTimestampToDate(entry.end_at)}
                         </TableCell>
-                        <TableCell>{money(entry.amount_usd)}</TableCell>
+                        <TableCell>
+                          {money(entry.amount_usd, billingUSDToCNYRate)}
+                        </TableCell>
                         <TableCell>{entry.source}</TableCell>
                         <TableCell className='max-w-72 truncate'>
                           {entry.note || '-'}
