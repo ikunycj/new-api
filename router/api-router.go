@@ -12,6 +12,11 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// Grafana loads many assets through auth_request. Keep this cheap, read-only
+	// session check outside the global API rate limiter so asset bursts do not
+	// turn a valid embedded dashboard into an OpenResty 500 response.
+	registerFailoverGrafanaAuthRoute(router)
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))

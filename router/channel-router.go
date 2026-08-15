@@ -16,13 +16,16 @@ type permissionRoute struct {
 	handler    gin.HandlerFunc
 }
 
-func registerChannelRoutes(apiRouter *gin.RouterGroup) {
-	apiRouter.GET("/channel/failover/grafana-auth",
+func registerFailoverGrafanaAuthRoute(router gin.IRoutes) {
+	router.GET("/api/channel/failover/grafana-auth",
+		middleware.RouteTag("api"),
 		middleware.AdminSessionAuth(),
 		middleware.RequirePermission(authz.ChannelRead),
 		controller.GetFailoverGrafanaAuth,
 	)
+}
 
+func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 	channelRoute := apiRouter.Group("/channel")
 	channelRoute.Use(middleware.AdminAuth())
 
