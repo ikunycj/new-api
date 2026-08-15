@@ -13,7 +13,7 @@ The AllToken application container reaches Prometheus and Alertmanager through
 Deploy to `/opt/alltoken-production-monitoring`, validate with
 `docker compose config --quiet`, then start with `docker compose up -d`.
 
-Set `MONITORING_BIND_ADDRESS` before running Compose when the host uses a Docker
-bridge address other than `172.17.0.1`. Keep host firewall rules closed for TCP
-ports `9090` and `9093`; these listeners are intended only for container-to-host
-traffic.
+Verify that the host Docker bridge is `172.17.0.1` before deploying. The
+Prometheus alert target and Grafana data sources use the same bridge address.
+Keep host firewall rules closed for TCP ports `9090` and `9093`; these listeners
+are intended only for container-to-host traffic.
