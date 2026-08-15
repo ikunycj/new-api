@@ -9,7 +9,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
-      - --web.listen-address=127.0.0.1:9090
+      - --web.listen-address=${MONITORING_BIND_ADDRESS:-172.17.0.1}:9090
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -24,7 +24,7 @@ services:
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
-      - --web.listen-address=127.0.0.1:9093
+      - --web.listen-address=${MONITORING_BIND_ADDRESS:-172.17.0.1}:9093
     volumes:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
