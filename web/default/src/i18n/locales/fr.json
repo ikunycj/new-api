@@ -6184,6 +6184,18 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Sélectionne automatiquement gpt-image-2 et génère un chaton.",
     "让 AI 帮你生成图片（多模态）": "Générez des images avec l’IA (multimodal)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Laissez Codex ou Claude Code lire les fichiers du projet, écrire du code et accomplir des tâches.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises.",
+    "Channel binding is incomplete": "Association de canal incomplète",
+    "Channel bindings": "Associations des canaux",
+    "Channel bindings saved": "Associations des canaux enregistrées",
+    "Failed to load channel bindings": "Échec du chargement des associations de canaux",
+    "Link each channel to a cluster and one of its P1-P3 pools.": "Associez chaque canal à un cluster et à l’un de ses pools P1-P3.",
+    "No clusters available": "Aucun cluster disponible",
+    "Pool": "Pool",
+    "Save bindings": "Enregistrer les associations",
+    "Save a cluster and its pools before binding channels.": "Enregistrez un cluster et ses pools avant d’associer des canaux.",
+    "Select a pool for every assigned cluster.": "Sélectionnez un pool pour chaque cluster attribué.",
+    "Select pool": "Sélectionner un pool",
+    "Unassigned": "Non attribué"
   }
 }

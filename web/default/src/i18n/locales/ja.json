@@ -6184,6 +6184,18 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "gpt-image-2 に自動で切り替え、子猫の画像を生成します。",
     "让 AI 帮你生成图片（多模态）": "AI で画像を生成（マルチモーダル）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Codex または Claude Code にプロジェクトファイルを読ませ、コード作成やタスク実行を任せます。",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "自作プログラムから AI を呼び出します。開発者や企業向けです。"
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "自作プログラムから AI を呼び出します。開発者や企業向けです。",
+    "Channel binding is incomplete": "チャネルの関連付けが未完了です",
+    "Channel bindings": "チャネルの関連付け",
+    "Channel bindings saved": "チャネルの関連付けを保存しました",
+    "Failed to load channel bindings": "チャネルの関連付けを読み込めませんでした",
+    "Link each channel to a cluster and one of its P1-P3 pools.": "各チャネルを Cluster とその P1-P3 プールのいずれかに関連付けます。",
+    "No clusters available": "利用可能な Cluster がありません",
+    "Pool": "プール",
+    "Save bindings": "関連付けを保存",
+    "Save a cluster and its pools before binding channels.": "チャネルを関連付ける前に Cluster とプールを保存してください。",
+    "Select a pool for every assigned cluster.": "割り当てた各 Cluster のプールを選択してください。",
+    "Select pool": "プールを選択",
+    "Unassigned": "未割り当て"
   }
 }

@@ -55,6 +55,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getFailoverConfig, updateFailoverConfig } from './api'
+import { ChannelBindingsPanel } from './components/channel-bindings-panel'
 import { FailoverMonitoring } from './monitoring'
 import type { FailoverConfig, FailoverMode } from './types'
 
@@ -1367,10 +1368,17 @@ function FailoverConfigurationPanel() {
         </Alert>
       )}
       {configQuery.data && (
-        <FailoverConfigForm
-          key={configQuery.dataUpdatedAt}
-          config={configQuery.data}
-        />
+        <>
+          <FailoverConfigForm
+            key={configQuery.dataUpdatedAt}
+            config={configQuery.data}
+          />
+          <Separator />
+          <ChannelBindingsPanel
+            clusters={configQuery.data.clusters}
+            pools={configQuery.data.pools}
+          />
+        </>
       )}
     </div>
   )

@@ -6184,6 +6184,18 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Tự động chuyển sang gpt-image-2 và tạo ảnh một chú mèo con.",
     "让 AI 帮你生成图片（多模态）": "Tạo ảnh bằng AI (đa phương thức)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
+    "Channel binding is incomplete": "Liên kết kênh chưa hoàn tất",
+    "Channel bindings": "Liên kết kênh",
+    "Channel bindings saved": "Đã lưu liên kết kênh",
+    "Failed to load channel bindings": "Không thể tải liên kết kênh",
+    "Link each channel to a cluster and one of its P1-P3 pools.": "Liên kết từng kênh với một Cluster và một pool P1-P3 của Cluster đó.",
+    "No clusters available": "Không có Cluster khả dụng",
+    "Pool": "Pool",
+    "Save bindings": "Lưu liên kết",
+    "Save a cluster and its pools before binding channels.": "Hãy lưu Cluster và các pool trước khi liên kết kênh.",
+    "Select a pool for every assigned cluster.": "Chọn một pool cho mỗi Cluster đã gán.",
+    "Select pool": "Chọn pool",
+    "Unassigned": "Chưa gán"
   }
 }

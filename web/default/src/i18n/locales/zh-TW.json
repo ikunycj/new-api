@@ -6184,6 +6184,18 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "自動切換到 gpt-image-2，並生成一隻小貓。",
     "让 AI 帮你生成图片（多模态）": "讓 AI 幫你生成圖片（多模態）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "讓 Codex 或 Claude Code 讀取專案檔案、編寫程式碼並完成任務。",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "讓你自己的程式呼叫 AI，適合開發者和企業使用。"
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "讓你自己的程式呼叫 AI，適合開發者和企業使用。",
+    "Channel binding is incomplete": "渠道綁定不完整",
+    "Channel bindings": "渠道綁定",
+    "Channel bindings saved": "渠道綁定已儲存",
+    "Failed to load channel bindings": "載入渠道綁定失敗",
+    "Link each channel to a cluster and one of its P1-P3 pools.": "將每個渠道關聯到一個 Cluster 及其 P1-P3 號池。",
+    "No clusters available": "暫無可用 Cluster",
+    "Pool": "號池",
+    "Save bindings": "儲存綁定",
+    "Save a cluster and its pools before binding channels.": "請先儲存 Cluster 及其號池，再綁定渠道。",
+    "Select a pool for every assigned cluster.": "請為每個已分配的 Cluster 選擇號池。",
+    "Select pool": "選擇號池",
+    "Unassigned": "未分配"
   }
 }

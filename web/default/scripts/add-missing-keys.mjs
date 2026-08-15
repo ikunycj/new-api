@@ -5,6 +5,21 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Channel binding is incomplete': 'Channel binding is incomplete',
+    'Channel bindings': 'Channel bindings',
+    'Channel bindings saved': 'Channel bindings saved',
+    'Failed to load channel bindings': 'Failed to load channel bindings',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      'Link each channel to a cluster and one of its P1-P3 pools.',
+    'No clusters available': 'No clusters available',
+    Pool: 'Pool',
+    'Save bindings': 'Save bindings',
+    'Save a cluster and its pools before binding channels.':
+      'Save a cluster and its pools before binding channels.',
+    'Select a pool for every assigned cluster.':
+      'Select a pool for every assigned cluster.',
+    'Select pool': 'Select pool',
+    Unassigned: 'Unassigned',
     '24 hours': '24 hours',
     '7 days': '7 days',
     '30 days': '30 days',
@@ -36,6 +51,21 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
+    'Channel binding is incomplete': '渠道绑定不完整',
+    'Channel bindings': '渠道绑定',
+    'Channel bindings saved': '渠道绑定已保存',
+    'Failed to load channel bindings': '加载渠道绑定失败',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      '将每个渠道关联到一个 Cluster 及其 P1-P3 号池。',
+    'No clusters available': '暂无可用 Cluster',
+    Pool: '号池',
+    'Save bindings': '保存绑定',
+    'Save a cluster and its pools before binding channels.':
+      '请先保存 Cluster 及其号池，再绑定渠道。',
+    'Select a pool for every assigned cluster.':
+      '请为每个已分配的 Cluster 选择号池。',
+    'Select pool': '选择号池',
+    Unassigned: '未分配',
     '24 hours': '24 小时',
     '7 days': '7 天',
     '30 days': '30 天',
@@ -67,6 +97,22 @@ const newKeys = {
     'User charge': '用户扣费',
   },
   fr: {
+    'Channel binding is incomplete': 'Association de canal incomplète',
+    'Channel bindings': 'Associations des canaux',
+    'Channel bindings saved': 'Associations des canaux enregistrées',
+    'Failed to load channel bindings':
+      'Échec du chargement des associations de canaux',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      'Associez chaque canal à un cluster et à l’un de ses pools P1-P3.',
+    'No clusters available': 'Aucun cluster disponible',
+    Pool: 'Pool',
+    'Save bindings': 'Enregistrer les associations',
+    'Save a cluster and its pools before binding channels.':
+      'Enregistrez un cluster et ses pools avant d’associer des canaux.',
+    'Select a pool for every assigned cluster.':
+      'Sélectionnez un pool pour chaque cluster attribué.',
+    'Select pool': 'Sélectionner un pool',
+    Unassigned: 'Non attribué',
     '24 hours': '24 heures',
     '7 days': '7 jours',
     '30 days': '30 jours',
@@ -98,6 +144,22 @@ const newKeys = {
     'User charge': 'Facturation utilisateur',
   },
   ja: {
+    'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
+    'Channel bindings': 'チャネルの関連付け',
+    'Channel bindings saved': 'チャネルの関連付けを保存しました',
+    'Failed to load channel bindings':
+      'チャネルの関連付けを読み込めませんでした',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      '各チャネルを Cluster とその P1-P3 プールのいずれかに関連付けます。',
+    'No clusters available': '利用可能な Cluster がありません',
+    Pool: 'プール',
+    'Save bindings': '関連付けを保存',
+    'Save a cluster and its pools before binding channels.':
+      'チャネルを関連付ける前に Cluster とプールを保存してください。',
+    'Select a pool for every assigned cluster.':
+      '割り当てた各 Cluster のプールを選択してください。',
+    'Select pool': 'プールを選択',
+    Unassigned: '未割り当て',
     '24 hours': '24時間',
     '7 days': '7日間',
     '30 days': '30日間',
@@ -129,6 +191,21 @@ const newKeys = {
     'User charge': 'ユーザー請求額',
   },
   ru: {
+    'Channel binding is incomplete': 'Привязка канала не завершена',
+    'Channel bindings': 'Привязки каналов',
+    'Channel bindings saved': 'Привязки каналов сохранены',
+    'Failed to load channel bindings': 'Не удалось загрузить привязки каналов',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      'Свяжите каждый канал с Cluster и одним из его пулов P1-P3.',
+    'No clusters available': 'Нет доступных Cluster',
+    Pool: 'Пул',
+    'Save bindings': 'Сохранить привязки',
+    'Save a cluster and its pools before binding channels.':
+      'Сохраните Cluster и его пулы перед привязкой каналов.',
+    'Select a pool for every assigned cluster.':
+      'Выберите пул для каждого назначенного Cluster.',
+    'Select pool': 'Выберите пул',
+    Unassigned: 'Не назначено',
     '24 hours': '24 часа',
     '7 days': '7 дней',
     '30 days': '30 дней',
@@ -160,6 +237,21 @@ const newKeys = {
     'User charge': 'Списание с пользователя',
   },
   vi: {
+    'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
+    'Channel bindings': 'Liên kết kênh',
+    'Channel bindings saved': 'Đã lưu liên kết kênh',
+    'Failed to load channel bindings': 'Không thể tải liên kết kênh',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      'Liên kết từng kênh với một Cluster và một pool P1-P3 của Cluster đó.',
+    'No clusters available': 'Không có Cluster khả dụng',
+    Pool: 'Pool',
+    'Save bindings': 'Lưu liên kết',
+    'Save a cluster and its pools before binding channels.':
+      'Hãy lưu Cluster và các pool trước khi liên kết kênh.',
+    'Select a pool for every assigned cluster.':
+      'Chọn một pool cho mỗi Cluster đã gán.',
+    'Select pool': 'Chọn pool',
+    Unassigned: 'Chưa gán',
     '24 hours': '24 giờ',
     '7 days': '7 ngày',
     '30 days': '30 ngày',
@@ -191,6 +283,21 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
+    'Channel binding is incomplete': '渠道綁定不完整',
+    'Channel bindings': '渠道綁定',
+    'Channel bindings saved': '渠道綁定已儲存',
+    'Failed to load channel bindings': '載入渠道綁定失敗',
+    'Link each channel to a cluster and one of its P1-P3 pools.':
+      '將每個渠道關聯到一個 Cluster 及其 P1-P3 號池。',
+    'No clusters available': '暫無可用 Cluster',
+    Pool: '號池',
+    'Save bindings': '儲存綁定',
+    'Save a cluster and its pools before binding channels.':
+      '請先儲存 Cluster 及其號池，再綁定渠道。',
+    'Select a pool for every assigned cluster.':
+      '請為每個已分配的 Cluster 選擇號池。',
+    'Select pool': '選擇號池',
+    Unassigned: '未分配',
     '24 hours': '24 小時',
     '7 days': '7 天',
     '30 days': '30 天',

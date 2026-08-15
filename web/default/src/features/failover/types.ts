@@ -35,6 +35,20 @@ export type ClusterPool = {
   updated_time: number
 }
 
+export type ChannelFailoverBinding = {
+  channel_id: number
+  channel_name: string
+  base_url: string | null
+  status: number
+  cluster_id: number
+  cluster_pool_id: number
+}
+
+export type ChannelFailoverBindingUpdate = Pick<
+  ChannelFailoverBinding,
+  'channel_id' | 'cluster_id' | 'cluster_pool_id'
+>
+
 export type FailoverPolicy = {
   id: number
   name: string
