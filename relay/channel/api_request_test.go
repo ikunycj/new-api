@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	common2 "github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -190,4 +191,82 @@ func TestProcessHeaderOverride_PassHeadersTemplateSetsRuntimeHeaders(t *testing.
 	require.Equal(t, "Codex CLI", upstreamReq.Header.Get("Originator"))
 	require.Equal(t, "sess-123", upstreamReq.Header.Get("Session_id"))
 	require.Empty(t, upstreamReq.Header.Get("X-Codex-Beta-Features"))
+}
+
+func TestCaptureUpstreamRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name  string
+		setup func(http.Header)
+		want  string
+	}{
+		{
+			name: "oneapi header has priority",
+			setup: func(header http.Header) {
+				header.Set(common2.RequestIdKey, "oneapi-id")
+				header.Set("X-Request-ID", "generic-id")
+			},
+			want: "oneapi-id",
+		},
+		{
+			name: "generic request id fallback",
+			setup: func(header http.Header) {
+				header.Set("X-Request-ID", "generic-id")
+			},
+			want: "generic-id",
+		},
+		{name: "missing"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			header := make(http.Header)
+			if tt.setup != nil {
+				tt.setup(header)
+			}
+			captureUpstreamRequestID(ctx, header)
+			require.Equal(t, tt.want, ctx.GetString(common2.UpstreamRequestIdKey))
+		})
+	}
+}
+
+func TestApplyObservabilityHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name       string
+		baseURL    string
+		requestID  string
+		retryIndex int
+		wantID     string
+		wantRetry  string
+	}{
+		{name: "ikun", baseURL: "https://ikun.love", requestID: "server-request-123", retryIndex: 2, wantID: "server-request-123", wantRetry: "2"},
+		{name: "other provider", baseURL: "https://example.com", requestID: "server-request-123"},
+		{name: "missing request id", baseURL: "https://ikun.love"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			ctx.Set(common2.RequestIdKey, tt.requestID)
+			header := http.Header{"X-Client-Request-Id": []string{"untrusted-override"}}
+			info := &relaycommon.RelayInfo{
+				RetryIndex: tt.retryIndex,
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ChannelBaseUrl: tt.baseURL,
+				},
+			}
+
+			applyObservabilityHeaders(header, ctx, info)
+
+			if tt.wantID == "" {
+				require.Equal(t, "untrusted-override", header.Get("X-Client-Request-ID"))
+				require.Empty(t, header.Get("X-AllToken-Attempt"))
+				return
+			}
+			require.Equal(t, tt.wantID, header.Get("X-Client-Request-ID"))
+			require.Equal(t, tt.wantRetry, header.Get("X-AllToken-Attempt"))
+		})
+	}
 }

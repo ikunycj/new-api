@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/common/limiter"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/gin-gonic/gin"
@@ -86,10 +87,12 @@ func redisRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) g
 		allowed, err := checkRedisRateLimit(ctx, rdb, successKey, successMaxCount, duration)
 		if err != nil {
 			fmt.Println("检查成功请求数限制失败:", err.Error())
+			observability.MarkContextError(c, observability.ErrorInternal)
 			abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
 			return
 		}
 		if !allowed {
+			observability.MarkContextError(c, observability.ErrorUserRateLimit)
 			abortWithOpenAiMessage(c, http.StatusTooManyRequests, fmt.Sprintf("您已达到请求数限制：%d分钟内最多请求%d次", setting.ModelRequestRateLimitDurationMinutes, successMaxCount))
 			return
 		}
@@ -109,12 +112,15 @@ func redisRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) g
 
 			if err != nil {
 				fmt.Println("检查总请求数限制失败:", err.Error())
+				observability.MarkContextError(c, observability.ErrorInternal)
 				abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
 				return
 			}
 
 			if !allowed {
+				observability.MarkContextError(c, observability.ErrorUserRateLimit)
 				abortWithOpenAiMessage(c, http.StatusTooManyRequests, fmt.Sprintf("您已达到总请求数限制：%d分钟内最多请求%d次，包括失败次数，请检查您的请求是否正确", setting.ModelRequestRateLimitDurationMinutes, totalMaxCount))
+				return
 			}
 		}
 
@@ -139,6 +145,7 @@ func memoryRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) 
 
 		// 1. 检查总请求数限制（当totalMaxCount为0时跳过）
 		if totalMaxCount > 0 && !inMemoryRateLimiter.Request(totalKey, totalMaxCount, duration) {
+			observability.MarkContextError(c, observability.ErrorUserRateLimit)
 			c.Status(http.StatusTooManyRequests)
 			c.Abort()
 			return
@@ -148,6 +155,7 @@ func memoryRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) 
 		// 使用一个临时key来检查限制，这样可以避免实际记录
 		checkKey := successKey + "_check"
 		if !inMemoryRateLimiter.Request(checkKey, successMaxCount, duration) {
+			observability.MarkContextError(c, observability.ErrorUserRateLimit)
 			c.Status(http.StatusTooManyRequests)
 			c.Abort()
 			return

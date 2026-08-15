@@ -1,10 +1,11 @@
 {
   "uid": "new-api-loadtest",
-  "title": "new-api load test",
+  "title": "Remote ECS · new-api load test",
+  "description": "Grafana runs locally. All panels scoped to jobs new-api, node, postgres, and redis visualize the remote Hong Kong ECS through the SSH tunnel.",
   "tags": ["new-api", "loadtest"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 6,
   "refresh": "5s",
   "time": {"from": "now-30m", "to": "now"},
   "templating": {
@@ -82,12 +83,12 @@
       "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
     },
     {
-      "id": 11, "type": "timeseries", "title": "Container CPU and memory", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "id": 11, "type": "timeseries", "title": "Remote ECS CPU and memory", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
       "targets": [
-        {"refId": "A", "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\".*new-api.*|.*postgres.*|.*redis.*\"}[1m]))", "legendFormat": "CPU {{name}}"},
-        {"refId": "B", "expr": "sum by (name) (container_memory_working_set_bytes{name=~\".*new-api.*|.*postgres.*|.*redis.*\"})", "legendFormat": "memory {{name}}"}
+        {"refId": "A", "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[1m])))", "legendFormat": "CPU {{instance}}"},
+        {"refId": "B", "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})", "legendFormat": "memory {{instance}}"}
       ],
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": [{"matcher": {"id": "byName", "options": "memory"}, "properties": [{"id": "unit", "value": "bytes"}]}]}
+      "fieldConfig": {"defaults": {"unit": "percent", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
     },
     {
       "id": 12, "type": "table", "title": "Active alerts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
@@ -113,6 +114,108 @@
         {"refId": "C", "expr": "rate(k6_new_api_total_tokens_total[1m])", "legendFormat": "total Token TPS"}
       ],
       "fieldConfig": {"defaults": {"unit": "ops", "decimals": 0, "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "id": 15, "type": "row", "title": "Remote bottleneck diagnosis · select a test time range", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 52}, "collapsed": false, "panels": []
+    },
+    {
+      "id": 16, "type": "text", "title": "What this dashboard is showing", "gridPos": {"h": 5, "w": 24, "x": 0, "y": 53},
+      "options": {"mode": "markdown", "content": "### Data source\nGrafana and Prometheus run **locally**, while `new-api`, `node`, `postgres`, and `redis` are scraped from the **remote Hong Kong ECS through the SSH tunnel**. The Mac is not represented in the remote resource panels.\n\n### Mixed workload gate: 200 VUs failed, 500 VUs not executed\nThe workload used **10 short + 190 large VUs** (5% / 95%). Short requests calibrated at 44 tokens; large requests at 2,292 tokens. The 200-VU stage produced 7,457 requests: 2,143 HTTP 200, 5,313 HTTP 429, 0 HTTP 5xx, and 1 transport timeout. Overall error rate was **71.26%**.\n\n| Workload | HTTP 200 | HTTP 429 | status=0 | Error rate | P95 | P99 |\n|---|---:|---:|---:|---:|---:|---:|\n| Short | 389 | 260 | 0 | 40.06% | 3.45s | 6.11s |\n| Large | 1,754 | 5,053 | 1 | 74.24% | 13.31s | 21.56s |\n\nAll tokens share one user-level 1,000 requests/minute limiter. Once the success bucket filled, 429 responses returned in milliseconds; closed-loop VUs immediately retried and amplified the 429 rate. One large request reached the 120-second client timeout. ECS resources remained moderate, so 500 VUs were blocked by the safety gate rather than host saturation.\n\n[Open the 200 VU mixed window](/d/new-api-loadtest/new-api-load-test?orgId=1&from=1786263441000&to=1786263582230&refresh=5s) · [Open the 100 VU large-token window](/d/new-api-loadtest/new-api-load-test?orgId=1&from=1786262312000&to=1786262449870&refresh=5s) · [Open the 50 VU large-token window](/d/new-api-loadtest/new-api-load-test?orgId=1&from=1786261598000&to=1786261780000&refresh=5s)"}
+    },
+    {
+      "id": 17, "type": "timeseries", "title": "Remote chat responses by HTTP status", "description": "Application-side response rate from the remote new-api instance. Stacked to show when 429/5xx replace successful traffic.", "gridPos": {"h": 9, "w": 16, "x": 0, "y": 58},
+      "targets": [{"refId": "A", "expr": "sum by (status) (rate(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\"}[$__rate_interval]))", "legendFormat": "HTTP {{status}}"}],
+      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 35, "stacking": {"mode": "normal", "group": "status"}}}, "overrides": [
+        {"matcher": {"id": "byRegexp", "options": "/HTTP 2../"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "HTTP 429"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+        {"matcher": {"id": "byRegexp", "options": "/HTTP 5../"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]}
+    },
+    {
+      "id": 18, "type": "piechart", "title": "Response composition in selected range", "description": "Increase of remote chat response counters over the selected dashboard range.", "gridPos": {"h": 9, "w": 8, "x": 16, "y": 58},
+      "targets": [{"refId": "A", "expr": "sum by (status) (increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\"}[$__range]))", "legendFormat": "HTTP {{status}}", "instant": true}],
+      "options": {"pieType": "donut", "displayLabels": ["name", "percent"], "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}, "tooltip": {"mode": "single", "sort": "desc"}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": [
+        {"matcher": {"id": "byRegexp", "options": "/HTTP 2../"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+        {"matcher": {"id": "byName", "options": "HTTP 429"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+        {"matcher": {"id": "byRegexp", "options": "/HTTP 5../"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+      ]}
+    },
+    {
+      "id": 19, "type": "stat", "title": "Success ratio", "gridPos": {"h": 5, "w": 8, "x": 0, "y": 67},
+      "targets": [{"refId": "A", "expr": "100 * sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\",status=~\"2..\"}[$__range])) / clamp_min(sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\"}[$__range])), 1)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 95}, {"color": "green", "value": 99}]}}, "overrides": []}
+    },
+    {
+      "id": 20, "type": "stat", "title": "HTTP 429 ratio", "gridPos": {"h": 5, "w": 8, "x": 8, "y": 67},
+      "targets": [{"refId": "A", "expr": "100 * sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\",status=\"429\"}[$__range])) / clamp_min(sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\"}[$__range])), 1)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}}, "overrides": []}
+    },
+    {
+      "id": 21, "type": "stat", "title": "HTTP 5xx ratio", "gridPos": {"h": 5, "w": 8, "x": 16, "y": 67},
+      "targets": [{"refId": "A", "expr": "100 * sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\",status=~\"5..\"}[$__range])) / clamp_min(sum(increase(new_api_http_requests_total{job=\"new-api\",route=\"/v1/chat/completions\"}[$__range])), 1)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}}, "overrides": []}
+    },
+    {
+      "id": 22, "type": "timeseries", "title": "Remote ECS saturation check", "description": "Low CPU and memory usage while errors spike indicates that the host is not the bottleneck.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 72},
+      "targets": [
+        {"refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[$__rate_interval])))", "legendFormat": "ECS CPU busy"},
+        {"refId": "B", "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})", "legendFormat": "ECS memory used"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12}}, "overrides": []}
+    },
+    {
+      "id": 23, "type": "timeseries", "title": "Remote dependencies and app concurrency", "description": "PostgreSQL, Redis, and application concurrency remain modest during the 50 VU failure spike.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 72},
+      "targets": [
+        {"refId": "A", "expr": "sum(pg_stat_activity_count{job=\"postgres\"})", "legendFormat": "PostgreSQL connections"},
+        {"refId": "B", "expr": "redis_connected_clients{job=\"redis\"}", "legendFormat": "Redis clients"},
+        {"refId": "C", "expr": "go_goroutines{job=\"new-api\"}", "legendFormat": "new-api goroutines"},
+        {"refId": "D", "expr": "new_api_http_requests_in_flight{job=\"new-api\"}", "legendFormat": "requests in flight"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "id": 24, "type": "row", "title": "Pool and cluster failover", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 81}, "collapsed": false, "panels": []
+    },
+    {
+      "id": 25, "type": "timeseries", "title": "Remaining tokens by cluster pool", "description": "The pool-failover profile consumes 30 mock tokens per successful request. P1 is free, P2 is Pro/Plus, and P3 is fallback.", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 82},
+      "targets": [{"refId": "A", "expr": "mock_cluster_pool_remaining_tokens", "legendFormat": "C{{cluster_code}} P{{pool_tier}} {{pool}}"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2, "fillOpacity": 12}}, "overrides": []}
+    },
+    {
+      "id": 26, "type": "timeseries", "title": "Pool consumption and routing attempts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 82},
+      "targets": [
+        {"refId": "A", "expr": "rate(mock_cluster_pool_consumed_tokens_total[1m])", "legendFormat": "C{{cluster_code}} P{{pool_tier}} token/s"},
+        {"refId": "B", "expr": "sum by (cluster_code, pool_tier, outcome) (rate(alltoken_pool_requests_total[1m]))", "legendFormat": "C{{cluster_code}} P{{pool_tier}} {{outcome}} req/s"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "id": 27, "type": "timeseries", "title": "Cluster failover and circuit state", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 90},
+      "targets": [
+        {"refId": "A", "expr": "sum by (from_cluster, to_cluster, mode) (rate(alltoken_cluster_failover_total[1m]))", "legendFormat": "C{{from_cluster}} to C{{to_cluster}} {{mode}}"},
+        {"refId": "B", "expr": "alltoken_cluster_circuit_state{state=~\"open|half_open\"}", "legendFormat": "C{{cluster_code}} {{state}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 12}}, "overrides": []}
+    },
+    {
+      "id": 28, "type": "timeseries", "title": "Errors by stable AllToken code", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 90},
+      "targets": [{"refId": "A", "expr": "sum by (event_kind, alltoken_code, category, cluster_code) (rate(alltoken_error_events_total[1m]))", "legendFormat": "{{event_kind}} {{alltoken_code}} {{category}} C{{cluster_code}}"}],
+      "fieldConfig": {"defaults": {"unit": "reqps", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 15}}, "overrides": []}
+    },
+    {
+      "id": 29, "type": "timeseries", "title": "Failover latency", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 98},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, outcome, mode) (rate(alltoken_failover_duration_seconds_bucket[5m])))", "legendFormat": "P95 {{outcome}} {{mode}}"},
+        {"refId": "B", "expr": "histogram_quantile(0.99, sum by (le, outcome, mode) (rate(alltoken_failover_duration_seconds_bucket[5m])))", "legendFormat": "P99 {{outcome}} {{mode}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
+    },
+    {
+      "id": 30, "type": "table", "title": "Failover alerts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 98},
+      "targets": [{"refId": "A", "expr": "ALERTS{alertname=~\"AllTokenClusterCircuitOpen|AllTokenUpstreamExhausted|AllTokenPoolTokensLow|AllTokenPoolExhausted|AllTokenFailoverSurge\"}", "format": "table", "instant": true}],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true}
     }
   ],
   "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard"}]},

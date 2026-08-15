@@ -122,6 +122,33 @@ func TestRelayErrorHandlerKeepsOpenAIErrorMessage(t *testing.T) {
 	require.Equal(t, message, newAPIError.Error())
 }
 
+func TestRelayErrorHandlerUsesUpstreamErrorSourceHeader(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Header:     http.Header{"X-Error-Source": []string{"openai"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"upstream failed","code":"server_error"}}`)),
+	}
+
+	newAPIError := RelayErrorHandler(context.Background(), resp, false)
+
+	require.NotNil(t, newAPIError)
+	require.Equal(t, types.ErrorSourceOpenAI, newAPIError.GetErrorSource())
+	require.Equal(t, "openai.server_error", newAPIError.SourceCode())
+}
+
+func TestRelayErrorHandlerUsesStructuredErrorSource(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"cluster throttled","code":"rate_limit_exceeded","source":"ikun"}}`)),
+	}
+
+	newAPIError := RelayErrorHandler(context.Background(), resp, false)
+
+	require.NotNil(t, newAPIError)
+	require.Equal(t, types.ErrorSourceIkun, newAPIError.GetErrorSource())
+	require.Equal(t, "cluster.rate_limit_exceeded", newAPIError.SourceCode())
+}
+
 func TestRelayErrorHandlerKeepsInvalidJSONBodyInDebugLog(t *testing.T) {
 	withDebugEnabled(t, true)
 

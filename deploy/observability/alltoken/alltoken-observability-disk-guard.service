@@ -1,0 +1,11 @@
+[Unit]
+Description=Protect alltoken root disk from observability log growth
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=STACK_DIR=/opt/alltoken-observability/alltoken
+Environment=LOKI_MAX_KIB=15728640
+Environment=ROOT_MIN_FREE_KIB=20971520
+ExecStart=/opt/alltoken-observability/alltoken/disk-guard.sh

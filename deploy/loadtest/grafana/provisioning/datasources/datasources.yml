@@ -17,3 +17,35 @@ datasources:
     access: proxy
     url: http://pyroscope:4040
     editable: false
+
+  - name: Loki AllToken
+    uid: loki-alltoken
+    type: loki
+    access: proxy
+    url: http://host.docker.internal:13100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: AllToken Request ID
+          matcherRegex: '"request_id":"([^"\\]+)"'
+          url: '${__value.raw}'
+        - name: Upstream Request ID
+          matcherRegex: '"upstream_request_id":"([^"\\]+)"'
+          url: '${__value.raw}'
+
+  - name: Loki ikun
+    uid: loki-ikun
+    type: loki
+    access: proxy
+    url: http://host.docker.internal:13200
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: AllToken Request ID
+          matcherRegex: '"client_request_id":"([^"\\]+)"'
+          url: '${__value.raw}'
+        - name: ikun Request ID
+          matcherRegex: '"request_id":"([^"\\]+)"'
+          url: '${__value.raw}'

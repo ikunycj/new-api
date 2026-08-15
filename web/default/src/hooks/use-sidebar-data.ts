@@ -21,6 +21,7 @@ import {
   Box,
   CreditCard,
   FileText,
+  GitBranch,
   FlaskConical,
   HeartPulse,
   Key,
@@ -134,6 +135,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channel Monitors'),
             url: '/channel-monitors',
             icon: HeartPulse,
+          },
+          {
+            title: t('Monitoring & Alerts'),
+            url: '/failover',
+            icon: GitBranch,
           },
           {
             title: t('Models'),

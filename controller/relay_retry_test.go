@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -49,6 +51,19 @@ func newOrderedRoutingBillingInfo(userID int) *relaycommon.RelayInfo {
 	}
 }
 
+func TestCancellationPhase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	before, _ := gin.CreateTestContext(httptest.NewRecorder())
+	assert.Equal(t, "before_upstream", cancellationPhase(before, false))
+	assert.Equal(t, "upstream", cancellationPhase(before, true))
+
+	response, _ := gin.CreateTestContext(httptest.NewRecorder())
+	_, err := response.Writer.Write([]byte("partial response"))
+	require.NoError(t, err)
+	assert.Equal(t, "response", cancellationPhase(response, true))
+}
+
 func TestRelayRetryCommittedStopsAfterStreamingOutput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -70,6 +85,69 @@ func TestRelayRetryCommittedStopsOnClientCancellation(t *testing.T) {
 	cancel()
 
 	assert.True(t, relayRetryCommitted(ctx, &relaycommon.RelayInfo{}))
+}
+
+func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name       string
+		source     types.ErrorSource
+		statusCode int
+	}{
+		{name: "openai bad request", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadRequest},
+		{name: "openai unauthorized", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized},
+		{name: "ikun server error", source: types.ErrorSourceIkun, statusCode: http.StatusBadGateway},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			err := types.WithOpenAIError(types.OpenAIError{
+				Message: "upstream failure",
+				Code:    "upstream_code",
+				Source:  tt.source,
+			}, tt.statusCode)
+			require.True(t, shouldRetry(ctx, err, 1))
+		})
+	}
+}
+
+func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "vendor rejected request",
+		Code:    "vendor_policy_error",
+		Source:  types.ErrorSourceCluster,
+	}, http.StatusBadGateway)
+	err.SetClassification(207001, "policy", "request", "none", false)
+
+	assert.False(t, shouldRetry(ctx, err, 1))
+	assert.False(t, isFailoverEligible(ctx, err))
+}
+
+func TestShouldRetryDoesNotFailoverAllTokenClientErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	err := types.NewErrorWithStatusCode(errors.New("invalid request"), types.ErrorCodeInvalidRequest, http.StatusBadRequest)
+
+	assert.False(t, shouldRetry(ctx, err, 1))
+	assert.False(t, isFailoverEligible(ctx, err))
+}
+
+func TestShouldRetryRespectsSpecificChannelSelection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set("specific_channel_id", 42)
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "upstream failure",
+		Code:    "server_error",
+		Source:  types.ErrorSourceIkun,
+	}, http.StatusBadGateway)
+
+	assert.False(t, shouldRetry(ctx, err, 1))
+	assert.False(t, isFailoverEligible(ctx, err))
 }
 
 func TestReserveRelayGroupBillingCreatesSessionForFreeToPaidFallback(t *testing.T) {

@@ -5,17 +5,52 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
 
 type OpenAIError struct {
-	Message  string          `json:"message"`
-	Type     string          `json:"type"`
-	Param    string          `json:"param"`
-	Code     any             `json:"code"`
-	Metadata json.RawMessage `json:"metadata,omitempty"`
+	Message      string          `json:"message"`
+	Type         string          `json:"type"`
+	Param        string          `json:"param"`
+	Code         any             `json:"code"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	Source       ErrorSource     `json:"source,omitempty"`
+	SourceCode   string          `json:"source_code,omitempty"`
+	Retryable    *bool           `json:"retryable,omitempty"`
+	RequestID    string          `json:"request_id,omitempty"`
+	AttemptCount int             `json:"attempt_count,omitempty"`
+	AlltokenCode int             `json:"alltoken_code,omitempty"`
+	ErrorRef     string          `json:"error_ref,omitempty"`
+	Category     string          `json:"category,omitempty"`
+	ClusterCode  int             `json:"cluster_code,omitempty"`
+	PoolTier     int             `json:"pool_tier,omitempty"`
+	FailureScope string          `json:"failure_scope,omitempty"`
+	Action       string          `json:"action,omitempty"`
+	Cause        *ErrorCause     `json:"cause,omitempty"`
+}
+
+type ErrorSource string
+
+const (
+	ErrorSourceUnknown  ErrorSource = ""
+	ErrorSourceOpenAI   ErrorSource = "openai"
+	ErrorSourceCluster  ErrorSource = "cluster"
+	ErrorSourceIkun     ErrorSource = ErrorSourceCluster
+	ErrorSourceAllToken ErrorSource = "alltoken"
+)
+
+type ErrorCause struct {
+	Source       ErrorSource `json:"source"`
+	Code         string      `json:"code"`
+	RawCode      string      `json:"raw_code,omitempty"`
+	StatusCode   int         `json:"status_code,omitempty"`
+	AlltokenCode int         `json:"alltoken_code,omitempty"`
+	ErrorRef     string      `json:"error_ref,omitempty"`
+	ClusterCode  int         `json:"cluster_code,omitempty"`
+	PoolTier     int         `json:"pool_tier,omitempty"`
 }
 
 type ClaudeError struct {
@@ -77,6 +112,7 @@ const (
 	ErrorCodeAwsInvokeError         ErrorCode = "aws_invoke_error"
 	ErrorCodeModelNotFound          ErrorCode = "model_not_found"
 	ErrorCodePromptBlocked          ErrorCode = "prompt_blocked"
+	ErrorCodeUpstreamExhausted      ErrorCode = "upstream_exhausted"
 
 	// sql error
 	ErrorCodeQueryDataError  ErrorCode = "query_data_error"
@@ -96,6 +132,14 @@ type NewAPIError struct {
 	errorCode      ErrorCode
 	StatusCode     int
 	Metadata       json.RawMessage
+	errorSource    ErrorSource
+	retryable      *bool
+	requestID      string
+	attemptCount   int
+	cause          *ErrorCause
+	clusterCode    int
+	poolTier       int
+	classification *errorDefinition
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -118,6 +162,162 @@ func (e *NewAPIError) GetErrorType() ErrorType {
 		return ""
 	}
 	return e.errorType
+}
+
+func ParseErrorSource(source string) ErrorSource {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case string(ErrorSourceOpenAI):
+		return ErrorSourceOpenAI
+	case string(ErrorSourceCluster), "ikun":
+		return ErrorSourceCluster
+	case string(ErrorSourceAllToken), "new-api", "new_api":
+		return ErrorSourceAllToken
+	default:
+		return ErrorSourceUnknown
+	}
+}
+
+// ResolveErrorSource applies the explicit channel setting first, then uses a
+// conservative default for OpenAI-compatible endpoints. Direct api.openai.com
+// traffic is attributed to OpenAI; other compatible upstreams are attributed
+// to the configured IKUN/cluster layer. alltoken-generated errors never call
+// this function.
+func ResolveErrorSource(configured, baseURL string) ErrorSource {
+	if source := ParseErrorSource(configured); source == ErrorSourceOpenAI || source == ErrorSourceIkun {
+		return source
+	}
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err == nil && strings.EqualFold(parsed.Hostname(), "api.openai.com") {
+		return ErrorSourceOpenAI
+	}
+	return ErrorSourceIkun
+}
+
+func (e *NewAPIError) GetErrorSource() ErrorSource {
+	if e == nil {
+		return ErrorSourceUnknown
+	}
+	return e.errorSource
+}
+
+func (e *NewAPIError) SetErrorSource(source ErrorSource) {
+	if e == nil || source == ErrorSourceUnknown {
+		return
+	}
+	e.errorSource = source
+}
+
+func (e *NewAPIError) EnsureErrorSource(source ErrorSource) {
+	if e == nil || e.errorSource != ErrorSourceUnknown {
+		return
+	}
+	e.SetErrorSource(source)
+}
+
+func (e *NewAPIError) SourceCode() string {
+	if e == nil {
+		return ""
+	}
+	source := e.errorSource
+	if source == ErrorSourceUnknown {
+		source = ErrorSourceAllToken
+	}
+	code := strings.TrimSpace(string(e.errorCode))
+	if code == "" {
+		code = "unknown_error"
+	}
+	code = strings.ReplaceAll(code, ":", ".")
+	prefix := string(source) + "."
+	if strings.HasPrefix(strings.ToLower(code), prefix) {
+		return code
+	}
+	return prefix + code
+}
+
+func (e *NewAPIError) SetRetryable(retryable bool) {
+	if e == nil {
+		return
+	}
+	e.retryable = common.GetPointer(retryable)
+}
+
+func (e *NewAPIError) IsRetryable() bool {
+	return e != nil && e.retryable != nil && *e.retryable
+}
+
+func (e *NewAPIError) HasRetryable() bool {
+	return e != nil && e.retryable != nil
+}
+
+func (e *NewAPIError) SetRequestID(requestID string) {
+	if e != nil {
+		e.requestID = requestID
+	}
+}
+
+func (e *NewAPIError) SetAttemptCount(attemptCount int) {
+	if e != nil && attemptCount > 0 {
+		e.attemptCount = attemptCount
+	}
+}
+
+func (e *NewAPIError) SetRoutingLocation(clusterCode int, poolTier int) {
+	if e == nil {
+		return
+	}
+	if clusterCode > 0 {
+		e.clusterCode = clusterCode
+	}
+	if poolTier >= 1 && poolTier <= 3 {
+		e.poolTier = poolTier
+	}
+}
+
+func (e *NewAPIError) SetClassification(alltokenCode int, category string, failureScope string, action string, retryable bool) {
+	if e == nil || alltokenCode < 100000 || alltokenCode > 999999 {
+		return
+	}
+	e.classification = &errorDefinition{
+		Code:         alltokenCode,
+		Category:     strings.TrimSpace(category),
+		FailureScope: strings.TrimSpace(failureScope),
+		Action:       strings.TrimSpace(action),
+	}
+	e.SetRetryable(retryable)
+}
+
+func (e *NewAPIError) AlltokenCode() int {
+	return classifyError(e).Code
+}
+
+func (e *NewAPIError) ErrorRef() string {
+	return buildErrorRef(e.AlltokenCode(), e.clusterCode, e.poolTier)
+}
+
+func (e *NewAPIError) ClusterCode() int {
+	if e == nil {
+		return 0
+	}
+	return e.clusterCode
+}
+
+func (e *NewAPIError) PoolTier() int {
+	if e == nil {
+		return 0
+	}
+	return e.poolTier
+}
+
+func (e *NewAPIError) ErrorCategory() string {
+	return classifyError(e).Category
+}
+
+func (e *NewAPIError) FailureScope() string {
+	return classifyError(e).FailureScope
+}
+
+func (e *NewAPIError) ErrorAction() string {
+	return classifyError(e).Action
 }
 
 func (e *NewAPIError) Error() string {
@@ -207,6 +407,23 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	result.Source = e.errorSource
+	if result.Source == ErrorSourceUnknown {
+		result.Source = ErrorSourceAllToken
+	}
+	result.SourceCode = e.SourceCode()
+	result.Retryable = e.retryable
+	result.RequestID = e.requestID
+	result.AttemptCount = e.attemptCount
+	definition := classifyError(e)
+	result.AlltokenCode = definition.Code
+	result.ErrorRef = buildErrorRef(definition.Code, e.clusterCode, e.poolTier)
+	result.Category = definition.Category
+	result.ClusterCode = e.clusterCode
+	result.PoolTier = e.poolTier
+	result.FailureScope = definition.FailureScope
+	result.Action = definition.Action
+	result.Cause = e.cause
 	return result
 }
 
@@ -251,11 +468,12 @@ func NewError(err error, errorCode ErrorCode, ops ...NewAPIErrorOptions) *NewAPI
 		return newErr
 	}
 	e := &NewAPIError{
-		Err:        err,
-		RelayError: nil,
-		errorType:  ErrorTypeNewAPIError,
-		StatusCode: http.StatusInternalServerError,
-		errorCode:  errorCode,
+		Err:         err,
+		RelayError:  nil,
+		errorType:   ErrorTypeNewAPIError,
+		StatusCode:  http.StatusInternalServerError,
+		errorCode:   errorCode,
+		errorSource: ErrorSourceAllToken,
 	}
 	for _, op := range ops {
 		op(e)
@@ -274,17 +492,23 @@ func NewOpenAIError(err error, errorCode ErrorCode, statusCode int, ops ...NewAP
 				Code:    errorCode,
 			}
 			newErr.RelayError = openaiError
+			newErr.EnsureErrorSource(ErrorSourceAllToken)
 		}
 		for _, op := range ops {
 			op(newErr)
 		}
 		return newErr
 	}
+	message := string(errorCode)
+	if err != nil {
+		message = err.Error()
+	}
 	openaiError := OpenAIError{
-		Message: err.Error(),
+		Message: message,
 		Type:    string(errorCode),
 		Code:    errorCode,
 	}
+	ops = append([]NewAPIErrorOptions{ErrOptionWithErrorSource(ErrorSourceAllToken)}, ops...)
 	return WithOpenAIError(openaiError, statusCode, ops...)
 }
 
@@ -303,9 +527,10 @@ func NewErrorWithStatusCode(err error, errorCode ErrorCode, statusCode int, ops 
 			Message: err.Error(),
 			Type:    string(errorCode),
 		},
-		errorType:  ErrorTypeNewAPIError,
-		StatusCode: statusCode,
-		errorCode:  errorCode,
+		errorType:   ErrorTypeNewAPIError,
+		StatusCode:  statusCode,
+		errorCode:   errorCode,
+		errorSource: ErrorSourceAllToken,
 	}
 	for _, op := range ops {
 		op(e)
@@ -326,12 +551,19 @@ func WithOpenAIError(openAIError OpenAIError, statusCode int, ops ...NewAPIError
 	if openAIError.Type == "" {
 		openAIError.Type = "upstream_error"
 	}
+	source := ParseErrorSource(string(openAIError.Source))
+	if source == ErrorSourceAllToken {
+		// The alltoken namespace is reserved for errors created locally. An
+		// upstream payload cannot claim ownership of the gateway layer.
+		source = ErrorSourceUnknown
+	}
 	e := &NewAPIError{
-		RelayError: openAIError,
-		errorType:  ErrorTypeOpenAIError,
-		StatusCode: statusCode,
-		Err:        errors.New(openAIError.Message),
-		errorCode:  ErrorCode(code),
+		RelayError:  openAIError,
+		errorType:   ErrorTypeOpenAIError,
+		StatusCode:  statusCode,
+		Err:         errors.New(openAIError.Message),
+		errorCode:   ErrorCode(code),
+		errorSource: source,
 	}
 	// OpenRouter
 	if len(openAIError.Metadata) > 0 {
@@ -394,6 +626,44 @@ func ErrOptionWithStatusCode(statusCode int) NewAPIErrorOptions {
 	return func(e *NewAPIError) {
 		e.StatusCode = statusCode
 	}
+}
+
+func ErrOptionWithErrorSource(source ErrorSource) NewAPIErrorOptions {
+	return func(e *NewAPIError) {
+		e.SetErrorSource(source)
+	}
+}
+
+func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIError {
+	if lastErr == nil {
+		return NewError(errors.New("all upstream routes failed"), ErrorCodeUpstreamExhausted)
+	}
+	cause := &ErrorCause{
+		Source:       lastErr.GetErrorSource(),
+		Code:         lastErr.SourceCode(),
+		RawCode:      string(lastErr.GetErrorCode()),
+		StatusCode:   lastErr.StatusCode,
+		AlltokenCode: lastErr.AlltokenCode(),
+		ErrorRef:     lastErr.ErrorRef(),
+		ClusterCode:  lastErr.clusterCode,
+		PoolTier:     lastErr.poolTier,
+	}
+	if cause.Source == ErrorSourceUnknown {
+		cause.Source = ErrorSourceAllToken
+	}
+	e := NewErrorWithStatusCode(
+		fmt.Errorf("all upstream routes failed: %w", lastErr),
+		ErrorCodeUpstreamExhausted,
+		lastErr.StatusCode,
+	)
+	e.errorType = ErrorTypeUpstreamError
+	e.errorSource = ErrorSourceAllToken
+	e.attemptCount = attemptCount
+	e.cause = cause
+	e.clusterCode = lastErr.clusterCode
+	e.poolTier = lastErr.poolTier
+	e.SetRetryable(true)
+	return e
 }
 
 func ErrOptionWithHideErrMsg(replaceStr string) NewAPIErrorOptions {
