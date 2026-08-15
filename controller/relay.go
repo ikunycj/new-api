@@ -261,7 +261,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		// dynamic metadata before local routing guards so a rejected first
 		// candidate does not get selected repeatedly on the next loop.
 		relayInfo.InitChannelMeta(c)
-		policy := retryParam.RuntimePolicy()
+		policy := retryParam.RuntimePolicyForCluster(channel.ClusterId)
 		route := c.FullPath()
 		poolTier := model.ResolveChannelPoolTier(channel)
 		if !retryParam.CanAttemptCluster(channel.ClusterId) {

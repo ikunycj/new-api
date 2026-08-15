@@ -372,3 +372,31 @@ func TestFailoverGroupPriorityOverridesChannelPriorityAcrossClusters(t *testing.
 	require.NotNil(t, channel)
 	assert.Equal(t, 1, channel.ClusterId)
 }
+
+func TestRetryParamUsesPolicyOfSelectedCluster(t *testing.T) {
+	require.NoError(t, model.DB.AutoMigrate(&model.Cluster{}, &model.FailoverPolicy{}))
+	for _, table := range []string{"failover_policies", "clusters"} {
+		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"failover_policies", "clusters"} {
+			_ = model.DB.Exec("DELETE FROM " + table).Error
+		}
+		model.InitFailoverCache()
+	})
+	require.NoError(t, model.DB.Create(&[]model.FailoverPolicy{
+		{Id: 81, Name: "conservative", Mode: model.FailoverModeConservative, Enabled: true, MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 12000, CircuitFailureThreshold: 8, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2},
+		{Id: 82, Name: "aggressive", Mode: model.FailoverModeAggressive, Enabled: true, MaxPoolAttempts: 4, MaxClusterAttempts: 4, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 6000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 90, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2},
+	}).Error)
+	require.NoError(t, model.DB.Create(&[]model.Cluster{
+		{Id: 81, Name: "primary", Type: "ikun", Status: model.ClusterStatusEnabled, BillingGroup: "cluster_pro", PolicyId: 81, FailoverPriority: 100},
+		{Id: 82, Name: "secondary", Type: "ikun", Status: model.ClusterStatusEnabled, BillingGroup: "cluster_pro", PolicyId: 82, FailoverPriority: 90},
+	}).Error)
+	model.InitFailoverCache()
+
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "cluster_pro", ModelName: "shared-model"}
+
+	assert.Equal(t, model.FailoverModeConservative, param.RuntimePolicyForCluster(81).Mode)
+	assert.Equal(t, model.FailoverModeAggressive, param.RuntimePolicyForCluster(82).Mode)
+}

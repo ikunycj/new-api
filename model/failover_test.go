@@ -156,9 +156,38 @@ func TestResolveRuntimeFailoverAppliesRulePolicyAndClusterGroup(t *testing.T) {
 	}).Error)
 	InitFailoverCache()
 
-	policy, clusterOrder := ResolveRuntimeFailover("", "gpt-5", "/v1/chat", "pro")
+	policy, clusterOrder, rulePolicy := ResolveRuntimeFailover("", "gpt-5", "/v1/chat", "pro", "")
 
 	assert.Equal(t, FailoverModeAggressive, policy.Mode)
 	assert.Equal(t, 5, policy.MaxTotalAttempts)
 	assert.Equal(t, []int{17, 23}, clusterOrder)
+	assert.True(t, rulePolicy)
+}
+
+func TestResolveRuntimeFailoverUsesBillingGroupClusterOrder(t *testing.T) {
+	setupFailoverTables(t)
+	require.NoError(t, DB.Create(&FailoverPolicy{
+		Id: 61, Name: "cluster-policy", Mode: FailoverModeConservative, Enabled: true,
+		MaxPoolAttempts: 3, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 7000,
+		CircuitFailureThreshold: 4, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 60,
+		CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+	}).Error)
+	require.NoError(t, DB.Create(&FailoverPolicy{
+		Id: 62, Name: "secondary-policy", Mode: FailoverModeBalanced, Enabled: true,
+		MaxPoolAttempts: 4, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 9000,
+		CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60,
+		CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+	}).Error)
+	require.NoError(t, DB.Create(&[]Cluster{
+		{Id: 71, Name: "secondary", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "cluster_pro", PolicyId: 62, FailoverPriority: 50},
+		{Id: 72, Name: "primary", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "cluster_pro", PolicyId: 61, FailoverPriority: 100},
+	}).Error)
+	InitFailoverCache()
+
+	policy, clusterOrder, rulePolicy := ResolveRuntimeFailover("", "gpt-5", "/v1/chat", "user", "cluster_pro")
+
+	assert.Equal(t, FailoverModeConservative, policy.Mode)
+	assert.Equal(t, []int{72, 71}, clusterOrder)
+	assert.False(t, rulePolicy)
+	assert.Equal(t, FailoverModeBalanced, GetRuntimeFailoverPolicyForCluster(71, DefaultRuntimeFailoverPolicy("")).Mode)
 }

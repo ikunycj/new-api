@@ -31,6 +31,15 @@ func GetChannelFailoverBindings(c *gin.Context) {
 	common.ApiSuccess(c, bindings)
 }
 
+func GetClusterConfiguration(c *gin.Context) {
+	snapshot, err := model.GetClusterConfigurationSnapshot()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, snapshot)
+}
+
 func GetFailoverGrafanaAuth(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
@@ -45,6 +54,7 @@ func UpdateFailoverConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	model.InitFailoverCache()
 	model.InitChannelCache()
 	recordManageAudit(c, "failover.config.update", map[string]interface{}{
 		"clusters": len(config.Clusters),
@@ -77,4 +87,24 @@ func UpdateChannelFailoverBindings(c *gin.Context) {
 		"unbound": len(request.Bindings) - bound,
 	})
 	common.ApiSuccess(c, nil)
+}
+
+func UpdateClusterConfiguration(c *gin.Context) {
+	request := &model.ClusterConfiguration{}
+	if err := c.ShouldBindJSON(request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SaveClusterConfiguration(request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	model.InitFailoverCache()
+	model.InitChannelCache()
+	recordManageAudit(c, "failover.cluster.update", map[string]interface{}{
+		"cluster_id":    request.Id,
+		"billing_group": request.BillingGroup,
+		"routes":        len(request.Routes),
+	})
+	common.ApiSuccess(c, gin.H{"id": request.Id})
 }

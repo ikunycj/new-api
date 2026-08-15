@@ -30,6 +30,8 @@ type RetryParam struct {
 	poolAttemptCounts map[int]map[int]int
 	startedAt         time.Time
 	runtimePolicy     *model.RuntimeFailoverPolicy
+	basePolicy        *model.RuntimeFailoverPolicy
+	rulePolicy        bool
 	allowedClusters   map[int]struct{}
 	clusterOrder      []int
 	groups            []string
@@ -316,16 +318,24 @@ func (p *RetryParam) policy() model.RuntimeFailoverPolicy {
 	if p.runtimePolicy != nil {
 		return *p.runtimePolicy
 	}
+	if p.basePolicy != nil {
+		return *p.basePolicy
+	}
 	mode := ""
 	if p.Ctx != nil && p.Ctx.Request != nil {
 		mode = p.Ctx.GetHeader("X-Alltoken-Failover-Mode")
 	}
 	userGroup := ""
+	billingGroup := p.TokenGroup
 	if p.Ctx != nil {
 		userGroup = common.GetContextKeyString(p.Ctx, constant.ContextKeyUserGroup)
+		if selected := common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup); selected != "" {
+			billingGroup = selected
+		}
 	}
-	policy, clusterOrder := model.ResolveRuntimeFailover(mode, p.ModelName, p.RequestPath, userGroup)
-	p.runtimePolicy = &policy
+	policy, clusterOrder, rulePolicy := model.ResolveRuntimeFailover(mode, p.ModelName, p.RequestPath, userGroup, billingGroup)
+	p.basePolicy = &policy
+	p.rulePolicy = rulePolicy
 	p.clusterOrder = clusterOrder
 	if clusterOrder != nil {
 		p.allowedClusters = make(map[int]struct{}, len(clusterOrder))
@@ -341,6 +351,22 @@ func (p *RetryParam) policy() model.RuntimeFailoverPolicy {
 
 func (p *RetryParam) RuntimePolicy() model.RuntimeFailoverPolicy {
 	return p.policy()
+}
+
+func (p *RetryParam) RuntimePolicyForCluster(clusterID int) model.RuntimeFailoverPolicy {
+	p.policy()
+	basePolicy := *p.basePolicy
+	if p.Ctx != nil && p.Ctx.Request != nil && p.Ctx.GetHeader("X-Alltoken-Failover-Mode") != "" {
+		p.runtimePolicy = &basePolicy
+		return basePolicy
+	}
+	if p.rulePolicy {
+		p.runtimePolicy = &basePolicy
+		return basePolicy
+	}
+	clusterPolicy := model.GetRuntimeFailoverPolicyForCluster(clusterID, basePolicy)
+	p.runtimePolicy = &clusterPolicy
+	return clusterPolicy
 }
 
 func (p *RetryParam) ExcludeCluster(clusterID int) {

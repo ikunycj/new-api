@@ -329,7 +329,7 @@ func ChannelAllowedByFailoverPolicy(channel *Channel, policy RuntimeFailoverPoli
 	if pool.Tier == PoolTierPremium && !policy.AllowPaidEscalation {
 		return false
 	}
-	if pool.Tier == PoolTierFallback && !policy.AllowFallback {
+	if (pool.Tier == PoolTierFallback || pool.Tier == PoolTierEmergency) && !policy.AllowFallback {
 		return false
 	}
 	return policy.MaxCostMultiplier <= 0 || pool.CostFactor <= policy.MaxCostMultiplier

@@ -14,9 +14,10 @@ const (
 	ClusterStatusDisabled = 0
 	ClusterStatusEnabled  = 1
 
-	PoolTierFree     = 1
-	PoolTierPremium  = 2
-	PoolTierFallback = 3
+	PoolTierFree      = 1
+	PoolTierPremium   = 2
+	PoolTierFallback  = 3
+	PoolTierEmergency = 4
 
 	FailoverModeConservative = "conservative"
 	FailoverModeBalanced     = "balanced"
@@ -24,14 +25,17 @@ const (
 )
 
 type Cluster struct {
-	Id          int    `json:"id"`
-	Name        string `json:"name" gorm:"type:varchar(128);index"`
-	Type        string `json:"type" gorm:"type:varchar(64);index"`
-	Status      int    `json:"status" gorm:"index"`
-	Remark      string `json:"remark" gorm:"type:varchar(255)"`
-	Archived    bool   `json:"archived" gorm:"index"`
-	CreatedTime int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64  `json:"updated_time" gorm:"bigint"`
+	Id               int    `json:"id"`
+	Name             string `json:"name" gorm:"type:varchar(128);index"`
+	Type             string `json:"type" gorm:"type:varchar(64);index"`
+	Status           int    `json:"status" gorm:"index"`
+	BillingGroup     string `json:"billing_group" gorm:"type:varchar(64);index"`
+	PolicyId         int    `json:"policy_id" gorm:"index"`
+	FailoverPriority int    `json:"failover_priority" gorm:"index"`
+	Remark           string `json:"remark" gorm:"type:varchar(255)"`
+	Archived         bool   `json:"archived" gorm:"index"`
+	CreatedTime      int64  `json:"created_time" gorm:"bigint"`
+	UpdatedTime      int64  `json:"updated_time" gorm:"bigint"`
 }
 
 type ClusterPool struct {
@@ -150,11 +154,11 @@ type RuntimeFailoverPolicy struct {
 func DefaultRuntimeFailoverPolicy(mode string) RuntimeFailoverPolicy {
 	switch normalizeFailoverMode(mode) {
 	case FailoverModeConservative:
-		return RuntimeFailoverPolicy{Mode: FailoverModeConservative, SamePoolRetries: 1, MaxPoolAttempts: 3, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 12000, CircuitFailureThreshold: 8, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return RuntimeFailoverPolicy{Mode: FailoverModeConservative, SamePoolRetries: 1, MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 12000, CircuitFailureThreshold: 8, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
 	case FailoverModeAggressive:
-		return RuntimeFailoverPolicy{Mode: FailoverModeAggressive, MaxPoolAttempts: 3, MaxClusterAttempts: 4, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 6000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 90, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return RuntimeFailoverPolicy{Mode: FailoverModeAggressive, MaxPoolAttempts: 4, MaxClusterAttempts: 4, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 6000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 90, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
 	default:
-		return RuntimeFailoverPolicy{Mode: FailoverModeBalanced, MaxPoolAttempts: 3, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return RuntimeFailoverPolicy{Mode: FailoverModeBalanced, MaxPoolAttempts: 4, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
 	}
 }
 
@@ -170,39 +174,59 @@ func GetRuntimeFailoverPolicy(mode string) RuntimeFailoverPolicy {
 }
 
 type failoverLookupCache struct {
-	clusterTypes map[int]string
-	mappings     []UpstreamErrorMapping
-	policies     map[string]RuntimeFailoverPolicy
-	policiesByID map[int]RuntimeFailoverPolicy
-	groups       map[int]FailoverGroup
-	groupMembers map[int][]FailoverGroupMember
-	rules        []FailoverRule
+	clusterTypes         map[int]string
+	clusterPolicyIDs     map[int]int
+	billingGroupClusters map[string][]int
+	billingGroupPolicies map[string]int
+	mappings             []UpstreamErrorMapping
+	policies             map[string]RuntimeFailoverPolicy
+	policiesByID         map[int]RuntimeFailoverPolicy
+	groups               map[int]FailoverGroup
+	groupMembers         map[int][]FailoverGroupMember
+	rules                []FailoverRule
 }
 
 var failoverLookup = struct {
 	sync.RWMutex
 	value failoverLookupCache
 }{value: failoverLookupCache{
-	clusterTypes: make(map[int]string),
-	policies:     make(map[string]RuntimeFailoverPolicy),
-	policiesByID: make(map[int]RuntimeFailoverPolicy),
-	groups:       make(map[int]FailoverGroup),
-	groupMembers: make(map[int][]FailoverGroupMember),
+	clusterTypes:         make(map[int]string),
+	clusterPolicyIDs:     make(map[int]int),
+	billingGroupClusters: make(map[string][]int),
+	billingGroupPolicies: make(map[string]int),
+	policies:             make(map[string]RuntimeFailoverPolicy),
+	policiesByID:         make(map[int]RuntimeFailoverPolicy),
+	groups:               make(map[int]FailoverGroup),
+	groupMembers:         make(map[int][]FailoverGroupMember),
 }}
 
 func InitFailoverCache() {
 	cache := failoverLookupCache{
-		clusterTypes: make(map[int]string),
-		policies:     make(map[string]RuntimeFailoverPolicy),
-		policiesByID: make(map[int]RuntimeFailoverPolicy),
-		groups:       make(map[int]FailoverGroup),
-		groupMembers: make(map[int][]FailoverGroupMember),
+		clusterTypes:         make(map[int]string),
+		clusterPolicyIDs:     make(map[int]int),
+		billingGroupClusters: make(map[string][]int),
+		billingGroupPolicies: make(map[string]int),
+		policies:             make(map[string]RuntimeFailoverPolicy),
+		policiesByID:         make(map[int]RuntimeFailoverPolicy),
+		groups:               make(map[int]FailoverGroup),
+		groupMembers:         make(map[int][]FailoverGroupMember),
 	}
 	if DB != nil && DB.Migrator().HasTable(&Cluster{}) {
 		var clusters []Cluster
-		if err := DB.Select("id", "type").Where("status = ? AND archived = ?", ClusterStatusEnabled, false).Find(&clusters).Error; err == nil {
+		if err := DB.Select("id", "type", "billing_group", "policy_id", "failover_priority").Where("status = ? AND archived = ?", ClusterStatusEnabled, false).Order("failover_priority DESC, id ASC").Find(&clusters).Error; err == nil {
 			for _, cluster := range clusters {
 				cache.clusterTypes[cluster.Id] = strings.ToLower(strings.TrimSpace(cluster.Type))
+				if cluster.PolicyId > 0 {
+					cache.clusterPolicyIDs[cluster.Id] = cluster.PolicyId
+				}
+				billingGroup := strings.TrimSpace(cluster.BillingGroup)
+				if billingGroup == "" {
+					continue
+				}
+				cache.billingGroupClusters[billingGroup] = append(cache.billingGroupClusters[billingGroup], cluster.Id)
+				if _, exists := cache.billingGroupPolicies[billingGroup]; !exists && cluster.PolicyId > 0 {
+					cache.billingGroupPolicies[billingGroup] = cluster.PolicyId
+				}
 			}
 		}
 	}
@@ -282,10 +306,18 @@ func InitFailoverCache() {
 	failoverLookup.Unlock()
 }
 
-func ResolveRuntimeFailover(mode string, modelName string, route string, userGroup string) (RuntimeFailoverPolicy, []int) {
+func ResolveRuntimeFailover(mode string, modelName string, route string, userGroup string, billingGroup string) (RuntimeFailoverPolicy, []int, bool) {
 	policy := GetRuntimeFailoverPolicy(mode)
 	failoverLookup.RLock()
 	defer failoverLookup.RUnlock()
+	clusterOrder := append([]int(nil), failoverLookup.value.billingGroupClusters[billingGroup]...)
+	if strings.TrimSpace(mode) == "" {
+		if policyID := failoverLookup.value.billingGroupPolicies[billingGroup]; policyID > 0 {
+			if configured, exists := failoverLookup.value.policiesByID[policyID]; exists {
+				policy = configured
+			}
+		}
+	}
 	for _, rule := range failoverLookup.value.rules {
 		group, ok := failoverLookup.value.groups[rule.FailoverGroupId]
 		if !ok {
@@ -307,7 +339,7 @@ func ResolveRuntimeFailover(mode string, modelName string, route string, userGro
 			}
 		}
 		members := failoverLookup.value.groupMembers[group.Id]
-		clusterOrder := make([]int, 0, len(members))
+		clusterOrder = make([]int, 0, len(members))
 		seen := make(map[int]struct{}, len(members))
 		for _, member := range members {
 			if _, exists := seen[member.ClusterId]; exists {
@@ -316,9 +348,23 @@ func ResolveRuntimeFailover(mode string, modelName string, route string, userGro
 			seen[member.ClusterId] = struct{}{}
 			clusterOrder = append(clusterOrder, member.ClusterId)
 		}
-		return policy, clusterOrder
+		return policy, clusterOrder, true
 	}
-	return policy, nil
+	return policy, clusterOrder, false
+}
+
+func GetRuntimeFailoverPolicyForCluster(clusterID int, fallback RuntimeFailoverPolicy) RuntimeFailoverPolicy {
+	if clusterID <= 0 {
+		return fallback
+	}
+	failoverLookup.RLock()
+	policyID := failoverLookup.value.clusterPolicyIDs[clusterID]
+	policy, exists := failoverLookup.value.policiesByID[policyID]
+	failoverLookup.RUnlock()
+	if !exists {
+		return fallback
+	}
+	return policy
 }
 
 func matchesFailoverPattern(pattern string, value string) bool {
@@ -409,7 +455,7 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 		}
 		for i := range config.Pools {
 			pool := &config.Pools[i]
-			if pool.ClusterId <= 0 || pool.Tier < PoolTierFree || pool.Tier > PoolTierFallback {
+			if pool.ClusterId <= 0 || pool.Tier < PoolTierFree || pool.Tier > PoolTierEmergency {
 				return errors.New("pool cluster_id and tier are invalid")
 			}
 			if pool.CostFactor < 0 {
@@ -456,14 +502,36 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				return err
 			}
 		}
+		clusterBillingGroups := make(map[int]string, len(config.Clusters))
+		for _, cluster := range config.Clusters {
+			clusterBillingGroups[cluster.Id] = strings.TrimSpace(cluster.BillingGroup)
+		}
 		for i := range config.GroupMembers {
 			member := &config.GroupMembers[i]
 			if member.FailoverGroupId <= 0 || member.ClusterId <= 0 || member.Weight < 0 {
 				return errors.New("failover group member is invalid")
 			}
+			if _, exists := clusterBillingGroups[member.ClusterId]; !exists {
+				var cluster Cluster
+				if err := tx.Select("id", "billing_group").First(&cluster, member.ClusterId).Error; err != nil {
+					return err
+				}
+				clusterBillingGroups[cluster.Id] = strings.TrimSpace(cluster.BillingGroup)
+			}
 			if err := tx.Save(member).Error; err != nil {
 				return err
 			}
+		}
+		groupBilling := make(map[int]string)
+		for _, member := range config.GroupMembers {
+			billingGroup := clusterBillingGroups[member.ClusterId]
+			if billingGroup == "" {
+				continue
+			}
+			if existing, ok := groupBilling[member.FailoverGroupId]; ok && existing != billingGroup {
+				return errors.New("clusters in one failover group must use the same billing group")
+			}
+			groupBilling[member.FailoverGroupId] = billingGroup
 		}
 		for i := range config.Rules {
 			rule := &config.Rules[i]

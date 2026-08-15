@@ -17,10 +17,60 @@ export type Cluster = {
   name: string
   type: string
   status: number
+  billing_group: string
+  policy_id: number
+  failover_priority: number
   remark: string
   archived: boolean
   created_time: number
   updated_time: number
+}
+
+export type ClusterRouteConfig = {
+  channel_id: number
+  pool_tier: number
+  pool_name: string
+  route_order: number
+  weight: number
+  cost_factor: number
+}
+
+export type ClusterConfiguration = {
+  id: number
+  name: string
+  type: string
+  status: number
+  billing_group: string
+  billing_group_description: string
+  billing_group_ratio: number
+  policy_id: number
+  failover_priority: number
+  remark: string
+  routes: ClusterRouteConfig[]
+}
+
+export type ClusterChannelOption = {
+  id: number
+  name: string
+  base_url: string | null
+  status: number
+  type: number
+  group: string
+  cluster_id: number
+  is_multi_key: boolean
+}
+
+export type BillingGroupOption = {
+  name: string
+  description: string
+  ratio: number
+}
+
+export type ClusterConfigurationSnapshot = {
+  clusters: ClusterConfiguration[]
+  channels: ClusterChannelOption[]
+  billing_groups: BillingGroupOption[]
+  policies: FailoverPolicy[]
 }
 
 export type ClusterPool = {

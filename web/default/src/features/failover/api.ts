@@ -1,6 +1,8 @@
 import { api } from '@/lib/api'
 
 import type {
+  ClusterConfiguration,
+  ClusterConfigurationSnapshot,
   ChannelFailoverBinding,
   ChannelFailoverBindingUpdate,
   FailoverConfig,
@@ -53,6 +55,28 @@ export async function updateChannelFailoverBindings(
   const response = await api.put<ApiResponse<null>>(
     '/api/channel/failover/bindings',
     { bindings }
+  )
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+}
+
+export async function getClusterConfiguration(): Promise<ClusterConfigurationSnapshot> {
+  const response = await api.get<ApiResponse<ClusterConfigurationSnapshot>>(
+    '/api/channel/failover/cluster-config'
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+  return response.data.data
+}
+
+export async function updateClusterConfiguration(
+  config: ClusterConfiguration
+): Promise<void> {
+  const response = await api.put<ApiResponse<{ id: number }>>(
+    '/api/channel/failover/cluster-config',
+    config
   )
   if (!response.data.success) {
     throw new Error(response.data.message || 'Request failed')

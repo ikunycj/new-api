@@ -55,7 +55,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getFailoverConfig, updateFailoverConfig } from './api'
-import { ChannelBindingsPanel } from './components/channel-bindings-panel'
+import { ClusterConfigurationPanel } from './components/cluster-configuration-panel'
 import { FailoverMonitoring } from './monitoring'
 import type { FailoverConfig, FailoverMode } from './types'
 
@@ -64,6 +64,9 @@ const clusterSchema = z.object({
   name: z.string().trim().min(1),
   type: z.string().trim().min(1),
   status: z.coerce.number().int().min(0).max(1),
+  billing_group: z.string(),
+  policy_id: z.coerce.number().int().min(0),
+  failover_priority: z.coerce.number().int().min(0),
   remark: z.string(),
   archived: z.boolean(),
   created_time: z.coerce.number(),
@@ -73,7 +76,7 @@ const clusterSchema = z.object({
 const poolSchema = z.object({
   id: z.coerce.number().int().min(0),
   cluster_id: z.coerce.number().int().positive(),
-  tier: z.coerce.number().int().min(1).max(3),
+  tier: z.coerce.number().int().min(1).max(4),
   name: z.string().trim().min(1),
   status: z.coerce.number().int().min(0).max(1),
   cost_factor: z.coerce.number().nonnegative(),
@@ -188,7 +191,7 @@ function defaultPolicy(mode: FailoverMode): FormInput['policies'][number] {
     same_pool_retries: 0,
     connect_timeout_ms: 1500,
     first_byte_timeout_ms: 3000,
-    max_pool_attempts: 3,
+    max_pool_attempts: 4,
     max_cluster_attempts: 3,
     max_total_attempts: 6,
     total_failover_budget_ms: 10000,
@@ -454,6 +457,9 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                 name: '',
                 type: 'custom',
                 status: 1,
+                billing_group: '',
+                policy_id: 0,
+                failover_priority: 100,
                 remark: '',
                 archived: false,
                 created_time: 0,
@@ -577,7 +583,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
               </EmptyMedia>
               <EmptyTitle>{t('No account pools')}</EmptyTitle>
               <EmptyDescription>
-                {t('Add a cluster first, then define its P1-P3 pools.')}
+                {t('Add a cluster first, then define its P1-P4 pools.')}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -645,7 +651,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {[1, 2, 3].map((tier) => (
+                                {[1, 2, 3, 4].map((tier) => (
                                   <SelectItem key={tier} value={String(tier)}>
                                     P{tier}
                                   </SelectItem>
@@ -1335,7 +1341,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
   )
 }
 
-function FailoverConfigurationPanel() {
+function AdvancedFailoverConfiguration() {
   const { t } = useTranslation()
   const configQuery = useQuery({
     queryKey: ['failover-config'],
@@ -1344,15 +1350,6 @@ function FailoverConfigurationPanel() {
 
   return (
     <div className='space-y-6'>
-      <Alert>
-        <HugeiconsIcon icon={Route01Icon} />
-        <AlertTitle>{t('Two-level failover')}</AlertTitle>
-        <AlertDescription>
-          {t(
-            'Clusters exhaust P1, P2, and P3 internally; AllToken then switches to another cluster.'
-          )}
-        </AlertDescription>
-      </Alert>
       {configQuery.isLoading && (
         <div className='flex flex-col gap-3'>
           <Skeleton className='h-10 w-full' />
@@ -1368,18 +1365,40 @@ function FailoverConfigurationPanel() {
         </Alert>
       )}
       {configQuery.data && (
-        <>
-          <FailoverConfigForm
-            key={configQuery.dataUpdatedAt}
-            config={configQuery.data}
-          />
-          <Separator />
-          <ChannelBindingsPanel
-            clusters={configQuery.data.clusters}
-            pools={configQuery.data.pools}
-          />
-        </>
+        <FailoverConfigForm
+          key={configQuery.dataUpdatedAt}
+          config={configQuery.data}
+        />
       )}
+    </div>
+  )
+}
+
+function FailoverConfigurationPanel() {
+  const { t } = useTranslation()
+  return (
+    <div className='space-y-6'>
+      <Alert>
+        <HugeiconsIcon icon={Route01Icon} />
+        <AlertTitle>{t('Two-level failover')}</AlertTitle>
+        <AlertDescription>
+          {t(
+            'Clusters exhaust P1-P4 internally; AllToken then switches to another cluster in the same billing group.'
+          )}
+        </AlertDescription>
+      </Alert>
+      <Tabs defaultValue='clusters' className='gap-5'>
+        <TabsList>
+          <TabsTrigger value='clusters'>{t('Cluster setup')}</TabsTrigger>
+          <TabsTrigger value='advanced'>{t('Advanced rules')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value='clusters'>
+          <ClusterConfigurationPanel />
+        </TabsContent>
+        <TabsContent value='advanced'>
+          <AdvancedFailoverConfiguration />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
