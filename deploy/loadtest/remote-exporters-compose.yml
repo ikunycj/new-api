@@ -1,0 +1,39 @@
+name: new-api-remote-observability
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command: ["--path.rootfs=/host"]
+    pid: host
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - "/:/host:ro,rslave"
+    networks: [remote-observability]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${POSTGRES_HOST:?POSTGRES_HOST is required}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:?POSTGRES_DB is required}?sslmode=disable"
+    ports:
+      - "127.0.0.1:9187:9187"
+    networks: [remote-observability, onepanel]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://${REDIS_HOST:?REDIS_HOST is required}:${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    ports:
+      - "127.0.0.1:9121:9121"
+    networks: [remote-observability, onepanel]
+
+networks:
+  remote-observability:
+    name: new-api-remote-observability
+  onepanel:
+    name: 1panel-network
+    external: true

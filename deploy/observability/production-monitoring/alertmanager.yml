@@ -1,0 +1,19 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: alltoken-dashboard
+  group_by: [alertname, severity, cluster_code, pool_tier]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 30m
+
+inhibit_rules:
+  - source_matchers:
+      - alertname="AllTokenClusterCircuitOpen"
+    target_matchers:
+      - alertname=~"AllTokenFailoverSurge|AllTokenHighRetryRatio"
+    equal: [cluster_code]
+
+receivers:
+  - name: alltoken-dashboard

@@ -1,0 +1,119 @@
+groups:
+  - name: alltoken-service
+    rules:
+      - alert: AllTokenServiceDown
+        expr: up{job="new-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: AllToken API metrics endpoint is unavailable
+          description: Prometheus cannot scrape new-api for 30 seconds.
+
+      - alert: AllTokenHighFinalErrorRate
+        expr: sum(rate(new_api_relay_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001) > 0.05 and sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: AllToken final error rate exceeds 5%
+          description: Client-visible relay failures have remained above 5% for three minutes.
+
+      - alert: AllTokenHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m]))) > 30 and sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AllToken P95 relay latency exceeds 30 seconds
+          description: Inspect upstream attempts, retries, and in-flight requests.
+
+      - alert: AllTokenHighRetryRatio
+        expr: sum(rate(new_api_relay_retries_total[5m])) / clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001) > 0.25 and sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AllToken retry ratio exceeds 25%
+          description: One or more upstream channels are unstable or exhausted.
+
+      - alert: AllTokenClusterCircuitOpen
+        expr: alltoken_cluster_circuit_state{state="open"} == 1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: Cluster C{{ $labels.cluster_code }} circuit is open
+          description: New requests are being routed to another eligible cluster.
+
+      - alert: AllTokenFailoverSurge
+        expr: sum(rate(alltoken_cluster_failover_total[2m])) > 1
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: Cluster failover rate exceeds one per second
+          description: Check the primary cluster and current failover policy.
+
+      - alert: AllTokenUpstreamExhausted
+        expr: increase(alltoken_final_errors_total{alltoken_code="305001"}[2m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: All candidate clusters are exhausted
+          description: At least one request returned AllToken error 305001.
+
+  - name: alltoken-dependencies
+    rules:
+      - alert: AllTokenExporterDown
+        expr: up{job=~"node|postgres|redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Production exporter {{ $labels.job }} is unavailable
+          description: Host, PostgreSQL, or Redis metrics are incomplete.
+
+      - alert: AllTokenHostCPUHigh
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{job="node",mode="idle"}[5m]))) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: ECS CPU usage exceeds 85%
+          description: CPU pressure has remained high for ten minutes.
+
+      - alert: AllTokenHostMemoryLow
+        expr: node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: ECS available memory is below 10%
+          description: Reduce load or investigate memory growth before OOM occurs.
+
+      - alert: AllTokenRootDiskLow
+        expr: node_filesystem_avail_bytes{job="node",mountpoint="/",fstype!~"tmpfs|overlay"} < 20 * 1024 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: ECS root disk has less than 20 GiB free
+          description: Inspect logs, Prometheus retention, and Loki storage.
+
+      - alert: AllTokenDatabasePoolHigh
+        expr: new_api_database_connections{database="main",state="in_use"} / clamp_min(new_api_database_connections{database="main",state="max_open"}, 1) > 0.85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Database connection pool usage exceeds 85%
+          description: Investigate slow queries and connection wait counts.
+
+      - alert: AllTokenRedisTimeouts
+        expr: increase(new_api_redis_pool_timeouts_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis pool timeouts detected
+          description: Check Redis latency, saturation, and application pool settings.

@@ -8,6 +8,13 @@ route:
   group_interval: 30s
   repeat_interval: 15m
 
+inhibit_rules:
+  - source_matchers:
+      - alertname="AllTokenClusterCircuitOpen"
+    target_matchers:
+      - alertname=~"AllTokenPoolTokensLow|AllTokenPoolExhausted"
+    equal: [cluster_code]
+
 receivers:
   - name: local-alert-sink
     webhook_configs:

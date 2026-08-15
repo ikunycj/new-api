@@ -1,0 +1,115 @@
+loki.write "alltoken" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "new_api" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/new-api"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "__path__"
+    replacement   = "/var/lib/docker/containers/$1/$1-json.log"
+  }
+
+  rule {
+    target_label = "source"
+    replacement  = "docker"
+  }
+
+  rule {
+    target_label = "host"
+    replacement  = "alltoken"
+  }
+
+  rule {
+    target_label = "service"
+    replacement  = "new-api"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "alltoken/new-api"
+  }
+}
+
+loki.source.file "new_api" {
+  targets       = discovery.relabel.new_api.output
+  forward_to    = [loki.process.new_api.receiver]
+  tail_from_end = true
+}
+
+loki.process "new_api" {
+  stage.docker {}
+
+  stage.match {
+    selector = "{job=\"alltoken/new-api\"} |~ \"observability_event=\""
+
+    stage.regex {
+      expression = "observability_event=(?P<payload>\\{.*\\})$"
+    }
+
+    stage.json {
+      source = "payload"
+      expressions = {
+        event               = "event",
+        provider            = "provider",
+        error_class         = "error_class",
+        request_id          = "request_id",
+        client_trace_id     = "client_trace_id",
+        upstream_request_id = "upstream_request_id",
+        status              = "status",
+        upstream_status     = "upstream_status",
+        retry_index         = "retry_index",
+        channel_id          = "channel_id",
+        model               = "model",
+        duration_ms         = "duration_ms",
+        attempt_duration_ms = "attempt_duration_ms",
+      }
+    }
+
+    stage.labels {
+      values = {
+        event       = "event",
+        provider    = "provider",
+        error_class = "error_class",
+      }
+    }
+
+    stage.structured_metadata {
+      values = {
+        request_id          = "request_id",
+        client_trace_id     = "client_trace_id",
+        upstream_request_id = "upstream_request_id",
+        status              = "status",
+        upstream_status     = "upstream_status",
+        retry_index         = "retry_index",
+        channel_id          = "channel_id",
+        model               = "model",
+        duration_ms         = "duration_ms",
+        attempt_duration_ms = "attempt_duration_ms",
+      }
+    }
+  }
+
+  forward_to = [loki.write.alltoken.receiver]
+}

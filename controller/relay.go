@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/observability"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -69,19 +70,61 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	requestId := c.GetString(common.RequestIdKey)
-	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
-
 	var (
 		newAPIError *types.NewAPIError
 		ws          *websocket.Conn
 	)
+	requestStartedAt := time.Now()
+	finalProvider := observability.ProviderOther
+	finalChannelID := 0
+	finalModel := ""
+	finalStream := false
+	attemptedUpstream := false
+	previousClusterID := 0
+	previousPoolTier := 0
+	failoverOccurred := false
+	defer func() {
+		contextErr := c.Request.Context().Err()
+		errorClass := observability.ErrorClass(newAPIError, contextErr)
+		status := c.Writer.Status()
+		if newAPIError != nil {
+			status = newAPIError.StatusCode
+		}
+		if errorClass == observability.ErrorClientCancelled {
+			status = 499
+			observability.RecordClientCancellation(finalProvider, cancellationPhase(c, attemptedUpstream))
+		}
+		observability.RecordRequest(finalProvider, errorClass, status, time.Since(requestStartedAt))
+		event := observability.Event{
+			Event:             "request_finished",
+			RequestID:         requestId,
+			ClientTraceID:     c.GetString(common.ClientTraceIdKey),
+			UpstreamRequestID: c.GetString(common.UpstreamRequestIdKey),
+			Provider:          finalProvider,
+			ChannelID:         finalChannelID,
+			Route:             c.FullPath(),
+			Model:             finalModel,
+			Stream:            finalStream,
+			Status:            status,
+			ErrorClass:        errorClass,
+			DurationMS:        time.Since(requestStartedAt).Milliseconds(),
+		}
+		if newAPIError != nil {
+			event.ErrorCode = string(newAPIError.GetErrorCode())
+			event.ErrorSource = string(newAPIError.GetErrorSource())
+			event.SourceCode = newAPIError.SourceCode()
+		}
+		observability.LogEvent(c, event)
+	}()
+	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
 	if relayFormat == types.RelayFormatOpenAIRealtime {
 		var err error
 		ws, err = upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			helper.WssError(c, ws, types.NewError(err, types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry()).ToOpenAIError())
+			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			helper.WssError(c, ws, newAPIError.ToOpenAIError())
 			return
 		}
 		defer ws.Close()
@@ -89,6 +132,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	defer func() {
 		if newAPIError != nil {
+			if !newAPIError.HasRetryable() {
+				newAPIError.SetRetryable(isFailoverEligible(c, newAPIError))
+			}
+			newAPIError.SetRequestID(requestId)
+			newAPIError.SetAttemptCount(len(c.GetStringSlice("use_channel")))
+			c.Header("X-Alltoken-Error-Source", string(newAPIError.GetErrorSource()))
+			c.Header("X-Alltoken-Error-Code", newAPIError.SourceCode())
+			c.Header("X-Alltoken-Code", fmt.Sprintf("%06d", newAPIError.AlltokenCode()))
+			c.Header("X-Alltoken-Error-Ref", newAPIError.ErrorRef())
+			c.Header("X-Alltoken-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 			switch relayFormat {
@@ -123,6 +176,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+	finalModel = relayInfo.OriginModelName
+	finalStream = relayInfo.IsStream
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
@@ -195,9 +250,68 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			newAPIError = channelErr
+			if relayInfo.LastError != nil {
+				newAPIError = relayInfo.LastError
+			} else {
+				newAPIError = channelErr
+			}
 			break
 		}
+		// The distributor seeds the first channel on the Gin context. Initialize
+		// dynamic metadata before local routing guards so a rejected first
+		// candidate does not get selected repeatedly on the next loop.
+		relayInfo.InitChannelMeta(c)
+		policy := retryParam.RuntimePolicy()
+		route := c.FullPath()
+		poolTier := model.ResolveChannelPoolTier(channel)
+		if !retryParam.CanAttemptCluster(channel.ClusterId) {
+			retryParam.ExcludeCluster(channel.ClusterId)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			newAPIError = types.NewErrorWithStatusCode(errors.New("cluster attempt limit reached"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
+			break
+		}
+		if !model.ChannelAllowedByFailoverPolicy(channel, policy) {
+			retryParam.ExcludeChannel(channel.Id)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			newAPIError = types.NewErrorWithStatusCode(errors.New("no channel satisfies the failover cost policy"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
+			break
+		}
+		if !retryParam.CanAttemptPool(channel.ClusterId, poolTier) {
+			retryParam.ExcludeChannel(channel.Id)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			newAPIError = types.NewErrorWithStatusCode(errors.New("cluster pool attempt limit reached"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
+			break
+		}
+		if !service.ClusterCircuitAllows(channel.ClusterId, route, policy) {
+			retryParam.ExcludeCluster(channel.ClusterId)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			newAPIError = types.NewErrorWithStatusCode(errors.New("all candidate cluster circuits are open"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
+			break
+		}
+		provider := observability.ProviderFromBaseURL(relayInfo.ChannelBaseUrl)
+		finalProvider = provider
+		finalChannelID = channel.Id
+		if previousClusterID > 0 && channel.ClusterId > 0 && previousClusterID != channel.ClusterId {
+			observability.RecordClusterFailover(previousClusterID, channel.ClusterId, policy.Mode)
+			failoverOccurred = true
+		} else if previousClusterID > 0 && previousClusterID == channel.ClusterId && previousPoolTier > 0 && poolTier > 0 && previousPoolTier != poolTier {
+			observability.RecordPoolFailover(channel.ClusterId, previousPoolTier, poolTier, policy.Mode)
+			failoverOccurred = true
+		}
+		previousClusterID = channel.ClusterId
+		previousPoolTier = poolTier
 		if previousGroup != relayInfo.UsingGroup {
 			if billingErr := reserveRelayGroupBilling(c, relayInfo, tokens, meta); billingErr != nil {
 				newAPIError = billingErr
@@ -218,37 +332,126 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
-		retryParam.MarkAttempted()
-		switch relayFormat {
-		case types.RelayFormatOpenAIRealtime:
-			newAPIError = relay.WssHelper(c, relayInfo)
-		case types.RelayFormatClaude:
-			newAPIError = relay.ClaudeHelper(c, relayInfo)
-		case types.RelayFormatGemini:
-			newAPIError = geminiRelayHandler(c, relayInfo)
-		default:
-			newAPIError = relayHandler(c, relayInfo)
+		attemptStartedAt := time.Now()
+		finishInFlight := observability.IncInFlight(provider)
+		attemptedUpstream = true
+		retryParam.MarkChannelAttempted(channel.Id, channel.ClusterId)
+		retryParam.MarkPoolAttempted(channel.ClusterId, poolTier)
+		func() {
+			defer finishInFlight()
+			switch relayFormat {
+			case types.RelayFormatOpenAIRealtime:
+				newAPIError = relay.WssHelper(c, relayInfo)
+			case types.RelayFormatClaude:
+				newAPIError = relay.ClaudeHelper(c, relayInfo)
+			case types.RelayFormatGemini:
+				newAPIError = geminiRelayHandler(c, relayInfo)
+			default:
+				newAPIError = relayHandler(c, relayInfo)
+			}
+		}()
+		attemptDuration := time.Since(attemptStartedAt)
+
+		contextErr := c.Request.Context().Err()
+		attemptClass := observability.ErrorClass(newAPIError, contextErr)
+		upstreamStatus := http.StatusOK
+		if newAPIError != nil {
+			newAPIError = service.NormalizeViolationFeeError(newAPIError)
+			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
+			newAPIError.SetRoutingLocation(channel.ClusterId, model.ResolveChannelPoolTier(channel))
+			if mapping, ok := model.MatchUpstreamErrorMapping(channel.ClusterId, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
+				newAPIError.SetClassification(mapping.AlltokenCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
+			}
+			observability.RecordErrorEvent("upstream_attempt", newAPIError)
+			observability.RecordPoolRequest(channel.ClusterId, poolTier, "error")
+			if newAPIError.FailureScope() == "cluster" || newAPIError.FailureScope() == "provider" {
+				retryParam.ExcludeCluster(channel.ClusterId)
+				service.RecordClusterCircuitFailure(channel.ClusterId, route, policy)
+			}
+			attemptClass = observability.ErrorClass(newAPIError, contextErr)
+			upstreamStatus = newAPIError.StatusCode
+		}
+		if attemptClass == observability.ErrorClientCancelled {
+			upstreamStatus = 499
 		}
 
+		willRetry := false
+		if newAPIError != nil {
+			relayInfo.LastError = newAPIError
+			newAPIError.SetRetryable(isFailoverEligible(c, newAPIError))
+			processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+			if !relayRetryCommitted(c, relayInfo) && shouldRetry(c, newAPIError, boolToRetryCount(retryParam.HasNextRetry())) {
+				willRetry = retryParam.AdvanceRetry()
+			}
+		}
+
+		observability.RecordAttempt(provider, attemptClass, upstreamStatus, attemptDuration)
+		observability.LogEvent(c, observability.Event{
+			Event:             "relay_attempt_finished",
+			RequestID:         requestId,
+			ClientTraceID:     c.GetString(common.ClientTraceIdKey),
+			UpstreamRequestID: c.GetString(common.UpstreamRequestIdKey),
+			Provider:          provider,
+			ChannelID:         channel.Id,
+			RetryIndex:        relayInfo.RetryIndex,
+			Route:             c.FullPath(),
+			Model:             relayInfo.OriginModelName,
+			Stream:            relayInfo.IsStream,
+			UpstreamStatus:    upstreamStatus,
+			ErrorClass:        attemptClass,
+			ErrorSource:       errorSource(newAPIError),
+			SourceCode:        sourceCode(newAPIError),
+			AttemptDurationMS: attemptDuration.Milliseconds(),
+			Retried:           willRetry,
+			AlltokenCode:      errorAlltokenCode(newAPIError),
+			ErrorRef:          errorRef(newAPIError),
+			Category:          errorCategory(newAPIError),
+			ClusterCode:       channel.ClusterId,
+			PoolTier:          poolTier,
+			FailureScope:      errorFailureScope(newAPIError),
+			Action:            errorAction(newAPIError),
+			FailoverMode:      policy.Mode,
+		})
+
 		if newAPIError == nil {
+			service.RecordClusterCircuitSuccess(channel.ClusterId, route)
+			observability.RecordPoolRequest(channel.ClusterId, poolTier, "success")
+			if failoverOccurred {
+				observability.RecordFailoverDuration("success", policy.Mode, time.Since(requestStartedAt))
+			}
 			relayInfo.LastError = nil
 			return
 		}
-
-		newAPIError = service.NormalizeViolationFeeError(newAPIError)
-		relayInfo.LastError = newAPIError
-
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
-
-		if relayRetryCommitted(c, relayInfo) || !shouldRetry(c, newAPIError, boolToRetryCount(retryParam.HasNextRetry())) {
+		if !willRetry {
 			break
 		}
-		if !retryParam.AdvanceRetry() {
-			break
-		}
+		observability.RecordRetry(provider, attemptClass)
+		observability.LogEvent(c, observability.Event{
+			Event:       "relay_retry",
+			RequestID:   requestId,
+			Provider:    provider,
+			ChannelID:   channel.Id,
+			RetryIndex:  relayInfo.RetryIndex,
+			Model:       relayInfo.OriginModelName,
+			ErrorClass:  attemptClass,
+			ErrorCode:   string(newAPIError.GetErrorCode()),
+			ErrorSource: errorSource(newAPIError),
+			SourceCode:  sourceCode(newAPIError),
+			Retried:     true,
+		})
 	}
 
 	useChannel := c.GetStringSlice("use_channel")
+	if newAPIError != nil && attemptedUpstream && isFailoverEligible(c, newAPIError) && !relayRetryCommitted(c, relayInfo) {
+		newAPIError = types.NewUpstreamExhaustedError(newAPIError, len(useChannel))
+		relayInfo.LastError = newAPIError
+	}
+	if newAPIError != nil {
+		observability.RecordErrorEvent("final_response", newAPIError)
+		if failoverOccurred || attemptedUpstream {
+			observability.RecordFailoverDuration("exhausted", retryParam.RuntimePolicy().Mode, time.Since(requestStartedAt))
+		}
+	}
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))
 		logger.LogInfo(c, retryLogStr)
@@ -309,6 +512,81 @@ func boolToRetryCount(canRetry bool) int {
 	return 0
 }
 
+func errorSource(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return string(err.GetErrorSource())
+}
+
+func sourceCode(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return err.SourceCode()
+}
+
+func errorAlltokenCode(err *types.NewAPIError) int {
+	if err == nil {
+		return 0
+	}
+	return err.AlltokenCode()
+}
+
+func errorRef(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return err.ErrorRef()
+}
+
+func errorCategory(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return err.ErrorCategory()
+}
+
+func errorFailureScope(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return err.FailureScope()
+}
+
+func errorAction(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	return err.ErrorAction()
+}
+
+// isFailoverEligible answers whether a different upstream candidate could
+// plausibly handle the request. It deliberately ignores retry budget; callers
+// use RetryParam to decide whether another candidate exists.
+func isFailoverEligible(c *gin.Context, err *types.NewAPIError) bool {
+	if err == nil || service.ShouldSkipRetryAfterChannelAffinityFailure(c) || types.IsSkipRetryError(err) {
+		return false
+	}
+	if _, ok := c.Get("specific_channel_id"); ok {
+		return false
+	}
+	if err.HasRetryable() {
+		return err.IsRetryable()
+	}
+	if action := err.ErrorAction(); action == "none" || action == "abort" {
+		return false
+	}
+	if types.IsChannelError(err) {
+		return true
+	}
+	if err.StatusCode >= 200 && err.StatusCode < 300 {
+		return false
+	}
+	source := err.GetErrorSource()
+	return source == types.ErrorSourceOpenAI || source == types.ErrorSourceIkun || operation_setting.ShouldRetryByStatusCode(err.StatusCode)
+}
+
 // reserveRelayGroupBilling refreshes pricing after an ordered candidate
 // transition and reserves the higher target before any bytes are sent to the
 // new provider. A free first candidate can therefore create its BillingSession
@@ -341,6 +619,16 @@ func reserveRelayGroupBilling(c *gin.Context, info *relaycommon.RelayInfo, promp
 	return nil
 }
 
+func cancellationPhase(c *gin.Context, attemptedUpstream bool) string {
+	if c != nil && c.Writer != nil && c.Writer.Size() > 0 {
+		return "response"
+	}
+	if attemptedUpstream {
+		return "upstream"
+	}
+	return "before_upstream"
+}
+
 // Once streaming output is visible to the client, replaying the request against
 // another provider would splice two upstream responses into one stream. Client
 // cancellation is terminal even if no bytes were written.
@@ -365,10 +653,13 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			autoBanInt = 0
 		}
 		return &model.Channel{
-			Id:      c.GetInt("channel_id"),
-			Type:    c.GetInt("channel_type"),
-			Name:    c.GetString("channel_name"),
-			AutoBan: &autoBanInt,
+			Id:              c.GetInt("channel_id"),
+			Type:            c.GetInt("channel_type"),
+			Name:            c.GetString("channel_name"),
+			ClusterId:       c.GetInt("cluster_id"),
+			ClusterPoolId:   c.GetInt("cluster_pool_id"),
+			ClusterPoolTier: c.GetInt("cluster_pool_tier"),
+			AutoBan:         &autoBanInt,
 		}, nil
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
@@ -410,6 +701,12 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
+	if openaiErr.HasRetryable() {
+		return openaiErr.IsRetryable()
+	}
+	if source := openaiErr.GetErrorSource(); source == types.ErrorSourceOpenAI || source == types.ErrorSourceIkun {
+		return openaiErr.StatusCode < 200 || openaiErr.StatusCode >= 300
+	}
 	code := openaiErr.StatusCode
 	if code >= 200 && code < 300 {
 		return false
@@ -447,6 +744,9 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		other["error_type"] = err.GetErrorType()
 		other["error_code"] = err.GetErrorCode()
+		other["error_source"] = err.GetErrorSource()
+		other["source_code"] = err.SourceCode()
+		other["retryable"] = err.IsRetryable()
 		other["status_code"] = err.StatusCode
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")

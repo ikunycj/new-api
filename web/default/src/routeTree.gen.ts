@@ -54,6 +54,7 @@ import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedGroupStatusIndexRouteImport } from './routes/_authenticated/group-status/index'
+import { Route as AuthenticatedFailoverIndexRouteImport } from './routes/_authenticated/failover/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelMonitorsIndexRouteImport } from './routes/_authenticated/channel-monitors/index'
@@ -324,6 +325,12 @@ const AuthenticatedGroupStatusIndexRoute =
     path: '/group-status/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedFailoverIndexRoute =
+  AuthenticatedFailoverIndexRouteImport.update({
+    id: '/failover/',
+    path: '/failover/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -553,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/failover/': typeof AuthenticatedFailoverIndexRoute
   '/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
@@ -631,6 +639,7 @@ export interface FileRoutesByTo {
   '/channel-monitors': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/failover': typeof AuthenticatedFailoverIndexRoute
   '/group-status': typeof AuthenticatedGroupStatusIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
@@ -713,6 +722,7 @@ export interface FileRoutesById {
   '/_authenticated/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/failover/': typeof AuthenticatedFailoverIndexRoute
   '/_authenticated/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
@@ -794,6 +804,7 @@ export interface FileRouteTypes {
     | '/channel-monitors/'
     | '/channels/'
     | '/dashboard/'
+    | '/failover/'
     | '/group-status/'
     | '/keys/'
     | '/models/'
@@ -872,6 +883,7 @@ export interface FileRouteTypes {
     | '/channel-monitors'
     | '/channels'
     | '/dashboard'
+    | '/failover'
     | '/group-status'
     | '/keys'
     | '/models'
@@ -953,6 +965,7 @@ export interface FileRouteTypes {
     | '/_authenticated/channel-monitors/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/failover/'
     | '/_authenticated/group-status/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
@@ -1353,6 +1366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedGroupStatusIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/failover/': {
+      id: '/_authenticated/failover/'
+      path: '/failover'
+      fullPath: '/failover/'
+      preLoaderRoute: typeof AuthenticatedFailoverIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
       path: '/dashboard'
@@ -1688,6 +1708,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChannelMonitorsIndexRoute: typeof AuthenticatedChannelMonitorsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedFailoverIndexRoute: typeof AuthenticatedFailoverIndexRoute
   AuthenticatedGroupStatusIndexRoute: typeof AuthenticatedGroupStatusIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
@@ -1714,6 +1735,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedChannelMonitorsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedFailoverIndexRoute: AuthenticatedFailoverIndexRoute,
   AuthenticatedGroupStatusIndexRoute: AuthenticatedGroupStatusIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,

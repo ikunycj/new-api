@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -73,6 +74,21 @@ func HTTPMiddleware() gin.HandlerFunc {
 			responseSize = 0
 		}
 		httpResponseSize.WithLabelValues(labels...).Observe(float64(responseSize))
+
+		if errorClass := c.GetString(observability.ContextErrorClassKey); errorClass != "" {
+			duration := time.Since(startedAt)
+			observability.RecordRequest(observability.ProviderOther, errorClass, c.Writer.Status(), duration)
+			observability.LogEvent(c, observability.Event{
+				Event:         "request_finished",
+				RequestID:     c.GetString(common.RequestIdKey),
+				ClientTraceID: c.GetString(common.ClientTraceIdKey),
+				Provider:      observability.ProviderOther,
+				Route:         route,
+				Status:        c.Writer.Status(),
+				ErrorClass:    errorClass,
+				DurationMS:    duration.Milliseconds(),
+			})
+		}
 	}
 }
 
@@ -96,6 +112,9 @@ func NewRegistry() (*prometheus.Registry, error) {
 			},
 		}, func() float64 { return 1 }),
 	)
+	for _, collector := range observability.Collectors() {
+		registry.MustRegister(collector)
+	}
 
 	if model.DB != nil {
 		mainDB, err := model.DB.DB()

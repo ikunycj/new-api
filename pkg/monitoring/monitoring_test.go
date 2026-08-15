@@ -4,12 +4,44 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
+	observability.RecordRequest(observability.ProviderIkun, observability.ErrorSuccess, http.StatusOK, time.Millisecond)
+	observability.RecordAttempt(observability.ProviderIkun, observability.ErrorUpstreamRateLimit, http.StatusTooManyRequests, time.Millisecond)
+	observability.RecordRetry(observability.ProviderIkun, observability.ErrorUpstreamRateLimit)
+	observability.RecordClientCancellation(observability.ProviderIkun, "upstream")
+	finishInFlight := observability.IncInFlight(observability.ProviderIkun)
+	finishInFlight()
+
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+	families, err := registry.Gather()
+	require.NoError(t, err)
+
+	found := make(map[string]bool)
+	for _, family := range families {
+		found[family.GetName()] = true
+	}
+	for _, name := range []string{
+		"new_api_relay_requests_total",
+		"new_api_relay_request_duration_seconds",
+		"new_api_relay_attempts_total",
+		"new_api_relay_attempt_duration_seconds",
+		"new_api_relay_retries_total",
+		"new_api_relay_in_flight",
+		"new_api_relay_client_cancellations_total",
+	} {
+		assert.True(t, found[name], name)
+	}
+}
 
 func TestHTTPMiddlewareUsesRouteTemplate(t *testing.T) {
 	gin.SetMode(gin.TestMode)

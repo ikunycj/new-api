@@ -18,21 +18,36 @@ import (
 
 var group2model2channels map[string]map[string][]int // enabled channel
 var channelsIDM map[int]*Channel                     // all channels include disabled
+var clusterPoolTierByID map[int]int
+var clusterPoolByID map[int]ClusterPool
+
 // channel2advancedCustomConfig caches parsed Advanced Custom (type 58) configs so
 // path-aware selection avoids re-parsing JSON per request. Refreshed on full sync.
 var channel2advancedCustomConfig map[int]*dto.AdvancedCustomConfig
 var channelSyncLock sync.RWMutex
 
 func InitChannelCache() {
+	InitFailoverCache()
 	if !common.MemoryCacheEnabled {
 		InvalidatePricingCache()
 		return
 	}
 	newChannelId2channel := make(map[int]*Channel)
+	newClusterPoolTierByID := make(map[int]int)
+	newClusterPoolByID := make(map[int]ClusterPool)
+	if DB.Migrator().HasTable(&ClusterPool{}) {
+		var pools []ClusterPool
+		DB.Find(&pools)
+		for _, pool := range pools {
+			newClusterPoolTierByID[pool.Id] = pool.Tier
+			newClusterPoolByID[pool.Id] = pool
+		}
+	}
 	newChannel2advancedCustomConfig := make(map[int]*dto.AdvancedCustomConfig)
 	var channels []*Channel
 	DB.Find(&channels)
 	for _, channel := range channels {
+		channel.ClusterPoolTier = newClusterPoolTierByID[channel.ClusterPoolId]
 		newChannelId2channel[channel.Id] = channel
 		if channel.Type == constant.ChannelTypeAdvancedCustom {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
@@ -93,6 +108,8 @@ func InitChannelCache() {
 		}
 	}
 	channelsIDM = newChannelId2channel
+	clusterPoolTierByID = newClusterPoolTierByID
+	clusterPoolByID = newClusterPoolByID
 	channel2advancedCustomConfig = newChannel2advancedCustomConfig
 	channelSyncLock.Unlock()
 	// Lock ordering: InvalidatePricingCache acquires updatePricingLock, and
@@ -112,9 +129,21 @@ func SyncChannelCache(frequency int) {
 }
 
 func GetRandomSatisfiedChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
+	return GetRandomSatisfiedChannelWithExclusions(group, model, retry, requestPath, nil, nil)
+}
+
+// GetRandomSatisfiedChannelExcluding selects a weighted channel while
+// excluding channels already attempted for this request. This is used by the
+// relay failover loop so a failed upstream is not selected again at the same
+// priority.
+func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
+	return GetRandomSatisfiedChannelWithExclusions(group, model, retry, requestPath, excluded, nil)
+}
+
+func GetRandomSatisfiedChannelWithExclusions(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry, requestPath)
+		return GetChannelWithExclusions(group, model, retry, requestPath, excludedChannels, excludedClusters)
 	}
 
 	channelSyncLock.RLock()
@@ -127,6 +156,22 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	if len(channels) == 0 {
 		normalizedModel := ratio_setting.FormatMatchingModelName(model)
 		channels = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
+	}
+	if len(excludedChannels) > 0 || len(excludedClusters) > 0 {
+		filtered := make([]int, 0, len(channels))
+		for _, channelID := range channels {
+			if _, ok := excludedChannels[channelID]; ok {
+				continue
+			}
+			channel := channelsIDM[channelID]
+			if channel != nil && channel.ClusterId > 0 {
+				if _, ok := excludedClusters[channel.ClusterId]; ok {
+					continue
+				}
+			}
+			filtered = append(filtered, channelID)
+		}
+		channels = filtered
 	}
 
 	if len(channels) == 0 {
@@ -206,6 +251,88 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
+}
+
+// HasSatisfiedChannelExcluding reports whether at least one eligible channel
+// remains after excluding the channels already attempted by a request.
+func HasSatisfiedChannelExcluding(group string, model string, requestPath string, excluded map[int]struct{}) (bool, error) {
+	return HasSatisfiedChannelWithExclusions(group, model, requestPath, excluded, nil)
+}
+
+func HasSatisfiedChannelWithExclusions(group string, model string, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (bool, error) {
+	if !common.MemoryCacheEnabled {
+		channel, err := GetChannelWithExclusions(group, model, 0, requestPath, excludedChannels, excludedClusters)
+		return channel != nil, err
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+	channels := filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
+	if len(channels) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(model)
+		channels = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
+	}
+	for _, channelID := range channels {
+		if _, excluded := excludedChannels[channelID]; excluded {
+			continue
+		}
+		if channel, ok := channelsIDM[channelID]; ok {
+			if channel.ClusterId > 0 {
+				if _, excluded := excludedClusters[channel.ClusterId]; excluded {
+					continue
+				}
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func ResolveChannelPoolTier(channel *Channel) int {
+	if channel == nil || channel.ClusterPoolId <= 0 {
+		return 0
+	}
+	if channel.ClusterPoolTier > 0 {
+		return channel.ClusterPoolTier
+	}
+	if common.MemoryCacheEnabled {
+		channelSyncLock.RLock()
+		tier := clusterPoolTierByID[channel.ClusterPoolId]
+		channelSyncLock.RUnlock()
+		return tier
+	}
+	if !DB.Migrator().HasTable(&ClusterPool{}) {
+		return 0
+	}
+	var pool ClusterPool
+	if err := DB.Select("tier").First(&pool, "id = ?", channel.ClusterPoolId).Error; err != nil {
+		return 0
+	}
+	return pool.Tier
+}
+
+func ChannelAllowedByFailoverPolicy(channel *Channel, policy RuntimeFailoverPolicy) bool {
+	if channel == nil || channel.ClusterPoolId <= 0 {
+		return true
+	}
+	var pool ClusterPool
+	if common.MemoryCacheEnabled {
+		channelSyncLock.RLock()
+		pool = clusterPoolByID[channel.ClusterPoolId]
+		channelSyncLock.RUnlock()
+	} else if DB.Migrator().HasTable(&ClusterPool{}) {
+		_ = DB.First(&pool, "id = ?", channel.ClusterPoolId).Error
+	}
+	if pool.Id == 0 || pool.Status != ClusterStatusEnabled {
+		return false
+	}
+	if pool.Tier == PoolTierPremium && !policy.AllowPaidEscalation {
+		return false
+	}
+	if pool.Tier == PoolTierFallback && !policy.AllowFallback {
+		return false
+	}
+	return policy.MaxCostMultiplier <= 0 || pool.CostFactor <= policy.MaxCostMultiplier
 }
 
 // filterChannelsByRequestPathAndModel restricts candidates by request path and

@@ -4,8 +4,12 @@ import { Counter, Rate, Trend } from 'k6/metrics';
 
 const profile = __ENV.LOAD_PROFILE || 'smoke';
 const baseURL = normalizeBaseURL(__ENV.BASE_URL || 'http://new-api:3000');
+const loadTestModel = __ENV.LOADTEST_MODEL || 'gpt-3.5-turbo';
 const userCount = numberEnv('LOADTEST_USERS', 1000);
 const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
+const failoverMode = __ENV.FAILOVER_MODE || 'balanced';
+const mockControlA = normalizeBaseURL(__ENV.MOCK_CONTROL_A || 'http://mock-upstream:8080');
+const mockControlB = normalizeBaseURL(__ENV.MOCK_CONTROL_B || 'http://mock-upstream-b:8080');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
 const smokeVUs = numberEnv('SMOKE_VUS', 10);
 const burstMaxDuration = __ENV.BURST_MAX_DURATION || '5m';
@@ -18,6 +22,7 @@ const capacityMaxVUs = numberEnv('CAPACITY_MAX_VUS', 2000);
 const applicationErrors = new Rate('new_api_application_errors');
 const timeToFirstByte = new Trend('new_api_time_to_first_byte', true);
 const completedRequests = new Counter('new_api_completed_requests');
+const httpResponses = new Counter('new_api_http_responses');
 const promptTokens = new Counter('new_api_prompt_tokens');
 const completionTokens = new Counter('new_api_completion_tokens');
 const totalTokens = new Counter('new_api_total_tokens');
@@ -31,6 +36,22 @@ const commonThresholds = {
 };
 
 export const options = buildOptions(profile);
+
+export function setup() {
+  if (profile !== 'pool-failover') {
+    return;
+  }
+  const responses = http.batch([
+    ['POST', `${mockControlA}/control/reset?free=300&premium=300&fallback=300`, null],
+    ['POST', `${mockControlB}/control/reset?free=3000&premium=3000&fallback=3000`, null],
+  ]);
+  const reset = check(responses, {
+    'mock clusters reset': (items) => items.every((item) => item.status === 200),
+  });
+  if (!reset) {
+    throw new Error('failed to reset mock cluster pools');
+  }
+}
 
 export function chat() {
   makeChatRequest(false);
@@ -64,7 +85,7 @@ function makeChatRequest(streaming) {
   const response = http.post(
     `${baseURL}/v1/chat/completions`,
     JSON.stringify({
-      model: 'gpt-3.5-turbo',
+      model: loadTestModel,
       messages: [{ role: 'user', content: 'Return a deterministic load-test response.' }],
       stream: streaming,
       stream_options: streaming ? { include_usage: true } : undefined,
@@ -108,6 +129,7 @@ function recordUsage(response) {
 }
 
 function recordResponse(response, name) {
+  httpResponses.add(1, { profile, endpoint: name, status: String(response.status) });
   const valid = check(response, {
     [`${name}: status is 200`]: (result) => result.status === 200,
     [`${name}: no gateway error`]: (result) => !result.body || !result.body.includes('"error"'),
@@ -125,6 +147,7 @@ function headersForVU() {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'X-Load-Test-ID': `${profile}-${__VU}-${__ITER}`,
+    'X-Alltoken-Failover-Mode': failoverMode,
   };
 }
 
@@ -231,6 +254,21 @@ function buildOptions(selectedProfile) {
         ...commonThresholds,
         dropped_iterations: ['count==0'],
         new_api_usage_missing: ['rate<0.001'],
+      },
+    },
+    'pool-failover': {
+      scenarios: {
+        poolFailover: {
+          executor: 'constant-vus',
+          exec: 'chat',
+          vus: 5,
+          duration: '30s',
+          gracefulStop: '30s',
+        },
+      },
+      thresholds: {
+        ...commonThresholds,
+        new_api_application_errors: ['rate<0.01'],
       },
     },
   };

@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -129,6 +130,55 @@ func TestRetryParamDoesNotCrossGroupsWhenDisabled(t *testing.T) {
 	assert.False(t, param.AdvanceRetry())
 }
 
+func TestRetryParamSwitchesToUntriedChannelWithoutGlobalRetryBudget(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "ikun")
+	priority := int64(10)
+	weight := uint(100)
+	second := &model.Channel{
+		Id:       91999,
+		Name:     "routing-ikun-secondary",
+		Key:      "test-key-secondary",
+		Status:   common.ChannelStatusEnabled,
+		Models:   "shared-model",
+		Group:    "ikun",
+		Priority: &priority,
+		Weight:   &weight,
+	}
+	require.NoError(t, model.DB.Create(second).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     "ikun",
+		Model:     "shared-model",
+		ChannelId: second.Id,
+		Enabled:   true,
+		Priority:  &priority,
+		Weight:    weight,
+	}).Error)
+	model.InitChannelCache()
+
+	originalRetryTimes := common.RetryTimes
+	common.RetryTimes = 0
+	t.Cleanup(func() { common.RetryTimes = originalRetryTimes })
+
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "ikun", ModelName: "shared-model"}
+	first, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	param.MarkChannelAttempted(first.Id, first.ClusterId)
+
+	require.True(t, param.HasNextRetry())
+	require.True(t, param.AdvanceRetry())
+	next, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
+
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.Equal(t, "ikun", selectedGroup)
+	assert.NotEqual(t, first.Id, next.Id)
+	assert.Contains(t, []int{ids["ikun"], second.Id}, next.Id)
+	param.MarkChannelAttempted(next.Id, next.ClusterId)
+	assert.False(t, param.HasNextRetry())
+}
+
 func TestCacheGetRandomSatisfiedChannelHonorsExplicitGroupOverride(t *testing.T) {
 	ids := setupOrderedRoutingChannels(t, "openai", "claude")
 	ctx := orderedRoutingContext([]string{"openai", "claude"}, true)
@@ -141,4 +191,184 @@ func TestCacheGetRandomSatisfiedChannelHonorsExplicitGroupOverride(t *testing.T)
 	assert.Equal(t, ids["claude"], channel.Id)
 	assert.Equal(t, "claude", selectedGroup)
 	assert.False(t, param.IsAutoRouting())
+}
+
+func TestRetryParamExcludesEveryChannelInFailedCluster(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "ikun")
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", ids["ikun"]).Update("cluster_id", 1).Error)
+	priority := int64(10)
+	weight := uint(100)
+	channels := []model.Channel{
+		{Id: 92001, Name: "cluster-one-a", Key: "a", Status: common.ChannelStatusEnabled, Models: "shared-model", Group: "ikun", Priority: &priority, Weight: &weight, ClusterId: 1},
+		{Id: 92002, Name: "cluster-one-b", Key: "b", Status: common.ChannelStatusEnabled, Models: "shared-model", Group: "ikun", Priority: &priority, Weight: &weight, ClusterId: 1},
+		{Id: 92003, Name: "cluster-two", Key: "c", Status: common.ChannelStatusEnabled, Models: "shared-model", Group: "ikun", Priority: &priority, Weight: &weight, ClusterId: 2},
+	}
+	for i := range channels {
+		require.NoError(t, model.DB.Create(&channels[i]).Error)
+		require.NoError(t, model.DB.Create(&model.Ability{Group: "ikun", Model: "shared-model", ChannelId: channels[i].Id, Enabled: true, Priority: &priority, Weight: weight}).Error)
+	}
+	model.InitChannelCache()
+
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "ikun", ModelName: "shared-model"}
+	param.MarkChannelAttempted(channels[0].Id, 1)
+	param.ExcludeCluster(1)
+
+	require.True(t, param.HasNextRetry())
+	next, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.Equal(t, 2, next.ClusterId)
+}
+
+func TestRetryParamSkipsOpenClusterWithoutGlobalRetryBudget(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "ikun")
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", ids["ikun"]).Update("cluster_id", 1).Error)
+	priority := int64(10)
+	weight := uint(100)
+	second := &model.Channel{
+		Id:        92004,
+		Name:      "cluster-two",
+		Key:       "cluster-two-key",
+		Status:    common.ChannelStatusEnabled,
+		Models:    "shared-model",
+		Group:     "ikun",
+		Priority:  &priority,
+		Weight:    &weight,
+		ClusterId: 2,
+	}
+	require.NoError(t, model.DB.Create(second).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group: "ikun", Model: "shared-model", ChannelId: second.Id,
+		Enabled: true, Priority: &priority, Weight: weight,
+	}).Error)
+	model.InitChannelCache()
+
+	originalRetryTimes := common.RetryTimes
+	common.RetryTimes = 0
+	t.Cleanup(func() { common.RetryTimes = originalRetryTimes })
+
+	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{
+		Ctx: ctx, TokenGroup: "ikun", ModelName: "shared-model",
+		runtimePolicy: &policy, clusterOrder: []int{1, 2}, startedAt: time.Now(),
+	}
+	first, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.Equal(t, 1, first.ClusterId)
+
+	param.ExcludeCluster(first.ClusterId)
+	require.True(t, param.HasNextRetry())
+	require.True(t, param.AdvanceRetry())
+	next, _, err := CacheGetRandomSatisfiedChannel(param)
+
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.Equal(t, 2, next.ClusterId)
+}
+
+func TestRetryParamKeepsClusterAvailableForChannelScopedFailure(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "ikun")
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", ids["ikun"]).Updates(map[string]any{"cluster_id": 1, "cluster_pool_id": 1}).Error)
+	priority := int64(9)
+	weight := uint(100)
+	second := &model.Channel{
+		Id: 92011, Name: "cluster-one-premium", Key: "premium", Status: common.ChannelStatusEnabled,
+		Models: "shared-model", Group: "ikun", Priority: &priority, Weight: &weight, ClusterId: 1, ClusterPoolId: 2,
+	}
+	require.NoError(t, model.DB.Create(second).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "ikun", Model: "shared-model", ChannelId: second.Id, Enabled: true, Priority: &priority, Weight: weight}).Error)
+	model.InitChannelCache()
+
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "ikun", ModelName: "shared-model"}
+	first, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	param.MarkChannelAttempted(first.Id, first.ClusterId)
+
+	require.True(t, param.HasNextRetry())
+	require.True(t, param.AdvanceRetry())
+	next, _, err := CacheGetRandomSatisfiedChannel(param)
+
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.Equal(t, 1, next.ClusterId)
+	assert.NotEqual(t, first.Id, next.Id)
+}
+
+func TestRetryParamClusterLimitStillAllowsVisitedClusterPools(t *testing.T) {
+	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+	policy.MaxClusterAttempts = 1
+	param := &RetryParam{runtimePolicy: &policy}
+	param.MarkChannelAttempted(1, 17)
+
+	assert.True(t, param.CanAttemptCluster(17))
+	assert.False(t, param.CanAttemptCluster(23))
+}
+
+func TestRetryParamEnforcesPoolRetryAndTierBudgets(t *testing.T) {
+	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+	policy.SamePoolRetries = 1
+	policy.MaxPoolAttempts = 2
+	param := &RetryParam{runtimePolicy: &policy}
+
+	assert.True(t, param.CanAttemptPool(17, model.PoolTierFree))
+	param.MarkPoolAttempted(17, model.PoolTierFree)
+	assert.True(t, param.CanAttemptPool(17, model.PoolTierFree))
+	param.MarkPoolAttempted(17, model.PoolTierFree)
+	assert.False(t, param.CanAttemptPool(17, model.PoolTierFree))
+
+	assert.True(t, param.CanAttemptPool(17, model.PoolTierPremium))
+	param.MarkPoolAttempted(17, model.PoolTierPremium)
+	assert.False(t, param.CanAttemptPool(17, model.PoolTierFallback))
+}
+
+func TestFailoverGroupPriorityOverridesChannelPriorityAcrossClusters(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "ikun")
+	require.NoError(t, model.DB.AutoMigrate(
+		&model.Cluster{}, &model.ClusterPool{}, &model.FailoverPolicy{}, &model.FailoverGroup{},
+		&model.FailoverGroupMember{}, &model.FailoverRule{}, &model.UpstreamErrorMapping{},
+	))
+	for _, table := range []string{"failover_rules", "failover_group_members", "failover_groups", "failover_policies", "clusters"} {
+		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"failover_rules", "failover_group_members", "failover_groups", "failover_policies", "clusters"} {
+			_ = model.DB.Exec("DELETE FROM " + table).Error
+		}
+		model.InitFailoverCache()
+	})
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", ids["ikun"]).Update("cluster_id", 1).Error)
+	highPriority := int64(100)
+	weight := uint(100)
+	second := &model.Channel{
+		Id: 92021, Name: "cluster-two-higher-channel-priority", Key: "cluster-two", Status: common.ChannelStatusEnabled,
+		Models: "shared-model", Group: "ikun", Priority: &highPriority, Weight: &weight, ClusterId: 2,
+	}
+	require.NoError(t, model.DB.Create(second).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "ikun", Model: "shared-model", ChannelId: second.Id, Enabled: true, Priority: &highPriority, Weight: weight}).Error)
+	require.NoError(t, model.DB.Create(&model.FailoverPolicy{
+		Id: 51, Name: "ordered", Mode: model.FailoverModeBalanced, Enabled: true,
+		MaxPoolAttempts: 3, MaxClusterAttempts: 2, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000,
+		CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60,
+		CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.FailoverGroup{Id: 51, Name: "ordered", PolicyId: 51, Enabled: true}).Error)
+	require.NoError(t, model.DB.Create(&[]model.FailoverGroupMember{
+		{FailoverGroupId: 51, ClusterId: 1, Priority: 100, Weight: 100},
+		{FailoverGroupId: 51, ClusterId: 2, Priority: 90, Weight: 100},
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.FailoverRule{FailoverGroupId: 51, ModelPattern: "shared-*", RoutePattern: "/v1/*", UserGroup: "*", Priority: 100, Enabled: true}).Error)
+	model.InitChannelCache()
+
+	ctx := orderedRoutingContext(nil, false)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "ikun", ModelName: "shared-model", RequestPath: "/v1/chat"}
+	channel, _, err := CacheGetRandomSatisfiedChannel(param)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, 1, channel.ClusterId)
 }

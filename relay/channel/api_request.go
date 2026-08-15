@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	common2 "github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -303,6 +305,38 @@ func applyHeaderOverrideToRequest(req *http.Request, headerOverride map[string]s
 	}
 }
 
+var upstreamRequestIDHeaders = []string{
+	common2.RequestIdKey,
+	"X-Request-ID",
+}
+
+func captureUpstreamRequestID(c *gin.Context, header http.Header) {
+	if c == nil {
+		return
+	}
+	for _, name := range upstreamRequestIDHeaders {
+		if requestID := strings.TrimSpace(header.Get(name)); requestID != "" {
+			c.Set(common2.UpstreamRequestIdKey, requestID)
+			return
+		}
+	}
+}
+
+func applyObservabilityHeaders(header http.Header, c *gin.Context, info *common.RelayInfo) {
+	if header == nil || c == nil || info == nil {
+		return
+	}
+	if observability.ProviderFromBaseURL(info.ChannelBaseUrl) != observability.ProviderIkun {
+		return
+	}
+	requestID := strings.TrimSpace(c.GetString(common2.RequestIdKey))
+	if requestID == "" {
+		return
+	}
+	header.Set("X-Client-Request-ID", requestID)
+	header.Set("X-AllToken-Attempt", strconv.Itoa(info.RetryIndex))
+}
+
 func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody io.Reader) (*http.Response, error) {
 	fullRequestURL, err := a.GetRequestURL(info)
 	if err != nil {
@@ -326,6 +360,7 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, err
 	}
 	applyHeaderOverrideToRequest(req, headerOverride)
+	applyObservabilityHeaders(req.Header, c, info)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -358,6 +393,7 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 		return nil, err
 	}
 	applyHeaderOverrideToRequest(req, headerOverride)
+	applyObservabilityHeaders(req.Header, c, info)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -384,6 +420,7 @@ func DoWssRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	for key, value := range headerOverride {
 		targetHeader.Set(key, value)
 	}
+	applyObservabilityHeaders(targetHeader, c, info)
 	targetHeader.Set("Content-Type", c.Request.Header.Get("Content-Type"))
 	targetConn, _, err := websocket.DefaultDialer.Dial(fullRequestURL, targetHeader)
 	if err != nil {
@@ -513,9 +550,7 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		return nil, errors.New("resp is nil")
 	}
 
-	if upID := resp.Header.Get(common2.RequestIdKey); upID != "" {
-		c.Set(common2.UpstreamRequestIdKey, upID)
-	}
+	captureUpstreamRequestID(c, resp.Header)
 
 	_ = req.Body.Close()
 	_ = c.Request.Body.Close()
@@ -540,6 +575,7 @@ func DoTaskApiRequest(a TaskAdaptor, c *gin.Context, info *common.RelayInfo, req
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
+	applyObservabilityHeaders(req.Header, c, info)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)

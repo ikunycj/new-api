@@ -2,7 +2,7 @@ groups:
   - name: new-api-availability
     rules:
       - alert: NewAPIInstanceDown
-        expr: up{job="new-api"} == 0
+        expr: up{job="new-api",instance="new-api:8006"} == 0
         for: 30s
         labels:
           severity: critical
@@ -98,7 +98,7 @@ groups:
   - name: new-api-dependencies
     rules:
       - alert: PostgreSQLExporterDown
-        expr: up{job="postgres"} == 0
+        expr: up{job="postgres",instance="postgres-exporter:9187"} == 0
         for: 30s
         labels:
           severity: critical
@@ -107,7 +107,7 @@ groups:
           description: "The PostgreSQL exporter cannot be scraped."
 
       - alert: RedisExporterDown
-        expr: up{job="redis"} == 0
+        expr: up{job="redis",instance="redis-exporter:9121"} == 0
         for: 30s
         labels:
           severity: critical
@@ -144,3 +144,135 @@ groups:
         annotations:
           summary: "Mock upstream is returning errors"
           description: "Verify whether MOCK_ERROR_RATE was intentionally configured."
+
+  - name: end-to-end-observability
+    rules:
+      - alert: ObservabilityTargetDown
+        expr: up{monitoring_scope="remote",job=~"loki-alltoken|alloy-alltoken|loki-ikun|alloy-ikun|node|node-ikun"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Observability target is unavailable on {{ $labels.host }}"
+          description: "Prometheus has failed to scrape {{ $labels.job }} for two minutes. Check the SSH tunnel and the remote service before assuming the application is down."
+
+      - alert: RemoteHostRootDiskLow
+        expr: node_filesystem_avail_bytes{monitoring_scope="remote",host=~"alltoken|ikun",mountpoint="/",fstype!~"tmpfs|overlay"} < 20 * 1024 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Root disk free space is below 20 GiB on {{ $labels.host }}"
+          description: "The remote observability disk guard may stop Loki and Alloy to protect the host. Inspect disk growth and Loki retention data."
+
+      - alert: ObservabilityAlloyConfigInvalid
+        expr: alloy_config_last_load_successful{monitoring_scope="remote",job=~"alloy-alltoken|alloy-ikun"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alloy configuration is invalid on {{ $labels.host }}"
+          description: "Alloy failed to load its latest configuration. Existing collection may be stale or stopped."
+
+      - alert: ObservabilityLogEntriesDropped
+        expr: sum by (host) (increase(loki_write_dropped_entries_total{monitoring_scope="remote",job=~"alloy-alltoken|alloy-ikun"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy dropped log entries on {{ $labels.host }}"
+          description: "At least one log entry was dropped in the last five minutes. Check Loki readiness, timestamp rejection, line size, and tunnel health."
+
+  - name: alltoken-relay-production
+    rules:
+      - alert: AllTokenRelayHighFinalErrorRate
+        expr: |
+          (
+            sum(rate(new_api_relay_requests_total{outcome="error"}[5m]))
+            /
+            clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001)
+          ) > 0.05
+          and
+          sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AllToken final relay error rate exceeds 5%"
+          description: "Client-visible final errors have remained above 5% with meaningful traffic. Use error_class to distinguish ingress, quota, channel, upstream, timeout, and internal failures."
+
+      - alert: AllTokenRelayHighRetryRatio
+        expr: |
+          (
+            sum(rate(new_api_relay_retries_total[5m]))
+            /
+            clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001)
+          ) > 0.25
+          and
+          sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AllToken retry ratio exceeds 25%"
+          description: "A sustained gap between upstream attempts and final requests indicates downstream instability, pending limits, rate limits, or account failover."
+
+      - alert: AllTokenRelayHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m]))
+          ) > 30
+          and
+          sum(rate(new_api_relay_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AllToken final relay P95 latency exceeds 30 seconds"
+          description: "Compare final request latency with single-attempt latency, retries, in-flight requests, and ikun access latency."
+
+  - name: alltoken-failover
+    rules:
+      - alert: AllTokenClusterCircuitOpen
+        expr: alltoken_cluster_circuit_state{state="open"} == 1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cluster C{{ $labels.cluster_code }} circuit is open"
+          description: "AllToken has stopped routing new requests to this cluster and is using alternate clusters."
+
+      - alert: AllTokenUpstreamExhausted
+        expr: increase(alltoken_final_errors_total{alltoken_code="305001"}[2m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "All candidate clusters are exhausted"
+          description: "At least one client received 305001 in the last two minutes. Inspect cluster and pool exhaustion panels."
+
+      - alert: AllTokenPoolTokensLow
+        expr: mock_cluster_pool_remaining_tokens > 0 and mock_cluster_pool_remaining_tokens < 300
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mock pool P{{ $labels.pool_tier }} on C{{ $labels.cluster_code }} is low"
+          description: "The deterministic pool has fewer than 300 mock tokens remaining."
+
+      - alert: AllTokenPoolExhausted
+        expr: mock_cluster_pool_remaining_tokens == 0
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mock pool P{{ $labels.pool_tier }} on C{{ $labels.cluster_code }} is exhausted"
+          description: "Traffic should move to the next configured pool or cluster."
+
+      - alert: AllTokenFailoverSurge
+        expr: sum(rate(alltoken_cluster_failover_total[2m])) > 1
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cluster failover rate exceeds one per second"
+          description: "A sustained failover surge indicates an unstable primary cluster or overly aggressive policy."
