@@ -233,11 +233,6 @@ try {
         $env:VITE_REACT_APP_VERSION = $oldVersion
     }
 
-    $classicDist = Join-Path $worktree 'web\classic\dist'
-    New-Item -ItemType Directory -Path $classicDist -Force | Out-Null
-    $classicPlaceholder = '<!doctype html><html><head><title>New API</title></head><body>Classic frontend build disabled for this deployment.</body></html>'
-    [IO.File]::WriteAllText((Join-Path $classicDist 'index.html'), $classicPlaceholder, [Text.UTF8Encoding]::new($false))
-
     New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
     $oldGoos = $env:GOOS
     $oldGoarch = $env:GOARCH

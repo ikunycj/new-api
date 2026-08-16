@@ -67,7 +67,7 @@ Run `scripts/build-release.ps1 -Commit $releaseCommit`. Its important invariants
 - Create a detached worktree from the commit, not from working-tree files.
 - Put the worktree on the same drive as the repository. A `C:` worktree linked to `F:` dependencies caused Rspack font paths such as `F:Project...` and failed the build.
 - Run `bun install --frozen-lockfile` inside the worktree, then build `web/default` with Bun. Do not reuse the mutable repository `web/node_modules`; installed package versions can differ from the target commit's lockfile even when the build succeeds.
-- Do not build classic. Create the same minimal `web/classic/dist/index.html` placeholder used by `Dockerfile` when `BUILD_CLASSIC=false`.
+- Build the frontend from `web/default` with the frozen workspace lockfile.
 - Cross-compile with `GOOS=linux`, `GOARCH=amd64`, `CGO_ENABLED=0`, and the current Dockerfile's `GOEXPERIMENT`.
 - Set `common.Version` from `VERSION`. An empty `VERSION` is valid and matched the live deployment during the recorded release.
 - Use `-buildvcs=false` because the worktree revision is recorded separately and deployment integrity comes from explicit hashes.

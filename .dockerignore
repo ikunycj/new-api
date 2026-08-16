@@ -12,5 +12,4 @@ docs
 /web/node_modules
 /web/default/node_modules
 /web/default/dist
-/web/classic
 !THIRD-PARTY-LICENSES.md

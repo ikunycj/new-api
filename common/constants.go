@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	//"os"
 	//"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,20 +19,6 @@ var SystemName = "New API"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
-
-// ThemeAwarePath rewrites known legacy /console/* paths to their default
-// frontend equivalents while preserving suffixes and query strings.
-func ThemeAwarePath(suffix string) string {
-	switch {
-	case strings.HasPrefix(suffix, "/console/topup"):
-		return strings.Replace(suffix, "/console/topup", "/wallet", 1)
-	case strings.HasPrefix(suffix, "/console/log"):
-		return strings.Replace(suffix, "/console/log", "/usage-logs", 1)
-	case strings.HasPrefix(suffix, "/console/personal"):
-		return strings.Replace(suffix, "/console/personal", "/profile", 1)
-	}
-	return suffix
-}
 
 // var ChatLink = ""
 // var ChatLink2 = ""
