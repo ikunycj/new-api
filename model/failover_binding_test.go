@@ -38,6 +38,10 @@ func setupClusterConfigurationTestDB(t *testing.T) {
 	previousLogDatabaseType := common.LogDatabaseType()
 	previousRatios := ratio_setting.GroupRatio2JSONString()
 	previousGroups := setting.UserUsableGroups2JSONString()
+	common.OptionMapRWMutex.Lock()
+	previousOptionMap := common.OptionMap
+	common.OptionMap = make(map[string]string)
+	common.OptionMapRWMutex.Unlock()
 	DB = testDB
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	t.Cleanup(func() {
@@ -45,6 +49,9 @@ func setupClusterConfigurationTestDB(t *testing.T) {
 		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(previousGroups))
 		DB = previousDB
 		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = previousOptionMap
+		common.OptionMapRWMutex.Unlock()
 	})
 }
 
@@ -177,6 +184,67 @@ func TestSaveClusterConfigurationCreatesBillingGroupPoolsAndOrderedRoutes(t *tes
 	require.Len(t, pools, 3)
 	for _, pool := range pools {
 		assert.Equal(t, ClusterStatusDisabled, pool.Status)
+	}
+}
+
+func TestSaveClusterConfigurationExpandsTwoRouteCluster(t *testing.T) {
+	setupClusterConfigurationTestDB(t)
+	channels := []Channel{
+		{Name: "pro-key", Key: "key-a", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+		{Name: "plus-key", Key: "key-b", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+		{Name: "fallback-key", Key: "key-c", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+	}
+	require.NoError(t, DB.Create(&channels).Error)
+
+	config := &ClusterConfiguration{
+		Name: "IKUN", Type: "ikun", Status: ClusterStatusEnabled,
+		BillingGroup: "cluster_ikun", BillingGroupDescription: "IKUN billing", BillingGroupRatio: 1,
+		Routes: []ClusterRouteConfig{
+			{ChannelId: channels[0].Id, PoolTier: 1, RouteOrder: 1, PoolName: "Pro", CostFactor: 1, Weight: 100},
+			{ChannelId: channels[1].Id, PoolTier: 2, RouteOrder: 2, PoolName: "Plus", CostFactor: 1.5, Weight: 100},
+		},
+	}
+	require.NoError(t, SaveClusterConfiguration(config))
+
+	config.Name = "IKUN updated"
+	config.Routes = append(config.Routes, ClusterRouteConfig{
+		ChannelId: channels[2].Id, PoolTier: 3, RouteOrder: 3,
+		PoolName: "Fallback", CostFactor: 2, Weight: 100,
+	})
+	require.NoError(t, SaveClusterConfiguration(config))
+
+	var storedCluster Cluster
+	require.NoError(t, DB.First(&storedCluster, config.Id).Error)
+	assert.Equal(t, "IKUN updated", storedCluster.Name)
+	var storedChannels []Channel
+	require.NoError(t, DB.Order("id ASC").Find(&storedChannels).Error)
+	require.Len(t, storedChannels, 3)
+	for index, channel := range storedChannels {
+		assert.Equal(t, config.Id, channel.ClusterId)
+		require.NotNil(t, channel.Priority)
+		assert.Equal(t, int64((3-index)*100), *channel.Priority)
+	}
+}
+
+func TestSaveClusterConfigurationRejectsUnsupportedRouteCount(t *testing.T) {
+	config := &ClusterConfiguration{
+		Name: "IKUN", Type: "ikun", Status: ClusterStatusEnabled,
+		BillingGroup: "cluster_ikun", BillingGroupRatio: 1,
+	}
+	tests := []struct {
+		name   string
+		routes []ClusterRouteConfig
+	}{
+		{name: "no routes"},
+		{name: "more than four routes", routes: make([]ClusterRouteConfig, 5)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config.Routes = test.routes
+			err := SaveClusterConfiguration(config)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "between one and four")
+		})
 	}
 }
 

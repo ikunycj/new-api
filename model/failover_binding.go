@@ -277,8 +277,8 @@ func SaveClusterConfiguration(config *ClusterConfiguration) error {
 	if config.BillingGroupRatio < 0 {
 		return errors.New("billing group ratio cannot be negative")
 	}
-	if len(config.Routes) < 3 || len(config.Routes) > 4 {
-		return errors.New("a cluster must have three or four channel routes")
+	if len(config.Routes) < 1 || len(config.Routes) > 4 {
+		return errors.New("a cluster must have between one and four channel routes")
 	}
 	sort.SliceStable(config.Routes, func(i, j int) bool { return config.Routes[i].RouteOrder < config.Routes[j].RouteOrder })
 	seenChannels := make(map[int]struct{}, len(config.Routes))

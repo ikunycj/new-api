@@ -70,7 +70,7 @@ const clusterConfigurationSchema = z
     policy_id: z.coerce.number().int().min(0),
     failover_priority: z.coerce.number().int().min(0).max(100000),
     remark: z.string(),
-    routes: z.array(routeSchema).min(3).max(4),
+    routes: z.array(routeSchema).min(1).max(4),
   })
   .superRefine((value, context) => {
     const channelIds = value.routes.map((route) => route.channel_id)
@@ -111,6 +111,14 @@ const defaultRoutes: ClusterConfiguration['routes'] = [
     weight: 100,
     cost_factor: 1.5,
   },
+  {
+    channel_id: 0,
+    pool_tier: 4,
+    pool_name: 'Emergency',
+    route_order: 4,
+    weight: 100,
+    cost_factor: 2,
+  },
 ]
 
 function newClusterConfiguration(): ClusterConfiguration {
@@ -126,7 +134,7 @@ function newClusterConfiguration(): ClusterConfiguration {
     policy_id: 0,
     failover_priority: 100,
     remark: '',
-    routes: defaultRoutes.map((route) => ({ ...route })),
+    routes: defaultRoutes.slice(0, 3).map((route) => ({ ...route })),
   }
 }
 
@@ -432,23 +440,17 @@ function ClusterConfigurationWorkspace(props: {
                   )}
                 </p>
               </div>
-              {routes.fields.length === 3 && (
+              {routes.fields.length < 4 && (
                 <Button
                   type='button'
                   variant='outline'
-                  onClick={() =>
-                    routes.append({
-                      channel_id: 0,
-                      pool_tier: 4,
-                      pool_name: 'Emergency',
-                      route_order: 4,
-                      weight: 100,
-                      cost_factor: 2,
-                    })
-                  }
+                  onClick={() => {
+                    const route = defaultRoutes[routes.fields.length]
+                    if (route) routes.append({ ...route })
+                  }}
                 >
                   <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
-                  {t('Add emergency route')}
+                  {t('Add route')}
                 </Button>
               )}
             </div>
@@ -529,17 +531,18 @@ function ClusterConfigurationWorkspace(props: {
                         />
                       </TableCell>
                       <TableCell>
-                        {index === 3 && (
-                          <Button
-                            type='button'
-                            size='icon'
-                            variant='ghost'
-                            aria-label={t('Remove emergency route')}
-                            onClick={() => routes.remove(index)}
-                          >
-                            <HugeiconsIcon icon={Delete02Icon} />
-                          </Button>
-                        )}
+                        {index === routes.fields.length - 1 &&
+                          routes.fields.length > 1 && (
+                            <Button
+                              type='button'
+                              size='icon'
+                              variant='ghost'
+                              aria-label={t('Delete')}
+                              onClick={() => routes.remove(index)}
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} />
+                            </Button>
+                          )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -558,9 +561,7 @@ function ClusterConfigurationWorkspace(props: {
               <HugeiconsIcon icon={Alert02Icon} />
               <AlertTitle>{t('Configuration validation failed')}</AlertTitle>
               <AlertDescription>
-                {t(
-                  'Complete the cluster, billing group, and three required channel routes.'
-                )}
+                {t('Channel binding is incomplete')}
               </AlertDescription>
             </Alert>
           )}
