@@ -507,36 +507,14 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				return err
 			}
 		}
-		clusterBillingGroups := make(map[int]string, len(config.Clusters))
-		for _, cluster := range config.Clusters {
-			clusterBillingGroups[cluster.Id] = strings.TrimSpace(cluster.BillingGroup)
-		}
 		for i := range config.GroupMembers {
 			member := &config.GroupMembers[i]
 			if member.FailoverGroupId <= 0 || member.ClusterId <= 0 || member.Weight < 0 {
 				return errors.New("failover group member is invalid")
 			}
-			if _, exists := clusterBillingGroups[member.ClusterId]; !exists {
-				var cluster Cluster
-				if err := tx.Select("id", "billing_group").First(&cluster, member.ClusterId).Error; err != nil {
-					return err
-				}
-				clusterBillingGroups[cluster.Id] = strings.TrimSpace(cluster.BillingGroup)
-			}
 			if err := tx.Save(member).Error; err != nil {
 				return err
 			}
-		}
-		groupBilling := make(map[int]string)
-		for _, member := range config.GroupMembers {
-			billingGroup := clusterBillingGroups[member.ClusterId]
-			if billingGroup == "" {
-				continue
-			}
-			if existing, ok := groupBilling[member.FailoverGroupId]; ok && existing != billingGroup {
-				return errors.New("clusters in one failover group must use the same billing group")
-			}
-			groupBilling[member.FailoverGroupId] = billingGroup
 		}
 		for i := range config.Rules {
 			rule := &config.Rules[i]

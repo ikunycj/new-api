@@ -30,12 +30,20 @@ export async function getFailoverConfig(): Promise<FailoverConfig> {
 export async function updateFailoverConfig(
   config: FailoverConfig
 ): Promise<void> {
-  const response = await api.put<ApiResponse<null>>(
-    '/api/channel/failover/config',
-    config
-  )
-  if (!response.data.success) {
-    throw new Error(response.data.message || 'Request failed')
+  try {
+    const response = await api.put<ApiResponse<null>>(
+      '/api/channel/failover/config',
+      config,
+      { skipErrorHandler: true }
+    )
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Request failed')
+    }
+  } catch (error) {
+    if (isAxiosError<ApiResponse<null>>(error)) {
+      throw new Error(error.response?.data.message || error.message)
+    }
+    throw error
   }
 }
 

@@ -102,6 +102,37 @@ func TestSaveFailoverConfigNormalizesAndArchivesRemovedRecords(t *testing.T) {
 	assert.False(t, oldMapping.Enabled)
 }
 
+func TestSaveFailoverConfigAllowsCrossBillingGroupMembers(t *testing.T) {
+	setupFailoverTables(t)
+	config := &FailoverConfig{
+		Clusters: []Cluster{
+			{Id: 101, Name: "primary", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "Cluster_1"},
+			{Id: 102, Name: "secondary", Type: "ikun2", Status: ClusterStatusEnabled, BillingGroup: "Cluster_2"},
+		},
+		Policies: []FailoverPolicy{{
+			Id: 101, Name: "cross-group", Mode: FailoverModeBalanced, Enabled: true,
+			MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 12000,
+			CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60,
+			CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+		}},
+		Groups: []FailoverGroup{{Id: 101, Name: "primary-to-secondary", PolicyId: 101, Enabled: true}},
+		GroupMembers: []FailoverGroupMember{
+			{FailoverGroupId: 101, ClusterId: 101, Priority: 100, Weight: 100},
+			{FailoverGroupId: 101, ClusterId: 102, Priority: 90, Weight: 100},
+		},
+		Rules: []FailoverRule{{
+			FailoverGroupId: 101, ModelPattern: "gpt-*", RoutePattern: "/v1/chat/completions", UserGroup: "*", Priority: 100, Enabled: true,
+		}},
+	}
+
+	require.NoError(t, SaveFailoverConfig(config))
+	InitFailoverCache()
+
+	_, clusterOrder, rulePolicy := ResolveRuntimeFailover("", "gpt-5.4-mini", "/v1/chat/completions", "default", "Cluster_1")
+	assert.Equal(t, []int{101, 102}, clusterOrder)
+	assert.True(t, rulePolicy)
+}
+
 func TestMatchUpstreamErrorMappingUsesMostSpecificRule(t *testing.T) {
 	setupFailoverTables(t)
 	require.NoError(t, DB.Create(&Cluster{Id: 23, Name: "IKUN A", Type: "ikun", Status: ClusterStatusEnabled}).Error)
