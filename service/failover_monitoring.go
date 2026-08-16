@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -393,12 +394,21 @@ func applyMonitoringAuth(request *http.Request, config failoverMonitoringConfig)
 }
 
 func parseMonitoringNumber(value any) (float64, error) {
+	var number float64
 	switch parsed := value.(type) {
 	case float64:
-		return parsed, nil
+		number = parsed
 	case string:
-		return strconv.ParseFloat(parsed, 64)
+		var err error
+		number, err = strconv.ParseFloat(parsed, 64)
+		if err != nil {
+			return 0, err
+		}
 	default:
 		return 0, errors.New("invalid monitoring metric value")
 	}
+	if math.IsNaN(number) || math.IsInf(number, 0) {
+		return 0, errors.New("monitoring metric value must be finite")
+	}
+	return number, nil
 }

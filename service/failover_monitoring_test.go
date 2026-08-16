@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -143,4 +144,29 @@ func TestGetFailoverMonitoringSnapshotFiltersMetricsAndAlertsByCluster(t *testin
 	for _, source := range snapshot.Sources[:2] {
 		assert.Equal(t, "healthy", source.Status)
 	}
+}
+
+func TestGetFailoverMonitoringSnapshotRejectsNonFiniteMetrics(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		value := "1"
+		if strings.Contains(r.URL.Query().Get("query"), "histogram_quantile") {
+			value = "NaN"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786773070,"%s"]}]}}`, value)
+	}))
+	t.Cleanup(prometheus.Close)
+
+	t.Setenv("FAILOVER_PROMETHEUS_URL", prometheus.URL)
+	t.Setenv("FAILOVER_ALERTMANAGER_URL", "")
+	t.Setenv("FAILOVER_GRAFANA_PUBLIC_URL", "")
+
+	snapshot := GetFailoverMonitoringSnapshot(context.Background(), 0)
+
+	assert.Zero(t, snapshot.Metrics.P95LatencySeconds)
+	require.Len(t, snapshot.Sources, 3)
+	assert.Equal(t, "degraded", snapshot.Sources[0].Status)
+	assert.Equal(t, "1 metric queries failed", snapshot.Sources[0].Message)
+	_, err := common.Marshal(snapshot)
+	require.NoError(t, err)
 }
