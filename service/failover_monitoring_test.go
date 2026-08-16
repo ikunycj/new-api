@@ -55,7 +55,7 @@ func TestGetFailoverMonitoringSnapshotAggregatesMetricsAndAlerts(t *testing.T) {
 	t.Setenv("FAILOVER_GRAFANA_PUBLIC_URL", "https://monitoring.example.com/d/failover?orgId=1")
 	t.Setenv("FAILOVER_MONITORING_BEARER_TOKEN", "test-token")
 
-	snapshot := GetFailoverMonitoringSnapshot(context.Background())
+	snapshot := GetFailoverMonitoringSnapshot(context.Background(), 0)
 
 	assert.Equal(t, "5m", snapshot.Window)
 	assert.Equal(t, 12.5, snapshot.Metrics.RequestRPS)
@@ -87,7 +87,7 @@ func TestGetFailoverMonitoringSnapshotReportsMissingConfiguration(t *testing.T) 
 		t.Setenv(name, "")
 	}
 
-	snapshot := GetFailoverMonitoringSnapshot(context.Background())
+	snapshot := GetFailoverMonitoringSnapshot(context.Background(), 0)
 
 	assert.Empty(t, snapshot.GrafanaURL)
 	assert.Empty(t, snapshot.Alerts)
@@ -95,5 +95,52 @@ func TestGetFailoverMonitoringSnapshotReportsMissingConfiguration(t *testing.T) 
 	for _, source := range snapshot.Sources {
 		assert.Equal(t, "not_configured", source.Status)
 		assert.True(t, strings.Contains(source.Message, "not configured"))
+	}
+}
+
+func TestGetFailoverMonitoringSnapshotFiltersMetricsAndAlertsByCluster(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		expectedQueries := map[string]struct{}{
+			`sum(rate(alltoken_pool_requests_total{cluster_code="7"}[5m]))`: {},
+			`sum(rate(alltoken_pool_requests_total{cluster_code="7",outcome="error"}[5m])) / clamp_min(sum(rate(alltoken_pool_requests_total{cluster_code="7"}[5m])), 0.001)`: {},
+			`histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m])))`:                                                                 {},
+			`sum(new_api_relay_in_flight)`: {},
+			`sum(increase(alltoken_cluster_failover_total{from_cluster="7"}[5m])) + sum(increase(alltoken_cluster_failover_total{to_cluster="7"}[5m]))`:   {},
+			`sum(increase(alltoken_pool_failover_total{cluster_code="7"}[5m]))`:                                                                           {},
+			`sum(alltoken_cluster_circuit_state{cluster_code="7",state="open"} == 1)`:                                                                     {},
+			`new_api_database_connections{database="main",state="in_use"} / clamp_min(new_api_database_connections{database="main",state="max_open"}, 1)`: {},
+			`sum(increase(new_api_redis_pool_timeouts_total[5m]))`:                                                                                        {},
+		}
+		if _, ok := expectedQueries[query]; !ok {
+			http.Error(w, "unexpected query", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786773070,"1"]}]}}`))
+	}))
+	t.Cleanup(prometheus.Close)
+
+	alertmanager := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"labels":{"alertname":"Global","severity":"warning"},"fingerprint":"global","status":{"state":"active"}},
+			{"labels":{"alertname":"Selected","severity":"critical","cluster_code":"7"},"fingerprint":"selected","status":{"state":"active"}},
+			{"labels":{"alertname":"Other","severity":"critical","cluster_code":"8"},"fingerprint":"other","status":{"state":"active"}}
+		]`))
+	}))
+	t.Cleanup(alertmanager.Close)
+
+	t.Setenv("FAILOVER_PROMETHEUS_URL", prometheus.URL)
+	t.Setenv("FAILOVER_ALERTMANAGER_URL", alertmanager.URL)
+
+	snapshot := GetFailoverMonitoringSnapshot(context.Background(), 7)
+
+	assert.Equal(t, 7, snapshot.ClusterCode)
+	require.Len(t, snapshot.Alerts, 2)
+	assert.Equal(t, "Selected", snapshot.Alerts[0].Name)
+	assert.Equal(t, "Global", snapshot.Alerts[1].Name)
+	for _, source := range snapshot.Sources[:2] {
+		assert.Equal(t, "healthy", source.Status)
 	}
 }

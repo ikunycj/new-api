@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProviderFromBaseURL(t *testing.T) {
@@ -80,6 +81,31 @@ func TestCollectorLabelsAreBounded(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestReplaceClusterInfoPublishesOnlyActiveClusterCodes(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	require.NoError(t, registry.Register(clusterInfo))
+	t.Cleanup(func() { ReplaceClusterInfo(nil) })
+
+	ReplaceClusterInfo([]int{7, 0, 9})
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+
+	clusterCodes := make([]string, 0, 2)
+	for _, family := range metricFamilies {
+		if family.GetName() != "alltoken_cluster_info" {
+			continue
+		}
+		for _, metric := range family.Metric {
+			for _, label := range metric.Label {
+				if label.GetName() == "cluster_code" {
+					clusterCodes = append(clusterCodes, label.GetValue())
+				}
+			}
+		}
+	}
+	assert.ElementsMatch(t, []string{"7", "9"}, clusterCodes)
 }
 
 func TestNormalizeErrorClassIsBounded(t *testing.T) {

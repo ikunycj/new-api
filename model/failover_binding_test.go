@@ -32,7 +32,7 @@ func setupClusterConfigurationTestDB(t *testing.T) {
 	t.Helper()
 	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, testDB.AutoMigrate(&Channel{}, &Ability{}, &Cluster{}, &ClusterPool{}, &FailoverPolicy{}, &Option{}))
+	require.NoError(t, testDB.AutoMigrate(&Channel{}, &Ability{}, &Cluster{}, &ClusterPool{}, &FailoverPolicy{}, &FailoverGroupMember{}, &Option{}))
 	previousDB := DB
 	previousMainDatabaseType := common.MainDatabaseType()
 	previousLogDatabaseType := common.LogDatabaseType()
@@ -218,4 +218,132 @@ func TestSaveClusterConfigurationRejectsMultiKeyAndExistingClusterBinding(t *tes
 			assert.Zero(t, clusterCount)
 		})
 	}
+}
+
+func TestClusterConfigurationIncludesArchivedClusterAndCanReclaimItsChannel(t *testing.T) {
+	setupClusterConfigurationTestDB(t)
+	archivedCluster := Cluster{
+		Id: 77, Name: "legacy", Type: "ikun", Status: ClusterStatusDisabled,
+		BillingGroup: "legacy_group", Archived: true,
+	}
+	require.NoError(t, DB.Create(&archivedCluster).Error)
+	legacyPool := ClusterPool{ClusterId: archivedCluster.Id, Tier: PoolTierFree, Name: "Free", Status: ClusterStatusDisabled}
+	require.NoError(t, DB.Create(&legacyPool).Error)
+	channels := []Channel{
+		{Name: "legacy-key", Key: "a", Models: "gpt-5", Group: "legacy_group", Status: common.ChannelStatusEnabled, ClusterId: archivedCluster.Id, ClusterPoolId: legacyPool.Id},
+		{Name: "plus-key", Key: "b", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+		{Name: "fallback-key", Key: "c", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+	}
+	require.NoError(t, DB.Create(&channels).Error)
+
+	snapshot, err := GetClusterConfigurationSnapshot()
+	require.NoError(t, err)
+	require.Len(t, snapshot.Clusters, 1)
+	assert.True(t, snapshot.Clusters[0].Archived)
+	require.Len(t, snapshot.Clusters[0].Routes, 1)
+	assert.Equal(t, channels[0].Id, snapshot.Clusters[0].Routes[0].ChannelId)
+
+	config := &ClusterConfiguration{
+		Name: "replacement", Type: "ikun", Status: ClusterStatusEnabled,
+		BillingGroup: "replacement_group", BillingGroupRatio: 1,
+		Routes: []ClusterRouteConfig{
+			{ChannelId: channels[0].Id, PoolTier: 1, RouteOrder: 1},
+			{ChannelId: channels[1].Id, PoolTier: 2, RouteOrder: 2},
+			{ChannelId: channels[2].Id, PoolTier: 3, RouteOrder: 3},
+		},
+	}
+	require.NoError(t, SaveClusterConfiguration(config))
+
+	var reclaimed Channel
+	require.NoError(t, DB.First(&reclaimed, channels[0].Id).Error)
+	assert.Equal(t, config.Id, reclaimed.ClusterId)
+	assert.Equal(t, "replacement_group", reclaimed.Group)
+}
+
+func TestSaveClusterConfigurationRejectsChannelFromActiveCluster(t *testing.T) {
+	setupClusterConfigurationTestDB(t)
+	owner := Cluster{Name: "active", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "active_group"}
+	require.NoError(t, DB.Create(&owner).Error)
+	channels := []Channel{
+		{Name: "owned", Key: "a", Models: "gpt-5", Group: "active_group", Status: common.ChannelStatusEnabled, ClusterId: owner.Id},
+		{Name: "plus-key", Key: "b", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+		{Name: "fallback-key", Key: "c", Models: "gpt-5", Group: "default", Status: common.ChannelStatusEnabled},
+	}
+	require.NoError(t, DB.Create(&channels).Error)
+	config := &ClusterConfiguration{
+		Name: "replacement", Type: "ikun", Status: ClusterStatusEnabled,
+		BillingGroup: "replacement_group", BillingGroupRatio: 1,
+		Routes: []ClusterRouteConfig{
+			{ChannelId: channels[0].Id, PoolTier: 1, RouteOrder: 1},
+			{ChannelId: channels[1].Id, PoolTier: 2, RouteOrder: 2},
+			{ChannelId: channels[2].Id, PoolTier: 3, RouteOrder: 3},
+		},
+	}
+
+	err := SaveClusterConfiguration(config)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already belongs to active cluster")
+	var clusterCount int64
+	require.NoError(t, DB.Model(&Cluster{}).Count(&clusterCount).Error)
+	assert.Equal(t, int64(1), clusterCount)
+}
+
+func TestDeleteClusterConfigurationArchivesClusterAndReleasesChannels(t *testing.T) {
+	setupClusterConfigurationTestDB(t)
+	cluster := Cluster{
+		Name: "legacy", Type: "ikun", Status: ClusterStatusEnabled,
+		BillingGroup: "legacy_group",
+	}
+	require.NoError(t, DB.Create(&cluster).Error)
+	pools := []ClusterPool{
+		{ClusterId: cluster.Id, Tier: PoolTierFree, Name: "Free", Status: ClusterStatusEnabled},
+		{ClusterId: cluster.Id, Tier: PoolTierPremium, Name: "Pro/Plus", Status: ClusterStatusEnabled},
+	}
+	require.NoError(t, DB.Create(&pools).Error)
+	channels := []Channel{
+		{Name: "free-key", Key: "a", Models: "gpt-5", Group: "default,legacy_group", Status: common.ChannelStatusEnabled, ClusterId: cluster.Id, ClusterPoolId: pools[0].Id},
+		{Name: "plus-key", Key: "b", Models: "gpt-5", Group: "legacy_group", Status: common.ChannelStatusEnabled, ClusterId: cluster.Id, ClusterPoolId: pools[1].Id},
+	}
+	require.NoError(t, DB.Create(&channels).Error)
+	for index := range channels {
+		require.NoError(t, channels[index].UpdateAbilities(DB))
+	}
+	require.NoError(t, DB.Create(&FailoverGroupMember{FailoverGroupId: 9, ClusterId: cluster.Id, Priority: 100}).Error)
+
+	require.NoError(t, DeleteClusterConfiguration(cluster.Id))
+
+	var storedCluster Cluster
+	require.ErrorIs(t, DB.First(&Cluster{}, cluster.Id).Error, gorm.ErrRecordNotFound)
+	require.NoError(t, DB.Unscoped().First(&storedCluster, cluster.Id).Error)
+	assert.True(t, storedCluster.Archived)
+	assert.Equal(t, ClusterStatusDisabled, storedCluster.Status)
+	assert.True(t, storedCluster.DeletedAt.Valid)
+	snapshot, err := GetClusterConfigurationSnapshot()
+	require.NoError(t, err)
+	assert.Empty(t, snapshot.Clusters)
+
+	var storedPools []ClusterPool
+	require.NoError(t, DB.Where("cluster_id = ?", cluster.Id).Find(&storedPools).Error)
+	require.Len(t, storedPools, 2)
+	for _, pool := range storedPools {
+		assert.Equal(t, ClusterStatusDisabled, pool.Status)
+	}
+
+	var storedChannels []Channel
+	require.NoError(t, DB.Order("id ASC").Find(&storedChannels).Error)
+	require.Len(t, storedChannels, 2)
+	for _, channel := range storedChannels {
+		assert.Zero(t, channel.ClusterId)
+		assert.Zero(t, channel.ClusterPoolId)
+		assert.Equal(t, "default", channel.Group)
+	}
+	var abilities []Ability
+	require.NoError(t, DB.Find(&abilities).Error)
+	require.Len(t, abilities, 2)
+	for _, ability := range abilities {
+		assert.Equal(t, "default", ability.Group)
+	}
+	var memberCount int64
+	require.NoError(t, DB.Model(&FailoverGroupMember{}).Where("cluster_id = ?", cluster.Id).Count(&memberCount).Error)
+	assert.Zero(t, memberCount)
 }

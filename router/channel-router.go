@@ -57,6 +57,7 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/failover/monitoring", permission: authz.ChannelRead, handler: controller.GetFailoverMonitoring},
 	{method: http.MethodPut, path: "/failover/bindings", permission: authz.ChannelWrite, handler: controller.UpdateChannelFailoverBindings},
 	{method: http.MethodPut, path: "/failover/cluster-config", permission: authz.ChannelWrite, handler: controller.UpdateClusterConfiguration},
+	{method: http.MethodDelete, path: "/failover/cluster-config/:id", permission: authz.ChannelWrite, handler: controller.DeleteClusterConfiguration},
 	{method: http.MethodPut, path: "/failover/config", permission: authz.ChannelWrite, handler: controller.UpdateFailoverConfig},
 	{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetChannel},
 	{method: http.MethodGet, path: "/:id/reconciliation", permission: authz.ChannelRead, handler: controller.GetChannelReconciliation},

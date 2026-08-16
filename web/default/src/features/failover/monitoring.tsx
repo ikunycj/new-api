@@ -7,12 +7,20 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -24,13 +32,25 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
-import { getFailoverMonitoring } from './api'
+import { getClusterConfiguration, getFailoverMonitoring } from './api'
 import type { FailoverMonitoringAlert, FailoverMonitoringSource } from './types'
 
 type MetricItem = {
   label: string
   value: string
   emphasis?: 'danger' | 'warning'
+}
+
+const allClustersValue = 'all'
+
+function buildGrafanaClusterURL(rawURL: string, clusterCode?: number): string {
+  const url = new URL(rawURL, globalThis.location?.origin)
+  if (clusterCode) {
+    url.searchParams.set('var-cluster', String(clusterCode))
+  } else {
+    url.searchParams.delete('var-cluster')
+  }
+  return url.toString()
 }
 
 const sourceNames: Record<FailoverMonitoringSource['name'], string> = {
@@ -124,9 +144,17 @@ function MonitoringSkeleton() {
 
 export function FailoverMonitoring() {
   const { t } = useTranslation()
+  const [selectedCluster, setSelectedCluster] = useState(allClustersValue)
+  const selectedClusterCode =
+    selectedCluster === allClustersValue ? undefined : Number(selectedCluster)
+  const clusterQuery = useQuery({
+    queryKey: ['cluster-configuration'],
+    queryFn: getClusterConfiguration,
+    staleTime: 30_000,
+  })
   const monitoringQuery = useQuery({
-    queryKey: ['failover-monitoring'],
-    queryFn: getFailoverMonitoring,
+    queryKey: ['failover-monitoring', selectedClusterCode ?? allClustersValue],
+    queryFn: () => getFailoverMonitoring(selectedClusterCode),
     refetchInterval: 10_000,
     staleTime: 5_000,
   })
@@ -146,6 +174,9 @@ export function FailoverMonitoring() {
   if (!monitoringQuery.data) return null
 
   const snapshot = monitoringQuery.data
+  const grafanaURL = snapshot.grafana_url
+    ? buildGrafanaClusterURL(snapshot.grafana_url, selectedClusterCode)
+    : undefined
   const metricItems: MetricItem[] = [
     {
       label: t('Request rate'),
@@ -213,7 +244,31 @@ export function FailoverMonitoring() {
             {t('Last updated')}: {dayjs(snapshot.updated_at).format('HH:mm:ss')}
           </span>
         </div>
-        <div className='flex items-center gap-2'>
+        <div className='flex flex-wrap items-center justify-end gap-2'>
+          <div className='flex items-center gap-2'>
+            <span className='text-muted-foreground text-sm'>{t('Cluster')}</span>
+            <Select
+              value={selectedCluster}
+              onValueChange={(value) =>
+                setSelectedCluster(value || allClustersValue)
+              }
+            >
+              <SelectTrigger
+                aria-label={t('Cluster')}
+                className='w-48 max-w-[min(12rem,70vw)]'
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align='end'>
+                <SelectItem value={allClustersValue}>{t('All')}</SelectItem>
+                {(clusterQuery.data?.clusters || []).map((cluster) => (
+                  <SelectItem key={cluster.id} value={String(cluster.id)}>
+                    C{cluster.id} · {cluster.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             type='button'
             variant='outline'
@@ -227,12 +282,12 @@ export function FailoverMonitoring() {
             />
             {t('Refresh')}
           </Button>
-          {snapshot.grafana_url && (
+          {grafanaURL && (
             <Button
               variant='outline'
               render={
                 <a
-                  href={snapshot.grafana_url}
+                  href={grafanaURL}
                   target='_blank'
                   rel='noreferrer'
                 />
@@ -344,13 +399,13 @@ export function FailoverMonitoring() {
             {t('Full Grafana dashboard')}
           </h2>
         </div>
-        {snapshot.grafana_url ? (
+        {grafanaURL ? (
           // The URL is operator-controlled and validated by the backend. Grafana
           // requires its normal same-origin script context to render dashboards.
           // oxlint-disable-next-line react/iframe-missing-sandbox
           <iframe
             title={t('Full Grafana dashboard')}
-            src={snapshot.grafana_url}
+            src={grafanaURL}
             referrerPolicy='same-origin'
             className='bg-background h-[720px] min-h-[60vh] w-full rounded-lg border'
           />

@@ -56,12 +56,13 @@ type FailoverMonitoringAlert struct {
 }
 
 type FailoverMonitoringSnapshot struct {
-	UpdatedAt  int64                      `json:"updated_at"`
-	Window     string                     `json:"window"`
-	Metrics    FailoverMonitoringMetrics  `json:"metrics"`
-	Alerts     []FailoverMonitoringAlert  `json:"alerts"`
-	Sources    []FailoverMonitoringSource `json:"sources"`
-	GrafanaURL string                     `json:"grafana_url,omitempty"`
+	UpdatedAt   int64                      `json:"updated_at"`
+	Window      string                     `json:"window"`
+	ClusterCode int                        `json:"cluster_code,omitempty"`
+	Metrics     FailoverMonitoringMetrics  `json:"metrics"`
+	Alerts      []FailoverMonitoringAlert  `json:"alerts"`
+	Sources     []FailoverMonitoringSource `json:"sources"`
+	GrafanaURL  string                     `json:"grafana_url,omitempty"`
 }
 
 type failoverMonitoringConfig struct {
@@ -94,12 +95,13 @@ type alertmanagerAlert struct {
 	} `json:"status"`
 }
 
-func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapshot {
+func GetFailoverMonitoringSnapshot(ctx context.Context, clusterCode int) FailoverMonitoringSnapshot {
 	config := failoverMonitoringConfigFromEnv()
 	snapshot := FailoverMonitoringSnapshot{
-		UpdatedAt: time.Now().UnixMilli(),
-		Window:    failoverMonitoringWindow,
-		Alerts:    []FailoverMonitoringAlert{},
+		UpdatedAt:   time.Now().UnixMilli(),
+		Window:      failoverMonitoringWindow,
+		ClusterCode: clusterCode,
+		Alerts:      []FailoverMonitoringAlert{},
 		Sources: []FailoverMonitoringSource{
 			monitoringSource("prometheus", config.prometheusURL),
 			monitoringSource("alertmanager", config.alertmanagerURL),
@@ -109,12 +111,12 @@ func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapsh
 
 	client := &http.Client{Timeout: failoverMonitoringTimeout}
 	if config.prometheusURL != "" {
-		metrics, errCount, err := fetchFailoverMonitoringMetrics(ctx, client, config)
+		metrics, errCount, err := fetchFailoverMonitoringMetrics(ctx, client, config, clusterCode)
 		snapshot.Metrics = metrics
 		setMonitoringSource(&snapshot.Sources[0], err, errCount)
 	}
 	if config.alertmanagerURL != "" {
-		alerts, err := fetchFailoverMonitoringAlerts(ctx, client, config)
+		alerts, err := fetchFailoverMonitoringAlerts(ctx, client, config, clusterCode)
 		snapshot.Alerts = alerts
 		setMonitoringSource(&snapshot.Sources[1], err, 0)
 	}
@@ -169,7 +171,7 @@ func setMonitoringSource(source *FailoverMonitoringSource, err error, errorCount
 	source.Message = "request failed"
 }
 
-func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, config failoverMonitoringConfig) (FailoverMonitoringMetrics, int, error) {
+func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, config failoverMonitoringConfig, clusterCode int) (FailoverMonitoringMetrics, int, error) {
 	queries := []struct {
 		name  string
 		query string
@@ -183,6 +185,14 @@ func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, co
 		{name: "open_circuits", query: `sum(alltoken_cluster_circuit_state{state="open"} == 1)`},
 		{name: "database_usage", query: `new_api_database_connections{database="main",state="in_use"} / clamp_min(new_api_database_connections{database="main",state="max_open"}, 1)`},
 		{name: "redis_timeouts", query: `sum(increase(new_api_redis_pool_timeouts_total[5m]))`},
+	}
+	if clusterCode > 0 {
+		clusterLabel := strconv.Itoa(clusterCode)
+		queries[0].query = fmt.Sprintf(`sum(rate(alltoken_pool_requests_total{cluster_code=%q}[5m]))`, clusterLabel)
+		queries[1].query = fmt.Sprintf(`sum(rate(alltoken_pool_requests_total{cluster_code=%q,outcome="error"}[5m])) / clamp_min(sum(rate(alltoken_pool_requests_total{cluster_code=%q}[5m])), 0.001)`, clusterLabel, clusterLabel)
+		queries[4].query = fmt.Sprintf(`sum(increase(alltoken_cluster_failover_total{from_cluster=%q}[5m])) + sum(increase(alltoken_cluster_failover_total{to_cluster=%q}[5m]))`, clusterLabel, clusterLabel)
+		queries[5].query = fmt.Sprintf(`sum(increase(alltoken_pool_failover_total{cluster_code=%q}[5m]))`, clusterLabel)
+		queries[6].query = fmt.Sprintf(`sum(alltoken_cluster_circuit_state{cluster_code=%q,state="open"} == 1)`, clusterLabel)
 	}
 	values := make([]float64, len(queries))
 	errorsByQuery := make([]error, len(queries))
@@ -274,7 +284,7 @@ func queryPrometheus(ctx context.Context, client *http.Client, config failoverMo
 	return parseMonitoringNumber(payload.Data.Result[0].Value[1])
 }
 
-func fetchFailoverMonitoringAlerts(ctx context.Context, client *http.Client, config failoverMonitoringConfig) ([]FailoverMonitoringAlert, error) {
+func fetchFailoverMonitoringAlerts(ctx context.Context, client *http.Client, config failoverMonitoringConfig, clusterCode int) ([]FailoverMonitoringAlert, error) {
 	endpoint, err := monitoringEndpoint(config.alertmanagerURL, "/api/v2/alerts")
 	if err != nil {
 		return []FailoverMonitoringAlert{}, err
@@ -302,6 +312,10 @@ func fetchFailoverMonitoringAlerts(ctx context.Context, client *http.Client, con
 	}
 	alerts := make([]FailoverMonitoringAlert, 0, len(payload))
 	for _, alert := range payload {
+		alertClusterCode := alert.Labels["cluster_code"]
+		if clusterCode > 0 && alertClusterCode != "" && alertClusterCode != strconv.Itoa(clusterCode) {
+			continue
+		}
 		status := alert.Status.State
 		if status == "" {
 			status = "active"
@@ -313,7 +327,7 @@ func fetchFailoverMonitoringAlerts(ctx context.Context, client *http.Client, con
 			Status:      status,
 			Summary:     alert.Annotations["summary"],
 			Description: alert.Annotations["description"],
-			ClusterCode: alert.Labels["cluster_code"],
+			ClusterCode: alertClusterCode,
 			PoolTier:    alert.Labels["pool_tier"],
 			Instance:    alert.Labels["instance"],
 			StartedAt:   alert.StartsAt,

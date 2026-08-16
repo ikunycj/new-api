@@ -40,6 +40,7 @@ export type ClusterConfiguration = {
   name: string
   type: string
   status: number
+  archived: boolean
   billing_group: string
   billing_group_description: string
   billing_group_ratio: number
@@ -210,6 +211,7 @@ export type FailoverMonitoringAlert = {
 export type FailoverMonitoringSnapshot = {
   updated_at: number
   window: string
+  cluster_code?: number
   metrics: FailoverMonitoringMetrics
   alerts: FailoverMonitoringAlert[]
   sources: FailoverMonitoringSource[]

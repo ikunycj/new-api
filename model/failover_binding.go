@@ -45,6 +45,7 @@ type ClusterConfiguration struct {
 	Name                    string               `json:"name"`
 	Type                    string               `json:"type"`
 	Status                  int                  `json:"status"`
+	Archived                bool                 `json:"archived"`
 	BillingGroup            string               `json:"billing_group"`
 	BillingGroupDescription string               `json:"billing_group_description"`
 	BillingGroupRatio       float64              `json:"billing_group_ratio"`
@@ -190,7 +191,7 @@ func GetClusterConfigurationSnapshot() (*ClusterConfigurationSnapshot, error) {
 		Policies:      make([]FailoverPolicy, 0),
 	}
 	var clusters []Cluster
-	if err := DB.Where("archived = ?", false).Order("failover_priority DESC, id ASC").Find(&clusters).Error; err != nil {
+	if err := DB.Order("archived ASC, failover_priority DESC, id ASC").Find(&clusters).Error; err != nil {
 		return nil, err
 	}
 	var pools []ClusterPool
@@ -233,6 +234,7 @@ func GetClusterConfigurationSnapshot() (*ClusterConfigurationSnapshot, error) {
 		}
 		snapshot.Clusters = append(snapshot.Clusters, ClusterConfiguration{
 			Id: cluster.Id, Name: cluster.Name, Type: cluster.Type, Status: cluster.Status,
+			Archived:     cluster.Archived,
 			BillingGroup: cluster.BillingGroup, BillingGroupDescription: descriptions[cluster.BillingGroup],
 			BillingGroupRatio: ratio, PolicyId: cluster.PolicyId, FailoverPriority: cluster.FailoverPriority,
 			Remark: cluster.Remark, Routes: routes,
@@ -371,15 +373,34 @@ func SaveClusterConfiguration(config *ClusterConfiguration) error {
 			return errors.New("one or more channels do not exist")
 		}
 		channelByID := make(map[int]*Channel, len(routeChannels))
+		ownerClusterIDs := make([]int, 0)
 		for index := range routeChannels {
 			channel := &routeChannels[index]
 			if channel.ChannelInfo.IsMultiKey {
 				return fmt.Errorf("channel %d uses multiple keys and cannot be assigned to a cluster", channel.Id)
 			}
 			if channel.ClusterId > 0 && channel.ClusterId != cluster.Id {
-				return fmt.Errorf("channel %d already belongs to cluster %d", channel.Id, channel.ClusterId)
+				ownerClusterIDs = append(ownerClusterIDs, channel.ClusterId)
 			}
 			channelByID[channel.Id] = channel
+		}
+		if len(ownerClusterIDs) > 0 {
+			var ownerClusters []Cluster
+			if err := lockForUpdate(tx).Where("id IN ?", ownerClusterIDs).Find(&ownerClusters).Error; err != nil {
+				return err
+			}
+			archivedOwners := make(map[int]bool, len(ownerClusters))
+			for _, owner := range ownerClusters {
+				archivedOwners[owner.Id] = owner.Archived
+			}
+			for _, channel := range routeChannels {
+				if channel.ClusterId <= 0 || channel.ClusterId == cluster.Id {
+					continue
+				}
+				if !archivedOwners[channel.ClusterId] {
+					return fmt.Errorf("channel %d already belongs to active cluster %d", channel.Id, channel.ClusterId)
+				}
+			}
 		}
 
 		poolByTier := make(map[int]*ClusterPool)
@@ -449,6 +470,58 @@ func SaveClusterConfiguration(config *ClusterConfiguration) error {
 		return err
 	}
 	return applyOptionValues(optionValues)
+}
+
+func DeleteClusterConfiguration(clusterID int) error {
+	if clusterID <= 0 {
+		return errors.New("cluster id must be positive")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var cluster Cluster
+		if err := lockForUpdate(tx).First(&cluster, clusterID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("cluster %d does not exist", clusterID)
+			}
+			return err
+		}
+
+		var channels []Channel
+		if err := lockForUpdate(tx).Where("cluster_id = ?", clusterID).Find(&channels).Error; err != nil {
+			return err
+		}
+		billingGroup := strings.TrimSpace(cluster.BillingGroup)
+		for index := range channels {
+			channel := &channels[index]
+			channel.ClusterId = 0
+			channel.ClusterPoolId = 0
+			channel.Group = removeChannelGroup(channel.Group, billingGroup)
+			if err := tx.Model(channel).Select("group", "cluster_id", "cluster_pool_id").Updates(channel).Error; err != nil {
+				return err
+			}
+			if err := channel.UpdateAbilities(tx); err != nil {
+				return err
+			}
+		}
+
+		now := common.GetTimestamp()
+		if err := tx.Model(&ClusterPool{}).Where("cluster_id = ?", clusterID).Updates(map[string]any{
+			"status":       ClusterStatusDisabled,
+			"updated_time": now,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("cluster_id = ?", clusterID).Delete(&FailoverGroupMember{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&cluster).Updates(map[string]any{
+			"status":       ClusterStatusDisabled,
+			"archived":     true,
+			"updated_time": now,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&cluster).Error
+	})
 }
 
 func defaultPoolName(tier int) string {

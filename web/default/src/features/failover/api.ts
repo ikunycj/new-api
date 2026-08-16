@@ -83,9 +83,21 @@ export async function updateClusterConfiguration(
   }
 }
 
-export async function getFailoverMonitoring(): Promise<FailoverMonitoringSnapshot> {
+export async function deleteClusterConfiguration(id: number): Promise<void> {
+  const response = await api.delete<ApiResponse<null>>(
+    `/api/channel/failover/cluster-config/${id}`
+  )
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+}
+
+export async function getFailoverMonitoring(
+  clusterCode?: number
+): Promise<FailoverMonitoringSnapshot> {
   const response = await api.get<ApiResponse<FailoverMonitoringSnapshot>>(
-    '/api/channel/failover/monitoring'
+    '/api/channel/failover/monitoring',
+    { params: clusterCode ? { cluster_code: clusterCode } : undefined }
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Request failed')

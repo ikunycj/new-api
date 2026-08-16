@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/QuantumNous/new-api/pkg/observability"
 	"gorm.io/gorm"
 )
 
@@ -25,17 +26,18 @@ const (
 )
 
 type Cluster struct {
-	Id               int    `json:"id"`
-	Name             string `json:"name" gorm:"type:varchar(128);index"`
-	Type             string `json:"type" gorm:"type:varchar(64);index"`
-	Status           int    `json:"status" gorm:"index"`
-	BillingGroup     string `json:"billing_group" gorm:"type:varchar(64);index"`
-	PolicyId         int    `json:"policy_id" gorm:"index"`
-	FailoverPriority int    `json:"failover_priority" gorm:"index"`
-	Remark           string `json:"remark" gorm:"type:varchar(255)"`
-	Archived         bool   `json:"archived" gorm:"index"`
-	CreatedTime      int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime      int64  `json:"updated_time" gorm:"bigint"`
+	Id               int            `json:"id"`
+	Name             string         `json:"name" gorm:"type:varchar(128);index"`
+	Type             string         `json:"type" gorm:"type:varchar(64);index"`
+	Status           int            `json:"status" gorm:"index"`
+	BillingGroup     string         `json:"billing_group" gorm:"type:varchar(64);index"`
+	PolicyId         int            `json:"policy_id" gorm:"index"`
+	FailoverPriority int            `json:"failover_priority" gorm:"index"`
+	Remark           string         `json:"remark" gorm:"type:varchar(255)"`
+	Archived         bool           `json:"archived" gorm:"index"`
+	CreatedTime      int64          `json:"created_time" gorm:"bigint"`
+	UpdatedTime      int64          `json:"updated_time" gorm:"bigint"`
+	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type ClusterPool struct {
@@ -211,10 +213,12 @@ func InitFailoverCache() {
 		groups:               make(map[int]FailoverGroup),
 		groupMembers:         make(map[int][]FailoverGroupMember),
 	}
+	activeClusterCodes := make([]int, 0)
 	if DB != nil && DB.Migrator().HasTable(&Cluster{}) {
 		var clusters []Cluster
 		if err := DB.Select("id", "type", "billing_group", "policy_id", "failover_priority").Where("status = ? AND archived = ?", ClusterStatusEnabled, false).Order("failover_priority DESC, id ASC").Find(&clusters).Error; err == nil {
 			for _, cluster := range clusters {
+				activeClusterCodes = append(activeClusterCodes, cluster.Id)
 				cache.clusterTypes[cluster.Id] = strings.ToLower(strings.TrimSpace(cluster.Type))
 				if cluster.PolicyId > 0 {
 					cache.clusterPolicyIDs[cluster.Id] = cluster.PolicyId
@@ -230,6 +234,7 @@ func InitFailoverCache() {
 			}
 		}
 	}
+	observability.ReplaceClusterInfo(activeClusterCodes)
 	if DB != nil && DB.Migrator().HasTable(&UpstreamErrorMapping{}) {
 		_ = DB.Where("enabled = ?", true).Find(&cache.mappings).Error
 		sort.SliceStable(cache.mappings, func(i, j int) bool {

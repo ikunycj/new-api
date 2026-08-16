@@ -92,6 +92,10 @@ var (
 		Namespace: "alltoken", Name: "cluster_circuit_state",
 		Help: "Cluster circuit state represented as one hot state labels.",
 	}, []string{"cluster_code", "route", "state"})
+	clusterInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "alltoken", Name: "cluster_info",
+		Help: "Configured active clusters available for monitoring filters.",
+	}, []string{"cluster_code"})
 	failoverDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "alltoken", Name: "failover_duration_seconds",
 		Help:    "Time spent before a successful failover or final exhaustion.",
@@ -105,7 +109,16 @@ func Collectors() []prometheus.Collector {
 		relayRequests, relayRequestDuration, relayAttempts, relayAttemptDuration,
 		relayRetries, relayInFlight, relayClientCancellations,
 		errorEvents, poolRequests, poolFailovers, clusterFailovers,
-		finalErrors, clusterCircuitState, failoverDuration,
+		finalErrors, clusterCircuitState, clusterInfo, failoverDuration,
+	}
+}
+
+func ReplaceClusterInfo(clusterCodes []int) {
+	clusterInfo.Reset()
+	for _, clusterCode := range clusterCodes {
+		if clusterCode > 0 {
+			clusterInfo.WithLabelValues(strconv.Itoa(clusterCode)).Set(1)
+		}
 	}
 }
 

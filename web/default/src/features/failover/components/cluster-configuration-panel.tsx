@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,7 +38,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import { getClusterConfiguration, updateClusterConfiguration } from '../api'
+import {
+  deleteClusterConfiguration,
+  getClusterConfiguration,
+  updateClusterConfiguration,
+} from '../api'
 import type {
   ClusterConfiguration,
   ClusterConfigurationSnapshot,
@@ -58,6 +63,7 @@ const clusterConfigurationSchema = z
     name: z.string().trim().min(1),
     type: z.string().trim().min(1),
     status: z.coerce.number().int().min(0).max(1),
+    archived: z.boolean(),
     billing_group: z.string().trim().min(1).max(64),
     billing_group_description: z.string().trim().min(1),
     billing_group_ratio: z.coerce.number().min(0),
@@ -113,6 +119,7 @@ function newClusterConfiguration(): ClusterConfiguration {
     name: '',
     type: 'ikun',
     status: 1,
+    archived: false,
     billing_group: '',
     billing_group_description: '',
     billing_group_ratio: 1,
@@ -132,6 +139,7 @@ function ClusterConfigurationWorkspace(props: {
   const [selectedClusterId, setSelectedClusterId] = React.useState(
     initialCluster.id
   )
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const form = useForm<
     ClusterConfigurationInput,
     unknown,
@@ -158,6 +166,24 @@ function ClusterConfigurationWorkspace(props: {
     onError: (error) => toast.error(error.message || t('Save failed')),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteClusterConfiguration,
+    onSuccess: async () => {
+      setDeleteDialogOpen(false)
+      setSelectedClusterId(0)
+      form.reset(newClusterConfiguration())
+      toast.success(t('Deleted successfully'))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['cluster-configuration'] }),
+        queryClient.invalidateQueries({ queryKey: ['failover-config'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['channel-failover-bindings'],
+        }),
+      ])
+    },
+    onError: (error) => toast.error(error.message || t('Delete failed')),
+  })
+
   const selectCluster = (cluster: ClusterConfiguration) => {
     setSelectedClusterId(cluster.id)
     form.reset(cluster)
@@ -181,9 +207,16 @@ function ClusterConfigurationWorkspace(props: {
   }
 
   const currentClusterId = Number(form.watch('id'))
+  const archivedClusterIds = new Set(
+    props.snapshot.clusters
+      .filter((cluster) => cluster.archived)
+      .map((cluster) => cluster.id)
+  )
   const selectableChannels = props.snapshot.channels.filter(
     (channel) =>
-      channel.cluster_id === 0 || channel.cluster_id === currentClusterId
+      channel.cluster_id === 0 ||
+      channel.cluster_id === currentClusterId ||
+      archivedClusterIds.has(channel.cluster_id)
   )
 
   return (
@@ -257,6 +290,17 @@ function ClusterConfigurationWorkspace(props: {
               </p>
             </div>
             <div className='flex items-center gap-2'>
+              {currentClusterId > 0 && (
+                <Button
+                  type='button'
+                  size='icon'
+                  variant='outline'
+                  aria-label={t('Delete')}
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} />
+                </Button>
+              )}
               <FieldLabel htmlFor='cluster-enabled'>{t('Enabled')}</FieldLabel>
               <Controller
                 control={form.control}
@@ -456,6 +500,9 @@ function ClusterConfigurationWorkspace(props: {
                               disabled={channel.is_multi_key}
                             >
                               #{channel.id} · {channel.name}
+                              {channel.cluster_id > 0
+                                ? ` · C${channel.cluster_id}`
+                                : ''}
                               {channel.is_multi_key
                                 ? ` · ${t('Multi-key not supported')}`
                                 : ''}
@@ -519,7 +566,10 @@ function ClusterConfigurationWorkspace(props: {
           )}
 
           <div className='flex justify-end'>
-            <Button type='submit' disabled={mutation.isPending}>
+            <Button
+              type='submit'
+              disabled={mutation.isPending || deleteMutation.isPending}
+            >
               {mutation.isPending ? (
                 <Spinner data-icon='inline-start' />
               ) : (
@@ -529,6 +579,18 @@ function ClusterConfigurationWorkspace(props: {
             </Button>
           </div>
         </form>
+        <ConfirmDialog
+          destructive
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          title={t('Are you sure?')}
+          desc={t('This action cannot be undone.')}
+          confirmText={
+            deleteMutation.isPending ? t('Deleting...') : t('Delete')
+          }
+          isLoading={deleteMutation.isPending}
+          handleConfirm={() => deleteMutation.mutate(currentClusterId)}
+        />
       </Form>
     </div>
   )
