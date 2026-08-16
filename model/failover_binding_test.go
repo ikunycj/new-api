@@ -226,6 +226,63 @@ func TestSaveClusterConfigurationExpandsTwoRouteCluster(t *testing.T) {
 	}
 }
 
+func TestSaveClusterConfigurationReactivatesArchivedClusterWithNewRoutes(t *testing.T) {
+	setupClusterConfigurationTestDB(t)
+	cluster := Cluster{
+		Name: "Cluster1", Type: "ikun", Status: ClusterStatusDisabled,
+		BillingGroup: "Cluster_1", FailoverPriority: 100, Archived: true,
+	}
+	require.NoError(t, DB.Create(&cluster).Error)
+	for tier := 1; tier <= 4; tier++ {
+		require.NoError(t, DB.Create(&ClusterPool{
+			ClusterId: cluster.Id, Tier: tier, Name: defaultPoolName(tier),
+			Status: ClusterStatusEnabled, CostFactor: float64(tier-1) * 0.5,
+		}).Error)
+	}
+	oldChannels := []Channel{
+		{Name: "old-pro", Key: "old-a", Models: "gpt-5.4-mini", Group: "Cluster_1", Status: common.ChannelStatusEnabled, ClusterId: cluster.Id, ClusterPoolId: 2},
+		{Name: "old-plus", Key: "old-b", Models: "gpt-5.4-mini", Group: "Cluster_1", Status: common.ChannelStatusEnabled, ClusterId: cluster.Id, ClusterPoolId: 3},
+	}
+	newChannels := []Channel{
+		{Name: "new-plus", Key: "new-a", Models: "gpt-5.4-mini", Group: "Cluster_1", Status: common.ChannelStatusEnabled},
+		{Name: "new-pro", Key: "new-b", Models: "gpt-5.4-mini", Group: "Cluster_1", Status: common.ChannelStatusEnabled},
+		{Name: "new-fallback", Key: "new-c", Models: "gpt-5.4-mini", Group: "Cluster_1", Status: common.ChannelStatusEnabled},
+	}
+	require.NoError(t, DB.Create(&oldChannels).Error)
+	require.NoError(t, DB.Create(&newChannels).Error)
+
+	snapshot, err := GetClusterConfigurationSnapshot()
+	require.NoError(t, err)
+	require.Len(t, snapshot.Clusters, 1)
+	config := &snapshot.Clusters[0]
+	require.Len(t, config.Routes, 2)
+	for index, route := range config.Routes {
+		assert.Equal(t, index+1, route.PoolTier)
+		assert.Equal(t, index+1, route.RouteOrder)
+	}
+	config.BillingGroupDescription = "Cluster 1 routes"
+	config.Routes[0].ChannelId = newChannels[0].Id
+	config.Routes[1].ChannelId = newChannels[1].Id
+	config.Routes = append(config.Routes, ClusterRouteConfig{
+		ChannelId: newChannels[2].Id, PoolTier: 3, RouteOrder: 3,
+		PoolName: "Fallback", Weight: 100, CostFactor: 1.5,
+	})
+	require.NoError(t, SaveClusterConfiguration(config))
+
+	var stored Cluster
+	require.NoError(t, DB.First(&stored, cluster.Id).Error)
+	assert.False(t, stored.Archived)
+	for _, channel := range newChannels {
+		require.NoError(t, DB.First(&channel, channel.Id).Error)
+		assert.Equal(t, cluster.Id, channel.ClusterId)
+	}
+	for _, channel := range oldChannels {
+		require.NoError(t, DB.First(&channel, channel.Id).Error)
+		assert.Zero(t, channel.ClusterId)
+		assert.Zero(t, channel.ClusterPoolId)
+	}
+}
+
 func TestSaveClusterConfigurationRejectsUnsupportedRouteCount(t *testing.T) {
 	config := &ClusterConfiguration{
 		Name: "IKUN", Type: "ikun", Status: ClusterStatusEnabled,

@@ -226,6 +226,10 @@ func GetClusterConfigurationSnapshot() (*ClusterConfigurationSnapshot, error) {
 	for _, cluster := range clusters {
 		routes := channelRoutes[cluster.Id]
 		sort.SliceStable(routes, func(i, j int) bool { return routes[i].RouteOrder < routes[j].RouteOrder })
+		for index := range routes {
+			routes[index].PoolTier = index + 1
+			routes[index].RouteOrder = index + 1
+		}
 		ratio := ratios[cluster.BillingGroup]
 		if ratio == 0 {
 			if _, exists := ratios[cluster.BillingGroup]; !exists {
