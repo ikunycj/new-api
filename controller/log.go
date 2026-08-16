@@ -149,28 +149,3 @@ func GetLogsSelfStat(c *gin.Context) {
 	})
 	return
 }
-
-// DeleteHistoryLogs is the legacy synchronous log cleanup endpoint (DELETE /api/log/).
-// It remains available for API compatibility; the default frontend uses the
-// asynchronous POST /api/system-task/log-cleanup endpoint.
-func DeleteHistoryLogs(c *gin.Context) {
-	targetTimestamp, _ := strconv.ParseInt(c.Query("target_timestamp"), 10, 64)
-	if targetTimestamp == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "target timestamp is required",
-		})
-		return
-	}
-	count, err := model.DeleteOldLog(c.Request.Context(), targetTimestamp, 100)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    count,
-	})
-	return
-}

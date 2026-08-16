@@ -1377,45 +1377,6 @@
         ]
       }
     },
-    "/api/user/aff_transfer": {
-      "post": {
-        "summary": "转换邀请额度",
-        "deprecated": false,
-        "description": "🔐 需要登录（User权限）",
-        "tags": [
-          "用户管理"
-        ],
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "quota": {
-                    "type": "integer"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "成功",
-            "headers": {}
-          }
-        },
-        "security": [
-          {
-            "Combination343": []
-          },
-          {
-            "Combination1243": []
-          }
-        ]
-      }
-    },
     "/api/user/setting": {
       "put": {
         "summary": "更新用户设置",
@@ -3881,29 +3842,6 @@
             "Combination1243": []
           }
         ]
-      },
-      "delete": {
-        "summary": "删除历史日志",
-        "deprecated": false,
-        "description": "👨‍💼 需要管理员权限（Admin）",
-        "tags": [
-          "日志"
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "headers": {}
-          }
-        },
-        "security": [
-          {
-            "Combination343": []
-          },
-          {
-            "Combination1243": []
-          }
-        ]
       }
     },
     "/api/log/stat": {
@@ -4846,31 +4784,6 @@
     "/api/option/rest_model_ratio": {
       "post": {
         "summary": "重置模型倍率",
-        "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
-        "tags": [
-          "系统设置"
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "headers": {}
-          }
-        },
-        "security": [
-          {
-            "Combination343": []
-          },
-          {
-            "Combination1243": []
-          }
-        ]
-      }
-    },
-    "/api/option/migrate_console_setting": {
-      "post": {
-        "summary": "迁移控制台设置",
         "deprecated": false,
         "description": "👑 需要超级管理员权限（Root）",
         "tags": [

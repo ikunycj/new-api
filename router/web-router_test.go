@@ -23,9 +23,9 @@ func TestWebRouterStaticFallbackContract(t *testing.T) {
 	}
 	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
 	router := gin.New()
-	SetWebRouter(router, ThemeAssets{
-		DefaultBuildFS:   buildFS,
-		DefaultIndexPage: indexPage,
+	SetWebRouter(router, WebAssets{
+		BuildFS:   buildFS,
+		IndexPage: indexPage,
 	})
 
 	t.Run("serves an existing hashed asset", func(t *testing.T) {
@@ -109,9 +109,9 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 	}
 	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
 	engine := gin.New()
-	SetWebRouter(engine, ThemeAssets{
-		DefaultBuildFS:   buildFS,
-		DefaultIndexPage: indexPage,
+	SetWebRouter(engine, WebAssets{
+		BuildFS:   buildFS,
+		IndexPage: indexPage,
 	})
 
 	t.Run("selects locale and safely injects public bootstrap", func(t *testing.T) {
