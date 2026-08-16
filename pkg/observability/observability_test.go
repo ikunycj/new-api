@@ -41,8 +41,9 @@ func TestErrorClass(t *testing.T) {
 		want       string
 	}{
 		{name: "success", want: ErrorSuccess},
-		{name: "cancelled", contextErr: context.Canceled, want: ErrorClientCancelled},
-		{name: "deadline", contextErr: context.DeadlineExceeded, want: ErrorResponseTimeout},
+		{name: "successful response ignores late cancellation", contextErr: context.Canceled, want: ErrorSuccess},
+		{name: "cancelled", apiErr: types.NewError(context.Canceled, types.ErrorCodeDoRequestFailed), contextErr: context.Canceled, want: ErrorClientCancelled},
+		{name: "deadline", apiErr: types.NewError(context.DeadlineExceeded, types.ErrorCodeDoRequestFailed), contextErr: context.DeadlineExceeded, want: ErrorResponseTimeout},
 		{name: "quota", apiErr: types.NewError(errors.New("quota"), types.ErrorCodeInsufficientUserQuota), want: ErrorQuota},
 		{name: "no channel", apiErr: types.NewError(errors.New("none"), types.ErrorCodeGetChannelFailed), want: ErrorNoChannel},
 		{name: "parse", apiErr: types.NewError(errors.New("bad json"), types.ErrorCodeReadResponseBodyFailed), want: ErrorParse},

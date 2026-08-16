@@ -211,6 +211,12 @@ func ProviderFromBaseURL(raw string) string {
 
 // ErrorClass converts all errors into a deliberately bounded category set.
 func ErrorClass(apiErr *types.NewAPIError, contextErr error) string {
+	// A relay can finish writing a valid response just before the client closes
+	// the connection. In that case Gin's request context is already canceled,
+	// but the relay outcome is still a success and must not be reported as 499.
+	if apiErr == nil {
+		return ErrorSuccess
+	}
 	if contextErr != nil {
 		if errors.Is(contextErr, context.Canceled) {
 			return ErrorClientCancelled
@@ -219,10 +225,6 @@ func ErrorClass(apiErr *types.NewAPIError, contextErr error) string {
 			return ErrorResponseTimeout
 		}
 	}
-	if apiErr == nil {
-		return ErrorSuccess
-	}
-
 	code := strings.ToLower(string(apiErr.GetErrorCode()))
 	message := strings.ToLower(apiErr.Error())
 	switch apiErr.GetErrorCode() {
