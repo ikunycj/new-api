@@ -43,7 +43,7 @@ Stop if local `master` is missing, any SHA differs, the remote query fails, or t
 ## Execute the release
 
 1. Fetch `origin master`, verify local `master`, `origin/master`, and live remote `master` resolve to the same SHA, and use only that SHA as the release commit. Stop on any mismatch.
-2. Use `scripts/build-release.ps1` to create a same-drive detached worktree, install the exact locked frontend dependencies in that worktree, build the default frontend, create the classic placeholder, cross-compile the Linux binary, and emit a SHA-256 manifest plus archive.
+2. Use `scripts/build-release.ps1` to create a same-drive detached worktree, install the exact locked frontend dependencies in that worktree, build the frontend, cross-compile the Linux binary, and emit a SHA-256 manifest plus archive.
 3. Inspect the artifact's ELF magic, `go version -m` metadata, commit, and SHA. Upload only the artifact archive and remote deploy script.
 4. Verify the uploaded archive SHA before extraction. Run the binary with `--help` before wrapping it into an image.
 5. Use `scripts/deploy-binary.sh` on the host. It preserves the current image as a rollback tag, replaces `/new-api` in a stopped temporary container, commits a candidate image, smoke-tests it, recreates only the `new-api` service, and rolls back if local health fails.

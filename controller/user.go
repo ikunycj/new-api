@@ -420,25 +420,6 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
-type TransferAffQuotaRequest struct {
-	Quota int64 `json:"quota" binding:"required"`
-}
-
-// TransferAffQuota keeps the classic frontend contract while using the new
-// affiliate quota account as the source of truth.
-func TransferAffQuota(c *gin.Context) {
-	var request TransferAffQuotaRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if _, err := model.CreateAffiliateBalanceTransfer(c.GetInt("id"), request.Quota, common.GetUUID()); err != nil {
-		common.ApiErrorI18n(c, i18n.MsgUserTransferFailed, map[string]any{"Error": err.Error()})
-		return
-	}
-	common.ApiSuccessI18n(c, i18n.MsgUserTransferSuccess, nil)
-}
-
 func GetAffCode(c *gin.Context) {
 	id := c.GetInt("id")
 	if err := model.EnsureAffiliateProfile(id); err != nil {

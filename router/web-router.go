@@ -38,10 +38,9 @@ var publicPageLanguageMatcher = language.NewMatcher([]language.Tag{
 	language.Vietnamese,
 })
 
-// ThemeAssets retains the existing router API while carrying only the default frontend.
-type ThemeAssets struct {
-	DefaultBuildFS   fs.FS
-	DefaultIndexPage []byte
+type WebAssets struct {
+	BuildFS   fs.FS
+	IndexPage []byte
 }
 
 type docsManifest struct {
@@ -64,11 +63,11 @@ func matchesETag(header, etag string) bool {
 	return false
 }
 
-func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
-	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
+func SetWebRouter(router *gin.Engine, assets WebAssets) {
+	webFS := common.EmbedFolder(assets.BuildFS, "web/default/dist")
 	manifest := docsManifest{}
 	manifestETag := ""
-	if manifestJSON, err := fs.ReadFile(assets.DefaultBuildFS, "web/default/dist/static/docs/manifest.json"); err == nil {
+	if manifestJSON, err := fs.ReadFile(assets.BuildFS, "web/default/dist/static/docs/manifest.json"); err == nil {
 		manifestETag = contentETag(manifestJSON)
 		_ = common.Unmarshal(manifestJSON, &manifest)
 	}
@@ -78,7 +77,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	prerenderPages := make(map[string][]byte, len(publicPageLocales)+len(documentationRoutes))
 	for _, locale := range publicPageLocales {
 		page, err := fs.ReadFile(
-			assets.DefaultBuildFS,
+			assets.BuildFS,
 			path.Join("web/default/dist/prerender", locale, publicHomeFile),
 		)
 		if err == nil {
@@ -92,7 +91,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 		}
 		publicPageRoutes[routePath] = struct{}{}
 		page, err := fs.ReadFile(
-			assets.DefaultBuildFS,
+			assets.BuildFS,
 			path.Join("web/default/dist/prerender", documentationLocale, fileName),
 		)
 		if err == nil {
@@ -116,7 +115,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 		}
 		c.Next()
 	})
-	router.Use(static.Serve("/", defaultFS))
+	router.Use(static.Serve("/", webFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
 		requestPath := c.Request.URL.Path
@@ -154,7 +153,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			common.OptionMapRWMutex.RUnlock()
 			if canonicalPath == "/" && strings.TrimSpace(homePageContent) != "" {
 				c.Header("Cache-Control", "no-cache, must-revalidate")
-				c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
+				c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
 				return
 			}
 
@@ -213,7 +212,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 		}
 
 		c.Header("Cache-Control", "no-cache, must-revalidate")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
 	})
 }
 

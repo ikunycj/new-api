@@ -563,12 +563,12 @@ web/default/scripts/build-prerender.ts
 
 ### 10.2 Go 返回逻辑
 
-`ThemeAssets` 保持现有 `fs.FS` 接口。`SetWebRouter` 启动时从嵌入文件系统读取预渲染模板和文档 manifest，不增加生产 Node 服务，也不在每个请求中读取磁盘：
+`WebAssets` 保持 `fs.FS` 接口。`SetWebRouter` 启动时从嵌入文件系统读取预渲染模板和文档 manifest，不增加生产 Node 服务，也不在每个请求中读取磁盘：
 
 ```go
-type ThemeAssets struct {
-    DefaultBuildFS   fs.FS
-    DefaultIndexPage []byte
+type WebAssets struct {
+    BuildFS   fs.FS
+    IndexPage []byte
 }
 ```
 
