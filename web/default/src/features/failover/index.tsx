@@ -8,6 +8,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -260,6 +261,43 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
   const clusterValues = form.watch('clusters') as FormValues['clusters']
   const policyValues = form.watch('policies') as FormValues['policies']
   const groupValues = form.watch('groups') as FormValues['groups']
+  const clusterSelectItems = useMemo(
+    () =>
+      clusterValues
+        .filter((cluster) => cluster.id > 0)
+        .map((cluster) => ({
+          label: `${cluster.name} · ${t('ID')} ${cluster.id}`,
+          value: String(cluster.id),
+        })),
+    [clusterValues, t]
+  )
+  const policySelectItems = useMemo(
+    () =>
+      policyValues
+        .filter((policy) => policy.id > 0)
+        .map((policy) => ({
+          label: `${policy.name} · ${t('ID')} ${policy.id}`,
+          value: String(policy.id),
+        })),
+    [policyValues, t]
+  )
+  const groupSelectItems = useMemo(
+    () =>
+      groupValues
+        .filter((group) => group.id > 0)
+        .map((group) => ({
+          label: `${group.name} · ${t('ID')} ${group.id}`,
+          value: String(group.id),
+        })),
+    [groupValues, t]
+  )
+  const rulePolicySelectItems = useMemo(
+    () => [
+      { label: t('Inherit group policy'), value: '0' },
+      ...policySelectItems,
+    ],
+    [policySelectItems, t]
+  )
 
   const updateMutation = useMutation({
     mutationFn: (values: FormValues) =>
@@ -609,26 +647,25 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                         name={`pools.${index}.cluster_id`}
                         render={({ field }) => (
                           <Select
+                            items={clusterSelectItems}
                             value={String(field.value)}
                             onValueChange={(value) =>
                               field.onChange(Number(value))
                             }
                           >
-                            <SelectTrigger className='w-44'>
+                            <SelectTrigger className='w-52'>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {clusterValues
-                                  .filter((cluster) => cluster.id > 0)
-                                  .map((cluster) => (
-                                    <SelectItem
-                                      key={cluster.id}
-                                      value={String(cluster.id)}
-                                    >
-                                      C{cluster.id} {cluster.name}
-                                    </SelectItem>
-                                  ))}
+                                {clusterSelectItems.map((item) => (
+                                  <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                  >
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
                               </SelectGroup>
                             </SelectContent>
                           </Select>
@@ -765,26 +802,22 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       name={`groups.${index}.policy_id`}
                       render={({ field }) => (
                         <Select
+                          items={policySelectItems}
                           value={String(field.value)}
                           onValueChange={(value) =>
                             field.onChange(Number(value))
                           }
                         >
-                          <SelectTrigger className='w-44'>
+                          <SelectTrigger className='w-52'>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {policyValues
-                                .filter((policy) => policy.id > 0)
-                                .map((policy) => (
-                                  <SelectItem
-                                    key={policy.id}
-                                    value={String(policy.id)}
-                                  >
-                                    {policy.name}
-                                  </SelectItem>
-                                ))}
+                              {policySelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
@@ -867,26 +900,22 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       name={`group_members.${index}.failover_group_id`}
                       render={({ field }) => (
                         <Select
+                          items={groupSelectItems}
                           value={String(field.value)}
                           onValueChange={(value) =>
                             field.onChange(Number(value))
                           }
                         >
-                          <SelectTrigger className='w-40'>
+                          <SelectTrigger className='w-60'>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {groupValues
-                                .filter((group) => group.id > 0)
-                                .map((group) => (
-                                  <SelectItem
-                                    key={group.id}
-                                    value={String(group.id)}
-                                  >
-                                    {group.name}
-                                  </SelectItem>
-                                ))}
+                              {groupSelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
@@ -899,26 +928,22 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       name={`group_members.${index}.cluster_id`}
                       render={({ field }) => (
                         <Select
+                          items={clusterSelectItems}
                           value={String(field.value)}
                           onValueChange={(value) =>
                             field.onChange(Number(value))
                           }
                         >
-                          <SelectTrigger className='w-44'>
+                          <SelectTrigger className='w-52'>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {clusterValues
-                                .filter((cluster) => cluster.id > 0)
-                                .map((cluster) => (
-                                  <SelectItem
-                                    key={cluster.id}
-                                    value={String(cluster.id)}
-                                  >
-                                    C{cluster.id} {cluster.name}
-                                  </SelectItem>
-                                ))}
+                              {clusterSelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
@@ -1003,26 +1028,22 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       name={`rules.${index}.failover_group_id`}
                       render={({ field }) => (
                         <Select
+                          items={groupSelectItems}
                           value={String(field.value)}
                           onValueChange={(value) =>
                             field.onChange(Number(value))
                           }
                         >
-                          <SelectTrigger className='w-40'>
+                          <SelectTrigger className='w-60'>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {groupValues
-                                .filter((group) => group.id > 0)
-                                .map((group) => (
-                                  <SelectItem
-                                    key={group.id}
-                                    value={String(group.id)}
-                                  >
-                                    {group.name}
-                                  </SelectItem>
-                                ))}
+                              {groupSelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
@@ -1045,29 +1066,22 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       name={`rules.${index}.policy_id`}
                       render={({ field }) => (
                         <Select
+                          items={rulePolicySelectItems}
                           value={String(field.value)}
                           onValueChange={(value) =>
                             field.onChange(Number(value))
                           }
                         >
-                          <SelectTrigger className='w-44'>
+                          <SelectTrigger className='w-52'>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              <SelectItem value='0'>
-                                {t('Inherit group policy')}
-                              </SelectItem>
-                              {policyValues
-                                .filter((policy) => policy.id > 0)
-                                .map((policy) => (
-                                  <SelectItem
-                                    key={policy.id}
-                                    value={String(policy.id)}
-                                  >
-                                    {policy.name}
-                                  </SelectItem>
-                                ))}
+                              {rulePolicySelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
