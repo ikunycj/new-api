@@ -49,7 +49,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
-import type { ApiKeyModelsResult } from '../../api'
+import type { ApiKeyModelEndpoint, ApiKeyModelsResult } from '../../api'
 import { useApiKeyModelCatalog } from '../../hooks/use-api-key-model-catalog'
 import {
   buildCCSwitchImportUrl,
@@ -158,6 +158,45 @@ function createInitialDrafts(
   }
 }
 
+function selectSuggestedModel(
+  models: ApiKeyModelsResult | undefined,
+  app: CCSwitchApp
+): string {
+  if (!models?.success) return ''
+
+  const preferredFamilies: Record<CCSwitchApp, string[]> = {
+    claude: ['claude', 'anthropic'],
+    codex: ['gpt-', 'codex', 'o1', 'o3', 'o4'],
+    gemini: ['gemini', 'google'],
+  }
+  const family = preferredFamilies[app]
+  const appModel = models.models.find((model) => {
+    const id = model.id.toLowerCase()
+    const owner = model.ownedBy?.toLowerCase() ?? ''
+    let endpoint: ApiKeyModelEndpoint = 'gemini'
+    if (app === 'claude') endpoint = 'anthropic'
+    if (app === 'codex') endpoint = 'openai-response'
+    return (
+      model.supportedEndpointTypes.includes(endpoint) &&
+      family.some(
+        (candidate) => id.includes(candidate) || owner.includes(candidate)
+      )
+    )
+  })
+  if (appModel) return appModel.id
+
+  const generalModel = models.models.find((model) =>
+    model.supportedEndpointTypes.some(
+      (endpoint) =>
+        endpoint === 'openai' ||
+        endpoint === 'anthropic' ||
+        endpoint === 'gemini' ||
+        endpoint === 'openai-response'
+    )
+  )
+  return generalModel?.id ?? ''
+}
+
 function getRoutingLabel(t: TFunction, apiKey: ApiKey | null): string {
   if (!apiKey) return t('Not available')
   if (apiKey.group_candidates.length > 0) {
@@ -202,11 +241,31 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   const currentDefaultName = getDefaultName(t, app, props.apiKey?.name)
   const currentDraft = drafts[app]
   const primarySelection = currentDraft.models.model
+  const primaryModelValue = primarySelection?.value.trim() ?? ''
   const modelsCount = modelsQuery.data?.success
     ? modelsQuery.data.models.length
     : null
   const modelsFailure: Extract<ApiKeyModelsResult, { success: false }> | null =
     modelsQuery.data?.success === false ? modelsQuery.data : null
+
+  useEffect(() => {
+    if (!props.open || !modelsQuery.data?.success) return
+    if (primaryModelValue) return
+
+    const suggestedModel = selectSuggestedModel(modelsQuery.data, app)
+    if (!suggestedModel) return
+
+    setDrafts((current) => ({
+      ...current,
+      [app]: {
+        ...current[app],
+        models: {
+          ...current[app].models,
+          model: { source: 'catalog', value: suggestedModel },
+        },
+      },
+    }))
+  }, [app, modelsQuery.data, primaryModelValue, props.open])
 
   useEffect(() => {
     return () => launchCleanupRef.current()

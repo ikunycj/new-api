@@ -66,6 +66,8 @@ export interface LoginResponse {
   data?: {
     require_2fa?: boolean
     id?: number
+    onboarding_required?: boolean
+    onboarding_version?: number | null
   }
 }
 

@@ -20,6 +20,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { markUserRequestCompleted } from '@/lib/api'
+
 import { generateImage, sendChatCompletion } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import {
@@ -77,6 +79,7 @@ export function useChatHandler({
   const [isRequesting, setIsRequesting] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
+  const completedRequestIdsRef = useRef<Set<number>>(new Set())
   const pendingStreamChunksRef = useRef<PendingStreamChunks>({
     content: '',
     reasoning: '',
@@ -158,6 +161,20 @@ export function useChatHandler({
     [t]
   )
 
+  // A stream can deliver its terminal event more than once while it is being
+  // closed. Keep the optimistic onboarding counter idempotent per request.
+  const markRequestCompletedOnce = useCallback((requestId: number) => {
+    if (completedRequestIdsRef.current.has(requestId)) return
+    completedRequestIdsRef.current.add(requestId)
+    if (completedRequestIdsRef.current.size > 64) {
+      const oldestRequestId = [...completedRequestIdsRef.current][0]
+      if (oldestRequestId !== undefined) {
+        completedRequestIdsRef.current.delete(oldestRequestId)
+      }
+    }
+    markUserRequestCompleted()
+  }, [])
+
   // Handle stream update
   const handleStreamUpdate = useCallback(
     (type: 'reasoning' | 'content', chunk: string) => {
@@ -171,17 +188,21 @@ export function useChatHandler({
   )
 
   // Handle stream complete
-  const handleStreamComplete = useCallback(() => {
-    flushStreamUpdates()
-    setIsRequesting(false)
-    onMessageUpdate((prev) =>
-      updateLastAssistantMessage(prev, (message) =>
-        isAssistantMessageFinal(message)
-          ? message
-          : completeAssistantMessage(message)
+  const handleStreamComplete = useCallback(
+    (requestId: number) => {
+      flushStreamUpdates()
+      setIsRequesting(false)
+      markRequestCompletedOnce(requestId)
+      onMessageUpdate((prev) =>
+        updateLastAssistantMessage(prev, (message) =>
+          isAssistantMessageFinal(message)
+            ? message
+            : completeAssistantMessage(message)
+        )
       )
-    )
-  }, [flushStreamUpdates, onMessageUpdate])
+    },
+    [flushStreamUpdates, markRequestCompletedOnce, onMessageUpdate]
+  )
 
   // Handle stream error
   const handleStreamError = useCallback(
@@ -206,6 +227,8 @@ export function useChatHandler({
   // Send streaming chat request
   const sendStreamingChat = useCallback(
     (messages: Message[]) => {
+      const requestId = requestIdRef.current + 1
+      requestIdRef.current = requestId
       setIsRequesting(true)
       const payload = buildChatCompletionPayload(
         messages,
@@ -215,7 +238,7 @@ export function useChatHandler({
       sendStreamRequest(
         payload,
         handleStreamUpdate,
-        handleStreamComplete,
+        () => handleStreamComplete(requestId),
         handleStreamError
       )
     },
@@ -266,6 +289,7 @@ export function useChatHandler({
             return updatedMessage ?? message
           })
         )
+        markRequestCompletedOnce(requestId)
       } catch (error: unknown) {
         if (abortController.signal.aborted) return
 
@@ -278,7 +302,13 @@ export function useChatHandler({
         }
       }
     },
-    [config, parameterEnabled, onMessageUpdate, handleStreamError]
+    [
+      config,
+      parameterEnabled,
+      onMessageUpdate,
+      handleStreamError,
+      markRequestCompletedOnce,
+    ]
   )
 
   const sendImageGeneration = useCallback(
@@ -286,7 +316,9 @@ export function useChatHandler({
       const promptMessage = [...messages]
         .reverse()
         .find((message) => message.from === 'user')
-      const prompt = promptMessage ? getMessageContent(promptMessage).trim() : ''
+      const prompt = promptMessage
+        ? getMessageContent(promptMessage).trim()
+        : ''
 
       if (!prompt) {
         handleStreamError(ERROR_MESSAGES.API_REQUEST_ERROR)
@@ -318,9 +350,7 @@ export function useChatHandler({
           .map((image) => ({
             url:
               image.url ||
-              (image.b64_json
-                ? `data:image/png;base64,${image.b64_json}`
-                : ''),
+              (image.b64_json ? `data:image/png;base64,${image.b64_json}` : ''),
             revisedPrompt: image.revised_prompt,
           }))
           .filter((image) => image.url)
@@ -334,6 +364,7 @@ export function useChatHandler({
             completeAssistantMessage({ ...message, images })
           )
         )
+        markRequestCompletedOnce(requestId)
       } catch (error: unknown) {
         if (abortController.signal.aborted) return
 
@@ -346,7 +377,7 @@ export function useChatHandler({
         }
       }
     },
-    [config, handleStreamError, onMessageUpdate, t]
+    [config, handleStreamError, markRequestCompletedOnce, onMessageUpdate, t]
   )
 
   // Send chat request (stream or non-stream based on config)
@@ -363,7 +394,13 @@ export function useChatHandler({
         sendNonStreamingChat(messages)
       }
     },
-    [config.model, config.stream, sendImageGeneration, sendStreamingChat, sendNonStreamingChat]
+    [
+      config.model,
+      config.stream,
+      sendImageGeneration,
+      sendStreamingChat,
+      sendNonStreamingChat,
+    ]
   )
 
   // Stop generation

@@ -17,58 +17,63 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowRight,
   BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
-  Circle,
-  Copy,
-  CreditCard,
   FileText,
   KeyRound,
   ListChecks,
+  LoaderCircle,
+  MessageSquareText,
+  MonitorDown,
   RadioTower,
-  ShieldCheck,
-  TerminalSquare,
-  Timer,
   type LucideIcon,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'motion/react'
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { Dialog } from '@/components/dialog'
 import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { API_KEY_STATUS } from '@/features/keys/constants'
 import type { ApiKey } from '@/features/keys/types'
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { getUserModels } from '@/lib/api'
-import { MOTION_TRANSITION } from '@/lib/motion'
+import { completeOnboarding, getSelf } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
-import {
-  useApiInfo,
-  useDashboardContentVisibility,
-} from '../../hooks/use-status-data'
+import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
+import { NewUserOnboardingDialog } from './new-user-onboarding-dialog'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
 
 const SETUP_GUIDE_VISIBILITY_STORAGE_KEY =
-  'dashboard_overview_setup_guide_expanded'
+  'dashboard_overview_setup_guide_expanded:v2'
+const SETUP_GUIDE_SKIPPED_STORAGE_KEY =
+  'dashboard_overview_setup_guide_skipped_steps:v1'
+const ONBOARDING_UI_VERSION = 1
+
+const LazyCCSwitchDialog = lazy(() =>
+  import('@/features/keys/components/dialogs/cc-switch-dialog').then(
+    (module) => ({
+      default: module.CCSwitchDialog,
+    })
+  )
+)
 
 const SETUP_GUIDE_CODE_PATTERN = [
   'const request = await client.responses.create({',
@@ -93,9 +98,10 @@ interface StartStep {
   title: string
   description: string
   to: DashboardActionPath
-  icon: LucideIcon
   completed: boolean
 }
+
+type StartStepState = 'completed' | 'current' | 'pending'
 
 interface QuickAction {
   title: string
@@ -105,79 +111,60 @@ interface QuickAction {
   adminOnly?: boolean
 }
 
-interface RequestExample {
-  endpoint: string
-  model: string
-  keyName: string
-  keyId?: number
-  displayKey: string
-  ready: boolean
-}
-
-interface HeroSignal {
-  label: string
-  value: string
-  icon: LucideIcon
-  tone: IconBadgeTone
-}
-
-function getSavedSetupGuideExpanded(): boolean | null {
-  if (typeof window === 'undefined') return null
-  const saved = window.localStorage.getItem(SETUP_GUIDE_VISIBILITY_STORAGE_KEY)
+function getSavedSetupGuideExpanded(userId?: number): boolean | null {
+  if (typeof window === 'undefined' || !userId) return null
+  const saved = window.localStorage.getItem(
+    `${SETUP_GUIDE_VISIBILITY_STORAGE_KEY}:${userId}`
+  )
   if (saved === 'expanded') return true
   if (saved === 'collapsed') return false
   return null
 }
 
-function saveSetupGuideExpanded(expanded: boolean): void {
-  if (typeof window === 'undefined') return
+function saveSetupGuideExpanded(
+  userId: number | undefined,
+  expanded: boolean
+): void {
+  if (typeof window === 'undefined' || !userId) return
   window.localStorage.setItem(
-    SETUP_GUIDE_VISIBILITY_STORAGE_KEY,
+    `${SETUP_GUIDE_VISIBILITY_STORAGE_KEY}:${userId}`,
     expanded ? 'expanded' : 'collapsed'
   )
 }
 
-function getCurrentOrigin(): string {
-  if (typeof window === 'undefined') return ''
-  return window.location.origin
-}
+function getSavedSkippedSetupSteps(userId?: number): number[] {
+  if (typeof window === 'undefined' || !userId) return []
+  const saved = window.localStorage.getItem(
+    `${SETUP_GUIDE_SKIPPED_STORAGE_KEY}:${ONBOARDING_UI_VERSION}:${userId}`
+  )
+  if (!saved) return []
 
-function normalizeEndpoint(sourceUrl?: string): string {
-  const fallback = `${getCurrentOrigin()}/v1/chat/completions`
-  const trimmed = sourceUrl?.trim()
-  if (!trimmed) return fallback
-
-  const withoutTrailingSlash = trimmed.replace(/\/+$/, '')
-  if (withoutTrailingSlash.endsWith('/v1/chat/completions')) {
-    return withoutTrailingSlash
+  try {
+    const parsed = JSON.parse(saved)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (value): value is number =>
+        typeof value === 'number' && Number.isInteger(value) && value >= 0
+    )
+  } catch {
+    return []
   }
-  if (withoutTrailingSlash.endsWith('/v1')) {
-    return `${withoutTrailingSlash}/chat/completions`
-  }
-  return `${withoutTrailingSlash}/v1/chat/completions`
 }
 
-function getPreferredKey(keys: ApiKey[]): ApiKey | null {
-  return keys.find((item) => item.status === 1) ?? keys[0] ?? null
+function saveSkippedSetupSteps(userId: number | undefined, steps: number[]) {
+  if (typeof window === 'undefined' || !userId) return
+  window.localStorage.setItem(
+    `${SETUP_GUIDE_SKIPPED_STORAGE_KEY}:${ONBOARDING_UI_VERSION}:${userId}`,
+    JSON.stringify(steps)
+  )
 }
 
-function formatDisplayKey(key?: string): string {
-  if (!key) return 'sk-...'
-  if (key.length <= 14) return key
-  return `${key.slice(0, 7)}...${key.slice(-4)}`
+function getAnyKey(keys: ApiKey[]): ApiKey | null {
+  return keys[0] ?? null
 }
 
-function buildCurlCommand(args: {
-  endpoint: string
-  apiKey: string
-  model: string
-}): string {
-  return [
-    `curl ${args.endpoint} \\`,
-    '  -H "Content-Type: application/json" \\',
-    `  -H "Authorization: Bearer ${args.apiKey}" \\`,
-    `  -d '{"model":"${args.model}","messages":[{"role":"user","content":"Say hello in one sentence."}]}'`,
-  ].join('\n')
+function getPreferredEnabledKey(keys: ApiKey[]): ApiKey | null {
+  return keys.find((item) => item.status === API_KEY_STATUS.ENABLED) ?? null
 }
 
 function SetupGuideBackdrop(props: { compact?: boolean }) {
@@ -221,197 +208,200 @@ function SetupGuideBackdrop(props: { compact?: boolean }) {
 function StartStepItem(props: {
   step: StartStep
   index: number
-  isLast: boolean
+  state: StartStepState
+  onSkip: () => void
+  onOpen: () => void
 }) {
-  const Icon = props.step.icon
-  const StatusIcon = props.step.completed ? Check : Circle
+  const { t } = useTranslation()
+  const isCurrent = props.state === 'current'
+  const isCompleted = props.state === 'completed'
+  const isRequestStep = props.index === 2
+  let stateLabel = t('Pending')
+  if (isCompleted) stateLabel = t('Completed')
+  if (isCurrent) stateLabel = t('Processing')
+
+  const stepContent = <StepContent index={props.index} step={props.step} />
+  const stepControlClassName =
+    'focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2'
+  const arrowClassName = cn(
+    'size-4',
+    isCompleted ? 'text-success' : 'text-muted-foreground'
+  )
+  const arrowControlClassName =
+    'hover:bg-muted focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-md outline-none focus-visible:ring-2'
 
   return (
-    <li className='relative flex gap-3 pb-2.5 last:pb-0'>
-      {!props.isLast && (
-        <span
-          className='bg-border absolute top-9 bottom-0 left-4 w-px'
-          aria-hidden='true'
-        />
-      )}
-      <span
+    <li className='relative pb-2.5 last:pb-0'>
+      <div
         className={cn(
-          'bg-background relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg border shadow-xs',
-          props.step.completed && 'border-success/30 bg-success/10'
+          'flex min-h-16 items-center gap-2 rounded-xl border px-3 py-2.5 shadow-xs transition-transform duration-300 sm:gap-3',
+          isCompleted && 'border-success/35 bg-success/12',
+          isCurrent &&
+            'scale-[1.03] border-warning/90 bg-warning/20 shadow-[0_0_0_4px_color-mix(in_oklch,var(--warning)_28%,transparent)] motion-safe:animate-[pulse_2s_ease-in-out_infinite]',
+          !isCompleted && !isCurrent && 'border-border bg-background'
         )}
       >
-        <StatusIcon
-          className={props.step.completed ? 'text-success size-4' : 'size-4'}
-          aria-hidden='true'
-        />
-      </span>
-
-      <Link
-        to={props.step.to}
-        className='bg-background/70 hover:bg-muted/50 focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left shadow-xs transition-colors outline-none focus-visible:ring-2'
-      >
-        <span className='flex min-w-0 items-start gap-2.5'>
-          <span className='bg-muted mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg'>
-            <Icon className='size-3.5' aria-hidden='true' />
-          </span>
-          <span className='flex min-w-0 flex-col gap-0.5'>
-            <span className='flex items-center gap-2 text-sm font-medium'>
-              <span className='text-muted-foreground font-mono text-xs tabular-nums'>
-                {props.index + 1}.
-              </span>
-              <span className='truncate'>{props.step.title}</span>
-            </span>
-            <span className='text-muted-foreground line-clamp-1 text-xs'>
-              {props.step.description}
-            </span>
-          </span>
-        </span>
-        <ArrowRight
-          className='text-muted-foreground size-4 shrink-0'
-          aria-hidden='true'
-        />
-      </Link>
+        <span className='sr-only'>{stateLabel}</span>
+        {isRequestStep ? (
+          <button
+            type='button'
+            onClick={props.onOpen}
+            className={stepControlClassName}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
+            {stepContent}
+          </button>
+        ) : (
+          <Link
+            to={props.step.to}
+            className={stepControlClassName}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
+            {stepContent}
+          </Link>
+        )}
+        <div className='flex shrink-0 items-center gap-1'>
+          {isCurrent ? (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-7 shrink-0 px-2 text-xs'
+              onClick={props.onSkip}
+            >
+              {t('Skip')}
+            </Button>
+          ) : null}
+          {isRequestStep ? (
+            <button
+              type='button'
+              onClick={props.onOpen}
+              className={arrowControlClassName}
+              aria-label={props.step.title}
+            >
+              <ArrowRight className={arrowClassName} aria-hidden='true' />
+            </button>
+          ) : (
+            <Link
+              to={props.step.to}
+              className={arrowControlClassName}
+              aria-label={props.step.title}
+            >
+              <ArrowRight className={arrowClassName} aria-hidden='true' />
+            </Link>
+          )}
+        </div>
+      </div>
     </li>
   )
 }
 
-function RequestPreview(props: {
-  example: RequestExample
-  signals: HeroSignal[]
+function StepContent(props: { index: number; step: StartStep }) {
+  return (
+    <span className='flex min-w-0 items-center gap-3'>
+      <span className='text-muted-foreground w-8 shrink-0 font-mono text-xs font-semibold tabular-nums'>
+        {String(props.index + 1).padStart(2, '0')}
+      </span>
+      <span className='flex min-w-0 flex-col gap-0.5'>
+        <span className='truncate text-sm font-medium'>{props.step.title}</span>
+        <span className='text-muted-foreground line-clamp-1 text-xs'>
+          {props.step.description}
+        </span>
+      </span>
+    </span>
+  )
+}
+
+function StartRequestChoiceDialog(props: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onWebsiteChat: () => void
+  onCCSwitch: () => void
+  isResolvingCCSwitchKey: boolean
 }) {
   const { t } = useTranslation()
-  const shouldReduceMotion = useReducedMotion()
-  const [isCopying, setIsCopying] = useState(false)
-  const { copyToClipboard } = useCopyToClipboard({ notify: false })
-  const previewCurl = buildCurlCommand({
-    endpoint: props.example.endpoint,
-    apiKey: props.example.displayKey,
-    model: props.example.model,
-  })
-  const previewLines = previewCurl.split('\n')
-  const handleCopyRequest = async () => {
-    if (!props.example.keyId || isCopying) return
-
-    setIsCopying(true)
-    try {
-      const result = await fetchTokenKey(props.example.keyId)
-      const key = result.success && result.data?.key ? result.data.key : ''
-      if (!key) {
-        toast.error(result.message || t('Failed to copy to clipboard'))
-        return
-      }
-
-      const realCurl = buildCurlCommand({
-        endpoint: props.example.endpoint,
-        apiKey: `sk-${key}`,
-        model: props.example.model,
-      })
-      const copied = await copyToClipboard(realCurl)
-      if (copied) {
-        toast.success(t('Copied to clipboard'))
-      } else {
-        toast.error(t('Failed to copy to clipboard'))
-      }
-    } finally {
-      setIsCopying(false)
-    }
-  }
 
   return (
-    <motion.div
-      initial={shouldReduceMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
-      animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-      transition={MOTION_TRANSITION.slow}
-      className='bg-background/75 relative overflow-hidden rounded-2xl border p-3 shadow-sm backdrop-blur'
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title={t('Choose how to start')}
+      description={t('Pick the way you want to send your first request.')}
+      contentClassName='sm:max-w-2xl'
+      bodyClassName='p-0'
     >
-      {!shouldReduceMotion && (
-        <motion.div
-          className='via-foreground/30 pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent'
-          animate={{ x: ['-100%', '100%'] }}
-          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-          aria-hidden='true'
-        />
-      )}
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <button
+          type='button'
+          onClick={props.onWebsiteChat}
+          className='group border-success/30 bg-success/5 hover:border-success/60 hover:bg-success/10 focus-visible:ring-ring flex min-h-48 flex-col items-center justify-between gap-5 rounded-xl border p-5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none'
+        >
+          <MessageSquareText
+            className='text-success size-10'
+            aria-hidden='true'
+          />
+          <span className='flex flex-col gap-1'>
+            <span className='text-sm font-semibold'>
+              {t('Start chatting directly on the website')}
+            </span>
+            <span className='text-muted-foreground text-xs'>
+              {t('Use the built-in playground to try a live conversation.')}
+            </span>
+          </span>
+          <span className='text-success text-xs font-medium'>
+            {t('Continue')}
+          </span>
+        </button>
 
-      <div className='flex items-center justify-between gap-3 border-b pb-3'>
-        <div className='flex min-w-0 items-center gap-2'>
-          <IconBadge tone='info'>
-            <TerminalSquare />
-          </IconBadge>
-          <div className='min-w-0'>
-            <div className='truncate text-sm font-medium'>
-              {t('First API request')}
-            </div>
-            <div className='text-muted-foreground truncate text-xs'>
-              {props.example.ready
-                ? props.example.keyName
-                : t('Create an API key to unlock the real request')}
-            </div>
-          </div>
-        </div>
-        {props.example.ready ? (
-          <Button
-            variant='outline'
-            size='sm'
-            className='h-7 gap-1.5 px-2 text-xs'
-            disabled={isCopying}
-            onClick={handleCopyRequest}
-            aria-label={t('Copy ready-to-run curl')}
-          >
-            <Copy data-icon='inline-start' />
-            {isCopying ? t('Loading') : t('Copy')}
-          </Button>
-        ) : (
-          <Button size='sm' variant='outline' render={<Link to='/keys' />}>
-            {t('Create API Key')}
-          </Button>
-        )}
+        <button
+          type='button'
+          onClick={props.onCCSwitch}
+          disabled={props.isResolvingCCSwitchKey}
+          aria-busy={props.isResolvingCCSwitchKey}
+          className='group bg-background hover:border-primary/50 hover:bg-muted/50 focus-visible:ring-ring flex min-h-48 flex-col items-center justify-between gap-5 rounded-xl border p-5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-70'
+        >
+          <MonitorDown className='text-primary size-10' aria-hidden='true' />
+          <span className='flex flex-col gap-1'>
+            <span className='text-sm font-semibold'>
+              {t('Import your Agent client with CC Switch')}
+            </span>
+            <span className='text-muted-foreground text-xs'>
+              {t(
+                'Bring your API key and model settings into a desktop client.'
+              )}
+            </span>
+          </span>
+          <span className='text-primary text-xs font-medium'>
+            {props.isResolvingCCSwitchKey ? (
+              <LoaderCircle
+                className='mx-auto size-4 animate-spin'
+                aria-label={t('Loading')}
+              />
+            ) : (
+              t('Continue')
+            )}
+          </span>
+        </button>
       </div>
+    </Dialog>
+  )
+}
 
-      <div className='bg-foreground/[0.035] my-3 rounded-xl p-3 font-mono text-xs'>
-        <div className='mb-2 flex items-center gap-1.5'>
-          <span className='bg-destructive size-2 rounded-full' />
-          <span className='bg-warning size-2 rounded-full' />
-          <span className='bg-success size-2 rounded-full' />
-        </div>
-        <div className='flex flex-col gap-1 overflow-hidden'>
-          {previewLines.map((line) => (
-            <code
-              key={line}
-              className='text-muted-foreground truncate'
-              title={line}
-            >
-              {line}
-            </code>
-          ))}
-        </div>
+function CCSwitchDialogFallback(props: {
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog open onOpenChange={props.onOpenChange} title={t('Loading')}>
+      <div
+        className='text-muted-foreground flex items-center justify-center gap-2 p-6 text-sm'
+        role='status'
+      >
+        <LoaderCircle className='size-4 animate-spin' aria-hidden='true' />
+        {t('Loading')}
       </div>
-
-      <div className='grid gap-2'>
-        {props.signals.map((signal) => {
-          const Icon = signal.icon
-
-          return (
-            <div
-              key={signal.label}
-              className='bg-muted/40 flex items-center justify-between gap-3 rounded-xl px-3 py-2'
-            >
-              <span className='flex min-w-0 items-center gap-2'>
-                <IconBadge tone={signal.tone} size='xs'>
-                  <Icon />
-                </IconBadge>
-                <span className='truncate text-xs font-medium'>
-                  {signal.label}
-                </span>
-              </span>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {signal.value}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </motion.div>
+    </Dialog>
   )
 }
 
@@ -457,8 +447,10 @@ function CompactQuickAction(props: { action: QuickAction }) {
 
 export function OverviewDashboard() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const user = useAuthStore((state) => state.auth.user)
-  const { items: apiInfoItems } = useApiInfo()
+  const setUser = useAuthStore((state) => state.auth.setUser)
+  const { serverAddress } = useChatPresets()
   const {
     apiInfo: showApiInfoPanel,
     announcements: showAnnouncementsPanel,
@@ -467,7 +459,83 @@ export function OverviewDashboard() {
   } = useDashboardContentVisibility()
   const [manualSetupGuideExpanded, setManualSetupGuideExpanded] = useState<
     boolean | null
-  >(() => getSavedSetupGuideExpanded())
+  >(() => getSavedSetupGuideExpanded(user?.id))
+  const [skippedSteps, setSkippedSteps] = useState<number[]>(() =>
+    getSavedSkippedSetupSteps(user?.id)
+  )
+  const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false)
+  const [requestChoiceOpen, setRequestChoiceOpen] = useState(false)
+  const [ccSwitchOpen, setCCSwitchOpen] = useState(false)
+  const [ccSwitchKey, setCCSwitchKey] = useState('')
+  const [isResolvingCCSwitchKey, setIsResolvingCCSwitchKey] = useState(false)
+  const requestChoiceOpenRef = useRef(false)
+  const selfRefreshInFlightRef = useRef(false)
+  const onboardingMutationGenerationRef = useRef(0)
+
+  useEffect(() => {
+    setManualSetupGuideExpanded(getSavedSetupGuideExpanded(user?.id))
+    setSkippedSteps(getSavedSkippedSetupSteps(user?.id))
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    let disposed = false
+
+    const refreshSelf = async () => {
+      if (disposed || selfRefreshInFlightRef.current) return
+
+      const currentUser = useAuthStore.getState().auth.user
+      if (!currentUser || currentUser.id !== user.id) return
+
+      selfRefreshInFlightRef.current = true
+      const refreshGeneration = onboardingMutationGenerationRef.current
+      try {
+        const result = await getSelf()
+        if (disposed || !result?.success || !result.data) return
+
+        const latestUser = useAuthStore.getState().auth.user
+        if (!latestUser || latestUser.id !== user.id) return
+
+        const refreshedUser = { ...latestUser, ...result.data }
+        if (onboardingMutationGenerationRef.current !== refreshGeneration) {
+          refreshedUser.onboarding_required = latestUser.onboarding_required
+          refreshedUser.onboarding_version = latestUser.onboarding_version
+        }
+        const localRequestCount = Number(latestUser.request_count ?? 0)
+        const serverRequestCount = Number(result.data.request_count ?? 0)
+        if (
+          Number.isFinite(localRequestCount) &&
+          Number.isFinite(serverRequestCount)
+        ) {
+          // Server-side batch updates may briefly lag the successful request.
+          refreshedUser.request_count = Math.max(
+            localRequestCount,
+            serverRequestCount
+          )
+        }
+        setUser(refreshedUser)
+      } catch {
+        // Keep the cached snapshot when the refresh is unavailable.
+      } finally {
+        selfRefreshInFlightRef.current = false
+      }
+    }
+
+    void refreshSelf()
+    const handleWindowFocus = () => void refreshSelf()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshSelf()
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      disposed = true
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [setUser, user?.id])
 
   const requestCount = Number(user?.request_count ?? 0)
   const remainQuota = Number(user?.quota ?? 0)
@@ -475,25 +543,22 @@ export function OverviewDashboard() {
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
 
   const apiKeysQuery = useQuery({
-    queryKey: ['dashboard', 'overview', 'api-keys'],
+    queryKey: ['dashboard', 'overview', 'api-keys', user?.id],
     queryFn: async () => {
-      const result = await getApiKeys({ p: 1, size: 10 })
+      const result = await getApiKeys({ p: 1, size: 100 })
       return result.success ? (result.data?.items ?? []) : []
     },
-    staleTime: 60 * 1000,
+    enabled: Boolean(user?.id),
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
-  const modelsQuery = useQuery({
-    queryKey: ['dashboard', 'overview', 'user-models'],
-    queryFn: async () => {
-      const result = await getUserModels()
-      return result.success ? (result.data ?? []) : []
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-
+  const anyKey = useMemo(
+    () => getAnyKey(apiKeysQuery.data ?? []),
+    [apiKeysQuery.data]
+  )
   const preferredKey = useMemo(
-    () => getPreferredKey(apiKeysQuery.data ?? []),
+    () => getPreferredEnabledKey(apiKeysQuery.data ?? []),
     [apiKeysQuery.data]
   )
 
@@ -503,25 +568,22 @@ export function OverviewDashboard() {
         title: t('Create API Key'),
         description: t('Create a key for your app or service'),
         to: '/keys',
-        icon: KeyRound,
-        completed: Boolean(preferredKey),
+        completed: Boolean(anyKey),
       },
       {
         title: t('Add credits'),
         description: t('Keep enough balance before production traffic'),
         to: '/wallet',
-        icon: CreditCard,
         completed: remainQuota > 0 || usedQuota > 0,
       },
       {
         title: t('Send a request'),
         description: t('Verify routing with Playground or your client'),
         to: '/playground',
-        icon: TerminalSquare,
         completed: requestCount > 0,
       },
     ],
-    [preferredKey, remainQuota, requestCount, t, usedQuota]
+    [anyKey, remainQuota, requestCount, t, usedQuota]
   )
 
   const quickActions = useMemo<QuickAction[]>(
@@ -560,51 +622,23 @@ export function OverviewDashboard() {
     [isAdmin, quickActions]
   )
 
-  const heroSignals = useMemo<HeroSignal[]>(
-    () => [
-      {
-        label: t('Route active'),
-        value: apiInfoItems.length > 0 ? t('Online') : t('Current domain'),
-        icon: RadioTower,
-        tone: 'info',
-      },
-      {
-        label: t('Auth configured'),
-        value: preferredKey ? t('Secured') : t('Needs API key'),
-        icon: ShieldCheck,
-        tone: 'success',
-      },
-      {
-        label: t('Model selected'),
-        value: modelsQuery.data?.[0] ?? t('Loading'),
-        icon: Timer,
-        tone: 'chart-4',
-      },
-    ],
-    [apiInfoItems.length, modelsQuery.data, preferredKey, t]
-  )
+  const stepStates = useMemo<StartStepState[]>(() => {
+    const currentStepIndex = startSteps.findIndex(
+      (step, index) => !step.completed && !skippedSteps.includes(index)
+    )
 
-  const requestExample = useMemo<RequestExample>(() => {
-    const endpoint = normalizeEndpoint(apiInfoItems[0]?.url)
-    const model = modelsQuery.data?.[0] ?? 'gpt-4o-mini'
-    const keyName = preferredKey?.name ?? t('No API key yet')
-    const ready = Boolean(preferredKey?.id && model)
-
-    return {
-      endpoint,
-      model,
-      keyName,
-      keyId: preferredKey?.id,
-      displayKey: preferredKey
-        ? formatDisplayKey(`sk-${preferredKey.key}`)
-        : 'sk-...',
-      ready,
-    }
-  }, [apiInfoItems, modelsQuery.data, preferredKey, t])
-
-  const completedStepCount = startSteps.filter((step) => step.completed).length
-  const setupComplete = completedStepCount === startSteps.length
+    return startSteps.map((step, index) => {
+      if (step.completed || skippedSteps.includes(index)) return 'completed'
+      if (index === currentStepIndex) return 'current'
+      return 'pending'
+    })
+  }, [skippedSteps, startSteps])
+  const completedStepCount = stepStates.filter(
+    (state) => state === 'completed'
+  ).length
+  const setupComplete = completedStepCount === stepStates.length
   const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
+  const onboardingRequired = user?.onboarding_required === true
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
   const showLeftContentPanels =
@@ -614,65 +648,177 @@ export function OverviewDashboard() {
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
     setManualSetupGuideExpanded(nextExpanded)
-    saveSetupGuideExpanded(nextExpanded)
+    saveSetupGuideExpanded(user?.id, nextExpanded)
+  }
+
+  const handleCompleteOnboarding = async (expandGuide: boolean) => {
+    if (isCompletingOnboarding || user?.onboarding_required !== true) return
+
+    setIsCompletingOnboarding(true)
+    onboardingMutationGenerationRef.current += 1
+    try {
+      const result = await completeOnboarding()
+      if (!result.success || !result.data) {
+        toast.error(result.message || t('Request failed'))
+        return
+      }
+
+      setManualSetupGuideExpanded(expandGuide)
+      saveSetupGuideExpanded(user.id, expandGuide)
+      const latestUser = useAuthStore.getState().auth.user
+      if (!latestUser || latestUser.id !== user.id) return
+      setUser({
+        ...latestUser,
+        onboarding_required: result.data.onboarding_required,
+        onboarding_version: result.data.onboarding_version,
+      })
+    } catch {
+      toast.error(t('Request failed'))
+    } finally {
+      setIsCompletingOnboarding(false)
+    }
+  }
+
+  const handleSkipStep = (index: number) => {
+    if (skippedSteps.includes(index)) return
+
+    const nextSkippedSteps = [...skippedSteps, index]
+    setSkippedSteps(nextSkippedSteps)
+    saveSkippedSetupSteps(user?.id, nextSkippedSteps)
+
+    const allStepsResolved = startSteps.every(
+      (step, stepIndex) =>
+        step.completed || nextSkippedSteps.includes(stepIndex)
+    )
+    if (allStepsResolved && user?.onboarding_required === true) {
+      void handleCompleteOnboarding(false)
+    }
+  }
+
+  const handleWebsiteChat = () => {
+    requestChoiceOpenRef.current = false
+    setRequestChoiceOpen(false)
+    void navigate({ to: '/playground' })
+  }
+
+  const handleOpenRequestChoice = () => {
+    requestChoiceOpenRef.current = true
+    setRequestChoiceOpen(true)
+  }
+
+  const handleRequestChoiceOpenChange = (open: boolean) => {
+    requestChoiceOpenRef.current = open
+    setRequestChoiceOpen(open)
+  }
+
+  const handleCCSwitch = async () => {
+    if (isResolvingCCSwitchKey) return
+
+    if (!preferredKey?.id) {
+      toast.error(
+        anyKey
+          ? t(
+              'Unable to prepare chat link. Please ensure you have an enabled API key.'
+            )
+          : t(
+              'No API keys available. Create your first API key to get started.'
+            )
+      )
+      return
+    }
+
+    setIsResolvingCCSwitchKey(true)
+    try {
+      const result = await fetchTokenKey(preferredKey.id)
+      const tokenKey = result.success ? (result.data?.key ?? '') : ''
+      if (!tokenKey) {
+        toast.error(
+          result.message || t('Unable to resolve the selected API key.')
+        )
+        return
+      }
+
+      if (!requestChoiceOpenRef.current) return
+
+      setCCSwitchKey(tokenKey.startsWith('sk-') ? tokenKey : `sk-${tokenKey}`)
+      requestChoiceOpenRef.current = false
+      setRequestChoiceOpen(false)
+      setCCSwitchOpen(true)
+    } catch {
+      toast.error(t('Unable to resolve the selected API key.'))
+    } finally {
+      setIsResolvingCCSwitchKey(false)
+    }
+  }
+
+  const normalizedServerAddress = serverAddress.trim().replace(/\/+$/, '')
+  const apiBaseUrl = normalizedServerAddress
+    ? `${normalizedServerAddress}/v1`
+    : ''
+  const handleCCSwitchOpenChange = (open: boolean) => {
+    setCCSwitchOpen(open)
+    if (!open) setCCSwitchKey('')
   }
 
   return (
     <div className='flex flex-col gap-4'>
+      <NewUserOnboardingDialog
+        open={onboardingRequired}
+        steps={startSteps}
+        isPending={isCompletingOnboarding}
+        onStart={() => void handleCompleteOnboarding(true)}
+        onSkip={() => void handleCompleteOnboarding(false)}
+      />
+
       {setupGuideExpanded ? (
         <CardStaggerContainer className='grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
           <CardStaggerItem className='bg-card h-full overflow-hidden rounded-2xl border shadow-xs'>
             <div className='relative h-full overflow-hidden p-4 sm:p-5'>
               <SetupGuideBackdrop />
-              <div className='relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]'>
-                <div className='flex min-w-0 flex-col gap-5'>
-                  <div className='flex flex-wrap items-start justify-between gap-3'>
-                    <div className='flex max-w-2xl flex-col gap-1'>
-                      <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase'>
-                        <ListChecks className='size-3.5' aria-hidden='true' />
-                        {t('Get started')}
-                      </div>
-                      <h3 className='text-xl font-semibold tracking-tight sm:text-2xl'>
-                        {t('Build on your API gateway in minutes')}
-                      </h3>
-                      <p className='text-muted-foreground max-w-xl text-sm leading-relaxed'>
-                        {t(
-                          'A focused home for keys, balance, routing, and service health.'
-                        )}
-                      </p>
+              <div className='relative flex min-w-0 flex-col gap-5'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                  <div className='flex max-w-2xl flex-col gap-1'>
+                    <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase'>
+                      <ListChecks className='size-3.5' aria-hidden='true' />
+                      {t('Get started')}
                     </div>
-                    <div className='flex flex-wrap items-center gap-2'>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={handleSetupGuideToggle}
-                      >
-                        <ChevronUp data-icon='inline-start' />
-                        {t('Hide setup guide')}
-                      </Button>
-                      <Button size='sm' render={<Link to='/keys' />}>
-                        <KeyRound data-icon='inline-start' />
-                        {t('Create API Key')}
-                      </Button>
-                    </div>
+                    <h3 className='text-xl font-semibold tracking-tight sm:text-2xl'>
+                      {t('Build on your API gateway in minutes')}
+                    </h3>
+                    <p className='text-muted-foreground max-w-xl text-sm leading-relaxed'>
+                      {t(
+                        'A focused home for keys, balance, routing, and service health.'
+                      )}
+                    </p>
                   </div>
-
-                  <ol className='bg-background/45 rounded-2xl border p-2 backdrop-blur'>
-                    {startSteps.map((step, index) => (
-                      <StartStepItem
-                        key={step.title}
-                        step={step}
-                        index={index}
-                        isLast={index === startSteps.length - 1}
-                      />
-                    ))}
-                  </ol>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={handleSetupGuideToggle}
+                    >
+                      <ChevronUp data-icon='inline-start' />
+                      {t('Hide setup guide')}
+                    </Button>
+                    <Button size='sm' render={<Link to='/keys' />}>
+                      <KeyRound data-icon='inline-start' />
+                      {t('Create API Key')}
+                    </Button>
+                  </div>
                 </div>
 
-                <RequestPreview
-                  example={requestExample}
-                  signals={heroSignals}
-                />
+                <ol className='bg-background/45 rounded-2xl border p-2 backdrop-blur'>
+                  {startSteps.map((step, index) => (
+                    <StartStepItem
+                      key={step.title}
+                      step={step}
+                      index={index}
+                      state={stepStates[index]}
+                      onSkip={() => handleSkipStep(index)}
+                      onOpen={handleOpenRequestChoice}
+                    />
+                  ))}
+                </ol>
               </div>
             </div>
           </CardStaggerItem>
@@ -747,6 +893,31 @@ export function OverviewDashboard() {
             </div>
           </CardStaggerItem>
         </CardStaggerContainer>
+      )}
+
+      <StartRequestChoiceDialog
+        open={requestChoiceOpen}
+        onOpenChange={handleRequestChoiceOpenChange}
+        onWebsiteChat={handleWebsiteChat}
+        onCCSwitch={() => void handleCCSwitch()}
+        isResolvingCCSwitchKey={isResolvingCCSwitchKey}
+      />
+
+      {ccSwitchOpen && (
+        <Suspense
+          fallback={
+            <CCSwitchDialogFallback onOpenChange={handleCCSwitchOpenChange} />
+          }
+        >
+          <LazyCCSwitchDialog
+            open={ccSwitchOpen}
+            onOpenChange={handleCCSwitchOpenChange}
+            apiKey={preferredKey}
+            apiBaseUrl={apiBaseUrl}
+            serverAddress={normalizedServerAddress}
+            tokenKey={ccSwitchKey}
+          />
+        </Suspense>
       )}
 
       <SummaryCards />
