@@ -232,6 +232,9 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [announcement, setAnnouncement] = useState('')
+  const groupSelectionHint = t(
+    'Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.'
+  )
 
   const options = useMemo(() => {
     const specialOptions: ApiKeyRoutingGroupOption[] = []
@@ -361,8 +364,11 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
             />
           }
         >
-          <span className='text-muted-foreground truncate'>
-            {t('Search and add groups')}
+          <span
+            className='text-muted-foreground min-w-0 flex-1 truncate text-left text-xs'
+            title={groupSelectionHint}
+          >
+            {groupSelectionHint}
           </span>
           <span className='flex shrink-0 items-center gap-2'>
             <Badge variant='secondary'>
