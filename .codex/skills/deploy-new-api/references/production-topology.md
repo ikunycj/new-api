@@ -8,7 +8,7 @@ Ask before every deployment whether the target is `aliyun` (development) or `all
 
 | Environment | SSH alias | Host | Deployment scope |
 | --- | --- | --- | --- |
-| Development | `aliyun` | Verify from local SSH config | Development-only checks; keep `NODE_TYPE=slave` and isolated test PostgreSQL/Redis. |
+| Development/test | `aliyun` | Verify from local SSH config | The remote test service and local development process both use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis; keep those services isolated from production. |
 | Production | `alltokenapi` | `154.37.213.1` (verify live) | Production release and rollback workflow below. |
 
 ## Service map
