@@ -598,7 +598,7 @@ Go 只替换经过 JSON 安全编码的小型公开 bootstrap 占位符，不把
 /static/**/*.<hash>.*:
   Cache-Control: public, max-age=31536000, immutable
 
-/logo.png、/favicon.ico 等非 hash 资源:
+/logo.png 等非 hash 资源:
   Cache-Control: no-cache, must-revalidate
 ```
 
@@ -656,7 +656,7 @@ hash 文件名不会冲突，可以增量合并。OpenResty 优先从该目录�
 
 LCP 元素稳定为 19.4 KB 的 Ribbon WebP 静态首帧，726 KB 动画请求为 0。默认首页与文档直达在验收窗口内的 `status`、`notice`、`pricing` 和 `home_page_content` 请求均为 0；`status` 只会在首次交互或 5 秒延迟后后台刷新。首页未滚动时只挂载首屏 section，滚动后再加载下半页。
 
-导航 Logo 使用 56 x 56、1.67 KB 的 WebP，favicon 使用 28 x 28、688 B 的 WebP。Rsbuild 的 favicon 配置已显式指向小图，避免模板图标之外又自动注入并下载原 49.7 KB 的 `favicon.ico`。
+导航 Logo 使用 56 x 56 的 WebP，页面 favicon 同样由 `logo-28.webp` 提供，不再保留独立的 `favicon.ico` 文件。Rsbuild 的 favicon 配置已显式指向小图，避免模板图标之外又复制额外的兼容图标。
 
 本轮还发现并移除了多条隐藏的首屏依赖：系统设置 route 的 `beforeLoad` 原本从 JSX registry 读取常量，使初始 JS 约 640 KB gzip；拆出轻量 route 配置后降到约 312 KB。随后将首页的 `PublicLayout` 改为直接文件导入，避免 hydration 后再请求约 162 KB gzip 的认证后台共享块。公共路由词典把首次词典降到最多约 31.5 KB gzip；Base UI/Radix 的合并块改为只处理异步 chunk，约 106 KB gzip 的后台 UI primitives 不再成为首页同步入口依赖，初始同步 JS 进一步降到约 206 KB gzip。
 
