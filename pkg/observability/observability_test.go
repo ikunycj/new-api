@@ -93,3 +93,34 @@ func TestNormalizeReasonIsBounded(t *testing.T) {
 	assert.Equal(t, ErrorUpstream5xx, normalizeReason(ErrorUpstream5xx))
 	assert.Equal(t, ErrorInternal, normalizeReason("arbitrary-user-controlled-reason"))
 }
+
+func TestAuthFailureReasonIsBounded(t *testing.T) {
+	assert.Equal(t, "token_expired", normalizeAuthFailureReason("token_expired"))
+	assert.Equal(t, "token_invalid", normalizeAuthFailureReason("raw-token-value"))
+}
+
+func TestRecordAuthFailureUsesBoundedLabels(t *testing.T) {
+	RecordAuthFailure("/v1/chat/completions", "token_not_found", http.StatusUnauthorized)
+	registry := prometheus.NewRegistry()
+	for _, collector := range Collectors() {
+		registry.MustRegister(collector)
+	}
+	metricFamilies, err := registry.Gather()
+	require.NoError(t, err)
+	for _, family := range metricFamilies {
+		if family.GetName() != "alltoken_auth_failures_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			assert.Equal(t, "token_not_found", labels["reason"])
+			assert.Equal(t, "/v1/chat/completions", labels["route"])
+			assert.Equal(t, "401", labels["status"])
+			return
+		}
+	}
+	t.Fatal("alltoken_auth_failures_total metric was not gathered")
+}

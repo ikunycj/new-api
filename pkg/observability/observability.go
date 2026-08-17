@@ -88,6 +88,10 @@ var (
 		Namespace: "alltoken", Name: "final_errors_total",
 		Help: "Errors returned to clients after failover is complete.",
 	}, []string{"alltoken_code", "category", "cluster_code"})
+	authFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "alltoken", Name: "auth_failures_total",
+		Help: "Gateway authentication failures by bounded reason and route.",
+	}, []string{"reason", "route", "status"})
 	clusterCircuitState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "alltoken", Name: "cluster_circuit_state",
 		Help: "Cluster circuit state represented as one hot state labels.",
@@ -105,8 +109,24 @@ func Collectors() []prometheus.Collector {
 		relayRequests, relayRequestDuration, relayAttempts, relayAttemptDuration,
 		relayRetries, relayInFlight, relayClientCancellations,
 		errorEvents, poolRequests, poolFailovers, clusterFailovers,
-		finalErrors, clusterCircuitState, failoverDuration,
+		finalErrors, authFailures, clusterCircuitState, clusterInfo, failoverDuration,
 	}
+}
+
+func RecordAuthFailure(route, reason string, status int) {
+	if route == "" {
+		route = "unmatched"
+	}
+	authFailures.WithLabelValues(normalizeAuthFailureReason(reason), route, statusLabel(status)).Inc()
+}
+
+func ReplaceClusterInfo(clusterCodes []int) {
+	clusterInfo.Reset()
+	for _, clusterCode := range clusterCodes {
+		if clusterCode > 0 {
+			clusterInfo.WithLabelValues(strconv.Itoa(clusterCode)).Set(1)
+	}
+}
 }
 
 func RecordErrorEvent(eventKind string, apiErr *types.NewAPIError) {
@@ -342,6 +362,17 @@ func normalizeReason(reason string) string {
 	}
 }
 
+func normalizeAuthFailureReason(reason string) string {
+	switch reason {
+	case "token_not_provided", "token_not_found", "token_invalid", "token_disabled",
+		"token_expired", "token_exhausted", "ip_restricted", "user_disabled",
+		"group_forbidden", "token_config_invalid", "specific_channel_forbidden":
+		return reason
+	default:
+		return "token_invalid"
+	}
+}
+
 // Event is serialized as one JSON object. IDs remain log fields and never labels.
 type Event struct {
 	Event             string `json:"event"`
@@ -371,6 +402,7 @@ type Event struct {
 	FailureScope      string `json:"failure_scope,omitempty"`
 	Action            string `json:"action,omitempty"`
 	FailoverMode      string `json:"failover_mode,omitempty"`
+	AuthFailureReason string `json:"auth_failure_reason,omitempty"`
 }
 
 func LogEvent(ctx context.Context, event Event) {

@@ -19,6 +19,18 @@ groups:
           summary: AllToken final error rate exceeds 5%
           description: Client-visible relay failures have remained above 5% for three minutes.
 
+      - alert: AllTokenGatewayAuthFailureRate
+        expr: |
+          sum(rate(new_api_http_requests_total{route_tag="relay",status=~"401|403"}[5m]))
+            / clamp_min(sum(rate(new_api_http_requests_total{route_tag="relay"}[5m])), 0.001) > 0.05
+          and sum(rate(new_api_http_requests_total{route_tag="relay",status=~"401|403"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Gateway authentication failures exceed 5%
+          description: Requests are being rejected before Cluster routing. Inspect token status, expiry, quota, IP restrictions, and client credentials.
+
       - alert: AllTokenHighP95Latency
         expr: histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m]))) > 30 and sum(rate(new_api_relay_requests_total[5m])) > 0.1
         for: 5m
