@@ -188,6 +188,38 @@ export async function getSelf() {
   return res.data
 }
 
+/**
+ * Reflect a completed playground request immediately in the local snapshot.
+ * The dashboard reconciles this optimistic count with the server on refresh;
+ * this keeps the onboarding step responsive when accounting is batched.
+ */
+export function markUserRequestCompleted(): void {
+  const currentUser = useAuthStore.getState().auth.user
+  if (!currentUser) return
+
+  const requestCount = Number(currentUser.request_count ?? 0)
+  useAuthStore.getState().auth.setUser({
+    ...currentUser,
+    request_count:
+      Number.isFinite(requestCount) && requestCount >= 0 ? requestCount + 1 : 1,
+  })
+}
+
+export async function completeOnboarding(): Promise<{
+  success: boolean
+  message?: string
+  data?: {
+    onboarding_required: boolean
+    onboarding_version: number | null
+  }
+}> {
+  const res = await api.put('/api/user/self/onboarding', undefined, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
 // Get user available models
 export async function getUserModels(group?: string): Promise<{
   success: boolean

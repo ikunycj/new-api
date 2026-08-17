@@ -37,6 +37,8 @@ export interface AuthUser {
   quota?: number
   used_quota?: number
   request_count?: number
+  onboarding_required?: boolean
+  onboarding_version?: number | null
   aff_code?: string
   aff_count?: number
   aff_quota?: number

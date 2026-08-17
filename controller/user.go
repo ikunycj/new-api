@@ -143,6 +143,7 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
 	model.UpdateUserLastLoginAt(user.Id)
+	onboardingStatus := user.OnboardingStatus()
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
 	session.Set("username", user.Username)
@@ -159,12 +160,14 @@ func setupLogin(user *model.User, c *gin.Context) {
 		"message": "",
 		"success": true,
 		"data": map[string]any{
-			"id":           user.Id,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"role":         user.Role,
-			"status":       user.Status,
-			"group":        user.Group,
+			"id":                  user.Id,
+			"username":            user.Username,
+			"display_name":        user.DisplayName,
+			"role":                user.Role,
+			"status":              user.Status,
+			"group":               user.Group,
+			"onboarding_required": onboardingStatus.Required,
+			"onboarding_version":  onboardingStatus.Version,
 		},
 	})
 }
@@ -253,11 +256,12 @@ func Register(c *gin.Context) {
 		}
 	}
 	cleanUser := model.User{
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.Username,
-		InviterId:   inviterId,
-		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
+		Username:          user.Username,
+		Password:          user.Password,
+		DisplayName:       user.Username,
+		InviterId:         inviterId,
+		Role:              common.RoleCommonUser, // 明确设置角色为普通用户
+		OnboardingVersion: model.NewUserOnboardingVersion(),
 	}
 	if common.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
@@ -461,34 +465,37 @@ func GetSelf(c *gin.Context) {
 
 	// 获取用户设置并提取sidebar_modules
 	userSetting := user.GetSetting()
+	onboardingStatus := user.OnboardingStatus()
 
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
-		"id":                user.Id,
-		"username":          user.Username,
-		"display_name":      user.DisplayName,
-		"role":              user.Role,
-		"status":            user.Status,
-		"email":             user.Email,
-		"github_id":         user.GitHubId,
-		"discord_id":        user.DiscordId,
-		"oidc_id":           user.OidcId,
-		"wechat_id":         user.WeChatId,
-		"telegram_id":       user.TelegramId,
-		"group":             user.Group,
-		"quota":             user.Quota,
-		"used_quota":        user.UsedQuota,
-		"request_count":     user.RequestCount,
-		"aff_code":          user.AffCode,
-		"aff_count":         user.AffCount,
-		"aff_quota":         affiliateAccount.AvailableQuota,
-		"aff_history_quota": affiliateAccount.LifetimeEarnedQuota,
-		"inviter_id":        user.InviterId,
-		"linux_do_id":       user.LinuxDOId,
-		"setting":           user.Setting,
-		"stripe_customer":   user.StripeCustomer,
-		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":       permissions,                // 新增权限字段
+		"id":                  user.Id,
+		"username":            user.Username,
+		"display_name":        user.DisplayName,
+		"role":                user.Role,
+		"status":              user.Status,
+		"email":               user.Email,
+		"github_id":           user.GitHubId,
+		"discord_id":          user.DiscordId,
+		"oidc_id":             user.OidcId,
+		"wechat_id":           user.WeChatId,
+		"telegram_id":         user.TelegramId,
+		"group":               user.Group,
+		"quota":               user.Quota,
+		"used_quota":          user.UsedQuota,
+		"request_count":       user.RequestCount,
+		"aff_code":            user.AffCode,
+		"aff_count":           user.AffCount,
+		"aff_quota":           affiliateAccount.AvailableQuota,
+		"aff_history_quota":   affiliateAccount.LifetimeEarnedQuota,
+		"inviter_id":          user.InviterId,
+		"linux_do_id":         user.LinuxDOId,
+		"setting":             user.Setting,
+		"stripe_customer":     user.StripeCustomer,
+		"sidebar_modules":     userSetting.SidebarModules, // 正确提取sidebar_modules字段
+		"permissions":         permissions,                // 新增权限字段
+		"onboarding_required": onboardingStatus.Required,
+		"onboarding_version":  onboardingStatus.Version,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -497,6 +504,15 @@ func GetSelf(c *gin.Context) {
 		"data":    responseData,
 	})
 	return
+}
+
+func CompleteOnboarding(c *gin.Context) {
+	user, err := model.CompleteUserOnboarding(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, user.OnboardingStatus())
 }
 
 // 计算用户权限的辅助函数
