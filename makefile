@@ -1,6 +1,6 @@
 WEB_DIR = ./web/default
 API_DIR = .
-DEV_WEB_DEFAULT_PORT ?= 5173
+DEV_WEB_PORT ?= 5173
 DEV_COMPOSE_FILE = docker-compose.dev.yml
 DEV_POSTGRES_SERVICE = postgres
 DEV_API_SERVICE = new-api
@@ -8,16 +8,14 @@ DEV_POSTGRES_DB = new-api
 DEV_POSTGRES_USER = root
 DEV_SQLITE_PATH ?= one-api.db
 
-.PHONY: all build-web build-all-web start-api dev dev-api dev-api-rebuild dev-web reset-setup
+.PHONY: all build-web start-api dev dev-api dev-api-rebuild dev-web reset-setup
 
-all: build-all-web start-api
+all: build-web start-api
 
 build-web:
-	@echo "Building default web..."
+	@echo "Building web frontend..."
 	@cd ./web && bun install --frozen-lockfile
 	@cd $(WEB_DIR) && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat ../../VERSION) bun run build
-
-build-all-web: build-web
 
 start-api:
 	@echo "Starting api dev server..."
@@ -32,10 +30,10 @@ dev-api-rebuild:
 	@docker compose -f $(DEV_COMPOSE_FILE) up -d --build $(DEV_API_SERVICE)
 
 dev-web:
-	@echo "Starting default web dev server..."
-	@echo "Default web: http://localhost:$(DEV_WEB_DEFAULT_PORT)"
+	@echo "Starting web frontend dev server..."
+	@echo "Web frontend: http://localhost:$(DEV_WEB_PORT)"
 	@cd ./web && bun install --filter ./default
-	@cd $(WEB_DIR) && bun run dev -- --host 0.0.0.0 --port $(DEV_WEB_DEFAULT_PORT)
+	@cd $(WEB_DIR) && bun run dev -- --host 0.0.0.0 --port $(DEV_WEB_PORT)
 
 dev: dev-api dev-web
 

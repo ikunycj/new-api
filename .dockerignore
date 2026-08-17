@@ -12,4 +12,7 @@ docs
 /web/node_modules
 /web/default/node_modules
 /web/default/dist
+/new-api
+/new-api.exe
+/one-api
 !THIRD-PARTY-LICENSES.md

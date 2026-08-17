@@ -48,10 +48,8 @@ export type SafeNumberFieldProps = {
  *   numeric validators (`z.number().min(...)`, `z.coerce.number()`, etc.)
  *   fail at submit time, so `form.handleSubmit` silently refuses to call
  *   `onSubmit` — the save button appears frozen with no toast and no error.
- * - The legacy Semi `InputNumber` avoids this by snapping the input back to
- *   the previous valid number. We replicate that behaviour by ignoring `NaN`
- *   updates: React's controlled-input reconciliation will restore the last
- *   valid value to the DOM on the next render.
+ * - Ignoring `NaN` updates lets React's controlled-input reconciliation
+ *   restore the previous valid number to the DOM on the next render.
  *
  * Display:
  * - When the underlying state is not a finite number, the prop returns `''`

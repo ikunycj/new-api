@@ -27,19 +27,16 @@ export const DEFAULT_ENDPOINT = '/api/pricing'
 // they are wire-protocol identifiers, not user-facing labels.
 //
 // Identification on the frontend should rely on the stable negative ID alone.
-// `*_NAME` and `*_BASE_URL` are kept for diagnostics, custom channel
-// detection, and backwards compatibility with the classic frontend.
+// `*_NAME` is the display label for the corresponding stable negative ID.
 // ---------------------------------------------------------------------------
 
 export const OFFICIAL_CHANNEL_ID = -100
 export const OFFICIAL_CHANNEL_NAME = '官方倍率预设'
-export const OFFICIAL_CHANNEL_BASE_URL = 'https://basellm.github.io'
 export const OFFICIAL_CHANNEL_ENDPOINT =
   '/llm-metadata/api/newapi/ratio_config-v1-base.json'
 
 export const MODELS_DEV_PRESET_ID = -101
 export const MODELS_DEV_PRESET_NAME = 'models.dev 价格预设'
-export const MODELS_DEV_PRESET_BASE_URL = 'https://models.dev'
 export const MODELS_DEV_PRESET_ENDPOINT = 'https://models.dev/api.json'
 
 export const OPENROUTER_ENDPOINT = 'openrouter'
