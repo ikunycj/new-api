@@ -53,6 +53,22 @@ func TestOpenAIErrorPreservesUpstreamCodeAndSource(t *testing.T) {
 	assert.Equal(t, "104001-C23-P1", response.ErrorRef)
 	assert.Equal(t, 23, response.ClusterCode)
 	assert.Equal(t, 1, response.PoolTier)
+	assert.Equal(t, "channel", response.FailureScope)
+}
+
+func TestClusterRateLimitIsChannelScoped(t *testing.T) {
+	apiErr := WithOpenAIError(OpenAIError{
+		Message: "cluster rate limited",
+		Code:    "rate_limit_exceeded",
+		Source:  ErrorSourceCluster,
+	}, http.StatusTooManyRequests)
+	apiErr.SetRoutingLocation(23, 1)
+
+	response := apiErr.ToOpenAIError()
+
+	assert.Equal(t, 204001, response.AlltokenCode)
+	assert.Equal(t, "channel", response.FailureScope)
+	assert.Equal(t, "204001-C23-P1", response.ErrorRef)
 }
 
 func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {

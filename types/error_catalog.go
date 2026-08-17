@@ -40,7 +40,7 @@ func classifyOpenAIError(rawCode string, statusCode int) errorDefinition {
 	case strings.Contains(rawCode, "insufficient_quota") || strings.Contains(rawCode, "credit_balance"):
 		return errorDefinition{103001, "quota", "credential", "failover"}
 	case strings.Contains(rawCode, "rate_limit") || statusCode == 429:
-		return errorDefinition{104001, "rate_limit", "cluster", "failover"}
+		return errorDefinition{104001, "rate_limit", "channel", "failover"}
 	case statusCode == 503:
 		return errorDefinition{105002, "upstream", "provider", "failover"}
 	case statusCode >= 500:
@@ -55,7 +55,10 @@ func classifyClusterError(rawCode string, statusCode int) errorDefinition {
 	case strings.Contains(rawCode, "invalid_api_key") || strings.Contains(rawCode, "invalid_credential"):
 		return errorDefinition{202001, "auth", "credential", "failover"}
 	case strings.Contains(rawCode, "rate_limit") || statusCode == 429:
-		return errorDefinition{204001, "rate_limit", "cluster", "failover"}
+		// A rate limit normally exhausts the current key/channel or pool, not
+		// every channel in the cluster. Keep the cluster available so the
+		// ordered pool fallback can try Pro and the fallback key first.
+		return errorDefinition{204001, "rate_limit", "channel", "failover"}
 	case strings.Contains(rawCode, "all_pools_exhausted"):
 		return errorDefinition{205003, "upstream", "cluster", "failover"}
 	case strings.Contains(rawCode, "pool_exhausted"):

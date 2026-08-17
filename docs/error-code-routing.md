@@ -132,7 +132,7 @@ alltoken_code = L * 100000 + CC * 1000 + NNN
 | 数字码 | 拆解 | 含义 |
 | ---: | --- | --- |
 | `104001` | `1-04-001` | OpenAI 限流 |
-| `204001` | `2-04-001` | cluster 限流 |
+| `204001` | `2-04-001` | cluster 内当前渠道/号池限流 |
 | `301001` | `3-01-001` | alltoken 参数错误 |
 | `305001` | `3-05-001` | 所有上游耗尽 |
 | `306001` | `3-06-001` | 渠道没有可用 Key |
@@ -254,7 +254,7 @@ OpenAI 官方参考：<https://developers.openai.com/api/docs/guides/error-codes
 | ---: | --- | --- | --- |
 | `200001` | `CLUSTER_UNKNOWN` | 未识别错误 | `failover` |
 | `202001` | `CLUSTER_INVALID_CREDENTIAL` | `invalid_api_key` | `failover` |
-| `204001` | `CLUSTER_RATE_LIMIT` | `rate_limit_exceeded` | `failover` |
+| `204001` | `CLUSTER_POOL_RATE_LIMIT` | `rate_limit_exceeded` | `failover` |
 | `205001` | `NO_HEALTHY_ACCOUNT` | `no_healthy_account` | `failover` |
 | `205002` | `CLUSTER_UNAVAILABLE` | `service_unavailable` | `failover` |
 | `205003` | `ALL_POOLS_EXHAUSTED` | `all_pools_exhausted` | `failover` |
