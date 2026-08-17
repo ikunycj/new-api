@@ -9,11 +9,14 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 ## Deployment Environments
 
 - `ssh aliyun` (`47.251.84.204`) is the test environment. Its `new-api` and OpenResty services are expected to remain running unless the user explicitly asks to stop them.
-- The test environment must use the exact lowercase value `NODE_TYPE=slave`. Never run it as a second master while another environment is active, because master-only migrations and scheduled tasks include channel monitoring, subscription resets, system tasks, and Codex credential refresh.
-- Keep the test PostgreSQL and Redis physically isolated from production. Slave nodes skip database migrations, so verify test schema compatibility before deploying a different binary. Keep `CHANNEL_UPDATE_FREQUENCY` unset because that updater is not protected by the master/slave check.
+- The test topology intentionally runs both `ssh aliyun` and the local development process as `NODE_TYPE=master`, against the same Aliyun test PostgreSQL and Redis services. This shared dual-master setup is for testing only; duplicate master-only jobs are accepted in this environment and must never be used as the production topology.
+- Keep the shared test PostgreSQL and Redis physically isolated from production. Both test masters may run migrations and scheduled tasks, so verify the resulting schema and test data after a deployment. Keep `CHANNEL_UPDATE_FREQUENCY` unset unless the test explicitly needs that updater.
 - `ssh alltokenapi` (`154.37.213.1`) is the production environment. Its infrastructure is managed by `/opt/new-api-infra/docker-compose.yml`, and its application is managed by `/opt/new-api/docker-compose.1panel.yml`.
 - Always verify live DNS before deployment or cutover work, and never infer the active environment from historical DNS state. Do not change `alltokenapi.com` DNS without explicit user authorization.
 - The test host is memory-constrained. Never run `docker system df` there because it has previously caused dockerd OOM restarts.
+- Treat the local development `.env` and every deployed `.env` as separate protected configuration. Never copy, synchronize, upload, or overwrite one with another.
+- The local development `.env` may reference the `aliyun` test data services, but it is not a deployment artifact. Normal development, build, startup, and deployment work must not edit it.
+- Any `.env` change requires explicit field-level authorization for the named environment. Before and after the change, record only file metadata and a SHA-256 fingerprint; never print, log, or diff secret values.
 
 ## Tech Stack
 
@@ -146,11 +149,10 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 ### Local Development Ports
 
 - The Go backend uses `http://127.0.0.1:3000`.
-- The default frontend development server uses **only** `http://localhost:5173` and is started from `web/default/` with `bun run dev`.
-- Before starting the frontend, check whether port `5173` already serves this workspace. Reuse the healthy existing server instead of starting another process.
-- Never pass an alternate `--port`, and never allow the dev server to fall through to `3001`, `5174`, or another port. `web/default/rsbuild.config.ts` must keep `port: 5173` and `strictPort: true`.
-- If port `5173` is occupied by an unrelated or unhealthy process, identify the owning process and report the conflict. Do not terminate a user-owned process or switch ports without explicit approval.
-- Do not start a frontend server for checks that only require tests, type checking, linting, formatting, or a production build. When browser verification is required, use the fixed URL above and keep it running for user review.oject policy. No exceptions.
+- Frontend development ports are branch-scoped: use `http://localhost:5174` for the `ikun.love` branch, `http://localhost:5173` for the main-style branch (`feature/docs-perfect`), and `http://localhost:5713` when no branch-specific port is specified.
+- Start the frontend from `web/default/` with `bun run dev` and keep `strictPort: true`; do not silently fall through to another port.
+- Before starting the frontend, check the port assigned to the current branch and reuse a healthy server for this workspace. If it is occupied by an unrelated or unhealthy process, identify the owning process and report the conflict. Do not terminate a user-owned process or switch ports without explicit approval.
+- Do not start a frontend server for checks that only require tests, type checking, linting, formatting, or a production build. When browser verification is required, use the branch-assigned URL above and keep it running for user review. No exceptions.
 
 **Pull requests:** When creating a pull request:
 

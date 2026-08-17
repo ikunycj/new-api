@@ -11,7 +11,7 @@ Deploy the latest `origin/master` commit without compiling on the target server.
 
 Before every deployment, ask the user explicitly: `部署到 aliyun（开发）还是 alltokenapi（生产）？` Do not infer the target from the current branch, historical notes, DNS, or the last deployment. Set the selected SSH alias as `$deployHost` and use it consistently for all remote commands.
 
-- `aliyun`: development server. Follow the development-node constraints in `AGENTS.md`, including `NODE_TYPE=slave` and isolated PostgreSQL/Redis.
+- `aliyun`: development/test server. Follow the test-topology constraints in `AGENTS.md`: the remote service and the local development process intentionally use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis, which remain isolated from production.
 - `alltokenapi`: production server. This is the current production deployment host and must use the production authorization gate, live DNS verification, and rollback checks below.
 
 ## Require the latest master
