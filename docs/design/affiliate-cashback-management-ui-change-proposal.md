@@ -4,7 +4,7 @@
 
 将当前“转入余额 + 空状态转入记录”改成以“被邀请者充值记录”为核心的管理页面。用户可以按时间查看每笔被邀请者充值产生的返现，并在同一行完成余额转入操作。
 
-设计稿：`docs/affiliate-cashback-management-ui-v2.svg`
+设计稿：`docs/design/affiliate-cashback-management-ui-v2.svg`
 
 ## 2. 页面结构
 
