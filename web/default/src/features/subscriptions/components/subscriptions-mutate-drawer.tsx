@@ -70,7 +70,11 @@ import {
   createWaffoPancakeSubscriptionProduct,
   listWaffoPancakeSubscriptionProductOptions,
 } from '../api'
-import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
+import {
+  getDurationUnitOptions,
+  getResetPeriodOptions,
+  getRoutingStrategyOptions,
+} from '../constants'
 import {
   getPlanFormSchema,
   PLAN_FORM_DEFAULTS,
@@ -247,6 +251,7 @@ export function SubscriptionsMutateDrawer({
 
   const durationUnitOpts = getDurationUnitOptions(t)
   const resetPeriodOpts = getResetPeriodOptions(t)
+  const routingStrategyOpts = getRoutingStrategyOptions(t)
 
   return (
     <Sheet
@@ -421,6 +426,45 @@ export function SubscriptionsMutateDrawer({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='routing_strategy'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Routing strategy')}</FormLabel>
+                      <Select
+                        items={routingStrategyOpts}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {routingStrategyOpts.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t(
+                          'This objective selects the pool order; retry and circuit settings remain in failover policies.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

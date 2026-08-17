@@ -42,6 +42,7 @@ The authenticated AllToken admin page at `/failover` includes the same current m
 ./run.sh steady  # 1000 VUs for 30 minutes
 ./run.sh spike   # ramp from 50 to 1000 VUs in 10 seconds
 ./run.sh burst   # LOADTEST_USERS VUs, one request each
+./run.sh ramp    # short ramp to RAMP_TARGET_VUS, then hold concurrent load
 ./run.sh stream  # 1000 concurrent SSE connections
 ./run.sh mixed   # 700 stream + 200 non-stream + 100 model-list VUs
 ./run.sh soak    # 500 VUs for 2 hours, leak check
@@ -102,6 +103,25 @@ CAPACITY_RATES=100,200,300 \
 ```
 
 For a local token file, use `LOADTEST_TOKEN_FILE=/absolute/path/tokens.txt`; each line may be either a token or `name token`. The file is read locally and is not part of the repository. A URL ending in `/v1` is normalized automatically, so both `https://host` and `https://host/v1` are accepted.
+
+### Compare package routing strategies
+
+Prepare three dedicated token files whose users subscribe to packages mapped to `cost_first`, `balanced`, and `stability_first`. The comparison script runs the same VU curve sequentially and preserves one summary per strategy:
+
+```sh
+CONFIRM_REMOTE_LOADTEST=yes \
+REMOTE_BASE_URL=https://approved-test-api.example.com \
+LOADTEST_MODEL=gpt-5.4-mini \
+RAMP_TARGET_VUS=200 \
+RAMP_UP_DURATION=90s \
+RAMP_HOLD_DURATION=3m \
+COST_FIRST_TOKEN_FILE=/absolute/path/cost-first.txt \
+BALANCED_TOKEN_FILE=/absolute/path/balanced.txt \
+STABILITY_FIRST_TOKEN_FILE=/absolute/path/stability-first.txt \
+./compare-strategies.sh ramp
+```
+
+The package strategy is used only when `FAILOVER_MODE` is empty. The script enforces that behavior and adds `routing_strategy` to k6 Prometheus series so cost, latency, errors, and token throughput can be compared by strategy.
 
 `run-remote.sh` does not start or seed the local new-api/PostgreSQL/Redis services; it only runs k6 on the existing Compose network. The remote Prometheus endpoint must accept authenticated remote-write traffic, or keep the default local endpoint and inspect only local k6 metrics. To see remote CPU, memory, Go, PostgreSQL and Redis panels, the remote Prometheus must scrape the corresponding remote exporters and the remote Grafana must use that Prometheus. Keep metrics and exporter endpoints on a private network or VPN; never expose them publicly just for a load test.
 

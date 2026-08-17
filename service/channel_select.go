@@ -13,11 +13,12 @@ import (
 )
 
 type RetryParam struct {
-	Ctx         *gin.Context
-	TokenGroup  string
-	ModelName   string
-	RequestPath string
-	Retry       *int
+	Ctx             *gin.Context
+	TokenGroup      string
+	ModelName       string
+	RequestPath     string
+	RoutingStrategy string
+	Retry           *int
 
 	// Routing state is request-local. Keeping it off the Gin context prevents a
 	// fresh RetryParam in the relay handler from skipping the first candidate.
@@ -227,24 +228,22 @@ func (p *RetryParam) hasUntriedChannelInCurrentGroup() bool {
 			if _, excluded := p.excludedClusters[clusterID]; excluded {
 				continue
 			}
-			available, err := model.HasSatisfiedChannelWithExclusions(
-				groups[p.groupIndex], p.ModelName, p.RequestPath, p.excludedChannels, p.clusterExclusionsFor(clusterID),
-			)
-			if err == nil && available {
+			available, err := selectChannelForPolicy(policy, groups[p.groupIndex], p.ModelName, 0, p.RequestPath, p.excludedChannels, p.clusterExclusionsFor(clusterID))
+			if err == nil && available != nil {
 				return true
 			}
 		}
 		return false
 	}
-	available, err := model.HasSatisfiedChannelWithExclusions(groups[p.groupIndex], p.ModelName, p.RequestPath, p.excludedChannels, p.excludedClusters)
-	return err == nil && available
+	available, err := selectChannelForPolicy(policy, groups[p.groupIndex], p.ModelName, 0, p.RequestPath, p.excludedChannels, p.excludedClusters)
+	return err == nil && available != nil
 }
 
 // CacheGetRandomSatisfiedChannel selects within the first usable candidate.
 // Candidate order is deterministic; channel selection within one group keeps
 // the existing weighted/priority behavior.
 func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, error) {
-	param.policy()
+	policy := param.policy()
 	groups, err := param.candidateGroups()
 	if err != nil {
 		return nil, param.TokenGroup, err
@@ -282,15 +281,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 				if _, excluded := param.excludedClusters[clusterID]; excluded {
 					continue
 				}
-				channel, channelErr = model.GetRandomSatisfiedChannelWithExclusions(
-					group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.clusterExclusionsFor(clusterID),
-				)
+				channel, channelErr = selectChannelForPolicy(policy, group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.clusterExclusionsFor(clusterID))
 				if channelErr != nil || channel != nil {
 					break
 				}
 			}
 		} else {
-			channel, channelErr = model.GetRandomSatisfiedChannelWithExclusions(group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.excludedClusters)
+			channel, channelErr = selectChannelForPolicy(policy, group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.excludedClusters)
 		}
 		if channelErr != nil {
 			return nil, group, channelErr
@@ -314,6 +311,20 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	return nil, groups[len(groups)-1], nil
 }
 
+func selectChannelForPolicy(policy model.RuntimeFailoverPolicy, group string, modelName string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*model.Channel, error) {
+	poolTiers := policy.PoolTiers
+	if len(poolTiers) == 0 {
+		poolTiers = []int{0}
+	}
+	for _, poolTier := range poolTiers {
+		channel, err := model.GetRandomSatisfiedChannelWithExclusionsAndPoolTier(group, modelName, retry, requestPath, excludedChannels, excludedClusters, poolTier)
+		if err != nil || channel != nil {
+			return channel, err
+		}
+	}
+	return model.GetRandomSatisfiedChannelWithExclusionsAndPoolTier(group, modelName, retry, requestPath, excludedChannels, excludedClusters, -1)
+}
+
 func (p *RetryParam) policy() model.RuntimeFailoverPolicy {
 	if p.runtimePolicy != nil {
 		return *p.runtimePolicy
@@ -333,7 +344,7 @@ func (p *RetryParam) policy() model.RuntimeFailoverPolicy {
 			billingGroup = selected
 		}
 	}
-	policy, clusterOrder, rulePolicy := model.ResolveRuntimeFailover(mode, p.ModelName, p.RequestPath, userGroup, billingGroup)
+	policy, clusterOrder, rulePolicy := model.ResolveRuntimeFailoverWithStrategy(mode, p.RoutingStrategy, p.ModelName, p.RequestPath, userGroup, billingGroup)
 	p.basePolicy = &policy
 	p.rulePolicy = rulePolicy
 	p.clusterOrder = clusterOrder
@@ -357,6 +368,10 @@ func (p *RetryParam) RuntimePolicyForCluster(clusterID int) model.RuntimeFailove
 	p.policy()
 	basePolicy := *p.basePolicy
 	if p.Ctx != nil && p.Ctx.Request != nil && p.Ctx.GetHeader("X-Alltoken-Failover-Mode") != "" {
+		p.runtimePolicy = &basePolicy
+		return basePolicy
+	}
+	if model.IsRoutingStrategy(p.RoutingStrategy) {
 		p.runtimePolicy = &basePolicy
 		return basePolicy
 	}
@@ -401,7 +416,11 @@ func (p *RetryParam) CanAttemptPool(clusterID int, poolTier int) bool {
 	}
 	policy := p.policy()
 	clusterAttempts := p.poolAttemptCounts[clusterID]
-	if clusterAttempts[poolTier] >= policy.SamePoolRetries+1 {
+	maxAttempts := policy.SamePoolRetries + 1
+	if configured, ok := policy.PoolAttemptsByTier[poolTier]; ok && configured > 0 {
+		maxAttempts = configured
+	}
+	if clusterAttempts[poolTier] >= maxAttempts {
 		return false
 	}
 	if clusterAttempts[poolTier] == 0 && len(clusterAttempts) >= policy.MaxPoolAttempts {

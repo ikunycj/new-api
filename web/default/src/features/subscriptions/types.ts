@@ -41,6 +41,10 @@ export const subscriptionPlanSchema = z.object({
   total_amount: z.number(),
   upgrade_group: z.string().optional(),
   downgrade_group: z.string().optional(),
+  routing_strategy: z
+    .enum(['cost_first', 'balanced', 'stability_first'])
+    .optional()
+    .default('balanced'),
   stripe_price_id: z.string().optional(),
   creem_product_id: z.string().optional(),
   waffo_pancake_product_id: z.string().optional(),

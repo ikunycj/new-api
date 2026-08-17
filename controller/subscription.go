@@ -192,6 +192,13 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	if req.Plan.RoutingStrategy == "" {
+		req.Plan.RoutingStrategy = model.RoutingStrategyBalanced
+	}
+	if !model.IsRoutingStrategy(req.Plan.RoutingStrategy) {
+		common.ApiErrorMsg(c, "路由策略无效")
+		return
+	}
 	req.Plan.DowngradeGroup = strings.TrimSpace(req.Plan.DowngradeGroup)
 	if req.Plan.DowngradeGroup != "" {
 		if _, ok := ratio_setting.GetGroupRatioCopy()[req.Plan.DowngradeGroup]; !ok {
@@ -266,6 +273,13 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	if req.Plan.RoutingStrategy == "" {
+		req.Plan.RoutingStrategy = model.RoutingStrategyBalanced
+	}
+	if !model.IsRoutingStrategy(req.Plan.RoutingStrategy) {
+		common.ApiErrorMsg(c, "路由策略无效")
+		return
+	}
 	req.Plan.DowngradeGroup = strings.TrimSpace(req.Plan.DowngradeGroup)
 	if req.Plan.DowngradeGroup != "" {
 		if _, ok := ratio_setting.GetGroupRatioCopy()[req.Plan.DowngradeGroup]; !ok {
@@ -298,6 +312,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"total_amount":               req.Plan.TotalAmount,
 			"upgrade_group":              req.Plan.UpgradeGroup,
 			"downgrade_group":            req.Plan.DowngradeGroup,
+			"routing_strategy":           req.Plan.RoutingStrategy,
 			"quota_reset_period":         req.Plan.QuotaResetPeriod,
 			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
 			"updated_at":                 common.GetTimestamp(),

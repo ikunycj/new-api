@@ -234,12 +234,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
+	routingStrategy := ""
+	if relayInfo.SubscriptionPlanId > 0 {
+		if plan, planErr := model.GetSubscriptionPlanById(relayInfo.SubscriptionPlanId); planErr == nil && plan != nil {
+			routingStrategy = plan.RoutingStrategy
+		}
+	}
 	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
+		Ctx:             c,
+		TokenGroup:      relayInfo.TokenGroup,
+		ModelName:       relayInfo.OriginModelName,
+		RequestPath:     c.Request.URL.Path,
+		RoutingStrategy: routingStrategy,
+		Retry:           common.GetPointer(0),
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
@@ -652,7 +659,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		if !autoBan {
 			autoBanInt = 0
 		}
-		return &model.Channel{
+		seededChannel := &model.Channel{
 			Id:              c.GetInt("channel_id"),
 			Type:            c.GetInt("channel_type"),
 			Name:            c.GetString("channel_name"),
@@ -660,7 +667,22 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			ClusterPoolId:   c.GetInt("cluster_pool_id"),
 			ClusterPoolTier: c.GetInt("cluster_pool_tier"),
 			AutoBan:         &autoBanInt,
-		}, nil
+		}
+		if _, fixedChannel := c.Get("specific_channel_id"); fixedChannel {
+			return seededChannel, nil
+		}
+		channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
+		if err != nil {
+			return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的策略渠道失败: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+		}
+		if channel == nil || channel.Id == seededChannel.Id {
+			return seededChannel, nil
+		}
+		if setupErr := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName); setupErr != nil {
+			return nil, setupErr
+		}
+		helper.HandleGroupRatio(c, info)
+		return channel, nil
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
 

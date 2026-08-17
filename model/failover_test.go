@@ -222,3 +222,48 @@ func TestResolveRuntimeFailoverUsesBillingGroupClusterOrder(t *testing.T) {
 	assert.False(t, rulePolicy)
 	assert.Equal(t, FailoverModeBalanced, GetRuntimeFailoverPolicyForCluster(71, DefaultRuntimeFailoverPolicy("")).Mode)
 }
+
+func TestDefaultRuntimeFailoverPolicyUsesStrategyPoolOrder(t *testing.T) {
+	tests := []struct {
+		name      string
+		mode      string
+		strategy  string
+		poolTiers []int
+	}{
+		{name: "cost", mode: FailoverModeAggressive, strategy: RoutingStrategyCostFirst, poolTiers: []int{PoolTierFree, PoolTierPremium, PoolTierFallback, PoolTierEmergency}},
+		{name: "balanced", mode: FailoverModeBalanced, strategy: RoutingStrategyBalanced, poolTiers: []int{PoolTierPremium, PoolTierFree, PoolTierFallback, PoolTierEmergency}},
+		{name: "stability", mode: FailoverModeConservative, strategy: RoutingStrategyStabilityFirst, poolTiers: []int{PoolTierFallback, PoolTierEmergency, PoolTierPremium, PoolTierFree}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy := DefaultRuntimeFailoverPolicy(test.mode)
+			assert.Equal(t, test.strategy, policy.Strategy)
+			assert.Equal(t, test.poolTiers, policy.PoolTiers)
+		})
+	}
+}
+
+func TestResolveRuntimeFailoverUsesPackageStrategyPolicySteps(t *testing.T) {
+	setupFailoverTables(t)
+	require.NoError(t, DB.Create(&FailoverPolicy{
+		Id: 91, Name: "stable-package", Mode: FailoverModeBalanced, Strategy: RoutingStrategyStabilityFirst, Enabled: true,
+		MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 8000,
+		CircuitFailureThreshold: 4, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 60,
+		CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 3,
+	}).Error)
+	require.NoError(t, DB.Create(&[]FailoverPolicyStep{
+		{PolicyId: 91, StepOrder: 1, PoolTier: PoolTierEmergency, MaxAttempts: 2},
+		{PolicyId: 91, StepOrder: 2, PoolTier: PoolTierFallback, MaxAttempts: 1},
+	}).Error)
+	require.NoError(t, DB.Create(&Cluster{Id: 91, Name: "package-cluster", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "package_group", PolicyId: 91, FailoverPriority: 100}).Error)
+	InitFailoverCache()
+
+	policy, clusterOrder, rulePolicy := ResolveRuntimeFailoverWithStrategy("", RoutingStrategyStabilityFirst, "gpt-5.4-mini", "/v1/chat/completions", "default", "package_group")
+
+	assert.Equal(t, RoutingStrategyStabilityFirst, policy.Strategy)
+	assert.Equal(t, []int{PoolTierEmergency, PoolTierFallback}, policy.PoolTiers)
+	assert.Equal(t, 2, policy.PoolAttemptsByTier[PoolTierEmergency])
+	assert.Equal(t, []int{91}, clusterOrder)
+	assert.False(t, rulePolicy)
+}

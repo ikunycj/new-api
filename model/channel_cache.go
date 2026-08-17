@@ -141,9 +141,16 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 }
 
 func GetRandomSatisfiedChannelWithExclusions(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*Channel, error) {
+	return GetRandomSatisfiedChannelWithExclusionsAndPoolTier(group, model, retry, requestPath, excludedChannels, excludedClusters, 0)
+}
+
+// GetRandomSatisfiedChannelWithExclusionsAndPoolTier applies an explicit pool
+// tier before the existing priority and weight rules. A negative tier selects
+// legacy channels that are not bound to a configured pool.
+func GetRandomSatisfiedChannelWithExclusionsAndPoolTier(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}, poolTier int) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannelWithExclusions(group, model, retry, requestPath, excludedChannels, excludedClusters)
+		return GetChannelWithExclusionsAndPoolTier(group, model, retry, requestPath, excludedChannels, excludedClusters, poolTier)
 	}
 
 	channelSyncLock.RLock()
@@ -170,6 +177,23 @@ func GetRandomSatisfiedChannelWithExclusions(group string, model string, retry i
 				}
 			}
 			filtered = append(filtered, channelID)
+		}
+		channels = filtered
+	}
+	if poolTier != 0 {
+		filtered := make([]int, 0, len(channels))
+		for _, channelID := range channels {
+			channel := channelsIDM[channelID]
+			if channel == nil {
+				continue
+			}
+			if poolTier < 0 && (channel.ClusterPoolId <= 0 || clusterPoolTierByID[channel.ClusterPoolId] == 0) {
+				filtered = append(filtered, channelID)
+				continue
+			}
+			if poolTier > 0 && clusterPoolTierByID[channel.ClusterPoolId] == poolTier {
+				filtered = append(filtered, channelID)
+			}
 		}
 		channels = filtered
 	}

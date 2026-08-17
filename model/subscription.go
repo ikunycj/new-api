@@ -178,6 +178,9 @@ type SubscriptionPlan struct {
 	// Downgrade user group on expiry (empty = revert to the group held before purchase)
 	DowngradeGroup string `json:"downgrade_group" gorm:"type:varchar(64);default:''"`
 
+	// Routing objective selected for this package.
+	RoutingStrategy string `json:"routing_strategy" gorm:"type:varchar(32);default:'balanced';index"`
+
 	// Total quota (amount in quota units, 0 = unlimited)
 	TotalAmount int64 `json:"total_amount" gorm:"type:bigint;not null;default:0"`
 
@@ -207,6 +210,9 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	}
 	if p.AllowWalletOverflow == nil {
 		p.AllowWalletOverflow = common.GetPointer(true)
+	}
+	if !IsRoutingStrategy(p.RoutingStrategy) {
+		p.RoutingStrategy = RoutingStrategyBalanced
 	}
 }
 

@@ -1,4 +1,5 @@
 export type FailoverMode = 'conservative' | 'balanced' | 'aggressive'
+export type RoutingStrategy = 'cost_first' | 'balanced' | 'stability_first'
 export type FailureScope =
   | 'request'
   | 'credential'
@@ -104,6 +105,7 @@ export type FailoverPolicy = {
   id: number
   name: string
   mode: FailoverMode
+  strategy: RoutingStrategy
   enabled: boolean
   same_pool_retries: number
   connect_timeout_ms: number
@@ -123,6 +125,14 @@ export type FailoverPolicy = {
   max_cost_multiplier: number
   created_time: number
   updated_time: number
+}
+
+export type FailoverPolicyStep = {
+  id: number
+  policy_id: number
+  step_order: number
+  pool_tier: number
+  max_attempts: number
 }
 
 export type UpstreamErrorMapping = {
@@ -170,7 +180,7 @@ export type FailoverConfig = {
   clusters: Cluster[]
   pools: ClusterPool[]
   policies: FailoverPolicy[]
-  policy_steps: unknown[]
+  policy_steps: FailoverPolicyStep[]
   groups: FailoverGroup[]
   group_members: FailoverGroupMember[]
   rules: FailoverRule[]

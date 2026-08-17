@@ -15,10 +15,8 @@ import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getAdminPlans,
-  getPackageComparison,
-} from '@/features/dashboard/api'
+import { getAdminPlans, getPackageComparison } from '@/features/dashboard/api'
+import { getRoutingStrategyLabel } from '@/features/subscriptions/constants'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
 
@@ -99,6 +97,9 @@ export function PackageComparison() {
                   {stat.currency} {stat.plan_price.toFixed(2)}
                 </span>
               </CardTitle>
+              <div className='text-muted-foreground text-xs'>
+                {getRoutingStrategyLabel(t, stat.routing_strategy)}
+              </div>
             </CardHeader>
             <CardContent className='grid grid-cols-2 gap-x-4 gap-y-3'>
               <Metric
@@ -106,8 +107,12 @@ export function PackageComparison() {
                 value={formatNumber(stat.requests, locale)}
               />
               <Metric
-                label={t('Channel hit rate')}
-                value={`${(stat.channel_hit_rate * 100).toFixed(1)}%`}
+                label={t('Success rate')}
+                value={`${(stat.success_rate * 100).toFixed(1)}%`}
+              />
+              <Metric
+                label={t('Failure rate')}
+                value={`${(stat.failure_rate * 100).toFixed(1)}%`}
               />
               <Metric
                 label={t('Input tokens')}
@@ -126,6 +131,10 @@ export function PackageComparison() {
                 value={`${stat.average_latency_ms.toFixed(0)} ms`}
               />
               <Metric label={t('Usage cost')} value={formatQuota(stat.quota)} />
+              <Metric
+                label={t('Cost per million tokens')}
+                value={formatQuota(stat.quota_per_million_tokens)}
+              />
               <Metric
                 label={t('Plan quota')}
                 value={
@@ -183,7 +192,9 @@ export function PackageComparison() {
         </div>
       </div>
       <p className='text-muted-foreground text-xs'>
-        {t('Usage is attributed to the plan selected when each request is billed.')}
+        {t(
+          'Usage is attributed to the plan selected when each request is billed.'
+        )}
       </p>
       {comparisonContent}
     </div>

@@ -330,11 +330,229 @@ const newKeys = {
   },
 }
 
+const routingStrategyKeys = {
+  en: {
+    'Cost first': 'Cost first',
+    'Balanced cost and stability': 'Balanced cost and stability',
+    'Stability first': 'Stability first',
+    'Routing strategy': 'Routing strategy',
+    'Routing objective': 'Routing objective',
+    cost_first: 'Cost first',
+    stability_first: 'Stability first',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      'This objective selects the pool order; retry and circuit settings remain in failover policies.',
+    'Pool order': 'Pool order',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      'Define the ordered pool path and per-pool attempt limit for each policy.',
+    'Add pool step': 'Add pool step',
+    Order: 'Order',
+    'Maximum attempts': 'Maximum attempts',
+    'Cheap pool': 'Cheap pool',
+    'Premium pool': 'Premium pool',
+    'Fallback pool': 'Fallback pool',
+    'Emergency pool': 'Emergency pool',
+    'Delete pool step': 'Delete pool step',
+    'Failure rate': 'Failure rate',
+    'Cost per million tokens': 'Cost per million tokens',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.',
+  },
+  zh: {
+    'Cost first': '成本优先',
+    'Balanced cost and stability': '成本与稳定性均衡',
+    'Stability first': '稳定性优先',
+    'Routing strategy': '路由策略',
+    'Routing objective': '路由目标',
+    cost_first: '成本优先',
+    stability_first: '稳定性优先',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      '该目标决定号池顺序；重试和熔断参数仍在切流策略中配置。',
+    'Pool order': '号池顺序',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      '为每个策略配置有序号池路径和每个号池的尝试上限。',
+    'Add pool step': '添加号池步骤',
+    Order: '顺序',
+    'Maximum attempts': '最大尝试次数',
+    'Cheap pool': '便宜号池',
+    'Premium pool': '优质号池',
+    'Fallback pool': '兜底号池',
+    'Emergency pool': '应急号池',
+    'Delete pool step': '删除号池步骤',
+    'Failure rate': '失败率',
+    'Cost per million tokens': '每百万 Token 成本',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 为免费号池，P2 为 Pro/Plus，P3 为兜底链路，P4 为应急链路。',
+  },
+  fr: {
+    'Cost first': 'Coût prioritaire',
+    'Balanced cost and stability': 'Coût et stabilité équilibrés',
+    'Stability first': 'Stabilité prioritaire',
+    'Routing strategy': 'Stratégie de routage',
+    'Routing objective': 'Objectif de routage',
+    cost_first: 'Coût prioritaire',
+    stability_first: 'Stabilité prioritaire',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      'Cet objectif définit l’ordre des pools ; les tentatives et circuits restent dans les politiques de bascule.',
+    'Pool order': 'Ordre des pools',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      'Définissez le parcours des pools et la limite de tentatives par pool.',
+    'Add pool step': 'Ajouter une étape',
+    Order: 'Ordre',
+    'Maximum attempts': 'Tentatives maximales',
+    'Cheap pool': 'Pool économique',
+    'Premium pool': 'Pool premium',
+    'Fallback pool': 'Pool de secours',
+    'Emergency pool': 'Pool d’urgence',
+    'Delete pool step': 'Supprimer l’étape',
+    'Failure rate': 'Taux d’échec',
+    'Cost per million tokens': 'Coût par million de tokens',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 est gratuit, P2 est Pro/Plus, P3 est le secours et P4 l’urgence.',
+  },
+  ja: {
+    'Cost first': 'コスト優先',
+    'Balanced cost and stability': 'コストと安定性のバランス',
+    'Stability first': '安定性優先',
+    'Routing strategy': 'ルーティング戦略',
+    'Routing objective': 'ルーティング目標',
+    cost_first: 'コスト優先',
+    stability_first: '安定性優先',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      'この目標でプール順を選択します。再試行とサーキット設定はフェイルオーバーポリシーで管理します。',
+    'Pool order': 'プール順',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      '各ポリシーのプール経路とプールごとの試行上限を設定します。',
+    'Add pool step': 'プール手順を追加',
+    Order: '順序',
+    'Maximum attempts': '最大試行回数',
+    'Cheap pool': '低コストプール',
+    'Premium pool': 'プレミアムプール',
+    'Fallback pool': 'フォールバックプール',
+    'Emergency pool': '緊急プール',
+    'Delete pool step': 'プール手順を削除',
+    'Failure rate': '失敗率',
+    'Cost per million tokens': '100万トークン当たりのコスト',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1は無料、P2はPro/Plus、P3はフォールバック、P4は緊急経路です。',
+  },
+  ru: {
+    'Cost first': 'Приоритет стоимости',
+    'Balanced cost and stability': 'Баланс стоимости и стабильности',
+    'Stability first': 'Приоритет стабильности',
+    'Routing strategy': 'Стратегия маршрутизации',
+    'Routing objective': 'Цель маршрутизации',
+    cost_first: 'Приоритет стоимости',
+    stability_first: 'Приоритет стабильности',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      'Цель задаёт порядок пулов; повторы и параметры контура остаются в политиках переключения.',
+    'Pool order': 'Порядок пулов',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      'Задайте порядок пулов и лимит попыток для каждого пула.',
+    'Add pool step': 'Добавить этап пула',
+    Order: 'Порядок',
+    'Maximum attempts': 'Максимум попыток',
+    'Cheap pool': 'Экономичный пул',
+    'Premium pool': 'Премиум-пул',
+    'Fallback pool': 'Резервный пул',
+    'Emergency pool': 'Аварийный пул',
+    'Delete pool step': 'Удалить этап пула',
+    'Failure rate': 'Доля ошибок',
+    'Cost per million tokens': 'Стоимость за миллион токенов',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 — бесплатный, P2 — Pro/Plus, P3 — резервный, P4 — аварийный пул.',
+  },
+  vi: {
+    'Cost first': 'Ưu tiên chi phí',
+    'Balanced cost and stability': 'Cân bằng chi phí và ổn định',
+    'Stability first': 'Ưu tiên ổn định',
+    'Routing strategy': 'Chiến lược định tuyến',
+    'Routing objective': 'Mục tiêu định tuyến',
+    cost_first: 'Ưu tiên chi phí',
+    stability_first: 'Ưu tiên ổn định',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      'Mục tiêu này chọn thứ tự pool; cấu hình thử lại và mạch vẫn nằm trong chính sách chuyển tuyến.',
+    'Pool order': 'Thứ tự pool',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      'Đặt đường đi pool và giới hạn số lần thử cho từng pool.',
+    'Add pool step': 'Thêm bước pool',
+    Order: 'Thứ tự',
+    'Maximum attempts': 'Số lần thử tối đa',
+    'Cheap pool': 'Pool chi phí thấp',
+    'Premium pool': 'Pool cao cấp',
+    'Fallback pool': 'Pool dự phòng',
+    'Emergency pool': 'Pool khẩn cấp',
+    'Delete pool step': 'Xóa bước pool',
+    'Failure rate': 'Tỷ lệ thất bại',
+    'Cost per million tokens': 'Chi phí trên một triệu token',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 miễn phí, P2 là Pro/Plus, P3 dự phòng và P4 khẩn cấp.',
+  },
+  'zh-TW': {
+    'Cost first': '成本優先',
+    'Balanced cost and stability': '成本與穩定性平衡',
+    'Stability first': '穩定性優先',
+    'Routing strategy': '路由策略',
+    'Routing objective': '路由目標',
+    cost_first: '成本優先',
+    stability_first: '穩定性優先',
+    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
+      '此目標決定號池順序；重試和熔斷參數仍在切流策略中設定。',
+    'Pool order': '號池順序',
+    'Define the ordered pool path and per-pool attempt limit for each policy.':
+      '為每個策略設定有序號池路徑和每個號池的嘗試上限。',
+    'Add pool step': '新增號池步驟',
+    Order: '順序',
+    'Maximum attempts': '最大嘗試次數',
+    'Cheap pool': '便宜號池',
+    'Premium pool': '優質號池',
+    'Fallback pool': '備援號池',
+    'Emergency pool': '緊急號池',
+    'Delete pool step': '刪除號池步驟',
+    'Failure rate': '失敗率',
+    'Cost per million tokens': '每百萬 Token 成本',
+    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
+      'P1 為免費號池，P2 為 Pro/Plus，P3 為備援鏈路，P4 為緊急鏈路。',
+  },
+}
+
+for (const [locale, translations] of Object.entries(routingStrategyKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const preservedLocaleValues = {
+  fr: { End: 'End', Tokens: 'Jeton' },
+  ja: {
+    '24 hours': '24 時間',
+    '30 days': '30 日間',
+    '7 days': '7 日間',
+    Daily: '毎日',
+    Requests: 'リクエスト',
+  },
+  ru: {
+    Daily: 'Ежедневно',
+    End: 'End',
+    'Estimated cost': 'Примерная стоимость',
+  },
+  vi: { Daily: 'Hàng ngày', End: 'End', Tokens: 'Mã thông báo' },
+  'zh-TW': {
+    '24 hours': '24 hours',
+    Daily: '每天',
+    'Estimated cost': '預計成本',
+    Tokens: 'Token',
+  },
+  zh: { Daily: '每天', 'Estimated cost': '预计成本', Tokens: 'Token' },
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
-  for (const [key, value] of Object.entries(newKeys[locale])) {
-    if (json.translation[key] === undefined) json.translation[key] = value
-  }
+  Object.assign(
+    json.translation,
+    routingStrategyKeys[locale],
+    preservedLocaleValues[locale]
+  )
+  json.translation = Object.fromEntries(
+    Object.entries(json.translation).sort(([a], [b]) => a.localeCompare(b))
+  )
   await fs.writeFile(file, `${JSON.stringify(json, null, 2)}\n`, 'utf8')
 }

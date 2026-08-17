@@ -309,6 +309,34 @@ func TestRetryParamClusterLimitStillAllowsVisitedClusterPools(t *testing.T) {
 	assert.False(t, param.CanAttemptCluster(23))
 }
 
+func TestCacheGetRandomSatisfiedChannelUsesPolicyPoolOrder(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "strategy")
+	require.NoError(t, model.DB.AutoMigrate(&model.ClusterPool{}))
+	require.NoError(t, model.DB.Create(&[]model.ClusterPool{
+		{Id: 81, ClusterId: 1, Tier: model.PoolTierFree, Name: "cheap", Status: model.ClusterStatusEnabled, CostFactor: 1},
+		{Id: 82, ClusterId: 1, Tier: model.PoolTierFallback, Name: "stable", Status: model.ClusterStatusEnabled, CostFactor: 2},
+	}).Error)
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", ids["strategy"]).Updates(map[string]any{"cluster_id": 1, "cluster_pool_id": 81}).Error)
+	priority := int64(1)
+	weight := uint(100)
+	stable := &model.Channel{
+		Id: 93001, Name: "stable", Key: "stable", Status: common.ChannelStatusEnabled,
+		Models: "shared-model", Group: "strategy", Priority: &priority, Weight: &weight, ClusterId: 1, ClusterPoolId: 82,
+	}
+	require.NoError(t, model.DB.Create(stable).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "strategy", Model: "shared-model", ChannelId: stable.Id, Enabled: true, Priority: &priority, Weight: weight}).Error)
+	model.InitChannelCache()
+
+	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+	policy.PoolTiers = []int{model.PoolTierFallback, model.PoolTierFree}
+	param := &RetryParam{Ctx: orderedRoutingContext(nil, false), TokenGroup: "strategy", ModelName: "shared-model", runtimePolicy: &policy}
+	channel, _, err := CacheGetRandomSatisfiedChannel(param)
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, stable.Id, channel.Id)
+}
+
 func TestRetryParamEnforcesPoolRetryAndTierBudgets(t *testing.T) {
 	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
 	policy.SamePoolRetries = 1

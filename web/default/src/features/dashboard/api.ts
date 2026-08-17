@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
 import type { PlanRecord } from '@/features/subscriptions/types'
+import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
@@ -30,17 +30,20 @@ export interface PackageComparisonStat {
   plan_title: string
   plan_price: number
   currency: string
+  routing_strategy: string
   plan_quota: number
   requests: number
   success_requests: number
   error_requests: number
   success_rate: number
+  failure_rate: number
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
   quota: number
   average_latency_ms: number
   channel_hit_rate: number
+  quota_per_million_tokens: number
 }
 
 export async function getAdminPlans(): Promise<{

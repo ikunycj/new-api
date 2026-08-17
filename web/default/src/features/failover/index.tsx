@@ -58,7 +58,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getFailoverConfig, updateFailoverConfig } from './api'
 import { ClusterConfigurationPanel } from './components/cluster-configuration-panel'
 import { FailoverMonitoring } from './monitoring'
-import type { FailoverConfig, FailoverMode } from './types'
+import type { FailoverConfig, FailoverMode, RoutingStrategy } from './types'
 
 const clusterSchema = z.object({
   id: z.coerce.number().int().min(0),
@@ -91,6 +91,7 @@ const policySchema = z
     id: z.coerce.number().int().min(0),
     name: z.string().trim().min(1),
     mode: z.enum(['conservative', 'balanced', 'aggressive']),
+    strategy: z.enum(['cost_first', 'balanced', 'stability_first']),
     enabled: z.boolean(),
     same_pool_retries: z.coerce.number().int().min(0).max(10),
     connect_timeout_ms: z.coerce.number().int().positive(),
@@ -149,6 +150,14 @@ const failoverGroupSchema = z.object({
   updated_time: z.coerce.number(),
 })
 
+const policyStepSchema = z.object({
+  id: z.coerce.number().int().min(0),
+  policy_id: z.coerce.number().int().positive(),
+  step_order: z.coerce.number().int().positive(),
+  pool_tier: z.coerce.number().int().min(1).max(4),
+  max_attempts: z.coerce.number().int().positive(),
+})
+
 const groupMemberSchema = z.object({
   id: z.coerce.number().int().min(0),
   failover_group_id: z.coerce.number().int().positive(),
@@ -172,6 +181,7 @@ const formSchema = z.object({
   clusters: z.array(clusterSchema),
   pools: z.array(poolSchema),
   policies: z.array(policySchema),
+  policy_steps: z.array(policyStepSchema),
   groups: z.array(failoverGroupSchema),
   group_members: z.array(groupMemberSchema),
   rules: z.array(failoverRuleSchema),
@@ -182,12 +192,21 @@ type FormValues = z.output<typeof formSchema>
 type FormInput = z.input<typeof formSchema>
 
 const modeOrder: FailoverMode[] = ['conservative', 'balanced', 'aggressive']
+const strategyOrder: RoutingStrategy[] = [
+  'cost_first',
+  'balanced',
+  'stability_first',
+]
 
 function defaultPolicy(mode: FailoverMode): FormInput['policies'][number] {
+  let strategy: RoutingStrategy = 'balanced'
+  if (mode === 'conservative') strategy = 'stability_first'
+  if (mode === 'aggressive') strategy = 'cost_first'
   const policy: FormInput['policies'][number] = {
     id: 0,
     name: mode,
     mode,
+    strategy,
     enabled: true,
     same_pool_retries: 0,
     connect_timeout_ms: 1500,
@@ -239,6 +258,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
       clusters: props.config.clusters,
       pools: props.config.pools,
       policies: props.config.policies,
+      policy_steps: props.config.policy_steps,
       groups: props.config.groups,
       group_members: props.config.group_members,
       rules: props.config.rules,
@@ -248,6 +268,10 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
   const clusters = useFieldArray({ control: form.control, name: 'clusters' })
   const pools = useFieldArray({ control: form.control, name: 'pools' })
   const policies = useFieldArray({ control: form.control, name: 'policies' })
+  const policySteps = useFieldArray({
+    control: form.control,
+    name: 'policy_steps',
+  })
   const errorMappings = useFieldArray({
     control: form.control,
     name: 'error_mappings',
@@ -306,6 +330,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
         clusters: values.clusters,
         pools: values.pools,
         policies: values.policies,
+        policy_steps: values.policy_steps,
         groups: values.groups,
         group_members: values.group_members,
         rules: values.rules,
@@ -357,6 +382,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('Mode')}</TableHead>
+                <TableHead>{t('Routing objective')}</TableHead>
                 <TableHead>{t('Same-pool retries')}</TableHead>
                 <TableHead>{t('Pool attempts')}</TableHead>
                 <TableHead>{t('Cluster attempts')}</TableHead>
@@ -392,6 +418,31 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                               {modeOrder.map((mode) => (
                                 <SelectItem key={mode} value={mode}>
                                   {t(mode)}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Controller
+                      control={form.control}
+                      name={`policies.${index}.strategy`}
+                      render={({ field }) => (
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger className='w-48'>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {strategyOrder.map((strategy) => (
+                                <SelectItem key={strategy} value={strategy}>
+                                  {t(strategy)}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
@@ -465,6 +516,157 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                       variant='ghost'
                       aria-label={t('Delete policy')}
                       onClick={() => policies.remove(index)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <div>
+            <h3 className='text-sm font-semibold'>{t('Pool order')}</h3>
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Define the ordered pool path and per-pool attempt limit for each policy.'
+              )}
+            </p>
+          </div>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={policySelectItems.length === 0}
+            onClick={() => {
+              const firstPolicy = policyValues.find((policy) => policy.id > 0)
+              if (!firstPolicy) return
+              const existingSteps = form
+                .getValues('policy_steps')
+                .filter((step) => step.policy_id === firstPolicy.id)
+              const usedTiers = new Set(
+                existingSteps.map((step) => step.pool_tier)
+              )
+              const poolTier = [1, 2, 3, 4].find((tier) => !usedTiers.has(tier))
+              if (!poolTier) return
+              const stepOrder =
+                Math.max(
+                  0,
+                  ...existingSteps.map((step) => Number(step.step_order))
+                ) + 1
+              policySteps.append({
+                id: 0,
+                policy_id: firstPolicy.id,
+                step_order: stepOrder,
+                pool_tier: poolTier,
+                max_attempts: 1,
+              })
+            }}
+          >
+            <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
+            {t('Add pool step')}
+          </Button>
+        </div>
+
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('Policy')}</TableHead>
+                <TableHead>{t('Order')}</TableHead>
+                <TableHead>{t('Pool tier')}</TableHead>
+                <TableHead>{t('Maximum attempts')}</TableHead>
+                <TableHead className='w-10' />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {policySteps.fields.map((step, index) => (
+                <TableRow key={step.id}>
+                  <TableCell>
+                    <Controller
+                      control={form.control}
+                      name={`policy_steps.${index}.policy_id`}
+                      render={({ field }) => (
+                        <Select
+                          value={String(field.value)}
+                          onValueChange={(value) =>
+                            field.onChange(Number(value))
+                          }
+                        >
+                          <SelectTrigger className='w-48'>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {policySelectItems.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type='number'
+                      min='1'
+                      className='w-24'
+                      {...form.register(`policy_steps.${index}.step_order`)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Controller
+                      control={form.control}
+                      name={`policy_steps.${index}.pool_tier`}
+                      render={({ field }) => (
+                        <Select
+                          value={String(field.value)}
+                          onValueChange={(value) =>
+                            field.onChange(Number(value))
+                          }
+                        >
+                          <SelectTrigger className='w-44'>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value='1'>
+                                {t('Cheap pool')}
+                              </SelectItem>
+                              <SelectItem value='2'>
+                                {t('Premium pool')}
+                              </SelectItem>
+                              <SelectItem value='3'>
+                                {t('Fallback pool')}
+                              </SelectItem>
+                              <SelectItem value='4'>
+                                {t('Emergency pool')}
+                              </SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type='number'
+                      min='1'
+                      className='w-28'
+                      {...form.register(`policy_steps.${index}.max_attempts`)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      type='button'
+                      size='icon'
+                      variant='ghost'
+                      aria-label={t('Delete pool step')}
+                      onClick={() => policySteps.remove(index)}
                     >
                       <HugeiconsIcon icon={Delete02Icon} />
                     </Button>
@@ -585,7 +787,9 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
           <div>
             <h2 className='text-base font-semibold'>{t('Account pools')}</h2>
             <p className='text-muted-foreground text-sm'>
-              {t('P1 is free, P2 is Pro/Plus, and P3 is the fallback path.')}
+              {t(
+                'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.'
+              )}
             </p>
           </div>
           <Button

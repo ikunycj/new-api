@@ -23,6 +23,10 @@ const (
 	FailoverModeConservative = "conservative"
 	FailoverModeBalanced     = "balanced"
 	FailoverModeAggressive   = "aggressive"
+
+	RoutingStrategyCostFirst      = "cost_first"
+	RoutingStrategyBalanced       = "balanced"
+	RoutingStrategyStabilityFirst = "stability_first"
 )
 
 type Cluster struct {
@@ -56,6 +60,7 @@ type FailoverPolicy struct {
 	Id                      int     `json:"id"`
 	Name                    string  `json:"name" gorm:"type:varchar(128);index"`
 	Mode                    string  `json:"mode" gorm:"type:varchar(32);index"`
+	Strategy                string  `json:"strategy" gorm:"type:varchar(32);index"`
 	Enabled                 bool    `json:"enabled" gorm:"index"`
 	SamePoolRetries         int     `json:"same_pool_retries"`
 	ConnectTimeoutMs        int     `json:"connect_timeout_ms"`
@@ -139,6 +144,7 @@ type FailoverConfig struct {
 
 type RuntimeFailoverPolicy struct {
 	Mode                    string
+	Strategy                string
 	SamePoolRetries         int
 	MaxPoolAttempts         int
 	MaxClusterAttempts      int
@@ -151,17 +157,32 @@ type RuntimeFailoverPolicy struct {
 	AllowPaidEscalation     bool
 	AllowFallback           bool
 	MaxCostMultiplier       float64
+	PoolTiers               []int
+	PoolAttemptsByTier      map[int]int
 }
 
 func DefaultRuntimeFailoverPolicy(mode string) RuntimeFailoverPolicy {
 	switch normalizeFailoverMode(mode) {
 	case FailoverModeConservative:
-		return RuntimeFailoverPolicy{Mode: FailoverModeConservative, SamePoolRetries: 1, MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 12000, CircuitFailureThreshold: 8, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return withDefaultPoolOrder(RuntimeFailoverPolicy{Mode: FailoverModeConservative, Strategy: RoutingStrategyStabilityFirst, SamePoolRetries: 1, MaxPoolAttempts: 4, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 12000, CircuitFailureThreshold: 8, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2})
 	case FailoverModeAggressive:
-		return RuntimeFailoverPolicy{Mode: FailoverModeAggressive, MaxPoolAttempts: 4, MaxClusterAttempts: 4, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 6000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 90, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return withDefaultPoolOrder(RuntimeFailoverPolicy{Mode: FailoverModeAggressive, Strategy: RoutingStrategyCostFirst, MaxPoolAttempts: 4, MaxClusterAttempts: 4, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 6000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 90, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2})
 	default:
-		return RuntimeFailoverPolicy{Mode: FailoverModeBalanced, MaxPoolAttempts: 4, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2}
+		return withDefaultPoolOrder(RuntimeFailoverPolicy{Mode: FailoverModeBalanced, Strategy: RoutingStrategyBalanced, MaxPoolAttempts: 4, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2})
 	}
+}
+
+func withDefaultPoolOrder(policy RuntimeFailoverPolicy) RuntimeFailoverPolicy {
+	policy.PoolAttemptsByTier = make(map[int]int)
+	switch policy.Strategy {
+	case RoutingStrategyStabilityFirst:
+		policy.PoolTiers = []int{PoolTierFallback, PoolTierEmergency, PoolTierPremium, PoolTierFree}
+	case RoutingStrategyBalanced:
+		policy.PoolTiers = []int{PoolTierPremium, PoolTierFree, PoolTierFallback, PoolTierEmergency}
+	default:
+		policy.PoolTiers = []int{PoolTierFree, PoolTierPremium, PoolTierFallback, PoolTierEmergency}
+	}
+	return policy
 }
 
 func GetRuntimeFailoverPolicy(mode string) RuntimeFailoverPolicy {
@@ -183,6 +204,8 @@ type failoverLookupCache struct {
 	mappings             []UpstreamErrorMapping
 	policies             map[string]RuntimeFailoverPolicy
 	policiesByID         map[int]RuntimeFailoverPolicy
+	policiesByStrategy   map[string]RuntimeFailoverPolicy
+	policyIDsByStrategy  map[string]int
 	groups               map[int]FailoverGroup
 	groupMembers         map[int][]FailoverGroupMember
 	rules                []FailoverRule
@@ -198,6 +221,8 @@ var failoverLookup = struct {
 	billingGroupPolicies: make(map[string]int),
 	policies:             make(map[string]RuntimeFailoverPolicy),
 	policiesByID:         make(map[int]RuntimeFailoverPolicy),
+	policiesByStrategy:   make(map[string]RuntimeFailoverPolicy),
+	policyIDsByStrategy:  make(map[string]int),
 	groups:               make(map[int]FailoverGroup),
 	groupMembers:         make(map[int][]FailoverGroupMember),
 }}
@@ -210,6 +235,8 @@ func InitFailoverCache() {
 		billingGroupPolicies: make(map[string]int),
 		policies:             make(map[string]RuntimeFailoverPolicy),
 		policiesByID:         make(map[int]RuntimeFailoverPolicy),
+		policiesByStrategy:   make(map[string]RuntimeFailoverPolicy),
+		policyIDsByStrategy:  make(map[string]int),
 		groups:               make(map[int]FailoverGroup),
 		groupMembers:         make(map[int][]FailoverGroupMember),
 	}
@@ -247,6 +274,8 @@ func InitFailoverCache() {
 			for _, stored := range policies {
 				mode := normalizeFailoverMode(stored.Mode)
 				runtime := DefaultRuntimeFailoverPolicy(mode)
+				runtime.Strategy = normalizeRoutingStrategy(stored.Strategy, mode)
+				runtime = withDefaultPoolOrder(runtime)
 				if stored.SamePoolRetries >= 0 {
 					runtime.SamePoolRetries = stored.SamePoolRetries
 				}
@@ -281,6 +310,36 @@ func InitFailoverCache() {
 				}
 				cache.policies[mode] = runtime
 				cache.policiesByID[stored.Id] = runtime
+				if _, exists := cache.policiesByStrategy[runtime.Strategy]; !exists {
+					cache.policiesByStrategy[runtime.Strategy] = runtime
+					cache.policyIDsByStrategy[runtime.Strategy] = stored.Id
+				}
+			}
+		}
+	}
+	if DB != nil && DB.Migrator().HasTable(&FailoverPolicyStep{}) {
+		var steps []FailoverPolicyStep
+		if err := DB.Order("policy_id ASC, step_order ASC").Find(&steps).Error; err == nil {
+			configuredPolicies := make(map[int]struct{})
+			for _, step := range steps {
+				runtime, ok := cache.policiesByID[step.PolicyId]
+				if !ok || step.PoolTier < PoolTierFree || step.PoolTier > PoolTierEmergency {
+					continue
+				}
+				if _, configured := configuredPolicies[step.PolicyId]; !configured {
+					runtime.PoolTiers = nil
+					runtime.PoolAttemptsByTier = make(map[int]int)
+					configuredPolicies[step.PolicyId] = struct{}{}
+				}
+				if step.MaxAttempts > 0 {
+					runtime.PoolAttemptsByTier[step.PoolTier] = step.MaxAttempts
+				}
+				runtime.PoolTiers = append(runtime.PoolTiers, step.PoolTier)
+				cache.policiesByID[step.PolicyId] = runtime
+				cache.policies[runtime.Mode] = runtime
+				if cache.policyIDsByStrategy[runtime.Strategy] == step.PolicyId {
+					cache.policiesByStrategy[runtime.Strategy] = runtime
+				}
 			}
 		}
 	}
@@ -312,6 +371,10 @@ func InitFailoverCache() {
 }
 
 func ResolveRuntimeFailover(mode string, modelName string, route string, userGroup string, billingGroup string) (RuntimeFailoverPolicy, []int, bool) {
+	return ResolveRuntimeFailoverWithStrategy(mode, "", modelName, route, userGroup, billingGroup)
+}
+
+func ResolveRuntimeFailoverWithStrategy(mode string, strategy string, modelName string, route string, userGroup string, billingGroup string) (RuntimeFailoverPolicy, []int, bool) {
 	policy := GetRuntimeFailoverPolicy(mode)
 	failoverLookup.RLock()
 	defer failoverLookup.RUnlock()
@@ -323,6 +386,7 @@ func ResolveRuntimeFailover(mode string, modelName string, route string, userGro
 			}
 		}
 	}
+	rulePolicy := false
 	for _, rule := range failoverLookup.value.rules {
 		group, ok := failoverLookup.value.groups[rule.FailoverGroupId]
 		if !ok {
@@ -343,6 +407,7 @@ func ResolveRuntimeFailover(mode string, modelName string, route string, userGro
 				policy = configured
 			}
 		}
+		rulePolicy = true
 		members := failoverLookup.value.groupMembers[group.Id]
 		clusterOrder = make([]int, 0, len(members))
 		seen := make(map[int]struct{}, len(members))
@@ -353,9 +418,18 @@ func ResolveRuntimeFailover(mode string, modelName string, route string, userGro
 			seen[member.ClusterId] = struct{}{}
 			clusterOrder = append(clusterOrder, member.ClusterId)
 		}
-		return policy, clusterOrder, true
+		break
 	}
-	return policy, clusterOrder, false
+	if strings.TrimSpace(mode) == "" && IsRoutingStrategy(strategy) {
+		normalizedStrategy := strings.ToLower(strings.TrimSpace(strategy))
+		if configured, exists := failoverLookup.value.policiesByStrategy[normalizedStrategy]; exists {
+			policy = configured
+		} else {
+			policy.Strategy = normalizedStrategy
+			policy = withDefaultPoolOrder(policy)
+		}
+	}
+	return policy, clusterOrder, rulePolicy
 }
 
 func GetRuntimeFailoverPolicyForCluster(clusterID int, fallback RuntimeFailoverPolicy) RuntimeFailoverPolicy {
@@ -439,6 +513,9 @@ func GetFailoverConfig() (*FailoverConfig, error) {
 			return nil, err
 		}
 	}
+	for i := range config.Policies {
+		config.Policies[i].Strategy = normalizeRoutingStrategy(config.Policies[i].Strategy, config.Policies[i].Mode)
+	}
 	return config, nil
 }
 
@@ -473,6 +550,7 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 		for i := range config.Policies {
 			policy := &config.Policies[i]
 			policy.Mode = normalizeFailoverMode(policy.Mode)
+			policy.Strategy = normalizeRoutingStrategy(policy.Strategy, policy.Mode)
 			if policy.Name == "" {
 				policy.Name = policy.Mode
 			}
@@ -492,8 +570,47 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				return err
 			}
 		}
+		stepOrders := make(map[[2]int]struct{}, len(config.PolicySteps))
+		stepTiers := make(map[[2]int]struct{}, len(config.PolicySteps))
+		for i := range config.PolicySteps {
+			step := &config.PolicySteps[i]
+			if step.PolicyId <= 0 || step.StepOrder <= 0 || step.PoolTier < PoolTierFree || step.PoolTier > PoolTierEmergency || step.MaxAttempts <= 0 {
+				return errors.New("policy step is invalid")
+			}
+			orderKey := [2]int{step.PolicyId, step.StepOrder}
+			tierKey := [2]int{step.PolicyId, step.PoolTier}
+			if _, duplicate := stepOrders[orderKey]; duplicate {
+				return errors.New("policy step order must be unique within a policy")
+			}
+			if _, duplicate := stepTiers[tierKey]; duplicate {
+				return errors.New("pool tier must be unique within a policy")
+			}
+			stepOrders[orderKey] = struct{}{}
+			stepTiers[tierKey] = struct{}{}
+		}
 		if len(config.PolicySteps) > 0 {
 			if err := tx.Save(&config.PolicySteps).Error; err != nil {
+				return err
+			}
+		}
+		policyIDsForSteps := make([]int, 0, len(config.Policies))
+		for _, policy := range config.Policies {
+			if policy.Id > 0 {
+				policyIDsForSteps = append(policyIDsForSteps, policy.Id)
+			}
+		}
+		if len(policyIDsForSteps) > 0 {
+			stepQuery := tx.Where("policy_id IN ?", policyIDsForSteps)
+			stepIDs := make([]int, 0, len(config.PolicySteps))
+			for _, step := range config.PolicySteps {
+				if step.Id > 0 {
+					stepIDs = append(stepIDs, step.Id)
+				}
+			}
+			if len(stepIDs) > 0 {
+				stepQuery = stepQuery.Where("id NOT IN ?", stepIDs)
+			}
+			if err := stepQuery.Delete(&FailoverPolicyStep{}).Error; err != nil {
 				return err
 			}
 		}
@@ -667,5 +784,30 @@ func normalizeFailoverMode(mode string) string {
 		return FailoverModeAggressive
 	default:
 		return FailoverModeBalanced
+	}
+}
+
+func normalizeRoutingStrategy(strategy string, mode string) string {
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst:
+		return strings.ToLower(strings.TrimSpace(strategy))
+	default:
+		switch normalizeFailoverMode(mode) {
+		case FailoverModeConservative:
+			return RoutingStrategyStabilityFirst
+		case FailoverModeAggressive:
+			return RoutingStrategyCostFirst
+		default:
+			return RoutingStrategyBalanced
+		}
+	}
+}
+
+func IsRoutingStrategy(strategy string) bool {
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst:
+		return true
+	default:
+		return false
 	}
 }
