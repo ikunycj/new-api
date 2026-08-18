@@ -246,6 +246,8 @@ func TestCalculateTextQuotaSummaryUsesClaudeBillingUsageBeforeTopLevelUsage(t *t
 	require.Equal(t, 20, summary.CacheCreationTokens)
 	require.Equal(t, 12, summary.CacheCreationTokens5m)
 	require.Equal(t, 8, summary.CacheCreationTokens1h)
+	require.Equal(t, 120, summary.InputTokensTotal)
+	require.True(t, summary.CacheStatsAvailable)
 	require.Equal(t, 118, summary.Quota)
 }
 

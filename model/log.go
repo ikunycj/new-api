@@ -68,6 +68,10 @@ type Log struct {
 	Quota                 int    `json:"quota" gorm:"default:0"`
 	PromptTokens          int    `json:"prompt_tokens" gorm:"default:0"`
 	CompletionTokens      int    `json:"completion_tokens" gorm:"default:0"`
+	InputTokensTotal      int    `json:"input_tokens_total" gorm:"default:0"`
+	CacheReadTokens       int    `json:"cache_read_tokens" gorm:"default:0"`
+	CacheWriteTokens      int    `json:"cache_write_tokens" gorm:"default:0"`
+	CacheStatsAvailable   bool   `json:"cache_stats_available"`
 	UseTime               int    `json:"use_time" gorm:"default:0"`
 	IsStream              bool   `json:"is_stream"`
 	ChannelId             int    `json:"channel" gorm:"index"`
@@ -332,18 +336,22 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 }
 
 type RecordConsumeLogParams struct {
-	ChannelId        int                    `json:"channel_id"`
-	PromptTokens     int                    `json:"prompt_tokens"`
-	CompletionTokens int                    `json:"completion_tokens"`
-	ModelName        string                 `json:"model_name"`
-	TokenName        string                 `json:"token_name"`
-	Quota            int                    `json:"quota"`
-	Content          string                 `json:"content"`
-	TokenId          int                    `json:"token_id"`
-	UseTimeSeconds   int                    `json:"use_time_seconds"`
-	IsStream         bool                   `json:"is_stream"`
-	Group            string                 `json:"group"`
-	Other            map[string]interface{} `json:"other"`
+	ChannelId           int                    `json:"channel_id"`
+	PromptTokens        int                    `json:"prompt_tokens"`
+	CompletionTokens    int                    `json:"completion_tokens"`
+	InputTokensTotal    int                    `json:"input_tokens_total"`
+	CacheReadTokens     int                    `json:"cache_read_tokens"`
+	CacheWriteTokens    int                    `json:"cache_write_tokens"`
+	CacheStatsAvailable bool                   `json:"cache_stats_available"`
+	ModelName           string                 `json:"model_name"`
+	TokenName           string                 `json:"token_name"`
+	Quota               int                    `json:"quota"`
+	Content             string                 `json:"content"`
+	TokenId             int                    `json:"token_id"`
+	UseTimeSeconds      int                    `json:"use_time_seconds"`
+	IsStream            bool                   `json:"is_stream"`
+	Group               string                 `json:"group"`
+	Other               map[string]interface{} `json:"other"`
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
@@ -379,21 +387,25 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 	}
 	log := &Log{
-		UserId:           userId,
-		Username:         username,
-		CreatedAt:        createdAt,
-		Type:             LogTypeConsume,
-		Content:          params.Content,
-		PromptTokens:     params.PromptTokens,
-		CompletionTokens: params.CompletionTokens,
-		TokenName:        params.TokenName,
-		ModelName:        params.ModelName,
-		Quota:            params.Quota,
-		ChannelId:        params.ChannelId,
-		TokenId:          params.TokenId,
-		UseTime:          params.UseTimeSeconds,
-		IsStream:         params.IsStream,
-		Group:            params.Group,
+		UserId:              userId,
+		Username:            username,
+		CreatedAt:           createdAt,
+		Type:                LogTypeConsume,
+		Content:             params.Content,
+		PromptTokens:        params.PromptTokens,
+		CompletionTokens:    params.CompletionTokens,
+		InputTokensTotal:    params.InputTokensTotal,
+		CacheReadTokens:     params.CacheReadTokens,
+		CacheWriteTokens:    params.CacheWriteTokens,
+		CacheStatsAvailable: params.CacheStatsAvailable,
+		TokenName:           params.TokenName,
+		ModelName:           params.ModelName,
+		Quota:               params.Quota,
+		ChannelId:           params.ChannelId,
+		TokenId:             params.TokenId,
+		UseTime:             params.UseTimeSeconds,
+		IsStream:            params.IsStream,
+		Group:               params.Group,
 		Ip: func() string {
 			if needRecordIp {
 				return c.ClientIP()
@@ -633,9 +645,15 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 }
 
 type Stat struct {
-	Quota int `json:"quota"`
-	Rpm   int `json:"rpm"`
-	Tpm   int `json:"tpm"`
+	Quota                 int     `json:"quota"`
+	Rpm                   int     `json:"rpm"`
+	Tpm                   int     `json:"tpm"`
+	CacheInputTokens      int64   `json:"cache_input_tokens"`
+	CacheReadTokens       int64   `json:"cache_read_tokens"`
+	CacheWriteTokens      int64   `json:"cache_write_tokens"`
+	CacheHitRequests      int64   `json:"cache_hit_requests"`
+	CacheEligibleRequests int64   `json:"cache_eligible_requests"`
+	CacheHitRate          float64 `json:"cache_hit_rate"`
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
@@ -643,6 +661,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
+	cacheQuery := LOG_DB.Table("logs").Select("COALESCE(sum(input_tokens_total), 0) cache_input_tokens, COALESCE(sum(cache_read_tokens), 0) cache_read_tokens, COALESCE(sum(cache_write_tokens), 0) cache_write_tokens, COALESCE(sum(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END), 0) cache_hit_requests, count(*) cache_eligible_requests")
 
 	if tx, err = applyExplicitLogTextFilter(tx, "username", username); err != nil {
 		return stat, err
@@ -650,15 +669,21 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if rpmTpmQuery, err = applyExplicitLogTextFilter(rpmTpmQuery, "username", username); err != nil {
 		return stat, err
 	}
+	if cacheQuery, err = applyExplicitLogTextFilter(cacheQuery, "username", username); err != nil {
+		return stat, err
+	}
 	if tokenName != "" {
 		tx = tx.Where("token_name = ?", tokenName)
 		rpmTpmQuery = rpmTpmQuery.Where("token_name = ?", tokenName)
+		cacheQuery = cacheQuery.Where("token_name = ?", tokenName)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("created_at >= ?", startTimestamp)
+		cacheQuery = cacheQuery.Where("created_at >= ?", startTimestamp)
 	}
 	if endTimestamp != 0 {
 		tx = tx.Where("created_at <= ?", endTimestamp)
+		cacheQuery = cacheQuery.Where("created_at <= ?", endTimestamp)
 	}
 	if tx, err = applyExplicitLogTextFilter(tx, "model_name", modelName); err != nil {
 		return stat, err
@@ -666,17 +691,23 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if rpmTpmQuery, err = applyExplicitLogTextFilter(rpmTpmQuery, "model_name", modelName); err != nil {
 		return stat, err
 	}
+	if cacheQuery, err = applyExplicitLogTextFilter(cacheQuery, "model_name", modelName); err != nil {
+		return stat, err
+	}
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)
 		rpmTpmQuery = rpmTpmQuery.Where("channel_id = ?", channel)
+		cacheQuery = cacheQuery.Where("channel_id = ?", channel)
 	}
 	if group != "" {
 		tx = tx.Where(logGroupCol+" = ?", group)
 		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
+		cacheQuery = cacheQuery.Where(logGroupCol+" = ?", group)
 	}
 
 	tx = tx.Where("type = ?", LogTypeConsume)
 	rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)
+	cacheQuery = cacheQuery.Where("type = ? AND cache_stats_available = ?", LogTypeConsume, true)
 
 	// 只统计最近60秒的rpm和tpm
 	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
@@ -689,6 +720,13 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if err := rpmTpmQuery.Scan(&stat).Error; err != nil {
 		common.SysError("failed to query rpm/tpm stat: " + err.Error())
 		return stat, errors.New("查询统计数据失败")
+	}
+	if err := cacheQuery.Scan(&stat).Error; err != nil {
+		common.SysError("failed to query cache stat: " + err.Error())
+		return stat, errors.New("查询统计数据失败")
+	}
+	if stat.CacheInputTokens > 0 {
+		stat.CacheHitRate = float64(stat.CacheReadTokens) / float64(stat.CacheInputTokens) * 100
 	}
 
 	return stat, nil
