@@ -81,9 +81,15 @@ export function CommonLogsStats() {
         <Skeleton className='h-7 w-[150px] rounded-md' />
         <Skeleton className='h-7 w-[100px] rounded-md' />
         <Skeleton className='h-7 w-[120px] rounded-md' />
+        <Skeleton className='h-7 w-[135px] rounded-md' />
       </div>
     )
   }
+
+  const hasCacheStats = (stats?.cache_input_tokens || 0) > 0
+  const cacheHitRate = hasCacheStats
+    ? `${(stats?.cache_hit_rate || 0).toFixed(1)}%`
+    : '-'
 
   return (
     <div className='flex flex-wrap items-center gap-2'>
@@ -101,6 +107,11 @@ export function CommonLogsStats() {
         label={t('TPM')}
         value={stats?.tpm || 0}
         accent='bg-slate-400/70'
+      />
+      <StatBadge
+        label={t('Cache hit rate')}
+        value={cacheHitRate}
+        accent='bg-emerald-500/70'
       />
     </div>
   )

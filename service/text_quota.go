@@ -29,6 +29,8 @@ type textQuotaSummary struct {
 	CacheCreationTokens      int
 	CacheCreationTokens5m    int
 	CacheCreationTokens1h    int
+	InputTokensTotal         int
+	CacheStatsAvailable      bool
 	ImageTokens              int
 	AudioTokens              int
 	ModelName                string
@@ -213,6 +215,10 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CacheCreationTokensTotal()
 	summary.CacheCreationTokens5m = usage.ClaudeCacheCreation5mTokens
 	summary.CacheCreationTokens1h = usage.ClaudeCacheCreation1hTokens
+	if (usage.UsageSource != "" || usage.UsageSemantic != "") && usage.InputTokens > 0 {
+		summary.InputTokensTotal = usage.InputTokens
+		summary.CacheStatsAvailable = true
+	}
 	summary.ImageTokens = usage.PromptTokensDetails.ImageTokens
 	summary.AudioTokens = usage.PromptTokensDetails.AudioTokens
 	legacyClaudeDerived := isLegacyClaudeDerivedOpenAIUsage(relayInfo, usage)
@@ -478,11 +484,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		// to cache_creation_tokens.
 		other["cache_write_tokens"] = cacheWriteTokens
 	}
-	if relayInfo.GetFinalRequestRelayFormat() != types.RelayFormatClaude && billingUsage != nil && billingUsage.UsageSource != "" && billingUsage.InputTokens > 0 {
-		// input_tokens_total: explicit normalized total input used by the usage log UI.
-		// Only write this field when upstream/current conversion has already provided a
-		// reliable total input value and tagged the usage source. Do not infer it from
-		// prompt/cache fields here, otherwise old upstream payloads may be double-counted.
+	if summary.CacheStatsAvailable {
+		// input_tokens_total is populated only when the upstream usage conversion
+		// provided a reliable normalized input total. Do not infer it from prompt/cache
+		// fields, otherwise provider-specific semantics can double-count tokens.
 		other["input_tokens_total"] = billingUsage.InputTokens
 	}
 	if tieredBillingApplied {
@@ -492,18 +497,22 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	attachQuotaSaturation(ctx, relayInfo, other)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
-		ChannelId:        relayInfo.ChannelId,
-		PromptTokens:     summary.PromptTokens,
-		CompletionTokens: summary.CompletionTokens,
-		ModelName:        logModel,
-		TokenName:        summary.TokenName,
-		Quota:            summary.Quota,
-		Content:          logContent,
-		TokenId:          relayInfo.TokenId,
-		UseTimeSeconds:   int(summary.UseTimeSeconds),
-		IsStream:         relayInfo.IsStream,
-		Group:            relayInfo.UsingGroup,
-		Other:            other,
+		ChannelId:           relayInfo.ChannelId,
+		PromptTokens:        summary.PromptTokens,
+		CompletionTokens:    summary.CompletionTokens,
+		InputTokensTotal:    summary.InputTokensTotal,
+		CacheReadTokens:     summary.CacheTokens,
+		CacheWriteTokens:    cacheWriteTokensTotal(summary),
+		CacheStatsAvailable: summary.CacheStatsAvailable,
+		ModelName:           logModel,
+		TokenName:           summary.TokenName,
+		Quota:               summary.Quota,
+		Content:             logContent,
+		TokenId:             relayInfo.TokenId,
+		UseTimeSeconds:      int(summary.UseTimeSeconds),
+		IsStream:            relayInfo.IsStream,
+		Group:               relayInfo.UsingGroup,
+		Other:               other,
 	})
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
