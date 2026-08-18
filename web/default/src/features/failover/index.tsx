@@ -352,11 +352,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
   })
 
   const addPolicy = () => {
-    const existing = new Set(
-      form.getValues('policies').map((item) => item.mode)
-    )
-    const mode = modeOrder.find((candidate) => !existing.has(candidate))
-    if (mode) policies.append(defaultPolicy(mode))
+    policies.append(defaultPolicy('balanced'))
   }
 
   return (
@@ -378,7 +374,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
             type='button'
             variant='outline'
             onClick={addPolicy}
-            disabled={policies.fields.length >= modeOrder.length}
+            disabled={policies.fields.length >= 10}
           >
             <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
             {t('Add policy')}
