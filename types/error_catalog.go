@@ -68,7 +68,11 @@ func classifyClusterError(rawCode string, statusCode int) errorDefinition {
 	case strings.Contains(rawCode, "timeout"):
 		return errorDefinition{210001, "network", "cluster", "failover"}
 	case statusCode >= 500:
-		return errorDefinition{205002, "upstream", "cluster", "failover"}
+		// A generic 5xx is emitted by the current upstream channel. Keep the
+		// cluster available so the ordered pool policy can try the next account
+		// tier before escalating to another cluster. Explicit exhaustion codes
+		// above remain cluster-scoped.
+		return errorDefinition{205002, "upstream", "channel", "failover"}
 	default:
 		return errorDefinition{200001, "unknown", "cluster", "failover"}
 	}
