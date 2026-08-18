@@ -16,26 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useStatus } from '@/hooks/use-status'
+export const DOCS_BASE_URL = 'https://ikun.love'
 
-export const DOCS_PRODUCTION_BASE_URL = 'https://alltokenapi.com'
-
-export function resolveDocsBaseUrl(configuredAddress?: unknown): string {
-  if (import.meta.env.PROD) {
-    return DOCS_PRODUCTION_BASE_URL
-  }
-
-  if (
-    typeof configuredAddress === 'string' &&
-    configuredAddress.trim().length > 0
-  ) {
-    return configuredAddress.trim().replace(/\/+$/, '')
-  }
-
-  return typeof window === 'undefined' ? '' : window.location.origin
+export function resolveDocsBaseUrl(): string {
+  return DOCS_BASE_URL
 }
 
 export function useDocsBaseUrl(): string {
-  const { status } = useStatus()
-  return resolveDocsBaseUrl(status?.server_address)
+  return resolveDocsBaseUrl()
 }

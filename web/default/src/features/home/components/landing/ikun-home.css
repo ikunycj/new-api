@@ -1,19 +1,5 @@
 /* Scoped visual system for the rebuilt ikun.love default landing page. */
 .ikun-home {
-  --ikun-canvas: #fffaf3;
-  --ikun-canvas-deep: #f6eee4;
-  --ikun-surface: #ffffff;
-  --ikun-surface-soft: #fff5e9;
-  --ikun-ink: #17131a;
-  --ikun-muted: #756d79;
-  --ikun-line: #eadfd4;
-  --ikun-line-strong: #d9c8b8;
-  --ikun-coral: #f35b28;
-  --ikun-coral-deep: #c83c16;
-  --ikun-lime: #9acb38;
-  --ikun-cyan: #48b8d2;
-  --ikun-night: #17131a;
-  --ikun-night-soft: #211b25;
   min-width: 0;
   overflow: hidden;
   background: var(--ikun-canvas);
@@ -27,6 +13,11 @@
 
 .ikun-home-hero {
   position: relative;
+  display: grid;
+  min-height: 100svh;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   isolation: isolate;
   overflow: hidden;
   border-bottom: 1px solid var(--ikun-line);
@@ -79,7 +70,7 @@
 
 .ikun-home-hero-grid {
   display: grid;
-  min-height: 720px;
+  min-height: 0;
   grid-template-columns: minmax(0, 0.92fr) minmax(25rem, 1.08fr);
   align-items: center;
   gap: 5rem;
@@ -499,7 +490,8 @@
 }
 
 .ikun-home-signal-rail {
-  border-bottom: 1px solid var(--ikun-line);
+  min-width: 0;
+  border-top: 1px solid var(--ikun-line);
   background: var(--ikun-surface);
 }
 
@@ -991,6 +983,44 @@
   }
 }
 
+@media (min-width: 1024px) and (max-height: 820px) {
+  .ikun-home-hero-grid {
+    padding-block: 6rem 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 740px) {
+  .ikun-home-hero-grid {
+    gap: 3rem;
+    padding-block: 5rem 1rem;
+  }
+
+  .ikun-home-hero-kicker {
+    margin-top: 1.5rem;
+  }
+
+  .ikun-home-display {
+    font-size: 5.25rem;
+  }
+
+  .ikun-home-hero-copy-text {
+    margin-top: 1rem;
+    line-height: 1.55;
+  }
+
+  .ikun-home-actions {
+    margin-top: 1.25rem;
+  }
+
+  .ikun-home-trust-row {
+    margin-top: 0.85rem;
+  }
+
+  .ikun-home-hero-panel {
+    padding-top: 2rem;
+  }
+}
+
 @media (max-width: 1023px) {
   .ikun-home-hero-grid,
   .ikun-home-control-grid {
@@ -998,7 +1028,6 @@
   }
 
   .ikun-home-hero-grid {
-    min-height: auto;
     gap: 3rem;
   }
 
@@ -1199,21 +1228,6 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
-}
-
-.dark .ikun-home {
-  --ikun-canvas: #120e17;
-  --ikun-canvas-deep: #1a1420;
-  --ikun-surface: #1b1522;
-  --ikun-surface-soft: #261b28;
-  --ikun-ink: #fff8ef;
-  --ikun-muted: #bcaeba;
-  --ikun-line: #3d3043;
-  --ikun-line-strong: #584154;
-  --ikun-coral: #ff7657;
-  --ikun-coral-deep: #ff987e;
-  --ikun-lime: #b6dc58;
-  --ikun-cyan: #6ed0e4;
 }
 
 .dark .ikun-home-hero {

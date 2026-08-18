@@ -60,7 +60,7 @@ const PROVIDER_PREVIEWS: ProviderPreview[] = [
     id: 'alltokenapi',
     mark: 'A',
     name: 'AllTokenAPI',
-    detail: 'https://alltokenapi.com',
+    detail: 'https://ikun.love',
     stateKey: 'Enabled',
     selected: true,
   },

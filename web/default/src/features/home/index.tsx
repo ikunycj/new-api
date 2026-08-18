@@ -131,10 +131,7 @@ export function Home() {
   }
 
   return (
-    <PublicLayout
-      headerProps={{ className: 'ikun-public-header' }}
-      showMainContainer={false}
-    >
+    <PublicLayout showMainContainer={false}>
       <DefaultHome isAuthenticated={isAuthenticated} />
     </PublicLayout>
   )
