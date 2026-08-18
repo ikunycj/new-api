@@ -4,12 +4,13 @@ This is a last-known snapshot from 2026-07-21. Verify every mutable value on the
 
 ## Deployment host selection
 
-Ask before every deployment whether the target is `aliyun` (development) or `alltokenapi` (production). The current production machine is the `alltokenapi` SSH host; `aliyun` is now a development server.
+Ask before every deployment whether the target is `aliyun` (development), `alltokenapi` (production), or `ikun.love` (production). The host and public URL must come from the current conversation and a live read-only check.
 
 | Environment | SSH alias | Host | Deployment scope |
 | --- | --- | --- | --- |
 | Development/test | `aliyun` | Verify from local SSH config | The remote test service and local development process both use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis; keep those services isolated from production. |
 | Production | `alltokenapi` | `154.37.213.1` (verify live) | Production release and rollback workflow below. |
+| Production | `ikun.love` | Verify from local SSH config | Dedicated `ikun.love` release ref and deployment materials; do not reuse the AllToken snapshot. |
 
 ## Service map
 
@@ -27,6 +28,28 @@ Ask before every deployment whether the target is `aliyun` (development) or `all
 | PostgreSQL | `1Panel-postgresql-2LOJ` | Must be healthy before switching the app. |
 | Redis | `1Panel-redis-pDR8` | Must be running before switching the app. |
 
+## ikun.love target contract
+
+The following values define the target-specific release contract, not a live
+server snapshot. Verify every mutable value during the read-only baseline:
+
+| Role | Target-specific value | Required behavior |
+| --- | --- | --- |
+| SSH alias | `ikun.love` | Use this alias for every remote command. |
+| Release ref | `origin/ikun.love` | Verify local, fetched, and live remote SHAs match. |
+| Public site | `https://ikun.love` | Verify DNS, TLS, `/api/status`, and the changed route. |
+| Deploy materials | `deploy/ikun.love/` | Use its Compose and target parameter templates. |
+| Deploy directory | `/opt/new-api` (verify) | Preserve `.env`, `data`, and `logs`. |
+| App service/container | `new-api` (verify) | Recreate only the app service. |
+| App port | `127.0.0.1:3000` | Check local `/api/status`. |
+| Compose file | `docker-compose.1panel.yml` | App-only Compose; reuse the external 1Panel network. |
+| PostgreSQL / Redis | Verify target container names | Must already exist and be healthy/running. |
+| Runtime `.env` | `/opt/new-api/.env`, mode `600` | Preserve secrets; never print or replace them. |
+
+The `ikun.love` server may have a different existing application or reverse
+proxy layout. Do not assume the legacy `alltokenapi` container names, database,
+Redis, OpenResty configuration, or `.env` values.
+
 The host has roughly 1.8 GiB RAM plus swap. Do not build the frontend, Go binary, or Docker multi-stage image there.
 
 ## Last successful release record
@@ -40,7 +63,7 @@ These values are historical evidence, not defaults for the next release:
 - Preserved rollback image ID: `sha256:cf03f277a1c13ad27ad33b971ef3ba31e1aff3f6ce3f4fbec472eae60e9bea7c`
 - Runtime `/new-api` SHA-256: `f8228896cacb4616046485b6a50a03cdee8883bc04eeee5bf845d90155336c04`
 
-## Read-only baseline
+## Read-only baseline (legacy alltokenapi)
 
 Run these before a deployment without expanding `.env`:
 
@@ -57,3 +80,8 @@ curl -fsS http://127.0.0.1:3000/api/status
 ```
 
 Do not use `docker compose down`. Do not restart Docker as part of a normal release.
+
+For `ikun.love`, substitute the verified target directory, service/container,
+PostgreSQL, and Redis names from the dedicated target contract and
+`deploy/ikun.love/deployment.env.example`. Do not expand `.env` while checking
+the baseline.

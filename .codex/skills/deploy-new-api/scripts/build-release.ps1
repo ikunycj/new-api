@@ -2,6 +2,7 @@
 param(
     [string]$Repository = 'F:\Project\My-Project\new-api',
     [string]$Commit = 'master',
+    [string]$ReleaseRef = 'master',
     [string]$OutputDirectory = '',
     [switch]$KeepWorktree,
     [switch]$ForceRebuild,
@@ -61,25 +62,38 @@ if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'go.mod'))) {
     throw "Not a new-api repository: $repoRoot"
 }
 
+if (
+    [string]::IsNullOrWhiteSpace($ReleaseRef) -or
+    $ReleaseRef -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or
+    $ReleaseRef.Contains('..') -or
+    $ReleaseRef.Contains('//') -or
+    $ReleaseRef.EndsWith('/')
+) {
+    throw "Invalid release ref: $ReleaseRef"
+}
+
+$releaseBranchRef = "refs/heads/$ReleaseRef"
+$fetchedReleaseRef = "refs/remotes/origin/$ReleaseRef"
+
 Invoke-Native -Command 'git' -Arguments @(
     '-C', $repoRoot, 'fetch', 'origin',
-    '+refs/heads/master:refs/remotes/origin/master'
+    "+$releaseBranchRef`:$fetchedReleaseRef"
 ) -WorkingDirectory $repoRoot
-$localMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/heads/master'
+$localRelease = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', $releaseBranchRef
 ) -WorkingDirectory $repoRoot
-$fetchedMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/remotes/origin/master'
+$fetchedRelease = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', $fetchedReleaseRef
 ) -WorkingDirectory $repoRoot
-$remoteMasterLine = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'ls-remote', 'origin', 'refs/heads/master'
+$remoteReleaseLine = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'ls-remote', 'origin', $releaseBranchRef
 ) -WorkingDirectory $repoRoot
-if ($remoteMasterLine -notmatch '(?m)^([0-9a-f]{40})\s+refs/heads/master$') {
-    throw "Could not verify live origin/master: $remoteMasterLine"
+if ($remoteReleaseLine -notmatch "(?m)^([0-9a-f]{40})\s+$([regex]::Escape($releaseBranchRef))$") {
+    throw "Could not verify live origin/$ReleaseRef`: $remoteReleaseLine"
 }
-$remoteMaster = $Matches[1]
-if ($localMaster -ne $fetchedMaster -or $localMaster -ne $remoteMaster) {
-    throw "master mismatch: local=$localMaster fetched=$fetchedMaster remote=$remoteMaster"
+$remoteRelease = $Matches[1]
+if ($localRelease -ne $fetchedRelease -or $localRelease -ne $remoteRelease) {
+    throw "release ref mismatch: ref=$ReleaseRef local=$localRelease fetched=$fetchedRelease remote=$remoteRelease"
 }
 
 $buildScriptSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -92,8 +106,8 @@ $commitSha = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, '
 if ($commitSha -notmatch '^[0-9a-f]{40}$') {
     throw "Could not resolve a single commit: $commitSha"
 }
-if ($commitSha -ne $remoteMaster) {
-    throw "Only the latest origin/master may be built: requested=$commitSha master=$remoteMaster"
+if ($commitSha -ne $remoteRelease) {
+    throw "Only the latest origin/$ReleaseRef may be built: requested=$commitSha remote=$remoteRelease"
 }
 
 $dockerfile = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'show', "${commitSha}:Dockerfile") -WorkingDirectory $repoRoot
@@ -145,6 +159,7 @@ $artifactExists = (Test-Path -LiteralPath $artifactDirectory) -or (Test-Path -Li
 if ($ValidateOnly) {
     [pscustomobject]@{
         Repository = $repoRoot
+        ReleaseRef = $ReleaseRef
         Commit = $commitSha
         Worktree = $worktree
         WorktreeExists = $worktreeExists
@@ -271,6 +286,7 @@ try {
     Invoke-Native -Command 'go' -Arguments @('version', '-m', $binaryPath) -WorkingDirectory $worktree
     $binarySha = (Get-FileHash -LiteralPath $binaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
+        release_ref = $ReleaseRef
         commit = $commitSha
         short_commit = $shortSha
         version = $version
