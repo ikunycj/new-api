@@ -42,7 +42,13 @@ export const subscriptionPlanSchema = z.object({
   upgrade_group: z.string().optional(),
   downgrade_group: z.string().optional(),
   routing_strategy: z
-    .enum(['cost_first', 'balanced', 'stability_first'])
+    .enum([
+      'cost_first',
+      'balanced',
+      'stability_first',
+      'pro_cost_first',
+      'pro_stability_first',
+    ])
     .optional()
     .default('balanced'),
   stripe_price_id: z.string().optional(),

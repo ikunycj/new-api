@@ -233,15 +233,51 @@ func TestDefaultRuntimeFailoverPolicyUsesStrategyPoolOrder(t *testing.T) {
 		{name: "cost", mode: FailoverModeAggressive, strategy: RoutingStrategyCostFirst, poolTiers: []int{PoolTierFree, PoolTierPremium, PoolTierFallback, PoolTierEmergency}},
 		{name: "balanced", mode: FailoverModeBalanced, strategy: RoutingStrategyBalanced, poolTiers: []int{PoolTierPremium, PoolTierFree, PoolTierFallback, PoolTierEmergency}},
 		{name: "stability", mode: FailoverModeConservative, strategy: RoutingStrategyStabilityFirst, poolTiers: []int{PoolTierFallback, PoolTierEmergency, PoolTierPremium, PoolTierFree}},
+		{name: "pro cost", mode: FailoverModeBalanced, strategy: RoutingStrategyProCostFirst, poolTiers: []int{PoolTierPremium, PoolTierFallback}},
+		{name: "pro stability", mode: FailoverModeBalanced, strategy: RoutingStrategyProStabilityFirst, poolTiers: []int{PoolTierPremium, PoolTierFallback}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			policy := DefaultRuntimeFailoverPolicy(test.mode)
+			policy.Strategy = test.strategy
+			policy = withDefaultPoolOrder(policy)
 			assert.Equal(t, test.strategy, policy.Strategy)
 			assert.Equal(t, test.poolTiers, policy.PoolTiers)
 		})
 	}
+}
+
+func TestResolveRuntimeFailoverKeepsCustomStrategySeparateFromModePolicy(t *testing.T) {
+	setupFailoverTables(t)
+	require.NoError(t, DB.Create(&[]FailoverPolicy{
+		{
+			Id: 101, Name: "balanced-default", Mode: FailoverModeBalanced, Strategy: RoutingStrategyBalanced, Enabled: true,
+			MaxPoolAttempts: 4, MaxClusterAttempts: 3, MaxTotalAttempts: 6, TotalFailoverBudgetMs: 10000,
+			CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60,
+			CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+		},
+		{
+			Id: 102, Name: "claude-pro-cost", Mode: FailoverModeBalanced, Strategy: RoutingStrategyProCostFirst, Enabled: true,
+			MaxPoolAttempts: 2, MaxClusterAttempts: 2, MaxTotalAttempts: 8, TotalFailoverBudgetMs: 30000,
+			CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60,
+			CircuitHalfOpenRequests: 1, AllowPaidEscalation: true, AllowFallback: true, MaxCostMultiplier: 2,
+		},
+	}).Error)
+	require.NoError(t, DB.Create(&[]FailoverPolicyStep{
+		{PolicyId: 102, StepOrder: 1, PoolTier: PoolTierPremium, MaxAttempts: 3},
+		{PolicyId: 102, StepOrder: 2, PoolTier: PoolTierFallback, MaxAttempts: 1},
+	}).Error)
+	InitFailoverCache()
+
+	modePolicy := GetRuntimeFailoverPolicy(FailoverModeBalanced)
+	assert.Equal(t, RoutingStrategyBalanced, modePolicy.Strategy)
+
+	strategyPolicy, _, _ := ResolveRuntimeFailoverWithStrategy("", RoutingStrategyProCostFirst, "claude-sonnet-4-6", "/v1/messages", "default", "claude")
+	assert.Equal(t, RoutingStrategyProCostFirst, strategyPolicy.Strategy)
+	assert.Equal(t, []int{PoolTierPremium, PoolTierFallback}, strategyPolicy.PoolTiers)
+	assert.Equal(t, 3, strategyPolicy.PoolAttemptsByTier[PoolTierPremium])
+	assert.Equal(t, 1, strategyPolicy.PoolAttemptsByTier[PoolTierFallback])
 }
 
 func TestResolveRuntimeFailoverUsesPackageStrategyPolicySteps(t *testing.T) {
