@@ -10,7 +10,8 @@ Usage: deploy-binary.sh \
 Options:
   --deploy-dir PATH       Deployment directory (default: /opt/new-api)
   --compose-file PATH     Compose file relative to deploy dir
-                          (default: docker-compose.1panel.yml)
+                           (default: docker-compose.1panel.yml)
+  --project-name NAME     Compose project name (default: from env file)
   --env-file PATH         Env file relative to deploy dir (default: .env)
   --image-tag TAG         Live image tag (default: new-api:local)
   --release-label KEY     Image label for the release (default: com.new-api.release)
@@ -32,6 +33,7 @@ COMMIT=''
 RELEASE=''
 DEPLOY_DIR='/opt/new-api'
 COMPOSE_FILE='docker-compose.1panel.yml'
+PROJECT_NAME=''
 ENV_FILE='.env'
 IMAGE_TAG='new-api:local'
 RELEASE_LABEL='com.new-api.release'
@@ -52,6 +54,7 @@ while (($#)); do
     --release) RELEASE=${2:?missing value}; shift 2 ;;
     --deploy-dir) DEPLOY_DIR=${2:?missing value}; shift 2 ;;
     --compose-file) COMPOSE_FILE=${2:?missing value}; shift 2 ;;
+    --project-name) PROJECT_NAME=${2:?missing value}; shift 2 ;;
     --env-file) ENV_FILE=${2:?missing value}; shift 2 ;;
     --image-tag) IMAGE_TAG=${2:?missing value}; shift 2 ;;
     --release-label) RELEASE_LABEL=${2:?missing value}; shift 2 ;;
@@ -80,6 +83,9 @@ done
 [[ $COMMIT =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'Commit must be a full 40-character SHA' >&2; exit 2; }
 [[ $RELEASE =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Release contains unsafe characters' >&2; exit 2; }
 [[ $RELEASE_LABEL =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo 'Release label contains unsafe characters' >&2; exit 2; }
+if [[ -n $PROJECT_NAME ]]; then
+  [[ $PROJECT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo 'Project name contains unsafe characters' >&2; exit 2; }
+fi
 [[ $TIMEOUT =~ ^[0-9]+$ ]] && ((TIMEOUT >= 10 && TIMEOUT <= 900)) || { echo 'Timeout must be 10..900 seconds' >&2; exit 2; }
 
 for command_name in docker curl sha256sum stat tar; do
@@ -147,7 +153,11 @@ docker rm "$TEMP_CONTAINER" >/dev/null
 docker run --rm --entrypoint /new-api "$CANDIDATE_TAG" --help >/dev/null
 
 compose_recreate() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
+  local compose_args=(docker compose)
+  if [[ -n $PROJECT_NAME ]]; then
+    compose_args+=(--project-name "$PROJECT_NAME")
+  fi
+  "${compose_args[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
     up -d --no-build --no-deps --force-recreate "$SERVICE"
 }
 

@@ -32,7 +32,30 @@ Recover in dependency order:
 4. Start or recreate only the target new-api container if it did not recover automatically; never touch Sub2API.
 5. Verify local `/api/status`, then public status.
 
-Do not recreate either data service and do not run `docker compose down`.
+For `aliyun`/`alltokenapi`, do not recreate either existing data service and do
+not run `docker compose down`. For `ikun.love`, the dedicated PostgreSQL and
+Redis services belong to the new stack and may be started with
+`docker compose --project-name ikun-new-api up -d postgres redis` if they are
+missing; never touch `1Panel-postgresql-8Kr6`, `1Panel-redis-xsdn`, or
+Sub2API.
+
+## First `ikun.love` install dependency failure
+
+The `ikun.love` target is a complete isolated stack. If the first bootstrap
+fails, inspect only the target containers and volumes:
+
+```bash
+cd /opt/new-api
+sudo docker compose --project-name ikun-new-api --env-file .env \
+  -f docker-compose.1panel.yml ps
+sudo docker logs --tail 200 ikun-new-api-postgres
+sudo docker logs --tail 200 ikun-new-api-redis
+```
+
+Do not point the app at the existing `1panel-network`, Sub2API database, or
+Redis db0. The bootstrap must finish the restricted `new_api_app` role before
+the application is started; `NODE_TYPE=master` is required for the first
+schema migration.
 
 ## Candidate fails local health
 

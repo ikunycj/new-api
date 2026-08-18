@@ -97,14 +97,14 @@ The binary must start with ELF magic `7f454c46`.
 
 For `alltokenapi`/`aliyun`, upload the archive and remote script to a staging
 path, not over the live binary. For a first `ikun.love` install, stage the
-target bootstrap scripts and Compose file in `~/ikun-new-api-stage`, then use
-`sudo install` into the new `/opt/new-api` directory; never write the Sub2API
-directory or its service files.
+target bootstrap scripts, Compose file, and archive in
+`~/ikun-new-api-stage`, then use `sudo install` into the new `/opt/new-api`
+directory; never write the Sub2API directory or its service files.
 
 ```powershell
-scp <archive> ${deployHost}:/opt/new-api/
+scp <archive> ${deployHost}:~/ikun-new-api-stage/ # first ikun.love install
 $repoRoot = git rev-parse --show-toplevel
-scp "$repoRoot/.codex/skills/deploy-new-api/scripts/deploy-binary.sh" ${deployHost}:/opt/new-api/
+scp "$repoRoot/.codex/skills/deploy-new-api/scripts/deploy-binary.sh" ${deployHost}:~/ikun-new-api-stage/
 ```
 
 Compare the local and remote archive hashes before extraction:
@@ -118,9 +118,10 @@ Do not print `.env` while checking the directory.
 
 ## 5. Wrap and switch the image
 
-Invoke the uploaded script with full commit and hashes. Pass explicit
-PostgreSQL/Redis container names for deployments that use them; omit neither
-gate for the `ikun.love` full-stack install:
+Invoke the uploaded script with full commit and hashes. For a first
+`ikun.love` install, run `deploy/ikun.love/bootstrap-config.sh` first; it
+starts and initializes the dedicated PostgreSQL/Redis services. Pass explicit
+dependency container names so the application switch gates on their health:
 
 ```bash
 cd /opt/new-api
@@ -130,11 +131,12 @@ bash ./deploy-binary.sh \
   --binary-sha <binary-sha256> \
   --commit <full-commit-sha> \
   --release <short-sha>-v1 \
+  --project-name ikun-new-api \
   --postgres <target-postgres-container> \
   --redis <target-redis-container>
 ```
 
-The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so PostgreSQL and Redis are not recreated.
+The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so an application release does not recreate the dedicated or existing data services.
 
 For remote multiline logic outside the script, encode the text locally as UTF-8/base64 and decode it remotely. Avoid nested PowerShell/SSH/Bash quoting.
 
@@ -152,7 +154,7 @@ docker inspect <target-postgres-container> --format '{{.State.Status}} {{.State.
 docker inspect <target-redis-container> --format '{{.State.Status}}'
 curl -fsS http://127.0.0.1:3000/api/status
 curl -fsS <target-public-status-url> # omit for isolated ikun.love first install
-curl -fsS -o /dev/null -w '%{http_code}\n' <target-public-route> # existing service guard for ikun.love
+curl -fsS -o /dev/null -w '%{http_code}\n' https://ikun.love/health # existing Sub2API guard
 ```
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.

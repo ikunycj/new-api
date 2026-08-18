@@ -1,4 +1,4 @@
 interface:
   display_name: "Deploy new-api"
   short_description: "Deploy a verified new-api release safely"
-  default_prompt: "Use $deploy-new-api to select aliyun, alltokenapi, or ikun.love, verify the selected origin release ref, and safely deploy new-api on the existing 1Panel stack."
+  default_prompt: "Use $deploy-new-api to select aliyun, alltokenapi, or ikun.love, verify the selected origin release ref, and safely deploy new-api; use the complete isolated PostgreSQL/Redis Docker stack for ikun.love."
