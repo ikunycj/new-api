@@ -7,3 +7,5 @@
 !observability/
 !observability/**
 observability/**/data/
+!ikun.love/
+!ikun.love/**

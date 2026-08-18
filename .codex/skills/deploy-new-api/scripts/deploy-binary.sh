@@ -13,6 +13,7 @@ Options:
                           (default: docker-compose.1panel.yml)
   --env-file PATH         Env file relative to deploy dir (default: .env)
   --image-tag TAG         Live image tag (default: new-api:local)
+  --release-label KEY     Image label for the release (default: com.new-api.release)
   --service NAME          Compose service (default: new-api)
   --container NAME        App container (default: new-api)
   --postgres NAME         Existing PostgreSQL container
@@ -33,6 +34,7 @@ DEPLOY_DIR='/opt/new-api'
 COMPOSE_FILE='docker-compose.1panel.yml'
 ENV_FILE='.env'
 IMAGE_TAG='new-api:local'
+RELEASE_LABEL='com.new-api.release'
 SERVICE='new-api'
 CONTAINER='new-api'
 POSTGRES='1Panel-postgresql-2LOJ'
@@ -52,6 +54,7 @@ while (($#)); do
     --compose-file) COMPOSE_FILE=${2:?missing value}; shift 2 ;;
     --env-file) ENV_FILE=${2:?missing value}; shift 2 ;;
     --image-tag) IMAGE_TAG=${2:?missing value}; shift 2 ;;
+    --release-label) RELEASE_LABEL=${2:?missing value}; shift 2 ;;
     --service) SERVICE=${2:?missing value}; shift 2 ;;
     --container) CONTAINER=${2:?missing value}; shift 2 ;;
     --postgres) POSTGRES=${2:?missing value}; shift 2 ;;
@@ -76,6 +79,7 @@ done
 [[ $BINARY_SHA =~ ^[0-9a-fA-F]{64}$ ]] || { echo 'Invalid binary SHA-256' >&2; exit 2; }
 [[ $COMMIT =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'Commit must be a full 40-character SHA' >&2; exit 2; }
 [[ $RELEASE =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Release contains unsafe characters' >&2; exit 2; }
+[[ $RELEASE_LABEL =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo 'Release label contains unsafe characters' >&2; exit 2; }
 [[ $TIMEOUT =~ ^[0-9]+$ ]] && ((TIMEOUT >= 10 && TIMEOUT <= 900)) || { echo 'Timeout must be 10..900 seconds' >&2; exit 2; }
 
 for command_name in docker curl sha256sum stat tar; do
@@ -133,7 +137,7 @@ docker create --name "$TEMP_CONTAINER" "$IMAGE_TAG" >/dev/null
 docker cp "$NEW_BINARY" "$TEMP_CONTAINER:/new-api"
 docker commit \
   --change "LABEL org.opencontainers.image.revision=$COMMIT" \
-  --change "LABEL com.alltokenapi.release=$RELEASE" \
+  --change "LABEL $RELEASE_LABEL=$RELEASE" \
   "$TEMP_CONTAINER" "$CANDIDATE_TAG" >/dev/null
 docker rm "$TEMP_CONTAINER" >/dev/null
 docker run --rm --entrypoint /new-api "$CANDIDATE_TAG" --help >/dev/null

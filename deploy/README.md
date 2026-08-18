@@ -6,6 +6,7 @@ This directory stores files used for native server deployment.
 - The server configuration assumes PostgreSQL and Redis listen on `127.0.0.1`.
 - Keep `SESSION_SECRET` and `CRYPTO_SECRET` stable across deployments.
 - Do not use this `.env` inside Docker. A container must connect through the database and Redis container names or another reachable host address.
+- `ikun.love/` contains the separate target contract for the Ikun production host and must not reuse the `alltokenapi` URL, `.env`, or container snapshot.
 
 Build the server binary into this directory from the repository root:
 

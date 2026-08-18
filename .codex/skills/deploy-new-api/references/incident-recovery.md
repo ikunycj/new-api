@@ -56,7 +56,7 @@ Do not immediately rebuild or roll back. Inspect the reverse-proxy path separate
 
 ```bash
 curl -v http://127.0.0.1:3000/api/status
-curl -v https://alltokenapi.com/api/status
+curl -v "$PUBLIC_STATUS_URL"
 ```
 
-Check OpenResty routing, TLS, and upstream connectivity. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
+Set `PUBLIC_STATUS_URL` from the selected target contract (`https://ikun.love/api/status` for `ssh ikun.love`). Check OpenResty routing, TLS, and upstream connectivity. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
