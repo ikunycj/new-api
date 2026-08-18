@@ -140,7 +140,7 @@ pg_admin() {
 
 role_flags=$(pg_admin "$POSTGRES_ADMIN_DB" -Atqc \
   "SELECT rolsuper || '|' || rolcreatedb || '|' || rolcreaterole || '|' || rolcanlogin FROM pg_roles WHERE rolname = '$POSTGRES_APP_USER'")
-[[ $role_flags == 'f|f|f|t' ]] || {
+[[ $role_flags == 'f|f|f|t' || $role_flags == 'false|false|false|true' ]] || {
   echo "Application PostgreSQL role flags are unsafe: $role_flags" >&2
   exit 1
 }
