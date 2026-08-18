@@ -24,9 +24,11 @@ const (
 	FailoverModeBalanced     = "balanced"
 	FailoverModeAggressive   = "aggressive"
 
-	RoutingStrategyCostFirst      = "cost_first"
-	RoutingStrategyBalanced       = "balanced"
-	RoutingStrategyStabilityFirst = "stability_first"
+	RoutingStrategyCostFirst         = "cost_first"
+	RoutingStrategyBalanced          = "balanced"
+	RoutingStrategyStabilityFirst    = "stability_first"
+	RoutingStrategyProCostFirst      = "pro_cost_first"
+	RoutingStrategyProStabilityFirst = "pro_stability_first"
 )
 
 type Cluster struct {
@@ -175,6 +177,8 @@ func DefaultRuntimeFailoverPolicy(mode string) RuntimeFailoverPolicy {
 func withDefaultPoolOrder(policy RuntimeFailoverPolicy) RuntimeFailoverPolicy {
 	policy.PoolAttemptsByTier = make(map[int]int)
 	switch policy.Strategy {
+	case RoutingStrategyProCostFirst, RoutingStrategyProStabilityFirst:
+		policy.PoolTiers = []int{PoolTierPremium, PoolTierFallback}
 	case RoutingStrategyStabilityFirst:
 		policy.PoolTiers = []int{PoolTierFallback, PoolTierEmergency, PoolTierPremium, PoolTierFree}
 	case RoutingStrategyBalanced:
@@ -308,7 +312,9 @@ func InitFailoverCache() {
 				if stored.MaxCostMultiplier > 0 {
 					runtime.MaxCostMultiplier = stored.MaxCostMultiplier
 				}
-				cache.policies[mode] = runtime
+				if runtime.Strategy == DefaultRuntimeFailoverPolicy(mode).Strategy {
+					cache.policies[mode] = runtime
+				}
 				cache.policiesByID[stored.Id] = runtime
 				if _, exists := cache.policiesByStrategy[runtime.Strategy]; !exists {
 					cache.policiesByStrategy[runtime.Strategy] = runtime
@@ -336,7 +342,9 @@ func InitFailoverCache() {
 				}
 				runtime.PoolTiers = append(runtime.PoolTiers, step.PoolTier)
 				cache.policiesByID[step.PolicyId] = runtime
-				cache.policies[runtime.Mode] = runtime
+				if runtime.Strategy == DefaultRuntimeFailoverPolicy(runtime.Mode).Strategy {
+					cache.policies[runtime.Mode] = runtime
+				}
 				if cache.policyIDsByStrategy[runtime.Strategy] == step.PolicyId {
 					cache.policiesByStrategy[runtime.Strategy] = runtime
 				}
@@ -789,7 +797,7 @@ func normalizeFailoverMode(mode string) string {
 
 func normalizeRoutingStrategy(strategy string, mode string) string {
 	switch strings.ToLower(strings.TrimSpace(strategy)) {
-	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst:
+	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst, RoutingStrategyProCostFirst, RoutingStrategyProStabilityFirst:
 		return strings.ToLower(strings.TrimSpace(strategy))
 	default:
 		switch normalizeFailoverMode(mode) {
@@ -805,7 +813,7 @@ func normalizeRoutingStrategy(strategy string, mode string) string {
 
 func IsRoutingStrategy(strategy string) bool {
 	switch strings.ToLower(strings.TrimSpace(strategy)) {
-	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst:
+	case RoutingStrategyCostFirst, RoutingStrategyBalanced, RoutingStrategyStabilityFirst, RoutingStrategyProCostFirst, RoutingStrategyProStabilityFirst:
 		return true
 	default:
 		return false

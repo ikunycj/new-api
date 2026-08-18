@@ -91,7 +91,13 @@ const policySchema = z
     id: z.coerce.number().int().min(0),
     name: z.string().trim().min(1),
     mode: z.enum(['conservative', 'balanced', 'aggressive']),
-    strategy: z.enum(['cost_first', 'balanced', 'stability_first']),
+    strategy: z.enum([
+      'cost_first',
+      'balanced',
+      'stability_first',
+      'pro_cost_first',
+      'pro_stability_first',
+    ]),
     enabled: z.boolean(),
     same_pool_retries: z.coerce.number().int().min(0).max(10),
     connect_timeout_ms: z.coerce.number().int().positive(),
@@ -196,6 +202,8 @@ const strategyOrder: RoutingStrategy[] = [
   'cost_first',
   'balanced',
   'stability_first',
+  'pro_cost_first',
+  'pro_stability_first',
 ]
 
 function defaultPolicy(mode: FailoverMode): FormInput['policies'][number] {

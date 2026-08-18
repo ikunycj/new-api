@@ -42,6 +42,8 @@ export const ROUTING_STRATEGIES = [
   { value: 'cost_first', labelKey: 'Cost first' },
   { value: 'balanced', labelKey: 'Balanced cost and stability' },
   { value: 'stability_first', labelKey: 'Stability first' },
+  { value: 'pro_cost_first', labelKey: 'Claude Pro cost first' },
+  { value: 'pro_stability_first', labelKey: 'Claude Pro stability first' },
 ] as const
 
 export function getDurationUnitOptions(t: TFunction) {

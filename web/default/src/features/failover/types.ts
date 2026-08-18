@@ -1,5 +1,10 @@
 export type FailoverMode = 'conservative' | 'balanced' | 'aggressive'
-export type RoutingStrategy = 'cost_first' | 'balanced' | 'stability_first'
+export type RoutingStrategy =
+  | 'cost_first'
+  | 'balanced'
+  | 'stability_first'
+  | 'pro_cost_first'
+  | 'pro_stability_first'
 export type FailureScope =
   | 'request'
   | 'credential'
