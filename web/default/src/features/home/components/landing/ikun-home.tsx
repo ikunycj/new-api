@@ -108,7 +108,7 @@ function getDisplayModels(
 function RequestWorkbench(props: { modelName: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
-  const request = `curl https://api.ikun.love/v1/responses \\\n+  -H "Authorization: Bearer sk-xxxx" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{ "model": "${props.modelName}", "input": "Hello" }'`
+  const request = `curl https://ikun.love/v1/responses \\\n+  -H "Authorization: Bearer sk-xxxx" \\\n+  -H "Content-Type: application/json" \\\n+  -d '{ "model": "${props.modelName}", "input": "Hello" }'`
 
   const cleanRequest = request.replaceAll('+  ', '  ')
 
@@ -183,7 +183,7 @@ function RequestWorkbench(props: { modelName: string }) {
         <div className='ikun-home-workbench-foot'>
           <div>
             <span>{t('Base URL')}</span>
-            <strong>api.ikun.love</strong>
+            <strong>ikun.love</strong>
           </div>
           <div>
             <span>{t('Route')}</span>
@@ -563,13 +563,13 @@ export function IkunHome(props: IkunHomeProps) {
             </div>
           </div>
         </div>
+        <SignalRail
+          models={models}
+          catalogAvailable={props.catalogAvailable}
+          isLoading={catalog.isLoading}
+        />
       </section>
 
-      <SignalRail
-        models={models}
-        catalogAvailable={props.catalogAvailable}
-        isLoading={catalog.isLoading}
-      />
       <ModelDirectory
         models={models}
         catalogAvailable={props.catalogAvailable}

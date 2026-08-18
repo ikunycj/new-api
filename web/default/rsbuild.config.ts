@@ -14,6 +14,15 @@ export default defineConfig(({ envMode }) => {
     process.env.VITE_REACT_APP_SERVER_URL ||
     env.rawPublicVars.VITE_REACT_APP_SERVER_URL ||
     'http://localhost:3000'
+  const devServerPort = Number(process.env.DEV_WEB_PORT ?? 5173)
+
+  if (
+    !Number.isInteger(devServerPort) ||
+    devServerPort < 1 ||
+    devServerPort > 65535
+  ) {
+    throw new Error('DEV_WEB_PORT must be an integer between 1 and 65535')
+  }
 
   const isProd = envMode === 'production'
   const devProxy = Object.fromEntries(
@@ -71,7 +80,7 @@ export default defineConfig(({ envMode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5173,
+      port: devServerPort,
       strictPort: true,
       historyApiFallback: true,
       proxy: devProxy,

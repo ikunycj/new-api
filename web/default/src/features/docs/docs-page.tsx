@@ -252,8 +252,7 @@ function escapeHtml(value: string): string {
 }
 
 function getServerAddress(): string {
-  const configured = getPublicBootstrap()?.status.server_address
-  return resolveDocsBaseUrl(configured)
+  return resolveDocsBaseUrl()
 }
 
 function resolveDocsHtml(rawHtml: string): string {
