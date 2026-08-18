@@ -218,6 +218,18 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	if (usage.UsageSource != "" || usage.UsageSemantic != "") && usage.InputTokens > 0 {
 		summary.InputTokensTotal = usage.InputTokens
 		summary.CacheStatsAvailable = true
+	} else if usage.UsageSource == "" && usage.UsageSemantic == "" &&
+		usage.PromptTokens > 0 &&
+		(relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatOpenAI ||
+			relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatOpenAIResponses) &&
+		(summary.CacheTokens > 0 || summary.CacheCreationTokens > 0) {
+		// Some OpenAI-compatible upstreams return prompt_tokens and cached_tokens
+		// without the normalized billing metadata. prompt_tokens is the full input
+		// total for this response, so it is a reliable denominator when a cache
+		// field is explicitly present. Keep unknown cache responses ineligible
+		// instead of treating missing cache metadata as a zero hit.
+		summary.InputTokensTotal = usage.PromptTokens
+		summary.CacheStatsAvailable = true
 	}
 	summary.ImageTokens = usage.PromptTokensDetails.ImageTokens
 	summary.AudioTokens = usage.PromptTokensDetails.AudioTokens
