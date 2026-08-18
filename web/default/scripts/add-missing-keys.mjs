@@ -543,6 +543,19 @@ const routingStrategyKeys = {
   },
 }
 
+const cacheStatsKeys = {
+  en: { 'Cache hit rate': 'Cache hit rate' },
+  zh: { 'Cache hit rate': '缓存命中率' },
+  'zh-TW': { 'Cache hit rate': '快取命中率' },
+  fr: { 'Cache hit rate': 'Taux de réussite du cache' },
+  ja: { 'Cache hit rate': 'キャッシュヒット率' },
+  ru: { 'Cache hit rate': 'Доля попаданий в кэш' },
+  vi: { 'Cache hit rate': 'Tỷ lệ cache hit' },
+}
+
+for (const [locale, translations] of Object.entries(cacheStatsKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
 for (const [locale, translations] of Object.entries(routingStrategyKeys)) {
   Object.assign(newKeys[locale], translations)
 }
@@ -576,6 +589,7 @@ for (const locale of Object.keys(newKeys)) {
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
   Object.assign(
     json.translation,
+    cacheStatsKeys[locale],
     routingStrategyKeys[locale],
     preservedLocaleValues[locale]
   )
