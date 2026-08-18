@@ -237,7 +237,7 @@ if [[ -z $role_flags ]]; then
   pg_admin "$POSTGRES_ADMIN_DB" -c \
     "CREATE ROLE \"$POSTGRES_APP_USER\" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD '$POSTGRES_APP_PASSWORD'" >/dev/null
 else
-  [[ $role_flags == 'f|f|f|t' ]] || {
+  [[ $role_flags == 'f|f|f|t' || $role_flags == 'false|false|false|true' ]] || {
     echo "Existing application role has unsafe flags: $role_flags" >&2
     exit 1
   }
