@@ -9,3 +9,7 @@
 observability/**/data/
 !ikun.love/
 !ikun.love/**
+ikun.love/.env
+ikun.love/deployment.env
+ikun.love/*.tar.gz
+ikun.love/.staging/
