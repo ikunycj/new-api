@@ -71,6 +71,23 @@ func TestClusterRateLimitIsChannelScoped(t *testing.T) {
 	assert.Equal(t, "204001-C23-P1", response.ErrorRef)
 }
 
+func TestClusterGenericServerErrorsAreChannelScoped(t *testing.T) {
+	for _, statusCode := range []int{http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable} {
+		apiErr := WithOpenAIError(OpenAIError{
+			Message: "upstream server error",
+			Code:    "unknown_error",
+			Source:  ErrorSourceCluster,
+		}, statusCode)
+		apiErr.SetRoutingLocation(4, 1)
+
+		response := apiErr.ToOpenAIError()
+
+		assert.Equal(t, 205002, response.AlltokenCode)
+		assert.Equal(t, "channel", response.FailureScope)
+		assert.Equal(t, "205002-C4-P1", response.ErrorRef)
+	}
+}
+
 func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 	lastErr := WithOpenAIError(OpenAIError{
 		Message: "cluster unavailable",
