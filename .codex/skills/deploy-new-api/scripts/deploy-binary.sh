@@ -16,8 +16,8 @@ Options:
   --release-label KEY     Image label for the release (default: com.new-api.release)
   --service NAME          Compose service (default: new-api)
   --container NAME        App container (default: new-api)
-  --postgres NAME         Existing PostgreSQL container
-  --redis NAME            Existing Redis container
+  --postgres NAME         Optional PostgreSQL container readiness gate
+  --redis NAME            Optional Redis container readiness gate
   --local-url URL         Local health URL
   --public-url URL        Optional public status URL
   --timeout SECONDS       Local health timeout (default: 120)
@@ -37,8 +37,8 @@ IMAGE_TAG='new-api:local'
 RELEASE_LABEL='com.new-api.release'
 SERVICE='new-api'
 CONTAINER='new-api'
-POSTGRES='1Panel-postgresql-2LOJ'
-REDIS='1Panel-redis-pDR8'
+POSTGRES=''
+REDIS=''
 LOCAL_URL='http://127.0.0.1:3000/api/status'
 PUBLIC_URL=''
 TIMEOUT=120
@@ -97,14 +97,18 @@ env_mode=$(stat -c '%a' "$ENV_FILE")
 actual_archive_sha=$(sha256sum "$ARCHIVE" | awk '{print tolower($1)}')
 [[ $actual_archive_sha == ${ARCHIVE_SHA,,} ]] || { echo 'Archive SHA-256 mismatch' >&2; exit 1; }
 
-postgres_state=$(docker inspect "$POSTGRES" --format '{{.State.Status}}')
-postgres_health=$(docker inspect "$POSTGRES" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')
-[[ $postgres_state == running && $postgres_health == healthy ]] || {
-  echo "PostgreSQL is not ready: state=$postgres_state health=$postgres_health" >&2
-  exit 1
-}
-redis_state=$(docker inspect "$REDIS" --format '{{.State.Status}}')
-[[ $redis_state == running ]] || { echo "Redis is not running: $redis_state" >&2; exit 1; }
+if [[ -n $POSTGRES ]]; then
+  postgres_state=$(docker inspect "$POSTGRES" --format '{{.State.Status}}')
+  postgres_health=$(docker inspect "$POSTGRES" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')
+  [[ $postgres_state == running && $postgres_health == healthy ]] || {
+    echo "PostgreSQL is not ready: state=$postgres_state health=$postgres_health" >&2
+    exit 1
+  }
+fi
+if [[ -n $REDIS ]]; then
+  redis_state=$(docker inspect "$REDIS" --format '{{.State.Status}}')
+  [[ $redis_state == running ]] || { echo "Redis is not running: $redis_state" >&2; exit 1; }
+fi
 
 TMP_DIR="$DEPLOY_DIR/.deploy-tmp-$RELEASE-$$"
 TEMP_CONTAINER="new-api-wrap-$RELEASE-$$"

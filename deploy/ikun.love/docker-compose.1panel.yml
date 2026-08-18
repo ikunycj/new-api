@@ -1,15 +1,18 @@
-# Compose contract for the new-api service on ikun.love.
-# PostgreSQL and Redis are existing 1Panel services; this file does not create
-# either data service or any persistent data volume for them.
+# Isolated Compose contract for new-api on the ikun.love host.
+# It does not modify, restart, network with, or reuse the running Sub2API
+# service. The initial install uses the dedicated `new_api` PostgreSQL
+# database/role in the existing PostgreSQL container and Redis logical
+# database 1 in the existing Redis container. It binds the application only to
+# host loopback.
 
 services:
   new-api:
-    image: new-api:local
-    container_name: ${CONTAINER:-new-api}
+    image: ${IMAGE_TAG:-new-api:ikun}
+    container_name: ${CONTAINER:-ikun-new-api}
     restart: always
     command: --log-dir /app/logs
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
       - "127.0.0.1:${METRICS_HOST_PORT:-8006}:${METRICS_PORT:-8006}"
     volumes:
       - ./data:/data
@@ -17,15 +20,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      SQL_DSN: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${POSTGRES_HOST:?POSTGRES_HOST is required}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:?POSTGRES_DB is required}
+      SQLITE_PATH: ${SQLITE_PATH:-/data/new-api.db?_busy_timeout=30000}
+      SQL_DSN: ${SQL_DSN:?SQL_DSN is required}
       SQL_MAX_IDLE_CONNS: ${SQL_MAX_IDLE_CONNS:-10}
       SQL_MAX_OPEN_CONNS: ${SQL_MAX_OPEN_CONNS:-30}
       SQL_MAX_LIFETIME: ${SQL_MAX_LIFETIME:-60}
-      REDIS_CONN_STRING: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@${REDIS_HOST:?REDIS_HOST is required}:${REDIS_PORT:-6379}/${REDIS_DB:-1}
+      REDIS_CONN_STRING: ${REDIS_CONN_STRING:?REDIS_CONN_STRING is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       CRYPTO_SECRET: ${CRYPTO_SECRET:?CRYPTO_SECRET is required}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
-      SESSION_COOKIE_TRUSTED_URL: ${SESSION_COOKIE_TRUSTED_URL:-https://ikun.love}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_COOKIE_TRUSTED_URL: ${SESSION_COOKIE_TRUSTED_URL:-}
       TRUSTED_REDIRECT_DOMAINS: ${TRUSTED_REDIRECT_DOMAINS:-ikun.love}
       TZ: ${TZ:-Asia/Shanghai}
       ERROR_LOG_ENABLED: ${ERROR_LOG_ENABLED:-true}

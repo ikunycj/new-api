@@ -20,7 +20,7 @@ Target-specific defaults:
 | --- | --- | --- | --- |
 | `aliyun` | `master` | verify live | repository defaults |
 | `alltokenapi` | `master` | `https://alltokenapi.com/api/status` | legacy production topology |
-| `ikun.love` | `ikun.love` | `https://ikun.love/api/status` | `deploy/ikun.love/` |
+| `ikun.love` | `ikun.love` | loopback-only new-api; existing `https://ikun.love` remains Sub2API | `deploy/ikun.love/` |
 
 Check workstation tools:
 
@@ -95,7 +95,11 @@ The binary must start with ELF magic `7f454c46`.
 
 ## 4. Upload and verify
 
-Upload the archive and remote script to a staging path, not over the live binary:
+For `alltokenapi`/`aliyun`, upload the archive and remote script to a staging
+path, not over the live binary. For a first `ikun.love` install, stage the
+target bootstrap scripts and Compose file in `~/ikun-new-api-stage`, then use
+`sudo install` into the new `/opt/new-api` directory; never write the Sub2API
+directory or its service files.
 
 ```powershell
 scp <archive> ${deployHost}:/opt/new-api/
@@ -114,7 +118,9 @@ Do not print `.env` while checking the directory.
 
 ## 5. Wrap and switch the image
 
-Invoke the uploaded script with full commit and hashes:
+Invoke the uploaded script with full commit and hashes. Pass explicit
+PostgreSQL/Redis container names for deployments that use them; omit neither
+gate for the `ikun.love` full-stack install:
 
 ```bash
 cd /opt/new-api
@@ -124,7 +130,8 @@ bash ./deploy-binary.sh \
   --binary-sha <binary-sha256> \
   --commit <full-commit-sha> \
   --release <short-sha>-v1 \
-  --public-url <target-public-status-url>
+  --postgres <target-postgres-container> \
+  --redis <target-redis-container>
 ```
 
 The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so PostgreSQL and Redis are not recreated.
@@ -136,16 +143,16 @@ For remote multiline logic outside the script, encode the text locally as UTF-8/
 Do not stop at `docker ps`. Verify all of the following:
 
 ```bash
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
-docker image inspect new-api:local --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
+docker inspect <target-app-container> --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
+docker image inspect <target-image-tag> --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
 docker cp new-api:/new-api /tmp/new-api.runtime
 sha256sum /tmp/new-api.runtime
 rm -f /tmp/new-api.runtime
-docker inspect 1Panel-postgresql-2LOJ --format '{{.State.Status}} {{.State.Health.Status}}'
-docker inspect 1Panel-redis-pDR8 --format '{{.State.Status}}'
+docker inspect <target-postgres-container> --format '{{.State.Status}} {{.State.Health.Status}}'
+docker inspect <target-redis-container> --format '{{.State.Status}}'
 curl -fsS http://127.0.0.1:3000/api/status
-curl -fsS <target-public-status-url>
-curl -fsS -o /dev/null -w '%{http_code}\n' <target-public-route>
+curl -fsS <target-public-status-url> # omit for isolated ikun.love first install
+curl -fsS -o /dev/null -w '%{http_code}\n' <target-public-route> # existing service guard for ikun.love
 ```
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.

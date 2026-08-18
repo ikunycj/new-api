@@ -1,66 +1,76 @@
-# ikun.love deployment materials
+# Isolated ikun.love deployment materials
 
-This directory is the target-specific deployment contract for the new-api
-release on `ssh ikun.love`, served publicly at `https://ikun.love`.
+This directory deploys the `ikun.love` branch as a new Dockerized `new-api`
+instance on `ssh ikun.love`. It does not replace the running Sub2API service.
 
-It is intentionally separate from the previous `alltokenapi` deployment:
-
-| Setting | ikun.love target |
+| Setting | Isolated target contract |
 | --- | --- |
 | SSH alias | `ikun.love` |
 | Release ref | `origin/ikun.love` |
-| Public origin | `https://ikun.love` |
-| Public status | `https://ikun.love/api/status` |
-| Local status | `http://127.0.0.1:3000/api/status` |
-| Default app directory | `/opt/new-api` (verify before use) |
+| New-api directory | `/opt/new-api` |
+| New-api container | `ikun-new-api` |
+| New-api local status | `http://127.0.0.1:3000/api/status` |
+| Existing Sub2API port | `127.0.0.1:8080` |
+| Existing public health | `https://ikun.love/api/v1/settings/public` |
+| PostgreSQL container | `1Panel-postgresql-8Kr6` |
+| New-api database/role | `new_api` / `new_api_app` |
+| Redis logical database | `1` (Sub2API uses `0`) |
+
+## Isolation guarantees
+
+- Never stop, restart, reconfigure, or remove `sub2api.service`.
+- Never edit `/opt/1panel/www/sites/ikun.love/proxy/root.conf` or TLS files
+  during this deployment. The existing public root remains on Sub2API.
+- New-api uses the existing PostgreSQL container only as a host service. The
+  bootstrap creates a new `new_api` database and a `new_api_app` login role
+  with `NOSUPERUSER`, `NOCREATEDB`, and `NOCREATEROLE`; no `sub2api` database
+  credentials are used.
+- New-api uses the existing Redis container only through logical database `1`.
+  The bootstrap refuses to continue if that database is not empty. Redis db0
+  remains untouched for Sub2API.
+- New-api binds host port `3000` to loopback. A public cutover requires a
+  separate explicit request and a routing plan with rollback.
 
 ## Files
 
-- `.env.example`: application environment template with no credentials.
-- `deployment.env.example`: non-secret operator settings for this target.
-- `docker-compose.1panel.yml`: app-only Compose file; it reuses the existing
-  1Panel PostgreSQL, Redis, and `1panel-network`.
-- `baseline.sh`: read-only target inventory; it never prints `.env` values.
-- `verify.sh`: local and public status checks after a release.
+- `.env.example`: non-secret runtime template.
+- `deployment.env.example`: target operator settings.
+- `docker-compose.1panel.yml`: app-only Compose contract with both existing
+  data services and isolated credentials.
+- `bootstrap-config.sh`: creates the database/role, checks Redis db1, generates
+  new-api-only secrets, and writes `.env` without printing values.
+- `bootstrap-image.sh`: seeds the target image tag from the official runtime
+  image without starting or rebuilding Sub2API.
+- `baseline.sh`: read-only inventory plus Sub2API preservation checks.
+- `verify.sh`: new-api health and Sub2API non-regression checks.
 
-The real server `.env` must be created and maintained on `ikun.love` with mode
-`600`. Preserve its existing `SESSION_SECRET`, `CRYPTO_SECRET`, database
-credentials, Redis credentials, `data`, and `logs`; never copy them from the
-workstation or commit them here.
+The real `/opt/new-api/.env` is generated on the target with mode `600`.
+Never copy the Sub2API environment into it, commit it, or print its values.
 
 ## Preflight
 
-This task only prepares materials. A deployment still requires explicit
-production authorization in the current conversation. Before any remote write:
+The deployment target and production authorization are selected in the current
+task. Repeat the read-only checks before remote writes:
 
-1. Verify the SSH alias and live DNS without exposing secrets:
+```powershell
+ssh -G ikun.love | Select-String '^(hostname|user|port|identityfile) '
+Resolve-DnsName ikun.love
+ssh ikun.love 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
+```
 
-   ```powershell
-   ssh -G ikun.love | Select-String '^(hostname|user|port|identityfile) '
-   Resolve-DnsName ikun.love
-   ```
+Run the baseline as `admin`; it automatically uses passwordless `sudo docker`:
 
-2. Capture a read-only baseline on the target. Verify the actual deployment
-   directory, Compose file, app container, PostgreSQL container, Redis
-   container, Docker network, and existing `.env` mode. Do not print `.env`.
-   After uploading `baseline.sh`, run it with the two audited data-container
-   names:
+```bash
+sudo bash baseline.sh
+```
 
-   ```bash
-   POSTGRES_CONTAINER=<target-postgres-container> \
-   REDIS_CONTAINER=<target-redis-container> \
-   ./baseline.sh
-   ```
-3. Confirm OpenResty/TLS already routes `https://ikun.love` to the app's local
-   port. This repository does not overwrite the target's certificate or proxy
-   configuration.
-4. Fill the target values in a private copy of `.env.example` and set mode 600.
-   The `REPLACE_WITH_...` markers must not remain in the server file.
+The baseline must show Sub2API active and its local/public health route
+available. A missing `/opt/new-api` directory and image are expected initially.
 
-## Build the ikun.love release
+## Build and stage
 
-Build the exact remote branch, not the current mutable directory. The generic
-build script now accepts a release ref:
+Build the exact latest `ikun.love` ref from a detached clean worktree, then
+inspect the manifest and both SHA-256 values:
 
 ```powershell
 $repoRoot = git rev-parse --show-toplevel
@@ -70,33 +80,54 @@ $releaseCommit = (git ls-remote origin refs/heads/ikun.love).Split()[0]
   -Commit $releaseCommit
 ```
 
-Inspect the emitted binary, manifest, and archive SHA-256 values before upload.
-Upload only the archive and the generic `deploy-binary.sh` script to the
-staging area on `ikun.love`. Do not upload `.env.example` as `.env`.
-
-## Install or update the app-only Compose contract
-
-Only after the target baseline and authorization are complete, copy the
-Compose file into the verified deployment directory. Do not use `--build`,
-`docker compose down`, or recreate PostgreSQL/Redis:
+Stage files in the admin home because `admin` cannot write `/opt` directly:
 
 ```powershell
-scp deploy/ikun.love/docker-compose.1panel.yml ikun.love:/opt/new-api/
-scp .codex/skills/deploy-new-api/scripts/deploy-binary.sh ikun.love:/opt/new-api/
+ssh ikun.love 'mkdir -p ~/ikun-new-api-stage'
+scp deploy/ikun.love/docker-compose.1panel.yml ikun.love:~/ikun-new-api-stage/
+scp deploy/ikun.love/bootstrap-config.sh ikun.love:~/ikun-new-api-stage/
+scp deploy/ikun.love/bootstrap-image.sh ikun.love:~/ikun-new-api-stage/
+scp deploy/ikun.love/baseline.sh ikun.love:~/ikun-new-api-stage/
+scp deploy/ikun.love/verify.sh ikun.love:~/ikun-new-api-stage/
+scp .codex/skills/deploy-new-api/scripts/deploy-binary.sh ikun.love:~/ikun-new-api-stage/
+scp <release-archive> ikun.love:~/ikun-new-api-stage/
+ssh ikun.love 'sudo install -d -m 750 /opt/new-api /opt/new-api/data /opt/new-api/logs; sudo install -m 755 ~/ikun-new-api-stage/*.sh /opt/new-api/; sudo install -m 644 ~/ikun-new-api-stage/docker-compose.1panel.yml /opt/new-api/'
 ```
 
-The exact target path and the PostgreSQL/Redis container names must come from
-the read-only baseline, not from this example. The existing target `.env` must
-already contain the values consumed by the Compose file.
+## Bootstrap data services and image
 
-## Switch the app image
-
-Run the uploaded script with the exact artifact hashes and target-specific
-parameters. Replace only the placeholder values obtained from the baseline:
+Run the configuration bootstrap as root. It reads the existing container
+credentials internally, creates only the new database/role, checks that Redis
+db1 is empty, generates new-api-only secrets, and records only `.env` mode and
+SHA-256. It never displays a password or connection string:
 
 ```bash
 cd /opt/new-api
-bash ./deploy-binary.sh \
+sudo bash ./bootstrap-config.sh \
+  --postgres-container 1Panel-postgresql-8Kr6 \
+  --redis-container 1Panel-redis-xsdn \
+  --database new_api \
+  --role new_api_app \
+  --redis-db 1
+```
+
+Seed the runtime image tag. This pulls/tags an image only; it does not start or
+recreate any running service:
+
+```bash
+sudo bash ./bootstrap-image.sh \
+  --base-image calciumion/new-api:latest \
+  --image-tag new-api:ikun
+```
+
+## Deploy only the new-api container
+
+Run the SHA-verified app switch as root. Pass both data-container names so the
+script gates on their readiness; it does not recreate either one:
+
+```bash
+cd /opt/new-api
+sudo bash ./deploy-binary.sh \
   --archive ./new-api-<full-commit>-linux-amd64.tar.gz \
   --archive-sha <archive-sha256> \
   --binary-sha <binary-sha256> \
@@ -105,28 +136,37 @@ bash ./deploy-binary.sh \
   --deploy-dir /opt/new-api \
   --compose-file docker-compose.1panel.yml \
   --env-file .env \
-  --postgres <target-postgres-container> \
-  --redis <target-redis-container> \
-  --local-url http://127.0.0.1:3000/api/status \
-  --public-url https://ikun.love/api/status
+  --image-tag new-api:ikun \
+  --container ikun-new-api \
+  --postgres 1Panel-postgresql-8Kr6 \
+  --redis 1Panel-redis-xsdn \
+  --local-url http://127.0.0.1:3000/api/status
 ```
 
-The script verifies archive and binary hashes, preserves a rollback image,
-recreates only the app service, verifies the runtime binary hash, and writes
-`.deploy-commit` and `.deploy-release` only after local health succeeds.
+The script replaces only the `new-api` service, preserves `/opt/new-api/data`
+and `logs`, verifies the runtime binary SHA, and retains
+`new-api:rollback-<release>`. It never runs `docker compose down`.
 
 ## Verify and rollback
 
-After the local checks pass, run `verify.sh` from the target deployment
-directory (or use equivalent commands with the target values):
-
 ```bash
-chmod 0755 verify.sh
-./verify.sh
-docker compose --env-file .env -f docker-compose.1panel.yml ps
+cd /opt/new-api
+sudo bash ./verify.sh
+sudo docker compose --env-file .env -f docker-compose.1panel.yml ps
 ```
 
-Also verify the public homepage and the changed route through the actual
-`ikun.love` OpenResty/TLS path. Keep the rollback image until the release is
-known stable. If public checks fail while local health is good, inspect DNS,
-TLS, and OpenResty routing before rebuilding or rolling back.
+Verification must prove:
+
+- `ikun-new-api` is running and healthy, and its runtime binary SHA matches the
+  local manifest.
+- PostgreSQL `1Panel-postgresql-8Kr6` is healthy and Redis
+  `1Panel-redis-xsdn` is running; only `new_api`/`new_api_app` and Redis db1 are
+  used by new-api.
+- `http://127.0.0.1:3000/api/status` succeeds.
+- `sub2api.service` remains active, port `8080` remains bound, and both its
+  local and public health checks still succeed.
+- New-api public routing is intentionally skipped until a separate cutover is
+  authorized.
+
+Keep the rollback image. If new-api fails local health, the deploy script
+restores the previous `new-api:ikun` image without touching Sub2API.

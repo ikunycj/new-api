@@ -27,19 +27,19 @@ An OOM-triggered Docker restart can briefly restart the app, PostgreSQL, and Red
 Recover in dependency order:
 
 1. Confirm Docker is stable and not still restarting.
-2. Wait for `1Panel-postgresql-2LOJ` to become healthy.
-3. Confirm `1Panel-redis-pDR8` is running.
-4. Start or recreate only `new-api` if it did not recover automatically.
+2. Wait for the target PostgreSQL container to become healthy.
+3. Confirm the target Redis container is running.
+4. Start or recreate only the target new-api container if it did not recover automatically; never touch Sub2API.
 5. Verify local `/api/status`, then public status.
 
 Do not recreate either data service and do not run `docker compose down`.
 
 ## Candidate fails local health
 
-The deploy script automatically retags the preserved rollback image as `new-api:local` and recreates only the app service. After rollback, verify:
+The deploy script automatically retags the preserved rollback image and recreates only the target app service. After rollback, verify:
 
 ```bash
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
+docker inspect <target-app-container> --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
 curl -fsS http://127.0.0.1:3000/api/status
 docker logs --tail 200 new-api
 ```
@@ -56,7 +56,7 @@ Do not immediately rebuild or roll back. Inspect the reverse-proxy path separate
 
 ```bash
 curl -v http://127.0.0.1:3000/api/status
-curl -v "$PUBLIC_STATUS_URL"
+curl -v "$PUBLIC_STATUS_URL" # only when a public URL is part of the selected contract
 ```
 
-Set `PUBLIC_STATUS_URL` from the selected target contract (`https://ikun.love/api/status` for `ssh ikun.love`). Check OpenResty routing, TLS, and upstream connectivity. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
+Set `PUBLIC_STATUS_URL` only when the selected target intentionally routes the new-api service publicly. For the isolated `ikun.love` first install it remains empty; check the existing Sub2API public route separately. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.

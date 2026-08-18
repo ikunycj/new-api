@@ -37,18 +37,20 @@ server snapshot. Verify every mutable value during the read-only baseline:
 | --- | --- | --- |
 | SSH alias | `ikun.love` | Use this alias for every remote command. |
 | Release ref | `origin/ikun.love` | Verify local, fetched, and live remote SHAs match. |
-| Public site | `https://ikun.love` | Verify DNS, TLS, `/api/status`, and the changed route. |
+| Existing public site | `https://ikun.love` | Verify the existing Sub2API health route; do not change the root proxy during the isolated install. |
 | Deploy materials | `deploy/ikun.love/` | Use its Compose and target parameter templates. |
 | Deploy directory | `/opt/new-api` (verify) | Preserve `.env`, `data`, and `logs`. |
-| App service/container | `new-api` (verify) | Recreate only the app service. |
+| App service/container | `new-api` / `ikun-new-api` | Recreate only the new-api service; leave `sub2api.service` untouched. |
 | App port | `127.0.0.1:3000` | Check local `/api/status`. |
-| Compose file | `docker-compose.1panel.yml` | App-only Compose; reuse the external 1Panel network. |
-| PostgreSQL / Redis | Verify target container names | Must already exist and be healthy/running. |
+| Compose file | `docker-compose.1panel.yml` | App-only Compose; reuse `1panel-network` for the existing data containers. |
+| PostgreSQL | `1Panel-postgresql-8Kr6` | Must be healthy; create only `new_api` owned by `new_api_app`. Never use `sub2api`. |
+| Redis | `1Panel-redis-xsdn` | Must be running; use logical database `1`, leaving db0 for Sub2API. |
 | Runtime `.env` | `/opt/new-api/.env`, mode `600` | Preserve secrets; never print or replace them. |
 
-The `ikun.love` server may have a different existing application or reverse
-proxy layout. Do not assume the legacy `alltokenapi` container names, database,
-Redis, OpenResty configuration, or `.env` values.
+The live `ikun.love` server currently runs `/opt/sub2api/sub2api` as
+`sub2api.service` on port 8080, with OpenResty proxying the public root to that
+port. The new-api install is parallel and loopback-only; do not stop or edit
+that service, its database, Redis db0, or the OpenResty configuration.
 
 The host has roughly 1.8 GiB RAM plus swap. Do not build the frontend, Go binary, or Docker multi-stage image there.
 
