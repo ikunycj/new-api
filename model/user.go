@@ -15,8 +15,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const UserNameMaxLength = 20
-
 // CurrentOnboardingVersion is the latest onboarding flow shown to newly
 // registered users. A nil user value means the user is not enrolled in the
 // onboarding flow (for example, a legacy or admin-created account).
@@ -29,7 +27,7 @@ const (
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
 	Id                int                        `json:"id"`
-	Username          string                     `json:"username" gorm:"unique;index" validate:"max=20"`
+	Username          string                     `json:"username" gorm:"index"`
 	Password          string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
 	OriginalPassword  string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
 	DisplayName       string                     `json:"display_name" gorm:"index" validate:"max=20"`
@@ -202,19 +200,15 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	return string(configBytes)
 }
 
-// CheckUserExistOrDeleted check if user exist or deleted, if not exist, return false, nil, if deleted or exist, return true, nil
-func CheckUserExistOrDeleted(username string, email string) (bool, error) {
+// CheckUserExistOrDeleted is kept for compatibility with older callers. Usernames
+// are not unique, so only the normalized email participates in this check.
+func CheckUserExistOrDeleted(_ string, email string) (bool, error) {
 	var user User
-
-	// err := DB.Unscoped().First(&user, "username = ? or email = ?", username, email).Error
-	// check email if empty
-	var err error
 	email = NormalizeEmail(email)
 	if email == "" {
-		err = DB.Unscoped().First(&user, "username = ?", username).Error
-	} else {
-		err = DB.Unscoped().First(&user, "username = ? or LOWER(email) = ?", username, email).Error
+		return false, nil
 	}
+	err := DB.Unscoped().First(&user, "LOWER(email) = ?", email).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// not exist, return false, nil
@@ -229,6 +223,23 @@ func CheckUserExistOrDeleted(username string, email string) (bool, error) {
 
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// NormalizeUsername applies the same whitespace normalization at every user
+// write boundary. Usernames remain case-sensitive to match existing login
+// behavior, but are not required to be unique.
+func NormalizeUsername(username string) string {
+	return strings.TrimSpace(username)
+}
+
+// ResolveUsername keeps imported and newly created users usable for login.
+// An email is the deterministic fallback when the source username is blank.
+func ResolveUsername(username, email string) string {
+	username = NormalizeUsername(username)
+	if username != "" {
+		return username
+	}
+	return NormalizeEmail(email)
 }
 
 func emailQuery(tx *gorm.DB, email string) *gorm.DB {
@@ -455,6 +466,10 @@ func HardDeleteUserById(id int) error {
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
 	user.Email = NormalizeEmail(user.Email)
+	user.Username = ResolveUsername(user.Username, user.Email)
+	if user.Username == "" {
+		return ErrUsernameEmpty
+	}
 	if err := ensureEmailAvailableWithTx(tx, user.Email, 0); err != nil {
 		return err
 	}
@@ -537,7 +552,7 @@ func (user *User) finishInsert(inviterId int) {
 	// 用户创建成功后，根据角色初始化边栏配置
 	// 需要重新获取用户以确保有正确的ID和Role
 	var createdUser User
-	if err := DB.Where("username = ?", user.Username).First(&createdUser).Error; err == nil {
+	if err := DB.Where("id = ?", user.Id).First(&createdUser).Error; err == nil {
 		// 生成基于角色的默认边栏配置
 		defaultSidebarConfig := generateDefaultSidebarConfigForRole(createdUser.Role)
 		if defaultSidebarConfig != "" {
@@ -623,6 +638,13 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
 	}
+	newUser.Username = ResolveUsername(newUser.Username, newUser.Email)
+	if newUser.Username == "" {
+		newUser.Username = NormalizeUsername(current.Username)
+	}
+	if newUser.Username == "" {
+		return ErrUsernameEmpty
+	}
 	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count").Updates(newUser).Error; err != nil {
 		return err
 	}
@@ -646,6 +668,17 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 
 	newUser := *user
+	current := User{}
+	if err = tx.First(&current, user.Id).Error; err != nil {
+		return err
+	}
+	newUser.Username = ResolveUsername(newUser.Username, newUser.Email)
+	if newUser.Username == "" {
+		newUser.Username = NormalizeEmail(current.Email)
+	}
+	if newUser.Username == "" {
+		return ErrUsernameEmpty
+	}
 	updates := map[string]interface{}{
 		"username":     newUser.Username,
 		"display_name": newUser.DisplayName,
@@ -654,11 +687,6 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
-	}
-
-	current := User{}
-	if err = tx.First(&current, user.Id).Error; err != nil {
-		return err
 	}
 	if err = tx.Model(&current).Updates(updates).Error; err != nil {
 		return err
