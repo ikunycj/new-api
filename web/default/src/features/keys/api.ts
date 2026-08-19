@@ -541,7 +541,11 @@ export async function getApiKeys(
   params: GetApiKeysParams = {}
 ): Promise<GetApiKeysResponse> {
   const { p = 1, size = 10 } = params
-  const res = await api.get(`/api/token/?p=${p}&size=${size}`)
+  // Token lists are scoped to the authenticated dashboard user. They must
+  // never share the global in-flight GET deduplication entry.
+  const res = await api.get(`/api/token/?p=${p}&size=${size}`, {
+    disableDuplicate: true,
+  })
   return normalizeApiKeysResponse(res.data)
 }
 
@@ -556,7 +560,9 @@ export async function searchApiKeys(
   if (token) queryParams.set('token', token)
   if (p != null) queryParams.set('p', String(p))
   if (size != null) queryParams.set('size', String(size))
-  const res = await api.get(`/api/token/search?${queryParams.toString()}`)
+  const res = await api.get(`/api/token/search?${queryParams.toString()}`, {
+    disableDuplicate: true,
+  })
   return normalizeApiKeysResponse(res.data)
 }
 

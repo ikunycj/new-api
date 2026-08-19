@@ -196,7 +196,8 @@ export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
   const [keys, setKeys] = useState<LoadTestKey[]>([])
-  const [selectedKeyId, setSelectedKeyId] = useState('')
+  // Use the masked key value as the UI identity instead of a database ID.
+  const [selectedKeyValue, setSelectedKeyValue] = useState('')
   const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
   const [durationSeconds, setDurationSeconds] = useState(
     LOAD_TEST_DEFAULT_DURATION_SECONDS
@@ -221,10 +222,10 @@ export function LoadTestDemo() {
     try {
       const loadedKeys = await loadClaudeLoadTestKeys()
       setKeys(loadedKeys)
-      setSelectedKeyId((current) =>
-        loadedKeys.some((key) => String(key.id) === current)
+      setSelectedKeyValue((current) =>
+        loadedKeys.some((key) => key.key === current)
           ? current
-          : String(loadedKeys[0]?.id ?? '')
+          : (loadedKeys[0]?.key ?? '')
       )
     } catch {
       setKeys([])
@@ -274,7 +275,7 @@ export function LoadTestDemo() {
   }, [])
 
   const run = useCallback(async () => {
-    const selectedKey = keys.find((key) => String(key.id) === selectedKeyId)
+    const selectedKey = keys.find((key) => key.key === selectedKeyValue)
     if (!serverAddress || !selectedKey) return
     if (
       !Number.isFinite(durationSeconds) ||
@@ -364,7 +365,7 @@ export function LoadTestDemo() {
     promptCache,
     recordResult,
     requestsPerSecond,
-    selectedKeyId,
+    selectedKeyValue,
     selectedModel,
     serverAddress,
     t,
@@ -435,7 +436,7 @@ export function LoadTestDemo() {
     Math.ceil(durationSeconds * requestsPerSecond)
   )
   const canRun =
-    (status === 'idle' || status === 'complete') && selectedKeyId !== ''
+    (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
 
   const statusLabel = useMemo(() => {
     if (status === 'loading-keys') return t('Loading')
@@ -484,15 +485,15 @@ export function LoadTestDemo() {
                 <div className='space-y-1.5'>
                   <Label>{t('API Key')}</Label>
                   <Select
-                    onValueChange={(value) => value && setSelectedKeyId(value)}
-                    value={selectedKeyId}
+                    onValueChange={(value) => value && setSelectedKeyValue(value)}
+                    value={selectedKeyValue}
                   >
                     <SelectTrigger className='w-full'>
                       <SelectValue placeholder={t('Select API Key')} />
                     </SelectTrigger>
                     <SelectContent>
                       {keys.map((key) => (
-                        <SelectItem key={key.id} value={String(key.id)}>
+                        <SelectItem key={key.key} value={key.key}>
                           {key.name}
                         </SelectItem>
                       ))}
