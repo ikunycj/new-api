@@ -31,6 +31,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -40,11 +41,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 
 import {
-  LOAD_TEST_DURATION_MS,
-  LOAD_TEST_INTERVAL_MS,
+  LOAD_TEST_DEFAULT_DURATION_SECONDS,
+  LOAD_TEST_DEFAULT_RPS,
+  LOAD_TEST_MAX_CONCURRENCY,
+  LOAD_TEST_MAX_DURATION_SECONDS,
+  LOAD_TEST_MAX_REQUESTS,
+  LOAD_TEST_MAX_RPS,
+  LOAD_TEST_MIN_DURATION_SECONDS,
+  LOAD_TEST_MIN_RPS,
   LOAD_TEST_MODEL,
   loadClaudeLoadTestKeys,
   loadClaudeLoadTestPricing,
@@ -146,6 +155,13 @@ export function LoadTestDemo() {
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   const [selectedKeyId, setSelectedKeyId] = useState('')
   const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
+  const [durationSeconds, setDurationSeconds] = useState(
+    LOAD_TEST_DEFAULT_DURATION_SECONDS
+  )
+  const [requestsPerSecond, setRequestsPerSecond] = useState(
+    LOAD_TEST_DEFAULT_RPS
+  )
+  const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [stats, setStats] = useState<RunStats>(EMPTY_STATS)
   const [runId, setRunId] = useState('')
@@ -214,6 +230,17 @@ export function LoadTestDemo() {
   const run = useCallback(async () => {
     const selectedKey = keys.find((key) => String(key.id) === selectedKeyId)
     if (!serverAddress || !selectedKey) return
+    if (
+      !Number.isFinite(durationSeconds) ||
+      !Number.isFinite(requestsPerSecond) ||
+      durationSeconds < LOAD_TEST_MIN_DURATION_SECONDS ||
+      durationSeconds > LOAD_TEST_MAX_DURATION_SECONDS ||
+      requestsPerSecond < LOAD_TEST_MIN_RPS ||
+      requestsPerSecond > LOAD_TEST_MAX_RPS
+    ) {
+      toast.error(t('Load test limits are invalid'))
+      return
+    }
     const controller = new AbortController()
     runAbortRef.current = controller
     runStartedAtRef.current = Date.now()
@@ -236,21 +263,36 @@ export function LoadTestDemo() {
     }
 
     const inFlight = new Set<Promise<void>>()
-    const deadline = Date.now() + LOAD_TEST_DURATION_MS
-    while (Date.now() < deadline && !controller.signal.aborted) {
-      if (inFlight.size >= 10) await Promise.race(inFlight)
+    const durationMs = durationSeconds * 1000
+    const requestIntervalMs = 1000 / requestsPerSecond
+    const requestLimit = Math.min(
+      LOAD_TEST_MAX_REQUESTS,
+      Math.ceil(durationSeconds * requestsPerSecond)
+    )
+    const deadline = Date.now() + durationMs
+    let sentRequests = 0
+    while (
+      Date.now() < deadline &&
+      sentRequests < requestLimit &&
+      !controller.signal.aborted
+    ) {
+      if (inFlight.size >= LOAD_TEST_MAX_CONCURRENCY) {
+        await Promise.race(inFlight)
+      }
 
       const request = sendClaudeLoadTestRequest(
         serverAddress,
         selectedKey,
         selectedModel,
         currentRunId,
+        promptCache,
         controller.signal
       ).then(recordResult)
       inFlight.add(request)
       void request.then(() => inFlight.delete(request))
+      sentRequests += 1
       await new Promise((resolve) =>
-        window.setTimeout(resolve, LOAD_TEST_INTERVAL_MS)
+        window.setTimeout(resolve, requestIntervalMs)
       )
     }
 
@@ -259,11 +301,19 @@ export function LoadTestDemo() {
 
     runAbortRef.current = null
     activeRunIdRef.current = ''
-    setElapsed(
-      Math.min(LOAD_TEST_DURATION_MS, Date.now() - runStartedAtRef.current)
-    )
+    setElapsed(Math.min(durationMs, Date.now() - runStartedAtRef.current))
     setStatus('complete')
-  }, [keys, recordResult, selectedKeyId, selectedModel, serverAddress])
+  }, [
+    durationSeconds,
+    keys,
+    promptCache,
+    recordResult,
+    requestsPerSecond,
+    selectedKeyId,
+    selectedModel,
+    serverAddress,
+    t,
+  ])
 
   const stop = useCallback(() => {
     runAbortRef.current?.abort()
@@ -272,15 +322,17 @@ export function LoadTestDemo() {
     setStatus('complete')
   }, [])
 
-  const progress = Math.min(100, (elapsed / LOAD_TEST_DURATION_MS) * 100)
+  const durationMs = durationSeconds * 1000
+  const progress = Math.min(100, (elapsed / durationMs) * 100)
   const successRate = stats.completed
     ? ((stats.successes / stats.completed) * 100).toFixed(1)
     : '0.0'
   const p50 = percentile(stats.latencies, 0.5)
   const p95 = percentile(stats.latencies, 0.95)
-  const cacheableInputTokens = stats.inputTokens + stats.cacheReadTokens
-  const cacheHitRate = cacheableInputTokens
-    ? ((stats.cacheReadTokens / cacheableInputTokens) * 100).toFixed(1)
+  const cacheAttemptTokens =
+    stats.inputTokens + stats.cacheReadTokens + stats.cacheWriteTokens
+  const cacheHitRate = cacheAttemptTokens
+    ? ((stats.cacheReadTokens / cacheAttemptTokens) * 100).toFixed(1)
     : '0.0'
   const inputPricePerMillion = pricing
     ? pricing.model.model_ratio * 2 * pricing.groupRatio
@@ -294,11 +346,23 @@ export function LoadTestDemo() {
   const cacheWritePricePerMillion = pricing
     ? inputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
     : 0
-  const estimatedCost =
-    (stats.inputTokens / 1_000_000) * inputPricePerMillion +
-    (stats.outputTokens / 1_000_000) * outputPricePerMillion +
-    (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
-    (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
+  let estimatedCost = 0
+  if (pricing) {
+    if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+      estimatedCost =
+        stats.successes * (pricing.model.model_price ?? 0) * pricing.groupRatio
+    } else {
+      estimatedCost =
+        (stats.inputTokens / 1_000_000) * inputPricePerMillion +
+        (stats.outputTokens / 1_000_000) * outputPricePerMillion +
+        (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
+        (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
+    }
+  }
+  const maxRequests = Math.min(
+    LOAD_TEST_MAX_REQUESTS,
+    Math.ceil(durationSeconds * requestsPerSecond)
+  )
   const canRun =
     (status === 'idle' || status === 'complete') && selectedKeyId !== ''
 
@@ -335,7 +399,7 @@ export function LoadTestDemo() {
                   </CardTitle>
                   <CardDescription className='mt-1'>
                     {t(
-                      'The demo runs for 60 seconds with a gentle request rate.'
+                      'Configure a bounded duration and request rate for a controlled test.'
                     )}
                   </CardDescription>
                 </div>
@@ -386,8 +450,64 @@ export function LoadTestDemo() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Metric label={t('Duration')} value='60s' />
-                <Metric label={t('Requests per second')} value='2' />
+                <div className='space-y-1.5'>
+                  <Label htmlFor='load-test-duration'>{t('Duration')}</Label>
+                  <Input
+                    id='load-test-duration'
+                    type='number'
+                    min={LOAD_TEST_MIN_DURATION_SECONDS}
+                    max={LOAD_TEST_MAX_DURATION_SECONDS}
+                    step={1}
+                    value={durationSeconds}
+                    onChange={(event) => {
+                      const value = Number(event.target.value)
+                      setDurationSeconds(
+                        Number.isFinite(value)
+                          ? Math.min(
+                              LOAD_TEST_MAX_DURATION_SECONDS,
+                              Math.max(LOAD_TEST_MIN_DURATION_SECONDS, value)
+                            )
+                          : LOAD_TEST_MIN_DURATION_SECONDS
+                      )
+                    }}
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Allowed range: {{min}}-{{max}} seconds', {
+                      min: LOAD_TEST_MIN_DURATION_SECONDS,
+                      max: LOAD_TEST_MAX_DURATION_SECONDS,
+                    })}
+                  </p>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label htmlFor='load-test-rps'>
+                    {t('Requests per second')}
+                  </Label>
+                  <Input
+                    id='load-test-rps'
+                    type='number'
+                    min={LOAD_TEST_MIN_RPS}
+                    max={LOAD_TEST_MAX_RPS}
+                    step={1}
+                    value={requestsPerSecond}
+                    onChange={(event) => {
+                      const value = Number(event.target.value)
+                      setRequestsPerSecond(
+                        Number.isFinite(value)
+                          ? Math.min(
+                              LOAD_TEST_MAX_RPS,
+                              Math.max(LOAD_TEST_MIN_RPS, value)
+                            )
+                          : LOAD_TEST_MIN_RPS
+                      )
+                    }}
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Allowed range: {{min}}-{{max}} RPS', {
+                      min: LOAD_TEST_MIN_RPS,
+                      max: LOAD_TEST_MAX_RPS,
+                    })}
+                  </p>
+                </div>
               </div>
 
               {keys.length === 0 ? (
@@ -401,6 +521,24 @@ export function LoadTestDemo() {
                   {keys.map((key) => key.name).join(', ')}
                 </div>
               )}
+
+              <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
+                <div>
+                  <Label htmlFor='load-test-cache'>{t('Prompt Cache')}</Label>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Adds a stable Claude cacheable prefix to the request.')}
+                  </p>
+                </div>
+                <Switch
+                  id='load-test-cache'
+                  checked={promptCache}
+                  onCheckedChange={setPromptCache}
+                />
+              </div>
+              <div className='text-muted-foreground text-xs'>
+                {t('Maximum requests for this run')}: {maxRequests} ·{' '}
+                {t('Maximum concurrency')}: {LOAD_TEST_MAX_CONCURRENCY}
+              </div>
 
               <div className='flex flex-wrap items-center gap-2'>
                 <Button disabled={!canRun} onClick={() => void run()}>
@@ -421,7 +559,7 @@ export function LoadTestDemo() {
                 <div className='space-y-2'>
                   <div className='flex justify-between text-xs'>
                     <span>{formatDuration(elapsed)}</span>
-                    <span>60s</span>
+                    <span>{durationSeconds}s</span>
                   </div>
                   <Progress value={progress} />
                   <div className='text-muted-foreground text-xs'>
@@ -461,6 +599,13 @@ export function LoadTestDemo() {
               }
             />
           </div>
+          <p className='text-muted-foreground text-xs'>
+            {pricing
+              ? t(
+                  'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
+                )
+              : t('Pricing is unavailable until the test starts.')}
+          </p>
 
           <div className='grid gap-4 lg:grid-cols-3'>
             <Card size='sm'>

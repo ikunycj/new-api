@@ -21,10 +21,22 @@ import type { ApiKey } from '@/features/keys/types'
 import { getPricing } from '@/features/pricing/api'
 import type { PricingModel } from '@/features/pricing/types'
 
-export const LOAD_TEST_DURATION_MS = 60_000
-export const LOAD_TEST_INTERVAL_MS = 500
+export const LOAD_TEST_DEFAULT_DURATION_SECONDS = 60
+export const LOAD_TEST_MIN_DURATION_SECONDS = 5
+export const LOAD_TEST_MAX_DURATION_SECONDS = 600
+export const LOAD_TEST_DEFAULT_RPS = 2
+export const LOAD_TEST_MIN_RPS = 1
+export const LOAD_TEST_MAX_RPS = 20
+export const LOAD_TEST_MAX_REQUESTS = 10_000
+export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_TIMEOUT_MS = 120_000
 export const LOAD_TEST_MODEL = 'claude-opus-4-8'
+
+const LOAD_TEST_CACHE_PREFIX = Array.from(
+  { length: 48 },
+  (_, index) =>
+    `Stable load-test context section ${index + 1}: keep this deterministic prefix unchanged so Anthropic prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.`
+).join('\n')
 
 export type LoadTestKey = ApiKey & { secret: string }
 
@@ -158,17 +170,46 @@ function readUsage(payload: unknown): LoadTestUsage | undefined {
   const record = usage as Record<string, unknown>
   const readNumber = (key: string) => {
     const value = record[key]
-    return typeof value === 'number' && Number.isFinite(value) && value >= 0
-      ? value
-      : 0
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    return 0
   }
+
+  const cacheCreation = record.cache_creation
+  const cacheCreationRecord =
+    cacheCreation && typeof cacheCreation === 'object'
+      ? (cacheCreation as Record<string, unknown>)
+      : undefined
+  const cacheWriteTokens =
+    readNumber('cache_creation_input_tokens') ||
+    (cacheCreationRecord
+      ? readNumberFromRecord(cacheCreationRecord, 'ephemeral_5m_input_tokens') +
+        readNumberFromRecord(cacheCreationRecord, 'ephemeral_1h_input_tokens')
+      : 0)
 
   return {
     inputTokens: readNumber('input_tokens'),
     outputTokens: readNumber('output_tokens'),
     cacheReadTokens: readNumber('cache_read_input_tokens'),
-    cacheWriteTokens: readNumber('cache_creation_input_tokens'),
+    cacheWriteTokens,
   }
+}
+
+function readNumberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed
+  }
+  return 0
 }
 
 export async function sendClaudeLoadTestRequest(
@@ -176,6 +217,7 @@ export async function sendClaudeLoadTestRequest(
   apiKey: LoadTestKey,
   model: string,
   runId: string,
+  promptCache: boolean,
   signal?: AbortSignal
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
@@ -188,6 +230,21 @@ export async function sendClaudeLoadTestRequest(
   signal?.addEventListener('abort', abortRequest, { once: true })
 
   try {
+    const requestBody: Record<string, unknown> = {
+      model,
+      max_tokens: 32,
+      messages: [{ role: 'user', content: 'Reply with OK.' }],
+    }
+    if (promptCache) {
+      requestBody.system = [
+        {
+          type: 'text',
+          text: LOAD_TEST_CACHE_PREFIX,
+          cache_control: { type: 'ephemeral' },
+        },
+      ]
+    }
+
     const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -198,11 +255,7 @@ export async function sendClaudeLoadTestRequest(
         'x-api-key': apiKey.secret,
         'X-Load-Test-ID': runId,
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 32,
-        messages: [{ role: 'user', content: 'Reply with OK.' }],
-      }),
+      body: JSON.stringify(requestBody),
       credentials: 'omit',
       cache: 'no-store',
       signal: controller.signal,

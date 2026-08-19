@@ -572,6 +572,23 @@ const loadTestDemoKeys = {
     'Input tokens': 'Input tokens',
     'Output tokens': 'Output tokens',
     'Cache tokens': 'Cache tokens',
+    'Load test limits are invalid': 'Load test limits are invalid',
+    'Allowed range: {{min}}-{{max}} seconds':
+      'Allowed range: {{min}}-{{max}} seconds',
+    'Allowed range: {{min}}-{{max}} RPS': 'Allowed range: {{min}}-{{max}} RPS',
+    'Prompt Cache': 'Prompt Cache',
+    'Adds a stable Claude cacheable prefix to the request.':
+      'Adds a stable Claude cacheable prefix to the request.',
+    'Maximum requests for this run': 'Maximum requests for this run',
+    'Maximum concurrency': 'Maximum concurrency',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      'Estimated cost uses the selected model and group pricing snapshot.',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.',
+    'Configure a bounded duration and request rate for a controlled test.':
+      'Configure a bounded duration and request rate for a controlled test.',
+    'Pricing is unavailable until the test starts.':
+      'Pricing is unavailable until the test starts.',
   },
   zh: {
     'Load Test Demo': '压测 Demo',
@@ -591,6 +608,21 @@ const loadTestDemoKeys = {
     'Input tokens': '输入 Token',
     'Output tokens': '输出 Token',
     'Cache tokens': '缓存 Token',
+    'Load test limits are invalid': '压测参数超出限制',
+    'Allowed range: {{min}}-{{max}} seconds': '允许范围：{{min}}-{{max}} 秒',
+    'Allowed range: {{min}}-{{max}} RPS': '允许范围：{{min}}-{{max}} RPS',
+    'Prompt Cache': 'Prompt Cache',
+    'Adds a stable Claude cacheable prefix to the request.':
+      '为请求添加稳定的 Claude 可缓存前缀。',
+    'Maximum requests for this run': '本次运行最大请求数',
+    'Maximum concurrency': '最大并发数',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      '预计成本使用所选模型和分组的价格快照计算。',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'Token 计费包含输入、输出、缓存读取和缓存写入；按请求计费按成功请求数计算。',
+    'Configure a bounded duration and request rate for a controlled test.':
+      '可配置受限的时长和请求速率，进行可控测试。',
+    'Pricing is unavailable until the test starts.': '测试开始前无法获取价格。',
   },
   'zh-TW': {
     'Load Test Demo': '壓測 Demo',
@@ -610,6 +642,21 @@ const loadTestDemoKeys = {
     'Input tokens': '輸入 Token',
     'Output tokens': '輸出 Token',
     'Cache tokens': '快取 Token',
+    'Load test limits are invalid': '壓測參數超出限制',
+    'Allowed range: {{min}}-{{max}} seconds': '允許範圍：{{min}}-{{max}} 秒',
+    'Allowed range: {{min}}-{{max}} RPS': '允許範圍：{{min}}-{{max}} RPS',
+    'Prompt Cache': 'Prompt Cache',
+    'Adds a stable Claude cacheable prefix to the request.':
+      '為請求加入穩定的 Claude 可快取前綴。',
+    'Maximum requests for this run': '本次執行最大請求數',
+    'Maximum concurrency': '最大並發數',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      '預計成本使用所選模型與群組的價格快照計算。',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'Token 計費包含輸入、輸出、快取讀取和快取寫入；按請求計費按成功請求數計算。',
+    'Configure a bounded duration and request rate for a controlled test.':
+      '可設定受限的時長和請求速率，進行可控測試。',
+    'Pricing is unavailable until the test starts.': '測試開始前無法取得價格。',
   },
   fr: {
     'Load Test Demo': 'Démo de test de charge',
@@ -629,6 +676,25 @@ const loadTestDemoKeys = {
     'Input tokens': 'Jetons d’entrée',
     'Output tokens': 'Jetons de sortie',
     'Cache tokens': 'Jetons de cache',
+    'Load test limits are invalid':
+      'Les paramètres du test de charge sont invalides',
+    'Allowed range: {{min}}-{{max}} seconds':
+      'Plage autorisée : {{min}}-{{max}} secondes',
+    'Allowed range: {{min}}-{{max}} RPS':
+      'Plage autorisée : {{min}}-{{max}} RPS',
+    'Prompt Cache': 'Cache de prompt',
+    'Adds a stable Claude cacheable prefix to the request.':
+      'Ajoute un préfixe Claude stable et compatible avec le cache.',
+    'Maximum requests for this run': 'Requêtes maximales pour cette exécution',
+    'Maximum concurrency': 'Concurrence maximale',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      'Le coût estimé utilise le modèle sélectionné et l’instantané tarifaire du groupe.',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'La tarification au token inclut les entrées, sorties, lectures et écritures du cache ; la tarification à la requête facture les requêtes réussies.',
+    'Configure a bounded duration and request rate for a controlled test.':
+      'Configurez une durée et un débit limités pour un test contrôlé.',
+    'Pricing is unavailable until the test starts.':
+      'Les tarifs seront disponibles au démarrage du test.',
   },
   ja: {
     'Load Test Demo': '負荷テストデモ',
@@ -648,6 +714,22 @@ const loadTestDemoKeys = {
     'Input tokens': '入力トークン',
     'Output tokens': '出力トークン',
     'Cache tokens': 'キャッシュトークン',
+    'Load test limits are invalid': '負荷テストのパラメータが無効です',
+    'Allowed range: {{min}}-{{max}} seconds': '許容範囲: {{min}}-{{max}} 秒',
+    'Allowed range: {{min}}-{{max}} RPS': '許容範囲: {{min}}-{{max}} RPS',
+    'Prompt Cache': 'プロンプトキャッシュ',
+    'Adds a stable Claude cacheable prefix to the request.':
+      'リクエストに安定した Claude キャッシュ用プレフィックスを追加します。',
+    'Maximum requests for this run': '今回の実行の最大リクエスト数',
+    'Maximum concurrency': '最大同時実行数',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      '推定コストは選択したモデルとグループの料金スナップショットで計算します。',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'トークン料金には入力、出力、キャッシュ読み取り、キャッシュ書き込みが含まれ、リクエスト料金は成功したリクエスト数で計算します。',
+    'Configure a bounded duration and request rate for a controlled test.':
+      '制限された時間とリクエストレートを設定して、制御されたテストを実行します。',
+    'Pricing is unavailable until the test starts.':
+      'テスト開始まで料金を取得できません。',
   },
   ru: {
     'Load Test Demo': 'Демо нагрузочного теста',
@@ -668,6 +750,24 @@ const loadTestDemoKeys = {
     'Input tokens': 'Входные токены',
     'Output tokens': 'Выходные токены',
     'Cache tokens': 'Токены кэша',
+    'Load test limits are invalid': 'Недопустимые параметры нагрузочного теста',
+    'Allowed range: {{min}}-{{max}} seconds':
+      'Допустимый диапазон: {{min}}-{{max}} секунд',
+    'Allowed range: {{min}}-{{max}} RPS':
+      'Допустимый диапазон: {{min}}-{{max}} RPS',
+    'Prompt Cache': 'Кэш промпта',
+    'Adds a stable Claude cacheable prefix to the request.':
+      'Добавляет стабильный префикс Claude для кэширования запроса.',
+    'Maximum requests for this run': 'Максимум запросов за запуск',
+    'Maximum concurrency': 'Максимальная параллельность',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      'Расчётная стоимость использует снимок цен выбранной модели и группы.',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'Тарификация по токенам включает входные, выходные токены, чтение и запись кэша; тарификация запросов учитывает успешные запросы.',
+    'Configure a bounded duration and request rate for a controlled test.':
+      'Настройте ограниченные длительность и частоту запросов для контролируемого теста.',
+    'Pricing is unavailable until the test starts.':
+      'Цены будут доступны после запуска теста.',
   },
   vi: {
     'Load Test Demo': 'Bản demo kiểm thử tải',
@@ -687,6 +787,24 @@ const loadTestDemoKeys = {
     'Input tokens': 'Token đầu vào',
     'Output tokens': 'Token đầu ra',
     'Cache tokens': 'Token cache',
+    'Load test limits are invalid': 'Tham số kiểm thử tải không hợp lệ',
+    'Allowed range: {{min}}-{{max}} seconds':
+      'Phạm vi cho phép: {{min}}-{{max}} giây',
+    'Allowed range: {{min}}-{{max}} RPS':
+      'Phạm vi cho phép: {{min}}-{{max}} RPS',
+    'Prompt Cache': 'Bộ nhớ đệm prompt',
+    'Adds a stable Claude cacheable prefix to the request.':
+      'Thêm tiền tố ổn định có thể cache của Claude vào yêu cầu.',
+    'Maximum requests for this run': 'Số yêu cầu tối đa cho lần chạy này',
+    'Maximum concurrency': 'Đồng thời tối đa',
+    'Estimated cost uses the selected model and group pricing snapshot.':
+      'Chi phí ước tính dùng mô hình và ảnh chụp giá của nhóm đã chọn.',
+    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
+      'Giá theo token gồm token đầu vào, đầu ra, đọc và ghi bộ nhớ đệm; giá theo yêu cầu tính theo số yêu cầu thành công.',
+    'Configure a bounded duration and request rate for a controlled test.':
+      'Thiết lập thời lượng và tốc độ yêu cầu trong giới hạn để kiểm thử có kiểm soát.',
+    'Pricing is unavailable until the test starts.':
+      'Chưa có giá cho đến khi bắt đầu kiểm thử.',
   },
 }
 
