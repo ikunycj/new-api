@@ -553,7 +553,147 @@ const cacheStatsKeys = {
   vi: { 'Cache hit rate': 'Tỷ lệ cache hit' },
 }
 
+const loadTestDemoKeys = {
+  en: {
+    'Load Test Demo': 'Load Test Demo',
+    'Claude Load Test Demo': 'Claude Load Test Demo',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'The demo runs for 60 seconds with a gentle request rate.',
+    'Requests per second': 'Requests per second',
+    'No Claude load-test keys found': 'No Claude load-test keys found',
+    'Claude load-test keys': 'Claude load-test keys',
+    'Run ID': 'Run ID',
+    'P50 latency': 'P50 latency',
+    'Error codes': 'Error codes',
+    'No requests sent yet': 'No requests sent yet',
+    'No errors': 'No errors',
+    'Key usage': 'Key usage',
+    'Select API Key': 'Select API Key',
+    'Input tokens': 'Input tokens',
+    'Output tokens': 'Output tokens',
+    'Cache tokens': 'Cache tokens',
+  },
+  zh: {
+    'Load Test Demo': '压测 Demo',
+    'Claude Load Test Demo': 'Claude 压测 Demo',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'Demo 持续 60 秒，以平缓速率发送请求。',
+    'Requests per second': '每秒请求数',
+    'No Claude load-test keys found': '未找到 Claude 压测 Key',
+    'Claude load-test keys': 'Claude 压测 Key',
+    'Run ID': '运行 ID',
+    'P50 latency': 'P50 延迟',
+    'Error codes': '错误码',
+    'No requests sent yet': '尚未发送请求',
+    'No errors': '暂无错误',
+    'Key usage': 'Key 使用情况',
+    'Select API Key': '选择 API Key',
+    'Input tokens': '输入 Token',
+    'Output tokens': '输出 Token',
+    'Cache tokens': '缓存 Token',
+  },
+  'zh-TW': {
+    'Load Test Demo': '壓測 Demo',
+    'Claude Load Test Demo': 'Claude 壓測 Demo',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'Demo 持續 60 秒，以平緩速率發送請求。',
+    'Requests per second': '每秒請求數',
+    'No Claude load-test keys found': '找不到 Claude 壓測 Key',
+    'Claude load-test keys': 'Claude 壓測 Key',
+    'Run ID': '執行 ID',
+    'P50 latency': 'P50 延遲',
+    'Error codes': '錯誤碼',
+    'No requests sent yet': '尚未發送請求',
+    'No errors': '沒有錯誤',
+    'Key usage': 'Key 使用情況',
+    'Select API Key': '選擇 API Key',
+    'Input tokens': '輸入 Token',
+    'Output tokens': '輸出 Token',
+    'Cache tokens': '快取 Token',
+  },
+  fr: {
+    'Load Test Demo': 'Démo de test de charge',
+    'Claude Load Test Demo': 'Démo de test de charge Claude',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'La démo dure 60 secondes à un rythme de requêtes modéré.',
+    'Requests per second': 'Requêtes par seconde',
+    'No Claude load-test keys found': 'Aucune clé de test Claude trouvée',
+    'Claude load-test keys': 'Clés de test Claude',
+    'Run ID': 'ID d’exécution',
+    'P50 latency': 'Latence P50',
+    'Error codes': 'Codes d’erreur',
+    'No requests sent yet': 'Aucune requête envoyée',
+    'No errors': 'Aucune erreur',
+    'Key usage': 'Utilisation des clés',
+    'Select API Key': 'Sélectionner une clé API',
+    'Input tokens': 'Jetons d’entrée',
+    'Output tokens': 'Jetons de sortie',
+    'Cache tokens': 'Jetons de cache',
+  },
+  ja: {
+    'Load Test Demo': '負荷テストデモ',
+    'Claude Load Test Demo': 'Claude 負荷テストデモ',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'デモは緩やかなリクエスト速度で 60 秒間実行します。',
+    'Requests per second': '1 秒あたりのリクエスト数',
+    'No Claude load-test keys found': 'Claude 負荷テストキーが見つかりません',
+    'Claude load-test keys': 'Claude 負荷テストキー',
+    'Run ID': '実行 ID',
+    'P50 latency': 'P50 レイテンシ',
+    'Error codes': 'エラーコード',
+    'No requests sent yet': 'まだリクエストはありません',
+    'No errors': 'エラーなし',
+    'Key usage': 'キー使用状況',
+    'Select API Key': 'API キーを選択',
+    'Input tokens': '入力トークン',
+    'Output tokens': '出力トークン',
+    'Cache tokens': 'キャッシュトークン',
+  },
+  ru: {
+    'Load Test Demo': 'Демо нагрузочного теста',
+    'Claude Load Test Demo': 'Демо нагрузочного теста Claude',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'Демо длится 60 секунд при умеренной частоте запросов.',
+    'Requests per second': 'Запросов в секунду',
+    'No Claude load-test keys found':
+      'Ключи нагрузочного теста Claude не найдены',
+    'Claude load-test keys': 'Ключи нагрузочного теста Claude',
+    'Run ID': 'ID запуска',
+    'P50 latency': 'Задержка P50',
+    'Error codes': 'Коды ошибок',
+    'No requests sent yet': 'Запросы ещё не отправлялись',
+    'No errors': 'Ошибок нет',
+    'Key usage': 'Использование ключей',
+    'Select API Key': 'Выберите ключ API',
+    'Input tokens': 'Входные токены',
+    'Output tokens': 'Выходные токены',
+    'Cache tokens': 'Токены кэша',
+  },
+  vi: {
+    'Load Test Demo': 'Bản demo kiểm thử tải',
+    'Claude Load Test Demo': 'Bản demo kiểm thử tải Claude',
+    'The demo runs for 60 seconds with a gentle request rate.':
+      'Bản demo chạy trong 60 giây với tốc độ gửi yêu cầu vừa phải.',
+    'Requests per second': 'Số yêu cầu mỗi giây',
+    'No Claude load-test keys found': 'Không tìm thấy key kiểm thử tải Claude',
+    'Claude load-test keys': 'Key kiểm thử tải Claude',
+    'Run ID': 'ID lần chạy',
+    'P50 latency': 'Độ trễ P50',
+    'Error codes': 'Mã lỗi',
+    'No requests sent yet': 'Chưa gửi yêu cầu nào',
+    'No errors': 'Không có lỗi',
+    'Key usage': 'Mức sử dụng key',
+    'Select API Key': 'Chọn key API',
+    'Input tokens': 'Token đầu vào',
+    'Output tokens': 'Token đầu ra',
+    'Cache tokens': 'Token cache',
+  },
+}
+
 for (const [locale, translations] of Object.entries(cacheStatsKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+for (const [locale, translations] of Object.entries(loadTestDemoKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 for (const [locale, translations] of Object.entries(routingStrategyKeys)) {
@@ -590,6 +730,7 @@ for (const locale of Object.keys(newKeys)) {
   Object.assign(
     json.translation,
     cacheStatsKeys[locale],
+    loadTestDemoKeys[locale],
     routingStrategyKeys[locale],
     preservedLocaleValues[locale]
   )
