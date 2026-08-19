@@ -17,6 +17,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var commonGroupCol string
@@ -267,6 +268,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := migrateUsernameToNonUnique(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -345,6 +349,9 @@ func migrateDB() error {
 }
 
 func migrateDBFast() error {
+	if err := migrateUsernameToNonUnique(); err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 
@@ -444,6 +451,97 @@ func migrateDBFast() error {
 	}
 	common.SysLog("database migrated")
 	return nil
+}
+
+// migrateUsernameToNonUnique removes the legacy username uniqueness constraint.
+// Email remains the sole unique user identifier; usernames are allowed to repeat.
+func migrateUsernameToNonUnique() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) {
+		return nil
+	}
+
+	switch common.MainDatabaseType() {
+	case common.DatabaseTypeSQLite:
+		columnTypes, err := DB.Migrator().ColumnTypes(&User{})
+		if err != nil {
+			return fmt.Errorf("inspect users.username uniqueness: %w", err)
+		}
+		for _, columnType := range columnTypes {
+			if columnType.Name() != "username" {
+				continue
+			}
+			if unique, ok := columnType.Unique(); ok && unique {
+				if err := DB.Migrator().AlterColumn(&User{}, "username"); err != nil {
+					return fmt.Errorf("remove users.username uniqueness: %w", err)
+				}
+			}
+			return nil
+		}
+		return nil
+	case common.DatabaseTypeMySQL:
+		var indexNames []string
+		if err := DB.Raw(`
+SELECT index_name
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = ?
+  AND non_unique = 0
+GROUP BY index_name
+HAVING COUNT(*) = 1 AND MAX(column_name) = ?`, "users", "username").Scan(&indexNames).Error; err != nil {
+			return fmt.Errorf("inspect users.username indexes: %w", err)
+		}
+		for _, indexName := range indexNames {
+			if indexName == "PRIMARY" {
+				continue
+			}
+			if err := DB.Migrator().DropIndex(&User{}, indexName); err != nil {
+				return fmt.Errorf("remove users.username unique index %q: %w", indexName, err)
+			}
+		}
+		return nil
+	case common.DatabaseTypePostgreSQL:
+		var constraintNames []string
+		if err := DB.Raw(`
+SELECT tc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_schema = kcu.constraint_schema
+ AND tc.constraint_name = kcu.constraint_name
+ AND tc.table_name = kcu.table_name
+WHERE tc.constraint_schema = current_schema()
+  AND tc.table_name = ?
+  AND tc.constraint_type = 'UNIQUE'
+GROUP BY tc.constraint_name
+HAVING COUNT(*) = 1 AND MAX(kcu.column_name) = ?`, "users", "username").Scan(&constraintNames).Error; err != nil {
+			return fmt.Errorf("inspect users.username constraints: %w", err)
+		}
+		for _, constraintName := range constraintNames {
+			if err := DB.Exec("ALTER TABLE ? DROP CONSTRAINT ?", clause.Table{Name: "users"}, clause.Column{Name: constraintName}).Error; err != nil {
+				return fmt.Errorf("remove users.username unique constraint %q: %w", constraintName, err)
+			}
+		}
+
+		indexes, err := DB.Migrator().GetIndexes(&User{})
+		if err != nil {
+			return fmt.Errorf("inspect users.username unique indexes: %w", err)
+		}
+		for _, index := range indexes {
+			unique, ok := index.Unique()
+			columns := index.Columns()
+			if !ok || !unique || len(columns) != 1 || columns[0] != "username" {
+				continue
+			}
+			if primaryKey, ok := index.PrimaryKey(); ok && primaryKey {
+				continue
+			}
+			if err := DB.Migrator().DropIndex(&User{}, index.Name()); err != nil {
+				return fmt.Errorf("remove users.username unique index %q: %w", index.Name(), err)
+			}
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 func removeLegacyChannelMonitorAvailabilityColumns() error {
