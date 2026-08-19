@@ -555,6 +555,16 @@ const cacheStatsKeys = {
 
 const loadTestDemoKeys = {
   en: {
+    'Input total': 'Input total',
+    'Prompt tokens': 'Prompt tokens',
+    'Channel cost': 'Channel cost',
+    'Channel statistics unavailable': 'Channel statistics unavailable',
+    'Channel token usage and cost': 'Channel token usage and cost',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      'Estimated cost = actual channel tokens × official model price × channel cost factor.',
+    'No channel usage recorded yet': 'No channel usage recorded yet',
+    'Token share': 'Token share',
+    'Token usage': 'Token usage',
     'Load Test Demo': 'Load Test Demo',
     'Claude Load Test Demo': 'Claude Load Test Demo',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -591,6 +601,16 @@ const loadTestDemoKeys = {
       'Pricing is unavailable until the test starts.',
   },
   zh: {
+    'Input total': '输入总量',
+    'Prompt tokens': 'Prompt Token',
+    'Channel cost': '渠道成本',
+    'Channel statistics unavailable': '暂时无法获取渠道统计',
+    'Channel token usage and cost': '渠道 Token 用量与成本',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      '预计成本 = 各渠道实际 Token × 模型官方价格 × 渠道成本系数。',
+    'No channel usage recorded yet': '本次测试尚无渠道用量记录',
+    'Token share': 'Token 占比',
+    'Token usage': 'Token 用量',
     'Load Test Demo': '压测 Demo',
     'Claude Load Test Demo': 'Claude 压测 Demo',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -625,6 +645,16 @@ const loadTestDemoKeys = {
     'Pricing is unavailable until the test starts.': '测试开始前无法获取价格。',
   },
   'zh-TW': {
+    'Input total': '輸入總量',
+    'Prompt tokens': 'Prompt Token',
+    'Channel cost': '渠道成本',
+    'Channel statistics unavailable': '暫時無法取得渠道統計',
+    'Channel token usage and cost': '渠道 Token 用量與成本',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      '預計成本 = 各渠道實際 Token × 模型官方價格 × 渠道成本係數。',
+    'No channel usage recorded yet': '本次測試尚無渠道用量記錄',
+    'Token share': 'Token 佔比',
+    'Token usage': 'Token 用量',
     'Load Test Demo': '壓測 Demo',
     'Claude Load Test Demo': 'Claude 壓測 Demo',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -659,6 +689,16 @@ const loadTestDemoKeys = {
     'Pricing is unavailable until the test starts.': '測試開始前無法取得價格。',
   },
   fr: {
+    'Input total': 'Entrée totale',
+    'Prompt tokens': 'Tokens du prompt',
+    'Channel cost': 'Coût du canal',
+    'Channel statistics unavailable': 'Statistiques des canaux indisponibles',
+    'Channel token usage and cost': 'Utilisation des tokens et coût par canal',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      'Coût estimé = tokens réels du canal × tarif officiel du modèle × coefficient de coût du canal.',
+    'No channel usage recorded yet': 'Aucune utilisation de canal enregistrée',
+    'Token share': 'Part des tokens',
+    'Token usage': 'Utilisation des tokens',
     'Load Test Demo': 'Démo de test de charge',
     'Claude Load Test Demo': 'Démo de test de charge Claude',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -697,6 +737,16 @@ const loadTestDemoKeys = {
       'Les tarifs seront disponibles au démarrage du test.',
   },
   ja: {
+    'Input total': '入力合計',
+    'Prompt tokens': 'プロンプトトークン',
+    'Channel cost': 'チャネルコスト',
+    'Channel statistics unavailable': 'チャネル統計を取得できません',
+    'Channel token usage and cost': 'チャネル別トークン使用量とコスト',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      '推定コスト = チャネルの実トークン数 × モデル公式価格 × チャネルコスト係数。',
+    'No channel usage recorded yet': 'チャネル使用量はまだ記録されていません',
+    'Token share': 'トークン比率',
+    'Token usage': 'トークン使用量',
     'Load Test Demo': '負荷テストデモ',
     'Claude Load Test Demo': 'Claude 負荷テストデモ',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -732,6 +782,16 @@ const loadTestDemoKeys = {
       'テスト開始まで料金を取得できません。',
   },
   ru: {
+    'Input total': 'Всего входных токенов',
+    'Prompt tokens': 'Токены промпта',
+    'Channel cost': 'Стоимость канала',
+    'Channel statistics unavailable': 'Статистика каналов недоступна',
+    'Channel token usage and cost': 'Токены и стоимость по каналам',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      'Расчётная стоимость = фактические токены канала × официальная цена модели × коэффициент стоимости канала.',
+    'No channel usage recorded yet': 'Использование каналов ещё не записано',
+    'Token share': 'Доля токенов',
+    'Token usage': 'Использование токенов',
     'Load Test Demo': 'Демо нагрузочного теста',
     'Claude Load Test Demo': 'Демо нагрузочного теста Claude',
     'The demo runs for 60 seconds with a gentle request rate.':
@@ -770,6 +830,16 @@ const loadTestDemoKeys = {
       'Цены будут доступны после запуска теста.',
   },
   vi: {
+    'Input total': 'Tổng đầu vào',
+    'Prompt tokens': 'Token prompt',
+    'Channel cost': 'Chi phí kênh',
+    'Channel statistics unavailable': 'Không thể tải thống kê kênh',
+    'Channel token usage and cost': 'Mức dùng token và chi phí theo kênh',
+    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
+      'Chi phí ước tính = token thực tế theo kênh × giá chính thức của mô hình × hệ số chi phí kênh.',
+    'No channel usage recorded yet': 'Chưa ghi nhận mức dùng kênh',
+    'Token share': 'Tỷ trọng token',
+    'Token usage': 'Mức dùng token',
     'Load Test Demo': 'Bản demo kiểm thử tải',
     'Claude Load Test Demo': 'Bản demo kiểm thử tải Claude',
     'The demo runs for 60 seconds with a gentle request rate.':
