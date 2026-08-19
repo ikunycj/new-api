@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { CCSwitchApp, CCSwitchModelField } from './model-catalog'
+import { withTokenPrefix } from './token-key'
 
 type CCSwitchImportConfig = {
   apiKey: string
@@ -36,7 +37,7 @@ export function resolveCCSwitchDefaultName(
 export function buildCCSwitchImportUrl(config: CCSwitchImportConfig): string {
   const serverAddress = config.serverAddress.trim().replace(/\/+$/, '')
   const apiKey = config.apiKey.trim()
-  const normalizedApiKey = apiKey.startsWith('sk-') ? apiKey : `sk-${apiKey}`
+  const normalizedApiKey = withTokenPrefix(apiKey)
   const endpoint =
     config.app === 'codex' ? `${serverAddress}/v1` : serverAddress
   const params = new URLSearchParams()
