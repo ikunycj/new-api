@@ -63,7 +63,10 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
   if (disableDuplicate) return originalGet(url, config)
 
   const params = config.params ? JSON.stringify(config.params) : '{}'
-  const key = `${url}?${params}`
+  // Include the dashboard user in the deduplication key. User-scoped
+  // endpoints must not share a response when two accounts are open in the
+  // same browser at the same time.
+  const key = `${getUserId() ?? ''}:${url}?${params}`
 
   // Return existing in-flight request if available
   const inFlightRequest = inFlightGet.get(key)

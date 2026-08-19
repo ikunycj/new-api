@@ -40,6 +40,22 @@ afterEach(() => {
 })
 
 describe('API key management', () => {
+  test('does not deduplicate user-scoped key lists across accounts', async () => {
+    let requestConfig: { disableDuplicate?: boolean } | undefined
+    api.get = (async (_url, config) => {
+      requestConfig = config
+      return {
+        data: {
+          success: true,
+          data: { items: [], total: 0, page: 1, page_size: 100 },
+        },
+      }
+    }) as typeof api.get
+
+    await getApiKeys({ p: 1, size: 100 })
+    assert.equal(requestConfig?.disableDuplicate, true)
+  })
+
   test('normalizes legacy list responses without routing fields', async () => {
     const legacyKey = {
       id: 1,
