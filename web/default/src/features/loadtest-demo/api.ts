@@ -20,6 +20,7 @@ import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { getPricing } from '@/features/pricing/api'
 import type { PricingModel } from '@/features/pricing/types'
+import { api } from '@/lib/api'
 
 export const LOAD_TEST_DEFAULT_DURATION_SECONDS = 60
 export const LOAD_TEST_MIN_DURATION_SECONDS = 5
@@ -61,6 +62,20 @@ export type LoadTestPricing = {
   model: PricingModel
   groupRatio: number
   group: string
+}
+
+export type LoadTestChannelStats = {
+  channel_id: number
+  channel_name: string
+  cluster_id: number
+  pool_name: string
+  cost_factor: number
+  requests: number
+  input_tokens: number
+  input_tokens_total: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
 }
 
 function isClaudeLoadTestKey(apiKey: ApiKey) {
@@ -110,6 +125,23 @@ export async function loadClaudeLoadTestPricing(
         ? configuredRatio
         : 1,
   }
+}
+
+export async function getLoadTestChannelStats(
+  requestIds: string[]
+): Promise<LoadTestChannelStats[]> {
+  if (requestIds.length === 0) return []
+  const response = await api.post<{
+    success: boolean
+    message?: string
+    data?: LoadTestChannelStats[]
+  }>('/api/log/self/loadtest-stats', { request_ids: requestIds })
+  if (!response.data.success) {
+    throw new Error(
+      response.data.message || 'Failed to load channel statistics'
+    )
+  }
+  return response.data.data ?? []
 }
 
 function readRequestId(response: Response) {

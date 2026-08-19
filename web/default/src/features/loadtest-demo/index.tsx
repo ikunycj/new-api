@@ -42,6 +42,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 
@@ -55,9 +63,11 @@ import {
   LOAD_TEST_MIN_DURATION_SECONDS,
   LOAD_TEST_MIN_RPS,
   LOAD_TEST_MODEL,
+  getLoadTestChannelStats,
   loadClaudeLoadTestKeys,
   loadClaudeLoadTestPricing,
   sendClaudeLoadTestRequest,
+  type LoadTestChannelStats,
   type LoadTestKey,
   type LoadTestPricing,
   type LoadTestRequestResult,
@@ -111,6 +121,39 @@ function incrementCounter(counter: Record<string, number>, key: string) {
 
 function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
+}
+
+function calculateChannelCost(
+  channel: LoadTestChannelStats,
+  pricing: LoadTestPricing
+) {
+  if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    return (
+      channel.requests * (pricing.model.model_price ?? 0) * channel.cost_factor
+    )
+  }
+
+  const officialInputPricePerMillion = pricing.model.model_ratio * 2
+  const officialOutputPricePerMillion =
+    officialInputPricePerMillion * pricing.model.completion_ratio
+  const officialCacheReadPricePerMillion =
+    officialInputPricePerMillion * (pricing.model.cache_ratio ?? 1)
+  const officialCacheWritePricePerMillion =
+    officialInputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
+  const baseInputTokens = Math.max(
+    0,
+    channel.input_tokens_total > 0
+      ? channel.input_tokens_total -
+          channel.cache_read_tokens -
+          channel.cache_write_tokens
+      : channel.input_tokens
+  )
+  const officialCost =
+    (baseInputTokens / 1_000_000) * officialInputPricePerMillion +
+    (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
+    (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
+    (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
+  return officialCost * channel.cost_factor
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -167,7 +210,9 @@ export function LoadTestDemo() {
   const [runId, setRunId] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [pricing, setPricing] = useState<LoadTestPricing | null>(null)
+  const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>([])
   const runAbortRef = useRef<AbortController | null>(null)
+  const requestIdsRef = useRef<string[]>([])
   const activeRunIdRef = useRef('')
   const runStartedAtRef = useRef(0)
 
@@ -203,6 +248,7 @@ export function LoadTestDemo() {
   }, [status])
 
   const recordResult = useCallback((result: LoadTestRequestResult) => {
+    if (result.requestId) requestIdsRef.current.push(result.requestId)
     setStats((current) => {
       const next = {
         ...current,
@@ -249,6 +295,8 @@ export function LoadTestDemo() {
     setRunId(currentRunId)
     setElapsed(0)
     setStats(EMPTY_STATS)
+    setChannelStats([])
+    requestIdsRef.current = []
     setStatus('running')
 
     try {
@@ -299,6 +347,13 @@ export function LoadTestDemo() {
     await Promise.all(inFlight)
     if (activeRunIdRef.current !== currentRunId) return
 
+    try {
+      setChannelStats(await getLoadTestChannelStats(requestIdsRef.current))
+    } catch {
+      setChannelStats([])
+      toast.error(t('Channel statistics unavailable'))
+    }
+
     runAbortRef.current = null
     activeRunIdRef.current = ''
     setElapsed(Math.min(durationMs, Date.now() - runStartedAtRef.current))
@@ -346,9 +401,25 @@ export function LoadTestDemo() {
   const cacheWritePricePerMillion = pricing
     ? inputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
     : 0
+  const totalChannelTokens = channelStats.reduce(
+    (total, item) =>
+      total +
+      (item.input_tokens_total > 0
+        ? item.input_tokens_total
+        : item.input_tokens +
+          item.cache_read_tokens +
+          item.cache_write_tokens) +
+      item.output_tokens,
+    0
+  )
   let estimatedCost = 0
   if (pricing) {
-    if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    if (channelStats.length > 0) {
+      estimatedCost = channelStats.reduce(
+        (total, channel) => total + calculateChannelCost(channel, pricing),
+        0
+      )
+    } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
       estimatedCost =
         stats.successes * (pricing.model.model_price ?? 0) * pricing.groupRatio
     } else {
@@ -599,6 +670,103 @@ export function LoadTestDemo() {
               }
             />
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('Channel token usage and cost')}</CardTitle>
+              <CardDescription>
+                {t(
+                  'Estimated cost = actual channel tokens × official model price × channel cost factor.'
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {channelStats.length === 0 ? (
+                <p className='text-muted-foreground text-sm'>
+                  {t('No channel usage recorded yet')}
+                </p>
+              ) : (
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('Channel')}</TableHead>
+                        <TableHead>{t('Pool')}</TableHead>
+                        <TableHead>{t('Requests')}</TableHead>
+                        <TableHead>{t('Prompt tokens')}</TableHead>
+                        <TableHead>{t('Input total')}</TableHead>
+                        <TableHead>{t('Output tokens')}</TableHead>
+                        <TableHead>{t('Cache tokens')}</TableHead>
+                        <TableHead>{t('Total tokens')}</TableHead>
+                        <TableHead>{t('Token share')}</TableHead>
+                        <TableHead>{t('Cost factor')}</TableHead>
+                        <TableHead>{t('Channel cost')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {channelStats.map((channel) => {
+                        const inputTotalTokens =
+                          channel.input_tokens_total > 0
+                            ? channel.input_tokens_total
+                            : channel.input_tokens +
+                              channel.cache_read_tokens +
+                              channel.cache_write_tokens
+                        const channelTokens =
+                          inputTotalTokens + channel.output_tokens
+                        const share = totalChannelTokens
+                          ? (channelTokens / totalChannelTokens) * 100
+                          : 0
+                        return (
+                          <TableRow key={channel.channel_id}>
+                            <TableCell>
+                              #{channel.channel_id} {channel.channel_name}
+                              {channel.cluster_id > 0
+                                ? ` · C${channel.cluster_id}`
+                                : ''}
+                            </TableCell>
+                            <TableCell>{channel.pool_name || '-'}</TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channel.requests}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channel.input_tokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {inputTotalTokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channel.output_tokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channel.cache_read_tokens.toLocaleString()} /{' '}
+                              {channel.cache_write_tokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channelTokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {share.toFixed(2)}%
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {channel.cost_factor.toFixed(2)}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              $
+                              {pricing
+                                ? calculateChannelCost(
+                                    channel,
+                                    pricing
+                                  ).toFixed(6)
+                                : '0.000000'}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <p className='text-muted-foreground text-xs'>
             {pricing
               ? t(
