@@ -53,6 +53,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { MAX_GROUP_CANDIDATES, SYSTEM_ROUTING_VALUE } from '../lib'
 
@@ -229,6 +230,9 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
 
 export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const { t } = useTranslation()
+  const preferredModels = useSystemConfigStore(
+    (state) => state.config.preferredModels
+  )
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [announcement, setAnnouncement] = useState('')
@@ -280,8 +284,17 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
         modelGroups.set(model, groups)
       }
     }
-    return [...modelGroups.entries()].filter(([, groups]) => groups.length > 1)
-  }, [props.modelsByGroup, props.value])
+    const preferredRank = new Map(
+      preferredModels.map((model, index) => [model, index])
+    )
+    return [...modelGroups.entries()]
+      .filter(([, groups]) => groups.length > 1)
+      .sort(
+        ([leftModel], [rightModel]) =>
+          (preferredRank.get(leftModel) ?? preferredModels.length) -
+          (preferredRank.get(rightModel) ?? preferredModels.length)
+      )
+  }, [preferredModels, props.modelsByGroup, props.value])
 
   const firstConflict = conflicts[0]
 

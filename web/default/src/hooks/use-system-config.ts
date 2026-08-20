@@ -31,6 +31,7 @@ import {
   type SystemConfig,
   DEFAULT_CURRENCY_CONFIG,
 } from '@/stores/system-config-store'
+import { setPreferredModelOrder } from '@/lib/model-preferences'
 
 interface StatusApiResponse {
   success: boolean
@@ -46,6 +47,7 @@ interface StatusApiResponse {
     usd_exchange_rate?: number
     custom_currency_symbol?: string
     custom_currency_exchange_rate?: number
+    preferred_models?: string[]
   }
 }
 
@@ -66,6 +68,8 @@ export function mapStatusDataToConfig(
 ): Partial<SystemConfig> {
   if (!data) return {}
 
+  setPreferredModelOrder(data.preferred_models)
+
   const has = (key: keyof StatusApiResponse['data']) =>
     Object.hasOwn(data, key)
   const nextConfig: Partial<SystemConfig> = {}
@@ -85,6 +89,9 @@ export function mapStatusDataToConfig(
   }
   if (has('display_token_stat_enabled')) {
     nextConfig.displayTokenStatEnabled = data.display_token_stat_enabled
+  }
+  if (has('preferred_models')) {
+    nextConfig.preferredModels = data.preferred_models ?? []
   }
 
   const currencyFields: (keyof StatusApiResponse['data'])[] = [

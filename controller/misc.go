@@ -49,6 +49,10 @@ func GetStatus(c *gin.Context) {
 
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
+	preferredModels := []string{}
+	if err := common.UnmarshalJsonStr(common.OptionMap["PreferredModels"], &preferredModels); err != nil {
+		preferredModels = []string{}
+	}
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -67,6 +71,7 @@ func GetStatus(c *gin.Context) {
 		"telegram_oauth":              common.TelegramOAuthEnabled,
 		"telegram_bot_name":           common.TelegramBotName,
 		"system_name":                 common.SystemName,
+		"preferred_models":            preferredModels,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
 		"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,

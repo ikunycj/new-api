@@ -48,6 +48,7 @@ export interface SystemConfig {
   footerHtml?: string
   demoSiteEnabled?: boolean
   displayTokenStatEnabled?: boolean
+  preferredModels: string[]
   currency: CurrencyConfig
 }
 
@@ -85,6 +86,7 @@ export const useSystemConfigStore = create<SystemConfigState>()(
       config: {
         systemName: DEFAULT_SYSTEM_NAME,
         logo: DEFAULT_LOGO,
+        preferredModels: [],
         currency: { ...DEFAULT_CURRENCY_CONFIG },
       },
       loading: true,

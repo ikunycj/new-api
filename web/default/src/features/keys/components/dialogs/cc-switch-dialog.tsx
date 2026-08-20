@@ -26,6 +26,8 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import type { TFunction } from 'i18next'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { getPreferredModelOrder } from '@/lib/model-preferences'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { Dialog } from '@/components/dialog'
 import {
@@ -164,6 +166,19 @@ function selectSuggestedModel(
 ): string {
   if (!models?.success) return ''
 
+  let endpoint: ApiKeyModelEndpoint = 'gemini'
+  if (app === 'claude') endpoint = 'anthropic'
+  if (app === 'codex') endpoint = 'openai-response'
+
+  const preferredModel = getPreferredModelOrder().find((preferred) =>
+    models.models.some(
+      (model) =>
+        model.id === preferred &&
+        model.supportedEndpointTypes.includes(endpoint)
+    )
+  )
+  if (preferredModel) return preferredModel
+
   const preferredFamilies: Record<CCSwitchApp, string[]> = {
     claude: ['claude', 'anthropic'],
     codex: ['gpt-', 'codex', 'o1', 'o3', 'o4'],
@@ -173,9 +188,6 @@ function selectSuggestedModel(
   const appModel = models.models.find((model) => {
     const id = model.id.toLowerCase()
     const owner = model.ownedBy?.toLowerCase() ?? ''
-    let endpoint: ApiKeyModelEndpoint = 'gemini'
-    if (app === 'claude') endpoint = 'anthropic'
-    if (app === 'codex') endpoint = 'openai-response'
     return (
       model.supportedEndpointTypes.includes(endpoint) &&
       family.some(
@@ -214,6 +226,9 @@ export function CCSwitchDialog(props: CCSwitchDialogProps) {
 
 function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   const { t } = useTranslation()
+  const preferredModels = useSystemConfigStore(
+    (state) => state.config.preferredModels
+  )
   const [app, setApp] = useState<CCSwitchApp>('claude')
   const [drafts, setDrafts] = useState(() =>
     createInitialDrafts(t, props.apiKey?.name)
@@ -265,7 +280,7 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
         },
       },
     }))
-  }, [app, modelsQuery.data, primaryModelValue, props.open])
+  }, [app, modelsQuery.data, primaryModelValue, preferredModels, props.open])
 
   useEffect(() => {
     return () => launchCleanupRef.current()

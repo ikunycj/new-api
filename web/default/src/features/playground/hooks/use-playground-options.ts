@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { getUserGroups, getUserModels } from '../api'
 import {
@@ -51,6 +52,9 @@ export function usePlaygroundOptions({
   updateConfig,
 }: UsePlaygroundOptionsParams) {
   const { t } = useTranslation()
+  const preferredModels = useSystemConfigStore(
+    (state) => state.config.preferredModels
+  )
 
   const {
     data: modelsData,
@@ -172,6 +176,7 @@ export function usePlaygroundOptions({
     setModels,
     shouldResolvePreferredGroup,
     updateConfig,
+    preferredModels,
   ])
 
   useEffect(() => {
