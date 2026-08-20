@@ -31,6 +31,12 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 		"default":   1,
 	})
 	require.NoError(t, err)
+	topupGroupRatio, err := common.Marshal(map[string]float64{
+		"Cluster_1": 0.8,
+		"Cluster_2": 0.9,
+		"default":   1,
+	})
+	require.NoError(t, err)
 	usableGroups, err := common.Marshal(map[string]string{
 		"Cluster_1": "旧套餐 1",
 		"Cluster_2": "旧套餐 2",
@@ -39,6 +45,7 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, testDB.Create(&[]Option{
 		{Key: "GroupRatio", Value: string(groupRatio)},
+		{Key: "TopupGroupRatio", Value: string(topupGroupRatio)},
 		{Key: "UserUsableGroups", Value: string(usableGroups)},
 	}).Error)
 	require.NoError(t, testDB.Create(&[]Cluster{
@@ -86,6 +93,14 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	assert.Equal(t, 0.8, ratios[UnifiedClusterBillingGroup])
 	assert.NotContains(t, ratios, "Cluster_1")
 	assert.NotContains(t, ratios, "Cluster_2")
+
+	var topupRatioOption Option
+	require.NoError(t, testDB.First(&topupRatioOption, "key = ?", "TopupGroupRatio").Error)
+	var topupRatios map[string]float64
+	require.NoError(t, common.UnmarshalJsonStr(topupRatioOption.Value, &topupRatios))
+	assert.Equal(t, 0.8, topupRatios[UnifiedClusterBillingGroup])
+	assert.NotContains(t, topupRatios, "Cluster_1")
+	assert.NotContains(t, topupRatios, "Cluster_2")
 
 	var groupsOption Option
 	require.NoError(t, testDB.First(&groupsOption, "key = ?", "UserUsableGroups").Error)

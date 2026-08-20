@@ -602,6 +602,40 @@ func migrateUnifiedClusterBillingGroup() error {
 			return err
 		}
 
+		// TopupGroupRatio is another user-facing billing map. Remove retired
+		// cluster package names here as well so they cannot remain selectable
+		// through the top-up flow.
+		var topupRatioOption Option
+		topupRatioByGroup := make(map[string]float64)
+		if err := tx.Where("key = ?", "TopupGroupRatio").First(&topupRatioOption).Error; err == nil && topupRatioOption.Value != "" {
+			if err := common.UnmarshalJsonStr(topupRatioOption.Value, &topupRatioByGroup); err != nil {
+				return fmt.Errorf("decode topup group ratios: %w", err)
+			}
+			if topupRatioByGroup == nil {
+				topupRatioByGroup = make(map[string]float64)
+			}
+		}
+		if ratio, ok := topupRatioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
+			ratio := float64(1)
+			for group := range legacyGroups {
+				if candidate, exists := topupRatioByGroup[group]; exists && candidate >= 0 {
+					ratio = candidate
+					break
+				}
+			}
+			topupRatioByGroup[UnifiedClusterBillingGroup] = ratio
+		}
+		for group := range legacyGroups {
+			delete(topupRatioByGroup, group)
+		}
+		topupRatioJSON, err := common.Marshal(topupRatioByGroup)
+		if err != nil {
+			return err
+		}
+		if err := tx.Save(&Option{Key: "TopupGroupRatio", Value: string(topupRatioJSON)}).Error; err != nil {
+			return err
+		}
+
 		var groupsOption Option
 		usableGroups := map[string]string{UnifiedClusterBillingGroup: "通用套餐"}
 		if err := tx.Where("key = ?", "UserUsableGroups").First(&groupsOption).Error; err == nil && groupsOption.Value != "" {
