@@ -2,7 +2,8 @@
 
 This directory installs the ikun.love branch as a complete, independent
 Docker stack on ssh ikun.love. The stack contains new-api, PostgreSQL, and
-Redis. It does not replace or connect to the running Sub2API service.
+Redis. The running Sub2API service is on ssh ikun.love-sub2api and is not
+replaced or connected to.
 
 | Setting | Isolated target contract |
 | --- | --- |
@@ -17,8 +18,9 @@ Redis. It does not replace or connect to the running Sub2API service.
 | PostgreSQL volume | ikun-new-api-postgres-data |
 | Redis volume | ikun-new-api-redis-data |
 | App status | http://127.0.0.1:3000/api/status |
-| Existing Sub2API port | 127.0.0.1:8080 |
-| Existing public health | https://ikun.love/api/v1/settings/public |
+| Legacy Sub2API SSH alias | ikun.love-sub2api |
+| Legacy Sub2API port | 127.0.0.1:8080 on ikun.love-sub2api |
+| Existing public health | https://ikun.love/api/v1/settings/public (old host until DNS cutover) |
 
 ## Isolation guarantees
 
@@ -32,8 +34,8 @@ Redis. It does not replace or connect to the running Sub2API service.
 - Redis uses its own container, persistent AOF volume, password, and database
   index 0. No Sub2API Redis keys are visible to it.
 - The app binds only to host loopback on port 3000 (metrics use loopback
-  8006). The public ikun.love root remains on Sub2API until a separate
-  routing request is authorized.
+  8006). The public ikun.love root remains on the old Sub2API host until a
+  separate DNS/routing request is authorized.
 - No command in these materials runs docker compose down, edits OpenResty, or
   stops/restarts sub2api.service.
 
@@ -44,23 +46,31 @@ Redis. It does not replace or connect to the running Sub2API service.
   1Panel services.
 - .env.example: non-secret configuration shape.
 - deployment.env.example: target operator settings.
-- bootstrap-config.sh: generates/validates .env, starts only this stack's data
-  services, and creates the least-privilege PostgreSQL role/database.
+- bootstrap-config.sh: validates the reviewed .env, starts only this stack's
+  data services, and creates the least-privilege PostgreSQL role/database.
 - bootstrap-image.sh: seeds the runtime image tag without starting any service.
-- baseline.sh: read-only inventory and Sub2API preservation baseline.
-- verify.sh: stack health, database/Redis isolation, and Sub2API checks.
+- baseline.sh: read-only inventory for the fresh host and port/collision guards.
+- verify.sh: stack health, database/Redis isolation, and fresh-host checks. The
+  legacy service is verified separately through `ikun.love-sub2api`.
 
-The real /opt/new-api/.env is generated with mode 600. Never copy the Sub2API
-environment into it, commit it, or print its values.
+The source of truth for this target is `deploy/ikun.love/.env`. Generate it
+locally with `.codex/skills/deploy-new-api/scripts/prepare-deployment-env.ps1`;
+the script never overwrites an existing file and prints only metadata and
+SHA-256. Never copy the Sub2API environment into it, commit it, or print its
+values. An administrator must review the generated file and explicitly approve
+its SHA before it can be uploaded. The installed `/opt/new-api/.env` must be
+mode 600 and byte-for-byte identical to that approved file.
 
 ## Preflight
 
-Confirm the target, DNS, and the existing service before any remote write:
+Confirm both SSH targets, DNS, and the old service before any remote write:
 
 ~~~powershell
 ssh -G ikun.love | Select-String '^(hostname|user|port|identityfile) '
+ssh -G ikun.love-sub2api | Select-String '^(hostname|user|port|identityfile) '
 Resolve-DnsName ikun.love
-ssh ikun.love 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
+ssh ikun.love 'docker ps -a --format "{{.Names}}"; ss -lnt | grep -E ":3000\\b|:8006\\b" || true'
+ssh ikun.love-sub2api 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
 ~~~
 
 Stage the materials and run the read-only baseline as admin:
@@ -70,8 +80,9 @@ sudo bash baseline.sh
 ~~~
 
 An absent /opt/new-api directory, stack containers, network, and volumes is
-expected on first install. The baseline must show the existing Sub2API service
-and its local/public health route available.
+expected on the new host's first install. The separate legacy baseline on
+`ikun.love-sub2api` must show Sub2API active and port 8080 bound; the public
+health URL should remain available before and after the install.
 
 ## Build and stage
 
@@ -81,22 +92,48 @@ record the manifest's binary and archive SHA-256 values:
 ~~~powershell
 $repoRoot = git rev-parse --show-toplevel
 $releaseCommit = (git ls-remote origin refs/heads/ikun.love).Split()[0]
-& "$repoRoot\\.codex\\skills\\deploy-new-api\\scripts\\build-release.ps1" -ReleaseRef ikun.love -Commit $releaseCommit
+& "$repoRoot\.codex\skills\deploy-new-api\scripts\build-release.ps1" `
+  -DeploymentAlias ikun.love -ReleaseRef ikun.love -Commit $releaseCommit
 ~~~
 
-Stage all deployment files in the admin home:
+The archive and manifest are written to
+`deploy/ikun.love/artifacts/<full-commit>/` and
+`deploy/ikun.love/artifacts/new-api-<full-commit>-linux-amd64.tar.gz`.
+
+Prepare the target environment locally. If the file is missing, the first
+command creates it and the process stops for administrator review. Do not
+upload or approve it automatically:
 
 ~~~powershell
-ssh ikun.love 'mkdir -p ~/ikun-new-api-stage'
+$envState = & "$repoRoot\.codex\skills\deploy-new-api\scripts\prepare-deployment-env.ps1" `
+  -DeploymentAlias ikun.love
+# Review deploy/ikun.love/.env without printing its values.
+# After approval, pass the reviewed SHA-256 explicitly:
+$approved = & "$repoRoot\.codex\skills\deploy-new-api\scripts\prepare-deployment-env.ps1" `
+  -DeploymentAlias ikun.love -ApproveSha256 <reviewed-env-sha256>
+if (-not $approved.ReadyForUpload) { throw 'Environment approval is required' }
+~~~
+
+Stage all deployment files in a mode-700 admin directory. Upload the approved
+environment file only after the review gate above:
+
+~~~powershell
+ssh ikun.love 'install -d -m 700 ~/ikun-new-api-stage'
+scp deploy/ikun.love/.env ikun.love:~/ikun-new-api-stage/.env
 scp deploy/ikun.love/docker-compose.1panel.yml ikun.love:~/ikun-new-api-stage/
 scp deploy/ikun.love/bootstrap-config.sh ikun.love:~/ikun-new-api-stage/
 scp deploy/ikun.love/bootstrap-image.sh ikun.love:~/ikun-new-api-stage/
 scp deploy/ikun.love/baseline.sh ikun.love:~/ikun-new-api-stage/
 scp deploy/ikun.love/verify.sh ikun.love:~/ikun-new-api-stage/
 scp .codex/skills/deploy-new-api/scripts/deploy-binary.sh ikun.love:~/ikun-new-api-stage/
-scp <release-archive> ikun.love:~/ikun-new-api-stage/
-ssh ikun.love 'sudo install -d -m 750 /opt/new-api /opt/new-api/data /opt/new-api/logs; sudo install -m 755 ~/ikun-new-api-stage/*.sh /opt/new-api/; sudo install -m 644 ~/ikun-new-api-stage/docker-compose.1panel.yml /opt/new-api/; sudo install -m 640 ~/ikun-new-api-stage/<archive-name> /opt/new-api/<archive-name>'
+scp deploy/ikun.love/artifacts/new-api-<full-commit>-linux-amd64.tar.gz ikun.love:~/ikun-new-api-stage/
+ssh ikun.love 'set -eu; chmod 600 ~/ikun-new-api-stage/.env; test ! -e /opt/new-api/.env && test ! -L /opt/new-api/.env; sudo install -d -m 750 /opt/new-api /opt/new-api/data /opt/new-api/logs; sudo install -m 600 ~/ikun-new-api-stage/.env /opt/new-api/.env; sudo install -m 755 ~/ikun-new-api-stage/*.sh /opt/new-api/; sudo install -m 644 ~/ikun-new-api-stage/docker-compose.1panel.yml /opt/new-api/; sudo install -m 640 ~/ikun-new-api-stage/<archive-name> /opt/new-api/<archive-name>'
 ~~~
+
+The install command is fail-closed: if `/opt/new-api/.env` already exists
+(including a symlink), it stops and does not overwrite it. Compare only
+SHA-256 fingerprints on the local machine, staging path, and installed path;
+never print or diff the file contents.
 
 Verify the archive hash on both machines before extraction:
 
@@ -107,14 +144,15 @@ ssh ikun.love 'sha256sum /opt/new-api/<archive-name>'
 
 ## Bootstrap the complete stack
 
-Run bootstrap-config.sh once. It creates the .env file, starts only
-ikun-new-api-postgres and ikun-new-api-redis, waits for both health checks,
+Run bootstrap-config.sh once with the administrator-approved SHA. It validates
+the installed .env, starts only ikun-new-api-postgres and ikun-new-api-redis,
+waits for both health checks,
 creates new_api owned by new_api_app, and verifies app-role connectivity. It is
 safe to retry after an interrupted first attempt:
 
 ~~~bash
 cd /opt/new-api
-sudo bash ./bootstrap-config.sh
+sudo bash ./bootstrap-config.sh --expected-env-sha <approved-env-sha256>
 sudo docker compose --project-name ikun-new-api --env-file .env \
   -f docker-compose.1panel.yml config --services
 ~~~
@@ -161,7 +199,7 @@ reconfigures Sub2API.
 
 ~~~bash
 cd /opt/new-api
-sudo env EXPECTED_BINARY_SHA=<binary-sha256> bash ./verify.sh
+sudo env EXPECTED_BINARY_SHA=<binary-sha256> EXPECTED_ENV_SHA=<approved-env-sha256> bash ./verify.sh
 sudo docker compose --project-name ikun-new-api --env-file .env \
   -f docker-compose.1panel.yml ps
 ~~~
@@ -170,11 +208,12 @@ Verification must prove:
 
 - all three dedicated containers are running and healthy;
 - the app is loopback-bound and its local status is successful;
-- the database owner is new_api_app, its role flags are non-superuser, and the
-  app probe uses new_api/new_api_app;
+- the database owner is new_api_app, its role is non-superuser,
+  non-createdb/non-createrole/non-replication/non-bypassrls/non-inherit with
+  no memberships, and the app probe uses new_api/new_api_app only;
 - Redis authentication works in the dedicated container;
-- sub2api.service, port 8080, and both existing local/public health checks
-  remain available;
+- the old host `ssh ikun.love-sub2api` still has `sub2api.service` active,
+  port 8080 bound, and its local/public health checks available;
 - no dedicated network member is a Sub2API or 1Panel container.
 
 If the app candidate fails local health, deploy-binary.sh automatically restores
@@ -184,7 +223,8 @@ migrations already applied by the candidate, so take a PostgreSQL backup before
 subsequent upgrades and retain the named volumes.
 
 New-api public routing is intentionally skipped for this parallel install;
-https://ikun.love continues to serve Sub2API. A fresh database has no admin
+`https://ikun.love` continues to serve Sub2API from `ikun.love-sub2api` until a
+separate DNS/routing cutover is authorized. A fresh database has no admin
 account yet. Use an SSH tunnel to open `http://127.0.0.1:3000/setup`, complete
 the first-run setup, and confirm `GET /api/setup` reports database type
 `postgres` (not SQLite) before using the instance.

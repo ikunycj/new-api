@@ -3,7 +3,8 @@ param(
     [string]$Repository = 'F:\Project\My-Project\new-api',
     [string]$Commit = 'master',
     [string]$ReleaseRef = 'master',
-    [string]$OutputDirectory = '',
+    [Parameter(Mandatory)]
+    [string]$DeploymentAlias,
     [switch]$KeepWorktree,
     [switch]$ForceRebuild,
     [switch]$ValidateOnly
@@ -60,6 +61,13 @@ foreach ($tool in @('git', 'bun', 'go', 'tar')) {
 $repoRoot = (Resolve-Path -LiteralPath $Repository).Path
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'go.mod'))) {
     throw "Not a new-api repository: $repoRoot"
+}
+
+if (
+    [string]::IsNullOrWhiteSpace($DeploymentAlias) -or
+    $DeploymentAlias -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+) {
+    throw "Invalid deployment SSH alias: $DeploymentAlias"
 }
 
 if (
@@ -145,20 +153,45 @@ if ($buildDrive.Free -lt $minimumFreeBytes) {
     throw "The build drive needs at least 4 GiB free; available: $([Math]::Round($buildDrive.Free / 1GB, 2)) GiB"
 }
 
-if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Join-Path $repoParent 'new-api-releases'
+$deployRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'deploy'))
+$deploymentDirectory = [IO.Path]::GetFullPath((Join-Path $deployRoot $DeploymentAlias))
+$deployRootWithSeparator = $deployRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (-not $deploymentDirectory.StartsWith($deployRootWithSeparator, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Deployment path escapes deploy directory: $deploymentDirectory"
 }
-$outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
+if (Test-Path -LiteralPath $deploymentDirectory) {
+    $deploymentItem = Get-Item -LiteralPath $deploymentDirectory
+    if (($deploymentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Deployment directory must not be a symlink or reparse point: $deploymentDirectory"
+    }
+}
+$outputRoot = [IO.Path]::GetFullPath((Join-Path $deploymentDirectory 'artifacts'))
+$outputRootWithSeparator = $outputRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (Test-Path -LiteralPath $outputRoot) {
+    $outputItem = Get-Item -LiteralPath $outputRoot
+    if (($outputItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Artifact output directory must not be a symlink or reparse point: $outputRoot"
+    }
+}
 $artifactDirectory = Join-Path $outputRoot $commitSha
 $binaryPath = Join-Path $artifactDirectory 'new-api'
 $manifestPath = Join-Path $artifactDirectory 'manifest.json'
 $archivePath = Join-Path $outputRoot "new-api-$commitSha-linux-amd64.tar.gz"
 $partialArchivePath = "$archivePath.partial-$PID"
 $artifactExists = (Test-Path -LiteralPath $artifactDirectory) -or (Test-Path -LiteralPath $archivePath)
+foreach ($existingTarget in @($artifactDirectory, $archivePath)) {
+    if (Test-Path -LiteralPath $existingTarget) {
+        $existingItem = Get-Item -LiteralPath $existingTarget
+        if (($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Artifact target must not be a symlink or reparse point: $existingTarget"
+        }
+    }
+}
 
 if ($ValidateOnly) {
     [pscustomobject]@{
         Repository = $repoRoot
+        DeploymentAlias = $DeploymentAlias
         ReleaseRef = $ReleaseRef
         Commit = $commitSha
         Worktree = $worktree
@@ -177,7 +210,6 @@ if ($ValidateOnly) {
     exit 0
 }
 
-$outputRootWithSeparator = $outputRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 foreach ($target in @($artifactDirectory, $archivePath, $partialArchivePath)) {
     $fullTarget = [IO.Path]::GetFullPath($target)
     if (-not $fullTarget.StartsWith($outputRootWithSeparator, [StringComparison]::OrdinalIgnoreCase)) {
@@ -286,6 +318,7 @@ try {
     Invoke-Native -Command 'go' -Arguments @('version', '-m', $binaryPath) -WorkingDirectory $worktree
     $binarySha = (Get-FileHash -LiteralPath $binaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
+        deployment_alias = $DeploymentAlias
         release_ref = $ReleaseRef
         commit = $commitSha
         short_commit = $shortSha

@@ -7,8 +7,6 @@ IMAGE_TAG=${IMAGE_TAG:-new-api:ikun}
 POSTGRES_CONTAINER=${POSTGRES_CONTAINER:-ikun-new-api-postgres}
 REDIS_CONTAINER=${REDIS_CONTAINER:-ikun-new-api-redis}
 NETWORK_NAME=${NETWORK_NAME:-ikun-new-api-network}
-LEGACY_POSTGRES_CONTAINER=${LEGACY_POSTGRES_CONTAINER:-1Panel-postgresql-8Kr6}
-LEGACY_REDIS_CONTAINER=${LEGACY_REDIS_CONTAINER:-1Panel-redis-xsdn}
 
 if docker info >/dev/null 2>&1; then
   DOCKER=(docker)
@@ -55,12 +53,11 @@ else
   echo "network=$NETWORK_NAME missing"
 fi
 
-# Read-only guards for the existing service. The independent stack must never
-# attach to or recreate these 1Panel data containers.
-inspect_container legacy_postgres "$LEGACY_POSTGRES_CONTAINER"
-inspect_container legacy_redis "$LEGACY_REDIS_CONTAINER"
-printf 'sub2api_service='; systemctl is-active sub2api.service 2>/dev/null || true
-printf 'sub2api_port_8080='; ss -lnt 2>/dev/null | awk '$4 ~ /:8080$/ {found=1} END {print found ? "bound" : "unbound"}'
-printf 'sub2api_local_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:8080/api/v1/settings/public 2>/dev/null || echo 000
-printf 'sub2api_public_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://ikun.love/api/v1/settings/public 2>/dev/null || echo 000
+# This is a fresh host. The old Sub2API service is on the separate
+# `ikun.love-sub2api` SSH target and is checked there before/after deployment.
+# Keep the new host free of the legacy port and report the public origin only as
+# an informational DNS/routing observation.
+printf 'legacy_sub2api_host=ikun.love-sub2api\n'
+printf 'new_host_port8080='; ss -lnt 2>/dev/null | awk '$4 ~ /:8080$/ {found=1} END {print found ? "bound" : "unbound"}'
+printf 'public_origin_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://ikun.love/api/v1/settings/public 2>/dev/null || echo 000
 printf 'new_api_local_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:3000/api/status 2>/dev/null || echo 000

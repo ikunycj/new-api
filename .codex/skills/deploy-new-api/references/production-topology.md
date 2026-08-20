@@ -10,7 +10,7 @@ Ask before every deployment whether the target is `aliyun` (development), `allto
 | --- | --- | --- | --- |
 | Development/test | `aliyun` | Verify from local SSH config | The remote test service and local development process both use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis; keep those services isolated from production. |
 | Production | `alltokenapi` | `154.37.213.1` (verify live) | Production release and rollback workflow below. |
-| Production | `ikun.love` | Verify from local SSH config | Dedicated `ikun.love` release ref and deployment materials; do not reuse the AllToken snapshot. |
+| Production | `ikun.love` | Verify from local SSH config | Fresh dedicated host for the `ikun.love` release ref; legacy Sub2API remains on `ikun.love-sub2api`. |
 
 ## Service map
 
@@ -37,22 +37,26 @@ server snapshot. Verify every mutable value during the read-only baseline:
 | --- | --- | --- |
 | SSH alias | `ikun.love` | Use this alias for every remote command. |
 | Release ref | `origin/ikun.love` | Verify local, fetched, and live remote SHAs match. |
-| Existing public site | `https://ikun.love` | Verify the existing Sub2API `/health` route; do not change the root proxy during the isolated install. |
+| Existing public site | `https://ikun.love` | Currently served by the old `ikun.love-sub2api` host; do not change DNS or routing during the isolated install. |
 | Deploy materials | `deploy/ikun.love/` | Use its Compose and target parameter templates. |
 | Deploy directory | `/opt/new-api` (verify) | Preserve `.env`, `data`, and `logs`. |
-| App service/container | `new-api` / `ikun-new-api` | Recreate only the new-api service; leave `sub2api.service` untouched. |
+| App service/container | `new-api` / `ikun-new-api` | Recreate only the new-api service on the fresh host. Do not connect to the legacy host. |
 | App port | `127.0.0.1:3000` | Check local `/api/status`. |
 | Compose file | `docker-compose.1panel.yml` | Complete three-service Compose with private network and named volumes. |
 | Docker network | `ikun-new-api-network` | Dedicated network; never attach to `1panel-network`. |
 | PostgreSQL | `ikun-new-api-postgres` | Dedicated `postgres:18.4-alpine` container and volume; app uses only restricted `new_api_app` in `new_api`. |
 | Redis | `ikun-new-api-redis` | Dedicated `redis:8.8.0` container and AOF volume; use logical database `0`. |
-| Existing 1Panel services | `1Panel-postgresql-8Kr6` / `1Panel-redis-xsdn` | Must remain running and untouched for Sub2API. |
-| Runtime `.env` | `/opt/new-api/.env`, mode `600` | Preserve secrets; never print or replace them. |
+| Legacy Sub2API host | `ikun.love-sub2api` | Verify `sub2api.service`, port 8080, and its local/public health before and after; never issue writes there. |
+| Legacy 1Panel services | On `ikun.love-sub2api` only | Must remain running and untouched; never attach the new host's network to them. |
+| Env source of truth | `deploy/ikun.love/.env` | Generate locally, ignore from Git, and require administrator approval of its SHA before first upload. |
+| Runtime `.env` | `/opt/new-api/.env`, mode `600` | It must match the approved local fingerprint; never print, diff, or replace a different file. |
 
-The live `ikun.love` server currently runs `/opt/sub2api/sub2api` as
-`sub2api.service` on port 8080, with OpenResty proxying the public root to that
-port. The new-api install is parallel and loopback-only; do not stop or edit
-that service, its database, Redis db0, or the OpenResty configuration.
+The new `ssh ikun.love` host is a fresh Ubuntu machine; it does not contain
+Sub2API, its 1Panel services, or port 8080. The old `ssh ikun.love-sub2api`
+host runs `/opt/sub2api/sub2api` as `sub2api.service` on port 8080, with
+OpenResty proxying the public root there. The new-api install is loopback-only;
+verify the old host read-only before and after, and do not stop or edit its
+service, database, Redis db0, OpenResty, or DNS.
 
 Verify current host memory and disk before writes. Do not build the frontend,
 Go binary, or Docker multi-stage image on the target host.
@@ -89,4 +93,10 @@ Do not use `docker compose down`. Do not restart Docker as part of a normal rele
 For `ikun.love`, substitute the verified target directory, service/container,
 PostgreSQL, and Redis names from the dedicated target contract and
 `deploy/ikun.love/deployment.env.example`. Do not expand `.env` while checking
-the baseline.
+the baseline. On the separate legacy host, capture only the following
+read-only preservation baseline from the workstation:
+
+```powershell
+ssh ikun.love-sub2api 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
+curl.exe -fsS https://ikun.love/api/v1/settings/public > $null
+```

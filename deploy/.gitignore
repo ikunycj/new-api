@@ -10,6 +10,10 @@ observability/**/data/
 !ikun.love/
 !ikun.love/**
 ikun.love/.env
+ikun.love/.env.tmp.*
+ikun.love/.env.approved.sha256
 ikun.love/deployment.env
 ikun.love/*.tar.gz
 ikun.love/.staging/
+ikun.love/artifacts/
+ikun.love/migration-reports/

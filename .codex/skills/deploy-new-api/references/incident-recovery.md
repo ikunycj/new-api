@@ -36,8 +36,8 @@ For `aliyun`/`alltokenapi`, do not recreate either existing data service and do
 not run `docker compose down`. For `ikun.love`, the dedicated PostgreSQL and
 Redis services belong to the new stack and may be started with
 `docker compose --project-name ikun-new-api up -d postgres redis` if they are
-missing; never touch `1Panel-postgresql-8Kr6`, `1Panel-redis-xsdn`, or
-Sub2API.
+missing; never connect the fresh host to the legacy `ikun.love-sub2api`
+1Panel PostgreSQL/Redis or Sub2API services.
 
 ## First `ikun.love` install dependency failure
 
@@ -82,4 +82,4 @@ curl -v http://127.0.0.1:3000/api/status
 curl -v "$PUBLIC_STATUS_URL" # only when a public URL is part of the selected contract
 ```
 
-Set `PUBLIC_STATUS_URL` only when the selected target intentionally routes the new-api service publicly. For the isolated `ikun.love` first install it remains empty; check the existing Sub2API public route separately. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
+Set `PUBLIC_STATUS_URL` only when the selected target intentionally routes the new-api service publicly. For the isolated `ikun.love` first install it remains empty; check the existing Sub2API public route from the workstation and verify its service on `ssh ikun.love-sub2api` separately. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
