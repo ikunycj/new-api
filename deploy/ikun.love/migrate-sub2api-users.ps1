@@ -13,7 +13,12 @@ param(
     [string]$SnapshotOutputPath,
     [ValidateNotNullOrEmpty()]
     [string]$ReportPath,
+    [ValidateRange(0, 128)]
+    [int]$SourceIdModulo = 0,
+    [ValidateRange(0, 127)]
+    [int]$SourceIdRemainder = 0,
     [switch]$Apply,
+    [switch]$FastApply,
     [switch]$DetailedReport
 )
 
@@ -65,39 +70,58 @@ function Get-EmailFingerprint([string]$Address) {
     }
 }
 
+function Get-ValueFingerprint([string]$Value) {
+    if ($null -eq $Value) { return '' }
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([Convert]::ToHexString($sha.ComputeHash($bytes))).ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Get-ReportEmail([string]$Address) {
     # Full migration reports must not become an export of the source address list.
     return "email:$((Get-EmailFingerprint $Address))"
 }
 
 function Invoke-Ssh([string]$Alias, [string]$RemoteCommand, [string]$InputText = '') {
-    $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = 'ssh'
-    [void]$startInfo.ArgumentList.Add('-T')
-    [void]$startInfo.ArgumentList.Add('-o')
-    [void]$startInfo.ArgumentList.Add('BatchMode=yes')
-    [void]$startInfo.ArgumentList.Add('-o')
-    [void]$startInfo.ArgumentList.Add('ConnectTimeout=15')
-    [void]$startInfo.ArgumentList.Add($Alias)
-    [void]$startInfo.ArgumentList.Add($RemoteCommand)
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.UseShellExecute = $false
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
-    if ($InputText) {
-        $process.StandardInput.Write($InputText)
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $startInfo = [Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = 'ssh'
+        [void]$startInfo.ArgumentList.Add('-T')
+        [void]$startInfo.ArgumentList.Add('-o')
+        [void]$startInfo.ArgumentList.Add('BatchMode=yes')
+        [void]$startInfo.ArgumentList.Add('-o')
+        [void]$startInfo.ArgumentList.Add('ConnectTimeout=15')
+        [void]$startInfo.ArgumentList.Add($Alias)
+        [void]$startInfo.ArgumentList.Add($RemoteCommand)
+        $startInfo.RedirectStandardInput = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.UseShellExecute = $false
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        if ($InputText) {
+            $process.StandardInput.Write($InputText)
+        }
+        $process.StandardInput.Close()
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        $exitCode = $process.ExitCode
+        $process.Dispose()
+        if ($exitCode -eq 0) { return $stdout.Trim() }
+
+        $transient = $stderr -match '(?i)(connection (closed|reset|refused)|broken pipe|timed out|kex_exchange|ssh_exchange|no route to host)'
+        if (-not $transient -or $attempt -eq 5) {
+            throw "ssh $Alias failed: $($stderr.Trim())"
+        }
+        Start-Sleep -Milliseconds ([int](250 * [math]::Pow(2, $attempt - 1)))
     }
-    $process.StandardInput.Close()
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-    if ($process.ExitCode -ne 0) {
-        throw "ssh $Alias failed: $($stderr.Trim())"
-    }
-    return $stdout.Trim()
+    throw "ssh $Alias failed after retries"
 }
 
 function Invoke-SourceSql([string]$Sql) {
@@ -124,7 +148,7 @@ function SqlNumber([object]$Value) {
 function Get-SourceUser([string]$Address) {
     $emailSql = $Address.Replace("'", "''")
     $sql = @"
-select encode(convert_to(json_build_object(
+select replace(encode(convert_to(json_build_object(
   'user', json_build_object(
     'id', u.id,
     'email', u.email,
@@ -146,10 +170,16 @@ select encode(convert_to(json_build_object(
     'quota_used', k.quota_used::text,
     'ip_whitelist', coalesce(k.ip_whitelist, '[]'::jsonb),
     'ip_blacklist', coalesce(k.ip_blacklist, '[]'::jsonb),
-    'rate_limit_5h', k.rate_limit_5h::text,
-    'rate_limit_1d', k.rate_limit_1d::text,
-    'rate_limit_7d', k.rate_limit_7d::text,
-    'created_at', extract(epoch from k.created_at)::bigint,
+     'rate_limit_5h', k.rate_limit_5h::text,
+     'rate_limit_1d', k.rate_limit_1d::text,
+     'rate_limit_7d', k.rate_limit_7d::text,
+     'usage_5h', k.usage_5h::text,
+     'usage_1d', k.usage_1d::text,
+     'usage_7d', k.usage_7d::text,
+     'window_5h_start', extract(epoch from k.window_5h_start)::bigint,
+     'window_1d_start', extract(epoch from k.window_1d_start)::bigint,
+     'window_7d_start', extract(epoch from k.window_7d_start)::bigint,
+     'created_at', extract(epoch from k.created_at)::bigint,
     'expires_at', extract(epoch from k.expires_at)::bigint,
     'group', g.name
   ) order by k.id) from api_keys k left join groups g on g.id = k.group_id
@@ -171,7 +201,7 @@ select encode(convert_to(json_build_object(
     'group', g.name,
     'subscription_type', coalesce(g.subscription_type,'')
   ) order by s.id) from user_subscriptions s join groups g on g.id = s.group_id
-    where s.user_id = u.id and s.deleted_at is null), '[]'::json))::text,'UTF8'),'base64')
+    where s.user_id = u.id and s.deleted_at is null), '[]'::json))::text,'UTF8'),'base64'), E'\n', '')
 from users u
 where lower(trim(u.email)) = lower('$emailSql') and u.deleted_at is null;
 "@
@@ -190,7 +220,7 @@ function Get-SourceSnapshotSql {
     # sessions per user. The result remains base64 encoded on stdout so neither
     # passwords nor API keys can be emitted accidentally by the shell transcript.
     return @"
-select encode(convert_to(coalesce(json_agg(json_build_object(
+select replace(encode(convert_to(coalesce(json_agg(json_build_object(
   'user', json_build_object(
     'id', u.id,
     'email', u.email,
@@ -212,10 +242,16 @@ select encode(convert_to(coalesce(json_agg(json_build_object(
     'quota_used', k.quota_used::text,
     'ip_whitelist', coalesce(k.ip_whitelist, '[]'::jsonb),
     'ip_blacklist', coalesce(k.ip_blacklist, '[]'::jsonb),
-    'rate_limit_5h', k.rate_limit_5h::text,
-    'rate_limit_1d', k.rate_limit_1d::text,
-    'rate_limit_7d', k.rate_limit_7d::text,
-    'created_at', extract(epoch from k.created_at)::bigint,
+     'rate_limit_5h', k.rate_limit_5h::text,
+     'rate_limit_1d', k.rate_limit_1d::text,
+     'rate_limit_7d', k.rate_limit_7d::text,
+     'usage_5h', k.usage_5h::text,
+     'usage_1d', k.usage_1d::text,
+     'usage_7d', k.usage_7d::text,
+     'window_5h_start', extract(epoch from k.window_5h_start)::bigint,
+     'window_1d_start', extract(epoch from k.window_1d_start)::bigint,
+     'window_7d_start', extract(epoch from k.window_7d_start)::bigint,
+     'created_at', extract(epoch from k.created_at)::bigint,
     'expires_at', extract(epoch from k.expires_at)::bigint,
     'group', g.name
   ) order by k.id) from api_keys k left join groups g on g.id = k.group_id
@@ -238,7 +274,7 @@ select encode(convert_to(coalesce(json_agg(json_build_object(
     'subscription_type', coalesce(g.subscription_type,'')
   ) order by s.id) from user_subscriptions s join groups g on g.id = s.group_id
     where s.user_id = u.id and s.deleted_at is null), '[]'::json)
-) order by u.id), '[]'::json)::text, 'UTF8'), 'base64')
+) order by u.id), '[]'::json)::text, 'UTF8'), 'base64'), E'\n', '')
 from users u
 where u.deleted_at is null and u.role = 'user';
 "@
@@ -291,8 +327,15 @@ select coalesce(json_agg(json_build_object(
 from users u
 where lower(trim(u.email)) = lower('$emailSql') and u.deleted_at is null;
 "@
-    $raw = Invoke-TargetSql $sql
-    return ($raw | ConvertFrom-Json)
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $raw = Invoke-TargetSql $sql
+        try {
+            return ($raw | ConvertFrom-Json)
+        } catch {
+            if ($attempt -eq 3) { throw }
+            Start-Sleep -Milliseconds (250 * $attempt)
+        }
+    }
 }
 
 function Get-TargetGroupRatio {
@@ -340,7 +383,7 @@ function Get-TargetPreflight([object[]]$Sources, [hashtable]$TokenRowsBySourceId
     }) -join ','
     $keyCte = if ($keyValues) { "key_values(key) as (values $keyValues)," } else { "key_values(key) as (select null::text where false)," }
     $mappingSelect = if ($MappingTableExists) {
-        "coalesce((select json_agg(json_build_object('source_id',m.source_user_id,'target_id',m.target_user_id,'quota',m.imported_quota,'tokens',m.imported_token_count)) from sub2api_user_migration_mappings m join source_users s on s.source_id=m.source_user_id),'[]'::json)"
+        "coalesce((select json_agg(json_build_object('source_id',m.source_user_id,'target_id',m.target_user_id,'quota',m.imported_quota,'tokens',m.imported_token_count,'fingerprint',btrim(m.source_fingerprint))) from sub2api_user_migration_mappings m join source_users s on s.source_id=m.source_user_id),'[]'::json)"
     } else {
         "'[]'::json"
     }
@@ -348,21 +391,32 @@ function Get-TargetPreflight([object[]]$Sources, [hashtable]$TokenRowsBySourceId
 with source_users(source_id,email) as (values $sourceValues),
 $keyCte
 target_users as (
-  select u.id, lower(trim(u.email)) as email, u.quota, u.used_quota,
-         (select count(*) from tokens t where t.user_id=u.id) as token_count
+  select u.id, lower(trim(u.email)) as email, u.password, u.created_at, u.deleted_at,
+         u.quota, u.used_quota,
+         (select count(*) from tokens t where t.user_id=u.id) as token_count,
+         coalesce((select json_agg(t.key order by t.id) from tokens t where t.user_id=u.id),'[]'::json) as token_keys
   from users u join source_users s on lower(trim(u.email))=s.email
 ), target_keys as (
   select t.key, t.user_id from tokens t join key_values k on k.key=t.key
 )
-select encode(convert_to(json_build_object(
-  'users', coalesce((select json_agg(json_build_object('id',id,'email',email,'quota',quota,'used_quota',used_quota,'token_count',token_count)) from target_users),'[]'::json),
+select replace(encode(convert_to(json_build_object(
+  'users', coalesce((select json_agg(json_build_object('id',id,'email',email,'password',password,'created_at',created_at,'deleted_at',deleted_at,'quota',quota,'used_quota',used_quota,'token_count',token_count,'token_keys',token_keys)) from target_users),'[]'::json),
   'mappings', $mappingSelect,
   'keys', coalesce((select json_agg(json_build_object('key',target_keys.key,'user_id',target_keys.user_id)) from target_keys),'[]'::json)
-)::text,'UTF8'),'base64');
+)::text,'UTF8'),'base64'), E'\n', '');
 "@
-    $raw = Invoke-TargetSql $sql
-    if (-not $raw) { return [pscustomobject]@{ Users = @{}; Mappings = @{}; Keys = @{} } }
-    $state = ConvertFrom-Base64Utf8 $raw | ConvertFrom-Json
+    $state = $null
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $raw = Invoke-TargetSql $sql
+        if (-not $raw) { return [pscustomobject]@{ Users = @{}; Mappings = @{}; Keys = @{} } }
+        try {
+            $state = ConvertFrom-Base64Utf8 $raw | ConvertFrom-Json
+            break
+        } catch {
+            if ($attempt -eq 3) { throw }
+            Start-Sleep -Milliseconds (250 * $attempt)
+        }
+    }
     $users = @{}
     foreach ($row in @($state.users)) {
         $email = Normalize-Email ([string]$row.email)
@@ -427,7 +481,14 @@ function Get-Quota([object]$Source) {
 }
 
 function Get-QuotaBreakdown([object]$Source) {
-    $balance = [math]::Max([decimal]0, (To-Decimal $Source.user.balance))
+    $rawBalance = To-Decimal $Source.user.balance
+    $balanceWarnings = @()
+    if ($rawBalance -lt 0) {
+        # The target quota column cannot represent a debt. Preserve this
+        # decision in the audit instead of silently losing it.
+        $balanceWarnings += 'negative_balance_clamped'
+    }
+    $balance = [math]::Max([decimal]0, $rawBalance)
     $subscriptionUsd = [decimal]0
     $activeSubscriptions = 0
     $issues = @()
@@ -468,6 +529,7 @@ function Get-QuotaBreakdown([object]$Source) {
         SubscriptionUsd = $subscriptionUsd
         ActiveSubscriptions = $activeSubscriptions
         Issues = @($issues)
+        BalanceWarnings = @($balanceWarnings)
     }
 }
 
@@ -544,10 +606,49 @@ function Get-TokenRows([object]$Source, [object]$TargetRatios) {
     return $rows
 }
 
+function ConvertTo-KeyDecimal([object]$Value, [string]$Field, [int64]$KeyId) {
+    if ($null -eq $Value -or [string]::IsNullOrEmpty([string]$Value)) { return [decimal]0 }
+    try {
+        $parsed = [decimal]::Parse([string]$Value, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        throw "key:${KeyId}:${Field}:invalid_numeric"
+    }
+    if ($parsed -lt 0) { throw "key:${KeyId}:${Field}:negative" }
+    return $parsed
+}
+
+function ConvertTo-KeyInt64([object]$Value, [string]$Field, [int64]$KeyId) {
+    if ($null -eq $Value -or [string]::IsNullOrEmpty([string]$Value)) { return $null }
+    try {
+        return [int64]$Value
+    } catch {
+        throw "key:${KeyId}:${Field}:invalid_integer"
+    }
+}
+
+function ConvertTo-KeyQuota([decimal]$Usd, [string]$Field, [int64]$KeyId) {
+    if ($Usd -lt 0) { throw "key:${KeyId}:${Field}:negative" }
+    $quotaDecimal = [decimal]::Floor(($Usd / 5) * $quotaPerCny)
+    if ($quotaDecimal -gt [decimal]2147483647) {
+        throw "key:${KeyId}:${Field}:quota_exceeds_target_int32"
+    }
+    return [int64]$quotaDecimal
+}
+
+function ConvertTo-CompactJson([object]$Value) {
+    if ($null -eq $Value) { return 'null' }
+    return ($Value | ConvertTo-Json -Depth 10 -Compress)
+}
+
 function Get-TokenPlan([object]$Source, [object]$TargetRatios) {
     $rows = @()
     $issues = @()
     $aliases = @{}
+    $policyCount = 0
+    $normalizedFormatCount = 0
+    $anomalyCount = 0
+    $quotaAnomalyCount = 0
+    $nameTooLongCount = 0
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $seenKeys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $mapping = @{
@@ -560,22 +661,31 @@ function Get-TokenPlan([object]$Source, [object]$TargetRatios) {
         'ChatGPT 羊毛福利' = '羊毛福利'
     }
     foreach ($key in @($Source.keys)) {
-        $rawKey = ([string]$key.key).Trim()
-        if ($rawKey -notmatch '^sk-[0-9a-fA-F]{64}$') {
-            $issues += "key:$($key.id):unsupported_format"
+        $keyId = [int64]$key.id
+        $rawKey = [string]$key.key
+        if ([string]::IsNullOrEmpty($rawKey)) {
+            $issues += "key:$($key.id):empty"
             continue
         }
-        try {
-            Assert-SupportedKeyPolicy $key
-        } catch {
-            # Keep the diagnostic useful without ever echoing the secret value.
-            $issues += "key:$($key.id):$($_.Exception.Message -replace '^.*? has ', '')"
+        $normalizedKey = if ($rawKey.StartsWith('sk-', [StringComparison]::Ordinal)) { $rawKey.Substring(3) } else { $rawKey }
+        if ([string]::IsNullOrEmpty($normalizedKey)) {
+            $issues += "key:$($key.id):empty_after_prefix"
             continue
         }
-        $normalizedKey = $rawKey.Substring(3)
+        if ($normalizedKey.Length -lt 16 -or $normalizedKey.Length -gt 128) {
+            $issues += "key:$($key.id):target_length_out_of_range"
+            continue
+        }
+        if ($normalizedKey -notmatch '^[A-Za-z0-9_-]+$') {
+            $issues += "key:$($key.id):unsupported_characters"
+            continue
+        }
         if (-not $seenKeys.Add($normalizedKey)) {
             $issues += "key:$($key.id):duplicate"
             continue
+        }
+        if (-not $rawKey.StartsWith('sk-', [StringComparison]::Ordinal) -or $rawKey -notmatch '^sk-[0-9a-fA-F]{64}$') {
+            $normalizedFormatCount++
         }
         $sourceGroup = [string]$key.group
         $candidate = if ($mapping.ContainsKey($sourceGroup)) { $mapping[$sourceGroup] } else { 'ChatGPT Plus' }
@@ -590,22 +700,113 @@ function Get-TokenPlan([object]$Source, [object]$TargetRatios) {
             $aliasKey = "$alias -> $targetGroup"
             if ($aliases.ContainsKey($aliasKey)) { $aliases[$aliasKey]++ } else { $aliases[$aliasKey] = 1 }
         }
+        try {
+            $limitUsd = ConvertTo-KeyDecimal $key.quota 'quota' $keyId
+            $usedUsd = ConvertTo-KeyDecimal $key.quota_used 'quota_used' $keyId
+            $limitQuota = ConvertTo-KeyQuota $limitUsd 'quota' $keyId
+            $usedQuota = ConvertTo-KeyQuota $usedUsd 'quota_used' $keyId
+            $rate5 = ConvertTo-KeyDecimal $key.rate_limit_5h 'rate_limit_5h' $keyId
+            $rate1d = ConvertTo-KeyDecimal $key.rate_limit_1d 'rate_limit_1d' $keyId
+            $rate7d = ConvertTo-KeyDecimal $key.rate_limit_7d 'rate_limit_7d' $keyId
+            $usage5 = ConvertTo-KeyDecimal $key.usage_5h 'usage_5h' $keyId
+            $usage1d = ConvertTo-KeyDecimal $key.usage_1d 'usage_1d' $keyId
+            $usage7d = ConvertTo-KeyDecimal $key.usage_7d 'usage_7d' $keyId
+            $window5 = ConvertTo-KeyInt64 $key.window_5h_start 'window_5h_start' $keyId
+            $window1d = ConvertTo-KeyInt64 $key.window_1d_start 'window_1d_start' $keyId
+            $window7d = ConvertTo-KeyInt64 $key.window_7d_start 'window_7d_start' $keyId
+        } catch {
+            $issues += $_.Exception.Message
+            continue
+        }
+        $anomalies = @()
+        $quotaExhausted = $false
+        if ($limitUsd -eq 0 -and $usedUsd -gt 0) {
+            $anomalies += 'unlimited_key_has_usage'
+            $quotaAnomalyCount++
+        } elseif ($limitUsd -gt 0 -and $usedUsd -gt $limitUsd) {
+            $anomalies += 'quota_used_exceeds_quota'
+            $quotaAnomalyCount++
+            $quotaExhausted = $true
+        } elseif ($limitUsd -gt 0 -and ($usedUsd -ge $limitUsd -or $usedQuota -ge $limitQuota)) {
+            $anomalies += 'quota_exhausted'
+            $quotaAnomalyCount++
+            $quotaExhausted = $true
+        }
+        $remainQuota = if ($limitUsd -eq 0) { 0 } else { [int64][math]::Max([decimal]0, $limitQuota - $usedQuota) }
+        $unlimited = $limitUsd -eq 0
+        $allowIps = @($key.ip_whitelist | ForEach-Object { [string]$_ } | Where-Object { $_ }) -join "`n"
+        $policyFlags = @()
+        if ($rate5 -ne 0) { $policyFlags += 'rate_limit_5h' }
+        if ($rate1d -ne 0) { $policyFlags += 'rate_limit_1d' }
+        if ($rate7d -ne 0) { $policyFlags += 'rate_limit_7d' }
+        if ($usage5 -ne 0) { $policyFlags += 'usage_5h' }
+        if ($usage1d -ne 0) { $policyFlags += 'usage_1d' }
+        if ($usage7d -ne 0) { $policyFlags += 'usage_7d' }
+        if ($null -ne $window5) { $policyFlags += 'window_5h_start' }
+        if ($null -ne $window1d) { $policyFlags += 'window_1d_start' }
+        if ($null -ne $window7d) { $policyFlags += 'window_7d_start' }
+        if (-not (Test-EmptyJsonList $key.ip_blacklist)) { $policyFlags += 'ip_blacklist_unmapped' }
+        $policyBlocked = $policyFlags.Count -gt 0
+        if ($policyBlocked) {
+            $policyCount++
+            # The target token schema has no equivalent enforcement for
+            # these source policies. Preserve the metadata and keep the
+            # imported token disabled until it can be reviewed.
+            $anomalies += 'policy_unrepresentable_disabled'
+        }
+        $name = [string]$key.name
+        $nameLengthBytes = [Text.Encoding]::UTF8.GetByteCount($name)
+        if ($nameLengthBytes -gt 50) {
+            $anomalies += 'name_too_long_for_controller'
+            $nameTooLongCount++
+        }
+        if ($anomalies.Count -gt 0) { $anomalyCount += $anomalies.Count }
         $expiredTime = if ($null -eq $key.expires_at) { -1 } else { [int64]$key.expires_at }
+        $ipWhitelistText = ConvertTo-CompactJson $key.ip_whitelist
+        $ipBlacklistText = ConvertTo-CompactJson $key.ip_blacklist
         $rows += [pscustomobject]@{
-            Name = [string]$key.name
+            SourceKeyId = $keyId
+            Name = $name
             Key = $normalizedKey
-            Status = if ([string]$key.status -eq 'active' -and ($expiredTime -eq -1 -or $expiredTime -gt $now)) { 1 } else { 0 }
+            Status = if ([string]$key.status -eq 'active' -and ($expiredTime -eq -1 -or $expiredTime -gt $now) -and -not $quotaExhausted -and -not $policyBlocked) { 1 } else { 0 }
             CreatedTime = if ($key.created_at) { [int64]$key.created_at } else { [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
             ExpiredTime = $expiredTime
             SourceGroup = $sourceGroup
             Group = $targetGroup
+            SourceQuotaUsd = $limitUsd
+            SourceUsedQuotaUsd = $usedUsd
+            RemainQuota = $remainQuota
+            UsedQuota = $usedQuota
+            UnlimitedQuota = $unlimited
+            QuotaExhausted = $quotaExhausted
+            PolicyBlocked = $policyBlocked
+            AllowIps = $allowIps
+            RateLimit5h = $rate5
+            RateLimit1d = $rate1d
+            RateLimit7d = $rate7d
+            Usage5h = $usage5
+            Usage1d = $usage1d
+            Usage7d = $usage7d
+            Window5hStart = $window5
+            Window1dStart = $window1d
+            Window7dStart = $window7d
+            IpWhitelist = $ipWhitelistText
+            IpBlacklist = $ipBlacklistText
+            PolicyFlags = @($policyFlags)
+            Anomalies = @($anomalies)
+            NameLengthBytes = $nameLengthBytes
         }
     }
     return [pscustomobject]@{
         Rows = @($rows)
         Issues = @($issues)
         Aliases = $aliases
-        SpecialCount = $issues.Count + $aliases.Count
+        SpecialCount = $normalizedFormatCount + $policyCount + $issues.Count + $anomalyCount
+        PolicyCount = $policyCount
+        NormalizedFormatCount = $normalizedFormatCount
+        AnomalyCount = $anomalyCount
+        QuotaAnomalyCount = $quotaAnomalyCount
+        NameTooLongCount = $nameTooLongCount
     }
 }
 
@@ -630,8 +831,28 @@ create table if not exists sub2api_user_migration_mappings (
   source_fingerprint char(64) not null,
   imported_quota bigint not null,
   imported_token_count integer not null,
-  created_at bigint not null
+  created_at bigint not null,
+  merge_mode text not null default 'clean'
 );
+alter table sub2api_user_migration_mappings add column if not exists merge_mode text not null default 'clean';
+create table if not exists sub2api_api_key_migration_policies (
+  source_user_id bigint not null,
+  source_key_id bigint not null,
+  target_token_id bigint not null references tokens(id),
+  rate_limit_5h numeric(20,8) not null default 0,
+  rate_limit_1d numeric(20,8) not null default 0,
+  rate_limit_7d numeric(20,8) not null default 0,
+  usage_5h numeric(20,8) not null default 0,
+  usage_1d numeric(20,8) not null default 0,
+  usage_7d numeric(20,8) not null default 0,
+  window_5h_start bigint,
+  window_1d_start bigint,
+  window_7d_start bigint,
+  ip_whitelist text,
+  ip_blacklist text,
+  created_at bigint not null,
+  primary key (source_user_id, source_key_id)
+ );
 '@ | Out-Null
 }
 
@@ -679,13 +900,50 @@ function Write-TargetAudit([object]$Item, [string]$Fingerprint, [object]$TargetB
             token_count = $_.token_count
         }
     })
+    $tokenTransforms = @($Item.Tokens | ForEach-Object {
+        [pscustomobject]@{
+            source_key_id = [int64]$_.SourceKeyId
+            key_fingerprint = Get-ValueFingerprint ([string]$_.Key)
+            source_quota_usd = $_.SourceQuotaUsd
+            source_used_quota_usd = $_.SourceUsedQuotaUsd
+            converted_grant_quota = [int64]$_.RemainQuota + [int64]$_.UsedQuota
+            converted_used_quota = [int64]$_.UsedQuota
+            converted_remain_quota = [int64]$_.RemainQuota
+            unlimited_quota = [bool]$_.UnlimitedQuota
+            quota_exhausted = [bool]$_.QuotaExhausted
+            status = [int]$_.Status
+            name_length_bytes = [int]$_.NameLengthBytes
+            source_group = $_.SourceGroup
+            target_group = $_.Group
+            policy_flags = @($_.PolicyFlags)
+            anomalies = @($_.Anomalies)
+        }
+    })
+    $policyFlags = @($Item.Tokens | ForEach-Object { @($_.PolicyFlags) } | Where-Object { $_ } | Sort-Object -Unique)
+    $anomalies = @($Item.Tokens | ForEach-Object { @($_.Anomalies) } | Where-Object { $_ } | Sort-Object -Unique)
     $audit = [pscustomobject]@{
         batch_id = $migrationStamp
         source_user_id = [int64]$Item.Source.user.id
         source_email_ref = Get-ReportEmail ([string]$Item.Source.user.email)
         source_fingerprint = $Fingerprint
-        calculated_quota = [int64]$Item.Quota
+        quota_conversion = [pscustomobject]@{
+            source_balance_usd = $Item.BalanceUsd
+            source_subscription_usd = $Item.SubscriptionUsd
+            balance_warnings = @($Item.BalanceWarnings)
+            conversion_usd_per_cny = [decimal]5
+            quota_per_cny = $quotaPerCny
+            calculated_quota = [int64]$Item.Quota
+        }
         token_count = $Item.Tokens.Count
+        policy_summary = [pscustomobject]@{
+            policy_key_count = [int]$Item.PolicyKeys
+            normalized_key_count = [int]$Item.NormalizedKeys
+            quota_anomaly_count = [int]$Item.QuotaAnomalyCount
+            name_too_long_count = [int]$Item.NameTooLongCount
+            flags = $policyFlags
+            anomalies = $anomalies
+        }
+        token_transforms = $tokenTransforms
         token_group_mappings = @($Item.Tokens | ForEach-Object {
             [pscustomobject]@{ source = $_.SourceGroup; target = $_.Group }
         })
@@ -714,11 +972,11 @@ function New-ImportSql([object]$Source, [int64]$Quota, [object[]]$TokenRows, [st
     $fingerprintExpr = SqlText $Fingerprint
     $values = @()
     foreach ($token in $TokenRows) {
-        $values += "(" + (SqlText $token.Key) + "," + (SqlNumber $token.Status) + "," + (SqlText $token.Name) + "," + (SqlNumber $token.CreatedTime) + "," + (SqlNumber $token.ExpiredTime) + "," + (SqlText $token.Group) + ")"
+        $values += "(" + (SqlNumber $token.SourceKeyId) + "," + (SqlText $token.Key) + "," + (SqlNumber $token.Status) + "," + (SqlText $token.Name) + "," + (SqlNumber $token.CreatedTime) + "," + (SqlNumber $token.ExpiredTime) + "," + (SqlNumber $token.RemainQuota) + "," + ($(if ($token.UnlimitedQuota) { 'true' } else { 'false' })) + "," + (SqlNumber $token.UsedQuota) + "," + (SqlText $token.AllowIps) + "," + (SqlText $token.Group) + "," + (SqlNumber $token.RateLimit5h) + "," + (SqlNumber $token.RateLimit1d) + "," + (SqlNumber $token.RateLimit7d) + "," + (SqlNumber $token.Usage5h) + "," + (SqlNumber $token.Usage1d) + "," + (SqlNumber $token.Usage7d) + "," + (SqlNumber $token.Window5hStart) + "," + (SqlNumber $token.Window1dStart) + "," + (SqlNumber $token.Window7dStart) + "," + (SqlText $token.IpWhitelist) + "," + (SqlText $token.IpBlacklist) + ")"
     }
     # Keep the CTE valid for users who have no source keys; the WHERE clause
     # below turns the sentinel row into zero inserts.
-    $tokenValues = if ($values.Count -gt 0) { $values -join "," } else { "(NULL::text,0,NULL::text,0,-1,''::text)" }
+    $tokenValues = if ($values.Count -gt 0) { $values -join "," } else { "(NULL::bigint,NULL::text,0,NULL::text,0,-1,0,false,0,NULL::text,''::text,0,0,0,0,0,0,NULL::bigint,NULL::bigint,NULL::bigint,NULL::text,NULL::text)" }
     return @"
 begin;
 select pg_advisory_xact_lock(hashtextextended('$($email.Replace("'", "''"))', 0));
@@ -727,22 +985,112 @@ with inserted_user as (
   select $usernameExpr,$password,$usernameExpr,1,1,$emailExpr,$Quota,0,0,'default',$remarkExpr,$createdAt,0
   where not exists (select 1 from users where lower(trim(email))=lower(trim($emailExpr)))
   returning id
-), inserted_tokens as (
+), token_values(source_key_id,key,status,name,created_time,expired_time,remain_quota,unlimited_quota,used_quota,allow_ips,group_name,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist) as (values $tokenValues), inserted_tokens as (
   insert into tokens (user_id,key,status,name,created_time,accessed_time,expired_time,remain_quota,unlimited_quota,model_limits_enabled,model_limits,allow_ips,used_quota,"group",group_candidates,cross_group_retry)
-  select inserted_user.id, token_values.key, token_values.status, token_values.name, token_values.created_time, 0, token_values.expired_time, 0, true, false, '', '', 0, token_values.group_name, '', false
-  from inserted_user cross join (values $tokenValues) as token_values(key,status,name,created_time,expired_time,group_name)
+  select inserted_user.id, token_values.key, token_values.status, token_values.name, token_values.created_time, 0, token_values.expired_time, token_values.remain_quota, token_values.unlimited_quota, false, '', token_values.allow_ips, token_values.used_quota, token_values.group_name, '', false
+  from inserted_user cross join token_values
   where token_values.key is not null
-  returning id
+  returning id,key
+), inserted_policies as (
+  insert into sub2api_api_key_migration_policies (source_user_id,source_key_id,target_token_id,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist,created_at)
+  select $($Source.user.id),v.source_key_id,t.id,v.rate_limit_5h,v.rate_limit_1d,v.rate_limit_7d,v.usage_5h,v.usage_1d,v.usage_7d,v.window_5h_start::bigint,v.window_1d_start::bigint,v.window_7d_start::bigint,v.ip_whitelist,v.ip_blacklist,extract(epoch from now())::bigint
+  from inserted_tokens t join token_values v on v.key=t.key
+  on conflict (source_user_id,source_key_id) do nothing
+  returning source_key_id
 ), inserted_mapping as (
-  insert into sub2api_user_migration_mappings (source_user_id,source_email,target_user_id,migration_batch_id,source_fingerprint,imported_quota,imported_token_count,created_at)
-  select $($Source.user.id),$emailExpr,inserted_user.id,$batchExpr,$fingerprintExpr,$Quota,$($TokenRows.Count),extract(epoch from now())::bigint
+  insert into sub2api_user_migration_mappings (source_user_id,source_email,target_user_id,migration_batch_id,source_fingerprint,imported_quota,imported_token_count,created_at,merge_mode)
+  select $($Source.user.id),$emailExpr,inserted_user.id,$batchExpr,$fingerprintExpr,$Quota,(select count(*) from inserted_tokens),extract(epoch from now())::bigint,'clean'
   from inserted_user
   where not exists (select 1 from sub2api_user_migration_mappings where source_user_id=$($Source.user.id))
   returning source_user_id
 )
-select (select count(*) from inserted_user) as users_inserted, (select count(*) from inserted_tokens) as tokens_inserted, (select count(*) from inserted_mapping) as mappings_inserted;
+select (select count(*) from inserted_user) as users_inserted, (select count(*) from inserted_tokens) as tokens_inserted, (select count(*) from inserted_mapping) as mappings_inserted, (select count(*) from inserted_policies) as policies_inserted;
 commit;
 "@
+}
+
+function New-ReconcileSql([object]$Source, [object]$Target, [int64]$ImportedQuota, [string]$Fingerprint) {
+    $email = ([string]$Source.user.email).Trim().ToLowerInvariant()
+    $emailExpr = SqlText $email
+    $batchExpr = SqlText $migrationStamp
+    $fingerprintExpr = SqlText $Fingerprint
+    return @"
+begin;
+select pg_advisory_xact_lock(hashtextextended('$($email.Replace("'", "''"))', 0));
+with inserted_mapping as (
+  insert into sub2api_user_migration_mappings (source_user_id,source_email,target_user_id,migration_batch_id,source_fingerprint,imported_quota,imported_token_count,created_at,merge_mode)
+  select $($Source.user.id),$emailExpr,$($Target.id),$batchExpr,$fingerprintExpr,$ImportedQuota,0,extract(epoch from now())::bigint,'reconciled_existing'
+  where not exists (select 1 from sub2api_user_migration_mappings where source_user_id=$($Source.user.id))
+  returning source_user_id
+)
+select 0,0,(select count(*) from inserted_mapping),0;
+commit;
+"@
+}
+
+function New-MergeSql([object]$Source, [object]$Target, [int64]$Quota, [object[]]$TokenRows, [string]$Fingerprint) {
+    $email = ([string]$Source.user.email).Trim().ToLowerInvariant()
+    $emailExpr = SqlText $email
+    $batchExpr = SqlText $migrationStamp
+    $fingerprintExpr = SqlText $Fingerprint
+    $values = @()
+    foreach ($token in $TokenRows) {
+        $values += "(" + (SqlNumber $token.SourceKeyId) + "," + (SqlText $token.Key) + "," + (SqlNumber $token.Status) + "," + (SqlText $token.Name) + "," + (SqlNumber $token.CreatedTime) + "," + (SqlNumber $token.ExpiredTime) + "," + (SqlNumber $token.RemainQuota) + "," + ($(if ($token.UnlimitedQuota) { 'true' } else { 'false' })) + "," + (SqlNumber $token.UsedQuota) + "," + (SqlText $token.AllowIps) + "," + (SqlText $token.Group) + "," + (SqlNumber $token.RateLimit5h) + "," + (SqlNumber $token.RateLimit1d) + "," + (SqlNumber $token.RateLimit7d) + "," + (SqlNumber $token.Usage5h) + "," + (SqlNumber $token.Usage1d) + "," + (SqlNumber $token.Usage7d) + "," + (SqlNumber $token.Window5hStart) + "," + (SqlNumber $token.Window1dStart) + "," + (SqlNumber $token.Window7dStart) + "," + (SqlText $token.IpWhitelist) + "," + (SqlText $token.IpBlacklist) + ")"
+    }
+    $tokenValues = if ($values.Count -gt 0) { $values -join "," } else { "(NULL::bigint,NULL::text,0,NULL::text,0,-1,0,false,0,NULL::text,''::text,0,0,0,0,0,0,NULL::bigint,NULL::bigint,NULL::bigint,NULL::text,NULL::text)" }
+    return @"
+begin;
+select pg_advisory_xact_lock(hashtextextended('$($email.Replace("'", "''"))', 0));
+with token_values(source_key_id,key,status,name,created_time,expired_time,remain_quota,unlimited_quota,used_quota,allow_ips,group_name,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist) as (values $tokenValues),
+eligible as (
+  select v.* from token_values v
+  where v.key is not null and not exists (select 1 from tokens x where x.key=v.key)
+), updated_user as (
+  update users set quota=coalesce(quota,0)+$Quota
+  where id=$($Target.id) and not exists (select 1 from sub2api_user_migration_mappings where source_user_id=$($Source.user.id))
+  returning id
+), inserted_tokens as (
+  insert into tokens (user_id,key,status,name,created_time,accessed_time,expired_time,remain_quota,unlimited_quota,model_limits_enabled,model_limits,allow_ips,used_quota,"group",group_candidates,cross_group_retry)
+  select $($Target.id),v.key,v.status,v.name,v.created_time,0,v.expired_time,v.remain_quota,v.unlimited_quota,false,'',v.allow_ips,v.used_quota,v.group_name,'',false
+  from eligible v
+  where exists (select 1 from updated_user)
+  returning id,key
+), inserted_policies as (
+  insert into sub2api_api_key_migration_policies (source_user_id,source_key_id,target_token_id,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist,created_at)
+  select $($Source.user.id),v.source_key_id,t.id,v.rate_limit_5h,v.rate_limit_1d,v.rate_limit_7d,v.usage_5h,v.usage_1d,v.usage_7d,v.window_5h_start::bigint,v.window_1d_start::bigint,v.window_7d_start::bigint,v.ip_whitelist,v.ip_blacklist,extract(epoch from now())::bigint
+  from inserted_tokens t join token_values v on v.key=t.key
+  on conflict (source_user_id,source_key_id) do nothing
+  returning source_key_id
+), inserted_mapping as (
+  insert into sub2api_user_migration_mappings (source_user_id,source_email,target_user_id,migration_batch_id,source_fingerprint,imported_quota,imported_token_count,created_at,merge_mode)
+  select $($Source.user.id),$emailExpr,$($Target.id),$batchExpr,$fingerprintExpr,$Quota,(select count(*) from inserted_tokens),extract(epoch from now())::bigint,'merge'
+  where exists (select 1 from updated_user)
+    and not exists (select 1 from sub2api_user_migration_mappings where source_user_id=$($Source.user.id))
+  returning source_user_id
+)
+select 0,(select count(*) from inserted_tokens),(select count(*) from inserted_mapping),(select count(*) from inserted_policies);
+commit;
+"@
+}
+
+function Test-TargetLooksMigrated([object]$Plan, [object]$Target) {
+    $sourcePassword = [string]$Plan.Source.user.password_hash
+    $targetPassword = [string]$Target.password
+    $samePassword = $sourcePassword -and $targetPassword -and ($sourcePassword -eq $targetPassword)
+    $sameCreated = $false
+    if ($null -ne $Target.created_at -and $null -ne $Plan.Source.user.created_at) {
+        $sameCreated = [int64]$Target.created_at -eq [int64]$Plan.Source.user.created_at
+    }
+    $targetKeys = @($Target.token_keys | ForEach-Object { [string]$_ } | Where-Object { $_ })
+    $targetKeySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($key in $targetKeys) { [void]$targetKeySet.Add($key) }
+    $sourceKeys = @($Plan.Tokens | ForEach-Object { [string]$_.Key })
+    $allSourceKeysPresent = $sourceKeys.Count -gt 0 -and @($sourceKeys | Where-Object { -not $targetKeySet.Contains($_) }).Count -eq 0
+    # Reconcile only when the preserved creation timestamp and the complete
+    # normalized Key set both match. A password match or one matching Key
+    # alone is not enough evidence to suppress a quota import.
+    if ($sameCreated -and ($sourceKeys.Count -eq 0 -or $allSourceKeysPresent)) { return $true }
+    return $false
 }
 
 $targetRatios = Get-TargetGroupRatio
@@ -752,6 +1100,19 @@ $report = @()
 $pending = @()
 $sourceEntries = @()
 $modeName = 'gray'
+
+if ($SourceIdModulo -eq 0 -and $SourceIdRemainder -ne 0) {
+    throw 'SourceIdRemainder requires a positive SourceIdModulo'
+}
+if ($FastApply -and -not $Apply) {
+    throw 'FastApply requires Apply'
+}
+if ($SourceIdModulo -eq 1 -and $SourceIdRemainder -ne 0) {
+    throw 'SourceIdRemainder must be 0 when SourceIdModulo is 1'
+}
+if ($SourceIdModulo -gt 0 -and $SourceIdRemainder -ge $SourceIdModulo) {
+    throw 'SourceIdRemainder must be smaller than SourceIdModulo'
+}
 
 if ($PSCmdlet.ParameterSetName -eq 'All') {
     $modeName = 'all'
@@ -785,6 +1146,16 @@ if ($PSCmdlet.ParameterSetName -eq 'All') {
         }
         $sourceEntries += [pscustomobject]@{ Address = $address; Source = $source }
     }
+}
+
+# Parallel apply workers may use disjoint source-user ID residues. The full
+# preflight remains the default; a shard only narrows the work after the
+# source snapshot has been read, so each worker still validates its own rows.
+if ($SourceIdModulo -gt 0) {
+    $sourceEntries = @($sourceEntries | Where-Object {
+        (([int64]$_.Source.user.id % [int64]$SourceIdModulo) -eq [int64]$SourceIdRemainder)
+    })
+    $modeName = "$modeName-shard-$SourceIdRemainder-of-$SourceIdModulo"
 }
 
 # A normalized-email collision is a hard stop in full mode. Never pick one row
@@ -821,17 +1192,21 @@ foreach ($entry in $sourceEntries) {
     if ([int64]$quotaInfo.Quota -gt 2147483647) { $sourceBlocked += 'quota_exceeds_target_int32' }
     if ($tokenPlan.Issues.Count -gt 0) { $sourceBlocked += @($tokenPlan.Issues) }
     $aliasText = @($tokenPlan.Aliases.GetEnumerator() | ForEach-Object { "$($_.Key) x$($_.Value)" }) -join ';'
+    $anomalyText = @(@($tokenPlan.Rows | ForEach-Object { @($_.Anomalies) }) + @($quotaInfo.BalanceWarnings) | Where-Object { $_ } | Sort-Object -Unique) -join ';'
     if ($sourceBlocked.Count -gt 0) {
         $report += [pscustomobject]@{ Email = Get-ReportEmail $address; Result = if ($tokenPlan.Issues.Count -gt 0) { 'source_key_policy_blocked' } else { 'source_blocked' }; SourceId = $source.user.id; TargetId = ''; Quota = $quotaInfo.Quota; BalanceUsd = $quotaInfo.BalanceUsd; SubscriptionUsd = $quotaInfo.SubscriptionUsd; Tokens = $tokenPlan.Rows.Count; SpecialKeys = $tokenPlan.SpecialCount; GroupAliases = $aliasText; Detail = ($sourceBlocked -join ';') }
         continue
     }
-    $plan = [pscustomobject]@{ Address = $address; Source = $source; Quota = $quotaInfo.Quota; BalanceUsd = $quotaInfo.BalanceUsd; SubscriptionUsd = $quotaInfo.SubscriptionUsd; Tokens = @($tokenPlan.Rows); SpecialKeys = $tokenPlan.SpecialCount; GroupAliases = $aliasText }
+    $plan = [pscustomobject]@{ Address = $address; Source = $source; Quota = $quotaInfo.Quota; BalanceUsd = $quotaInfo.BalanceUsd; SubscriptionUsd = $quotaInfo.SubscriptionUsd; BalanceWarnings = @($quotaInfo.BalanceWarnings); Tokens = @($tokenPlan.Rows); SpecialKeys = $tokenPlan.SpecialCount; PolicyKeys = $tokenPlan.PolicyCount; NormalizedKeys = $tokenPlan.NormalizedFormatCount; AnomalyCount = $tokenPlan.AnomalyCount; QuotaAnomalyCount = $tokenPlan.QuotaAnomalyCount; NameTooLongCount = $tokenPlan.NameTooLongCount; AnomalySummary = $anomalyText; GroupAliases = $aliasText }
     $plans += $plan
     $tokenRowsBySourceId[[string]$source.user.id] = @($tokenPlan.Rows)
 }
 
 $preflightSources = @($plans | ForEach-Object { $_.Source })
 $targetPreflight = Get-TargetPreflight $preflightSources $tokenRowsBySourceId $mappingTableExists
+$pendingClean = @()
+$pendingMerge = @()
+$pendingReconcile = @()
 $batchKeyOwners = @{}
 foreach ($plan in $plans) {
     foreach ($token in @($plan.Tokens)) {
@@ -843,27 +1218,80 @@ foreach ($plan in $plans) {
     $sourceId = [string]$plan.Source.user.id
     $mapping = if ($targetPreflight.Mappings.ContainsKey($sourceId)) { $targetPreflight.Mappings[$sourceId] } else { $null }
     if ($null -ne $mapping) {
-        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'already_migrated'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; GroupAliases = $plan.GroupAliases; Detail = '' }
+        $currentFingerprint = Get-SourceFingerprint $plan.Source
+        if ([string]$mapping.fingerprint -ne $currentFingerprint) {
+            $mappedTarget = @($targetPreflight.Users[$plan.Address] | Where-Object { [string]$_.id -eq [string]$mapping.target_id }) | Select-Object -First 1
+            # A mapping is the one-time grant ledger. Mutable source balances
+            # and subscription windows may change after it was written; do
+            # not charge them again when the target identity and complete Key
+            # set still match. A Key/identity mismatch remains a blocker.
+            $mutableRefreshSafe = $null -ne $mappedTarget -and (Test-TargetLooksMigrated $plan $mappedTarget)
+            if ($mutableRefreshSafe) {
+                $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'already_migrated'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = 'mapping fingerprint changed only in mutable source usage fields; quota and complete Key set still match' }
+                continue
+            }
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'source_changed_requires_review'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = 'existing mapping fingerprint differs from current source snapshot; no automatic re-import' }
+            continue
+        }
+        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'already_migrated'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = $plan.AnomalySummary }
         continue
     }
     $targetRows = if ($targetPreflight.Users.ContainsKey($plan.Address)) { @($targetPreflight.Users[$plan.Address]) } else { @() }
     if ($targetRows.Count -gt 0) {
-        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_conflict_skipped'; SourceId = $sourceId; TargetId = $targetRows[0].id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; GroupAliases = $plan.GroupAliases; Detail = "target rows=$($targetRows.Count);target_quota=$($targetRows[0].quota);target_used_quota=$($targetRows[0].used_quota);target_tokens=$($targetRows[0].token_count)" }
+        if ($targetRows.Count -gt 1) {
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_duplicate_email_blocked'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = "target rows=$($targetRows.Count)" }
+            continue
+        }
+        $target = $targetRows[0]
+        if ($null -ne $target.deleted_at -and -not [string]::IsNullOrWhiteSpace([string]$target.deleted_at)) {
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_deleted_email_blocked'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = 'target email belongs to a soft-deleted user' }
+            continue
+        }
+        try {
+            $targetQuota = [int64]$target.quota
+            $targetUsedQuota = [int64]$target.used_quota
+        } catch {
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_quota_invalid_blocked'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = 'target quota is not an integer' }
+            continue
+        }
+        if ($targetQuota -lt 0 -or $targetUsedQuota -lt 0 -or $targetQuota -gt 2147483647 -or $targetUsedQuota -gt 2147483647 -or $plan.Quota -gt (2147483647 - $targetQuota)) {
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_quota_overflow_blocked'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = "target_quota=$targetQuota;target_used_quota=$targetUsedQuota;incoming_quota=$($plan.Quota)" }
+            continue
+        }
+        $foreignKeyConflict = @($plan.Tokens | Where-Object {
+            $targetPreflight.Keys.ContainsKey($_.Key) -and [string]$targetPreflight.Keys[$_.Key].user_id -ne [string]$target.id
+        })
+        if ($foreignKeyConflict.Count -gt 0) {
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_key_conflict_blocked'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = "foreign target key conflicts=$($foreignKeyConflict.Count)" }
+            continue
+        }
+        if (Test-TargetLooksMigrated $plan $target) {
+            # A reconciled account receives no new quota. Keep the mapping's
+            # imported_quota at zero so a later audit cannot mistake the
+            # target's pre-existing balance for a newly imported grant.
+            $pendingReconcile += [pscustomobject]@{ Plan = $plan; Target = $target; ImportedQuota = [int64]0 }
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'reconciled_existing'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = "target_quota=$($target.quota);target_used_quota=$($target.used_quota);target_tokens=$($target.token_count);anomalies=$($plan.AnomalySummary)" }
+        } else {
+            $pendingMerge += [pscustomobject]@{ Plan = $plan; Target = $target }
+            $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'merge_ready'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = "target_quota=$($target.quota);target_used_quota=$($target.used_quota);target_tokens=$($target.token_count);target_password_preserved=true;anomalies=$($plan.AnomalySummary)" }
+        }
         continue
     }
     $targetKeyConflict = @($plan.Tokens | Where-Object { $targetPreflight.Keys.ContainsKey($_.Key) })
     if ($targetKeyConflict.Count -gt 0) {
-        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_key_conflict_skipped'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; GroupAliases = $plan.GroupAliases; Detail = "conflicting keys=$($targetKeyConflict.Count)" }
+        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'target_key_conflict_blocked'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = "conflicting keys=$($targetKeyConflict.Count)" }
         continue
     }
     $batchConflict = @($plan.Tokens | Where-Object { $batchKeyOwners[$_.Key].Count -gt 1 })
     if ($batchConflict.Count -gt 0) {
-        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'batch_key_conflict_blocked'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; GroupAliases = $plan.GroupAliases; Detail = "duplicate keys in batch=$($batchConflict.Count)" }
+        $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'batch_key_conflict_blocked'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; GroupAliases = $plan.GroupAliases; Detail = "duplicate keys in batch=$($batchConflict.Count)" }
         continue
     }
-    $pending += $plan
-    $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'ready'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; GroupAliases = $plan.GroupAliases; Detail = '' }
+    $pendingClean += $plan
+    $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'ready'; SourceId = $sourceId; TargetId = ''; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = $plan.AnomalySummary }
 }
+
+$pending = @($pendingClean)
 
 Write-Output ('mode=' + ($(if ($Apply) { 'apply' } else { 'dry-run' })) + ";scope=$modeName;source_count=$($sourceEntries.Count)")
 $summary = @($report | Group-Object Result | ForEach-Object { "$($_.Name)=$($_.Count)" }) -join ';'
@@ -885,34 +1313,74 @@ Write-Output "report=$reportPath"
 if (-not $Apply) { return }
 
 # Applying a full snapshot with hidden blockers would create a partial migration
-# that looks successful. Fail closed; `already_migrated` is the only non-ready
-# result allowed in an idempotent rerun.
-$blocking = @($report | Where-Object { $_.Result -notin @('ready', 'already_migrated') })
+# that looks successful. Fail closed; only explicit import/reconcile/merge results
+# and an idempotent already_migrated result are allowed.
+$blocking = @($report | Where-Object { $_.Result -notin @('ready', 'reconciled_existing', 'merge_ready', 'already_migrated') })
 if ($blocking.Count -gt 0) {
     throw "apply blocked by $($blocking.Count) non-ready source rows; resolve dry-run blockers first"
 }
 
 $applied = @()
-if ($pending.Count -gt 0) { Ensure-MigrationTable }
-foreach ($item in $pending) {
+if ($pendingClean.Count -gt 0 -or $pendingMerge.Count -gt 0 -or $pendingReconcile.Count -gt 0) { Ensure-MigrationTable }
+foreach ($item in $pendingClean) {
     $fingerprint = Get-SourceFingerprint $item.Source
-    $targetBefore = @(Get-TargetState $item.Address)
-    if ($targetBefore.Count -gt 0) { throw "target conflict appeared before import for $(Get-ReportEmail $item.Address)" }
-    if ($null -ne (Get-TargetMapping ([int64]$item.Source.user.id))) { throw "migration mapping appeared before import for $(Get-ReportEmail $item.Address)" }
-    if ((Get-TargetTokenConflictCount $item.Tokens) -gt 0) { throw "target key conflict appeared before import for $(Get-ReportEmail $item.Address)" }
-    $auditPath = Write-TargetAudit $item $fingerprint $targetBefore
+    $targetBefore = @()
+    if (-not $FastApply) {
+        $targetBefore = @(Get-TargetState $item.Address)
+        if ($targetBefore.Count -gt 0) { throw "target conflict appeared before import for $(Get-ReportEmail $item.Address)" }
+        if ($null -ne (Get-TargetMapping ([int64]$item.Source.user.id))) { throw "migration mapping appeared before import for $(Get-ReportEmail $item.Address)" }
+        if ((Get-TargetTokenConflictCount $item.Tokens) -gt 0) { throw "target key conflict appeared before import for $(Get-ReportEmail $item.Address)" }
+    }
+    $auditPath = if ($FastApply) { 'mapping_table' } else { Write-TargetAudit $item $fingerprint $targetBefore }
     $sql = New-ImportSql $item.Source $item.Quota $item.Tokens $fingerprint
     $result = Invoke-TargetSql $sql
     $parts = $result -split '\|'
-    if ($parts.Count -lt 3 -or $parts[0] -ne '1' -or [int]$parts[1] -ne $item.Tokens.Count -or $parts[2] -ne '1') {
+    if ($parts.Count -lt 4 -or $parts[0] -ne '1' -or [int]$parts[1] -ne $item.Tokens.Count -or $parts[2] -ne '1' -or [int]$parts[3] -ne $item.Tokens.Count) {
         throw "import did not insert exactly one user and $($item.Tokens.Count) tokens for $(Get-ReportEmail $item.Address): $result"
     }
-    $target = @(Get-TargetState $item.Address)
-    if ($target.Count -ne 1) { throw "post-import target lookup failed for $(Get-ReportEmail $item.Address)" }
-    $applied += [pscustomobject]@{ Email = Get-ReportEmail $item.Address; SourceId = $item.Source.user.id; TargetId = $target[0].id; Quota = $item.Quota; Tokens = $item.Tokens.Count; Audit = $auditPath }
+    $targetId = ''
+    if (-not $FastApply) {
+        $target = @(Get-TargetState $item.Address)
+        if ($target.Count -ne 1) { throw "post-import target lookup failed for $(Get-ReportEmail $item.Address)" }
+        $targetId = $target[0].id
+    }
+    $applied += [pscustomobject]@{ Email = Get-ReportEmail $item.Address; SourceId = $item.Source.user.id; TargetId = $targetId; Quota = $item.Quota; Tokens = $item.Tokens.Count; Audit = $auditPath }
 }
 
-([pscustomobject]@{ created_at = (Get-Date).ToUniversalTime().ToString('o'); scope = $modeName; applied = $applied; skipped = $report | Where-Object Result -ne 'ready' }) |
+foreach ($entry in $pendingReconcile) {
+    $item = $entry.Plan
+    $fingerprint = Get-SourceFingerprint $item.Source
+    $targetBefore = @()
+    if (-not $FastApply) {
+        $targetBefore = @(Get-TargetState $item.Address)
+        if ($targetBefore.Count -ne 1 -or [string]$targetBefore[0].id -ne [string]$entry.Target.id) { throw "reconcile target changed for $(Get-ReportEmail $item.Address)" }
+        if ($null -ne (Get-TargetMapping ([int64]$item.Source.user.id))) { throw "mapping appeared before reconcile for $(Get-ReportEmail $item.Address)" }
+    }
+    $auditPath = if ($FastApply) { 'mapping_table' } else { Write-TargetAudit $item $fingerprint $targetBefore }
+    $result = Invoke-TargetSql (New-ReconcileSql $item.Source $entry.Target $entry.ImportedQuota $fingerprint)
+    $parts = $result -split '\|'
+    if ($parts.Count -lt 4 -or $parts[2] -ne '1') { throw "reconcile did not insert mapping for $(Get-ReportEmail $item.Address): $result" }
+    $applied += [pscustomobject]@{ Email = Get-ReportEmail $item.Address; SourceId = $item.Source.user.id; TargetId = $entry.Target.id; Quota = 0; Tokens = 0; Mode = 'reconciled_existing'; Audit = $auditPath }
+}
+
+foreach ($entry in $pendingMerge) {
+    $item = $entry.Plan
+    $fingerprint = Get-SourceFingerprint $item.Source
+    $targetBefore = @()
+    if (-not $FastApply) {
+        $targetBefore = @(Get-TargetState $item.Address)
+        if ($targetBefore.Count -ne 1 -or [string]$targetBefore[0].id -ne [string]$entry.Target.id) { throw "merge target changed for $(Get-ReportEmail $item.Address)" }
+        if ($null -ne (Get-TargetMapping ([int64]$item.Source.user.id))) { throw "mapping appeared before merge for $(Get-ReportEmail $item.Address)" }
+    }
+    $auditPath = if ($FastApply) { 'mapping_table' } else { Write-TargetAudit $item $fingerprint $targetBefore }
+    $result = Invoke-TargetSql (New-MergeSql $item.Source $entry.Target $item.Quota $item.Tokens $fingerprint)
+    $parts = $result -split '\|'
+    if ($parts.Count -lt 4 -or $parts[2] -ne '1' -or [int]$parts[3] -ne [int]$parts[1]) { throw "merge did not insert mapping and policy rows consistently for $(Get-ReportEmail $item.Address): $result" }
+    $insertedTokens = [int]$parts[1]
+    $applied += [pscustomobject]@{ Email = Get-ReportEmail $item.Address; SourceId = $item.Source.user.id; TargetId = $entry.Target.id; Quota = $item.Quota; Tokens = $insertedTokens; Mode = 'merge'; Audit = $auditPath }
+}
+
+([pscustomobject]@{ created_at = (Get-Date).ToUniversalTime().ToString('o'); scope = $modeName; applied = $applied; skipped = $report | Where-Object Result -notin @('ready','merge_ready','reconciled_existing') }) |
     ConvertTo-Json -Depth 8 | Set-Content -Path $reportPath -Encoding utf8NoBOM
 Write-Output "report=$reportPath"
 $applied | Format-Table -AutoSize | Out-String | Write-Output
