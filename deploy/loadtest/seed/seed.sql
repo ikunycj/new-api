@@ -101,7 +101,7 @@ SELECT
   seed.base_url,
   0,
   0,
-  'gpt-3.5-turbo',
+  'gpt-3.5-turbo,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna,gpt-5.4-mini,gpt-4o,gpt-4.1',
   'default',
   0,
   '',
@@ -123,8 +123,17 @@ FROM (VALUES
 ) AS seed(api_key, name, base_url, header_override, priority, cluster_id, cluster_pool_id);
 
 INSERT INTO abilities ("group", model, channel_id, enabled, priority, weight)
-SELECT 'default', 'gpt-3.5-turbo', id, true, priority, 100
+SELECT 'default', models.model, channels.id, true, channels.priority, 100
 FROM channels
+JOIN (VALUES
+  ('gpt-3.5-turbo'),
+  ('gpt-5.6-sol'),
+  ('gpt-5.6-terra'),
+  ('gpt-5.6-luna'),
+  ('gpt-5.4-mini'),
+  ('gpt-4o'),
+  ('gpt-4.1')
+) AS models(model) ON true
 WHERE name LIKE 'Load Test Cluster %'
 ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   enabled = EXCLUDED.enabled,

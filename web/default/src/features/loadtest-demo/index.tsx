@@ -63,10 +63,11 @@ import {
   LOAD_TEST_MIN_DURATION_SECONDS,
   LOAD_TEST_MIN_RPS,
   LOAD_TEST_MODEL,
+  LOAD_TEST_MODELS,
   getLoadTestChannelStats,
-  loadClaudeLoadTestKeys,
-  loadClaudeLoadTestPricing,
-  sendClaudeLoadTestRequest,
+  loadLoadTestKeys,
+  loadLoadTestPricing,
+  sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
   type LoadTestPricing,
@@ -196,7 +197,8 @@ export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
   const [keys, setKeys] = useState<LoadTestKey[]>([])
-  // Use the masked key value as the UI identity instead of a database ID.
+  // Use the masked key value as the UI identity. IDs are database details and
+  // can be misleading when accounts are switched in the same browser.
   const [selectedKeyValue, setSelectedKeyValue] = useState('')
   const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
   const [durationSeconds, setDurationSeconds] = useState(
@@ -220,7 +222,7 @@ export function LoadTestDemo() {
   const loadKeys = useCallback(async () => {
     setStatus('loading-keys')
     try {
-      const loadedKeys = await loadClaudeLoadTestKeys()
+      const loadedKeys = await loadLoadTestKeys()
       setKeys(loadedKeys)
       setSelectedKeyValue((current) =>
         loadedKeys.some((key) => key.key === current)
@@ -302,7 +304,7 @@ export function LoadTestDemo() {
 
     try {
       setPricing(
-        await loadClaudeLoadTestPricing(
+        await loadLoadTestPricing(
           selectedModel,
           selectedKey.group?.trim() || selectedKey.group_candidates[0] || ''
         )
@@ -329,7 +331,7 @@ export function LoadTestDemo() {
         await Promise.race(inFlight)
       }
 
-      const request = sendClaudeLoadTestRequest(
+      const request = sendLoadTestRequest(
         serverAddress,
         selectedKey,
         selectedModel,
@@ -413,6 +415,14 @@ export function LoadTestDemo() {
       item.output_tokens,
     0
   )
+  const poolsUsed = new Set(
+    channelStats.map((channel) => channel.pool_name).filter(Boolean)
+  )
+  const clustersUsed = new Set(
+    channelStats
+      .map((channel) => channel.cluster_id)
+      .filter((clusterId) => clusterId > 0)
+  )
   let estimatedCost = 0
   if (pricing) {
     if (channelStats.length > 0) {
@@ -467,7 +477,7 @@ export function LoadTestDemo() {
                 <div>
                   <CardTitle className='flex items-center gap-2'>
                     <Activity className='text-primary size-5' />
-                    {t('Claude Load Test Demo')}
+                    {t('Load Test Demo')}
                   </CardTitle>
                   <CardDescription className='mt-1'>
                     {t(
@@ -485,7 +495,9 @@ export function LoadTestDemo() {
                 <div className='space-y-1.5'>
                   <Label>{t('API Key')}</Label>
                   <Select
-                    onValueChange={(value) => value && setSelectedKeyValue(value)}
+                    onValueChange={(value) =>
+                      value && setSelectedKeyValue(value)
+                    }
                     value={selectedKeyValue}
                   >
                     <SelectTrigger className='w-full'>
@@ -494,7 +506,8 @@ export function LoadTestDemo() {
                     <SelectContent>
                       {keys.map((key) => (
                         <SelectItem key={key.key} value={key.key}>
-                          {key.name}
+                          {key.name} ·{' '}
+                          {key.group || key.group_candidates[0] || '-'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -510,15 +523,11 @@ export function LoadTestDemo() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='claude-opus-4-8'>
-                        claude-opus-4-8
-                      </SelectItem>
-                      <SelectItem value='claude-sonnet-4-6'>
-                        claude-sonnet-4-6
-                      </SelectItem>
-                      <SelectItem value='claude-3-7-sonnet'>
-                        claude-3-7-sonnet
-                      </SelectItem>
+                      {LOAD_TEST_MODELS.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -585,12 +594,11 @@ export function LoadTestDemo() {
               {keys.length === 0 ? (
                 <div className='border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-lg border p-3 text-sm'>
                   <AlertTriangle className='mt-0.5 size-4 shrink-0' />
-                  <span>{t('No Claude load-test keys found')}</span>
+                  <span>{t('No keys found')}</span>
                 </div>
               ) : (
                 <div className='text-muted-foreground text-sm'>
-                  {t('Claude load-test keys')}:{' '}
-                  {keys.map((key) => key.name).join(', ')}
+                  {t('API Keys')}: {keys.map((key) => key.name).join(', ')}
                 </div>
               )}
 
@@ -598,7 +606,7 @@ export function LoadTestDemo() {
                 <div>
                   <Label htmlFor='load-test-cache'>{t('Prompt Cache')}</Label>
                   <p className='text-muted-foreground text-xs'>
-                    {t('Adds a stable Claude cacheable prefix to the request.')}
+                    {t('Prompt Cache')}
                   </p>
                 </div>
                 <Switch
@@ -768,6 +776,16 @@ export function LoadTestDemo() {
               )}
             </CardContent>
           </Card>
+          {channelStats.length > 0 && (
+            <div className='grid gap-4 sm:grid-cols-3'>
+              <Metric
+                label={t('Channel')}
+                value={String(channelStats.length)}
+              />
+              <Metric label={t('Pool')} value={String(poolsUsed.size)} />
+              <Metric label={t('Clusters')} value={String(clustersUsed.size)} />
+            </div>
+          )}
           <p className='text-muted-foreground text-xs'>
             {pricing
               ? t(
