@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { fetchTokenKeysBatch, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { getPricing } from '@/features/pricing/api'
 import type { PricingModel } from '@/features/pricing/types'
@@ -102,16 +102,17 @@ export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
   const candidates = (response.data?.items ?? []).filter(
     (apiKey) => apiKey.status === 1
   )
+  if (candidates.length === 0) return []
 
-  const loaded = await Promise.all(
-    candidates.map(async (apiKey) => {
-      const response = await fetchTokenKey(apiKey.id)
-      const secret = response.data?.key?.trim()
-      return secret ? { ...apiKey, secret } : null
-    })
-  )
+  // Fetch secrets in one request. Calling the per-key endpoint concurrently
+  // can trip the critical rate limit and make the whole selector appear empty.
+  const keyResponse = await fetchTokenKeysBatch(candidates.map((apiKey) => apiKey.id))
+  const secrets = keyResponse.data?.keys ?? {}
 
-  return loaded.filter((apiKey): apiKey is LoadTestKey => apiKey !== null)
+  return candidates.flatMap((apiKey) => {
+    const secret = secrets[apiKey.id]?.trim()
+    return secret ? [{ ...apiKey, secret }] : []
+  })
 }
 
 export async function loadLoadTestPricing(
