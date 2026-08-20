@@ -630,11 +630,6 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 			stepOrders[orderKey] = struct{}{}
 			stepTiers[tierKey] = struct{}{}
 		}
-		if len(config.PolicySteps) > 0 {
-			if err := tx.Save(&config.PolicySteps).Error; err != nil {
-				return err
-			}
-		}
 		policyIDsForSteps := make([]int, 0, len(config.Policies))
 		for _, policy := range config.Policies {
 			if policy.Id > 0 {
@@ -653,6 +648,30 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				stepQuery = stepQuery.Where("id NOT IN ?", stepIDs)
 			}
 			if err := stepQuery.Delete(&FailoverPolicyStep{}).Error; err != nil {
+				return err
+			}
+		}
+		// Temporarily move retained rows out of the unique key space as well.
+		// A simple swap (P1 <-> P2) keeps both IDs in the payload, so deleting
+		// only removed rows is not enough to avoid a transient unique-index hit.
+		for _, step := range config.PolicySteps {
+			if step.Id <= 0 {
+				continue
+			}
+			if err := tx.Model(&FailoverPolicyStep{}).Where("id = ?", step.Id).Updates(map[string]any{
+				"policy_id": -step.Id,
+				"step_order": -step.Id,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		// Remove rows that are no longer part of the submitted configuration
+		// before upserting the new steps. This matters when an administrator
+		// reorders or replaces a step: saving first would hit the unique
+		// (policy_id, step_order) index against the old row and roll back the
+		// entire transaction.
+		for i := range config.PolicySteps {
+			if err := tx.Save(&config.PolicySteps[i]).Error; err != nil {
 				return err
 			}
 		}

@@ -102,6 +102,40 @@ func TestSaveFailoverConfigNormalizesAndArchivesRemovedRecords(t *testing.T) {
 	assert.False(t, oldMapping.Enabled)
 }
 
+func TestSaveFailoverConfigCanReorderExistingPolicySteps(t *testing.T) {
+	setupFailoverTables(t)
+	require.NoError(t, DB.Create(&FailoverPolicy{
+		Id: 41, Name: "reorder", Mode: FailoverModeBalanced, Enabled: true,
+		MaxPoolAttempts: 3, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 5000,
+		CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 30, CircuitHalfOpenRequests: 1,
+	}).Error)
+	require.NoError(t, DB.Create(&[]FailoverPolicyStep{
+		{Id: 51, PolicyId: 41, StepOrder: 1, PoolTier: PoolTierFree, MaxAttempts: 1},
+		{Id: 52, PolicyId: 41, StepOrder: 2, PoolTier: PoolTierPremium, MaxAttempts: 1},
+	}).Error)
+
+	config := &FailoverConfig{
+		Policies: []FailoverPolicy{{
+			Id: 41, Name: "reorder", Mode: FailoverModeBalanced, Enabled: true,
+			MaxPoolAttempts: 3, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 5000,
+			CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 30, CircuitHalfOpenRequests: 1,
+		}},
+		PolicySteps: []FailoverPolicyStep{
+			{Id: 51, PolicyId: 41, StepOrder: 2, PoolTier: PoolTierFree, MaxAttempts: 1},
+			{Id: 52, PolicyId: 41, StepOrder: 1, PoolTier: PoolTierPremium, MaxAttempts: 1},
+		},
+	}
+
+	require.NoError(t, SaveFailoverConfig(config))
+	var steps []FailoverPolicyStep
+	require.NoError(t, DB.Where("policy_id = ?", 41).Order("step_order ASC").Find(&steps).Error)
+	require.Len(t, steps, 2)
+	assert.Equal(t, 1, steps[0].StepOrder)
+	assert.Equal(t, PoolTierPremium, steps[0].PoolTier)
+	assert.Equal(t, 2, steps[1].StepOrder)
+	assert.Equal(t, PoolTierFree, steps[1].PoolTier)
+}
+
 func TestResolveRuntimeFailoverUsesNamedMixedChannelGroup(t *testing.T) {
 	setupFailoverTables(t)
 	require.NoError(t, DB.Create(&[]Cluster{

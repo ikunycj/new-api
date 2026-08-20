@@ -359,7 +359,10 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
     <Form {...form}>
       <form
         className='flex min-w-0 flex-col gap-6'
-        onSubmit={form.handleSubmit((values) => updateMutation.mutate(values))}
+        onSubmit={form.handleSubmit(
+          (values) => updateMutation.mutate(values),
+          () => toast.error(t('Configuration validation failed'))
+        )}
       >
         <div className='flex flex-wrap items-center justify-between gap-3'>
           <div>
@@ -381,10 +384,11 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
           </Button>
         </div>
 
-        <div className='overflow-x-auto'>
-          <Table>
+        <div className='overflow-x-auto rounded-md border'>
+          <Table className='min-w-[1800px]'>
             <TableHeader>
               <TableRow>
+                <TableHead>{t('Name')}</TableHead>
                 <TableHead>{t('Mode')}</TableHead>
                 <TableHead>{t('Routing objective')}</TableHead>
                 <TableHead>{t('Same-pool retries')}</TableHead>
@@ -406,29 +410,40 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
               {policies.fields.map((policy, index) => (
                 <TableRow key={policy.id}>
                   <TableCell>
-                    <Controller
-                      control={form.control}
-                      name={`policies.${index}.mode`}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger className='w-36'>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {modeOrder.map((mode) => (
-                                <SelectItem key={mode} value={mode}>
-                                  {t(mode)}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      )}
+                    <Input
+                      className='w-52'
+                      {...form.register(`policies.${index}.name`)}
                     />
+                  </TableCell>
+                  <TableCell>
+                    <div className='space-y-1'>
+                      <Badge variant='outline' className='max-w-40 truncate'>
+                        {policy.name || `${t('Policy')} ${policy.id}`}
+                      </Badge>
+                      <Controller
+                        control={form.control}
+                        name={`policies.${index}.mode`}
+                        render={({ field }) => (
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger className='w-36'>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {modeOrder.map((mode) => (
+                                  <SelectItem key={mode} value={mode}>
+                                    {t(mode)}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Controller
