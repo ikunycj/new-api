@@ -48,7 +48,6 @@ import {
 } from '../lib/price'
 import type { PricingDisplayModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
-import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
 import { PriceValueComparison } from './price-value-comparison'
 
 export interface ModelCardProps {
@@ -58,7 +57,6 @@ export interface ModelCardProps {
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
-  perf?: ModelPerfBadgeData
 }
 
 const TOKEN_COUNT_FORMAT = new Intl.NumberFormat(undefined, {
@@ -105,7 +103,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       })
     : null
   const officialDynamicSummary = isDynamicPricing
-    ? getOfficialDynamicPricingSummary(props.model, tokenUnit, usdExchangeRate)
+    ? getOfficialDynamicPricingSummary(
+        props.model,
+        tokenUnit,
+        usdExchangeRate,
+        showRechargePrice
+      )
     : null
 
   const visibleBadges = [...endpoints.slice(0, 2), ...tags.slice(0, 1)]
@@ -169,13 +172,15 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       props.model,
       'input',
       tokenUnit,
-      usdExchangeRate
+      usdExchangeRate,
+      showRechargePrice
     )
     const officialOutputValue = formatOfficialPrice(
       props.model,
       'output',
       tokenUnit,
-      usdExchangeRate
+      usdExchangeRate,
+      showRechargePrice
     )
 
     priceRows.push(
@@ -206,7 +211,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         props.model,
         'cache',
         tokenUnit,
-        usdExchangeRate
+        usdExchangeRate,
+        showRechargePrice
       )
       priceRows.push({
         key: 'cache',
@@ -225,7 +231,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     )
     const officialRequestValue = formatOfficialRequestPrice(
       props.model,
-      usdExchangeRate
+      usdExchangeRate,
+      showRechargePrice
     )
     priceRows.push({
       key: 'request',
@@ -377,10 +384,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         )}
       </div>
 
-      <p className='text-muted-foreground mt-4 line-clamp-3 min-h-[3.75rem] text-sm leading-5'>
-        {props.model.description || t('No description available.')}
-      </p>
-
       <div className='mt-4 grid grid-cols-3 gap-3'>
         {metadata.slice(0, 3).map((item) => (
           <div key={item.key} className='min-w-0'>
@@ -397,14 +400,46 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       <div className='flex min-h-24 flex-col gap-1.5'>{pricingContent}</div>
 
       <footer className='mt-auto flex items-center justify-between gap-3 pt-4'>
-        <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
-          <GroupBadge
-            group={props.model.display_group}
-            ratio={props.model.display_group_ratio}
-            size='sm'
-          />
+        <div className='flex min-w-0 flex-1 flex-col gap-1.5'>
+          {props.model.display_groups.map((group) => {
+            const groupDynamicSummary = isDynamicPricing
+              ? getDynamicPricingSummary(props.model, {
+                  tokenUnit,
+                  showRechargePrice,
+                  priceRate,
+                  usdExchangeRate,
+                  groupRatioMultiplier: group.ratio,
+                })
+              : null
+            let price = ''
+            if (isDynamicPricing) {
+              price =
+                groupDynamicSummary?.primaryEntries
+                  .slice(0, 2)
+                  .map((entry) => entry.formatted)
+                  .join(' / ') || t('Dynamic Pricing')
+            } else if (isTokenBased) {
+              price = `${formatPrice(props.model, 'input', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)} / ${formatPrice(props.model, 'output', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)}`
+            } else {
+              price = formatRequestPrice(
+                props.model,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate,
+                group.group
+              )
+            }
+            return (
+              <div
+                key={group.group}
+                className='flex items-center justify-between gap-2 text-xs'
+              >
+                <GroupBadge group={group.group} ratio={group.ratio} size='sm' />
+                <span className='text-muted-foreground truncate'>{price}</span>
+              </div>
+            )
+          })}
           <ModelBillingModeBadge model={props.model} />
-          <ModelPerfBadge perf={props.perf} />
         </div>
         <Button type='button' variant='ghost' size='sm' onClick={props.onClick}>
           {t('Details')}

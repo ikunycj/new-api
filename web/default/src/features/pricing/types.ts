@@ -73,6 +73,7 @@ export type PricingModel = {
 export type PricingDisplayModel = PricingModel & {
   display_group: string
   display_group_ratio: number
+  display_groups: Array<{ group: string; ratio: number }>
 }
 
 /** Input/output modalities supported by a model. */

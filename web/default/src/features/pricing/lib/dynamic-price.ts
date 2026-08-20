@@ -170,11 +170,12 @@ export function getDynamicPricingSummary(
 export function getOfficialDynamicPricingSummary(
   model: PricingModel,
   tokenUnit: TokenUnit,
-  billingUSDToCNYRate = 1
+  billingUSDToCNYRate = 1,
+  showInCny = true
 ): DynamicPricingSummary | null {
   return getDynamicPricingSummary(model, {
     tokenUnit,
-    showRechargePrice: true,
+    showRechargePrice: showInCny,
     groupRatioMultiplier: 1,
     usdExchangeRate: billingUSDToCNYRate,
   })

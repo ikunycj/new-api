@@ -60,36 +60,38 @@ export function formatGroupRatio(
 
 export function expandModelsByGroup(
   models: PricingModel[],
-  selectedGroup: string,
   availableGroups: string[],
   groupRatio: Record<string, number>
 ): PricingDisplayModel[] {
   const selectableGroups = availableGroups.filter(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
   )
-  const targetGroups =
-    selectedGroup === FILTER_ALL
-      ? selectableGroups
-      : selectableGroups.filter((group) => group === selectedGroup)
-
   return models.flatMap((model) => {
     const enabledGroups = Array.isArray(model.enable_groups)
       ? model.enable_groups
       : []
     const supportsAllGroups = enabledGroups.includes(FILTER_ALL)
 
-    return targetGroups.flatMap((group) => {
-      if (!supportsAllGroups && !enabledGroups.includes(group)) return []
+    const groups = selectableGroups
+      .filter((group) => supportsAllGroups || enabledGroups.includes(group))
+      .map((group) => ({
+        group,
+        ratio: getConfiguredGroupRatio(groupRatio, group),
+      }))
+      .sort((a, b) => a.ratio - b.ratio || a.group.localeCompare(b.group))
+      .slice(0, 3)
 
-      return [
-        {
-          ...model,
-          key: `${model.key || model.model_name}::${group}`,
-          display_group: group,
-          display_group_ratio: getConfiguredGroupRatio(groupRatio, group),
-        },
-      ]
-    })
+    if (groups.length === 0) return []
+    const lowest = groups[0]
+    return [
+      {
+        ...model,
+        key: model.key || model.model_name,
+        display_group: lowest.group,
+        display_group_ratio: lowest.ratio,
+        display_groups: groups,
+      },
+    ]
   })
 }
 
@@ -107,12 +109,13 @@ export function getDisplayGroupRatio(
   const modelEnableGroups = Array.isArray(model.enable_groups)
     ? model.enable_groups
     : []
+  const supportsAllGroups = modelEnableGroups.includes(FILTER_ALL)
   const groupRatio = model.group_ratio || {}
 
   if (
     selectedGroup &&
     selectedGroup !== FILTER_ALL &&
-    modelEnableGroups.includes(selectedGroup)
+    (supportsAllGroups || modelEnableGroups.includes(selectedGroup))
   ) {
     return getConfiguredGroupRatio(groupRatio, selectedGroup)
   }

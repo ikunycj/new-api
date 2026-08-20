@@ -81,6 +81,10 @@ describe('billing exchange rate model-square prices', () => {
     )
     assert.equal(formatOfficialPrice(formulaModel, 'cache', 'M', 7.3), '¥0.73')
     assert.equal(
+      formatOfficialPrice(formulaModel, 'input', 'M', 7.3, false),
+      '$1'
+    )
+    assert.equal(
       formatPrice(formulaModel, 'cache', 'M', true, 1, 7.3, 'sale'),
       '¥0.0365'
     )
@@ -96,6 +100,7 @@ describe('billing exchange rate model-square prices', () => {
       '$0.1'
     )
     assert.equal(formatOfficialRequestPrice(requestModel, 7.3), '¥2.92')
+    assert.equal(formatOfficialRequestPrice(requestModel, 7.3, false), '$0.4')
     assert.equal(
       formatRequestPrice(requestModel, true, 1, 7.3, 'sale'),
       '¥0.73'
@@ -129,6 +134,16 @@ describe('billing exchange rate model-square prices', () => {
     assert.deepEqual(
       officialSummary?.entries.map((entry) => entry.formatted),
       ['¥36.5', '¥219', '¥7.3']
+    )
+    const officialUsdSummary = getOfficialDynamicPricingSummary(
+      dynamicModel,
+      'M',
+      7.3,
+      false
+    )
+    assert.deepEqual(
+      officialUsdSummary?.entries.map((entry) => entry.formatted),
+      ['$5', '$30', '$1']
     )
   })
 })

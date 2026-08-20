@@ -43,8 +43,8 @@ const models: PricingModel[] = [
 ]
 
 describe('model group display entries', () => {
-  test('expands each model into its selectable group prices', () => {
-    const result = expandModelsByGroup(models, 'all', ['default', 'vip'], {
+  test('returns one model with up to three groups ordered by price', () => {
+    const result = expandModelsByGroup(models, ['default', 'vip'], {
       default: 1,
       vip: 0.8,
     })
@@ -55,18 +55,35 @@ describe('model group display entries', () => {
         model.display_group,
         model.display_group_ratio,
         model.key,
+        model.display_groups,
       ]),
       [
-        ['grouped-model', 'default', 1, 'grouped-model::default'],
-        ['grouped-model', 'vip', 0.8, 'grouped-model::vip'],
-        ['wildcard-model', 'default', 1, 'wildcard-model::default'],
-        ['wildcard-model', 'vip', 0.8, 'wildcard-model::vip'],
+        [
+          'grouped-model',
+          'vip',
+          0.8,
+          'grouped-model',
+          [
+            { group: 'vip', ratio: 0.8 },
+            { group: 'default', ratio: 1 },
+          ],
+        ],
+        [
+          'wildcard-model',
+          'vip',
+          0.8,
+          'wildcard-model',
+          [
+            { group: 'vip', ratio: 0.8 },
+            { group: 'default', ratio: 1 },
+          ],
+        ],
       ]
     )
   })
 
-  test('keeps only the selected group and defaults a missing ratio to one', () => {
-    const result = expandModelsByGroup(models, 'vip', ['default', 'vip'], {})
+  test('uses the lowest available group when ratios are missing', () => {
+    const result = expandModelsByGroup(models, ['default', 'vip'], {})
 
     assert.deepEqual(
       result.map((model) => [
@@ -75,19 +92,18 @@ describe('model group display entries', () => {
         model.display_group_ratio,
       ]),
       [
-        ['grouped-model', 'vip', 1],
-        ['wildcard-model', 'vip', 1],
+        ['grouped-model', 'default', 1],
+        ['wildcard-model', 'default', 1],
       ]
     )
   })
 
   test('does not render unavailable or reserved groups', () => {
-    const result = expandModelsByGroup(
-      models,
-      'all',
-      ['default', 'auto', 'all'],
-      { default: 1, auto: 0.5, all: 0.1 }
-    )
+    const result = expandModelsByGroup(models, ['default', 'auto', 'all'], {
+      default: 1,
+      auto: 0.5,
+      all: 0.1,
+    })
 
     assert.deepEqual(
       result.map((model) => model.display_group),

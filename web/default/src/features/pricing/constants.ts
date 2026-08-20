@@ -60,6 +60,29 @@ export function getSortLabels(t: TFunction): Record<SortOption, string> {
 /** Filter values */
 export const FILTER_ALL = 'all'
 
+/** Model type options */
+export const MODEL_TYPES = {
+  ALL: 'all',
+  TEXT: 'text',
+  AUDIO: 'audio',
+  IMAGE: 'image',
+  VIDEO: 'video',
+} as const
+
+export type ModelTypeOption = (typeof MODEL_TYPES)[keyof typeof MODEL_TYPES]
+
+export function getModelTypeLabels(
+  t: TFunction
+): Record<ModelTypeOption, string> {
+  return {
+    [MODEL_TYPES.ALL]: t('All Model Types'),
+    [MODEL_TYPES.TEXT]: t('Text'),
+    [MODEL_TYPES.AUDIO]: t('Audio'),
+    [MODEL_TYPES.IMAGE]: t('Image'),
+    [MODEL_TYPES.VIDEO]: t('Video'),
+  }
+}
+
 /** Quota type options */
 export const QUOTA_TYPES = {
   ALL: 'all',
