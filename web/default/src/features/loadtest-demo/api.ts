@@ -31,15 +31,27 @@ export const LOAD_TEST_MAX_RPS = 20
 export const LOAD_TEST_MAX_REQUESTS = 10_000
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_TIMEOUT_MS = 120_000
-export const LOAD_TEST_MODEL = 'claude-opus-4-8'
+export const LOAD_TEST_MODEL = 'gpt-5.6-sol'
+export const LOAD_TEST_MODELS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.4-mini',
+  'gpt-4o',
+  'gpt-4.1',
+  'claude-opus-4-8',
+  'claude-sonnet-4-6',
+  'claude-3-7-sonnet',
+] as const
 
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
   (_, index) =>
-    `Stable load-test context section ${index + 1}: keep this deterministic prefix unchanged so Anthropic prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.`
+    `Stable load-test context section ${index + 1}: keep this deterministic prefix unchanged so provider prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.`
 ).join('\n')
 
 export type LoadTestKey = ApiKey & { secret: string }
+export type LoadTestProvider = 'openai' | 'claude'
 
 export type LoadTestRequestResult = {
   keyName: string
@@ -78,7 +90,11 @@ export type LoadTestChannelStats = {
   cache_write_tokens: number
 }
 
-function isClaudeLoadTestKey(apiKey: ApiKey) {
+export function getLoadTestProvider(model: string): LoadTestProvider {
+  return model.toLowerCase().startsWith('claude-') ? 'claude' : 'openai'
+}
+
+function isLoadTestKey(apiKey: ApiKey) {
   const searchable = [
     apiKey.name,
     apiKey.group ?? '',
@@ -87,14 +103,13 @@ function isClaudeLoadTestKey(apiKey: ApiKey) {
   ]
     .join(' ')
     .toLowerCase()
-
-  return searchable.includes('claude') || searchable.includes('anthropic')
+  return /(anthropic|claude|codex|gpt|openai|load[- ]?test)/.test(searchable)
 }
 
-export async function loadClaudeLoadTestKeys(): Promise<LoadTestKey[]> {
+export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
   const response = await getApiKeys({ p: 1, size: 100 })
   const candidates = (response.data?.items ?? []).filter(
-    (apiKey) => apiKey.status === 1 && isClaudeLoadTestKey(apiKey)
+    (apiKey) => apiKey.status === 1 && isLoadTestKey(apiKey)
   )
 
   const loaded = await Promise.all(
@@ -108,7 +123,7 @@ export async function loadClaudeLoadTestKeys(): Promise<LoadTestKey[]> {
   return loaded.filter((apiKey): apiKey is LoadTestKey => apiKey !== null)
 }
 
-export async function loadClaudeLoadTestPricing(
+export async function loadLoadTestPricing(
   modelName: string,
   group: string
 ): Promise<LoadTestPricing | null> {
@@ -189,7 +204,10 @@ function readErrorCode(payload: unknown) {
   return undefined
 }
 
-function readUsage(payload: unknown): LoadTestUsage | undefined {
+function readUsage(
+  payload: unknown,
+  provider: LoadTestProvider
+): LoadTestUsage | undefined {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return undefined
   }
@@ -210,6 +228,45 @@ function readUsage(payload: unknown): LoadTestUsage | undefined {
       if (Number.isFinite(parsed) && parsed >= 0) return parsed
     }
     return 0
+  }
+
+  if (provider === 'openai') {
+    const inputDetails = record.input_tokens_details
+    const promptDetails = record.prompt_tokens_details
+    const inputDetailsRecord =
+      inputDetails &&
+      typeof inputDetails === 'object' &&
+      !Array.isArray(inputDetails)
+        ? (inputDetails as Record<string, unknown>)
+        : undefined
+    const promptDetailsRecord =
+      promptDetails &&
+      typeof promptDetails === 'object' &&
+      !Array.isArray(promptDetails)
+        ? (promptDetails as Record<string, unknown>)
+        : undefined
+    const cacheReadTokens =
+      (promptDetailsRecord
+        ? readNumberFromRecord(promptDetailsRecord, 'cached_tokens')
+        : 0) ||
+      (inputDetailsRecord
+        ? readNumberFromRecord(inputDetailsRecord, 'cached_tokens')
+        : 0)
+    const cacheWriteTokens =
+      readNumber('cache_creation_input_tokens') ||
+      readNumber('cache_write_tokens')
+    const totalInputTokens =
+      readNumber('prompt_tokens') || readNumber('input_tokens')
+    return {
+      inputTokens: Math.max(
+        0,
+        totalInputTokens - cacheReadTokens - cacheWriteTokens
+      ),
+      outputTokens:
+        readNumber('completion_tokens') || readNumber('output_tokens'),
+      cacheReadTokens,
+      cacheWriteTokens,
+    }
   }
 
   const cacheCreation = record.cache_creation
@@ -244,7 +301,7 @@ function readNumberFromRecord(record: Record<string, unknown>, key: string) {
   return 0
 }
 
-export async function sendClaudeLoadTestRequest(
+export async function sendLoadTestRequest(
   baseUrl: string,
   apiKey: LoadTestKey,
   model: string,
@@ -262,31 +319,48 @@ export async function sendClaudeLoadTestRequest(
   signal?.addEventListener('abort', abortRequest, { once: true })
 
   try {
+    const provider = getLoadTestProvider(model)
     const requestBody: Record<string, unknown> = {
       model,
       max_tokens: 32,
       messages: [{ role: 'user', content: 'Reply with OK.' }],
     }
-    if (promptCache) {
-      requestBody.system = [
-        {
-          type: 'text',
-          text: LOAD_TEST_CACHE_PREFIX,
-          cache_control: { type: 'ephemeral' },
-        },
-      ]
+    if (provider === 'claude') {
+      if (promptCache) {
+        requestBody.system = [
+          {
+            type: 'text',
+            text: LOAD_TEST_CACHE_PREFIX,
+            cache_control: { type: 'ephemeral' },
+          },
+        ]
+      }
+    } else {
+      requestBody.temperature = 0
+      requestBody.stream = false
+      if (promptCache) {
+        requestBody.messages = [
+          { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
+          { role: 'user', content: 'Reply with OK.' },
+        ]
+      }
     }
 
-    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/messages`, {
+    const endpoint =
+      provider === 'claude' ? '/v1/messages' : '/v1/chat/completions'
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey.secret}`,
+      'X-Load-Test-ID': runId,
+    }
+    if (provider === 'claude') {
+      headers['anthropic-version'] = '2023-06-01'
+      headers['x-api-key'] = apiKey.secret
+    }
+    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}${endpoint}`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        Authorization: `Bearer ${apiKey.secret}`,
-        'x-api-key': apiKey.secret,
-        'X-Load-Test-ID': runId,
-      },
+      headers,
       body: JSON.stringify(requestBody),
       credentials: 'omit',
       cache: 'no-store',
@@ -299,7 +373,7 @@ export async function sendClaudeLoadTestRequest(
       status: response.status,
       errorCode: response.ok ? undefined : readErrorCode(payload),
       requestId: readRequestId(response),
-      usage: response.ok ? readUsage(payload) : undefined,
+      usage: response.ok ? readUsage(payload, provider) : undefined,
       success: response.ok,
     }
   } catch (error) {
