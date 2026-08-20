@@ -8,6 +8,8 @@ const newKeys = {
     'Account type': 'Account type',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': 'Billing package',
+    'Unified package': 'Unified package',
     'ToB accounts can access the load test demo.':
       'ToB accounts can access the load test demo.',
     'Mixed channel groups combine clusters and fail over in member priority order.':
@@ -63,6 +65,8 @@ const newKeys = {
     'Account type': '账户类型',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': '计费套餐',
+    'Unified package': '通用套餐',
     'ToB accounts can access the load test demo.': 'ToB 账户可以使用压测 Demo。',
     'Mixed channel groups combine clusters and fail over in member priority order.':
       '混合渠道分组会合并多个 Cluster，并按成员优先级执行切流。',
@@ -117,6 +121,8 @@ const newKeys = {
     'Account type': 'Type de compte',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': 'Forfait de facturation',
+    'Unified package': 'Forfait unifié',
     'ToB accounts can access the load test demo.':
       'Les comptes ToB peuvent accéder à la démo de test de charge.',
     'Mixed channel groups combine clusters and fail over in member priority order.':
@@ -173,6 +179,8 @@ const newKeys = {
     'Account type': 'アカウント種別',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': '課金プラン',
+    'Unified package': '共通プラン',
     'ToB accounts can access the load test demo.':
       'ToB アカウントは負荷テストデモを利用できます。',
     'Mixed channel groups combine clusters and fail over in member priority order.':
@@ -229,6 +237,8 @@ const newKeys = {
     'Account type': 'Тип аккаунта',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': 'Тарифный пакет',
+    'Unified package': 'Единый пакет',
     'ToB accounts can access the load test demo.':
       'Аккаунты ToB могут использовать демо нагрузочного тестирования.',
     'Mixed channel groups combine clusters and fail over in member priority order.':
@@ -284,6 +294,8 @@ const newKeys = {
     'Account type': 'Loại tài khoản',
     ToB: 'ToB',
     ToC: 'ToC',
+    'Billing package': 'Gói thanh toán',
+    'Unified package': 'Gói dùng chung',
     'ToB accounts can access the load test demo.':
       'Tài khoản ToB có thể truy cập bản demo kiểm thử tải.',
     'Mixed channel groups combine clusters and fail over in member priority order.':
@@ -336,6 +348,17 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
+    'Account type': '帳戶類型',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'Billing package': '計費套餐',
+    'Unified package': '通用套餐',
+    'ToB accounts can access the load test demo.':
+      'ToB 帳戶可以使用壓測 Demo。',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      '混合渠道分組會合併多個 Cluster，並按成員優先級執行切流。',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      '混合渠道分組名稱要填寫其 Cluster 使用的計費分組。',
     'Channel binding is incomplete': '渠道綁定不完整',
     'Channel bindings': '渠道綁定',
     'Channel bindings saved': '渠道綁定已儲存',
@@ -970,6 +993,7 @@ for (const locale of Object.keys(newKeys)) {
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
   Object.assign(
     json.translation,
+    newKeys[locale],
     cacheStatsKeys[locale],
     loadTestDemoKeys[locale],
     routingStrategyKeys[locale],

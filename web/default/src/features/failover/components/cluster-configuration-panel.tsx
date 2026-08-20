@@ -121,6 +121,8 @@ const defaultRoutes: ClusterConfiguration['routes'] = [
   },
 ]
 
+const unifiedBillingGroup = 'cluster'
+
 function newClusterConfiguration(): ClusterConfiguration {
   return {
     id: 0,
@@ -128,7 +130,7 @@ function newClusterConfiguration(): ClusterConfiguration {
     type: 'ikun',
     status: 1,
     archived: false,
-    billing_group: '',
+    billing_group: unifiedBillingGroup,
     billing_group_description: '',
     billing_group_ratio: 1,
     policy_id: 0,
@@ -154,7 +156,7 @@ function ClusterConfigurationWorkspace(props: {
     ClusterConfigurationValues
   >({
     resolver: zodResolver(clusterConfigurationSchema),
-    defaultValues: initialCluster,
+    defaultValues: { ...initialCluster, billing_group: unifiedBillingGroup },
   })
   const routes = useFieldArray({ control: form.control, name: 'routes' })
 
@@ -194,24 +196,12 @@ function ClusterConfigurationWorkspace(props: {
 
   const selectCluster = (cluster: ClusterConfiguration) => {
     setSelectedClusterId(cluster.id)
-    form.reset(cluster)
+    form.reset({ ...cluster, billing_group: unifiedBillingGroup })
   }
 
   const createCluster = () => {
     setSelectedClusterId(0)
     form.reset(newClusterConfiguration())
-  }
-
-  const chooseBillingGroup = (name: string) => {
-    form.setValue('billing_group', name, { shouldDirty: true })
-    const group = props.snapshot.billing_groups.find(
-      (candidate) => candidate.name === name
-    )
-    if (!group) return
-    form.setValue('billing_group_description', group.description, {
-      shouldDirty: true,
-    })
-    form.setValue('billing_group_ratio', group.ratio, { shouldDirty: true })
   }
 
   const currentClusterId = Number(form.watch('id'))
@@ -263,7 +253,7 @@ function ClusterConfigurationWorkspace(props: {
                   C{cluster.id} · {cluster.name}
                 </span>
                 <span className='text-muted-foreground block truncate text-xs'>
-                  {cluster.billing_group || t('Billing group not set')}
+                  {t('Unified package')}
                 </span>
               </span>
               <Badge variant={cluster.status === 1 ? 'default' : 'secondary'}>
@@ -381,7 +371,7 @@ function ClusterConfigurationWorkspace(props: {
 
           <section className='space-y-4 border-t pt-5'>
             <div>
-              <h3 className='text-sm font-semibold'>{t('Billing group')}</h3>
+              <h3 className='text-sm font-semibold'>{t('Billing package')}</h3>
               <p className='text-muted-foreground text-sm'>
                 {t(
                   'Requests keep this billing group while switching between clusters.'
@@ -390,19 +380,20 @@ function ClusterConfigurationWorkspace(props: {
             </div>
             <FieldGroup className='grid gap-4 md:grid-cols-3'>
               <Field>
-                <FieldLabel htmlFor='billing-group'>{t('Group ID')}</FieldLabel>
+                <FieldLabel htmlFor='billing-group'>
+                  {t('Billing package')}
+                </FieldLabel>
                 <Input
                   id='billing-group'
-                  list='billing-group-options'
-                  {...form.register('billing_group', {
-                    onChange: (event) => chooseBillingGroup(event.target.value),
-                  })}
+                  value={t('Unified package')}
+                  readOnly
+                  aria-readonly='true'
                 />
-                <datalist id='billing-group-options'>
-                  {props.snapshot.billing_groups.map((group) => (
-                    <option key={group.name} value={group.name} />
-                  ))}
-                </datalist>
+                <input
+                  type='hidden'
+                  value={unifiedBillingGroup}
+                  {...form.register('billing_group')}
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor='billing-description'>
