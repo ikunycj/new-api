@@ -1028,6 +1028,41 @@ commit;
 "@
 }
 
+function New-PolicyRepairSql([int64]$SourceUserId, [int64]$TargetUserId, [object[]]$TokenRows) {
+    $policyRows = @($TokenRows | Where-Object { [bool]$_.PolicyBlocked })
+    if ($policyRows.Count -eq 0) { return $null }
+
+    $values = @()
+    foreach ($token in $policyRows) {
+        $values += "(" + (SqlNumber $token.SourceKeyId) + "," + (SqlText $token.Key) + "," + (SqlNumber $token.RateLimit5h) + "," + (SqlNumber $token.RateLimit1d) + "," + (SqlNumber $token.RateLimit7d) + "," + (SqlNumber $token.Usage5h) + "," + (SqlNumber $token.Usage1d) + "," + (SqlNumber $token.Usage7d) + "," + (SqlNumber $token.Window5hStart) + "," + (SqlNumber $token.Window1dStart) + "," + (SqlNumber $token.Window7dStart) + "," + (SqlText $token.IpWhitelist) + "," + (SqlText $token.IpBlacklist) + ")"
+    }
+    $tokenValues = $values -join ","
+    return @"
+begin;
+select pg_advisory_xact_lock(hashtextextended('migration-policy:${SourceUserId}:${TargetUserId}', 0));
+with policy_values(source_key_id,key,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist) as (values $tokenValues),
+matched as (
+  select t.id, v.source_key_id, v.rate_limit_5h, v.rate_limit_1d, v.rate_limit_7d, v.usage_5h, v.usage_1d, v.usage_7d, v.window_5h_start, v.window_1d_start, v.window_7d_start, v.ip_whitelist, v.ip_blacklist
+  from tokens t join policy_values v on v.key=t.key
+  where t.user_id=$TargetUserId
+), updated_tokens as (
+  update tokens t
+  set status=2
+  from matched m
+  where t.id=m.id and t.status=1
+  returning t.id
+), upserted_policies as (
+  insert into sub2api_api_key_migration_policies (source_user_id,source_key_id,target_token_id,rate_limit_5h,rate_limit_1d,rate_limit_7d,usage_5h,usage_1d,usage_7d,window_5h_start,window_1d_start,window_7d_start,ip_whitelist,ip_blacklist,created_at)
+  select $SourceUserId,m.source_key_id,m.id,m.rate_limit_5h,m.rate_limit_1d,m.rate_limit_7d,m.usage_5h,m.usage_1d,m.usage_7d,m.window_5h_start::bigint,m.window_1d_start::bigint,m.window_7d_start::bigint,m.ip_whitelist,m.ip_blacklist,extract(epoch from now())::bigint
+  from matched m
+  on conflict (source_user_id,source_key_id) do update set target_token_id=excluded.target_token_id,rate_limit_5h=excluded.rate_limit_5h,rate_limit_1d=excluded.rate_limit_1d,rate_limit_7d=excluded.rate_limit_7d,usage_5h=excluded.usage_5h,usage_1d=excluded.usage_1d,usage_7d=excluded.usage_7d,window_5h_start=excluded.window_5h_start,window_1d_start=excluded.window_1d_start,window_7d_start=excluded.window_7d_start,ip_whitelist=excluded.ip_whitelist,ip_blacklist=excluded.ip_blacklist
+  returning source_key_id
+)
+select (select count(*) from matched),(select count(*) from updated_tokens),(select count(*) from upserted_policies);
+commit;
+"@
+}
+
 function New-MergeSql([object]$Source, [object]$Target, [int64]$Quota, [object[]]$TokenRows, [string]$Fingerprint) {
     $email = ([string]$Source.user.email).Trim().ToLowerInvariant()
     $emailExpr = SqlText $email
@@ -1207,6 +1242,7 @@ $targetPreflight = Get-TargetPreflight $preflightSources $tokenRowsBySourceId $m
 $pendingClean = @()
 $pendingMerge = @()
 $pendingReconcile = @()
+$pendingPolicyRepairs = @()
 $batchKeyOwners = @{}
 foreach ($plan in $plans) {
     foreach ($token in @($plan.Tokens)) {
@@ -1227,11 +1263,19 @@ foreach ($plan in $plans) {
             # set still match. A Key/identity mismatch remains a blocker.
             $mutableRefreshSafe = $null -ne $mappedTarget -and (Test-TargetLooksMigrated $plan $mappedTarget)
             if ($mutableRefreshSafe) {
+                $policyTokens = @($plan.Tokens | Where-Object { [bool]$_.PolicyBlocked })
+                if ($policyTokens.Count -gt 0) {
+                    $pendingPolicyRepairs += [pscustomobject]@{ SourceId = [int64]$sourceId; TargetId = [int64]$mapping.target_id; Tokens = $policyTokens }
+                }
                 $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'already_migrated'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = 'mapping fingerprint changed only in mutable source usage fields; quota and complete Key set still match' }
                 continue
             }
             $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'source_changed_requires_review'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = 'existing mapping fingerprint differs from current source snapshot; no automatic re-import' }
             continue
+        }
+        $policyTokens = @($plan.Tokens | Where-Object { [bool]$_.PolicyBlocked })
+        if ($policyTokens.Count -gt 0) {
+            $pendingPolicyRepairs += [pscustomobject]@{ SourceId = [int64]$sourceId; TargetId = [int64]$mapping.target_id; Tokens = $policyTokens }
         }
         $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'already_migrated'; SourceId = $sourceId; TargetId = $mapping.target_id; Quota = $mapping.quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $mapping.tokens; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = $plan.AnomalySummary }
         continue
@@ -1270,9 +1314,17 @@ foreach ($plan in $plans) {
             # imported_quota at zero so a later audit cannot mistake the
             # target's pre-existing balance for a newly imported grant.
             $pendingReconcile += [pscustomobject]@{ Plan = $plan; Target = $target; ImportedQuota = [int64]0 }
+            $policyTokens = @($plan.Tokens | Where-Object { [bool]$_.PolicyBlocked })
+            if ($policyTokens.Count -gt 0) {
+                $pendingPolicyRepairs += [pscustomobject]@{ SourceId = [int64]$sourceId; TargetId = [int64]$target.id; Tokens = $policyTokens }
+            }
             $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'reconciled_existing'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = "target_quota=$($target.quota);target_used_quota=$($target.used_quota);target_tokens=$($target.token_count);anomalies=$($plan.AnomalySummary)" }
         } else {
             $pendingMerge += [pscustomobject]@{ Plan = $plan; Target = $target }
+            $policyTokens = @($plan.Tokens | Where-Object { [bool]$_.PolicyBlocked })
+            if ($policyTokens.Count -gt 0) {
+                $pendingPolicyRepairs += [pscustomobject]@{ SourceId = [int64]$sourceId; TargetId = [int64]$target.id; Tokens = $policyTokens }
+            }
             $report += [pscustomobject]@{ Email = Get-ReportEmail $plan.Address; Result = 'merge_ready'; SourceId = $sourceId; TargetId = $target.id; Quota = $plan.Quota; BalanceUsd = $plan.BalanceUsd; SubscriptionUsd = $plan.SubscriptionUsd; BalanceWarnings = @($plan.BalanceWarnings); Tokens = $plan.Tokens.Count; SpecialKeys = $plan.SpecialKeys; PolicyKeys = $plan.PolicyKeys; AnomalyCount = $plan.AnomalyCount; QuotaAnomalies = $plan.QuotaAnomalyCount; NameTooLong = $plan.NameTooLongCount; GroupAliases = $plan.GroupAliases; Detail = "target_quota=$($target.quota);target_used_quota=$($target.used_quota);target_tokens=$($target.token_count);target_password_preserved=true;anomalies=$($plan.AnomalySummary)" }
         }
         continue
@@ -1321,7 +1373,7 @@ if ($blocking.Count -gt 0) {
 }
 
 $applied = @()
-if ($pendingClean.Count -gt 0 -or $pendingMerge.Count -gt 0 -or $pendingReconcile.Count -gt 0) { Ensure-MigrationTable }
+if ($pendingClean.Count -gt 0 -or $pendingMerge.Count -gt 0 -or $pendingReconcile.Count -gt 0 -or $pendingPolicyRepairs.Count -gt 0) { Ensure-MigrationTable }
 foreach ($item in $pendingClean) {
     $fingerprint = Get-SourceFingerprint $item.Source
     $targetBefore = @()
@@ -1378,6 +1430,17 @@ foreach ($entry in $pendingMerge) {
     if ($parts.Count -lt 4 -or $parts[2] -ne '1' -or [int]$parts[3] -ne [int]$parts[1]) { throw "merge did not insert mapping and policy rows consistently for $(Get-ReportEmail $item.Address): $result" }
     $insertedTokens = [int]$parts[1]
     $applied += [pscustomobject]@{ Email = Get-ReportEmail $item.Address; SourceId = $item.Source.user.id; TargetId = $entry.Target.id; Quota = $item.Quota; Tokens = $insertedTokens; Mode = 'merge'; Audit = $auditPath }
+}
+
+foreach ($entry in $pendingPolicyRepairs) {
+    $sql = New-PolicyRepairSql $entry.SourceId $entry.TargetId $entry.Tokens
+    if ($null -eq $sql) { continue }
+    $result = Invoke-TargetSql $sql
+    $parts = $result -split '\|'
+    if ($parts.Count -lt 3 -or [int]$parts[0] -ne $entry.Tokens.Count -or [int]$parts[2] -ne $entry.Tokens.Count) {
+        throw "policy repair did not match and audit all $($entry.Tokens.Count) restricted keys for source user $($entry.SourceId): $result"
+    }
+    $applied += [pscustomobject]@{ Email = ''; SourceId = $entry.SourceId; TargetId = $entry.TargetId; Quota = 0; Tokens = $entry.Tokens.Count; Mode = 'policy_repair'; Audit = 'policy_table' }
 }
 
 ([pscustomobject]@{ created_at = (Get-Date).ToUniversalTime().ToString('o'); scope = $modeName; applied = $applied; skipped = $report | Where-Object Result -notin @('ready','merge_ready','reconciled_existing') }) |
