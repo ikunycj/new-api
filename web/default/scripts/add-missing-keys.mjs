@@ -31,6 +31,10 @@ const newKeys = {
       'Mixed channel groups combine clusters and fail over in member priority order.',
     'Set the mixed channel group name to the billing group used by its clusters.':
       'Set the mixed channel group name to the billing group used by its clusters.',
+    'All Model Types': 'All Model Types',
+    'Model Type': 'Model Type',
+    'Search models, providers, and groups':
+      'Search models, providers, and groups',
     'Channel binding is incomplete': 'Channel binding is incomplete',
     'Channel bindings': 'Channel bindings',
     'Channel bindings saved': 'Channel bindings saved',
@@ -102,6 +106,9 @@ const newKeys = {
       '混合渠道分组会合并多个 Cluster，并按成员优先级执行切流。',
     'Set the mixed channel group name to the billing group used by its clusters.':
       '混合渠道分组名称要填写其 Cluster 使用的计费分组。',
+    'All Model Types': '全部模型类型',
+    'Model Type': '模型类型',
+    'Search models, providers, and groups': '搜索模型、厂商、分组',
     'Channel binding is incomplete': '渠道绑定不完整',
     'Channel bindings': '渠道绑定',
     'Channel bindings saved': '渠道绑定已保存',
@@ -174,6 +181,10 @@ const newKeys = {
       'Les groupes de canaux mixtes combinent les clusters et basculent selon la priorité des membres.',
     'Set the mixed channel group name to the billing group used by its clusters.':
       'Le nom du groupe de canaux mixtes doit correspondre au groupe de facturation de ses clusters.',
+    'All Model Types': 'Tous les types de modèles',
+    'Model Type': 'Type de modèle',
+    'Search models, providers, and groups':
+      'Rechercher des modèles, fournisseurs et groupes',
     'Channel binding is incomplete': 'Association de canal incomplète',
     'Channel bindings': 'Associations des canaux',
     'Channel bindings saved': 'Associations des canaux enregistrées',
@@ -247,6 +258,10 @@ const newKeys = {
       '混合チャネルグループは複数の Cluster をまとめ、メンバー優先度順に切り替えます。',
     'Set the mixed channel group name to the billing group used by its clusters.':
       '混合チャネルグループ名には、その Cluster が使用する課金グループを指定します。',
+    'All Model Types': 'すべてのモデルタイプ',
+    'Model Type': 'モデルタイプ',
+    'Search models, providers, and groups':
+      'モデル、プロバイダー、グループを検索',
     'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
     'Channel bindings': 'チャネルの関連付け',
     'Channel bindings saved': 'チャネルの関連付けを保存しました',
@@ -320,6 +335,10 @@ const newKeys = {
       'Смешанные группы каналов объединяют кластеры и переключаются по приоритету участников.',
     'Set the mixed channel group name to the billing group used by its clusters.':
       'Имя смешанной группы каналов должно совпадать с расчетной группой ее кластеров.',
+    'All Model Types': 'Все типы моделей',
+    'Model Type': 'Тип модели',
+    'Search models, providers, and groups':
+      'Поиск моделей, провайдеров и групп',
     'Channel binding is incomplete': 'Привязка канала не завершена',
     'Channel bindings': 'Привязки каналов',
     'Channel bindings saved': 'Привязки каналов сохранены',
@@ -392,6 +411,10 @@ const newKeys = {
       'Nhóm kênh hỗn hợp gộp các cluster và chuyển dự phòng theo thứ tự ưu tiên thành viên.',
     'Set the mixed channel group name to the billing group used by its clusters.':
       'Tên nhóm kênh hỗn hợp phải trùng với nhóm tính phí mà các cluster sử dụng.',
+    'All Model Types': 'Tất cả loại mô hình',
+    'Model Type': 'Loại mô hình',
+    'Search models, providers, and groups':
+      'Tìm kiếm mô hình, nhà cung cấp và nhóm',
     'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
     'Channel bindings': 'Liên kết kênh',
     'Channel bindings saved': 'Đã lưu liên kết kênh',
@@ -464,6 +487,9 @@ const newKeys = {
       '混合渠道分組會合併多個 Cluster，並按成員優先級執行切流。',
     'Set the mixed channel group name to the billing group used by its clusters.':
       '混合渠道分組名稱要填寫其 Cluster 使用的計費分組。',
+    'All Model Types': '全部模型類型',
+    'Model Type': '模型類型',
+    'Search models, providers, and groups': '搜尋模型、廠商、分組',
     'Channel binding is incomplete': '渠道綁定不完整',
     'Channel bindings': '渠道綁定',
     'Channel bindings saved': '渠道綁定已儲存',
@@ -1066,6 +1092,62 @@ for (const [locale, translations] of Object.entries(loadTestDemoKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 for (const [locale, translations] of Object.entries(routingStrategyKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const preferredModelKeys = {
+  en: {
+    'Preferred Models': 'Preferred Models',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      'Models are checked in this order when selecting a default model. Use a JSON string array.',
+  },
+  zh: {
+    'Preferred Models': '偏好模型',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      '选择默认模型时将按此顺序检查。请使用 JSON 字符串数组。',
+  },
+  'zh-TW': {
+    'Preferred Models': '偏好模型',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      '選擇預設模型時將依此順序檢查。請使用 JSON 字串陣列。',
+  },
+  fr: {
+    'Preferred Models': 'Modèles préférés',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      'Les modèles sont vérifiés dans cet ordre pour choisir le modèle par défaut. Utilisez un tableau JSON de chaînes.',
+  },
+  ja: {
+    'Preferred Models': '優先モデル',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      'デフォルトモデルの選択時にこの順序で確認します。JSON文字列配列を使用してください。',
+  },
+  ru: {
+    'Preferred Models': 'Предпочтительные модели',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      'При выборе модели по умолчанию проверка выполняется в этом порядке. Используйте JSON-массив строк.',
+  },
+  vi: {
+    'Preferred Models': 'Mô hình ưu tiên',
+    'Models are checked in this order when selecting a default model. Use a JSON string array.':
+      'Các mô hình được kiểm tra theo thứ tự này khi chọn mô hình mặc định. Hãy dùng mảng chuỗi JSON.',
+  },
+}
+
+for (const [locale, translations] of Object.entries(preferredModelKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const apiKeyGroupSelectionKeys = {
+  en: { 'Select one or more groups': 'Select one or more groups' },
+  zh: { 'Select one or more groups': '选择一个或多个分组' },
+  'zh-TW': { 'Select one or more groups': '選擇一個或多個分組' },
+  fr: { 'Select one or more groups': 'Sélectionnez un ou plusieurs groupes' },
+  ja: { 'Select one or more groups': '1つ以上のグループを選択' },
+  ru: { 'Select one or more groups': 'Выберите одну или несколько групп' },
+  vi: { 'Select one or more groups': 'Chọn một hoặc nhiều nhóm' },
+}
+
+for (const [locale, translations] of Object.entries(apiKeyGroupSelectionKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

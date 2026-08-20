@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 
+import { PREFERRED_MODEL_ORDER } from '../../lib/model-preferences'
+
 import type { TokenUnit } from './types'
 
 // ----------------------------------------------------------------------------
@@ -41,12 +43,7 @@ export const SORT_OPTION_VALUES = [
   SORT_OPTIONS.PRICE_HIGH,
 ] as const
 
-export const PROMOTED_MODEL_ORDER = [
-  'claude-fable-5',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-] as const
+export const PROMOTED_MODEL_ORDER = PREFERRED_MODEL_ORDER
 
 export function getSortLabels(t: TFunction): Record<SortOption, string> {
   return {
