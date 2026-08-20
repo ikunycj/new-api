@@ -164,6 +164,7 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"username":            user.Username,
 			"display_name":        user.DisplayName,
 			"role":                user.Role,
+			"user_type":           user.UserType,
 			"status":              user.Status,
 			"group":               user.Group,
 			"onboarding_required": onboardingStatus.Required,
@@ -232,6 +233,20 @@ func Register(c *gin.Context) {
 			return
 		}
 	}
+	emailForExistCheck := ""
+	if common.EmailVerificationEnabled {
+		emailForExistCheck = user.Email
+	}
+	exist, err := model.CheckUserExistOrDeleted(user.Username, emailForExistCheck)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		common.SysLog(fmt.Sprintf("CheckUserExistOrDeleted error: %v", err))
+		return
+	}
+	if exist {
+		common.ApiErrorI18n(c, i18n.MsgUserExists)
+		return
+	}
 	affCode := user.AffCode // this code is the inviter's code, not the user's own code
 	inviterId := 0
 	if affCode != "" {
@@ -263,7 +278,7 @@ func Register(c *gin.Context) {
 
 	// 获取插入后的用户ID
 	var insertedUser model.User
-	if err := model.DB.Where("id = ?", cleanUser.Id).First(&insertedUser).Error; err != nil {
+	if err := model.DB.Where("username = ?", cleanUser.Username).First(&insertedUser).Error; err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
 	}
@@ -459,6 +474,7 @@ func GetSelf(c *gin.Context) {
 		"username":            user.Username,
 		"display_name":        user.DisplayName,
 		"role":                user.Role,
+		"user_type":           user.UserType,
 		"status":              user.Status,
 		"email":               user.Email,
 		"github_id":           user.GitHubId,
@@ -644,12 +660,7 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	originUser, err := model.GetUserById(updatedUser.Id, false)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	updatedUser.Username = model.ResolveUsername(updatedUser.Username, originUser.Email)
+	updatedUser.Username = strings.TrimSpace(updatedUser.Username)
 	if updatedUser.Username == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -660,6 +671,16 @@ func UpdateUser(c *gin.Context) {
 	if err := common.Validate.Struct(&updatedUser); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
+	}
+	originUser, err := model.GetUserById(updatedUser.Id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if strings.TrimSpace(updatedUser.UserType) == "" {
+		updatedUser.UserType = originUser.UserType
+	} else {
+		updatedUser.UserType = model.NormalizeUserType(updatedUser.UserType)
 	}
 	if updatedUser.Role != common.RoleGuestUser && updatedUser.Role != originUser.Role {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
@@ -964,6 +985,7 @@ func CreateUser(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
+		UserType:    model.NormalizeUserType(user.UserType),
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {

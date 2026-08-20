@@ -257,6 +257,7 @@ export function UsersMutateDrawer({
                         <Input
                           {...field}
                           placeholder={t('Enter username')}
+                          disabled={isUpdate}
                         />
                       </FormControl>
                       <FormMessage />
@@ -303,6 +304,42 @@ export function UsersMutateDrawer({
                     )}
                   />
                 )}
+
+                <FormField
+                  control={form.control}
+                  name='user_type'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Account type')}</FormLabel>
+                      <Select
+                        items={[
+                          { value: 'toB', label: t('ToB') },
+                          { value: 'toC', label: t('ToC') },
+                        ]}
+                        value={field.value}
+                        onValueChange={(value) =>
+                          value !== null && field.onChange(value)
+                        }
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value='toB'>{t('ToB')}</SelectItem>
+                            <SelectItem value='toC'>{t('ToC')}</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t('ToB accounts can access the load test demo.')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}

@@ -31,6 +31,8 @@ export type UserStatus = z.infer<typeof userStatusSchema>
 /** User role: 1 = common user, 10 = admin, 100 = root */
 export const userRoleSchema = z.number()
 export type UserRole = z.infer<typeof userRoleSchema>
+export const userTypeSchema = z.enum(['toB', 'toC'])
+export type UserType = z.infer<typeof userTypeSchema>
 
 export const userSchema = z.object({
   id: z.number(),
@@ -56,6 +58,7 @@ export const userSchema = z.object({
   linux_do_id: z.string().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
+  user_type: userTypeSchema.optional(),
   created_at: z.number().optional(),
   updated_at: z.number().optional(),
   last_login_at: z.number().optional(),
@@ -110,6 +113,7 @@ export interface UserFormData {
   display_name: string
   password?: string
   role?: number // Only used when creating user
+  user_type?: UserType
   quota?: number // Only used when updating user
   group?: string // Only used when updating user
   remark?: string // Only used when updating user

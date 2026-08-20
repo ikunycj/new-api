@@ -38,6 +38,7 @@ export const userFormSchema = z.object({
   display_name: z.string().optional(),
   password: z.string().optional(),
   role: z.number().optional(),
+  user_type: z.enum(['toB', 'toC']).optional(),
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
@@ -57,6 +58,7 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   display_name: '',
   password: '',
   role: 1, // Default to common user
+  user_type: 'toC',
   quota_dollars: 0,
   group: DEFAULT_GROUP,
   remark: '',
@@ -80,6 +82,7 @@ export function transformFormDataToPayload(
     username: data.username,
     display_name: data.display_name || data.username,
     password: data.password || undefined,
+    user_type: data.user_type || 'toC',
   }
 
   const role = userId === undefined ? data.role || 1 : (data.role ?? 0)
@@ -118,6 +121,7 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     display_name: user.display_name,
     password: '',
     role: user.role,
+    user_type: user.user_type || 'toC',
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',

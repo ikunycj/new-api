@@ -960,7 +960,12 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
           <div>
             <h2 className='text-base font-semibold'>{t('Failover groups')}</h2>
             <p className='text-muted-foreground text-sm'>
-              {t('Limit cross-cluster routing to an explicit cluster set.')}
+              {t(
+                'Mixed channel groups combine clusters and fail over in member priority order.'
+              )}
+              <span className='mt-1 block'>
+                {t('Set the mixed channel group name to the billing group used by its clusters.')}
+              </span>
             </p>
           </div>
           <Button

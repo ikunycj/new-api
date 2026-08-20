@@ -5,6 +5,15 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Account type': 'Account type',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.':
+      'ToB accounts can access the load test demo.',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      'Mixed channel groups combine clusters and fail over in member priority order.',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      'Set the mixed channel group name to the billing group used by its clusters.',
     'Channel binding is incomplete': 'Channel binding is incomplete',
     'Channel bindings': 'Channel bindings',
     'Channel bindings saved': 'Channel bindings saved',
@@ -51,6 +60,14 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
+    'Account type': '账户类型',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.': 'ToB 账户可以使用压测 Demo。',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      '混合渠道分组会合并多个 Cluster，并按成员优先级执行切流。',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      '混合渠道分组名称要填写其 Cluster 使用的计费分组。',
     'Channel binding is incomplete': '渠道绑定不完整',
     'Channel bindings': '渠道绑定',
     'Channel bindings saved': '渠道绑定已保存',
@@ -97,6 +114,15 @@ const newKeys = {
     'User charge': '用户扣费',
   },
   fr: {
+    'Account type': 'Type de compte',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.':
+      'Les comptes ToB peuvent accéder à la démo de test de charge.',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      'Les groupes de canaux mixtes combinent les clusters et basculent selon la priorité des membres.',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      'Le nom du groupe de canaux mixtes doit correspondre au groupe de facturation de ses clusters.',
     'Channel binding is incomplete': 'Association de canal incomplète',
     'Channel bindings': 'Associations des canaux',
     'Channel bindings saved': 'Associations des canaux enregistrées',
@@ -144,6 +170,15 @@ const newKeys = {
     'User charge': 'Facturation utilisateur',
   },
   ja: {
+    'Account type': 'アカウント種別',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.':
+      'ToB アカウントは負荷テストデモを利用できます。',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      '混合チャネルグループは複数の Cluster をまとめ、メンバー優先度順に切り替えます。',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      '混合チャネルグループ名には、その Cluster が使用する課金グループを指定します。',
     'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
     'Channel bindings': 'チャネルの関連付け',
     'Channel bindings saved': 'チャネルの関連付けを保存しました',
@@ -191,6 +226,15 @@ const newKeys = {
     'User charge': 'ユーザー請求額',
   },
   ru: {
+    'Account type': 'Тип аккаунта',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.':
+      'Аккаунты ToB могут использовать демо нагрузочного тестирования.',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      'Смешанные группы каналов объединяют кластеры и переключаются по приоритету участников.',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      'Имя смешанной группы каналов должно совпадать с расчетной группой ее кластеров.',
     'Channel binding is incomplete': 'Привязка канала не завершена',
     'Channel bindings': 'Привязки каналов',
     'Channel bindings saved': 'Привязки каналов сохранены',
@@ -237,6 +281,15 @@ const newKeys = {
     'User charge': 'Списание с пользователя',
   },
   vi: {
+    'Account type': 'Loại tài khoản',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB accounts can access the load test demo.':
+      'Tài khoản ToB có thể truy cập bản demo kiểm thử tải.',
+    'Mixed channel groups combine clusters and fail over in member priority order.':
+      'Nhóm kênh hỗn hợp gộp các cluster và chuyển dự phòng theo thứ tự ưu tiên thành viên.',
+    'Set the mixed channel group name to the billing group used by its clusters.':
+      'Tên nhóm kênh hỗn hợp phải trùng với nhóm tính phí mà các cluster sử dụng.',
     'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
     'Channel bindings': 'Liên kết kênh',
     'Channel bindings saved': 'Đã lưu liên kết kênh',

@@ -102,6 +102,26 @@ func TestSaveFailoverConfigNormalizesAndArchivesRemovedRecords(t *testing.T) {
 	assert.False(t, oldMapping.Enabled)
 }
 
+func TestResolveRuntimeFailoverUsesNamedMixedChannelGroup(t *testing.T) {
+	setupFailoverTables(t)
+	require.NoError(t, DB.Create(&[]Cluster{
+		{Id: 21, Name: "primary", Type: "ikun", Status: ClusterStatusEnabled, BillingGroup: "mixed-claude"},
+		{Id: 22, Name: "backup", Type: "claude", Status: ClusterStatusEnabled, BillingGroup: "mixed-claude"},
+	}).Error)
+	require.NoError(t, DB.Create(&FailoverPolicy{Id: 21, Name: "mixed", Mode: FailoverModeBalanced, Strategy: RoutingStrategyBalanced, Enabled: true, MaxPoolAttempts: 2, MaxClusterAttempts: 2, MaxTotalAttempts: 4, TotalFailoverBudgetMs: 5000, CircuitFailureThreshold: 3, CircuitWindowSeconds: 30, CircuitCooldownSeconds: 30, CircuitHalfOpenRequests: 1}).Error)
+	require.NoError(t, DB.Create(&FailoverGroup{Id: 21, Name: "mixed-claude", PolicyId: 21, Enabled: true}).Error)
+	require.NoError(t, DB.Create(&[]FailoverGroupMember{
+		{FailoverGroupId: 21, ClusterId: 22, Priority: 200, Weight: 100},
+		{FailoverGroupId: 21, ClusterId: 21, Priority: 100, Weight: 100},
+	}).Error)
+
+	InitFailoverCache()
+	policy, order, direct := ResolveRuntimeFailover("", "claude-opus", "/v1/messages", "default", "mixed-claude")
+	assert.Equal(t, RoutingStrategyBalanced, policy.Strategy)
+	assert.Equal(t, []int{22, 21}, order)
+	assert.True(t, direct)
+}
+
 func TestSaveFailoverConfigAllowsCrossBillingGroupMembers(t *testing.T) {
 	setupFailoverTables(t)
 	config := &FailoverConfig{

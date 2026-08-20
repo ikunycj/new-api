@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -212,6 +213,7 @@ type failoverLookupCache struct {
 	policyIDsByStrategy  map[string]int
 	groups               map[int]FailoverGroup
 	groupMembers         map[int][]FailoverGroupMember
+	groupsByName         map[string]FailoverGroup
 	rules                []FailoverRule
 }
 
@@ -229,6 +231,7 @@ var failoverLookup = struct {
 	policyIDsByStrategy:  make(map[string]int),
 	groups:               make(map[int]FailoverGroup),
 	groupMembers:         make(map[int][]FailoverGroupMember),
+	groupsByName:         make(map[string]FailoverGroup),
 }}
 
 func InitFailoverCache() {
@@ -243,6 +246,7 @@ func InitFailoverCache() {
 		policyIDsByStrategy:  make(map[string]int),
 		groups:               make(map[int]FailoverGroup),
 		groupMembers:         make(map[int][]FailoverGroupMember),
+		groupsByName:         make(map[string]FailoverGroup),
 	}
 	activeClusterCodes := make([]int, 0)
 	if DB != nil && DB.Migrator().HasTable(&Cluster{}) {
@@ -356,6 +360,9 @@ func InitFailoverCache() {
 		if err := DB.Where("enabled = ?", true).Find(&groups).Error; err == nil {
 			for _, group := range groups {
 				cache.groups[group.Id] = group
+				if name := strings.ToLower(strings.TrimSpace(group.Name)); name != "" {
+					cache.groupsByName[name] = group
+				}
 			}
 		}
 	}
@@ -395,6 +402,28 @@ func ResolveRuntimeFailoverWithStrategy(mode string, strategy string, modelName 
 		}
 	}
 	rulePolicy := false
+	// A failover group whose name matches the concrete billing group acts as a
+	// mixed channel. Its members become the ordered cluster candidates, so a
+	// token using that group gets the same cross-cluster failover behavior as a
+	// wildcard routing rule without requiring a second mapping layer.
+	if mixedGroup, ok := failoverLookup.value.groupsByName[strings.ToLower(strings.TrimSpace(billingGroup))]; ok {
+		if strings.TrimSpace(mode) == "" {
+			if configured, exists := failoverLookup.value.policiesByID[mixedGroup.PolicyId]; exists {
+				policy = configured
+			}
+		}
+		members := failoverLookup.value.groupMembers[mixedGroup.Id]
+		clusterOrder = make([]int, 0, len(members))
+		seen := make(map[int]struct{}, len(members))
+		for _, member := range members {
+			if _, exists := seen[member.ClusterId]; exists {
+				continue
+			}
+			seen[member.ClusterId] = struct{}{}
+			clusterOrder = append(clusterOrder, member.ClusterId)
+		}
+		rulePolicy = len(clusterOrder) > 0
+	}
 	for _, rule := range failoverLookup.value.rules {
 		group, ok := failoverLookup.value.groups[rule.FailoverGroupId]
 		if !ok {
@@ -622,12 +651,18 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				return err
 			}
 		}
+		groupNames := make(map[string]struct{}, len(config.Groups))
 		for i := range config.Groups {
 			group := &config.Groups[i]
 			group.Name = strings.TrimSpace(group.Name)
 			if group.Name == "" || group.PolicyId <= 0 {
 				return errors.New("failover group name and policy_id are required")
 			}
+			groupName := strings.ToLower(group.Name)
+			if _, exists := groupNames[groupName]; exists {
+				return fmt.Errorf("failover group name %q is duplicated", group.Name)
+			}
+			groupNames[groupName] = struct{}{}
 			if err := tx.Save(group).Error; err != nil {
 				return err
 			}

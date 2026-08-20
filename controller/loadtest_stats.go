@@ -28,6 +28,16 @@ func GetLoadTestChannelStats(c *gin.Context) {
 		return
 	}
 
+	user, err := model.GetUserById(c.GetInt("id"), false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if user.UserType != model.UserTypeToB && c.GetInt("role") < common.RoleAdminUser {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to ToB accounts only"})
+		return
+	}
+
 	unique := make([]string, 0, len(request.RequestIDs))
 	seen := make(map[string]struct{}, len(request.RequestIDs))
 	for _, requestID := range request.RequestIDs {
