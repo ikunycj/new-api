@@ -63,8 +63,7 @@ export function useSidebarView(): ResolvedSidebarView {
         ).filter(
           (item) =>
             item.url !== '/loadtest-demo' ||
-            userType === 'toB' ||
-            role >= ROLE.ADMIN
+            userType === 'toB'
         )
         return items.length === group.items.length ? group : { ...group, items }
       })

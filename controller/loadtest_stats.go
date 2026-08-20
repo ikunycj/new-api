@@ -33,7 +33,7 @@ func GetLoadTestChannelStats(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if user.UserType != model.UserTypeToB && c.GetInt("role") < common.RoleAdminUser {
+	if user.UserType != model.UserTypeToB {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to ToB accounts only"})
 		return
 	}
