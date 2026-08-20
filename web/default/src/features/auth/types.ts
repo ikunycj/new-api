@@ -97,6 +97,7 @@ export interface SystemStatus {
     build_time?: string
     start_time?: number
     system_name?: string
+    preferred_models?: string[]
     logo?: string
     github_oauth?: boolean
     github_client_id?: string

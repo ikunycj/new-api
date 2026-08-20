@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { GroupOption, ModelOption } from '../../types'
+import { getPreferredModelOrder } from '../../../../lib/model-preferences'
 
 export function getModelFallback(
   models: ModelOption[],
@@ -26,6 +27,13 @@ export function getModelFallback(
 
   if (hasCurrentModel || models.length === 0) {
     return null
+  }
+
+  const preferredModel = getPreferredModelOrder().find((preferred) =>
+    models.some((model) => model.value === preferred)
+  )
+  if (preferredModel) {
+    return preferredModel
   }
 
   return models[0].value

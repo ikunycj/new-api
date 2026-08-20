@@ -420,7 +420,11 @@ export function ApiKeysMutateDrawer({
             <SideDrawerSection>
               <SideDrawerSectionHeader
                 title={t('Model groups and routing')}
-                description={t('Choose groups and set their request order')}
+                description={
+                  isUpdate
+                    ? t('Choose groups and set their request order')
+                    : t('Select one or more groups')
+                }
                 icon={<Route className='size-4' />}
                 iconTone='info'
               />

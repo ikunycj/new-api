@@ -55,6 +55,12 @@ const thinkingBlacklistExample = JSON.stringify(
   2
 )
 
+const preferredModelsExample = JSON.stringify(
+  ['gpt-5.6-sol', 'claude-fable-5'],
+  null,
+  2
+)
+
 const chatToResponsesPolicyExample = JSON.stringify(
   {
     enabled: true,
@@ -87,12 +93,26 @@ const jsonString = z.string().refine((value) => {
   }
 }, 'Invalid JSON format')
 
+const preferredModelsJson = jsonString.refine((value) => {
+  if (!value.trim()) return true
+  try {
+    const parsed = JSON.parse(value)
+    return (
+      Array.isArray(parsed) &&
+      parsed.every((model) => typeof model === 'string' && model.trim() !== '')
+    )
+  } catch {
+    return false
+  }
+}, 'Preferred models must be a JSON string array')
+
 const schema = z.object({
   global: z.object({
     pass_through_request_enabled: z.boolean(),
     thinking_model_blacklist: jsonString,
     chat_completions_to_responses_policy: jsonString,
   }),
+  PreferredModels: preferredModelsJson,
   general_setting: z.object({
     ping_interval_enabled: z.boolean(),
     ping_interval_seconds: z.coerce.number().min(1),
@@ -106,6 +126,7 @@ type FlatGlobalModelSettings = {
   'global.pass_through_request_enabled': boolean
   'global.thinking_model_blacklist': string
   'global.chat_completions_to_responses_policy': string
+  PreferredModels: string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
 }
@@ -123,6 +144,7 @@ const flattenGlobalValues = (
     values.global.chat_completions_to_responses_policy,
     '{}'
   ),
+  PreferredModels: normalizeJsonText(values.PreferredModels, '[]'),
   'general_setting.ping_interval_enabled':
     values.general_setting.ping_interval_enabled,
   'general_setting.ping_interval_seconds':
@@ -161,6 +183,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
     field:
       | 'global.thinking_model_blacklist'
       | 'global.chat_completions_to_responses_policy'
+      | 'PreferredModels'
   ) => {
     const raw = form.getValues(field)
     if (!raw || !raw.trim()) return
@@ -253,6 +276,40 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
                     onClick={() =>
                       formatJsonField('global.thinking_model_blacklist')
                     }
+                  >
+                    {t('Format JSON')}
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='PreferredModels'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Preferred Models')}</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={4}
+                    placeholder={`${t('Example:')}\n${preferredModelsExample}`}
+                    {...field}
+                    onChange={(event) => field.onChange(event.target.value)}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Models are checked in this order when selecting a default model. Use a JSON string array.'
+                  )}
+                </FormDescription>
+                <div className='flex flex-wrap gap-2'>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => formatJsonField('PreferredModels')}
                   >
                     {t('Format JSON')}
                   </Button>
