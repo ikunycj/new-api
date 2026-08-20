@@ -44,7 +44,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -58,12 +57,12 @@ import { cn } from '@/lib/utils'
 import {
   PRICING_CURRENCIES,
   VIEW_MODES,
+  getModelTypeLabels,
   getSortLabels,
   type PricingCurrency,
   type SortOption,
   type ViewMode,
 } from '../constants'
-import { formatGroupRatio } from '../lib/model-helpers'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 import { SearchBar } from './search-bar'
@@ -79,8 +78,6 @@ export interface PricingToolbarProps {
   searchInput: string
   onSearchChange: (value: string) => void
   onClearSearch: () => void
-  filteredCount: number
-  totalCount?: number
   sortBy: string
   onSortChange: (value: string) => void
   tokenUnit: TokenUnit
@@ -92,16 +89,15 @@ export interface PricingToolbarProps {
   quotaTypeFilter: string
   endpointTypeFilter: string
   vendorFilter: string
-  groupFilter: string
+  modelTypeFilter: string
   tagFilter: string
   onQuotaTypeChange: (value: string) => void
   onEndpointTypeChange: (value: string) => void
   onVendorChange: (value: string) => void
-  onGroupChange: (value: string) => void
+  onModelTypeChange: (value: string) => void
   onTagChange: (value: string) => void
   vendors: PricingVendor[]
   groups: string[]
-  groupRatios?: Record<string, number>
   tags: string[]
   models: PricingModel[]
   hasActiveFilters: boolean
@@ -223,6 +219,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   const { t } = useTranslation()
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const sortLabels = getSortLabels(t)
+  const modelTypeLabels = getModelTypeLabels(t)
 
   const handleTokenUnitChange = (value: string) => {
     props.onTokenUnitChange(value as TokenUnit)
@@ -243,17 +240,9 @@ export function PricingToolbar(props: PricingToolbarProps) {
       label: vendor.name,
     })),
   ]
-  const groupOptions: FilterDropdownOption[] = [
-    { value: 'all', label: t('All Groups') },
-    ...props.groups.map((group) => {
-      const ratioLabel = formatGroupRatio(props.groupRatios?.[group])
-      return {
-        value: group,
-        label: ratioLabel ? `${group} · ${ratioLabel}` : group,
-      }
-    }),
-  ]
-
+  const modelTypeOptions = Object.entries(modelTypeLabels).map(
+    ([value, label]) => ({ value, label })
+  )
   return (
     <section className='flex flex-col gap-3'>
       <div className='grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(280px,1fr)_220px_220px_auto]'>
@@ -261,7 +250,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
           value={props.searchInput}
           onChange={props.onSearchChange}
           onClear={props.onClearSearch}
-          placeholder={t('Search model name, provider, endpoint, or tag...')}
+          placeholder={t('Search models, providers, and groups')}
           className='md:col-span-2 lg:col-span-1'
         />
         <FilterDropdown
@@ -271,12 +260,11 @@ export function PricingToolbar(props: PricingToolbarProps) {
           onChange={props.onVendorChange}
         />
         <FilterDropdown
-          label={t('Pricing group')}
-          value={props.groupFilter}
-          options={groupOptions}
-          onChange={props.onGroupChange}
+          label={t('Model Type')}
+          value={props.modelTypeFilter}
+          options={modelTypeOptions}
+          onChange={props.onModelTypeChange}
         />
-
         <Tooltip>
           <TooltipTrigger
             render={
@@ -301,21 +289,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
         </Tooltip>
       </div>
 
-      <div className='border-border/70 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between'>
-        <div className='flex items-center gap-2'>
-          <div className='text-muted-foreground flex items-baseline gap-1 text-sm'>
-            <span className='text-foreground font-semibold tabular-nums'>
-              {props.filteredCount.toLocaleString()}
-            </span>
-            <span>{props.filteredCount === 1 ? t('model') : t('models')}</span>
-            {props.hasActiveFilters && props.totalCount && (
-              <span className='text-muted-foreground/60 text-xs'>
-                / {props.totalCount.toLocaleString()}
-              </span>
-            )}
-          </div>
-        </div>
-
+      <div className='border-border/70 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-end'>
         <div className='flex flex-wrap items-center gap-2'>
           <div className='flex items-center gap-2'>
             <SegmentedControl
@@ -398,25 +372,19 @@ export function PricingToolbar(props: PricingToolbarProps) {
         >
           <SheetHeader className={sideDrawerHeaderClassName()}>
             <SheetTitle>{t('Filter')}</SheetTitle>
-            <SheetDescription>
-              {t('Filter models by provider, group, type, endpoint, and tags.')}
-            </SheetDescription>
           </SheetHeader>
           <div className={sideDrawerFormClassName('gap-0')}>
             <PricingSidebar
               quotaTypeFilter={props.quotaTypeFilter}
               endpointTypeFilter={props.endpointTypeFilter}
               vendorFilter={props.vendorFilter}
-              groupFilter={props.groupFilter}
               tagFilter={props.tagFilter}
               onQuotaTypeChange={props.onQuotaTypeChange}
               onEndpointTypeChange={props.onEndpointTypeChange}
               onVendorChange={props.onVendorChange}
-              onGroupChange={props.onGroupChange}
               onTagChange={props.onTagChange}
               vendors={props.vendors}
               groups={props.groups}
-              groupRatios={props.groupRatios}
               tags={props.tags}
               models={props.models}
               hasActiveFilters={props.hasActiveFilters}

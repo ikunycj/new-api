@@ -156,7 +156,8 @@ export function usePricingColumns(
           const officialDynamicSummary = getOfficialDynamicPricingSummary(
             model,
             tokenUnit,
-            usdExchangeRate
+            usdExchangeRate,
+            showRechargePrice
           )
           const officialEntries = new Map(
             (officialDynamicSummary?.primaryEntries ?? []).map((entry) => [
@@ -216,10 +217,22 @@ export function usePricingColumns(
           )
           const currentValue = `${inputPrice} / ${outputPrice}`
           const officialInputPrice = stripTrailingZeros(
-            formatOfficialPrice(model, 'input', tokenUnit, usdExchangeRate)
+            formatOfficialPrice(
+              model,
+              'input',
+              tokenUnit,
+              usdExchangeRate,
+              showRechargePrice
+            )
           )
           const officialOutputPrice = stripTrailingZeros(
-            formatOfficialPrice(model, 'output', tokenUnit, usdExchangeRate)
+            formatOfficialPrice(
+              model,
+              'output',
+              tokenUnit,
+              usdExchangeRate,
+              showRechargePrice
+            )
           )
           const officialValue = `${officialInputPrice} / ${officialOutputPrice}`
 
@@ -242,7 +255,7 @@ export function usePricingColumns(
           )
         )
         const officialRequestPrice = stripTrailingZeros(
-          formatOfficialRequestPrice(model, usdExchangeRate)
+          formatOfficialRequestPrice(model, usdExchangeRate, showRechargePrice)
         )
 
         return (
@@ -292,7 +305,8 @@ export function usePricingColumns(
           const officialDynamicSummary = getOfficialDynamicPricingSummary(
             model,
             tokenUnit,
-            usdExchangeRate
+            usdExchangeRate,
+            showRechargePrice
           )
           const officialCacheEntry = officialDynamicSummary?.entries.find(
             (entry) => entry.field === 'cacheReadPrice'
@@ -328,7 +342,13 @@ export function usePricingColumns(
           )
         )
         const officialCachedPrice = stripTrailingZeros(
-          formatOfficialPrice(model, 'cache', tokenUnit, usdExchangeRate)
+          formatOfficialPrice(
+            model,
+            'cache',
+            tokenUnit,
+            usdExchangeRate,
+            showRechargePrice
+          )
         )
 
         return (

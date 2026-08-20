@@ -28,17 +28,20 @@ import {
   DEFAULT_PRICING_CURRENCY,
   PRICING_CURRENCIES,
   VIEW_MODES,
+  MODEL_TYPES,
   type PricingCurrency,
   type ViewMode,
 } from '../constants'
 import { filterAndSortModels, extractAllTags } from '../lib/filters'
 import type { PricingModel, TokenUnit } from '../types'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 type FilterState = {
   search?: string
   sort?: string
   vendor?: string
   group?: string
+  modelType?: string
   quotaType?: string
   endpointType?: string
   tag?: string
@@ -55,12 +58,16 @@ function normalizeViewMode(value: unknown): ViewMode {
 }
 
 export function useFilters(models: PricingModel[]) {
+  const preferredModels = useSystemConfigStore(
+    (state) => state.config.preferredModels
+  )
   const search = useSearch({ from: '/pricing/' })
   const [filterState, setFilterState] = useState<FilterState>(() => ({
     search: search.search,
     sort: search.sort,
     vendor: search.vendor,
     group: search.group,
+    modelType: search.modelType,
     quotaType: search.quotaType,
     endpointType: search.endpointType,
     tag: search.tag,
@@ -73,6 +80,7 @@ export function useFilters(models: PricingModel[]) {
   const sortBy = filterState.sort || SORT_OPTIONS.RECOMMENDED
   const vendorFilter = filterState.vendor || FILTER_ALL
   const groupFilter = filterState.group || FILTER_ALL
+  const modelTypeFilter = filterState.modelType || MODEL_TYPES.ALL
   const quotaTypeFilter = filterState.quotaType || QUOTA_TYPES.ALL
   const endpointTypeFilter = filterState.endpointType || ENDPOINT_TYPES.ALL
   const tagFilter = filterState.tag || FILTER_ALL
@@ -113,6 +121,11 @@ export function useFilters(models: PricingModel[]) {
   )
   const setGroupFilter = useCallback(
     (v: string) => updateFilters({ group: v === FILTER_ALL ? undefined : v }),
+    [updateFilters]
+  )
+  const setModelTypeFilter = useCallback(
+    (v: string) =>
+      updateFilters({ modelType: v === MODEL_TYPES.ALL ? undefined : v }),
     [updateFilters]
   )
   const setQuotaTypeFilter = useCallback(
@@ -161,46 +174,66 @@ export function useFilters(models: PricingModel[]) {
       search: searchInput,
       vendor: vendorFilter,
       group: groupFilter,
+      modelType: modelTypeFilter,
       quotaType: quotaTypeFilter,
       endpointType: endpointTypeFilter,
       tag: tagFilter,
       sortBy,
-    })
+    }, preferredModels)
   }, [
     models,
     searchInput,
     vendorFilter,
     groupFilter,
+    modelTypeFilter,
     quotaTypeFilter,
     endpointTypeFilter,
     tagFilter,
     sortBy,
+    preferredModels,
   ])
 
   const hasActiveFilters = useMemo(
     () =>
       vendorFilter !== FILTER_ALL ||
       groupFilter !== FILTER_ALL ||
+      modelTypeFilter !== MODEL_TYPES.ALL ||
       quotaTypeFilter !== QUOTA_TYPES.ALL ||
       endpointTypeFilter !== ENDPOINT_TYPES.ALL ||
       tagFilter !== FILTER_ALL,
-    [vendorFilter, groupFilter, quotaTypeFilter, endpointTypeFilter, tagFilter]
+    [
+      vendorFilter,
+      groupFilter,
+      modelTypeFilter,
+      quotaTypeFilter,
+      endpointTypeFilter,
+      tagFilter,
+    ]
   )
 
   const activeFilterCount = useMemo(
     () =>
       (vendorFilter !== FILTER_ALL ? 1 : 0) +
       (groupFilter !== FILTER_ALL ? 1 : 0) +
+      (modelTypeFilter !== MODEL_TYPES.ALL ? 1 : 0) +
       (quotaTypeFilter !== QUOTA_TYPES.ALL ? 1 : 0) +
       (endpointTypeFilter !== ENDPOINT_TYPES.ALL ? 1 : 0) +
       (tagFilter !== FILTER_ALL ? 1 : 0),
-    [vendorFilter, groupFilter, quotaTypeFilter, endpointTypeFilter, tagFilter]
+    [
+      vendorFilter,
+      groupFilter,
+      modelTypeFilter,
+      quotaTypeFilter,
+      endpointTypeFilter,
+      tagFilter,
+    ]
   )
 
   const clearFilters = useCallback(() => {
     updateFilters({
       vendor: undefined,
       group: undefined,
+      modelType: undefined,
       quotaType: undefined,
       endpointType: undefined,
       tag: undefined,
@@ -216,6 +249,7 @@ export function useFilters(models: PricingModel[]) {
     sortBy,
     vendorFilter,
     groupFilter,
+    modelTypeFilter,
     quotaTypeFilter,
     endpointTypeFilter,
     tagFilter,
@@ -226,6 +260,7 @@ export function useFilters(models: PricingModel[]) {
     setSortBy,
     setVendorFilter,
     setGroupFilter,
+    setModelTypeFilter,
     setQuotaTypeFilter,
     setEndpointTypeFilter,
     setTagFilter,

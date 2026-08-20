@@ -18,17 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   SORT_OPTIONS,
-  PROMOTED_MODEL_ORDER,
   FILTER_ALL,
   QUOTA_TYPES,
   QUOTA_TYPE_VALUES,
   ENDPOINT_TYPES,
+  MODEL_TYPES,
+  type ModelTypeOption,
 } from '../constants'
 import type { PricingModel } from '../types'
-
-const promotedModelRanks = new Map<string, number>(
-  PROMOTED_MODEL_ORDER.map((modelName, index) => [modelName, index])
-)
+import { getPreferredModelOrder } from '../../../lib/model-preferences'
 
 // ----------------------------------------------------------------------------
 // Filter Utilities
@@ -43,14 +41,39 @@ export function filterBySearch(
 ): PricingModel[] {
   if (!query) return models
 
-  const lowerQuery = query.toLowerCase()
+  const lowerQuery = query.trim().toLowerCase()
+  if (!lowerQuery) return models
+
   return models.filter(
     (m) =>
       m.model_name?.toLowerCase().includes(lowerQuery) ||
-      m.description?.toLowerCase().includes(lowerQuery) ||
-      m.tags?.toLowerCase().includes(lowerQuery) ||
-      m.vendor_name?.toLowerCase().includes(lowerQuery)
+      m.vendor_name?.toLowerCase().includes(lowerQuery) ||
+      m.enable_groups?.some((group) =>
+        group.toLowerCase().includes(lowerQuery)
+      )
   )
+}
+
+export function getModelType(model: PricingModel): ModelTypeOption {
+  const endpoints = model.supported_endpoint_types || []
+  if (endpoints.includes(ENDPOINT_TYPES.OPENAI_VIDEO)) {
+    return MODEL_TYPES.VIDEO
+  }
+  if (endpoints.includes(ENDPOINT_TYPES.IMAGE_GENERATION)) {
+    return MODEL_TYPES.IMAGE
+  }
+  if (model.audio_ratio != null || model.audio_completion_ratio != null) {
+    return MODEL_TYPES.AUDIO
+  }
+  return MODEL_TYPES.TEXT
+}
+
+export function filterByModelType(
+  models: PricingModel[],
+  modelType: string
+): PricingModel[] {
+  if (modelType === MODEL_TYPES.ALL) return models
+  return models.filter((model) => getModelType(model) === modelType)
 }
 
 /**
@@ -119,17 +142,21 @@ function getModelPrice(model: PricingModel): number {
  */
 export function sortModels(
   models: PricingModel[],
-  sortBy: string
+  sortBy: string,
+  preferredModelOrder = getPreferredModelOrder()
 ): PricingModel[] {
   const sorted = [...models]
 
   switch (sortBy) {
     case SORT_OPTIONS.RECOMMENDED:
+      const promotedModelRanks = new Map<string, number>(
+        preferredModelOrder.map((modelName, index) => [modelName, index])
+      )
       sorted.sort((a, b) => {
         const aRank =
-          promotedModelRanks.get(a.model_name) ?? PROMOTED_MODEL_ORDER.length
+          promotedModelRanks.get(a.model_name) ?? preferredModelOrder.length
         const bRank =
-          promotedModelRanks.get(b.model_name) ?? PROMOTED_MODEL_ORDER.length
+          promotedModelRanks.get(b.model_name) ?? preferredModelOrder.length
 
         return (
           aRank - bRank ||
@@ -162,19 +189,22 @@ export function filterAndSortModels(
     search: string
     vendor: string
     group: string
+    modelType: string
     quotaType: string
     endpointType: string
     tag: string
     sortBy: string
-  }
+  },
+  preferredModelOrder = getPreferredModelOrder()
 ): PricingModel[] {
   let result = filterBySearch(models, filters.search)
   result = filterByVendor(result, filters.vendor)
   result = filterByGroup(result, filters.group)
+  result = filterByModelType(result, filters.modelType)
   result = filterByQuotaType(result, filters.quotaType)
   result = filterByEndpointType(result, filters.endpointType)
   result = filterByTag(result, filters.tag)
-  result = sortModels(result, filters.sortBy)
+  result = sortModels(result, filters.sortBy, preferredModelOrder)
 
   return result
 }

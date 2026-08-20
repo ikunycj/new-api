@@ -163,19 +163,20 @@ export function formatOfficialPrice(
   model: PricingModel,
   type: PriceType,
   tokenUnit: TokenUnit,
-  billingUSDToCNYRate = 1
+  billingUSDToCNYRate = 1,
+  showInCny = true
 ): string {
   if (model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
     return '-'
   }
 
   const priceInUSD = calculateTokenPrice(model, type, 1)
-  const priceInCNY = convertUSDForDisplay(
+  const displayPrice = convertUSDForDisplay(
     priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit],
-    true,
+    showInCny,
     billingUSDToCNYRate
   )
-  return formatPricingCurrency(priceInCNY, true)
+  return formatPricingCurrency(displayPrice, showInCny)
 }
 
 /**
@@ -250,16 +251,17 @@ export function formatRequestPrice(
 /** Format the catalog base request price in CNY at the billing rate. */
 export function formatOfficialRequestPrice(
   model: PricingModel,
-  billingUSDToCNYRate = 1
+  billingUSDToCNYRate = 1,
+  showInCny = true
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
     return '-'
   }
 
-  const priceInCNY = convertUSDForDisplay(
+  const displayPrice = convertUSDForDisplay(
     model.model_price || 0,
-    true,
+    showInCny,
     billingUSDToCNYRate
   )
-  return formatPricingCurrency(priceInCNY, true, 4, 4)
+  return formatPricingCurrency(displayPrice, showInCny, 4, 4)
 }

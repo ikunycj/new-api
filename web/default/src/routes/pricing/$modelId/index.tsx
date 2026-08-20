@@ -29,6 +29,7 @@ const modelDetailsSearchSchema = z.object({
   sort: z.enum(SORT_OPTION_VALUES).optional().catch(undefined),
   vendor: z.string().optional(),
   group: z.string().optional(),
+  modelType: z.string().optional(),
   quotaType: z.string().optional(),
   endpointType: z.string().optional(),
   tag: z.string().optional(),

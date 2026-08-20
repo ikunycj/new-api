@@ -62,7 +62,7 @@ export function Pricing() {
     searchInput,
     sortBy,
     vendorFilter,
-    groupFilter,
+    modelTypeFilter,
     quotaTypeFilter,
     endpointTypeFilter,
     tagFilter,
@@ -72,7 +72,7 @@ export function Pricing() {
     setSearchInput,
     setSortBy,
     setVendorFilter,
-    setGroupFilter,
+    setModelTypeFilter,
     setQuotaTypeFilter,
     setEndpointTypeFilter,
     setTagFilter,
@@ -112,13 +112,8 @@ export function Pricing() {
 
   const displayModels = useMemo(
     () =>
-      expandModelsByGroup(
-        filteredModels,
-        groupFilter,
-        availableGroups,
-        groupRatio || {}
-      ),
-    [availableGroups, filteredModels, groupFilter, groupRatio]
+      expandModelsByGroup(filteredModels, availableGroups, groupRatio || {}),
+    [availableGroups, filteredModels, groupRatio]
   )
 
   const handleClearAll = useCallback(() => {
@@ -179,16 +174,6 @@ export function Pricing() {
           <h1 className='text-3xl leading-tight font-bold sm:text-4xl'>
             {t('Model Square')}
           </h1>
-          <p className='text-muted-foreground mt-3 max-w-2xl text-sm leading-6 sm:text-base'>
-            {t(
-              'Discover curated AI models, compare pricing and capabilities, and choose the right model for every scenario.'
-            )}
-          </p>
-          <p className='text-muted-foreground/70 mt-2 text-sm'>
-            {t('This site currently has {{count}} models enabled', {
-              count: models?.length || 0,
-            })}
-          </p>
         </header>
 
         <main className='flex min-w-0 flex-col gap-5'>
@@ -196,8 +181,6 @@ export function Pricing() {
             searchInput={searchInput}
             onSearchChange={setSearchInput}
             onClearSearch={clearSearch}
-            filteredCount={filteredModels.length}
-            totalCount={models?.length}
             sortBy={sortBy}
             onSortChange={setSortBy}
             tokenUnit={tokenUnit}
@@ -209,16 +192,15 @@ export function Pricing() {
             quotaTypeFilter={quotaTypeFilter}
             endpointTypeFilter={endpointTypeFilter}
             vendorFilter={vendorFilter}
-            groupFilter={groupFilter}
+            modelTypeFilter={modelTypeFilter}
             tagFilter={tagFilter}
             onQuotaTypeChange={setQuotaTypeFilter}
             onEndpointTypeChange={setEndpointTypeFilter}
             onVendorChange={setVendorFilter}
-            onGroupChange={setGroupFilter}
+            onModelTypeChange={setModelTypeFilter}
             onTagChange={setTagFilter}
             vendors={vendors || []}
             groups={availableGroups}
-            groupRatios={groupRatio}
             tags={availableTags}
             models={models || []}
             hasActiveFilters={hasActiveFilters}

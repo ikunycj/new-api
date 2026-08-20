@@ -33,6 +33,23 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 	return filtered
 }
 
+func filterVendorsByPricing(vendors []model.PricingVendor, pricing []model.Pricing) []model.PricingVendor {
+	usedVendorIDs := make(map[int]struct{})
+	for _, item := range pricing {
+		if item.VendorID != 0 {
+			usedVendorIDs[item.VendorID] = struct{}{}
+		}
+	}
+
+	filtered := make([]model.PricingVendor, 0, len(usedVendorIDs))
+	for _, vendor := range vendors {
+		if _, ok := usedVendorIDs[vendor.ID]; ok {
+			filtered = append(filtered, vendor)
+		}
+	}
+	return filtered
+}
+
 func GetPricing(c *gin.Context) {
 	pricing := model.GetPricing()
 	userId, exists := c.Get("id")
@@ -67,7 +84,7 @@ func GetPricing(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,
-		"vendors":            model.GetVendors(),
+		"vendors":            filterVendorsByPricing(model.GetVendors(), pricing),
 		"group_ratio":        groupRatio,
 		"usable_group":       usableGroup,
 		"supported_endpoint": model.GetSupportedEndpointMap(),
