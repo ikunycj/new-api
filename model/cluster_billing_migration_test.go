@@ -94,4 +94,14 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	assert.Equal(t, "通用套餐", groups[UnifiedClusterBillingGroup])
 	assert.NotContains(t, groups, "Cluster_1")
 	assert.NotContains(t, groups, "Cluster_2")
+
+	storedToken.Group = "Cluster_2"
+	require.NoError(t, storedToken.SetGroupCandidates([]string{"Claude_cluster_1", "default"}))
+	require.NoError(t, testDB.Unscoped().Model(&storedToken).Select("group", "group_candidates").Updates(&storedToken).Error)
+	require.NoError(t, migrateUnifiedClusterBillingGroup())
+	require.NoError(t, testDB.Unscoped().First(&storedToken, token.Id).Error)
+	assert.Equal(t, UnifiedClusterBillingGroup, storedToken.Group)
+	candidates, err = storedToken.GetGroupCandidates()
+	require.NoError(t, err)
+	assert.Equal(t, []string{UnifiedClusterBillingGroup, "default"}, candidates)
 }

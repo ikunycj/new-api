@@ -488,6 +488,9 @@ func migrateUnifiedClusterBillingGroup() error {
 	}
 
 	legacyGroups := make(map[string]struct{})
+	for _, group := range []string{"Cluster_1", "Cluster_2", "Claude_cluster_1", "Claude_cluster_2"} {
+		legacyGroups[group] = struct{}{}
+	}
 	for _, cluster := range clusters {
 		group := strings.TrimSpace(cluster.BillingGroup)
 		if group != "" && group != UnifiedClusterBillingGroup {
