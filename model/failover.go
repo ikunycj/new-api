@@ -16,7 +16,7 @@ const (
 	// UnifiedClusterBillingGroup is the single user-facing package for all
 	// cluster-backed channels. Individual cluster IDs remain internal routing
 	// details and are still used for failover isolation.
-	UnifiedClusterBillingGroup = "cluster"
+	UnifiedClusterBillingGroup = "通用套餐"
 
 	ClusterStatusDisabled = 0
 	ClusterStatusEnabled  = 1

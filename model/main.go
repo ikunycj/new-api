@@ -488,7 +488,10 @@ func migrateUnifiedClusterBillingGroup() error {
 	}
 
 	legacyGroups := make(map[string]struct{})
-	for _, group := range []string{"Cluster_1", "Cluster_2", "Claude_cluster_1", "Claude_cluster_2"} {
+	// These names were used by earlier Cluster implementations. Keep them in
+	// the migration set even when no active Cluster row still references them;
+	// old token candidates and billing options can outlive the Cluster record.
+	for _, group := range []string{"cluster", "Cluster_1", "Cluster_2", "Claude_cluster_1", "Claude_cluster_2"} {
 		legacyGroups[group] = struct{}{}
 	}
 	for _, cluster := range clusters {
