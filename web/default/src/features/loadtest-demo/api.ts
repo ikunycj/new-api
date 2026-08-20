@@ -94,22 +94,13 @@ export function getLoadTestProvider(model: string): LoadTestProvider {
   return model.toLowerCase().startsWith('claude-') ? 'claude' : 'openai'
 }
 
-function isLoadTestKey(apiKey: ApiKey) {
-  const searchable = [
-    apiKey.name,
-    apiKey.group ?? '',
-    apiKey.model_limits ?? '',
-    ...apiKey.group_candidates,
-  ]
-    .join(' ')
-    .toLowerCase()
-  return /(anthropic|claude|codex|gpt|openai|load[- ]?test)/.test(searchable)
-}
-
 export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
   const response = await getApiKeys({ p: 1, size: 100 })
+  // Keys are already scoped to the authenticated account by the API. Do not
+  // infer the provider from a key name/group: ordinary keys commonly use
+  // names such as "default" while still being valid for GPT or Claude.
   const candidates = (response.data?.items ?? []).filter(
-    (apiKey) => apiKey.status === 1 && isLoadTestKey(apiKey)
+    (apiKey) => apiKey.status === 1
   )
 
   const loaded = await Promise.all(
