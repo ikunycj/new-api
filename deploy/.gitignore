@@ -17,3 +17,4 @@ ikun.love/*.tar.gz
 ikun.love/.staging/
 ikun.love/artifacts/
 ikun.love/migration-reports/
+ikun.love/migration-snapshots/

@@ -181,15 +181,52 @@ Token；只有在管理员明确批准后，才可追加一次源余额并补导
 
 ### 8.2 Dry-run 阻断规则
 
-对全量邮箱显式传参，脚本默认不会隐式选择用户：
+迁移脚本有三种输入范围，默认都是 dry-run，只有显式加入 `-Apply` 才可能写目标库：
 
 ```powershell
+# 灰度：只处理明确列出的账户。
 & .\deploy\ikun.love\migrate-sub2api-users.ps1 `
-  -Email 'user-a@qq.com','user-b@qq.com','user-c@qq.com'
+  -Email 'user-a@qq.com','user-b@qq.com'
+
+# 全量：源端普通用户在一个 PostgreSQL 查询快照中读取，随后批量预检目标。
+& .\deploy\ikun.love\migrate-sub2api-users.ps1 -All
+
+# 需要人工复核快照时，显式落盘。该文件包含 bcrypt 哈希和 API Key，必须只保存在
+# deploy/ikun.love/migration-snapshots/ 这类受限且被 Git 忽略的目录。
+& .\deploy\ikun.love\migrate-sub2api-users.ps1 `
+  -All -SnapshotOutputPath .\deploy\ikun.love\migration-snapshots\full.json
+
+# 审核后的同一快照可以反复 dry-run；传入文件前由操作者确认 ACL 仅限管理员。
+& .\deploy\ikun.love\migrate-sub2api-users.ps1 `
+  -SnapshotPath .\deploy\ikun.love\migration-snapshots\full.json
 ```
 
+`-All` 不是数据库备份，也不替代源端冻结。它将一次 SQL 语句看到的普通用户、订阅和
+Key 固定为当前运行的输入，避免逐户读取时跨越多个源端状态；源端的注册、充值、消费和
+Key 变更仍必须在全量 apply 前冻结。全量模式不会在终端或 JSON 报告写出完整邮箱、密码
+哈希或完整 Key：每行只使用不可逆的邮箱短指纹，Key 仅以数量和策略类别计数。
+
+全量 dry-run 对目标用户、既有 mapping 和所有 Token（包括软删除 Token，以符合唯一索引）
+做批量预检。`-Apply` 前再逐户检查一次邮箱、mapping 和 Key 冲突，以防 dry-run 与写入
+之间出现新注册或其他并发导入。
+
 本批次新增导入候选必须全部显示 `ready` 才能进入 apply。`already_migrated` 是已完成的
-幂等结果，不应再次 apply；其余下列结果必须停止该用户，不得“跳过后算成功”：
+幂等结果，不应再次 apply；`-Apply` 对任何其他结果都会整体拒绝写入，而不是悄悄跳过后
+报告“成功”。常见阻断结果及报告字段如下：
+
+| 结果 | 含义 | 复核字段 |
+| --- | --- | --- |
+| `source_key_policy_blocked` | Key 格式或未支持的额度、已用量、IP、限流策略 | `SpecialKeys`、`Detail` |
+| `source_blocked` | 非 active、冻结余额、订阅窗口或 quota 范围异常 | `BalanceUsd`、`SubscriptionUsd`、`Detail` |
+| `target_conflict_skipped` | 目标有同一规范化邮箱 | `TargetId` |
+| `target_key_conflict_skipped` | 目标任意 Token 行已使用该内部 Key | `Tokens`、`Detail` |
+| `batch_key_conflict_blocked` | 同一源快照内两个用户声明相同 Key | `Detail` |
+| `source_duplicate_email` | 源端规范化邮箱不是一对一 | `Detail` |
+
+`GroupAliases` 会报告未知/空源组回退到 `ChatGPT Plus` 的次数，便于在 apply 前确认别名规则；
+它不会包含 API Key 值。
+
+其余下列结果也必须停止该用户，不得“跳过后算成功”：
 
 - `source_not_found`、非普通用户、非 active、`frozen_balance != 0`；
 - 邮箱为空、邮箱冲突或目标已有真实业务记录；
@@ -208,6 +245,17 @@ Token；只有在管理员明确批准后，才可追加一次源余额并补导
 & .\deploy\ikun.love\migrate-sub2api-users.ps1 `
   -Email 'user-a@qq.com','user-b@qq.com' -Apply
 ```
+
+全服 apply 仅在同一份已审核快照的 dry-run 没有任何阻断项、两端备份完成且源端已冻结时执行：
+
+```powershell
+& .\deploy\ikun.love\migrate-sub2api-users.ps1 `
+  -SnapshotPath .\deploy\ikun.love\migration-snapshots\full.json -Apply
+```
+
+不要先执行 `-All` dry-run、等待源数据继续变化、再执行另一次 `-All -Apply` 并把两次当作同一
+快照；这种情况要么重新审核最新 dry-run，要么使用受限 ACL 的 `-SnapshotPath`。快照文件、
+数据库备份和线上 JSON 报告均不得提交 Git 或发送到非受限位置。
 
 2. 每批完成后核对：目标邮箱/用户名非空、quota 公式、密码哈希、Token 数/状态/过期时间/
    分组、mapping 指纹和审计快照路径。数据库内部 Token 必须是 64 字符且不含 `sk-`。
