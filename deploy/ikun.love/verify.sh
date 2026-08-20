@@ -7,15 +7,26 @@ COMPOSE_FILE=${COMPOSE_FILE:-docker-compose.1panel.yml}
 LOCAL_STATUS_URL=${LOCAL_STATUS_URL:-http://127.0.0.1:3000/api/status}
 PUBLIC_STATUS_URL=${PUBLIC_STATUS_URL:-}
 EXPECTED_BINARY_SHA=${EXPECTED_BINARY_SHA:-}
-EXISTING_LOCAL_HEALTH_URL=${EXISTING_LOCAL_HEALTH_URL:-http://127.0.0.1:8080/api/v1/settings/public}
-EXISTING_PUBLIC_HEALTH_URL=${EXISTING_PUBLIC_HEALTH_URL:-https://ikun.love/api/v1/settings/public}
+EXPECTED_ENV_SHA=${EXPECTED_ENV_SHA:-}
 
 cd "$DEPLOY_DIR"
 ENV_PATH="$DEPLOY_DIR/$ENV_FILE"
 COMPOSE_PATH="$DEPLOY_DIR/$COMPOSE_FILE"
 [[ -f $ENV_PATH && -f $COMPOSE_PATH ]] || { echo 'Deployment env or compose file is missing' >&2; exit 1; }
+[[ ! -L $ENV_PATH && ! -L $COMPOSE_PATH ]] || { echo 'Deployment env or compose file must not be a symlink' >&2; exit 1; }
 env_mode=$(stat -c '%a' "$ENV_PATH")
 [[ $env_mode == 600 ]] || { echo "Refusing verification: env mode is $env_mode, expected 600" >&2; exit 1; }
+
+if [[ ! $EXPECTED_ENV_SHA =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo 'EXPECTED_ENV_SHA must be the approved SHA-256 value' >&2
+  exit 2
+fi
+actual_env_sha=$(sha256sum "$ENV_PATH" | awk '{print tolower($1)}')
+[[ $actual_env_sha == ${EXPECTED_ENV_SHA,,} ]] || {
+  echo 'Runtime env SHA mismatch' >&2
+  exit 1
+}
+echo "runtime_env_sha256=$actual_env_sha"
 
 # The bootstrap-generated file is root-owned deployment state. It contains
 # only this stack's credentials; do not print or copy its values.
@@ -43,7 +54,6 @@ if [[ -n $EXPECTED_BINARY_SHA && ! $EXPECTED_BINARY_SHA =~ ^[0-9a-fA-F]{64}$ ]];
   echo 'EXPECTED_BINARY_SHA must be a SHA-256 value' >&2
   exit 2
 fi
-
 if docker info >/dev/null 2>&1; then
   DOCKER=(docker)
 elif sudo -n docker info >/dev/null 2>&1; then
@@ -139,9 +149,15 @@ pg_admin() {
 }
 
 role_flags=$(pg_admin "$POSTGRES_ADMIN_DB" -Atqc \
-  "SELECT rolsuper || '|' || rolcreatedb || '|' || rolcreaterole || '|' || rolcanlogin FROM pg_roles WHERE rolname = '$POSTGRES_APP_USER'")
-[[ $role_flags == 'f|f|f|t' || $role_flags == 'false|false|false|true' ]] || {
+  "SELECT rolsuper || '|' || rolcreatedb || '|' || rolcreaterole || '|' || rolreplication || '|' || rolbypassrls || '|' || rolinherit || '|' || rolcanlogin FROM pg_roles WHERE rolname = '$POSTGRES_APP_USER'")
+[[ $role_flags == 'f|f|f|f|f|f|t' || $role_flags == 'false|false|false|false|false|false|true' ]] || {
   echo "Application PostgreSQL role flags are unsafe: $role_flags" >&2
+  exit 1
+}
+membership_count=$(pg_admin "$POSTGRES_ADMIN_DB" -Atqc \
+  "SELECT count(*) FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = '$POSTGRES_APP_USER')")
+[[ $membership_count == 0 ]] || {
+  echo 'Application PostgreSQL role has unexpected memberships' >&2
   exit 1
 }
 db_owner=$(pg_admin "$POSTGRES_ADMIN_DB" -Atqc \
@@ -157,22 +173,28 @@ app_probe=$("${DOCKER[@]}" exec -e "PGPASSWORD=$POSTGRES_APP_PASSWORD" "$POSTGRE
   echo 'Application PostgreSQL probe failed' >&2
   exit 1
 }
+if "${DOCKER[@]}" exec -e "PGPASSWORD=$POSTGRES_APP_PASSWORD" "$POSTGRES_CONTAINER" \
+  psql -U "$POSTGRES_APP_USER" -d "$POSTGRES_ADMIN_DB" -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null 2>&1; then
+  echo 'Application role can connect to the bootstrap database' >&2
+  exit 1
+fi
+if "${DOCKER[@]}" exec -e "PGPASSWORD=$POSTGRES_APP_PASSWORD" "$POSTGRES_CONTAINER" \
+  psql -U "$POSTGRES_APP_USER" -d template1 -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null 2>&1; then
+  echo 'Application role can connect to template1' >&2
+  exit 1
+fi
 redis_ping=$("${DOCKER[@]}" exec -e "REDISCLI_AUTH=$REDIS_PASSWORD" "$REDIS_CONTAINER" \
   redis-cli --no-auth-warning -n "$REDIS_DB" PING)
 [[ $redis_ping == PONG ]] || { echo 'Application Redis probe failed' >&2; exit 1; }
-echo "database=$POSTGRES_DB role=$POSTGRES_APP_USER redis_database=$REDIS_DB"
+echo "database=$POSTGRES_DB role=$POSTGRES_APP_USER database_access=${POSTGRES_DB}-only redis_database=$REDIS_DB"
 
-[[ $(systemctl is-active sub2api.service 2>/dev/null) == active ]] || {
-  echo 'sub2api.service is not active' >&2
+# The old Sub2API service lives on `ssh ikun.love-sub2api`; this fresh host
+# must not accidentally claim its port. Verify the old host separately.
+if ss -lnt 2>/dev/null | grep -Eq ':8080[[:space:]]'; then
+  echo 'Fresh ikun.love host unexpectedly has port 8080 bound' >&2
   exit 1
-}
-ss -lnt 2>/dev/null | awk '$4 ~ /:8080$/ {found=1} END {exit found ? 0 : 1}' || {
-  echo 'Sub2API port 8080 is not bound' >&2
-  exit 1
-}
-curl -fsS "$EXISTING_LOCAL_HEALTH_URL" >/dev/null
-curl -fsS "$EXISTING_PUBLIC_HEALTH_URL" >/dev/null
-echo 'sub2api local/public status: ok'
+fi
+echo 'legacy_sub2api=external-host-ikun.love-sub2api'
 
 curl -fsS "$LOCAL_STATUS_URL" >/dev/null
 echo 'new-api local status: ok'

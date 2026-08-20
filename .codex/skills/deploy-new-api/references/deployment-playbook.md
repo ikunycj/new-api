@@ -12,7 +12,7 @@
 
 ## 1. Gate and baseline
 
-First ask: `部署到 aliyun（开发）、alltokenapi（生产）还是 ikun.love（生产）？` Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. For `alltokenapi` and `ikun.love`, confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, and capture a read-only server baseline from `production-topology.md`.
+First ask: `部署到 aliyun（开发）、alltokenapi（生产）还是 ikun.love（生产）？` Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. For `alltokenapi` and `ikun.love`, confirm explicit permission for production writes. For `ikun.love`, also use `ikun.love-sub2api` for the separate legacy read-only baseline. Then read repository instructions, inspect the dirty worktree, and capture a read-only server baseline from `production-topology.md`.
 
 Target-specific defaults:
 
@@ -20,7 +20,7 @@ Target-specific defaults:
 | --- | --- | --- | --- |
 | `aliyun` | `master` | verify live | repository defaults |
 | `alltokenapi` | `master` | `https://alltokenapi.com/api/status` | legacy production topology |
-| `ikun.love` | `ikun.love` | loopback-only new-api; existing `https://ikun.love` remains Sub2API | `deploy/ikun.love/` |
+| `ikun.love` | `ikun.love` | loopback-only new-api on the fresh host; existing `https://ikun.love` remains on `ikun.love-sub2api` | `deploy/ikun.love/` |
 
 Check workstation tools:
 
@@ -71,7 +71,7 @@ Use this only as a fallback and still require all three SHAs to match.
 
 ## 3. Build on the workstation
 
-Run `scripts/build-release.ps1 -ReleaseRef $releaseRef -Commit $releaseCommit`. Its important invariants are:
+Run `scripts/build-release.ps1 -DeploymentAlias $deployHost -ReleaseRef $releaseRef -Commit $releaseCommit`. Its important invariants are:
 
 - Create a detached worktree from the commit, not from working-tree files.
 - Put the worktree on the same drive as the repository. A `C:` worktree linked to `F:` dependencies caused Rspack font paths such as `F:Project...` and failed the build.
@@ -80,8 +80,9 @@ Run `scripts/build-release.ps1 -ReleaseRef $releaseRef -Commit $releaseCommit`. 
 - Cross-compile with `GOOS=linux`, `GOARCH=amd64`, `CGO_ENABLED=0`, and the current Dockerfile's `GOEXPERIMENT`.
 - Set `common.Version` from `VERSION`. An empty `VERSION` is valid and matched the live deployment during the recorded release.
 - Use `-buildvcs=false` because the worktree revision is recorded separately and deployment integrity comes from explicit hashes.
+- Write the binary, manifest, and archive only under `deploy/<ssh-alias>/artifacts/` so releases cannot be confused across hosts.
 
-The script names the artifact directory and archive with the full commit SHA and fails if that artifact already exists. Use `-ForceRebuild` only when intentionally replacing the same commit's artifact; the old artifact is removed before the new build starts so a failed rebuild cannot leave a plausible stale release. The manifest records the Go and Bun versions, Dockerfile and frontend-lock Git blobs, build-script SHA, and binary SHA.
+The script names the artifact directory and archive with the full commit SHA and fails if that artifact already exists. Use `-ForceRebuild` only when intentionally replacing the same commit's artifact; the old artifact is removed before the new build starts so a failed rebuild cannot leave a plausible stale release. The manifest records the SSH alias, Go and Bun versions, Dockerfile and frontend-lock Git blobs, build-script SHA, and binary SHA.
 
 Treat the emitted archive SHA as the identity of that individual artifact. The manifest build time and gzip/tar timestamps mean archive bytes are not promised to reproduce across builds. The Linux binary should remain stable when the source, frozen dependencies, toolchain, and build script are unchanged. Review the binary, `manifest.json`, and `.tar.gz` output independently:
 
@@ -95,14 +96,18 @@ The binary must start with ELF magic `7f454c46`.
 
 ## 4. Upload and verify
 
-For `alltokenapi`/`aliyun`, upload the archive and remote script to a staging
-path, not over the live binary. For a first `ikun.love` install, stage the
-target bootstrap scripts, Compose file, and archive in
-`~/ikun-new-api-stage`, then use `sudo install` into the new `/opt/new-api`
-directory; never write the Sub2API directory or its service files.
+Before upload, run `scripts/prepare-deployment-env.ps1 -DeploymentAlias
+$deployHost`. If it creates `deploy/<ssh-alias>/.env`, stop for administrator
+review. Approve the exact SHA with `-ApproveSha256`, rerun, and require
+`ReadyForUpload=True`; never display env values. For a first install, upload
+the reviewed target env, archive, Compose file, and scripts to a mode-700
+staging directory. Install the env as `/opt/new-api/.env` mode 600 only when
+the destination is absent. If a remote env already exists with a different
+SHA, stop rather than overwrite it.
 
 ```powershell
-scp <archive> ${deployHost}:~/ikun-new-api-stage/ # first ikun.love install
+scp deploy/<ssh-alias>/.env ${deployHost}:~/ikun-new-api-stage/.env
+scp deploy/<ssh-alias>/artifacts/<archive> ${deployHost}:~/ikun-new-api-stage/
 $repoRoot = git rev-parse --show-toplevel
 scp "$repoRoot/.codex/skills/deploy-new-api/scripts/deploy-binary.sh" ${deployHost}:~/ikun-new-api-stage/
 ```
@@ -114,13 +119,15 @@ Get-FileHash -Algorithm SHA256 <archive>
 ssh $deployHost "sha256sum /opt/new-api/<archive-name>"
 ```
 
-Do not print `.env` while checking the directory.
+Compare the approved local env fingerprint with the staged and installed
+remote fingerprints. Do not print or diff `.env` while checking it.
 
 ## 5. Wrap and switch the image
 
 Invoke the uploaded script with full commit and hashes. For a first
-`ikun.love` install, run `deploy/ikun.love/bootstrap-config.sh` first; it
-starts and initializes the dedicated PostgreSQL/Redis services. Pass explicit
+`ikun.love` install, run `deploy/ikun.love/bootstrap-config.sh
+--expected-env-sha <approved-sha>` first; it validates the installed env and
+starts the dedicated PostgreSQL/Redis services. Pass explicit
 dependency container names so the application switch gates on their health:
 
 ```bash
@@ -154,10 +161,14 @@ docker inspect <target-postgres-container> --format '{{.State.Status}} {{.State.
 docker inspect <target-redis-container> --format '{{.State.Status}}'
 curl -fsS http://127.0.0.1:3000/api/status
 curl -fsS <target-public-status-url> # omit for isolated ikun.love first install
-curl -fsS -o /dev/null -w '%{http_code}\n' https://ikun.love/health # existing Sub2API guard
 ```
 
-The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.
+The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`. For the isolated `ikun.love` install, preserve the legacy host separately from the workstation:
+
+```powershell
+ssh ikun.love-sub2api 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
+curl.exe -fsS https://ikun.love/api/v1/settings/public > $null
+```
 
 ## 7. Record and clean up
 
