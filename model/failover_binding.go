@@ -266,14 +266,13 @@ func SaveClusterConfiguration(config *ClusterConfiguration) error {
 	}
 	config.Name = strings.TrimSpace(config.Name)
 	config.Type = strings.ToLower(strings.TrimSpace(config.Type))
-	config.BillingGroup = strings.TrimSpace(config.BillingGroup)
+	// All cluster-backed channels share one user-facing package. Cluster IDs
+	// remain internal routing details and must not create separate billing groups.
+	config.BillingGroup = UnifiedClusterBillingGroup
 	config.BillingGroupDescription = strings.TrimSpace(config.BillingGroupDescription)
 	config.Remark = strings.TrimSpace(config.Remark)
-	if config.Name == "" || config.Type == "" || config.BillingGroup == "" {
-		return errors.New("cluster name, type, and billing group are required")
-	}
-	if strings.Contains(config.BillingGroup, ",") || len(config.BillingGroup) > 64 {
-		return errors.New("billing group must be at most 64 characters and cannot contain commas")
+	if config.Name == "" || config.Type == "" {
+		return errors.New("cluster name and type are required")
 	}
 	if config.Status != ClusterStatusDisabled && config.Status != ClusterStatusEnabled {
 		return errors.New("cluster status is invalid")
@@ -309,7 +308,7 @@ func SaveClusterConfiguration(config *ClusterConfiguration) error {
 	descriptions := setting.GetUserUsableGroupsCopy()
 	ratios[config.BillingGroup] = config.BillingGroupRatio
 	if config.BillingGroupDescription == "" {
-		config.BillingGroupDescription = config.Name + " billing group"
+		config.BillingGroupDescription = "通用套餐"
 	}
 	descriptions[config.BillingGroup] = config.BillingGroupDescription
 	ratioJSON, err := common.Marshal(ratios)

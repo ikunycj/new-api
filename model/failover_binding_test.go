@@ -148,7 +148,7 @@ func TestSaveClusterConfigurationCreatesBillingGroupPoolsAndOrderedRoutes(t *tes
 	var storedCluster Cluster
 	require.NoError(t, DB.First(&storedCluster, config.Id).Error)
 	assert.Equal(t, "ikun", storedCluster.Type)
-	assert.Equal(t, "cluster_hk", storedCluster.BillingGroup)
+	assert.Equal(t, UnifiedClusterBillingGroup, storedCluster.BillingGroup)
 	assert.Equal(t, policy.Id, storedCluster.PolicyId)
 
 	var storedChannels []Channel
@@ -156,7 +156,7 @@ func TestSaveClusterConfigurationCreatesBillingGroupPoolsAndOrderedRoutes(t *tes
 	require.Len(t, storedChannels, 3)
 	for index, channel := range storedChannels {
 		assert.Equal(t, config.Id, channel.ClusterId)
-		assert.Equal(t, "cluster_hk", channel.Group)
+		assert.Equal(t, UnifiedClusterBillingGroup, channel.Group)
 		require.NotNil(t, channel.Priority)
 		assert.Equal(t, int64((3-index)*100), *channel.Priority)
 	}
@@ -165,11 +165,11 @@ func TestSaveClusterConfigurationCreatesBillingGroupPoolsAndOrderedRoutes(t *tes
 	require.NoError(t, DB.Order("channel_id ASC").Find(&abilities).Error)
 	require.Len(t, abilities, 3)
 	for _, ability := range abilities {
-		assert.Equal(t, "cluster_hk", ability.Group)
+		assert.Equal(t, UnifiedClusterBillingGroup, ability.Group)
 		assert.Equal(t, "gpt-5", ability.Model)
 	}
-	assert.Equal(t, 1.25, ratio_setting.GetGroupRatio("cluster_hk"))
-	assert.Equal(t, "Hong Kong billing", setting.GetUsableGroupDescription("cluster_hk"))
+	assert.Equal(t, 1.25, ratio_setting.GetGroupRatio(UnifiedClusterBillingGroup))
+	assert.Equal(t, "Hong Kong billing", setting.GetUsableGroupDescription(UnifiedClusterBillingGroup))
 
 	snapshot, err := GetClusterConfigurationSnapshot()
 	require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestClusterConfigurationIncludesArchivedClusterAndCanReclaimItsChannel(t *t
 	var reclaimed Channel
 	require.NoError(t, DB.First(&reclaimed, channels[0].Id).Error)
 	assert.Equal(t, config.Id, reclaimed.ClusterId)
-	assert.Equal(t, "replacement_group", reclaimed.Group)
+	assert.Equal(t, UnifiedClusterBillingGroup, reclaimed.Group)
 }
 
 func TestSaveClusterConfigurationRejectsChannelFromActiveCluster(t *testing.T) {

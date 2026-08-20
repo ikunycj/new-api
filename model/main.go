@@ -332,6 +332,9 @@ func migrateDB() error {
 	if err := migrateUserTypes(); err != nil {
 		return err
 	}
+	if err := migrateUnifiedClusterBillingGroup(); err != nil {
+		return err
+	}
 	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
 		return err
 	}
@@ -449,6 +452,9 @@ func migrateDBFast() error {
 	if err := migrateUserTypes(); err != nil {
 		return err
 	}
+	if err := migrateUnifiedClusterBillingGroup(); err != nil {
+		return err
+	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -463,6 +469,166 @@ func migrateDBFast() error {
 	}
 	common.SysLog("database migrated")
 	return nil
+}
+
+// migrateUnifiedClusterBillingGroup keeps cluster routing internal while
+// presenting one package and one configurable billing ratio to users. The
+// migration is idempotent and preserves the existing ratio when possible.
+func migrateUnifiedClusterBillingGroup() error {
+	if DB == nil || !DB.Migrator().HasTable(&Cluster{}) {
+		return nil
+	}
+
+	var clusters []Cluster
+	if err := DB.Find(&clusters).Error; err != nil {
+		return err
+	}
+	if len(clusters) == 0 {
+		return nil
+	}
+
+	legacyGroups := make(map[string]struct{})
+	for _, cluster := range clusters {
+		group := strings.TrimSpace(cluster.BillingGroup)
+		if group != "" && group != UnifiedClusterBillingGroup {
+			legacyGroups[group] = struct{}{}
+		}
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var ratioOption Option
+		ratioByGroup := map[string]float64{UnifiedClusterBillingGroup: 1}
+		if err := tx.Where("key = ?", "GroupRatio").First(&ratioOption).Error; err == nil && ratioOption.Value != "" {
+			if err := common.UnmarshalJsonStr(ratioOption.Value, &ratioByGroup); err != nil {
+				return fmt.Errorf("decode group ratios: %w", err)
+			}
+			if ratioByGroup == nil {
+				ratioByGroup = make(map[string]float64)
+			}
+		}
+		if ratio, ok := ratioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
+			ratio = float64(1)
+			for group := range legacyGroups {
+				if candidate, exists := ratioByGroup[group]; exists && candidate >= 0 {
+					ratio = candidate
+					break
+				}
+			}
+			ratioByGroup[UnifiedClusterBillingGroup] = ratio
+		}
+		for group := range legacyGroups {
+			delete(ratioByGroup, group)
+		}
+
+		var channels []Channel
+		if err := tx.Where("cluster_id > ?", 0).Find(&channels).Error; err != nil {
+			return err
+		}
+		for index := range channels {
+			channel := &channels[index]
+			groups := make([]string, 0)
+			seen := make(map[string]struct{})
+			for _, group := range strings.Split(channel.Group, ",") {
+				group = strings.TrimSpace(group)
+				if _, legacy := legacyGroups[group]; legacy {
+					group = UnifiedClusterBillingGroup
+				}
+				if group == "" {
+					continue
+				}
+				if _, exists := seen[group]; exists {
+					continue
+				}
+				seen[group] = struct{}{}
+				groups = append(groups, group)
+			}
+			if _, exists := seen[UnifiedClusterBillingGroup]; !exists {
+				groups = append(groups, UnifiedClusterBillingGroup)
+			}
+			channel.Group = strings.Join(groups, ",")
+			if err := tx.Model(channel).Select("group").Updates(channel).Error; err != nil {
+				return err
+			}
+			if err := channel.UpdateAbilities(tx); err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&Cluster{}).Where("id > ?", 0).Update("billing_group", UnifiedClusterBillingGroup).Error; err != nil {
+			return err
+		}
+
+		var tokens []Token
+		if err := tx.Find(&tokens).Error; err != nil {
+			return err
+		}
+		for index := range tokens {
+			token := &tokens[index]
+			changed := false
+			if _, legacy := legacyGroups[strings.TrimSpace(token.Group)]; legacy {
+				token.Group = UnifiedClusterBillingGroup
+				changed = true
+			}
+			candidates, err := token.GetGroupCandidates()
+			if err == nil && len(candidates) > 0 {
+				for candidateIndex, candidate := range candidates {
+					if _, legacy := legacyGroups[strings.TrimSpace(candidate)]; legacy {
+						candidates[candidateIndex] = UnifiedClusterBillingGroup
+						changed = true
+					}
+				}
+				if err := token.SetGroupCandidates(uniqueStrings(candidates)); err != nil {
+					return err
+				}
+			}
+			if changed {
+				if err := tx.Model(token).Select("group", "group_candidates").Updates(token).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		ratioJSON, err := common.Marshal(ratioByGroup)
+		if err != nil {
+			return err
+		}
+		if err := tx.Save(&Option{Key: "GroupRatio", Value: string(ratioJSON)}).Error; err != nil {
+			return err
+		}
+
+		var groupsOption Option
+		usableGroups := map[string]string{UnifiedClusterBillingGroup: "通用套餐"}
+		if err := tx.Where("key = ?", "UserUsableGroups").First(&groupsOption).Error; err == nil && groupsOption.Value != "" {
+			if err := common.UnmarshalJsonStr(groupsOption.Value, &usableGroups); err != nil {
+				return fmt.Errorf("decode user groups: %w", err)
+			}
+		}
+		for group := range legacyGroups {
+			delete(usableGroups, group)
+		}
+		usableGroups[UnifiedClusterBillingGroup] = "通用套餐"
+		groupsJSON, err := common.Marshal(usableGroups)
+		if err != nil {
+			return err
+		}
+		return tx.Save(&Option{Key: "UserUsableGroups", Value: string(groupsJSON)}).Error
+	})
+}
+
+func uniqueStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func removeLegacyChannelMonitorAvailabilityColumns() error {
