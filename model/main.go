@@ -480,7 +480,7 @@ func migrateUnifiedClusterBillingGroup() error {
 	}
 
 	var clusters []Cluster
-	if err := DB.Find(&clusters).Error; err != nil {
+	if err := DB.Order("id ASC").Find(&clusters).Error; err != nil {
 		return err
 	}
 	if len(clusters) == 0 {
@@ -497,7 +497,7 @@ func migrateUnifiedClusterBillingGroup() error {
 
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var ratioOption Option
-		ratioByGroup := map[string]float64{UnifiedClusterBillingGroup: 1}
+		ratioByGroup := make(map[string]float64)
 		if err := tx.Where("key = ?", "GroupRatio").First(&ratioOption).Error; err == nil && ratioOption.Value != "" {
 			if err := common.UnmarshalJsonStr(ratioOption.Value, &ratioByGroup); err != nil {
 				return fmt.Errorf("decode group ratios: %w", err)
@@ -508,7 +508,8 @@ func migrateUnifiedClusterBillingGroup() error {
 		}
 		if ratio, ok := ratioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
 			ratio = float64(1)
-			for group := range legacyGroups {
+			for _, cluster := range clusters {
+				group := strings.TrimSpace(cluster.BillingGroup)
 				if candidate, exists := ratioByGroup[group]; exists && candidate >= 0 {
 					ratio = candidate
 					break
@@ -558,7 +559,7 @@ func migrateUnifiedClusterBillingGroup() error {
 		}
 
 		var tokens []Token
-		if err := tx.Find(&tokens).Error; err != nil {
+		if err := tx.Unscoped().Find(&tokens).Error; err != nil {
 			return err
 		}
 		for index := range tokens {
@@ -581,7 +582,7 @@ func migrateUnifiedClusterBillingGroup() error {
 				}
 			}
 			if changed {
-				if err := tx.Model(token).Select("group", "group_candidates").Updates(token).Error; err != nil {
+				if err := tx.Unscoped().Model(token).Select("group", "group_candidates").Updates(token).Error; err != nil {
 					return err
 				}
 			}
@@ -600,6 +601,9 @@ func migrateUnifiedClusterBillingGroup() error {
 		if err := tx.Where("key = ?", "UserUsableGroups").First(&groupsOption).Error; err == nil && groupsOption.Value != "" {
 			if err := common.UnmarshalJsonStr(groupsOption.Value, &usableGroups); err != nil {
 				return fmt.Errorf("decode user groups: %w", err)
+			}
+			if usableGroups == nil {
+				usableGroups = make(map[string]string)
 			}
 		}
 		for group := range legacyGroups {

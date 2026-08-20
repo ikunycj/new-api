@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/glebarez/sqlite"
@@ -25,10 +26,9 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	})
 
 	groupRatio, err := common.Marshal(map[string]float64{
-		"Cluster_1":                0.8,
-		"Cluster_2":                0.9,
-		UnifiedClusterBillingGroup: 1.25,
-		"default":                  1,
+		"Cluster_1": 0.8,
+		"Cluster_2": 0.9,
+		"default":   1,
 	})
 	require.NoError(t, err)
 	usableGroups, err := common.Marshal(map[string]string{
@@ -50,7 +50,7 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 		{Id: 12, Name: "two-key", Models: "gpt-5", Group: "Cluster_2", Status: common.ChannelStatusEnabled, ClusterId: 2},
 	}
 	require.NoError(t, testDB.Create(&channels).Error)
-	token := Token{Id: 21, Group: "Cluster_2"}
+	token := Token{Id: 21, Group: "Cluster_2", DeletedAt: gorm.DeletedAt{Valid: true, Time: time.Now()}}
 	require.NoError(t, token.SetGroupCandidates([]string{"Cluster_1", "default", "Cluster_2"}))
 	require.NoError(t, testDB.Create(&token).Error)
 
@@ -73,7 +73,7 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	assert.Equal(t, UnifiedClusterBillingGroup, abilities[0].Group)
 
 	var storedToken Token
-	require.NoError(t, testDB.First(&storedToken, token.Id).Error)
+	require.NoError(t, testDB.Unscoped().First(&storedToken, token.Id).Error)
 	assert.Equal(t, UnifiedClusterBillingGroup, storedToken.Group)
 	candidates, err := storedToken.GetGroupCandidates()
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestMigrateUnifiedClusterBillingGroup(t *testing.T) {
 	require.NoError(t, testDB.First(&ratioOption, "key = ?", "GroupRatio").Error)
 	var ratios map[string]float64
 	require.NoError(t, common.UnmarshalJsonStr(ratioOption.Value, &ratios))
-	assert.Equal(t, 1.25, ratios[UnifiedClusterBillingGroup])
+	assert.Equal(t, 0.8, ratios[UnifiedClusterBillingGroup])
 	assert.NotContains(t, ratios, "Cluster_1")
 	assert.NotContains(t, ratios, "Cluster_2")
 
