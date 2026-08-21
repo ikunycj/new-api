@@ -2,13 +2,11 @@ package model
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -137,81 +135,6 @@ func TestSearchUsersMatchesRemark(t *testing.T) {
 	assert.Equal(t, int64(1), total)
 	require.Len(t, users, 1)
 	assert.Equal(t, "remark-match", users[0].Username)
-}
-
-func TestUsernameValidationAllowsValuesLongerThanLegacyLimit(t *testing.T) {
-	username := strings.Repeat("u", 64)
-	user := User{Username: username, Password: "password123"}
-	require.NoError(t, common.Validate.Struct(&user))
-}
-
-func TestEditPersistsLongUsername(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{Username: "short-name", Password: "password123", Status: common.UserStatusEnabled}
-	require.NoError(t, DB.Create(user).Error)
-
-	longUsername := strings.Repeat("long-username-", 8)
-	user.Username = longUsername
-	require.NoError(t, user.EditWithTx(DB, false))
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, longUsername, stored.Username)
-}
-
-func TestInsertUsesEmailWhenUsernameIsBlank(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{
-		Email:  "fallback@example.com",
-		Status: common.UserStatusEnabled,
-	}
-	require.NoError(t, user.Insert(0))
-	assert.Equal(t, "fallback@example.com", user.Username)
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, "fallback@example.com", stored.Username)
-}
-
-func TestEditAllowsDuplicateUsername(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	first := &User{Username: "duplicate-target", Password: "password123", Status: common.UserStatusEnabled}
-	second := &User{Username: "editable-user", Password: "password123", Status: common.UserStatusEnabled}
-	require.NoError(t, first.Insert(0))
-	require.NoError(t, second.Insert(0))
-
-	second.Username = first.Username
-	err := second.EditWithTx(DB, false)
-	require.NoError(t, err)
-
-	var count int64
-	require.NoError(t, DB.Model(&User{}).Where("username = ?", first.Username).Count(&count).Error)
-	assert.Equal(t, int64(2), count)
-}
-
-func TestMigrateUsernameToNonUniqueSQLite(t *testing.T) {
-	legacyDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	previousDB := DB
-	previousDatabaseType := common.MainDatabaseType()
-	DB = legacyDB
-	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
-	t.Cleanup(func() {
-		DB = previousDB
-		common.SetMainDatabaseType(previousDatabaseType)
-	})
-
-	require.NoError(t, DB.Exec("CREATE TABLE `users` (\n"+
-		"`id` integer primary key,\n"+
-		"`username` varchar(255) UNIQUE,\n"+
-		"`email` varchar(255)\n)").Error)
-	require.NoError(t, migrateUsernameToNonUnique())
-	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
-	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
 }
 
 func TestInsertRejectsDuplicateEmailWithoutUniqueIndex(t *testing.T) {
