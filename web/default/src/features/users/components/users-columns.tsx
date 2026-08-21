@@ -88,27 +88,12 @@ export function useUsersColumns(): ColumnDef<User>[] {
       cell: ({ row }) => {
         const username = row.getValue('username') as string
         const displayName = row.original.display_name
-        const remark = row.original.remark
 
         return (
           <div className='flex min-w-[160px] flex-col gap-1'>
-            <div className='flex items-center gap-2'>
-              <LongText className='max-w-[140px] font-medium'>
-                {username}
-              </LongText>
-              {remark && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={<StatusBadge variant='success' copyable={false} />}
-                  >
-                    <LongText className='max-w-[80px]'>{remark}</LongText>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className='text-xs'>{remark}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+            <LongText className='max-w-[180px] font-medium'>
+              {username}
+            </LongText>
             {displayName && displayName !== username && (
               <LongText className='text-muted-foreground max-w-[180px] text-xs'>
                 {displayName}
@@ -120,6 +105,28 @@ export function useUsersColumns(): ColumnDef<User>[] {
       enableHiding: false,
       size: 220,
       meta: { mobileTitle: true },
+    },
+    {
+      accessorKey: 'email',
+      header: t('Email'),
+      cell: ({ row }) => (
+        <LongText className='max-w-[240px] text-sm'>
+          {row.original.email || '-'}
+        </LongText>
+      ),
+      size: 220,
+      meta: { mobileOrder: 60 },
+    },
+    {
+      accessorKey: 'remark',
+      header: t('Remark'),
+      cell: ({ row }) => (
+        <LongText className='max-w-[220px] text-sm'>
+          {row.original.remark || '-'}
+        </LongText>
+      ),
+      size: 180,
+      meta: { mobileOrder: 70 },
     },
     {
       accessorKey: 'status',
