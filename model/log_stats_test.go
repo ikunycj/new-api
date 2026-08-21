@@ -54,7 +54,7 @@ func TestSumUsedQuotaAggregatesCacheHitRateFromEligibleLogs(t *testing.T) {
 		},
 	}).Error)
 
-	stat, err := SumUsedQuota(LogTypeConsume, now-1, now+1, "", "", "", 0, "")
+	stat, err := SumUsedQuota(LogTypeConsume, now-1, now+1, "", "", "", 0, "", 0)
 	require.NoError(t, err)
 	assert.EqualValues(t, 150, stat.CacheInputTokens)
 	assert.EqualValues(t, 40, stat.CacheReadTokens)
