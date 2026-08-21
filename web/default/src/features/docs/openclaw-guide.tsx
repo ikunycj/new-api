@@ -16,17 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { InformationCircleIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
 import { CodeBlock } from './components/code-block'
 import { DocsShell, type DocsTocItem } from './components/docs-shell'
 import { DocsTable } from './components/docs-table'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const OPENCLAW_TOC: DocsTocItem[] = [
@@ -102,22 +101,36 @@ export function DocsOpenClaw() {
 
       <section id='prepare' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>1. 准备 API Key 和模型</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '在 API Key 页面创建密钥。',
-            '在模型定价页面复制准确的模型 ID。',
-            '根据模型支持的接口选择 OpenClaw api 值和 Base URL，不要只根据模型名称猜测接口。',
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={DOCS_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  创建密钥。
+                </>
+              ),
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/pricing' className={DOCS_LINK_CLASS}>
+                    模型定价页面
+                  </Link>{' '}
+                  复制准确的模型 ID。
+                </>
+              ),
+            },
+            {
+              content:
+                '根据模型支持的接口选择 OpenClaw api 值和 Base URL，不要只根据模型名称猜测接口。',
+            },
           ]}
         />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key
-          </Button>
-          <Button variant='outline' render={<Link to='/pricing' />}>
-            打开模型定价
-          </Button>
-        </div>
         <div className='mt-6'>
           <DocsTable
             headers={['模型接口', 'OpenClaw api 值', 'Base URL']}

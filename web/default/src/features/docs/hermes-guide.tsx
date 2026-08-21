@@ -16,17 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { InformationCircleIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
 import { CodeBlock } from './components/code-block'
 import { DocsShell, type DocsTocItem } from './components/docs-shell'
 import { DocsTable } from './components/docs-table'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const HERMES_TOC: DocsTocItem[] = [
@@ -96,22 +95,35 @@ model:
         <h2 className='text-2xl font-semibold'>
           1. 准备 API Key、模型和接口类型
         </h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '在 API Key 页面创建密钥。',
-            '在模型定价页面复制准确的模型 ID。',
-            '根据模型实际接口选择 Hermes transport 和 Base URL。',
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={DOCS_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  创建密钥。
+                </>
+              ),
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/pricing' className={DOCS_LINK_CLASS}>
+                    模型定价页面
+                  </Link>{' '}
+                  复制准确的模型 ID。
+                </>
+              ),
+            },
+            {
+              content: '根据模型实际接口选择 Hermes transport 和 Base URL。',
+            },
           ]}
         />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key
-          </Button>
-          <Button variant='outline' render={<Link to='/pricing' />}>
-            打开模型定价
-          </Button>
-        </div>
         <div className='mt-6'>
           <DocsTable
             headers={['模型接口', 'Hermes transport', 'Base URL']}
@@ -155,13 +167,16 @@ model:
         <div className='mt-5'>
           <CodeBlock code='hermes model' label='终端' />
         </div>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '选择 Custom endpoint。',
-            '输入与接口匹配的 Base URL。',
-            '输入 API Key 和准确模型 ID。',
-            '选择 API compatibility mode：Chat Completions 使用 chat_completions，Responses 使用 codex_responses，Anthropic Messages 使用 anthropic_messages。',
-            '保存并退出向导。',
+            { content: '选择 Custom endpoint。' },
+            { content: '输入与接口匹配的 Base URL。' },
+            { content: '输入 API Key 和准确模型 ID。' },
+            {
+              content:
+                '选择 API compatibility mode：Chat Completions 使用 chat_completions，Responses 使用 codex_responses，Anthropic Messages 使用 anthropic_messages。',
+            },
+            { content: '保存并退出向导。' },
           ]}
         />
         <Alert className='mt-6'>
@@ -270,18 +285,15 @@ hermes status`}
           />
         </div>
         <p className='text-muted-foreground mt-5 leading-7'>
-          最后执行一次最小请求，并到使用日志确认实际模型、接口和请求状态。
+          最后执行一次最小请求，并到{' '}
+          <Link to='/usage-logs' className={DOCS_LINK_CLASS}>
+            使用日志
+          </Link>{' '}
+          确认实际模型、接口和请求状态。
         </p>
         <div className='mt-4'>
           <CodeBlock code='hermes -z "只回复 OK"' label='最小请求' />
         </div>
-        <Button
-          className='mt-5'
-          variant='outline'
-          render={<Link to='/usage-logs' />}
-        >
-          打开使用日志
-        </Button>
       </section>
 
       <section id='reload' className='scroll-mt-28'>

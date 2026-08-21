@@ -16,17 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { InformationCircleIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
 import { CodeBlock } from './components/code-block'
 import { DocsShell, type DocsTocItem } from './components/docs-shell'
 import { DocsTable } from './components/docs-table'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const OPENCODE_TOC: DocsTocItem[] = [
@@ -134,22 +133,35 @@ export function DocsOpenCode() {
 
       <section id='prepare' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>2. 准备模型和接口类型</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '在 API Key 页面创建密钥。',
-            '在模型定价页面复制准确模型 ID。',
-            '确认模型使用 Chat Completions 还是 Responses 接口。',
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={DOCS_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  创建密钥。
+                </>
+              ),
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/pricing' className={DOCS_LINK_CLASS}>
+                    模型定价页面
+                  </Link>{' '}
+                  复制准确模型 ID。
+                </>
+              ),
+            },
+            {
+              content: '确认模型使用 Chat Completions 还是 Responses 接口。',
+            },
           ]}
         />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key
-          </Button>
-          <Button variant='outline' render={<Link to='/pricing' />}>
-            打开模型定价
-          </Button>
-        </div>
         <div className='mt-6'>
           <DocsTable
             headers={['模型接口', 'npm 适配器', 'Base URL']}
@@ -183,13 +195,13 @@ export function DocsOpenCode() {
         <h2 className='text-2xl font-semibold'>
           3. 推荐：使用 /connect 保存密钥
         </h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '启动 OpenCode。',
-            '输入 /connect。',
-            '滚动到并选择 Other。',
-            'Provider ID 输入 alltokenapi。',
-            '粘贴 API Key 并保存。',
+            { content: '启动 OpenCode。' },
+            { content: '输入 /connect。' },
+            { content: '滚动到并选择 Other。' },
+            { content: 'Provider ID 输入 alltokenapi。' },
+            { content: '粘贴 API Key 并保存。' },
           ]}
         />
         <Alert className='mt-6'>
@@ -263,26 +275,32 @@ export function DocsOpenCode() {
 
       <section id='verify' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>6. 选择并验证模型</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '启动 opencode。',
-            '如果使用 /connect，运行 opencode auth list，确认凭据已保存。',
-            '在 TUI 中输入 /models，选择 alltokenapi/模型ID。',
-            '发送一个简短提示，或执行一次非交互测试。',
-            '在使用日志确认请求模型、状态和费用。',
+            { content: '启动 opencode。' },
+            {
+              content:
+                '如果使用 /connect，运行 opencode auth list，确认凭据已保存。',
+            },
+            { content: '在 TUI 中输入 /models，选择 alltokenapi/模型ID。' },
+            { content: '发送一个简短提示，或执行一次非交互测试。' },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/usage-logs' className={DOCS_LINK_CLASS}>
+                    使用日志
+                  </Link>{' '}
+                  确认请求模型、状态和费用。
+                </>
+              ),
+            },
           ]}
         />
         <div className='mt-5 grid gap-4 lg:grid-cols-2'>
           <CodeBlock code='opencode auth list' label='检查凭据' />
           <CodeBlock code='opencode run "只回复 OK"' label='非交互测试' />
         </div>
-        <Button
-          className='mt-5'
-          variant='outline'
-          render={<Link to='/usage-logs' />}
-        >
-          打开使用日志
-        </Button>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>
