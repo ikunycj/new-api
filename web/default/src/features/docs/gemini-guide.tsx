@@ -16,21 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Download04Icon,
-  InformationCircleIcon,
-  Key01Icon,
-} from '@hugeicons/core-free-icons'
+import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
+import { CC_SWITCH_SCREENSHOTS } from './components/cc-switch-screenshots'
 import { CodeBlock } from './components/code-block'
 import { DocsShell } from './components/docs-shell'
 import { DocsTable } from './components/docs-table'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const references = [
@@ -48,6 +44,8 @@ const references = [
 
 const CC_SWITCH_RELEASES_URL =
   'https://github.com/farion1231/cc-switch/releases'
+const DOCS_LINK_CLASS =
+  'text-primary font-medium underline-offset-4 hover:underline'
 
 export function DocsGemini() {
   const baseUrl = useDocsBaseUrl()
@@ -77,26 +75,36 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
     >
       <section id='prepare' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>1. 准备 API Key 和模型</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '在 API Key 页面创建或复制密钥。',
-            '在模型定价页复制一个支持 Gemini 原生接口的准确模型 ID。',
-            '确保 Gemini CLI 为较新版本，自定义 Base URL 是当前版本的正式配置项。',
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={DOCS_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  创建或复制密钥。
+                </>
+              ),
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/pricing' className={DOCS_LINK_CLASS}>
+                    模型定价页面
+                  </Link>{' '}
+                  复制一个支持 Gemini 原生接口的准确模型 ID。
+                </>
+              ),
+            },
+            {
+              content:
+                '确保 Gemini CLI 为较新版本，自定义 Base URL 是当前版本的正式配置项。',
+            },
           ]}
         />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button nativeButton={false} render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key
-          </Button>
-          <Button
-            nativeButton={false}
-            variant='outline'
-            render={<Link to='/pricing' />}
-          >
-            打开模型定价
-          </Button>
-        </div>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
           <AlertTitle>配置核验</AlertTitle>
@@ -110,38 +118,60 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
 
       <section id='cc-switch' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>2. 使用 CC Switch 一键导入</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '安装并打开 CC Switch。',
-            '在 API Key 页打开密钥操作菜单，选择 CC Switch 导入。',
-            '客户端选择 Gemini，再选择支持 Gemini 接口的模型。',
-            `保留服务根地址 ${baseUrl}，不要添加 /v1 或 /v1beta。`,
-            '保存并启用服务商，完全退出并重新打开 Gemini CLI。',
+            {
+              content: (
+                <>
+                  从{' '}
+                  <a
+                    href={CC_SWITCH_RELEASES_URL}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className={DOCS_LINK_CLASS}
+                  >
+                    CC Switch 发布页
+                  </a>{' '}
+                  安装并打开 CC Switch。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.download],
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={DOCS_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  打开密钥操作菜单，选择 CC Switch 导入。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.importEntry],
+            },
+            {
+              content: '客户端选择 Gemini，再选择支持 Gemini 接口的模型。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.importDialog],
+            },
+            {
+              content: (
+                <>
+                  保留服务根地址 <code>{baseUrl}</code>，不要添加 /v1 或
+                  /v1beta；完整流程可查看{' '}
+                  <Link to='/docs/tools/cc-switch' className={DOCS_LINK_CLASS}>
+                    CC Switch 详细步骤
+                  </Link>
+                  。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.confirmImport],
+            },
+            {
+              content: '保存并启用服务商，完全退出并重新打开 Gemini CLI。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.imported],
+            },
           ]}
         />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button
-            nativeButton={false}
-            variant='outline'
-            render={
-              <a
-                href={CC_SWITCH_RELEASES_URL}
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
-            下载 CC Switch
-          </Button>
-          <Button
-            nativeButton={false}
-            variant='outline'
-            render={<Link to='/docs/tools/cc-switch' />}
-          >
-            查看 CC Switch 详细步骤
-          </Button>
-        </div>
       </section>
 
       <section id='manual' className='scroll-mt-28'>
@@ -209,12 +239,25 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
 
       <section id='verify' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>4. 启动并验证</h2>
-        <NumberedSteps
+        <GuideSteps
           items={[
-            '运行 gemini。',
-            '首次提示认证方式时选择 Use Gemini API key，不要选择 Google 登录或 Vertex AI。',
-            '发送一个简短提示并等待完整响应。',
-            '打开使用日志，确认请求使用预期的 Gemini 模型。',
+            { content: '运行 gemini。' },
+            {
+              content:
+                '首次提示认证方式时选择 Use Gemini API key，不要选择 Google 登录或 Vertex AI。',
+            },
+            { content: '发送一个简短提示并等待完整响应。' },
+            {
+              content: (
+                <>
+                  打开{' '}
+                  <Link to='/usage-logs' className={DOCS_LINK_CLASS}>
+                    使用日志
+                  </Link>
+                  ，确认请求使用预期的 Gemini 模型。
+                </>
+              ),
+            },
           ]}
         />
         <div className='mt-5'>
@@ -227,14 +270,6 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
           模型选择优先级为：--model、GEMINI_MODEL、settings.json 中的
           model.name、默认模型。
         </p>
-        <Button
-          nativeButton={false}
-          className='mt-5'
-          variant='outline'
-          render={<Link to='/usage-logs' />}
-        >
-          打开使用日志
-        </Button>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>

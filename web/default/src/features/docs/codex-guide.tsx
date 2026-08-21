@@ -16,20 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Download04Icon,
-  InformationCircleIcon,
-  Key01Icon,
-} from '@hugeicons/core-free-icons'
+import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
+import { CC_SWITCH_SCREENSHOTS } from './components/cc-switch-screenshots'
 import { CodeBlock } from './components/code-block'
 import { DocsShell, type DocsTocItem } from './components/docs-shell'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
@@ -43,18 +39,13 @@ const CODEX_TOC: DocsTocItem[] = [
   { id: 'manual-config', label: '2. 手动配置 config.toml' },
 ]
 
-const CODEX_IMPORT_STEPS = [
-  '安装 CC Switch，并确认系统已注册 ccswitch:// 协议。',
-  '打开 API Key 页面，找到要使用的密钥。',
-  '打开该行的操作菜单，选择 CC Switch 导入。',
-  '选择 Codex，再选择当前 API Key 可用的主模型，并保留自动生成的 /v1 地址。',
-  '确认浏览器提示，然后在 CC Switch 中检查并保存导入的服务商。',
-]
-
 const CODEX_VERIFY_STEPS = [
-  '保存 config.toml，然后重启终端以及正在运行的 Codex 应用或 IDE 扩展。',
-  '在新的终端中运行 codex，发起一个测试任务。',
-  '如启动失败，请检查环境变量、模型名称和 Base URL 后重试。',
+  {
+    content:
+      '保存 config.toml，然后重启终端以及正在运行的 Codex 应用或 IDE 扩展。',
+  },
+  { content: '在新的终端中运行 codex，发起一个测试任务。' },
+  { content: '如启动失败，请检查环境变量、模型名称和 Base URL 后重试。' },
 ]
 
 export function DocsCodex() {
@@ -88,26 +79,59 @@ wire_api = "responses"`
           CC Switch 是最快的接入方式，无需手动编辑 TOML，即可导入 API
           Key、所选模型和 Codex 服务地址。
         </p>
-        <NumberedSteps items={CODEX_IMPORT_STEPS} />
-        <div className='mt-6 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key
-          </Button>
-          <Button
-            variant='outline'
-            render={
-              <a
-                href={CCSWITCH_RELEASES_URL}
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
-            下载 CC Switch
-          </Button>
-        </div>
+        <GuideSteps
+          items={[
+            {
+              content: (
+                <>
+                  从{' '}
+                  <a
+                    href={CCSWITCH_RELEASES_URL}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className={CODEX_LINK_CLASS}
+                  >
+                    CC Switch 发布页
+                  </a>{' '}
+                  安装应用，并确认系统已注册 ccswitch:// 协议。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.download],
+            },
+            {
+              content: (
+                <>
+                  打开{' '}
+                  <Link to='/keys' className={CODEX_LINK_CLASS}>
+                    API Key 页面
+                  </Link>
+                  ，找到要使用的密钥。
+                </>
+              ),
+              screenshots: [
+                CC_SWITCH_SCREENSHOTS.apiKey,
+                CC_SWITCH_SCREENSHOTS.apiKeyDetails,
+              ],
+            },
+            {
+              content: '打开该行的操作菜单，选择 CC Switch 导入。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.importEntry],
+            },
+            {
+              content:
+                '选择 Codex，再选择当前 API Key 可用的主模型，并保留自动生成的 /v1 地址。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.importDialog],
+            },
+            {
+              content:
+                '确认浏览器提示，然后在 CC Switch 中检查、保存并启用导入的服务商。',
+              screenshots: [
+                CC_SWITCH_SCREENSHOTS.confirmImport,
+                CC_SWITCH_SCREENSHOTS.imported,
+              ],
+            },
+          ]}
+        />
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
           <AlertTitle>导入的配置</AlertTitle>
@@ -148,7 +172,7 @@ wire_api = "responses"`
         </div>
 
         <h3 className='mt-8 text-lg font-semibold'>重启并验证</h3>
-        <NumberedSteps items={CODEX_VERIFY_STEPS} />
+        <GuideSteps items={CODEX_VERIFY_STEPS} />
         <div className='mt-5'>
           <CodeBlock code='codex' label='终端' />
         </div>

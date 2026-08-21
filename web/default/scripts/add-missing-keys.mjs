@@ -33,6 +33,8 @@ const newKeys = {
       'Set the mixed channel group name to the billing group used by its clusters.',
     'All Model Types': 'All Model Types',
     'Model Type': 'Model Type',
+    'View screenshot example': 'View screenshot example',
+    'Hide screenshot example': 'Hide screenshot example',
     'Search models, providers, and groups':
       'Search models, providers, and groups',
     'Channel binding is incomplete': 'Channel binding is incomplete',
@@ -108,6 +110,8 @@ const newKeys = {
       '混合渠道分组名称要填写其 Cluster 使用的计费分组。',
     'All Model Types': '全部模型类型',
     'Model Type': '模型类型',
+    'View screenshot example': '查看截图示例',
+    'Hide screenshot example': '收起截图示例',
     'Search models, providers, and groups': '搜索模型、厂商、分组',
     'Channel binding is incomplete': '渠道绑定不完整',
     'Channel bindings': '渠道绑定',
@@ -183,6 +187,8 @@ const newKeys = {
       'Le nom du groupe de canaux mixtes doit correspondre au groupe de facturation de ses clusters.',
     'All Model Types': 'Tous les types de modèles',
     'Model Type': 'Type de modèle',
+    'View screenshot example': "Voir l'exemple de capture d'écran",
+    'Hide screenshot example': "Masquer l'exemple de capture d'écran",
     'Search models, providers, and groups':
       'Rechercher des modèles, fournisseurs et groupes',
     'Channel binding is incomplete': 'Association de canal incomplète',
@@ -260,6 +266,8 @@ const newKeys = {
       '混合チャネルグループ名には、その Cluster が使用する課金グループを指定します。',
     'All Model Types': 'すべてのモデルタイプ',
     'Model Type': 'モデルタイプ',
+    'View screenshot example': 'スクリーンショット例を表示',
+    'Hide screenshot example': 'スクリーンショット例を閉じる',
     'Search models, providers, and groups':
       'モデル、プロバイダー、グループを検索',
     'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
@@ -337,6 +345,8 @@ const newKeys = {
       'Имя смешанной группы каналов должно совпадать с расчетной группой ее кластеров.',
     'All Model Types': 'Все типы моделей',
     'Model Type': 'Тип модели',
+    'View screenshot example': 'Показать пример скриншота',
+    'Hide screenshot example': 'Скрыть пример скриншота',
     'Search models, providers, and groups':
       'Поиск моделей, провайдеров и групп',
     'Channel binding is incomplete': 'Привязка канала не завершена',
@@ -413,6 +423,8 @@ const newKeys = {
       'Tên nhóm kênh hỗn hợp phải trùng với nhóm tính phí mà các cluster sử dụng.',
     'All Model Types': 'Tất cả loại mô hình',
     'Model Type': 'Loại mô hình',
+    'View screenshot example': 'Xem ví dụ ảnh chụp màn hình',
+    'Hide screenshot example': 'Ẩn ví dụ ảnh chụp màn hình',
     'Search models, providers, and groups':
       'Tìm kiếm mô hình, nhà cung cấp và nhóm',
     'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
@@ -489,6 +501,8 @@ const newKeys = {
       '混合渠道分組名稱要填寫其 Cluster 使用的計費分組。',
     'All Model Types': '全部模型類型',
     'Model Type': '模型類型',
+    'View screenshot example': '查看截圖範例',
+    'Hide screenshot example': '收起截圖範例',
     'Search models, providers, and groups': '搜尋模型、廠商、分組',
     'Channel binding is incomplete': '渠道綁定不完整',
     'Channel bindings': '渠道綁定',

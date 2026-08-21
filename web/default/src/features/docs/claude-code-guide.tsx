@@ -16,18 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Alert02Icon,
-  ArrowRight01Icon,
-  Download04Icon,
-  InformationCircleIcon,
-  Key01Icon,
-} from '@hugeicons/core-free-icons'
+import { Alert02Icon, InformationCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -37,9 +30,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { CC_SWITCH_SCREENSHOTS } from './components/cc-switch-screenshots'
 import { CodeBlock } from './components/code-block'
 import { DocsShell, type DocsTocItem } from './components/docs-shell'
-import { NumberedSteps } from './components/numbered-steps'
+import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
@@ -58,27 +52,6 @@ const CLAUDE_TOC: DocsTocItem[] = [
   { id: 'verify', label: '4. 启动并验证' },
   { id: 'troubleshooting', label: '5. 常见问题' },
   { id: 'references', label: '6. 官方参考' },
-]
-
-const CLAUDE_PREPARE_STEPS = [
-  '在 API Key 页面创建或复制密钥。',
-  '在模型定价页面复制一个支持 Anthropic Messages 接口的准确模型 ID。',
-  '更新 Claude Code，避免旧版本缺少网关或模型配置能力。',
-]
-
-const CLAUDE_IMPORT_STEPS = [
-  '安装并打开 CC Switch。',
-  '在 API Key 页打开密钥的操作菜单，选择 CC Switch 导入。',
-  '客户端选择 Claude，模型选择刚才确认的 Claude 模型。',
-  '保留生成的服务根地址，不要手动添加 /v1。',
-  '在 CC Switch 中保存并启用服务商，然后完全退出并重新打开 Claude Code。',
-]
-
-const CLAUDE_VERIFY_STEPS = [
-  '使用与配置相同的终端启动 claude。',
-  '如果出现登录页，说明网关凭据没有被读取；不要选择 Claude 订阅登录，先检查配置文件路径和 JSON 格式。',
-  '进入会话后运行 /status，核对服务地址、认证变量和当前模型。',
-  '发送一个简短测试请求，再到使用日志确认请求模型和状态。',
 ]
 
 export function DocsClaudeCode() {
@@ -120,17 +93,35 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
 
       <section id='prepare' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>1. 准备 API Key 和模型</h2>
-        <NumberedSteps items={CLAUDE_PREPARE_STEPS} />
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key 页面
-          </Button>
-          <Button variant='outline' render={<Link to='/pricing' />}>
-            查看模型定价
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
-          </Button>
-        </div>
+        <GuideSteps
+          items={[
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={CLAUDE_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  创建或复制密钥。
+                </>
+              ),
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/pricing' className={CLAUDE_LINK_CLASS}>
+                    模型定价页面
+                  </Link>{' '}
+                  复制一个支持 Anthropic Messages 接口的准确模型 ID。
+                </>
+              ),
+            },
+            {
+              content: '更新 Claude Code，避免旧版本缺少网关或模型配置能力。',
+            },
+          ]}
+        />
         <div className='mt-5'>
           <CodeBlock code='claude update' label='终端' />
         </div>
@@ -138,37 +129,64 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
 
       <section id='cc-switch-import' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>2. 使用 CC Switch 一键导入</h2>
-        <NumberedSteps items={CLAUDE_IMPORT_STEPS} />
-        <p className='text-muted-foreground mt-4 leading-7'>
-          导入界面中的服务根地址应为
-          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
-            {baseUrl}
-          </code>
-          ，不要添加 /v1。详细操作可以继续阅读
-          <Link to='/docs/tools/cc-switch' className={CLAUDE_LINK_CLASS}>
-            CC Switch 一键导入指南
-          </Link>
-          。
-        </p>
-        <div className='mt-5 flex flex-wrap gap-3'>
-          <Button render={<Link to='/keys' />}>
-            <HugeiconsIcon icon={Key01Icon} data-icon='inline-start' />
-            打开 API Key 页面
-          </Button>
-          <Button
-            variant='outline'
-            render={
-              <a
-                href={CCSWITCH_RELEASES_URL}
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            <HugeiconsIcon icon={Download04Icon} data-icon='inline-start' />
-            下载 CC Switch
-          </Button>
-        </div>
+        <GuideSteps
+          items={[
+            {
+              content: (
+                <>
+                  从{' '}
+                  <a
+                    href={CCSWITCH_RELEASES_URL}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className={CLAUDE_LINK_CLASS}
+                  >
+                    CC Switch 发布页
+                  </a>{' '}
+                  安装并打开 CC Switch。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.download],
+            },
+            {
+              content: (
+                <>
+                  在{' '}
+                  <Link to='/keys' className={CLAUDE_LINK_CLASS}>
+                    API Key 页面
+                  </Link>{' '}
+                  打开密钥的操作菜单，选择 CC Switch 导入。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.importEntry],
+            },
+            {
+              content: '客户端选择 Claude，模型选择刚才确认的 Claude 模型。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.importDialog],
+            },
+            {
+              content: (
+                <>
+                  保留生成的服务根地址 <code>{baseUrl}</code>，不要手动添加
+                  /v1；详细说明可查看{' '}
+                  <Link
+                    to='/docs/tools/cc-switch'
+                    className={CLAUDE_LINK_CLASS}
+                  >
+                    CC Switch 一键导入指南
+                  </Link>
+                  。
+                </>
+              ),
+              screenshots: [CC_SWITCH_SCREENSHOTS.confirmImport],
+            },
+            {
+              content:
+                '在 CC Switch 中保存并启用服务商，然后完全退出并重新打开 Claude Code。',
+              screenshots: [CC_SWITCH_SCREENSHOTS.imported],
+            },
+          ]}
+        />
       </section>
 
       <section id='manual-configuration' className='scroll-mt-28'>
@@ -282,7 +300,30 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
 
       <section id='verify' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>4. 启动并验证</h2>
-        <NumberedSteps items={CLAUDE_VERIFY_STEPS} />
+        <GuideSteps
+          items={[
+            { content: '使用与配置相同的终端启动 claude。' },
+            {
+              content:
+                '如果出现登录页，说明网关凭据没有被读取；不要选择 Claude 订阅登录，先检查配置文件路径和 JSON 格式。',
+            },
+            {
+              content:
+                '进入会话后运行 /status，核对服务地址、认证变量和当前模型。',
+            },
+            {
+              content: (
+                <>
+                  发送一个简短测试请求，再到{' '}
+                  <Link to='/usage-logs' className={CLAUDE_LINK_CLASS}>
+                    使用日志
+                  </Link>{' '}
+                  确认请求模型和状态。
+                </>
+              ),
+            },
+          ]}
+        />
         <p className='text-muted-foreground mt-5 leading-7'>
           在
           <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
@@ -309,14 +350,6 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
             label='终端'
           />
         </div>
-        <Button
-          className='mt-5'
-          variant='outline'
-          render={<Link to='/usage-logs' />}
-        >
-          打开使用日志
-          <HugeiconsIcon icon={ArrowRight01Icon} data-icon='inline-end' />
-        </Button>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>
