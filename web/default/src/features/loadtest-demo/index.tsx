@@ -86,7 +86,7 @@ const LOAD_TEST_ROUTING_STRATEGIES: Array<{
 
 type LoadTestSlot = {
   id: string
-  keyValue: string
+  keyId: string
   weight: number
   strategy: LoadTestRoutingStrategy
 }
@@ -184,12 +184,10 @@ export function LoadTestDemo() {
     (state) => state.config.currency.quotaPerUnit
   )
   const [keys, setKeys] = useState<LoadTestKey[]>([])
-  // Use the masked key value as the UI identity. IDs are database details and
-  // can be misleading when accounts are switched in the same browser.
   const [loadTestSlots, setLoadTestSlots] = useState<LoadTestSlot[]>([
-    { id: 'slot-a', keyValue: '', weight: 34, strategy: 'cost_first' },
-    { id: 'slot-b', keyValue: '', weight: 33, strategy: 'balanced' },
-    { id: 'slot-c', keyValue: '', weight: 33, strategy: 'stability_first' },
+    { id: 'slot-a', keyId: '', weight: 34, strategy: 'cost_first' },
+    { id: 'slot-b', keyId: '', weight: 33, strategy: 'balanced' },
+    { id: 'slot-c', keyId: '', weight: 33, strategy: 'stability_first' },
   ])
   const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
   const [durationSeconds, setDurationSeconds] = useState(
@@ -215,12 +213,22 @@ export function LoadTestDemo() {
       const loadedKeys = await loadLoadTestKeys()
       setKeys(loadedKeys)
       setLoadTestSlots((current) =>
-        current.map((slot, index) => ({
-          ...slot,
-          keyValue: loadedKeys.some((key) => key.key === slot.keyValue)
-            ? slot.keyValue
-            : (loadedKeys[index]?.key ?? ''),
-        }))
+        current.map((slot, index) => {
+          const currentKeyStillExists = loadedKeys.some(
+            (key) => String(key.id) === slot.keyId
+          )
+          const fallbackKey = loadedKeys[index]
+          let keyId = ''
+          if (currentKeyStillExists) {
+            keyId = slot.keyId
+          } else if (fallbackKey) {
+            keyId = String(fallbackKey.id)
+          }
+          return {
+            ...slot,
+            keyId,
+          }
+        })
       )
     } catch {
       setKeys([])
@@ -271,7 +279,7 @@ export function LoadTestDemo() {
 
   const run = useCallback(async () => {
     const activeSlots = loadTestSlots.flatMap((slot) => {
-      const key = keys.find((item) => item.key === slot.keyValue)
+      const key = keys.find((item) => String(item.id) === slot.keyId)
       return key ? [{ ...slot, key }] : []
     })
     if (!serverAddress || activeSlots.length === 0) return
@@ -440,7 +448,7 @@ export function LoadTestDemo() {
   )
   const canRun =
     (status === 'idle' || status === 'complete') &&
-    loadTestSlots.some((slot) => slot.keyValue !== '')
+    loadTestSlots.some((slot) => slot.keyId !== '')
 
   const statusLabel = useMemo(() => {
     if (status === 'loading-keys') return t('Loading')
@@ -507,12 +515,12 @@ export function LoadTestDemo() {
                           setLoadTestSlots((current) =>
                             current.map((item, itemIndex) =>
                               itemIndex === index
-                                ? { ...item, keyValue: value ?? '' }
+                                ? { ...item, keyId: value ?? '' }
                                 : item
                             )
                           )
                         }
-                        value={slot.keyValue}
+                        value={slot.keyId}
                       >
                         <SelectTrigger className='w-full'>
                           <SelectValue placeholder={t('Select API Key')} />
@@ -521,15 +529,15 @@ export function LoadTestDemo() {
                           {keys
                             .filter(
                               (key) =>
-                                key.key === slot.keyValue ||
+                                String(key.id) === slot.keyId ||
                                 !loadTestSlots.some(
                                   (item, itemIndex) =>
                                     itemIndex !== index &&
-                                    item.keyValue === key.key
+                                    item.keyId === String(key.id)
                                 )
                             )
                             .map((key) => (
-                              <SelectItem key={key.key} value={key.key}>
+                              <SelectItem key={key.id} value={String(key.id)}>
                                 {key.name} ·{' '}
                                 {key.group || key.group_candidates[0] || '-'}
                               </SelectItem>
