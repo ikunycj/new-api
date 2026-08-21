@@ -55,9 +55,9 @@ fi
 
 # This is a fresh host. The old Sub2API service is on the separate
 # `ikun.love-sub2api` SSH target and is checked there before/after deployment.
-# Keep the new host free of the legacy port and report the public origin only as
-# an informational DNS/routing observation.
+# Keep the new host free of the legacy port and report the current public
+# endpoint as an informational DNS/routing observation.
 printf 'legacy_sub2api_host=ikun.love-sub2api\n'
 printf 'new_host_port8080='; ss -lnt 2>/dev/null | awk '$4 ~ /:8080$/ {found=1} END {print found ? "bound" : "unbound"}'
-printf 'public_origin_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://ikun.love/api/v1/settings/public 2>/dev/null || echo 000
+printf 'public_origin_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 15 https://ikun.love/api/status 2>/dev/null || echo 000
 printf 'new_api_local_status='; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:3000/api/status 2>/dev/null || echo 000

@@ -5,7 +5,7 @@ DEPLOY_DIR=${DEPLOY_DIR:-/opt/new-api}
 ENV_FILE=${ENV_FILE:-.env}
 COMPOSE_FILE=${COMPOSE_FILE:-docker-compose.1panel.yml}
 LOCAL_STATUS_URL=${LOCAL_STATUS_URL:-http://127.0.0.1:3000/api/status}
-PUBLIC_STATUS_URL=${PUBLIC_STATUS_URL:-}
+PUBLIC_STATUS_URL=${PUBLIC_STATUS_URL:-https://ikun.love/api/status}
 EXPECTED_BINARY_SHA=${EXPECTED_BINARY_SHA:-}
 EXPECTED_ENV_SHA=${EXPECTED_ENV_SHA:-}
 
@@ -202,5 +202,5 @@ if [[ -n $PUBLIC_STATUS_URL ]]; then
   curl -fsS "$PUBLIC_STATUS_URL" >/dev/null
   echo 'new-api public status: ok'
 else
-  echo 'new-api public status: skipped (loopback-only deployment)'
+  echo 'new-api public status: skipped'
 fi

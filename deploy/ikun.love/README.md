@@ -20,7 +20,7 @@ replaced or connected to.
 | App status | http://127.0.0.1:3000/api/status |
 | Legacy Sub2API SSH alias | ikun.love-sub2api |
 | Legacy Sub2API port | 127.0.0.1:8080 on ikun.love-sub2api |
-| Existing public health | https://ikun.love/api/v1/settings/public (old host until DNS cutover) |
+| Public health | https://ikun.love/api/status |
 
 ## Isolation guarantees
 
@@ -34,8 +34,8 @@ replaced or connected to.
 - Redis uses its own container, persistent AOF volume, password, and database
   index 0. No Sub2API Redis keys are visible to it.
 - The app binds only to host loopback on port 3000 (metrics use loopback
-  8006). The public ikun.love root remains on the old Sub2API host until a
-  separate DNS/routing request is authorized.
+  8006). Public HTTPS for ikun.love is terminated by the target host's Nginx
+  and reverse-proxied to the app on 127.0.0.1:3000.
 - No command in these materials runs docker compose down, edits OpenResty, or
   stops/restarts sub2api.service.
 
@@ -69,6 +69,7 @@ Confirm both SSH targets, DNS, and the old service before any remote write:
 ssh -G ikun.love | Select-String '^(hostname|user|port|identityfile) '
 ssh -G ikun.love-sub2api | Select-String '^(hostname|user|port|identityfile) '
 Resolve-DnsName ikun.love
+Resolve-DnsName test.ikun.love
 ssh ikun.love 'docker ps -a --format "{{.Names}}"; ss -lnt | grep -E ":3000\\b|:8006\\b" || true'
 ssh ikun.love-sub2api 'systemctl is-active sub2api.service; ss -lnt | grep -E ":8080\\b"'
 ~~~
@@ -81,8 +82,9 @@ sudo bash baseline.sh
 
 An absent /opt/new-api directory, stack containers, network, and volumes is
 expected on the new host's first install. The separate legacy baseline on
-`ikun.love-sub2api` must show Sub2API active and port 8080 bound; the public
-health URL should remain available before and after the install.
+`ikun.love-sub2api` must show Sub2API active and port 8080 bound, with its
+public health URL available at `https://test.ikun.love/api/v1/settings/public`.
+The new host's public health URL is `https://ikun.love/api/status`.
 
 ## Build and stage
 
@@ -222,9 +224,11 @@ candidate image for diagnosis. A binary rollback does not undo database
 migrations already applied by the candidate, so take a PostgreSQL backup before
 subsequent upgrades and retain the named volumes.
 
-New-api public routing is intentionally skipped for this parallel install;
-`https://ikun.love` continues to serve Sub2API from `ikun.love-sub2api` until a
-separate DNS/routing cutover is authorized. A fresh database has no admin
-account yet. Use an SSH tunnel to open `http://127.0.0.1:3000/setup`, complete
+The public route is served by the target host's Nginx configuration in
+`deploy/ikun.love/nginx/ikun.love.conf`, using the certificate issued for
+`ikun.love` and proxying to `127.0.0.1:3000`. The legacy Sub2API host is
+available independently at `https://test.ikun.love`; its service remains
+untouched by this stack. A fresh database has no admin account yet. Use an SSH
+tunnel to open `http://127.0.0.1:3000/setup`, complete
 the first-run setup, and confirm `GET /api/setup` reports database type
 `postgres` (not SQLite) before using the instance.
