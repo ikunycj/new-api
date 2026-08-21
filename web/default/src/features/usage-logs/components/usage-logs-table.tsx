@@ -101,23 +101,6 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
         type: 'array' as const,
         deserialize: deserializeLogTypeFilter,
       },
-      { columnId: 'model_name', searchKey: 'model', type: 'string' as const },
-      { columnId: 'token_name', searchKey: 'token', type: 'string' as const },
-      { columnId: 'group', searchKey: 'group', type: 'string' as const },
-      ...(isAdmin
-        ? [
-            {
-              columnId: 'channel',
-              searchKey: 'channel',
-              type: 'string' as const,
-            },
-            {
-              columnId: 'username',
-              searchKey: 'username',
-              type: 'string' as const,
-            },
-          ]
-        : []),
     ],
   })
 

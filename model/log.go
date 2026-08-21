@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,72 @@ func buildLogLikeCondition(column string, value string) (string, string, error) 
 		return "", "", err
 	}
 	return column + " LIKE ? ESCAPE '!'", pattern, nil
+}
+
+func getLogSearchUserIDs(keyword string) ([]int, error) {
+	pattern := "%" + escapeLikeLiteral(strings.TrimSpace(keyword)) + "%"
+
+	var userIDs []int
+	err := DB.Unscoped().Model(&User{}).
+		Where("(username LIKE ? ESCAPE '!' OR display_name LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' OR remark LIKE ? ESCAPE '!')", pattern, pattern, pattern, pattern).
+		Pluck("id", &userIDs).Error
+	return userIDs, err
+}
+
+func escapeLikeLiteral(input string) string {
+	input = strings.ReplaceAll(input, "!", "!!")
+	input = strings.ReplaceAll(input, "%", "!%")
+	return strings.ReplaceAll(input, "_", "!_")
+}
+
+func buildLogContainsCondition(column string, value string) (string, string) {
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		value = strings.ReplaceAll(value, `\`, `\\`)
+		value = strings.ReplaceAll(value, "%", `\%`)
+		value = strings.ReplaceAll(value, "_", `\_`)
+		return column + " LIKE ?", "%" + value + "%"
+	}
+	return column + " LIKE ? ESCAPE '!'", "%" + escapeLikeLiteral(value) + "%"
+}
+
+func applyLogKeywordFilter(tx *gorm.DB, keyword string) (*gorm.DB, error) {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return tx, nil
+	}
+
+	searchValue := keyword
+	columns := []string{
+		"logs.model_name",
+		"logs.token_name",
+		"logs.username",
+		"logs." + logGroupCol,
+		"logs.request_id",
+		"logs.upstream_request_id",
+	}
+	conditions := make([]string, 0, len(columns)+2)
+	args := make([]interface{}, 0, len(columns)+2)
+	for _, column := range columns {
+		condition, pattern := buildLogContainsCondition(column, searchValue)
+		conditions = append(conditions, condition)
+		args = append(args, pattern)
+	}
+
+	if channelID, err := strconv.Atoi(keyword); err == nil {
+		conditions = append(conditions, "logs.channel_id = ?")
+		args = append(args, channelID)
+	}
+
+	userIDs, err := getLogSearchUserIDs(keyword)
+	if err != nil {
+		return nil, err
+	}
+	if len(userIDs) > 0 {
+		conditions = append(conditions, "logs.user_id IN ?")
+		args = append(args, userIDs)
+	}
+
+	return tx.Where("("+strings.Join(conditions, " OR ")+")", args...), nil
 }
 
 func sanitizeClickHouseLikePattern(input string) (string, error) {
@@ -500,7 +567,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -511,7 +578,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
 		return nil, 0, err
 	}
-	if tx, err = applyExplicitLogTextFilter(tx, "logs.username", username); err != nil {
+	if tx, err = applyLogKeywordFilter(tx, keyword); err != nil {
 		return nil, 0, err
 	}
 	if tokenName != "" {
@@ -596,7 +663,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -605,6 +672,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
+		return nil, 0, err
+	}
+	if tx, err = applyLogKeywordFilter(tx, keyword); err != nil {
 		return nil, 0, err
 	}
 	if tokenName != "" {
@@ -656,21 +726,26 @@ type Stat struct {
 	CacheHitRate          float64 `json:"cache_hit_rate"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, channel int, group string, userId int) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
 	cacheQuery := LOG_DB.Table("logs").Select("COALESCE(sum(input_tokens_total), 0) cache_input_tokens, COALESCE(sum(cache_read_tokens), 0) cache_read_tokens, COALESCE(sum(cache_write_tokens), 0) cache_write_tokens, COALESCE(sum(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END), 0) cache_hit_requests, count(*) cache_eligible_requests")
 
-	if tx, err = applyExplicitLogTextFilter(tx, "username", username); err != nil {
+	if tx, err = applyLogKeywordFilter(tx, keyword); err != nil {
 		return stat, err
 	}
-	if rpmTpmQuery, err = applyExplicitLogTextFilter(rpmTpmQuery, "username", username); err != nil {
+	if rpmTpmQuery, err = applyLogKeywordFilter(rpmTpmQuery, keyword); err != nil {
 		return stat, err
 	}
-	if cacheQuery, err = applyExplicitLogTextFilter(cacheQuery, "username", username); err != nil {
+	if cacheQuery, err = applyLogKeywordFilter(cacheQuery, keyword); err != nil {
 		return stat, err
+	}
+	if userId != 0 {
+		tx = tx.Where("user_id = ?", userId)
+		rpmTpmQuery = rpmTpmQuery.Where("user_id = ?", userId)
+		cacheQuery = cacheQuery.Where("user_id = ?", userId)
 	}
 	if tokenName != "" {
 		tx = tx.Where("token_name = ?", tokenName)

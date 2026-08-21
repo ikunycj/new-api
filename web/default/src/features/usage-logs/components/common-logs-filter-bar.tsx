@@ -49,7 +49,7 @@ import {
   LogsFilterInput,
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
-import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
+import { useUsageLogsContext } from './usage-logs-provider'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -81,24 +81,14 @@ function buildSearchSourceKey(values: {
   startTime?: unknown
   endTime?: unknown
   channel?: unknown
-  model?: unknown
-  token?: unknown
-  group?: unknown
-  username?: unknown
-  requestId?: unknown
-  upstreamRequestId?: unknown
+  keyword?: unknown
   type?: unknown
 }) {
   return [
     values.startTime,
     values.endTime,
     values.channel,
-    values.model,
-    values.token,
-    values.group,
-    values.username,
-    values.requestId,
-    values.upstreamRequestId,
+    values.keyword,
     Array.isArray(values.type) ? values.type.join(',') : values.type,
   ]
     .map((value) => String(value ?? ''))
@@ -116,7 +106,6 @@ export function CommonLogsFilterBar<TData>(
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const searchParams = route.useSearch()
-  const { isAdminView: isAdmin } = useLogsViewScope()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
 
@@ -126,12 +115,7 @@ export function CommonLogsFilterBar<TData>(
       startTime: searchParams.startTime,
       endTime: searchParams.endTime,
       channel: searchParams.channel,
-      model: searchParams.model,
-      token: searchParams.token,
-      group: searchParams.group,
-      username: searchParams.username,
-      requestId: searchParams.requestId,
-      upstreamRequestId: searchParams.upstreamRequestId,
+      keyword: searchParams.keyword,
       type: searchParams.type,
     }
     const filters: CommonLogFilters = {
@@ -140,12 +124,7 @@ export function CommonLogsFilterBar<TData>(
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
       channel: searchParams.channel || undefined,
-      model: searchParams.model || undefined,
-      token: searchParams.token || undefined,
-      group: searchParams.group || undefined,
-      username: searchParams.username || undefined,
-      requestId: searchParams.requestId || undefined,
-      upstreamRequestId: searchParams.upstreamRequestId || undefined,
+      keyword: searchParams.keyword || undefined,
     }
     return {
       sourceKey: buildSearchSourceKey(sourceValues),
@@ -156,12 +135,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.startTime,
     searchParams.endTime,
     searchParams.channel,
-    searchParams.model,
-    searchParams.token,
-    searchParams.group,
-    searchParams.username,
-    searchParams.requestId,
-    searchParams.upstreamRequestId,
+    searchParams.keyword,
     searchParams.type,
   ])
   const [draft, setDraft] = useState<CommonLogDraft>(() => searchState)
@@ -233,25 +207,8 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
-  const hasExpandedFilters =
-    !!filters.token ||
-    !!filters.username ||
-    !!filters.channel ||
-    !!filters.requestId ||
-    !!filters.upstreamRequestId
-
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
-  const hasAdditionalFilters =
-    !!filters.model || !!filters.group || hasTypeFilter || hasExpandedFilters
-
-  const expandedFilterCount = [
-    filters.token,
-    isAdmin ? filters.username : undefined,
-    isAdmin ? filters.channel : undefined,
-    filters.requestId,
-    filters.upstreamRequestId,
-  ].filter(Boolean).length
-  const sensitiveType = sensitiveVisible ? 'text' : 'password'
+  const hasAdditionalFilters = !!filters.keyword || hasTypeFilter
   const logTypeItems = useMemo(
     () =>
       LOG_TYPE_FILTERS.map((type) => ({
@@ -301,24 +258,16 @@ export function CommonLogsFilterBar<TData>(
       />
     </LogsFilterField>
   )
-  const modelFilter = (
+  const keywordFilter = (
     <LogsFilterField>
       <LogsFilterInput
-        placeholder={t('Model Name')}
-        value={filters.model || ''}
-        onChange={(e) => handleChange('model', e.target.value)}
+        placeholder={t(
+          'Search logs by model, token, user, email, remark, or request ID...'
+        )}
+        value={filters.keyword || ''}
+        onChange={(e) => handleChange('keyword', e.target.value)}
         onKeyDown={handleKeyDown}
-      />
-    </LogsFilterField>
-  )
-  const groupFilter = (
-    <LogsFilterField>
-      <LogsFilterInput
-        placeholder={t('Group')}
-        type={sensitiveType}
-        value={filters.group || ''}
-        onChange={(e) => handleChange('group', e.target.value)}
-        onKeyDown={handleKeyDown}
+        className='sm:min-w-[18rem]'
       />
     </LogsFilterField>
   )
@@ -358,57 +307,6 @@ export function CommonLogsFilterBar<TData>(
       </Select>
     </LogsFilterField>
   )
-  const advancedFilters = (
-    <>
-      <LogsFilterField>
-        <LogsFilterInput
-          placeholder={t('Token Name')}
-          type={sensitiveType}
-          value={filters.token || ''}
-          onChange={(e) => handleChange('token', e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-      </LogsFilterField>
-      {isAdmin && (
-        <LogsFilterField>
-          <LogsFilterInput
-            placeholder={t('Username')}
-            type={sensitiveType}
-            value={filters.username || ''}
-            onChange={(e) => handleChange('username', e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </LogsFilterField>
-      )}
-      {isAdmin && (
-        <LogsFilterField>
-          <LogsFilterInput
-            placeholder={t('Channel ID')}
-            value={filters.channel || ''}
-            onChange={(e) => handleChange('channel', e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </LogsFilterField>
-      )}
-      <LogsFilterField>
-        <LogsFilterInput
-          placeholder={t('Request ID')}
-          value={filters.requestId || ''}
-          onChange={(e) => handleChange('requestId', e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-      </LogsFilterField>
-      <LogsFilterField>
-        <LogsFilterInput
-          placeholder={t('Upstream Request ID')}
-          value={filters.upstreamRequestId || ''}
-          onChange={(e) => handleChange('upstreamRequestId', e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-      </LogsFilterField>
-    </>
-  )
-
   return (
     <LogsFilterToolbar
       table={props.table}
@@ -417,27 +315,20 @@ export function CommonLogsFilterBar<TData>(
       primaryFilters={
         <>
           {dateRangeFilter}
-          {modelFilter}
-          {groupFilter}
+          {keywordFilter}
           {typeFilter}
         </>
       }
-      advancedFilters={advancedFilters}
       mobilePinnedFilters={dateRangeFilter}
       mobileFilters={
         <>
-          {modelFilter}
-          {groupFilter}
+          {keywordFilter}
           {typeFilter}
-          {advancedFilters}
         </>
       }
       mobileFilterCount={
-        [filters.model, filters.group, hasTypeFilter].filter(Boolean).length +
-        expandedFilterCount
+        [filters.keyword, hasTypeFilter].filter(Boolean).length
       }
-      hasAdvancedActiveFilters={hasExpandedFilters}
-      advancedFilterCount={expandedFilterCount}
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}
