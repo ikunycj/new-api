@@ -37,6 +37,10 @@ const newKeys = {
     'Hide screenshot example': 'Hide screenshot example',
     'Search models, providers, and groups':
       'Search models, providers, and groups',
+    'Filter by username, name, email or remark...':
+      'Filter by username, name, email or remark...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      'Search logs by model, token, user, email, remark, or request ID...',
     'Channel binding is incomplete': 'Channel binding is incomplete',
     'Channel bindings': 'Channel bindings',
     'Channel bindings saved': 'Channel bindings saved',
@@ -113,6 +117,10 @@ const newKeys = {
     'View screenshot example': '查看截图示例',
     'Hide screenshot example': '收起截图示例',
     'Search models, providers, and groups': '搜索模型、厂商、分组',
+    'Filter by username, name, email or remark...':
+      '按用户名、姓名、邮箱或备注筛选...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      '按模型、令牌、用户、邮箱、备注或请求 ID 搜索日志...',
     'Channel binding is incomplete': '渠道绑定不完整',
     'Channel bindings': '渠道绑定',
     'Channel bindings saved': '渠道绑定已保存',
@@ -191,6 +199,10 @@ const newKeys = {
     'Hide screenshot example': "Masquer l'exemple de capture d'écran",
     'Search models, providers, and groups':
       'Rechercher des modèles, fournisseurs et groupes',
+    'Filter by username, name, email or remark...':
+      "Filtrer par nom d'utilisateur, nom, e-mail ou remarque...",
+    'Search logs by model, token, user, email, remark, or request ID...':
+      'Rechercher les journaux par modèle, jeton, utilisateur, e-mail, remarque ou ID de requête...',
     'Channel binding is incomplete': 'Association de canal incomplète',
     'Channel bindings': 'Associations des canaux',
     'Channel bindings saved': 'Associations des canaux enregistrées',
@@ -270,6 +282,10 @@ const newKeys = {
     'Hide screenshot example': 'スクリーンショット例を閉じる',
     'Search models, providers, and groups':
       'モデル、プロバイダー、グループを検索',
+    'Filter by username, name, email or remark...':
+      'ユーザー名、名前、メールアドレスまたは備考でフィルター...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      'モデル、トークン、ユーザー、メールアドレス、備考、リクエストIDでログを検索...',
     'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
     'Channel bindings': 'チャネルの関連付け',
     'Channel bindings saved': 'チャネルの関連付けを保存しました',
@@ -349,6 +365,10 @@ const newKeys = {
     'Hide screenshot example': 'Скрыть пример скриншота',
     'Search models, providers, and groups':
       'Поиск моделей, провайдеров и групп',
+    'Filter by username, name, email or remark...':
+      'Фильтр по имени пользователя, имени, email или примечанию...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      'Поиск журналов по модели, токену, пользователю, email, примечанию или ID запроса...',
     'Channel binding is incomplete': 'Привязка канала не завершена',
     'Channel bindings': 'Привязки каналов',
     'Channel bindings saved': 'Привязки каналов сохранены',
@@ -427,6 +447,10 @@ const newKeys = {
     'Hide screenshot example': 'Ẩn ví dụ ảnh chụp màn hình',
     'Search models, providers, and groups':
       'Tìm kiếm mô hình, nhà cung cấp và nhóm',
+    'Filter by username, name, email or remark...':
+      'Lọc theo tên người dùng, tên, email hoặc ghi chú...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      'Tìm nhật ký theo mô hình, token, người dùng, email, ghi chú hoặc ID yêu cầu...',
     'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
     'Channel bindings': 'Liên kết kênh',
     'Channel bindings saved': 'Đã lưu liên kết kênh',
@@ -504,6 +528,10 @@ const newKeys = {
     'View screenshot example': '查看截圖範例',
     'Hide screenshot example': '收起截圖範例',
     'Search models, providers, and groups': '搜尋模型、廠商、分組',
+    'Filter by username, name, email or remark...':
+      '按用戶名、姓名、電郵或備註篩選...',
+    'Search logs by model, token, user, email, remark, or request ID...':
+      '按模型、令牌、用戶、電郵、備註或請求 ID 搜尋日誌...',
     'Channel binding is incomplete': '渠道綁定不完整',
     'Channel bindings': '渠道綁定',
     'Channel bindings saved': '渠道綁定已儲存',
