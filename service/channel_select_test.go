@@ -337,6 +337,36 @@ func TestCacheGetRandomSatisfiedChannelUsesPolicyPoolOrder(t *testing.T) {
 	assert.Equal(t, stable.Id, channel.Id)
 }
 
+func TestCacheGetRandomSatisfiedChannelUsesExplicitPolicyChannelOrder(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "direct")
+	priority := int64(1)
+	weight := uint(100)
+	second := &model.Channel{
+		Id: 93002, Name: "direct-second", Key: "second", Status: common.ChannelStatusEnabled,
+		Models: "shared-model", Group: "direct", Priority: &priority, Weight: &weight,
+	}
+	require.NoError(t, model.DB.Create(second).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "direct", Model: "shared-model", ChannelId: second.Id, Enabled: true, Priority: &priority, Weight: weight}).Error)
+	model.InitChannelCache()
+
+	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+	policy.ChannelIDs = []int{second.Id, ids["direct"]}
+	policy.PoolTiers = nil
+	param := &RetryParam{Ctx: orderedRoutingContext(nil, false), TokenGroup: "direct", ModelName: "shared-model", runtimePolicy: &policy, startedAt: time.Now()}
+	channel, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, second.Id, channel.Id)
+
+	param.MarkChannelAttempted(channel.Id, channel.ClusterId)
+	assert.True(t, param.HasNextRetry())
+	assert.True(t, param.AdvanceRetry())
+	next, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.Equal(t, ids["direct"], next.Id)
+}
+
 func TestRetryParamEnforcesPoolRetryAndTierBudgets(t *testing.T) {
 	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
 	policy.SamePoolRetries = 1

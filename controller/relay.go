@@ -240,6 +240,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			routingStrategy = plan.RoutingStrategy
 		}
 	}
+	// The load-test demo may compare routing strategies while keeping all
+	// tokens in the same user-facing billing group. Restrict this override to
+	// requests carrying the load-test marker; normal API callers remain bound
+	// to their subscription plan strategy.
+	if c.GetHeader("X-Load-Test-ID") != "" && c.GetString("user_type") == model.UserTypeToB {
+		requestedStrategy := c.GetHeader("X-Alltoken-Routing-Strategy")
+		if model.IsRoutingStrategy(requestedStrategy) {
+			routingStrategy = requestedStrategy
+		}
+	}
 	retryParam := &service.RetryParam{
 		Ctx:             c,
 		TokenGroup:      relayInfo.TokenGroup,

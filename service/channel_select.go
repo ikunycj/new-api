@@ -22,22 +22,23 @@ type RetryParam struct {
 
 	// Routing state is request-local. Keeping it off the Gin context prevents a
 	// fresh RetryParam in the relay handler from skipping the first candidate.
-	groupIndex        int
-	attempted         bool
-	attemptedChannels map[int]struct{}
-	excludedChannels  map[int]struct{}
-	attemptedClusters map[int]struct{}
-	excludedClusters  map[int]struct{}
-	poolAttemptCounts map[int]map[int]int
-	startedAt         time.Time
-	runtimePolicy     *model.RuntimeFailoverPolicy
-	basePolicy        *model.RuntimeFailoverPolicy
-	rulePolicy        bool
-	allowedClusters   map[int]struct{}
-	clusterOrder      []int
-	groups            []string
-	groupsInit        bool
-	resetNextTry      bool // retained for callers using the legacy RetryParam API
+	groupIndex           int
+	attempted            bool
+	attemptedChannels    map[int]struct{}
+	channelAttemptCounts map[int]int
+	excludedChannels     map[int]struct{}
+	attemptedClusters    map[int]struct{}
+	excludedClusters     map[int]struct{}
+	poolAttemptCounts    map[int]map[int]int
+	startedAt            time.Time
+	runtimePolicy        *model.RuntimeFailoverPolicy
+	basePolicy           *model.RuntimeFailoverPolicy
+	rulePolicy           bool
+	allowedClusters      map[int]struct{}
+	clusterOrder         []int
+	groups               []string
+	groupsInit           bool
+	resetNextTry         bool // retained for callers using the legacy RetryParam API
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -88,10 +89,20 @@ func (p *RetryParam) MarkChannelAttempted(channelID int, clusterID int) {
 		p.attemptedChannels = make(map[int]struct{})
 	}
 	p.attemptedChannels[channelID] = struct{}{}
-	if p.excludedChannels == nil {
-		p.excludedChannels = make(map[int]struct{})
+	if p.channelAttemptCounts == nil {
+		p.channelAttemptCounts = make(map[int]int)
 	}
-	p.excludedChannels[channelID] = struct{}{}
+	p.channelAttemptCounts[channelID]++
+	maxAttempts := 1
+	if configured := p.policy().ChannelAttemptsByID[channelID]; configured > 0 {
+		maxAttempts = configured
+	}
+	if p.channelAttemptCounts[channelID] >= maxAttempts {
+		if p.excludedChannels == nil {
+			p.excludedChannels = make(map[int]struct{})
+		}
+		p.excludedChannels[channelID] = struct{}{}
+	}
 	if clusterID > 0 {
 		if p.attemptedClusters == nil {
 			p.attemptedClusters = make(map[int]struct{})
@@ -312,6 +323,15 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 }
 
 func selectChannelForPolicy(policy model.RuntimeFailoverPolicy, group string, modelName string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*model.Channel, error) {
+	if len(policy.ChannelIDs) > 0 {
+		for _, channelID := range policy.ChannelIDs {
+			channel, err := model.GetConfiguredChannel(group, modelName, channelID, excludedChannels, excludedClusters)
+			if err != nil || channel != nil {
+				return channel, err
+			}
+		}
+		return nil, nil
+	}
 	poolTiers := policy.PoolTiers
 	if len(poolTiers) == 0 {
 		poolTiers = []int{0}

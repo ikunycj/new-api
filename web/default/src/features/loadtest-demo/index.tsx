@@ -51,7 +51,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
-import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
@@ -66,13 +66,30 @@ import {
   LOAD_TEST_MODELS,
   getLoadTestChannelStats,
   loadLoadTestKeys,
-  loadLoadTestPricing,
   sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
-  type LoadTestPricing,
+  type LoadTestRoutingStrategy,
   type LoadTestRequestResult,
 } from './api'
+
+const LOAD_TEST_ROUTING_STRATEGIES: Array<{
+  value: LoadTestRoutingStrategy
+  label: string
+}> = [
+  { value: 'cost_first', label: 'Cost first' },
+  { value: 'balanced', label: 'Balanced cost and stability' },
+  { value: 'stability_first', label: 'Stability first' },
+  { value: 'pro_cost_first', label: 'Claude Pro cost first' },
+  { value: 'pro_stability_first', label: 'Claude Pro stability first' },
+]
+
+type LoadTestSlot = {
+  id: string
+  keyValue: string
+  weight: number
+  strategy: LoadTestRoutingStrategy
+}
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
@@ -124,39 +141,6 @@ function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
 }
 
-function calculateChannelCost(
-  channel: LoadTestChannelStats,
-  pricing: LoadTestPricing
-) {
-  if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-    return (
-      channel.requests * (pricing.model.model_price ?? 0) * channel.cost_factor
-    )
-  }
-
-  const officialInputPricePerMillion = pricing.model.model_ratio * 2
-  const officialOutputPricePerMillion =
-    officialInputPricePerMillion * pricing.model.completion_ratio
-  const officialCacheReadPricePerMillion =
-    officialInputPricePerMillion * (pricing.model.cache_ratio ?? 1)
-  const officialCacheWritePricePerMillion =
-    officialInputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
-  const baseInputTokens = Math.max(
-    0,
-    channel.input_tokens_total > 0
-      ? channel.input_tokens_total -
-          channel.cache_read_tokens -
-          channel.cache_write_tokens
-      : channel.input_tokens
-  )
-  const officialCost =
-    (baseInputTokens / 1_000_000) * officialInputPricePerMillion +
-    (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
-    (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
-    (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
-  return officialCost * channel.cost_factor
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className='bg-muted/40 rounded-lg px-3 py-2'>
@@ -196,10 +180,17 @@ function CounterList({
 export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
+  const quotaPerUnit = useSystemConfigStore(
+    (state) => state.config.currency.quotaPerUnit
+  )
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   // Use the masked key value as the UI identity. IDs are database details and
   // can be misleading when accounts are switched in the same browser.
-  const [selectedKeyValue, setSelectedKeyValue] = useState('')
+  const [loadTestSlots, setLoadTestSlots] = useState<LoadTestSlot[]>([
+    { id: 'slot-a', keyValue: '', weight: 34, strategy: 'cost_first' },
+    { id: 'slot-b', keyValue: '', weight: 33, strategy: 'balanced' },
+    { id: 'slot-c', keyValue: '', weight: 33, strategy: 'stability_first' },
+  ])
   const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
   const [durationSeconds, setDurationSeconds] = useState(
     LOAD_TEST_DEFAULT_DURATION_SECONDS
@@ -212,7 +203,6 @@ export function LoadTestDemo() {
   const [stats, setStats] = useState<RunStats>(EMPTY_STATS)
   const [runId, setRunId] = useState('')
   const [elapsed, setElapsed] = useState(0)
-  const [pricing, setPricing] = useState<LoadTestPricing | null>(null)
   const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>([])
   const runAbortRef = useRef<AbortController | null>(null)
   const requestIdsRef = useRef<string[]>([])
@@ -224,10 +214,13 @@ export function LoadTestDemo() {
     try {
       const loadedKeys = await loadLoadTestKeys()
       setKeys(loadedKeys)
-      setSelectedKeyValue((current) =>
-        loadedKeys.some((key) => key.key === current)
-          ? current
-          : (loadedKeys[0]?.key ?? '')
+      setLoadTestSlots((current) =>
+        current.map((slot, index) => ({
+          ...slot,
+          keyValue: loadedKeys.some((key) => key.key === slot.keyValue)
+            ? slot.keyValue
+            : (loadedKeys[index]?.key ?? ''),
+        }))
       )
     } catch {
       setKeys([])
@@ -277,8 +270,19 @@ export function LoadTestDemo() {
   }, [])
 
   const run = useCallback(async () => {
-    const selectedKey = keys.find((key) => key.key === selectedKeyValue)
-    if (!serverAddress || !selectedKey) return
+    const activeSlots = loadTestSlots.flatMap((slot) => {
+      const key = keys.find((item) => item.key === slot.keyValue)
+      return key ? [{ ...slot, key }] : []
+    })
+    if (!serverAddress || activeSlots.length === 0) return
+    const totalWeight = activeSlots.reduce(
+      (total, slot) => total + Math.max(0, slot.weight),
+      0
+    )
+    if (totalWeight <= 0) {
+      toast.error(t('Load test limits are invalid'))
+      return
+    }
     if (
       !Number.isFinite(durationSeconds) ||
       !Number.isFinite(requestsPerSecond) ||
@@ -302,17 +306,6 @@ export function LoadTestDemo() {
     requestIdsRef.current = []
     setStatus('running')
 
-    try {
-      setPricing(
-        await loadLoadTestPricing(
-          selectedModel,
-          selectedKey.group?.trim() || selectedKey.group_candidates[0] || ''
-        )
-      )
-    } catch {
-      setPricing(null)
-    }
-
     const inFlight = new Set<Promise<void>>()
     const durationMs = durationSeconds * 1000
     const requestIntervalMs = 1000 / requestsPerSecond
@@ -331,12 +324,22 @@ export function LoadTestDemo() {
         await Promise.race(inFlight)
       }
 
+      let weightedSlot = activeSlots[0]
+      let cursor = sentRequests % totalWeight
+      for (const slot of activeSlots) {
+        cursor -= Math.max(0, slot.weight)
+        if (cursor < 0) {
+          weightedSlot = slot
+          break
+        }
+      }
       const request = sendLoadTestRequest(
         serverAddress,
-        selectedKey,
+        weightedSlot.key,
         selectedModel,
         currentRunId,
         promptCache,
+        weightedSlot.strategy,
         controller.signal
       ).then(recordResult)
       inFlight.add(request)
@@ -367,7 +370,7 @@ export function LoadTestDemo() {
     promptCache,
     recordResult,
     requestsPerSecond,
-    selectedKeyValue,
+    loadTestSlots,
     selectedModel,
     serverAddress,
     t,
@@ -392,18 +395,10 @@ export function LoadTestDemo() {
   const cacheHitRate = cacheAttemptTokens
     ? ((stats.cacheReadTokens / cacheAttemptTokens) * 100).toFixed(1)
     : '0.0'
-  const inputPricePerMillion = pricing
-    ? pricing.model.model_ratio * 2 * pricing.groupRatio
-    : 0
-  const outputPricePerMillion = pricing
-    ? inputPricePerMillion * pricing.model.completion_ratio
-    : 0
-  const cacheReadPricePerMillion = pricing
-    ? inputPricePerMillion * (pricing.model.cache_ratio ?? 1)
-    : 0
-  const cacheWritePricePerMillion = pricing
-    ? inputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
-    : 0
+  const totalChargedQuota = channelStats.reduce(
+    (total, item) => total + item.charged_quota,
+    0
+  )
   const totalChannelTokens = channelStats.reduce(
     (total, item) =>
       total +
@@ -423,30 +418,29 @@ export function LoadTestDemo() {
       .map((channel) => channel.cluster_id)
       .filter((clusterId) => clusterId > 0)
   )
-  let estimatedCost = 0
-  if (pricing) {
-    if (channelStats.length > 0) {
-      estimatedCost = channelStats.reduce(
-        (total, channel) => total + calculateChannelCost(channel, pricing),
-        0
-      )
-    } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-      estimatedCost =
-        stats.successes * (pricing.model.model_price ?? 0) * pricing.groupRatio
-    } else {
-      estimatedCost =
-        (stats.inputTokens / 1_000_000) * inputPricePerMillion +
-        (stats.outputTokens / 1_000_000) * outputPricePerMillion +
-        (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
-        (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
+  const keyCostRows = channelStats.reduce((rows, channel) => {
+    const existing = rows.get(channel.token_id) ?? {
+      requests: 0,
+      quota: 0,
+      channels: new Set<number>(),
     }
-  }
+    existing.requests += channel.requests
+    existing.quota += channel.charged_quota
+    existing.channels.add(channel.channel_id)
+    rows.set(channel.token_id, existing)
+    return rows
+  }, new Map<number, { requests: number; quota: number; channels: Set<number> }>())
+  const actualCost =
+    channelStats.length > 0 && quotaPerUnit > 0
+      ? totalChargedQuota / quotaPerUnit
+      : 0
   const maxRequests = Math.min(
     LOAD_TEST_MAX_REQUESTS,
     Math.ceil(durationSeconds * requestsPerSecond)
   )
   const canRun =
-    (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
+    (status === 'idle' || status === 'complete') &&
+    loadTestSlots.some((slot) => slot.keyValue !== '')
 
   const statusLabel = useMemo(() => {
     if (status === 'loading-keys') return t('Loading')
@@ -491,28 +485,119 @@ export function LoadTestDemo() {
               </div>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-                <div className='space-y-1.5'>
-                  <Label>{t('API Key')}</Label>
-                  <Select
-                    onValueChange={(value) =>
-                      value && setSelectedKeyValue(value)
-                    }
-                    value={selectedKeyValue}
-                  >
-                    <SelectTrigger className='w-full'>
-                      <SelectValue placeholder={t('Select API Key')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {keys.map((key) => (
-                        <SelectItem key={key.key} value={key.key}>
-                          {key.name} ·{' '}
-                          {key.group || key.group_candidates[0] || '-'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className='space-y-3'>
+                <div className='flex items-center justify-between gap-3'>
+                  <div>
+                    <Label>{t('API Key')}</Label>
+                    <p className='text-muted-foreground text-xs'>
+                      {t('Weighted by request count')}
+                    </p>
+                  </div>
+                  <Badge variant='outline'>{t('Unified package')}</Badge>
                 </div>
+                {loadTestSlots.map((slot, index) => (
+                  <div
+                    className='grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]'
+                    key={slot.id}
+                  >
+                    <div className='space-y-1.5'>
+                      <Label>{`${t('API Key')} ${index + 1}`}</Label>
+                      <Select
+                        onValueChange={(value) =>
+                          setLoadTestSlots((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, keyValue: value ?? '' }
+                                : item
+                            )
+                          )
+                        }
+                        value={slot.keyValue}
+                      >
+                        <SelectTrigger className='w-full'>
+                          <SelectValue placeholder={t('Select API Key')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {keys
+                            .filter(
+                              (key) =>
+                                key.key === slot.keyValue ||
+                                !loadTestSlots.some(
+                                  (item, itemIndex) =>
+                                    itemIndex !== index &&
+                                    item.keyValue === key.key
+                                )
+                            )
+                            .map((key) => (
+                              <SelectItem key={key.key} value={key.key}>
+                                {key.name} ·{' '}
+                                {key.group || key.group_candidates[0] || '-'}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className='space-y-1.5'>
+                      <Label>{t('Weight')}</Label>
+                      <Input
+                        min={0}
+                        max={100}
+                        step={1}
+                        type='number'
+                        value={slot.weight}
+                        onChange={(event) => {
+                          const value = Number(event.target.value)
+                          setLoadTestSlots((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    weight: Number.isFinite(value)
+                                      ? Math.min(100, Math.max(0, value))
+                                      : 0,
+                                  }
+                                : item
+                            )
+                          )
+                        }}
+                      />
+                    </div>
+                    <div className='space-y-1.5'>
+                      <Label>{t('Routing strategy')}</Label>
+                      <Select
+                        onValueChange={(value) =>
+                          setLoadTestSlots((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    strategy: value as LoadTestRoutingStrategy,
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                        value={slot.strategy}
+                      >
+                        <SelectTrigger className='w-full'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LOAD_TEST_ROUTING_STRATEGIES.map((strategy) => (
+                            <SelectItem
+                              key={strategy.value}
+                              value={strategy.value}
+                            >
+                              {t(strategy.label)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>{t('Test model')}</Label>
                   <Select
@@ -673,20 +758,14 @@ export function LoadTestDemo() {
               value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
             />
             <Metric
-              label={t('Estimated cost')}
-              value={
-                pricing ? `$${estimatedCost.toFixed(6)}` : t('Unavailable')
-              }
+              label={t('Actual cost')}
+              value={`$${actualCost.toFixed(6)}`}
             />
           </div>
           <Card>
             <CardHeader>
               <CardTitle>{t('Channel token usage and cost')}</CardTitle>
-              <CardDescription>
-                {t(
-                  'Estimated cost = actual channel tokens × official model price × channel cost factor.'
-                )}
-              </CardDescription>
+              <CardDescription>{t('Actual cost')}</CardDescription>
             </CardHeader>
             <CardContent>
               {channelStats.length === 0 ? (
@@ -708,7 +787,7 @@ export function LoadTestDemo() {
                         <TableHead>{t('Total tokens')}</TableHead>
                         <TableHead>{t('Token share')}</TableHead>
                         <TableHead>{t('Cost factor')}</TableHead>
-                        <TableHead>{t('Channel cost')}</TableHead>
+                        <TableHead>{t('Actual cost')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -760,12 +839,10 @@ export function LoadTestDemo() {
                             </TableCell>
                             <TableCell className='tabular-nums'>
                               $
-                              {pricing
-                                ? calculateChannelCost(
-                                    channel,
-                                    pricing
-                                  ).toFixed(6)
-                                : '0.000000'}
+                              {(quotaPerUnit > 0
+                                ? channel.charged_quota / quotaPerUnit
+                                : 0
+                              ).toFixed(6)}
                             </TableCell>
                           </TableRow>
                         )
@@ -786,13 +863,7 @@ export function LoadTestDemo() {
               <Metric label={t('Clusters')} value={String(clustersUsed.size)} />
             </div>
           )}
-          <p className='text-muted-foreground text-xs'>
-            {pricing
-              ? t(
-                  'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
-                )
-              : t('Pricing is unavailable until the test starts.')}
-          </p>
+          <p className='text-muted-foreground text-xs'>{t('Actual cost')}</p>
 
           <div className='grid gap-4 lg:grid-cols-3'>
             <Card size='sm'>
@@ -822,10 +893,35 @@ export function LoadTestDemo() {
                 <CardTitle>{t('Key usage')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <CounterList
-                  counters={stats.keyCounts}
-                  emptyLabel={t('No requests sent yet')}
-                />
+                {keyCostRows.size === 0 ? (
+                  <CounterList
+                    counters={stats.keyCounts}
+                    emptyLabel={t('No requests sent yet')}
+                  />
+                ) : (
+                  <div className='space-y-2 text-sm'>
+                    {[...keyCostRows.entries()].map(([tokenId, row]) => {
+                      const key = keys.find((item) => item.id === tokenId)
+                      return (
+                        <div
+                          className='flex items-center justify-between gap-3'
+                          key={tokenId}
+                        >
+                          <span className='truncate'>
+                            {key?.name ?? `#${tokenId}`}
+                          </span>
+                          <span className='shrink-0 tabular-nums'>
+                            {row.requests} · $
+                            {(quotaPerUnit > 0
+                              ? row.quota / quotaPerUnit
+                              : 0
+                            ).toFixed(6)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

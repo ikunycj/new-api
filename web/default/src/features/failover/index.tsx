@@ -57,6 +57,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getFailoverConfig, updateFailoverConfig } from './api'
 import { ClusterConfigurationPanel } from './components/cluster-configuration-panel'
+import { SimpleFailoverPolicyPanel } from './components/simple-failover-policy-panel'
 import { FailoverMonitoring } from './monitoring'
 import type { FailoverConfig, FailoverMode, RoutingStrategy } from './types'
 
@@ -160,8 +161,11 @@ const policyStepSchema = z.object({
   id: z.coerce.number().int().min(0),
   policy_id: z.coerce.number().int().positive(),
   step_order: z.coerce.number().int().positive(),
-  pool_tier: z.coerce.number().int().min(1).max(4),
+  channel_id: z.coerce.number().int().min(0),
+  pool_tier: z.coerce.number().int().min(0).max(4),
   max_attempts: z.coerce.number().int().positive(),
+}).refine((value) => value.channel_id > 0 || value.pool_tier > 0, {
+  message: 'A route must select a channel',
 })
 
 const groupMemberSchema = z.object({
@@ -257,7 +261,7 @@ function defaultPolicy(mode: FailoverMode): FormInput['policies'][number] {
   return policy
 }
 
-function FailoverConfigForm(props: { config: FailoverConfig }) {
+export function FailoverConfigForm(props: { config: FailoverConfig }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const form = useForm<FormInput, unknown, FormValues>({
@@ -578,6 +582,7 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                 id: 0,
                 policy_id: firstPolicy.id,
                 step_order: stepOrder,
+                channel_id: 0,
                 pool_tier: poolTier,
                 max_attempts: 1,
               })
@@ -979,7 +984,9 @@ function FailoverConfigForm(props: { config: FailoverConfig }) {
                 'Mixed channel groups combine clusters and fail over in member priority order.'
               )}
               <span className='mt-1 block'>
-                {t('Set the mixed channel group name to the billing group used by its clusters.')}
+                {t(
+                  'Set the mixed channel group name to the billing group used by its clusters.'
+                )}
               </span>
             </p>
           </div>
@@ -1607,7 +1614,7 @@ function AdvancedFailoverConfiguration() {
         </Alert>
       )}
       {configQuery.data && (
-        <FailoverConfigForm
+        <SimpleFailoverPolicyPanel
           key={configQuery.dataUpdatedAt}
           config={configQuery.data}
         />
@@ -1625,14 +1632,14 @@ function FailoverConfigurationPanel() {
         <AlertTitle>{t('Two-level failover')}</AlertTitle>
         <AlertDescription>
           {t(
-            'Clusters exhaust P1-P4 internally; AllToken then switches to another cluster in the same billing group.'
+            'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.'
           )}
         </AlertDescription>
       </Alert>
       <Tabs defaultValue='clusters' className='gap-5'>
         <TabsList>
           <TabsTrigger value='clusters'>{t('Cluster setup')}</TabsTrigger>
-          <TabsTrigger value='advanced'>{t('Advanced rules')}</TabsTrigger>
+          <TabsTrigger value='advanced'>{t('Routing Strategy')}</TabsTrigger>
         </TabsList>
         <TabsContent value='clusters'>
           <ClusterConfigurationPanel />

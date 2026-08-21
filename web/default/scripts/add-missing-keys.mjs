@@ -5,6 +5,21 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.',
+    'Channel routing': 'Channel routing',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      'Routing policies use the configured channel order. Cluster and billing settings remain separate.',
+    'Channel order': 'Channel order',
+    'Requests try these channels from left to right.':
+      'Requests try these channels from left to right.',
+    'This policy still uses the legacy compatibility route.':
+      'This policy still uses the legacy compatibility route.',
+    'Add channel': 'Add channel',
+    'Remove channel': 'Remove channel',
+    'Select channel': 'Select channel',
+    'Retry count': 'Retry count',
+    'Uses each cluster channel chain': 'Uses each cluster channel chain',
     'Account type': 'Account type',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -62,6 +77,21 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      '请求按配置的渠道链路执行，必要时再切换到同一计费分组中的其他 Cluster。',
+    'Channel routing': '渠道路由',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      '路由策略使用配置的渠道顺序；Cluster 和计费设置彼此独立。',
+    'Channel order': '渠道顺序',
+    'Requests try these channels from left to right.':
+      '请求会按从左到右的顺序尝试这些渠道。',
+    'This policy still uses the legacy compatibility route.':
+      '此策略仍在使用旧版兼容路由。',
+    'Add channel': '添加渠道',
+    'Remove channel': '移除渠道',
+    'Select channel': '选择渠道',
+    'Retry count': '重试次数',
+    'Uses each cluster channel chain': '使用每个 Cluster 自己的渠道链路',
     'Account type': '账户类型',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -118,6 +148,21 @@ const newKeys = {
     'User charge': '用户扣费',
   },
   fr: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      'Les requêtes suivent la chaîne de canaux configurée, puis basculent si nécessaire vers un autre cluster du même groupe de facturation.',
+    'Channel routing': 'Routage des canaux',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      'Les politiques utilisent l’ordre configuré des canaux. Les paramètres de cluster et de facturation restent séparés.',
+    'Channel order': 'Ordre des canaux',
+    'Requests try these channels from left to right.':
+      'Les requêtes essaient ces canaux de gauche à droite.',
+    'This policy still uses the legacy compatibility route.':
+      'Cette politique utilise encore le routage de compatibilité historique.',
+    'Add channel': 'Ajouter un canal',
+    'Remove channel': 'Supprimer le canal',
+    'Select channel': 'Sélectionner un canal',
+    'Retry count': 'Nombre de tentatives',
+    'Uses each cluster channel chain': 'Utilise la chaîne de canaux de chaque cluster',
     'Account type': 'Type de compte',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -176,6 +221,21 @@ const newKeys = {
     'User charge': 'Facturation utilisateur',
   },
   ja: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      'リクエストは設定したチャネルチェーンに従い、必要に応じて同じ課金グループの別 Cluster に切り替えます。',
+    'Channel routing': 'チャネルルーティング',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      'ルーティングポリシーは設定したチャネル順を使用します。Cluster と課金設定は独立しています。',
+    'Channel order': 'チャネル順',
+    'Requests try these channels from left to right.':
+      'リクエストは左から右の順にチャネルを試します。',
+    'This policy still uses the legacy compatibility route.':
+      'このポリシーは旧互換ルートを使用しています。',
+    'Add channel': 'チャネルを追加',
+    'Remove channel': 'チャネルを削除',
+    'Select channel': 'チャネルを選択',
+    'Retry count': '再試行回数',
+    'Uses each cluster channel chain': '各 Cluster のチャネルチェーンを使用します',
     'Account type': 'アカウント種別',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -234,6 +294,21 @@ const newKeys = {
     'User charge': 'ユーザー請求額',
   },
   ru: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      'Запросы следуют настроенной цепочке каналов и при необходимости переключаются на другой Cluster в той же расчетной группе.',
+    'Channel routing': 'Маршрутизация каналов',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      'Политики используют заданный порядок каналов. Настройки Cluster и биллинга независимы.',
+    'Channel order': 'Порядок каналов',
+    'Requests try these channels from left to right.':
+      'Запросы проверяют эти каналы слева направо.',
+    'This policy still uses the legacy compatibility route.':
+      'Эта политика всё ещё использует старый совместимый маршрут.',
+    'Add channel': 'Добавить канал',
+    'Remove channel': 'Удалить канал',
+    'Select channel': 'Выберите канал',
+    'Retry count': 'Число повторов',
+    'Uses each cluster channel chain': 'Использует цепочку каналов каждого Cluster',
     'Account type': 'Тип аккаунта',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -291,6 +366,21 @@ const newKeys = {
     'User charge': 'Списание с пользователя',
   },
   vi: {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      'Yêu cầu đi theo chuỗi kênh đã cấu hình, sau đó chuyển sang Cluster khác trong cùng nhóm thanh toán khi cần.',
+    'Channel routing': 'Định tuyến kênh',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      'Chính sách định tuyến dùng thứ tự kênh đã cấu hình; cài đặt Cluster và thanh toán độc lập.',
+    'Channel order': 'Thứ tự kênh',
+    'Requests try these channels from left to right.':
+      'Yêu cầu thử các kênh này từ trái sang phải.',
+    'This policy still uses the legacy compatibility route.':
+      'Chính sách này vẫn dùng tuyến tương thích cũ.',
+    'Add channel': 'Thêm kênh',
+    'Remove channel': 'Xóa kênh',
+    'Select channel': 'Chọn kênh',
+    'Retry count': 'Số lần thử lại',
+    'Uses each cluster channel chain': 'Dùng chuỗi kênh riêng của từng Cluster',
     'Account type': 'Loại tài khoản',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -348,6 +438,21 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
+    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
+      '請求會依照設定的渠道鏈路執行，必要時再切換到同一計費分組中的其他 Cluster。',
+    'Channel routing': '渠道路由',
+    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
+      '路由策略使用設定的渠道順序；Cluster 和計費設定彼此獨立。',
+    'Channel order': '渠道順序',
+    'Requests try these channels from left to right.':
+      '請求會按從左到右的順序嘗試這些渠道。',
+    'This policy still uses the legacy compatibility route.':
+      '此策略仍在使用舊版相容路由。',
+    'Add channel': '新增渠道',
+    'Remove channel': '移除渠道',
+    'Select channel': '選擇渠道',
+    'Retry count': '重試次數',
+    'Uses each cluster channel chain': '使用每個 Cluster 自己的渠道鏈路',
     'Account type': '帳戶類型',
     ToB: 'ToB',
     ToC: 'ToC',

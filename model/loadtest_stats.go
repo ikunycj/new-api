@@ -9,6 +9,7 @@ import (
 // as successful upstream token usage.
 type LoadTestChannelStats struct {
 	ChannelID        int     `json:"channel_id"`
+	TokenID          int     `json:"token_id"`
 	ChannelName      string  `json:"channel_name"`
 	ClusterID        int     `json:"cluster_id"`
 	PoolName         string  `json:"pool_name"`
@@ -19,6 +20,7 @@ type LoadTestChannelStats struct {
 	OutputTokens     int64   `json:"output_tokens"`
 	CacheReadTokens  int64   `json:"cache_read_tokens"`
 	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	ChargedQuota     int64   `json:"charged_quota"`
 }
 
 func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannelStats, error) {
@@ -28,18 +30,20 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 
 	type row struct {
 		ChannelID        int
+		TokenID          int
 		Requests         int64
 		InputTokens      int64
 		InputTokensTotal int64
 		OutputTokens     int64
 		CacheReadTokens  int64
 		CacheWriteTokens int64
+		ChargedQuota     int64
 	}
 	var rows []row
 	err := LOG_DB.Table("logs").
-		Select("channel_id, COUNT(*) AS requests, COALESCE(SUM(prompt_tokens), 0) AS input_tokens, COALESCE(SUM(input_tokens_total), 0) AS input_tokens_total, COALESCE(SUM(completion_tokens), 0) AS output_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens").
+		Select("channel_id, token_id, COUNT(*) AS requests, COALESCE(SUM(prompt_tokens), 0) AS input_tokens, COALESCE(SUM(input_tokens_total), 0) AS input_tokens_total, COALESCE(SUM(completion_tokens), 0) AS output_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens, COALESCE(SUM(quota), 0) AS charged_quota").
 		Where("user_id = ? AND type = ? AND request_id IN ?", userID, LogTypeConsume, requestIDs).
-		Group("channel_id").
+		Group("channel_id, token_id").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
@@ -97,6 +101,7 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 		}
 		stats = append(stats, LoadTestChannelStats{
 			ChannelID:        item.ChannelID,
+			TokenID:          item.TokenID,
 			ChannelName:      channel.Name,
 			ClusterID:        channel.ClusterId,
 			PoolName:         pool.Name,
@@ -107,6 +112,7 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 			OutputTokens:     item.OutputTokens,
 			CacheReadTokens:  item.CacheReadTokens,
 			CacheWriteTokens: item.CacheWriteTokens,
+			ChargedQuota:     item.ChargedQuota,
 		})
 	}
 	sort.Slice(stats, func(i, j int) bool {

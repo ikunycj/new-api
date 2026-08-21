@@ -91,9 +91,13 @@ type FailoverPolicy struct {
 }
 
 type FailoverPolicyStep struct {
-	Id          int `json:"id"`
-	PolicyId    int `json:"policy_id" gorm:"index;uniqueIndex:idx_policy_step_order"`
-	StepOrder   int `json:"step_order" gorm:"uniqueIndex:idx_policy_step_order"`
+	Id        int `json:"id"`
+	PolicyId  int `json:"policy_id" gorm:"index;uniqueIndex:idx_policy_step_order"`
+	StepOrder int `json:"step_order" gorm:"uniqueIndex:idx_policy_step_order"`
+	// ChannelId is the preferred routing target. PoolTier is retained for
+	// backward compatibility with configurations created before routing was
+	// expressed directly in channels.
+	ChannelId   int `json:"channel_id" gorm:"index"`
 	PoolTier    int `json:"pool_tier"`
 	MaxAttempts int `json:"max_attempts"`
 }
@@ -139,15 +143,23 @@ type UpstreamErrorMapping struct {
 	Enabled      bool   `json:"enabled" gorm:"index"`
 }
 
+type FailoverChannelOption struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	ClusterId int    `json:"cluster_id"`
+	Status    int    `json:"status"`
+}
+
 type FailoverConfig struct {
-	Clusters      []Cluster              `json:"clusters"`
-	Pools         []ClusterPool          `json:"pools"`
-	Policies      []FailoverPolicy       `json:"policies"`
-	PolicySteps   []FailoverPolicyStep   `json:"policy_steps"`
-	Groups        []FailoverGroup        `json:"groups"`
-	GroupMembers  []FailoverGroupMember  `json:"group_members"`
-	Rules         []FailoverRule         `json:"rules"`
-	ErrorMappings []UpstreamErrorMapping `json:"error_mappings"`
+	Clusters      []Cluster               `json:"clusters"`
+	Channels      []FailoverChannelOption `json:"channels"`
+	Pools         []ClusterPool           `json:"pools"`
+	Policies      []FailoverPolicy        `json:"policies"`
+	PolicySteps   []FailoverPolicyStep    `json:"policy_steps"`
+	Groups        []FailoverGroup         `json:"groups"`
+	GroupMembers  []FailoverGroupMember   `json:"group_members"`
+	Rules         []FailoverRule          `json:"rules"`
+	ErrorMappings []UpstreamErrorMapping  `json:"error_mappings"`
 }
 
 type RuntimeFailoverPolicy struct {
@@ -165,6 +177,8 @@ type RuntimeFailoverPolicy struct {
 	AllowPaidEscalation     bool
 	AllowFallback           bool
 	MaxCostMultiplier       float64
+	ChannelIDs              []int
+	ChannelAttemptsByID     map[int]int
 	PoolTiers               []int
 	PoolAttemptsByTier      map[int]int
 }
@@ -336,20 +350,41 @@ func InitFailoverCache() {
 		var steps []FailoverPolicyStep
 		if err := DB.Order("policy_id ASC, step_order ASC").Find(&steps).Error; err == nil {
 			configuredPolicies := make(map[int]struct{})
+			directPolicies := make(map[int]bool)
+			for _, step := range steps {
+				if step.ChannelId > 0 {
+					directPolicies[step.PolicyId] = true
+				}
+			}
 			for _, step := range steps {
 				runtime, ok := cache.policiesByID[step.PolicyId]
-				if !ok || step.PoolTier < PoolTierFree || step.PoolTier > PoolTierEmergency {
+				if !ok || step.StepOrder <= 0 || step.MaxAttempts <= 0 {
+					continue
+				}
+				if directPolicies[step.PolicyId] && step.ChannelId <= 0 {
 					continue
 				}
 				if _, configured := configuredPolicies[step.PolicyId]; !configured {
-					runtime.PoolTiers = nil
-					runtime.PoolAttemptsByTier = make(map[int]int)
+					if step.ChannelId > 0 {
+						runtime.ChannelIDs = nil
+						runtime.ChannelAttemptsByID = make(map[int]int)
+					} else {
+						runtime.PoolTiers = nil
+						runtime.PoolAttemptsByTier = make(map[int]int)
+					}
 					configuredPolicies[step.PolicyId] = struct{}{}
 				}
-				if step.MaxAttempts > 0 {
+				if step.ChannelId > 0 {
+					runtime.ChannelIDs = append(runtime.ChannelIDs, step.ChannelId)
+					runtime.ChannelAttemptsByID[step.ChannelId] = step.MaxAttempts
+				} else if step.PoolTier >= PoolTierFree && step.PoolTier <= PoolTierEmergency {
 					runtime.PoolAttemptsByTier[step.PoolTier] = step.MaxAttempts
+				} else {
+					continue
 				}
-				runtime.PoolTiers = append(runtime.PoolTiers, step.PoolTier)
+				if step.ChannelId <= 0 {
+					runtime.PoolTiers = append(runtime.PoolTiers, step.PoolTier)
+				}
 				cache.policiesByID[step.PolicyId] = runtime
 				if runtime.Strategy == DefaultRuntimeFailoverPolicy(runtime.Mode).Strategy {
 					cache.policies[runtime.Mode] = runtime
@@ -537,6 +572,16 @@ func MatchUpstreamErrorMapping(clusterID int, rawCode string, statusCode int) (U
 
 func GetFailoverConfig() (*FailoverConfig, error) {
 	config := &FailoverConfig{}
+	var channels []Channel
+	if err := DB.Select("id", "name", "cluster_id", "status").Order("cluster_id ASC, id ASC").Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	config.Channels = make([]FailoverChannelOption, 0, len(channels))
+	for _, channel := range channels {
+		config.Channels = append(config.Channels, FailoverChannelOption{
+			Id: channel.Id, Name: channel.Name, ClusterId: channel.ClusterId, Status: channel.Status,
+		})
+	}
 	queries := []struct {
 		order string
 		value any
@@ -614,21 +659,61 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 		}
 		stepOrders := make(map[[2]int]struct{}, len(config.PolicySteps))
 		stepTiers := make(map[[2]int]struct{}, len(config.PolicySteps))
+		stepChannels := make(map[[2]int]struct{}, len(config.PolicySteps))
+		directPolicyModes := make(map[int]bool)
+		for _, step := range config.PolicySteps {
+			if step.ChannelId > 0 {
+				directPolicyModes[step.PolicyId] = true
+			}
+		}
+		channelIDs := make([]int, 0)
+		for _, step := range config.PolicySteps {
+			if step.ChannelId > 0 {
+				channelIDs = append(channelIDs, step.ChannelId)
+			}
+		}
+		validChannelIDs := make(map[int]struct{}, len(channelIDs))
+		if len(channelIDs) > 0 {
+			var channels []Channel
+			if err := tx.Select("id").Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
+				return err
+			}
+			for _, channel := range channels {
+				validChannelIDs[channel.Id] = struct{}{}
+			}
+		}
 		for i := range config.PolicySteps {
 			step := &config.PolicySteps[i]
-			if step.PolicyId <= 0 || step.StepOrder <= 0 || step.PoolTier < PoolTierFree || step.PoolTier > PoolTierEmergency || step.MaxAttempts <= 0 {
+			if step.PolicyId <= 0 || step.StepOrder <= 0 || step.MaxAttempts <= 0 {
 				return errors.New("policy step is invalid")
 			}
+			if directPolicyModes[step.PolicyId] {
+				if step.ChannelId <= 0 {
+					return errors.New("a policy cannot mix channel routes with legacy pool routes")
+				}
+				if _, exists := validChannelIDs[step.ChannelId]; !exists {
+					return fmt.Errorf("policy channel %d does not exist", step.ChannelId)
+				}
+				channelKey := [2]int{step.PolicyId, step.ChannelId}
+				if _, duplicate := stepChannels[channelKey]; duplicate {
+					return errors.New("a channel can appear only once within a policy")
+				}
+				stepChannels[channelKey] = struct{}{}
+			} else if step.PoolTier < PoolTierFree || step.PoolTier > PoolTierEmergency {
+				return errors.New("legacy policy step pool tier is invalid")
+			}
 			orderKey := [2]int{step.PolicyId, step.StepOrder}
-			tierKey := [2]int{step.PolicyId, step.PoolTier}
 			if _, duplicate := stepOrders[orderKey]; duplicate {
 				return errors.New("policy step order must be unique within a policy")
 			}
-			if _, duplicate := stepTiers[tierKey]; duplicate {
-				return errors.New("pool tier must be unique within a policy")
+			if !directPolicyModes[step.PolicyId] {
+				tierKey := [2]int{step.PolicyId, step.PoolTier}
+				if _, duplicate := stepTiers[tierKey]; duplicate {
+					return errors.New("legacy pool tier must be unique within a policy")
+				}
+				stepTiers[tierKey] = struct{}{}
 			}
 			stepOrders[orderKey] = struct{}{}
-			stepTiers[tierKey] = struct{}{}
 		}
 		policyIDsForSteps := make([]int, 0, len(config.Policies))
 		for _, policy := range config.Policies {
@@ -659,7 +744,7 @@ func SaveFailoverConfig(config *FailoverConfig) error {
 				continue
 			}
 			if err := tx.Model(&FailoverPolicyStep{}).Where("id = ?", step.Id).Updates(map[string]any{
-				"policy_id": -step.Id,
+				"policy_id":  -step.Id,
 				"step_order": -step.Id,
 			}).Error; err != nil {
 				return err

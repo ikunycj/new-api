@@ -32,6 +32,13 @@ export type Cluster = {
   updated_time: number
 }
 
+export type FailoverChannelOption = {
+  id: number
+  name: string
+  cluster_id: number
+  status: number
+}
+
 export type ClusterRouteConfig = {
   channel_id: number
   pool_tier: number
@@ -136,6 +143,7 @@ export type FailoverPolicyStep = {
   id: number
   policy_id: number
   step_order: number
+  channel_id: number
   pool_tier: number
   max_attempts: number
 }
@@ -183,6 +191,7 @@ export type FailoverRule = {
 
 export type FailoverConfig = {
   clusters: Cluster[]
+  channels: FailoverChannelOption[]
   pools: ClusterPool[]
   policies: FailoverPolicy[]
   policy_steps: FailoverPolicyStep[]

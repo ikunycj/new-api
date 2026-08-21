@@ -52,6 +52,12 @@ const LOAD_TEST_CACHE_PREFIX = Array.from(
 
 export type LoadTestKey = ApiKey & { secret: string }
 export type LoadTestProvider = 'openai' | 'claude'
+export type LoadTestRoutingStrategy =
+  | 'cost_first'
+  | 'balanced'
+  | 'stability_first'
+  | 'pro_cost_first'
+  | 'pro_stability_first'
 
 export type LoadTestRequestResult = {
   keyName: string
@@ -88,6 +94,8 @@ export type LoadTestChannelStats = {
   output_tokens: number
   cache_read_tokens: number
   cache_write_tokens: number
+  token_id: number
+  charged_quota: number
 }
 
 export function getLoadTestProvider(model: string): LoadTestProvider {
@@ -106,7 +114,9 @@ export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
 
   // Fetch secrets in one request. Calling the per-key endpoint concurrently
   // can trip the critical rate limit and make the whole selector appear empty.
-  const keyResponse = await fetchTokenKeysBatch(candidates.map((apiKey) => apiKey.id))
+  const keyResponse = await fetchTokenKeysBatch(
+    candidates.map((apiKey) => apiKey.id)
+  )
   const secrets = keyResponse.data?.keys ?? {}
 
   return candidates.flatMap((apiKey) => {
@@ -299,6 +309,7 @@ export async function sendLoadTestRequest(
   model: string,
   runId: string,
   promptCache: boolean,
+  routingStrategy: LoadTestRoutingStrategy,
   signal?: AbortSignal
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
@@ -345,6 +356,7 @@ export async function sendLoadTestRequest(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.secret}`,
       'X-Load-Test-ID': runId,
+      'X-Alltoken-Routing-Strategy': routingStrategy,
     }
     if (provider === 'claude') {
       headers['anthropic-version'] = '2023-06-01'

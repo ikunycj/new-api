@@ -121,7 +121,7 @@ const defaultRoutes: ClusterConfiguration['routes'] = [
   },
 ]
 
-const unifiedBillingGroup = 'cluster'
+const unifiedBillingGroup = '通用套餐'
 
 function newClusterConfiguration(): ClusterConfiguration {
   return {
@@ -283,7 +283,7 @@ function ClusterConfigurationWorkspace(props: {
               </h2>
               <p className='text-muted-foreground text-sm'>
                 {t(
-                  'Saving updates billing, channel ownership, pool order, and runtime routing together.'
+                  'Saving updates billing, channel ownership, channel order, and runtime routing together.'
                 )}
               </p>
             </div>
@@ -427,7 +427,7 @@ function ClusterConfigurationWorkspace(props: {
                 </h3>
                 <p className='text-muted-foreground text-sm'>
                   {t(
-                    'P1-P4 are attempted in order. One channel represents one key.'
+                    'Channels are attempted from top to bottom. Each route points to one channel and its key.'
                   )}
                 </p>
               </div>
@@ -450,7 +450,6 @@ function ClusterConfigurationWorkspace(props: {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('Order')}</TableHead>
-                    <TableHead>{t('Pool')}</TableHead>
                     <TableHead>{t('Channel / key')}</TableHead>
                     <TableHead>{t('Weight')}</TableHead>
                     <TableHead>{t('Cost factor')}</TableHead>
@@ -461,20 +460,21 @@ function ClusterConfigurationWorkspace(props: {
                   {routes.fields.map((route, index) => (
                     <TableRow key={route.id}>
                       <TableCell className='font-medium'>
-                        P{index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          className='w-36'
-                          {...form.register(`routes.${index}.pool_name`)}
-                        />
+                        #{index + 1}
                         <input
                           type='hidden'
+                          value={index + 1}
                           {...form.register(`routes.${index}.pool_tier`)}
                         />
                         <input
                           type='hidden'
+                          value={index + 1}
                           {...form.register(`routes.${index}.route_order`)}
+                        />
+                        <input
+                          type='hidden'
+                          value={`Route ${index + 1}`}
+                          {...form.register(`routes.${index}.pool_name`)}
                         />
                       </TableCell>
                       <TableCell className='min-w-64'>

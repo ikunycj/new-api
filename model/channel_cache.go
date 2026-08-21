@@ -339,6 +339,12 @@ func ChannelAllowedByFailoverPolicy(channel *Channel, policy RuntimeFailoverPoli
 	if channel == nil || channel.ClusterPoolId <= 0 {
 		return true
 	}
+	// Explicit channel routes are the current routing model. Legacy pool
+	// metadata may still exist on those channels for schema compatibility, but
+	// it must not impose paid/fallback gates on a directly configured route.
+	if len(policy.ChannelIDs) > 0 {
+		return true
+	}
 	var pool ClusterPool
 	if common.MemoryCacheEnabled {
 		channelSyncLock.RLock()

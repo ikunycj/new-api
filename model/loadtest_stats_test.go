@@ -33,9 +33,9 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&channels).Error)
 	require.NoError(t, db.Create(&[]Log{
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-a", ChannelId: channels[0].Id, PromptTokens: 100, CompletionTokens: 20},
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-b", ChannelId: channels[0].Id, PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25},
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-c", ChannelId: channels[1].Id, PromptTokens: 40, CompletionTokens: 8},
+		{UserId: 7, TokenId: 101, Type: LogTypeConsume, RequestId: "run-a", ChannelId: channels[0].Id, PromptTokens: 100, CompletionTokens: 20, Quota: 1000},
+		{UserId: 7, TokenId: 101, Type: LogTypeConsume, RequestId: "run-b", ChannelId: channels[0].Id, PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25, Quota: 2000},
+		{UserId: 7, TokenId: 102, Type: LogTypeConsume, RequestId: "run-c", ChannelId: channels[1].Id, PromptTokens: 40, CompletionTokens: 8, Quota: 3000},
 		{UserId: 8, Type: LogTypeConsume, RequestId: "run-d", ChannelId: channels[1].Id, PromptTokens: 999, CompletionTokens: 999},
 	}).Error)
 
@@ -48,8 +48,12 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 	require.Equal(t, int64(75), stats[0].InputTokensTotal)
 	require.Equal(t, int64(30), stats[0].OutputTokens)
 	require.Equal(t, int64(25), stats[0].CacheReadTokens)
+	require.Equal(t, 101, stats[0].TokenID)
+	require.Equal(t, int64(3000), stats[0].ChargedQuota)
 	require.InDelta(t, 0.6, stats[0].CostFactor, 0.0001)
 	require.Equal(t, channels[1].Id, stats[1].ChannelID)
 	require.Equal(t, int64(1), stats[1].Requests)
 	require.InDelta(t, 1.1, stats[1].CostFactor, 0.0001)
+	require.Equal(t, 102, stats[1].TokenID)
+	require.Equal(t, int64(3000), stats[1].ChargedQuota)
 }
