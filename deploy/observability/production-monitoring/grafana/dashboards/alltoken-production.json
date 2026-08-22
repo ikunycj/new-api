@@ -169,7 +169,7 @@
       "fieldConfig": { "defaults": {}, "overrides": [] },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
       "id": 12,
-      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "maxLines": 200, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
       "targets": [{ "expr": "{job=\"alltoken/new-api\"} |~ \"\\\"cluster_code\\\":($cluster)(,|})\"", "queryType": "range", "refId": "A" }],
       "title": "AllToken cluster logs",
       "type": "logs"
@@ -195,7 +195,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "15s",
   "schemaVersion": 40,
   "tags": ["alltoken", "production", "failover"],
   "templating": {

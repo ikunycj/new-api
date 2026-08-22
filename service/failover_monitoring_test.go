@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -74,6 +75,35 @@ func TestGetFailoverMonitoringSnapshotAggregatesMetricsAndAlerts(t *testing.T) {
 	for _, source := range snapshot.Sources {
 		assert.Equal(t, "healthy", source.Status)
 	}
+}
+
+func TestGetFailoverMonitoringSnapshotCachesRepeatedRefreshes(t *testing.T) {
+	var prometheusRequests atomic.Int32
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		prometheusRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786773070,"1"]}]}}`))
+	}))
+	t.Cleanup(prometheus.Close)
+
+	alertmanager := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(alertmanager.Close)
+
+	t.Setenv("FAILOVER_PROMETHEUS_URL", prometheus.URL)
+	t.Setenv("FAILOVER_ALERTMANAGER_URL", alertmanager.URL)
+	t.Setenv("FAILOVER_GRAFANA_PUBLIC_URL", "")
+	t.Setenv("FAILOVER_MONITORING_USERNAME", "")
+	t.Setenv("FAILOVER_MONITORING_PASSWORD", "")
+	t.Setenv("FAILOVER_MONITORING_BEARER_TOKEN", "")
+
+	first := GetFailoverMonitoringSnapshot(context.Background(), 0)
+	second := GetFailoverMonitoringSnapshot(context.Background(), 0)
+
+	assert.Equal(t, first.Metrics, second.Metrics)
+	assert.Equal(t, int32(9), prometheusRequests.Load())
 }
 
 func TestGetFailoverMonitoringSnapshotReportsMissingConfiguration(t *testing.T) {

@@ -42,6 +42,7 @@ type MetricItem = {
 }
 
 const allClustersValue = 'all'
+const monitoringSnapshotRefreshInterval = 30_000
 
 function buildGrafanaClusterURL(rawURL: string, clusterCode?: number): string {
   const url = new URL(rawURL, globalThis.location?.origin)
@@ -155,8 +156,9 @@ export function FailoverMonitoring() {
   const monitoringQuery = useQuery({
     queryKey: ['failover-monitoring', selectedClusterCode ?? allClustersValue],
     queryFn: () => getFailoverMonitoring(selectedClusterCode),
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchInterval: monitoringSnapshotRefreshInterval,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
   })
 
   if (monitoringQuery.isLoading) {
@@ -406,6 +408,7 @@ export function FailoverMonitoring() {
           <iframe
             title={t('Full Grafana dashboard')}
             src={grafanaURL}
+            loading='lazy'
             referrerPolicy='same-origin'
             className='bg-background h-[720px] min-h-[60vh] w-full rounded-lg border'
           />

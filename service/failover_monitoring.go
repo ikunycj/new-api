@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -16,11 +17,13 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
-	failoverMonitoringWindow  = "5m"
-	failoverMonitoringTimeout = 4 * time.Second
+	failoverMonitoringWindow   = "5m"
+	failoverMonitoringTimeout  = 4 * time.Second
+	failoverMonitoringCacheTTL = 8 * time.Second
 )
 
 var errMonitoringNotConfigured = errors.New("monitoring source is not configured")
@@ -75,6 +78,18 @@ type failoverMonitoringConfig struct {
 	bearerToken     string
 }
 
+type cachedFailoverMonitoringSnapshot struct {
+	snapshot  FailoverMonitoringSnapshot
+	expiresAt time.Time
+}
+
+var failoverMonitoringCache = struct {
+	sync.Mutex
+	values map[string]cachedFailoverMonitoringSnapshot
+}{values: make(map[string]cachedFailoverMonitoringSnapshot)}
+
+var failoverMonitoringRefresh singleflight.Group
+
 type prometheusQueryResponse struct {
 	Status    string `json:"status"`
 	ErrorType string `json:"errorType"`
@@ -98,6 +113,37 @@ type alertmanagerAlert struct {
 
 func GetFailoverMonitoringSnapshot(ctx context.Context, clusterCode int) FailoverMonitoringSnapshot {
 	config := failoverMonitoringConfigFromEnv()
+	cacheKey := failoverMonitoringCacheKey(config, clusterCode)
+	now := time.Now()
+	failoverMonitoringCache.Lock()
+	if cached, ok := failoverMonitoringCache.values[cacheKey]; ok && now.Before(cached.expiresAt) {
+		failoverMonitoringCache.Unlock()
+		return cached.snapshot
+	}
+	failoverMonitoringCache.Unlock()
+
+	value, _, _ := failoverMonitoringRefresh.Do(cacheKey, func() (any, error) {
+		now := time.Now()
+		failoverMonitoringCache.Lock()
+		if cached, ok := failoverMonitoringCache.values[cacheKey]; ok && now.Before(cached.expiresAt) {
+			failoverMonitoringCache.Unlock()
+			return cached.snapshot, nil
+		}
+		failoverMonitoringCache.Unlock()
+
+		snapshot := getFailoverMonitoringSnapshot(ctx, config, clusterCode)
+		failoverMonitoringCache.Lock()
+		failoverMonitoringCache.values[cacheKey] = cachedFailoverMonitoringSnapshot{
+			snapshot:  snapshot,
+			expiresAt: time.Now().Add(failoverMonitoringCacheTTL),
+		}
+		failoverMonitoringCache.Unlock()
+		return snapshot, nil
+	})
+	return value.(FailoverMonitoringSnapshot)
+}
+
+func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitoringConfig, clusterCode int) FailoverMonitoringSnapshot {
 	snapshot := FailoverMonitoringSnapshot{
 		UpdatedAt:   time.Now().UnixMilli(),
 		Window:      failoverMonitoringWindow,
@@ -129,6 +175,12 @@ func GetFailoverMonitoringSnapshot(ctx context.Context, clusterCode int) Failove
 	}
 
 	return snapshot
+}
+
+func failoverMonitoringCacheKey(config failoverMonitoringConfig, clusterCode int) string {
+	material := fmt.Sprintf("%d\x00%s\x00%s\x00%s\x00%s\x00%s", clusterCode, config.prometheusURL, config.alertmanagerURL, config.grafanaURL, config.username, config.password+"\x00"+config.bearerToken)
+	digest := sha256.Sum256([]byte(material))
+	return fmt.Sprintf("%d:%x", clusterCode, digest[:8])
 }
 
 func failoverMonitoringConfigFromEnv() failoverMonitoringConfig {
