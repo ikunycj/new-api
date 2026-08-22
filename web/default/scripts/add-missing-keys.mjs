@@ -848,6 +848,15 @@ const loadTestDemoKeys = {
       'Configure a bounded duration and request rate for a controlled test.',
     'Pricing is unavailable until the test starts.':
       'Pricing is unavailable until the test starts.',
+    'The same key is used for each package comparison':
+      'The same key is used for each package comparison',
+    'Packages to compare': 'Packages to compare',
+    'Selected packages run one by one with the same key':
+      'Selected packages run one by one with the same key',
+    'Package comparison': 'Package comparison',
+    'Each package was tested sequentially with the same API key':
+      'Each package was tested sequentially with the same API key',
+    Package: 'Package',
   },
   zh: {
     'Input total': '输入总量',
@@ -892,6 +901,15 @@ const loadTestDemoKeys = {
     'Configure a bounded duration and request rate for a controlled test.':
       '可配置受限的时长和请求速率，进行可控测试。',
     'Pricing is unavailable until the test starts.': '测试开始前无法获取价格。',
+    'The same key is used for each package comparison':
+      '每个套餐对比都使用同一个 Key',
+    'Packages to compare': '对比套餐',
+    'Selected packages run one by one with the same key':
+      '选中的套餐会使用同一个 Key 依次运行',
+    'Package comparison': '套餐对比',
+    'Each package was tested sequentially with the same API key':
+      '每个套餐都使用同一个 API Key 依次完成测试',
+    Package: '套餐',
   },
   'zh-TW': {
     'Input total': '輸入總量',
@@ -936,6 +954,15 @@ const loadTestDemoKeys = {
     'Configure a bounded duration and request rate for a controlled test.':
       '可設定受限的時長和請求速率，進行可控測試。',
     'Pricing is unavailable until the test starts.': '測試開始前無法取得價格。',
+    'The same key is used for each package comparison':
+      '每個套餐比較都使用同一個 Key',
+    'Packages to compare': '比較套餐',
+    'Selected packages run one by one with the same key':
+      '選取的套餐會使用同一個 Key 依次執行',
+    'Package comparison': '套餐比較',
+    'Each package was tested sequentially with the same API key':
+      '每個套餐都使用同一個 API Key 依次完成測試',
+    Package: '套餐',
   },
   fr: {
     'Input total': 'Entrée totale',
@@ -984,6 +1011,15 @@ const loadTestDemoKeys = {
       'Configurez une durée et un débit limités pour un test contrôlé.',
     'Pricing is unavailable until the test starts.':
       'Les tarifs seront disponibles au démarrage du test.',
+    'The same key is used for each package comparison':
+      'La même clé est utilisée pour chaque comparaison de forfaits',
+    'Packages to compare': 'Forfaits à comparer',
+    'Selected packages run one by one with the same key':
+      'Les forfaits sélectionnés sont exécutés un par un avec la même clé',
+    'Package comparison': 'Comparaison des forfaits',
+    'Each package was tested sequentially with the same API key':
+      'Chaque forfait a été testé séquentiellement avec la même clé API',
+    Package: 'Forfait',
   },
   ja: {
     'Input total': '入力合計',
@@ -1029,6 +1065,15 @@ const loadTestDemoKeys = {
       '制限された時間とリクエストレートを設定して、制御されたテストを実行します。',
     'Pricing is unavailable until the test starts.':
       'テスト開始まで料金を取得できません。',
+    'The same key is used for each package comparison':
+      '各パッケージの比較に同じキーを使用します',
+    'Packages to compare': '比較するパッケージ',
+    'Selected packages run one by one with the same key':
+      '選択したパッケージは同じキーで順番に実行されます',
+    'Package comparison': 'パッケージ比較',
+    'Each package was tested sequentially with the same API key':
+      '各パッケージを同じ API キーで順番にテストしました',
+    Package: 'パッケージ',
   },
   ru: {
     'Input total': 'Всего входных токенов',
@@ -1077,6 +1122,15 @@ const loadTestDemoKeys = {
       'Настройте ограниченные длительность и частоту запросов для контролируемого теста.',
     'Pricing is unavailable until the test starts.':
       'Цены будут доступны после запуска теста.',
+    'The same key is used for each package comparison':
+      'Для сравнения каждого пакета используется один и тот же ключ',
+    'Packages to compare': 'Пакеты для сравнения',
+    'Selected packages run one by one with the same key':
+      'Выбранные пакеты запускаются по очереди с одним и тем же ключом',
+    'Package comparison': 'Сравнение пакетов',
+    'Each package was tested sequentially with the same API key':
+      'Каждый пакет последовательно протестирован с одним и тем же ключом API',
+    Package: 'Пакет',
   },
   vi: {
     'Input total': 'Tổng đầu vào',
@@ -1124,6 +1178,15 @@ const loadTestDemoKeys = {
       'Thiết lập thời lượng và tốc độ yêu cầu trong giới hạn để kiểm thử có kiểm soát.',
     'Pricing is unavailable until the test starts.':
       'Chưa có giá cho đến khi bắt đầu kiểm thử.',
+    'The same key is used for each package comparison':
+      'Dùng cùng một key cho từng lần so sánh gói',
+    'Packages to compare': 'Các gói cần so sánh',
+    'Selected packages run one by one with the same key':
+      'Các gói đã chọn sẽ chạy lần lượt với cùng một key',
+    'Package comparison': 'So sánh gói',
+    'Each package was tested sequentially with the same API key':
+      'Mỗi gói được kiểm thử lần lượt với cùng một API key',
+    Package: 'Gói',
   },
 }
 
