@@ -78,6 +78,7 @@ import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
   getApiKeyFormSchema,
   type ApiKeyFormValues,
+  DEFAULT_GROUP_RETRY_TIMES,
   getApiKeyFormDefaultValues,
   SYSTEM_ROUTING_VALUE,
   transformFormDataToPayload,
@@ -153,7 +154,7 @@ export function ApiKeysMutateDrawer({
         }
       })
     } else if (open && !isUpdate) {
-      form.reset(getApiKeyFormDefaultValues())
+      form.reset(getApiKeyFormDefaultValues(defaultGroup))
     }
   }, [open, isUpdate, currentRow, form, defaultGroup])
 
@@ -238,6 +239,7 @@ export function ApiKeysMutateDrawer({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('group_candidates')
+  const groupRetryTimes = form.watch('group_retry_times')
   const selectedModelLimits = form.watch('model_limits')
   const concreteSelectedGroups = useMemo(
     () => selectedGroups.filter((group) => group !== SYSTEM_ROUTING_VALUE),
@@ -272,9 +274,24 @@ export function ApiKeysMutateDrawer({
     return [...union]
   }, [modelQueries, selectedModelLimits])
   const isLoadingModels = modelQueries.some((query) => query.isLoading)
-  const usesMultipleGroups = selectedGroups.length > 1
   const usesSystemRouting = selectedGroups[0] === SYSTEM_ROUTING_VALUE
   const unlimitedQuota = form.watch('unlimited_quota')
+
+  const handleGroupSelectionChange = (value: string[]) => {
+    const previous = form.getValues('group_retry_times') ?? {}
+    const next: Record<string, number> = {}
+    for (const group of value) {
+      if (group === SYSTEM_ROUTING_VALUE) continue
+      next[group] = previous[group] ?? DEFAULT_GROUP_RETRY_TIMES
+    }
+    form.setValue('group_retry_times', next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+    form.setValue('cross_group_retry', value.length > 1, {
+      shouldDirty: true,
+    })
+  }
 
   return (
     <Sheet
@@ -421,9 +438,9 @@ export function ApiKeysMutateDrawer({
               <SideDrawerSectionHeader
                 title={t('Model groups and routing')}
                 description={
-                  isUpdate
-                    ? t('Choose groups and set their request order')
-                    : t('Select one or more groups')
+                  t(
+                    'Select one or more groups and set the default retry count for each group.'
+                  )
                 }
                 icon={<Route className='size-4' />}
                 iconTone='info'
@@ -439,22 +456,22 @@ export function ApiKeysMutateDrawer({
                         allowSystemRouting={backendHasAuto || usesSystemRouting}
                         options={groups}
                         value={field.value}
+                        retryTimes={groupRetryTimes}
                         modelsByGroup={modelsByGroup}
                         isLoadingModels={isLoadingModels}
                         onValueChange={(value) => {
-                          const wasUsingMultipleGroups = field.value.length > 1
                           field.onChange(value)
-                          if (
-                            value.length <= 1 &&
-                            value[0] !== SYSTEM_ROUTING_VALUE
-                          ) {
-                            form.setValue('cross_group_retry', false)
-                          } else if (
-                            value.length > 1 &&
-                            !wasUsingMultipleGroups
-                          ) {
-                            form.setValue('cross_group_retry', true)
-                          }
+                          handleGroupSelectionChange(value)
+                        }}
+                        onRetryTimesChange={(group, value) => {
+                          form.setValue(
+                            'group_retry_times',
+                            {
+                              ...form.getValues('group_retry_times'),
+                              [group]: value,
+                            },
+                            { shouldDirty: true, shouldValidate: true }
+                          )
                         }}
                       />
                     </FormControl>
@@ -463,32 +480,11 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {(usesMultipleGroups || usesSystemRouting) && (
-                <FormField
-                  control={form.control}
-                  name='cross_group_retry'
-                  render={({ field }) => (
-                    <FormItem className={sideDrawerSwitchItemClassName()}>
-                      <div className='flex flex-col gap-0.5'>
-                        <FormLabel className='text-sm'>
-                          {t('Try the next group after a failure')}
-                        </FormLabel>
-                        <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
-                          {t(
-                            'After retryable failures exhaust the current group, continue with the next group in order.'
-                          )}
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={!!field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormDescription>
+                {t(
+                  'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.'
+                )}
+              </FormDescription>
             </SideDrawerSection>
 
             <SideDrawerSection>

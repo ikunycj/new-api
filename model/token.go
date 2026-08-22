@@ -28,6 +28,7 @@ type Token struct {
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
 	GroupCandidates    string         `json:"-" gorm:"type:text"`
+	GroupRetryTimes    string         `json:"-" gorm:"type:text"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
@@ -81,6 +82,36 @@ func (token *Token) SetGroupCandidates(groups []string) error {
 		return fmt.Errorf("failed to encode token group candidates: %w", err)
 	}
 	token.GroupCandidates = string(data)
+	return nil
+}
+
+// GetGroupRetryTimes returns the per-pricing-group retry configuration stored
+// on the token. The field is intentionally kept out of the model JSON shape so
+// callers must opt into the public, normalized representation.
+func (token *Token) GetGroupRetryTimes() (map[string]int, error) {
+	if token.GroupRetryTimes == "" {
+		return map[string]int{}, nil
+	}
+	result := make(map[string]int)
+	if err := common.UnmarshalJsonStr(token.GroupRetryTimes, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode token group retry times: %w", err)
+	}
+	if result == nil {
+		return map[string]int{}, nil
+	}
+	return result, nil
+}
+
+func (token *Token) SetGroupRetryTimes(retryTimes map[string]int) error {
+	if len(retryTimes) == 0 {
+		token.GroupRetryTimes = ""
+		return nil
+	}
+	data, err := common.Marshal(retryTimes)
+	if err != nil {
+		return fmt.Errorf("failed to encode token group retry times: %w", err)
+	}
+	token.GroupRetryTimes = string(data)
 	return nil
 }
 
@@ -345,7 +376,7 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "group_candidates", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "group_candidates", "group_retry_times", "cross_group_retry").Updates(token).Error
 	return err
 }
 

@@ -46,6 +46,21 @@ func InitChannelCache() {
 	newChannel2advancedCustomConfig := make(map[int]*dto.AdvancedCustomConfig)
 	var channels []*Channel
 	DB.Find(&channels)
+	channelIDs := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil {
+			channelIDs = append(channelIDs, channel.Id)
+		}
+	}
+	if rates, err := GetPreviousDayChannelProbeSuccessRates(channelIDs, time.Now()); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load channel probe rates while syncing cache: " + err.Error())
+	}
 	for _, channel := range channels {
 		channel.ClusterPoolTier = newClusterPoolTierByID[channel.ClusterPoolId]
 		newChannelId2channel[channel.Id] = channel
@@ -69,7 +84,7 @@ func InitChannelCache() {
 		if channel.Status != common.ChannelStatusEnabled {
 			continue // skip disabled channels
 		}
-		groups := strings.Split(channel.Group, ",")
+		groups := channel.GetGroups()
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {
@@ -130,6 +145,142 @@ func SyncChannelCache(frequency int) {
 
 func GetRandomSatisfiedChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
 	return GetRandomSatisfiedChannelWithExclusions(group, model, retry, requestPath, nil, nil)
+}
+
+// GetEligibleChannels returns every currently usable channel for a
+// group/model/path combination. The legacy selector intentionally returns one
+// priority bucket; dynamic routing needs the complete set so it can rank price,
+// probe reliability, force-priority, and compatibility tie-breakers together.
+func GetEligibleChannels(group string, modelName string, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}, poolTier int) ([]*Channel, error) {
+	if !common.MemoryCacheEnabled {
+		return getEligibleChannelsFromDB(group, modelName, requestPath, excludedChannels, excludedClusters, poolTier)
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	channelIDs := filterChannelsByRequestPathAndModel(group2model2channels[group][modelName], requestPath, modelName)
+	if len(channelIDs) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		channelIDs = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, modelName)
+	}
+	channels := make([]*Channel, 0, len(channelIDs))
+	seen := make(map[int]struct{}, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if _, alreadySeen := seen[channelID]; alreadySeen {
+			continue
+		}
+		seen[channelID] = struct{}{}
+		if _, excluded := excludedChannels[channelID]; excluded {
+			continue
+		}
+		channel, ok := channelsIDM[channelID]
+		if !ok || channel == nil || channel.Status != common.ChannelStatusEnabled {
+			continue
+		}
+		if channel.ClusterId > 0 {
+			if _, excluded := excludedClusters[channel.ClusterId]; excluded {
+				continue
+			}
+		}
+		if !channelMatchesPoolTier(channel, poolTier) {
+			continue
+		}
+		channels = append(channels, channel)
+	}
+	return channels, nil
+}
+
+func channelMatchesPoolTier(channel *Channel, poolTier int) bool {
+	if poolTier == 0 {
+		return true
+	}
+	if poolTier < 0 {
+		return channel.ClusterPoolId <= 0 || clusterPoolTierByID[channel.ClusterPoolId] == 0
+	}
+	return clusterPoolTierByID[channel.ClusterPoolId] == poolTier
+}
+
+func getEligibleChannelsFromDB(group string, modelName string, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}, poolTier int) ([]*Channel, error) {
+	var abilities []Ability
+	query := DB.Where(commonGroupCol+" = ? AND model = ? AND enabled = ?", group, modelName, true)
+	if err := query.Find(&abilities).Error; err != nil {
+		return nil, err
+	}
+	if len(abilities) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		if normalizedModel != modelName {
+			if err := DB.Where(commonGroupCol+" = ? AND model = ? AND enabled = ?", group, normalizedModel, true).Find(&abilities).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, modelName)
+	ids := make([]int, 0, len(abilities))
+	seen := make(map[int]struct{}, len(abilities))
+	for _, ability := range abilities {
+		if _, ok := seen[ability.ChannelId]; ok {
+			continue
+		}
+		seen[ability.ChannelId] = struct{}{}
+		ids = append(ids, ability.ChannelId)
+	}
+	if len(ids) == 0 {
+		return []*Channel{}, nil
+	}
+	var loaded []*Channel
+	if err := DB.Where("id IN ? AND status = ?", ids, common.ChannelStatusEnabled).Find(&loaded).Error; err != nil {
+		return nil, err
+	}
+	byID := make(map[int]*Channel, len(loaded))
+	for _, channel := range loaded {
+		byID[channel.Id] = channel
+	}
+	channels := make([]*Channel, 0, len(ids))
+	for _, id := range ids {
+		if _, excluded := excludedChannels[id]; excluded {
+			continue
+		}
+		channel := byID[id]
+		if channel == nil {
+			continue
+		}
+		if channel.ClusterId > 0 {
+			if _, excluded := excludedClusters[channel.ClusterId]; excluded {
+				continue
+			}
+		}
+		if poolTier != 0 {
+			if !channelMatchesPoolTierFromDB(channel, poolTier) {
+				continue
+			}
+		}
+		channels = append(channels, channel)
+	}
+	channelIDs := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		channelIDs = append(channelIDs, channel.Id)
+	}
+	if rates, err := GetPreviousDayChannelProbeSuccessRates(channelIDs, time.Now()); err == nil {
+		for _, channel := range channels {
+			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+		}
+	}
+	return channels, nil
+}
+
+func channelMatchesPoolTierFromDB(channel *Channel, poolTier int) bool {
+	if channel.ClusterPoolId <= 0 {
+		return poolTier < 0
+	}
+	var pool ClusterPool
+	if err := DB.Select("tier").First(&pool, "id = ?", channel.ClusterPoolId).Error; err != nil {
+		return false
+	}
+	if poolTier < 0 {
+		return pool.Tier == 0
+	}
+	return pool.Tier == poolTier
 }
 
 // GetRandomSatisfiedChannelExcluding selects a weighted channel while

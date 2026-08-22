@@ -132,6 +132,15 @@ export async function getSystemOptions() {
   return res.data
 }
 
+export async function getAdminUserGroups(): Promise<{
+  success: boolean
+  message?: string
+  data?: string[]
+}> {
+  const res = await api.get('/api/group/user-groups')
+  return res.data
+}
+
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
   return res.data

@@ -18,12 +18,43 @@ import (
 
 type tokenRequest struct {
 	model.Token
-	GroupCandidates *[]string `json:"group_candidates"`
+	GroupCandidates *[]string       `json:"group_candidates"`
+	GroupRetryTimes *map[string]int `json:"group_retry_times"`
 }
 
 type tokenResponse struct {
 	*model.Token
-	GroupCandidates []string `json:"group_candidates"`
+	GroupCandidates []string       `json:"group_candidates"`
+	GroupRetryTimes map[string]int `json:"group_retry_times"`
+}
+
+func tokenConcreteGroups(token *model.Token) []string {
+	if token == nil {
+		return nil
+	}
+	groups, err := token.GetGroupCandidates()
+	if err == nil && len(groups) > 0 {
+		return groups
+	}
+	if token.Group != "" && token.Group != "auto" {
+		return []string{token.Group}
+	}
+	return nil
+}
+
+func tokenGroupRetryTimes(token *model.Token) map[string]int {
+	groups := tokenConcreteGroups(token)
+	stored, err := token.GetGroupRetryTimes()
+	if err != nil {
+		common.SysLog("failed to decode token group retry times: " + err.Error())
+		stored = nil
+	}
+	normalized, err := service.NormalizeTokenGroupRetryTimes(groups, stored)
+	if err != nil {
+		common.SysLog("failed to normalize token group retry times: " + err.Error())
+		return map[string]int{}
+	}
+	return normalized
 }
 
 func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
@@ -43,6 +74,7 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 	return &tokenResponse{
 		Token:           &maskedToken,
 		GroupCandidates: groupCandidates,
+		GroupRetryTimes: tokenGroupRetryTimes(token),
 	}
 }
 
@@ -61,7 +93,7 @@ func getTokenUserGroup(c *gin.Context) (string, error) {
 	return model.GetUserGroup(c.GetInt("id"), false)
 }
 
-func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *[]string) error {
+func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *[]string, retryTimes *map[string]int) error {
 	if candidates == nil || len(*candidates) == 0 {
 		if err := service.ValidateTokenGroup(userGroup, token.Group); err != nil {
 			return err
@@ -69,18 +101,53 @@ func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *
 		if token.Group != "auto" {
 			token.CrossGroupRetry = false
 		}
-		return token.SetGroupCandidates(nil)
+		if err := token.SetGroupCandidates(nil); err != nil {
+			return err
+		}
+		values, err := token.GetGroupRetryTimes()
+		if err != nil {
+			return err
+		}
+		if retryTimes != nil {
+			values = *retryTimes
+		}
+		groups := tokenConcreteGroups(token)
+		normalized, err := service.NormalizeTokenGroupRetryTimes(groups, values)
+		if err != nil {
+			return err
+		}
+		return token.SetGroupRetryTimes(normalized)
 	}
 	if err := service.ValidateTokenGroupCandidates(userGroup, *candidates); err != nil {
+		return err
+	}
+	values := map[string]int{}
+	if existing, err := token.GetGroupRetryTimes(); err == nil {
+		values = existing
+	} else {
+		return err
+	}
+	if retryTimes != nil {
+		values = *retryTimes
+	}
+	normalized, err := service.NormalizeTokenGroupRetryTimes(*candidates, values)
+	if err != nil {
 		return err
 	}
 	if len(*candidates) == 1 {
 		token.Group = (*candidates)[0]
 		token.CrossGroupRetry = false
-		return token.SetGroupCandidates(nil)
+		if err := token.SetGroupCandidates(nil); err != nil {
+			return err
+		}
+		return token.SetGroupRetryTimes(normalized)
 	}
 	token.Group = "auto"
-	return token.SetGroupCandidates(*candidates)
+	token.CrossGroupRetry = true
+	if err := token.SetGroupCandidates(*candidates); err != nil {
+		return err
+	}
+	return token.SetGroupRetryTimes(normalized)
 }
 
 func GetAllTokens(c *gin.Context) {
@@ -246,7 +313,7 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
+	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates, request.GroupRetryTimes); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -284,6 +351,7 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		GroupCandidates:    token.GroupCandidates,
+		GroupRetryTimes:    token.GroupRetryTimes,
 		CrossGroupRetry:    token.CrossGroupRetry,
 	}
 	err = cleanToken.Insert()
@@ -360,12 +428,20 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 		if request.GroupCandidates != nil {
-			if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
+			if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates, request.GroupRetryTimes); err != nil {
 				common.ApiError(c, err)
 				return
 			}
 			cleanToken.Group = token.Group
 			cleanToken.GroupCandidates = token.GroupCandidates
+			cleanToken.GroupRetryTimes = token.GroupRetryTimes
+		} else if request.GroupRetryTimes != nil {
+			token.Group = cleanToken.Group
+			if err := applyTokenGroupSelection(&token, userGroup, nil, request.GroupRetryTimes); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			cleanToken.GroupRetryTimes = token.GroupRetryTimes
 		} else if token.Group != cleanToken.Group {
 			if err := service.ValidateTokenGroup(userGroup, token.Group); err != nil {
 				common.ApiError(c, err)
@@ -373,6 +449,7 @@ func UpdateToken(c *gin.Context) {
 			}
 			cleanToken.Group = token.Group
 			cleanToken.GroupCandidates = ""
+			cleanToken.GroupRetryTimes = ""
 		} else if cleanToken.GroupCandidates != "" {
 			groupCandidates, err := cleanToken.GetGroupCandidates()
 			if err != nil {

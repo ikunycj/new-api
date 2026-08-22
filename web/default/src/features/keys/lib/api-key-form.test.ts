@@ -40,6 +40,11 @@ function formValues(
     model_limits: [],
     allow_ips: '',
     group_candidates: groupCandidates,
+    group_retry_times: Object.fromEntries(
+      groupCandidates
+        .filter((group) => group !== SYSTEM_ROUTING_VALUE)
+        .map((group) => [group, 3])
+    ),
     cross_group_retry: crossGroupRetry,
     tokenCount: 1,
   }
@@ -62,6 +67,7 @@ function apiKey(overrides: Partial<ApiKey>): ApiKey {
     allow_ips: '',
     group: '',
     group_candidates: [],
+    group_retry_times: {},
     cross_group_retry: false,
     ...overrides,
   }
@@ -72,13 +78,22 @@ describe('API key routing form mapping', () => {
     const defaults = getApiKeyFormDefaultValues()
 
     assert.deepEqual(defaults.group_candidates, [])
+    assert.deepEqual(defaults.group_retry_times, {})
     assert.equal(defaults.cross_group_retry, false)
+  })
+
+  test('starts new keys in the supplied default pricing group', () => {
+    const defaults = getApiKeyFormDefaultValues('openai-low')
+
+    assert.deepEqual(defaults.group_candidates, ['openai-low'])
+    assert.deepEqual(defaults.group_retry_times, { 'openai-low': 3 })
   })
 
   test('maps fixed, ordered, and system routing to the API contract', () => {
     const fixed = transformFormDataToPayload(formValues(['openai-low']))
     assert.equal(fixed.group, 'openai-low')
     assert.deepEqual(fixed.group_candidates, ['openai-low'])
+    assert.deepEqual(fixed.group_retry_times, { 'openai-low': 3 })
     assert.equal(fixed.cross_group_retry, false)
 
     const ordered = transformFormDataToPayload(
@@ -86,6 +101,10 @@ describe('API key routing form mapping', () => {
     )
     assert.equal(ordered.group, 'auto')
     assert.deepEqual(ordered.group_candidates, ['openai-low', 'claude-low'])
+    assert.deepEqual(ordered.group_retry_times, {
+      'openai-low': 3,
+      'claude-low': 3,
+    })
     assert.equal(ordered.cross_group_retry, true)
 
     const system = transformFormDataToPayload(
@@ -121,12 +140,21 @@ describe('API key routing form mapping', () => {
       apiKey({
         group: 'auto',
         group_candidates: ['claude-low', 'openai-low'],
+        group_retry_times: { 'claude-low': 5, 'openai-low': 2 },
         cross_group_retry: true,
       })
     )
     assert.deepEqual(defaults.group_candidates, ['claude-low', 'openai-low'])
+    assert.deepEqual(defaults.group_retry_times, {
+      'claude-low': 5,
+      'openai-low': 2,
+    })
 
     const payload = transformFormDataToPayload(defaults)
     assert.deepEqual(payload.group_candidates, ['claude-low', 'openai-low'])
+    assert.deepEqual(payload.group_retry_times, {
+      'claude-low': 5,
+      'openai-low': 2,
+    })
   })
 })

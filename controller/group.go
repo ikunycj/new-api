@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -21,6 +22,18 @@ func GetGroups(c *gin.Context) {
 		"message": "",
 		"data":    groupNames,
 	})
+}
+
+// GetAdminUserGroups returns actual account-group values from User.Group.
+// Pricing groups are deliberately not used here; they are the target values
+// inside GroupGroupRatio rather than its outer account-group keys.
+func GetAdminUserGroups(c *gin.Context) {
+	groups, err := model.GetDistinctUserGroups()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, groups)
 }
 
 func GetUserGroups(c *gin.Context) {

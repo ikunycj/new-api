@@ -41,6 +41,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -50,6 +51,8 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const userRole = useAuthStore((state) => state.auth.user?.role)
+  const isAdmin = (userRole ?? ROLE.GUEST) >= ROLE.ADMIN
 
   return {
     navGroups: [
@@ -137,6 +140,16 @@ export function useSidebarData(): SidebarData {
             url: '/channels',
             icon: Radio,
           },
+          ...(isAdmin
+            ? [
+                {
+                  title: '管理控制台',
+                  url: '/admin-console' as const,
+                  icon: LayoutDashboard,
+                  requiredRole: ROLE.ADMIN,
+                },
+              ]
+            : []),
           {
             title: t('Channel Monitors'),
             url: '/channel-monitors',
@@ -157,6 +170,16 @@ export function useSidebarData(): SidebarData {
             url: '/users',
             icon: Users,
           },
+          ...(isAdmin
+            ? [
+                {
+                  title: t('Call Logs'),
+                  url: '/usage-logs/call' as const,
+                  icon: FileText,
+                  requiredRole: ROLE.ADMIN,
+                },
+              ]
+            : []),
           {
             title: t('Redemption Codes'),
             url: '/redemption-codes',

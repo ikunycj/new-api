@@ -148,6 +148,24 @@ export const channelFormSchema = z
     weight: z.number().optional(),
     test_model: z.string().optional(),
     auto_ban: z.number().optional(),
+    probe_interval_seconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(604800),
+    auto_disabled_probe_interval_seconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(604800),
+    probe_failure_auto_ban: z.boolean(),
+    probe_success_auto_enable: z.boolean(),
+    probe_model: z.string(),
+    upstream_max_retries: z.number().int().min(0).max(100),
+    price_multiplier: z.number().finite().min(0).max(1000),
+    price_multiplier_mode: z.enum(['usd', 'cny']),
+    force_priority: z.boolean(),
+    force_priority_scope: z.enum(['group', 'cross_group']),
     status: z.number(),
     status_code_mapping: z
       .string()
@@ -311,6 +329,16 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   weight: 0,
   test_model: '',
   auto_ban: 1,
+  probe_interval_seconds: 600,
+  auto_disabled_probe_interval_seconds: 600,
+  probe_failure_auto_ban: true,
+  probe_success_auto_enable: true,
+  probe_model: '',
+  upstream_max_retries: 3,
+  price_multiplier: 1,
+  price_multiplier_mode: 'usd',
+  force_priority: false,
+  force_priority_scope: 'group',
   status: CHANNEL_STATUS.ENABLED,
   status_code_mapping: '',
   tag: '',
@@ -452,6 +480,30 @@ export function transformChannelToFormDefaults(
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 1,
+    probe_interval_seconds:
+      channel.probe_interval_seconds > 0
+        ? channel.probe_interval_seconds
+        : CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      channel.auto_disabled_probe_interval_seconds > 0
+        ? channel.auto_disabled_probe_interval_seconds
+        : CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban:
+      channel.probe_failure_auto_ban ?? (channel.auto_ban ?? 1) === 1,
+    probe_success_auto_enable: channel.probe_success_auto_enable ?? true,
+    probe_model: channel.probe_model || '',
+    upstream_max_retries:
+      channel.upstream_max_retries ??
+      CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries,
+    price_multiplier:
+      channel.price_multiplier > 0
+        ? channel.price_multiplier
+        : CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
+    price_multiplier_mode:
+      channel.price_multiplier_mode === 'cny' ? 'cny' : 'usd',
+    force_priority: channel.force_priority ?? false,
+    force_priority_scope:
+      channel.force_priority_scope === 'cross_group' ? 'cross_group' : 'group',
     status: channel.status,
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
@@ -648,6 +700,17 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     weight: formData.weight || null,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
+    probe_interval_seconds: formData.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      formData.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban: formData.probe_failure_auto_ban,
+    probe_success_auto_enable: formData.probe_success_auto_enable,
+    probe_model: formData.probe_model || null,
+    upstream_max_retries: formData.upstream_max_retries,
+    price_multiplier: formData.price_multiplier,
+    price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status: formData.status,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
@@ -696,6 +759,17 @@ export function transformFormDataToUpdatePayload(
     weight: formData.weight ?? 0,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
+    probe_interval_seconds: formData.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      formData.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban: formData.probe_failure_auto_ban,
+    probe_success_auto_enable: formData.probe_success_auto_enable,
+    probe_model: formData.probe_model || '',
+    upstream_max_retries: formData.upstream_max_retries,
+    price_multiplier: formData.price_multiplier,
+    price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',

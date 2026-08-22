@@ -20,6 +20,8 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import z from 'zod'
 
 import { UsageLogs } from '@/features/usage-logs'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   isUsageLogsSectionId,
   USAGE_LOGS_DEFAULT_SECTION,
@@ -52,6 +54,12 @@ const usageLogsSearchSchema = z.object({
 
 export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
   beforeLoad: ({ params, search }) => {
+    const user = useAuthStore.getState().auth.user
+    if (params.section === 'call' && (user?.role ?? ROLE.GUEST) < ROLE.ADMIN) {
+      throw redirect({
+        to: '/403',
+      })
+    }
     if (!isUsageLogsSectionId(params.section)) {
       throw redirect({
         to: '/usage-logs/$section',
@@ -62,7 +70,7 @@ export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
     const hasTypeSearch = Array.isArray(search?.type)
       ? search.type.length > 0
       : search?.type != null && search.type !== ''
-    if (params.section !== 'common' && hasTypeSearch) {
+    if (params.section !== 'common' && params.section !== 'call' && hasTypeSearch) {
       throw redirect({
         to: '/usage-logs/$section',
         params: { section: params.section },

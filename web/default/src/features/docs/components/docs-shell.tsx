@@ -40,12 +40,13 @@ import {
 export type DocsTocItem = {
   id: string
   label: string
+  level?: 1 | 2 | 3
 }
 
 type DocsShellProps = {
   pageId: DocsPageId
   title: string
-  description: string
+  description?: string
   toc: DocsTocItem[]
   children: React.ReactNode
 }
@@ -281,9 +282,11 @@ export function DocsShell(props: DocsShellProps) {
 
             <header>
               <h1 className='text-3xl font-semibold'>{props.title}</h1>
-              <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
-                {props.description}
-              </p>
+              {props.description && (
+                <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
+                  {props.description}
+                </p>
+              )}
             </header>
 
             <Separator className='my-8' />
@@ -351,7 +354,12 @@ export function DocsShell(props: DocsShellProps) {
                   <a
                     key={item.id}
                     href={`#${item.id}`}
-                    className='text-muted-foreground hover:text-foreground text-sm transition-colors'
+                    className={cn(
+                      'text-muted-foreground hover:text-foreground text-sm transition-colors',
+                      item.level === 1 && 'text-foreground font-semibold',
+                      item.level === 2 && 'pl-2 text-xs leading-5',
+                      item.level === 3 && 'pl-4 text-[11px] leading-4'
+                    )}
                   >
                     {item.label}
                   </a>

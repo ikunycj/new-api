@@ -55,6 +55,13 @@ export const DOCS_ROUTES = [
     file: 'docs/referral-rewards.html',
   },
   {
+    id: 'error-self-check',
+    group: 'overview',
+    label: '错误自查指南',
+    path: '/docs/error-self-check',
+    file: 'docs/error-self-check.html',
+  },
+  {
     id: 'integration-guide',
     group: 'tools',
     label: '集成指南',

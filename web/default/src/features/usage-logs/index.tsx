@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo } from 'react'
+import { lazy, Suspense, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -28,7 +28,6 @@ import { useSidebarConfig } from '@/hooks/use-sidebar-config'
 
 import { UserInfoDialog } from './components/dialogs/user-info-dialog'
 import {
-  type LogsViewScope,
   UsageLogsProvider,
   useLogsViewScope,
   useUsageLogsContext,
@@ -40,12 +39,19 @@ import {
   type UsageLogsSectionId,
 } from './section-registry'
 
+const LazyCallLogsDashboard = lazy(
+  () => import('./components/call-logs-dashboard')
+)
+
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
 const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
   common: {
-    titleKey: 'Common Logs',
+    titleKey: 'Usage Logs',
+  },
+  call: {
+    titleKey: 'Call Logs',
   },
   drawing: {
     titleKey: 'Drawing Logs',
@@ -71,7 +77,11 @@ function UsageLogsContent() {
     affinityDialogOpen,
     setAffinityDialogOpen,
   } = useUsageLogsContext()
-  const { canManageScope, viewScope, setViewScope } = useLogsViewScope()
+  const { isAdminView } = useLogsViewScope()
+  const logCategory =
+    activeCategory === 'call' || activeCategory === 'common'
+      ? 'common'
+      : activeCategory
   const tabNavGroups = useMemo<NavGroup[]>(
     () => [
       {
@@ -108,19 +118,13 @@ function UsageLogsContent() {
     [navigate]
   )
 
-  const handleViewScopeChange = useCallback(
-    (scope: string) => {
-      if (scope === 'all' || scope === 'self') {
-        setViewScope(scope as LogsViewScope)
-      }
-    },
-    [setViewScope]
-  )
-
   const pageMeta =
-    activeCategory === 'common' ? SECTION_META.common : SECTION_META.task
+    activeCategory === 'call' && !isAdminView
+      ? SECTION_META.common
+      : SECTION_META[activeCategory]
   const showTaskSwitcher =
-    activeCategory !== 'common' && visibleSections.length > 1
+    (activeCategory === 'drawing' || activeCategory === 'task') &&
+    visibleSections.length > 1
 
   return (
     <>
@@ -128,16 +132,6 @@ function UsageLogsContent() {
         <SectionPageLayout.Title>
           {t(pageMeta.titleKey)}
         </SectionPageLayout.Title>
-        {canManageScope && (
-          <SectionPageLayout.Actions>
-            <Tabs value={viewScope} onValueChange={handleViewScopeChange}>
-              <TabsList>
-                <TabsTrigger value='all'>{t('All')}</TabsTrigger>
-                <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </SectionPageLayout.Actions>
-        )}
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>
             {showTaskSwitcher && (
@@ -151,9 +145,24 @@ function UsageLogsContent() {
                 </TabsList>
               </Tabs>
             )}
-            <div className='min-h-0 flex-1'>
-              <UsageLogsTable logCategory={activeCategory} />
-            </div>
+            {activeCategory === 'call' && isAdminView ? (
+              <div className='min-h-0 flex-1 space-y-3 overflow-y-auto'>
+                <Suspense
+                  fallback={
+                    <div className='bg-card/50 h-40 animate-pulse rounded-lg border' />
+                  }
+                >
+                  <LazyCallLogsDashboard />
+                </Suspense>
+                <div className='min-h-[34rem]'>
+                  <UsageLogsTable logCategory={logCategory} />
+                </div>
+              </div>
+            ) : (
+              <div className='min-h-0 flex-1'>
+                <UsageLogsTable logCategory={logCategory} />
+              </div>
+            )}
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

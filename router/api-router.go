@@ -29,6 +29,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
 		apiRouter.GET("/admin/analytics/package-comparison", middleware.AdminAuth(), controller.GetPackageComparison)
+		apiRouter.GET("/admin/console", middleware.AdminAuth(), controller.GetAdminConsole)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)
@@ -298,6 +299,8 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
+		logRoute.GET("/analytics", middleware.AdminAuth(), controller.GetLogAnalytics)
+		logRoute.GET("/options", middleware.AdminAuth(), controller.GetLogFilterOptions)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
 		logRoute.POST("/self/loadtest-stats", middleware.UserAuth(), controller.GetLoadTestChannelStats)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
@@ -336,6 +339,7 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+			groupRoute.GET("/user-groups", controller.GetAdminUserGroups)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")

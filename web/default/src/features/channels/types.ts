@@ -57,6 +57,17 @@ export const channelSchema = z.object({
   status_code_mapping: z.string().nullish(),
   priority: z.number().nullish(),
   auto_ban: z.number().nullish(),
+  probe_interval_seconds: z.number().default(600),
+  auto_disabled_probe_interval_seconds: z.number().default(600),
+  probe_failure_auto_ban: z.boolean().nullish(),
+  probe_success_auto_enable: z.boolean().nullish(),
+  probe_model: z.string().nullish(),
+  upstream_max_retries: z.number().nullish(),
+  price_multiplier: z.number().default(1),
+  price_multiplier_mode: z.enum(['usd', 'cny']).or(z.literal('')).default('usd'),
+  force_priority: z.boolean().nullish(),
+  force_priority_scope: z.enum(['group', 'cross_group']).or(z.literal('')).default('group'),
+  previous_day_probe_success_rate: z.number().default(100),
   other_info: z.string().default(''),
   tag: z.string().nullish(),
   setting: z.string().nullish(),
@@ -405,6 +416,16 @@ export interface ChannelFormData {
   weight?: number
   test_model?: string
   auto_ban?: number
+  probe_interval_seconds?: number
+  auto_disabled_probe_interval_seconds?: number
+  probe_failure_auto_ban?: boolean
+  probe_success_auto_enable?: boolean
+  probe_model?: string
+  upstream_max_retries?: number
+  price_multiplier?: number
+  price_multiplier_mode?: 'usd' | 'cny'
+  force_priority?: boolean
+  force_priority_scope?: 'group' | 'cross_group'
   status: number
   status_code_mapping?: string
   tag?: string

@@ -65,6 +65,11 @@ web/             — Frontend container
 - Usage: `useTranslation()` hook, call `t('English key')` in components
 - CLI tools: `bun run i18n:sync` (from `web/default/`)
 
+### Admin-only pages and features
+- 管理员/Root 专属页面和功能的新增、修改只需提供中文文案，不要求同步维护 en、fr、ja、ru、vi 或 zh-TW 等其他语言。
+- 管理员专属文案可以直接使用中文；不必为了这类文案新增 locale key、修改 `static-keys.ts` 或运行多语言同步脚本。
+- 如果组件同时被普通用户页面使用，或文案会出现在管理员和普通用户共用的界面中，仍必须遵循完整 i18n 规则。
+
 ## Rules
 
 ### Common Code Quality
@@ -144,6 +149,7 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
   - `bun run i18n:*` for i18n tooling
 - Frontend UI text must support i18n with `i18next`/`react-i18next`. Use flat JSON locale files in `web/default/src/i18n/locales/{lang}.json`, with English source strings as keys.
 - In React components, use `useTranslation()` and call `t('English key')` for user-facing text.
+- Admin/Root-only pages and features are an explicit exception: Chinese-only UI text is sufficient, and translations for other locales are not required. Shared components and non-admin user-facing surfaces must continue to follow the normal i18n rules.
 - Follow `web/default/AGENTS.md` for detailed frontend conventions, including TypeScript, component structure, styling, accessibility, testing, and build checks.
 
 ### Local Development Ports

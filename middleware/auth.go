@@ -528,17 +528,20 @@ func TokenAuth() func(c *gin.Context) {
 		userCache.WriteContext(c)
 		c.Set("user_type", userCache.UserType)
 
+		// User.Group is the account identity used for authorization and special
+		// pricing. Token.Group is an independent pricing/routing selection and
+		// must never overwrite the account group in the request context.
 		userGroup := userCache.Group
-		tokenGroup := token.Group
 		if err := validateTokenGroupAccess(userGroup, token); err != nil {
 			recordTokenAuthFailure(c, "group_forbidden", http.StatusForbidden)
 			abortWithOpenAiMessage(c, http.StatusForbidden, err.Error())
 			return
 		}
-		if tokenGroup != "" {
-			userGroup = tokenGroup
+		usingGroup := token.Group
+		if usingGroup == "" {
+			usingGroup = userGroup
 		}
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {
@@ -574,6 +577,30 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		return err
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroupCandidates, groupCandidates)
+	groupRetryTimes, err := token.GetGroupRetryTimes()
+	if err != nil {
+		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
+		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
+		return err
+	}
+	// New tokens persist a retry map for their concrete candidates. Normalize
+	// that map at the authentication boundary so stale or manually altered
+	// records cannot inject negative or unbounded retry budgets. Keep an empty
+	// legacy map empty so old tokens retain the process-wide retry behavior.
+	if len(groupRetryTimes) > 0 {
+		concreteGroups := groupCandidates
+		if len(concreteGroups) == 0 && token.Group != "" && token.Group != "auto" {
+			concreteGroups = []string{token.Group}
+		}
+		normalized, normalizeErr := service.NormalizeTokenGroupRetryTimes(concreteGroups, groupRetryTimes)
+		if normalizeErr != nil {
+			recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
+			abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
+			return normalizeErr
+		}
+		groupRetryTimes = normalized
+	}
+	common.SetContextKey(c, constant.ContextKeyTokenGroupRetryTimes, groupRetryTimes)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
 	if len(parts) > 1 {
 		if model.IsAdmin(token.UserId) {

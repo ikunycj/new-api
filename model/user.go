@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -1018,6 +1019,22 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 	}
 
 	return group, nil
+}
+
+// GetDistinctUserGroups returns the account-group values currently stored on
+// users. This is separate from the pricing-group registry: an account group
+// is the outer key of GroupGroupRatio, while pricing groups are its inner keys.
+func GetDistinctUserGroups() ([]string, error) {
+	var groups []string
+	err := DB.Model(&User{}).
+		Where(commonGroupCol+" IS NOT NULL AND "+commonGroupCol+" <> ?", "").
+		Distinct().
+		Pluck("group", &groups).Error
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(groups)
+	return groups, nil
 }
 
 // GetUserSetting gets setting from Redis first, falls back to DB if needed

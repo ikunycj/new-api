@@ -498,6 +498,7 @@ export const STATIC_I18N_KEYS = [
   'Token Management',
   'API token management',
   'Usage Logs',
+  'Call Logs',
   'API usage records',
   'Drawing Logs',
   'Drawing task records',

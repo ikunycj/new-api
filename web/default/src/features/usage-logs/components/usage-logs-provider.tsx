@@ -19,11 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
+import { getRouteApi } from '@tanstack/react-router'
+
 import { useIsAdmin } from '@/hooks/use-admin'
 
 import type { ChannelAffinityInfo } from '../types'
 
-export type LogsViewScope = 'all' | 'self'
+const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 interface UsageLogsContextValue {
   selectedUserId: number | null
@@ -36,8 +38,6 @@ interface UsageLogsContextValue {
   setAffinityDialogOpen: (open: boolean) => void
   sensitiveVisible: boolean
   setSensitiveVisible: (visible: boolean) => void
-  viewScope: LogsViewScope
-  setViewScope: (scope: LogsViewScope) => void
 }
 
 const UsageLogsContext = createContext<UsageLogsContextValue | undefined>(
@@ -51,7 +51,6 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
     useState<ChannelAffinityInfo | null>(null)
   const [affinityDialogOpen, setAffinityDialogOpen] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
-  const [viewScope, setViewScope] = useState<LogsViewScope>('all')
 
   return (
     <UsageLogsContext.Provider
@@ -66,8 +65,6 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
         setAffinityDialogOpen,
         sensitiveVisible,
         setSensitiveVisible,
-        viewScope,
-        setViewScope,
       }}
     >
       {children}
@@ -83,22 +80,13 @@ export function useUsageLogsContext() {
   return context
 }
 
-/**
- * Resolves the effective admin scope for usage logs: whether the current
- * user is allowed to view all users' logs (`canManageScope`), and whether
- * their current view preference (`viewScope`) has that scope active
- * (`isAdminView`). Data fetching and admin-only UI should key off
- * `isAdminView` rather than raw role, so an admin who switches to "only
- * mine" is treated exactly like a regular user for that view.
- */
+/** Resolves the log scope from the role-protected route. */
 export function useLogsViewScope() {
   const canManageScope = useIsAdmin()
-  const { viewScope, setViewScope } = useUsageLogsContext()
+  const section = route.useParams().section
 
   return {
     canManageScope,
-    viewScope,
-    setViewScope,
-    isAdminView: canManageScope && viewScope === 'all',
+    isAdminView: canManageScope && section === 'call',
   }
 }

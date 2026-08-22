@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -9,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,8 +27,12 @@ type RetryParam struct {
 	// fresh RetryParam in the relay handler from skipping the first candidate.
 	groupIndex           int
 	attempted            bool
+	concreteAttempted    bool
 	attemptedChannels    map[int]struct{}
 	channelAttemptCounts map[int]int
+	channelAttemptLimits map[int]int
+	channelGroups        map[int]string
+	groupAttemptCounts   map[string]int
 	excludedChannels     map[int]struct{}
 	attemptedClusters    map[int]struct{}
 	excludedClusters     map[int]struct{}
@@ -82,6 +89,7 @@ func (p *RetryParam) MarkAttempted() {
 // separate policy handled after the attempt is classified.
 func (p *RetryParam) MarkChannelAttempted(channelID int, clusterID int) {
 	p.attempted = true
+	p.concreteAttempted = true
 	if channelID <= 0 {
 		return
 	}
@@ -93,9 +101,33 @@ func (p *RetryParam) MarkChannelAttempted(channelID int, clusterID int) {
 		p.channelAttemptCounts = make(map[int]int)
 	}
 	p.channelAttemptCounts[channelID]++
-	maxAttempts := 1
+	if p.channelGroups == nil {
+		p.channelGroups = make(map[int]string)
+	}
+	group := p.channelGroups[channelID]
+	if group == "" && p.Ctx != nil {
+		group = common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup)
+	}
+	if group != "" {
+		if _, exists := p.channelGroups[channelID]; !exists {
+			p.channelGroups[channelID] = group
+		}
+	}
+	if group := p.channelGroups[channelID]; group != "" {
+		if p.groupAttemptCounts == nil {
+			p.groupAttemptCounts = make(map[string]int)
+		}
+		p.groupAttemptCounts[group]++
+	}
+	maxAttempts := p.channelAttemptLimits[channelID]
+	if maxAttempts <= 0 {
+		maxAttempts = common.RetryTimes + 1
+	}
 	if configured := p.policy().ChannelAttemptsByID[channelID]; configured > 0 {
 		maxAttempts = configured
+	}
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
 	if p.channelAttemptCounts[channelID] >= maxAttempts {
 		if p.excludedChannels == nil {
@@ -111,6 +143,33 @@ func (p *RetryParam) MarkChannelAttempted(channelID int, clusterID int) {
 	}
 }
 
+// RegisterSelectedChannel records the metadata needed to enforce a channel's
+// own retry budget. Selection and the actual upstream attempt are separate
+// events because the distributor may select the first channel before Relay
+// creates its request-local RetryParam.
+func (p *RetryParam) RegisterSelectedChannel(channel *model.Channel, group string) {
+	if channel == nil || channel.Id <= 0 {
+		return
+	}
+	if p.channelGroups == nil {
+		p.channelGroups = make(map[int]string)
+	}
+	if normalizedGroup := strings.TrimSpace(group); normalizedGroup != "" {
+		p.channelGroups[channel.Id] = normalizedGroup
+	}
+	if p.channelAttemptLimits == nil {
+		p.channelAttemptLimits = make(map[int]int)
+	}
+	maxAttempts := channel.GetUpstreamMaxRetries() + 1
+	if configured := p.policy().ChannelAttemptsByID[channel.Id]; configured > 0 {
+		maxAttempts = configured
+	}
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+	p.channelAttemptLimits[channel.Id] = maxAttempts
+}
+
 func (p *RetryParam) AttemptedChannels() map[int]struct{} {
 	if len(p.attemptedChannels) == 0 {
 		return nil
@@ -122,69 +181,113 @@ func (p *RetryParam) AttemptedChannels() map[int]struct{} {
 	return result
 }
 
+// HasChannelRetry reports whether a selected channel can be attempted again.
+// It is used by locked-channel task requests, which cannot switch to another
+// candidate but still honor the channel's configured upstream retry budget.
+func (p *RetryParam) HasChannelRetry(channelID int) bool {
+	if channelID <= 0 {
+		return false
+	}
+	limit := p.channelAttemptLimits[channelID]
+	if limit <= 0 {
+		limit = common.RetryTimes + 1
+	}
+	return p.channelAttemptCounts[channelID] < limit
+}
+
 func (p *RetryParam) IsAutoRouting() bool {
 	return p.TokenGroup == "auto"
 }
 
-// HasNextRetry is independent of common.RetryTimes for candidate transitions,
-// so ordered failover still works when the global retry count is zero.
+// HasNextRetry considers both the selected group's retry budget and the
+// concrete channel's own retry allowance. Authenticated tokens carry an
+// explicit per-group map; callers that construct RetryParam directly retain
+// the legacy process-wide retry setting.
 func (p *RetryParam) HasNextRetry() bool {
 	if !p.withinFailoverBudget() {
 		return false
 	}
-	if len(p.excludedChannels) > 0 || len(p.excludedClusters) > 0 {
-		if p.hasUntriedChannelInCurrentGroup() {
-			return true
-		}
-		if !p.IsAutoRouting() || !common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
-			return false
-		}
-		groups, err := p.candidateGroups()
-		return err == nil && p.groupIndex+1 < len(groups)
-	}
-	if p.GetRetry() < common.RetryTimes {
+	if p.hasUntriedChannelInCurrentGroup() {
 		return true
 	}
-	if !p.IsAutoRouting() || !common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
+	if !p.canCrossGroups() {
 		return false
 	}
 	groups, err := p.candidateGroups()
-	return err == nil && p.groupIndex+1 < len(groups)
-}
-
-// AdvanceRetry exhausts the current group's retry levels before moving to the
-// next ordered candidate.
-func (p *RetryParam) AdvanceRetry() bool {
-	if len(p.excludedChannels) > 0 || len(p.excludedClusters) > 0 {
-		if p.hasUntriedChannelInCurrentGroup() {
-			p.IncreaseRetry()
+	if err != nil {
+		return false
+	}
+	for index := p.groupIndex + 1; index < len(groups); index++ {
+		if p.groupHasAvailableChannels(groups[index], index) {
 			return true
 		}
-		if !p.IsAutoRouting() || !common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
-			return false
-		}
-		groups, err := p.candidateGroups()
-		if err != nil || p.groupIndex+1 >= len(groups) {
-			return false
-		}
-		p.groupIndex++
-		p.SetRetry(0)
-		return true
 	}
-	if p.GetRetry() < common.RetryTimes {
+	return false
+}
+
+// AdvanceRetry exhausts the current group's dynamic candidates before moving
+// to the next ordered group.
+func (p *RetryParam) AdvanceRetry() bool {
+	if p.hasUntriedChannelInCurrentGroup() {
 		p.IncreaseRetry()
 		return true
 	}
-	if !p.IsAutoRouting() || !common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
+	if !p.canCrossGroups() {
 		return false
 	}
 	groups, err := p.candidateGroups()
-	if err != nil || p.groupIndex+1 >= len(groups) {
+	if err != nil {
 		return false
 	}
-	p.groupIndex++
-	p.SetRetry(0)
-	return true
+	for index := p.groupIndex + 1; index < len(groups); index++ {
+		if !p.groupHasAvailableChannels(groups[index], index) {
+			continue
+		}
+		p.groupIndex = index
+		p.SetRetry(0)
+		return true
+	}
+	return false
+}
+
+func (p *RetryParam) canCrossGroups() bool {
+	if !p.IsAutoRouting() {
+		return false
+	}
+	if p.Ctx == nil {
+		return false
+	}
+	if common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
+		return true
+	}
+	values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes)
+	return ok && len(values) > 0
+}
+
+func (p *RetryParam) groupRetryLimit(group string) int {
+	if p.Ctx == nil {
+		return common.RetryTimes + 1
+	}
+	values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes)
+	if ok {
+		if retryTimes, exists := values[group]; exists {
+			return retryTimes + 1
+		}
+	}
+	return common.RetryTimes + 1
+}
+
+func (p *RetryParam) groupHasBudget(group string) bool {
+	if p.Ctx == nil {
+		return true
+	}
+	values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes)
+	if !ok || len(values) == 0 {
+		// Legacy callers do not carry a per-group map. Keep their existing
+		// channel-level failover behavior and let the global retry policy decide.
+		return true
+	}
+	return p.groupAttemptCounts[group] < p.groupRetryLimit(group)
 }
 
 func (p *RetryParam) candidateGroups() ([]string, error) {
@@ -202,19 +305,30 @@ func (p *RetryParam) candidateGroups() ([]string, error) {
 	}
 
 	// Explicit token candidates take precedence over the server-wide auto list.
-	if candidates := common.GetContextKeyStringSlice(p.Ctx, constant.ContextKeyTokenGroupCandidates); len(candidates) > 0 {
-		p.groups = append([]string(nil), candidates...)
+	if p.Ctx != nil {
+		if candidates := common.GetContextKeyStringSlice(p.Ctx, constant.ContextKeyTokenGroupCandidates); len(candidates) > 0 {
+			p.groups = append([]string(nil), candidates...)
+		} else {
+			if len(setting.GetAutoGroups()) == 0 {
+				return nil, errors.New("auto groups is not enabled")
+			}
+			userGroup := common.GetContextKeyString(p.Ctx, constant.ContextKeyUserGroup)
+			p.groups = GetUserAutoGroup(userGroup)
+		}
 	} else {
 		if len(setting.GetAutoGroups()) == 0 {
 			return nil, errors.New("auto groups is not enabled")
 		}
-		userGroup := common.GetContextKeyString(p.Ctx, constant.ContextKeyUserGroup)
-		p.groups = GetUserAutoGroup(userGroup)
+		p.groups = GetUserAutoGroup("")
 	}
 
 	// The distributor selects a concrete group before Relay creates its own
 	// RetryParam. Resume from that group instead of re-running earlier candidates.
-	if selected := common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup); selected != "" {
+	selected := ""
+	if p.Ctx != nil {
+		selected = common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup)
+	}
+	if selected != "" {
 		for i, group := range p.groups {
 			if group == selected {
 				p.groupIndex = i
@@ -234,25 +348,43 @@ func (p *RetryParam) hasUntriedChannelInCurrentGroup() bool {
 	if err != nil || p.groupIndex < 0 || p.groupIndex >= len(groups) {
 		return false
 	}
+	if p.attempted && !p.concreteAttempted && p.GetRetry() >= p.groupRetryLimit(groups[p.groupIndex])-1 {
+		return false
+	}
+	if !p.groupHasBudget(groups[p.groupIndex]) {
+		return false
+	}
+	return p.groupHasAvailableChannels(groups[p.groupIndex], p.groupIndex)
+}
+
+func (p *RetryParam) groupHasAvailableChannels(group string, groupIndex int) bool {
+	policy := p.policy()
 	if p.clusterOrder != nil {
 		for _, clusterID := range p.clusterOrder {
 			if _, excluded := p.excludedClusters[clusterID]; excluded {
 				continue
 			}
-			available, err := selectChannelForPolicy(policy, groups[p.groupIndex], p.ModelName, 0, p.RequestPath, p.excludedChannels, p.clusterExclusionsFor(clusterID))
-			if err == nil && available != nil {
+			candidates, err := p.dynamicCandidates([]string{group}, []int{groupIndex}, policy, p.clusterExclusionsFor(clusterID))
+			if err == nil && len(candidates) > 0 {
 				return true
 			}
 		}
 		return false
 	}
-	available, err := selectChannelForPolicy(policy, groups[p.groupIndex], p.ModelName, 0, p.RequestPath, p.excludedChannels, p.excludedClusters)
-	return err == nil && available != nil
+	candidates, err := p.dynamicCandidates([]string{group}, []int{groupIndex}, policy, p.excludedClusters)
+	return err == nil && len(candidates) > 0
 }
 
-// CacheGetRandomSatisfiedChannel selects within the first usable candidate.
-// Candidate order is deterministic; channel selection within one group keeps
-// the existing weighted/priority behavior.
+type dynamicChannelCandidate struct {
+	channel    *model.Channel
+	group      string
+	groupIndex int
+}
+
+// CacheGetRandomSatisfiedChannel ranks the complete eligible candidate set for
+// the currently reachable groups. A later cross-group force-priority channel
+// may outrank an earlier ordinary channel; ordinary channels always retain
+// their configured group order.
 func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, error) {
 	policy := param.policy()
 	groups, err := param.candidateGroups()
@@ -271,55 +403,159 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		return nil, groups[len(groups)-1], nil
 	}
 
-	for i := start; i < len(groups); i++ {
-		group := groups[i]
-		priorityRetry := param.GetRetry()
-		if i > start {
-			priorityRetry = 0
+	end := len(groups)
+	if param.attempted && !param.canCrossGroups() {
+		end = start + 1
+		if end > len(groups) {
+			end = len(groups)
 		}
-		if len(param.excludedChannels) > 0 || len(param.excludedClusters) > 0 {
-			// Failover is candidate-based. Once a channel has failed, select the
-			// highest-priority remaining channel instead of retrying the same
-			// priority slot and potentially selecting it again.
-			priorityRetry = 0
-		}
-		logger.LogDebug(param.Ctx, "Selecting group: %s, priorityRetry: %d", group, priorityRetry)
-
-		var channel *model.Channel
-		var channelErr error
-		if param.clusterOrder != nil {
-			for _, clusterID := range param.clusterOrder {
-				if _, excluded := param.excludedClusters[clusterID]; excluded {
-					continue
-				}
-				channel, channelErr = selectChannelForPolicy(policy, group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.clusterExclusionsFor(clusterID))
-				if channelErr != nil || channel != nil {
-					break
-				}
-			}
-		} else {
-			channel, channelErr = selectChannelForPolicy(policy, group, param.ModelName, priorityRetry, param.RequestPath, param.excludedChannels, param.excludedClusters)
-		}
-		if channelErr != nil {
-			return nil, group, channelErr
-		}
-		if channel == nil {
-			logger.LogDebug(param.Ctx, "No available channel in group %s for model %s at priorityRetry %d", group, param.ModelName, priorityRetry)
-			if param.attempted && !common.GetContextKeyBool(param.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
-				return nil, group, nil
-			}
-			param.groupIndex = i + 1
-			param.SetRetry(0)
-			continue
-		}
-
-		param.groupIndex = i
-		if param.IsAutoRouting() {
-			common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, group)
-		}
-		return channel, group, nil
 	}
-	return nil, groups[len(groups)-1], nil
+	groupSubset := append([]string(nil), groups[start:end]...)
+	indices := make([]int, len(groupSubset))
+	for index := range groupSubset {
+		indices[index] = start + index
+	}
+
+	var candidates []dynamicChannelCandidate
+	if param.clusterOrder != nil {
+		for _, clusterID := range param.clusterOrder {
+			if _, excluded := param.excludedClusters[clusterID]; excluded {
+				continue
+			}
+			candidates, err = param.dynamicCandidates(groupSubset, indices, policy, param.clusterExclusionsFor(clusterID))
+			if err != nil || len(candidates) > 0 {
+				break
+			}
+		}
+	} else {
+		candidates, err = param.dynamicCandidates(groupSubset, indices, policy, param.excludedClusters)
+	}
+	if err != nil {
+		return nil, groups[start], err
+	}
+	if len(candidates) == 0 {
+		group := groups[start]
+		logger.LogDebug(param.Ctx, "No available channel in group %s for model %s", group, param.ModelName)
+		return nil, group, nil
+	}
+	selected := candidates[0]
+	param.groupIndex = selected.groupIndex
+	if param.channelGroups == nil {
+		param.channelGroups = make(map[int]string)
+	}
+	if param.channelAttemptLimits == nil {
+		param.channelAttemptLimits = make(map[int]int)
+	}
+	param.channelGroups[selected.channel.Id] = selected.group
+	param.channelAttemptLimits[selected.channel.Id] = selected.channel.GetUpstreamMaxRetries() + 1
+	if param.IsAutoRouting() && param.Ctx != nil {
+		common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, selected.group)
+	}
+	return selected.channel, selected.group, nil
+}
+
+func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, policy model.RuntimeFailoverPolicy, excludedClusters map[int]struct{}) ([]dynamicChannelCandidate, error) {
+	if len(groups) == 0 {
+		return nil, nil
+	}
+	if len(policy.ChannelIDs) > 0 {
+		candidates := make([]dynamicChannelCandidate, 0, len(policy.ChannelIDs))
+		group := groups[0]
+		groupIndex := groupIndices[0]
+		if !p.groupHasBudget(group) {
+			return candidates, nil
+		}
+		for _, channelID := range policy.ChannelIDs {
+			channel, err := model.GetConfiguredChannel(group, p.ModelName, channelID, p.excludedChannels, excludedClusters)
+			if err != nil {
+				return nil, err
+			}
+			if channel != nil {
+				candidates = append(candidates, dynamicChannelCandidate{channel: channel, group: group, groupIndex: groupIndex})
+			}
+		}
+		return candidates, nil
+	}
+
+	poolTiers := append([]int(nil), policy.PoolTiers...)
+	if len(poolTiers) == 0 {
+		poolTiers = []int{0}
+	}
+	poolTiers = append(poolTiers, -1)
+	for _, poolTier := range poolTiers {
+		all := make([]dynamicChannelCandidate, 0)
+		for index, group := range groups {
+			groupIndex := groupIndices[index]
+			if !p.groupHasBudget(group) {
+				continue
+			}
+			channels, err := model.GetEligibleChannels(group, p.ModelName, p.RequestPath, p.excludedChannels, excludedClusters, poolTier)
+			if err != nil {
+				return nil, err
+			}
+			for _, channel := range channels {
+				if p.groupAttemptCounts[group] >= p.groupRetryLimit(group) {
+					if _, alreadyAttempted := p.attemptedChannels[channel.Id]; alreadyAttempted {
+						continue
+					}
+				}
+				all = append(all, dynamicChannelCandidate{channel: channel, group: group, groupIndex: groupIndex})
+			}
+		}
+		if len(all) > 0 {
+			sort.SliceStable(all, func(i, j int) bool {
+				return dynamicCandidateLess(all[i], all[j])
+			})
+			return all, nil
+		}
+		// A zero tier already includes legacy channels; the -1 fallback is only
+		// needed for policies that explicitly listed pool tiers.
+		if poolTier == 0 {
+			break
+		}
+	}
+	return nil, nil
+}
+
+func dynamicCandidateLess(left, right dynamicChannelCandidate) bool {
+	leftCrossForce := left.channel.IsForcePriority() && left.channel.GetForcePriorityScope() == model.ChannelForcePriorityScopeCrossGroup
+	rightCrossForce := right.channel.IsForcePriority() && right.channel.GetForcePriorityScope() == model.ChannelForcePriorityScopeCrossGroup
+	if leftCrossForce != rightCrossForce {
+		return leftCrossForce
+	}
+	if left.groupIndex != right.groupIndex {
+		return left.groupIndex < right.groupIndex
+	}
+	leftForce := left.channel.IsForcePriority()
+	rightForce := right.channel.IsForcePriority()
+	if leftForce != rightForce {
+		return leftForce
+	}
+	leftCost := channelComparableCost(left.channel)
+	rightCost := channelComparableCost(right.channel)
+	if leftCost != rightCost {
+		return leftCost < rightCost
+	}
+	leftRate := left.channel.PreviousDayProbeSuccessRate
+	rightRate := right.channel.PreviousDayProbeSuccessRate
+	if leftRate != rightRate {
+		return leftRate > rightRate
+	}
+	if left.channel.GetWeight() != right.channel.GetWeight() {
+		return left.channel.GetWeight() > right.channel.GetWeight()
+	}
+	return left.channel.Id < right.channel.Id
+}
+
+func channelComparableCost(channel *model.Channel) float64 {
+	cost := channel.GetPriceMultiplier()
+	if channel.GetPriceMultiplierMode() == model.ChannelPriceMultiplierModeCNY {
+		rate := operation_setting.GetBillingUSDToCNYRate()
+		if rate > 0 {
+			return cost / rate
+		}
+	}
+	return cost
 }
 
 func selectChannelForPolicy(policy model.RuntimeFailoverPolicy, group string, modelName string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*model.Channel, error) {

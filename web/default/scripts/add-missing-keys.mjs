@@ -1189,32 +1189,606 @@ const apiKeyGroupSelectionKeys = {
   vi: { 'Select one or more groups': 'Chọn một hoặc nhiều nhóm' },
 }
 
+const channelRoutingKeys = {
+  en: {
+    'Select one or more groups and set the default retry count for each group.':
+      'Select one or more groups and set the default retry count for each group.',
+    'Enter user group name': 'Enter user group name',
+    'Use the account group stored in User.Group, for example default or vip.':
+      'Use the account group stored in User.Group, for example default or vip.',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.',
+    'Model to use for automatic probes': 'Model to use for automatic probes',
+    'Probe interval': 'Probe interval',
+    'Auto-disabled probe interval': 'Auto-disabled probe interval',
+    'Probe model': 'Probe model',
+    'Upstream max retries': 'Upstream max retries',
+    'Channel price multiplier': 'Channel price multiplier',
+    'Price multiplier mode': 'Price multiplier mode',
+    'USD-equivalent': 'USD-equivalent',
+    CNY: 'CNY',
+    'Probe failure auto-ban': 'Probe failure auto-ban',
+    'Probe success auto-enable': 'Probe success auto-enable',
+    'Force priority': 'Force priority',
+    'Force priority scope': 'Force priority scope',
+    'Current group only': 'Current group only',
+    'Across selected groups': 'Across selected groups',
+    'Previous-day probe success rate': 'Previous-day probe success rate',
+    'Available after the first probe': 'Available after the first probe',
+    'Interval for probing enabled channels, in seconds':
+      'Interval for probing enabled channels, in seconds',
+    'Interval for probing auto-disabled channels, in seconds':
+      'Interval for probing auto-disabled channels, in seconds',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      'Model used by automatic probes. Falls back to the test model when empty.',
+    'Automatically disable the channel when a probe fails':
+      'Automatically disable the channel when a probe fails',
+    'Automatically enable the channel after a successful probe':
+      'Automatically enable the channel after a successful probe',
+    'Maximum retries for this channel after the first upstream attempt':
+      'Maximum retries for this channel after the first upstream attempt',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      'Relative upstream cost used for channel ranking. 1 means unchanged.',
+    'Currency used when comparing this channel price multiplier':
+      'Currency used when comparing this channel price multiplier',
+    'Place this channel before ordinary channels in its selected scope':
+      'Place this channel before ordinary channels in its selected scope',
+    'Choose whether force priority applies within one group or across groups':
+      'Choose whether force priority applies within one group or across groups',
+    'Read-only success rate from the previous natural day':
+      'Read-only success rate from the previous natural day',
+  },
+  zh: {
+    'Select one or more groups and set the default retry count for each group.':
+      '选择一个或多个分组，并分别设置每个分组的默认重试次数。',
+    'Enter user group name': '输入用户分组名称',
+    'Use the account group stored in User.Group, for example default or vip.':
+      '使用 User.Group 中保存的账户分组，例如 default 或 vip。',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      '你仍可以编辑模型、分组、权重和路由设置等非敏感运营字段。',
+    'Model to use for automatic probes': '自动探测使用的模型',
+    'Probe interval': '探测间隔',
+    'Auto-disabled probe interval': '自动禁用后的探测间隔',
+    'Probe model': '探测模型',
+    'Upstream max retries': '上游最大重试次数',
+    'Channel price multiplier': '渠道价格倍率',
+    'Price multiplier mode': '价格倍率币种',
+    'USD-equivalent': '美元等值',
+    CNY: '人民币',
+    'Probe failure auto-ban': '探测失败自动禁用',
+    'Probe success auto-enable': '探测成功自动启用',
+    'Force priority': '强制优先',
+    'Force priority scope': '强制优先范围',
+    'Current group only': '仅当前分组',
+    'Across selected groups': '跨所选分组',
+    'Previous-day probe success rate': '前一自然日探测成功率',
+    'Available after the first probe': '首次探测后可用',
+    'Interval for probing enabled channels, in seconds':
+      '启用渠道的探测间隔，单位为秒。',
+    'Interval for probing auto-disabled channels, in seconds':
+      '自动禁用渠道的探测间隔，单位为秒。',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      '自动探测使用的模型；留空时回退到测试模型。',
+    'Automatically disable the channel when a probe fails':
+      '探测失败时自动禁用渠道。',
+    'Automatically enable the channel after a successful probe':
+      '探测成功后自动启用渠道。',
+    'Maximum retries for this channel after the first upstream attempt':
+      '首次上游请求失败后，该渠道最多重试的次数。',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      '用于渠道排序的相对上游成本，1 表示不调整。',
+    'Currency used when comparing this channel price multiplier':
+      '比较该渠道价格倍率时使用的币种。',
+    'Place this channel before ordinary channels in its selected scope':
+      '在所选范围内将该渠道排在普通渠道之前。',
+    'Choose whether force priority applies within one group or across groups':
+      '选择强制优先只在单个分组内生效，还是跨分组生效。',
+    'Read-only success rate from the previous natural day':
+      '前一自然日的只读探测成功率。',
+  },
+  'zh-TW': {
+    'Select one or more groups and set the default retry count for each group.':
+      '選擇一個或多個分組，並分別設定每個分組的預設重試次數。',
+    'Enter user group name': '輸入使用者分組名稱',
+    'Use the account group stored in User.Group, for example default or vip.':
+      '使用 User.Group 中儲存的帳戶分組，例如 default 或 vip。',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      '你仍可編輯模型、分組、權重與路由設定等非敏感營運欄位。',
+    'Model to use for automatic probes': '自動探測使用的模型',
+    'Probe interval': '探測間隔',
+    'Auto-disabled probe interval': '自動停用後的探測間隔',
+    'Probe model': '探測模型',
+    'Upstream max retries': '上游最大重試次數',
+    'Channel price multiplier': '頻道價格倍率',
+    'Price multiplier mode': '價格倍率幣別',
+    'USD-equivalent': '美元等值',
+    CNY: '人民幣',
+    'Probe failure auto-ban': '探測失敗自動停用',
+    'Probe success auto-enable': '探測成功自動啟用',
+    'Force priority': '強制優先',
+    'Force priority scope': '強制優先範圍',
+    'Current group only': '僅目前分組',
+    'Across selected groups': '跨所選分組',
+    'Previous-day probe success rate': '前一自然日探測成功率',
+    'Available after the first probe': '首次探測後可用',
+    'Interval for probing enabled channels, in seconds':
+      '已啟用頻道的探測間隔，單位為秒。',
+    'Interval for probing auto-disabled channels, in seconds':
+      '自動停用頻道的探測間隔，單位為秒。',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      '自動探測使用的模型；留空時回退至測試模型。',
+    'Automatically disable the channel when a probe fails':
+      '探測失敗時自動停用頻道。',
+    'Automatically enable the channel after a successful probe':
+      '探測成功後自動啟用頻道。',
+    'Maximum retries for this channel after the first upstream attempt':
+      '首次上游請求失敗後，此頻道最多重試的次數。',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      '用於頻道排序的相對上游成本，1 表示不調整。',
+    'Currency used when comparing this channel price multiplier':
+      '比較此頻道價格倍率時使用的幣別。',
+    'Place this channel before ordinary channels in its selected scope':
+      '在所選範圍內將此頻道排在一般頻道之前。',
+    'Choose whether force priority applies within one group or across groups':
+      '選擇強制優先只在單一分組內生效，或跨分組生效。',
+    'Read-only success rate from the previous natural day':
+      '前一自然日的唯讀探測成功率。',
+  },
+  fr: {
+    'Select one or more groups and set the default retry count for each group.':
+      'Sélectionnez un ou plusieurs groupes et définissez le nombre de tentatives par défaut de chacun.',
+    'Enter user group name': 'Saisissez le nom du groupe utilisateur',
+    'Use the account group stored in User.Group, for example default or vip.':
+      'Utilisez le groupe de compte enregistré dans User.Group, par exemple default ou vip.',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      'Vous pouvez toujours modifier les champs opérationnels non sensibles tels que les modèles, groupes, poids et paramètres de routage.',
+    'Model to use for automatic probes': 'Modèle utilisé pour les sondes automatiques',
+    'Probe interval': 'Intervalle de sonde',
+    'Auto-disabled probe interval': 'Intervalle après désactivation automatique',
+    'Probe model': 'Modèle de sonde',
+    'Upstream max retries': 'Tentatives maximales en amont',
+    'Channel price multiplier': 'Multiplicateur de prix du canal',
+    'Price multiplier mode': 'Devise du multiplicateur de prix',
+    'USD-equivalent': 'Équivalent USD',
+    CNY: 'CNY',
+    'Probe failure auto-ban': 'Désactivation automatique après échec',
+    'Probe success auto-enable': 'Activation automatique après succès',
+    'Force priority': 'Forcer la priorité',
+    'Force priority scope': 'Portée de la priorité forcée',
+    'Current group only': 'Groupe actuel uniquement',
+    'Across selected groups': 'Tous les groupes sélectionnés',
+    'Previous-day probe success rate': 'Taux de réussite des sondes du jour précédent',
+    'Available after the first probe': 'Disponible après la première sonde',
+    'Interval for probing enabled channels, in seconds':
+      'Intervalle de sondage des canaux actifs, en secondes.',
+    'Interval for probing auto-disabled channels, in seconds':
+      'Intervalle de sondage des canaux désactivés automatiquement, en secondes.',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      'Modèle utilisé par les sondes automatiques. Utilise le modèle de test si vide.',
+    'Automatically disable the channel when a probe fails':
+      'Désactive automatiquement le canal en cas d’échec de sonde.',
+    'Automatically enable the channel after a successful probe':
+      'Active automatiquement le canal après une sonde réussie.',
+    'Maximum retries for this channel after the first upstream attempt':
+      'Nombre maximal de tentatives pour ce canal après la première tentative amont.',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      'Coût amont relatif utilisé pour classer les canaux. 1 signifie inchangé.',
+    'Currency used when comparing this channel price multiplier':
+      'Devise utilisée pour comparer le multiplicateur de prix de ce canal.',
+    'Place this channel before ordinary channels in its selected scope':
+      'Place ce canal avant les canaux ordinaires dans la portée choisie.',
+    'Choose whether force priority applies within one group or across groups':
+      'Choisissez si la priorité forcée s’applique à un groupe ou à tous les groupes.',
+    'Read-only success rate from the previous natural day':
+      'Taux de réussite en lecture seule du jour calendaire précédent.',
+  },
+  ja: {
+    'Select one or more groups and set the default retry count for each group.':
+      '1つ以上のグループを選択し、各グループのデフォルト再試行回数を設定します。',
+    'Enter user group name': 'ユーザーグループ名を入力',
+    'Use the account group stored in User.Group, for example default or vip.':
+      'User.Group に保存されたアカウントグループを使用します（例: default、vip）。',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      'モデル、グループ、重み、ルーティング設定などの非機密運用項目は引き続き編集できます。',
+    'Model to use for automatic probes': '自動プローブに使用するモデル',
+    'Probe interval': 'プローブ間隔',
+    'Auto-disabled probe interval': '自動無効化後のプローブ間隔',
+    'Probe model': 'プローブモデル',
+    'Upstream max retries': '上流の最大再試行回数',
+    'Channel price multiplier': 'チャネル価格倍率',
+    'Price multiplier mode': '価格倍率の通貨',
+    'USD-equivalent': '米ドル換算',
+    CNY: '人民元',
+    'Probe failure auto-ban': 'プローブ失敗時に自動無効化',
+    'Probe success auto-enable': 'プローブ成功時に自動有効化',
+    'Force priority': '優先を強制',
+    'Force priority scope': '強制優先の範囲',
+    'Current group only': '現在のグループのみ',
+    'Across selected groups': '選択したグループ全体',
+    'Previous-day probe success rate': '前日のプローブ成功率',
+    'Available after the first probe': '最初のプローブ後に利用可能',
+    'Interval for probing enabled channels, in seconds':
+      '有効なチャネルをプローブする間隔（秒）。',
+    'Interval for probing auto-disabled channels, in seconds':
+      '自動無効化されたチャネルをプローブする間隔（秒）。',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      '自動プローブに使用するモデル。空欄の場合はテストモデルに戻ります。',
+    'Automatically disable the channel when a probe fails':
+      'プローブ失敗時にチャネルを自動無効化します。',
+    'Automatically enable the channel after a successful probe':
+      'プローブ成功後にチャネルを自動有効化します。',
+    'Maximum retries for this channel after the first upstream attempt':
+      '最初の上流試行後にこのチャネルで許可する最大再試行回数。',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      'チャネル順位付けに使う相対的な上流コスト。1 は変更なしです。',
+    'Currency used when comparing this channel price multiplier':
+      'このチャネルの価格倍率を比較する際の通貨。',
+    'Place this channel before ordinary channels in its selected scope':
+      '選択した範囲でこのチャネルを通常のチャネルより先に配置します。',
+    'Choose whether force priority applies within one group or across groups':
+      '強制優先を 1 グループ内だけに適用するか、グループ間に適用するかを選択します。',
+    'Read-only success rate from the previous natural day':
+      '前日の読み取り専用プローブ成功率。',
+  },
+  ru: {
+    'Select one or more groups and set the default retry count for each group.':
+      'Выберите одну или несколько групп и задайте число повторных попыток для каждой.',
+    'Enter user group name': 'Введите имя группы пользователя',
+    'Use the account group stored in User.Group, for example default or vip.':
+      'Используйте группу аккаунта из User.Group, например default или vip.',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      'Вы по-прежнему можете изменять несекретные операционные поля: модели, группы, веса и параметры маршрутизации.',
+    'Model to use for automatic probes': 'Модель для автоматических проверок',
+    'Probe interval': 'Интервал проверки',
+    'Auto-disabled probe interval': 'Интервал после автоматического отключения',
+    'Probe model': 'Модель проверки',
+    'Upstream max retries': 'Максимум повторов upstream',
+    'Channel price multiplier': 'Множитель цены канала',
+    'Price multiplier mode': 'Валюта множителя цены',
+    'USD-equivalent': 'Эквивалент USD',
+    CNY: 'CNY',
+    'Probe failure auto-ban': 'Отключать при ошибке проверки',
+    'Probe success auto-enable': 'Включать после успешной проверки',
+    'Force priority': 'Принудительный приоритет',
+    'Force priority scope': 'Область принудительного приоритета',
+    'Current group only': 'Только текущая группа',
+    'Across selected groups': 'Во всех выбранных группах',
+    'Previous-day probe success rate': 'Успешность проверок за предыдущий день',
+    'Available after the first probe': 'Доступно после первой проверки',
+    'Interval for probing enabled channels, in seconds':
+      'Интервал проверки включённых каналов в секундах.',
+    'Interval for probing auto-disabled channels, in seconds':
+      'Интервал проверки автоматически отключённых каналов в секундах.',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      'Модель автоматической проверки. Если поле пусто, используется тестовая модель.',
+    'Automatically disable the channel when a probe fails':
+      'Автоматически отключать канал при ошибке проверки.',
+    'Automatically enable the channel after a successful probe':
+      'Автоматически включать канал после успешной проверки.',
+    'Maximum retries for this channel after the first upstream attempt':
+      'Максимальное число повторов для этого канала после первой попытки upstream.',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      'Относительная стоимость upstream для ранжирования каналов. 1 означает без изменений.',
+    'Currency used when comparing this channel price multiplier':
+      'Валюта для сравнения множителя цены этого канала.',
+    'Place this channel before ordinary channels in its selected scope':
+      'Поместить этот канал перед обычными каналами в выбранной области.',
+    'Choose whether force priority applies within one group or across groups':
+      'Выберите применение приоритета внутри одной группы или между группами.',
+    'Read-only success rate from the previous natural day':
+      'Только для чтения: успешность проверок за предыдущий календарный день.',
+  },
+  vi: {
+    'Select one or more groups and set the default retry count for each group.':
+      'Chọn một hoặc nhiều nhóm và đặt số lần thử lại mặc định cho từng nhóm.',
+    'Enter user group name': 'Nhập tên nhóm người dùng',
+    'Use the account group stored in User.Group, for example default or vip.':
+      'Sử dụng nhóm tài khoản được lưu trong User.Group, ví dụ default hoặc vip.',
+    'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
+      'Bạn vẫn có thể chỉnh sửa các trường vận hành không nhạy cảm như mô hình, nhóm, trọng số và cài đặt định tuyến.',
+    'Model to use for automatic probes': 'Mô hình dùng cho kiểm tra tự động',
+    'Probe interval': 'Khoảng thời gian kiểm tra',
+    'Auto-disabled probe interval': 'Khoảng thời gian sau khi tự tắt',
+    'Probe model': 'Mô hình kiểm tra',
+    'Upstream max retries': 'Số lần thử lại upstream tối đa',
+    'Channel price multiplier': 'Hệ số giá kênh',
+    'Price multiplier mode': 'Đơn vị tiền của hệ số giá',
+    'USD-equivalent': 'Quy đổi USD',
+    CNY: 'CNY',
+    'Probe failure auto-ban': 'Tự tắt khi kiểm tra thất bại',
+    'Probe success auto-enable': 'Tự bật sau khi kiểm tra thành công',
+    'Force priority': 'Ép ưu tiên',
+    'Force priority scope': 'Phạm vi ép ưu tiên',
+    'Current group only': 'Chỉ nhóm hiện tại',
+    'Across selected groups': 'Trong các nhóm đã chọn',
+    'Previous-day probe success rate': 'Tỷ lệ kiểm tra thành công ngày trước',
+    'Available after the first probe': 'Có sau lần kiểm tra đầu tiên',
+    'Interval for probing enabled channels, in seconds':
+      'Khoảng thời gian kiểm tra kênh đang bật, tính bằng giây.',
+    'Interval for probing auto-disabled channels, in seconds':
+      'Khoảng thời gian kiểm tra kênh tự tắt, tính bằng giây.',
+    'Model used by automatic probes. Falls back to the test model when empty.':
+      'Mô hình dùng cho kiểm tra tự động. Để trống sẽ dùng mô hình kiểm tra.',
+    'Automatically disable the channel when a probe fails':
+      'Tự tắt kênh khi kiểm tra thất bại.',
+    'Automatically enable the channel after a successful probe':
+      'Tự bật kênh sau khi kiểm tra thành công.',
+    'Maximum retries for this channel after the first upstream attempt':
+      'Số lần thử lại tối đa cho kênh này sau lần gọi upstream đầu tiên.',
+    'Relative upstream cost used for channel ranking. 1 means unchanged.':
+      'Chi phí upstream tương đối dùng để xếp hạng kênh. 1 nghĩa là giữ nguyên.',
+    'Currency used when comparing this channel price multiplier':
+      'Đơn vị tiền dùng để so sánh hệ số giá của kênh này.',
+    'Place this channel before ordinary channels in its selected scope':
+      'Đặt kênh này trước các kênh thông thường trong phạm vi đã chọn.',
+    'Choose whether force priority applies within one group or across groups':
+      'Chọn áp dụng ép ưu tiên trong một nhóm hay giữa các nhóm.',
+    'Read-only success rate from the previous natural day':
+      'Tỷ lệ kiểm tra thành công ngày trước, chỉ đọc.',
+  },
+}
+
+const callLogsKeys = {
+  en: { 'Call Logs': 'Call Logs' },
+  zh: { 'Call Logs': '调用日志' },
+  'zh-TW': { 'Call Logs': '呼叫日誌' },
+  fr: { 'Call Logs': "Journaux d'appels" },
+  ja: { 'Call Logs': '呼び出しログ' },
+  ru: { 'Call Logs': 'Журнал вызовов' },
+  vi: { 'Call Logs': 'Nhật ký cuộc gọi' },
+}
+
+const callLogsAnalyticsKeys = {
+  en: {
+    Hourly: 'Hourly',
+    'Updating...': 'Updating...',
+    'Group Usage Distribution': 'Group Usage Distribution',
+    'Model Distribution': 'Model Distribution',
+    'Total Requests': 'Total Requests',
+    'Successful Requests': 'Successful Requests',
+    'Failed Requests': 'Failed Requests',
+    'Total Tokens': 'Total Tokens',
+    'Total Spend': 'Total Spend',
+    'Average Duration': 'Average Duration',
+    'By Token': 'By Token',
+    'By Actual Charge': 'By Actual Charge',
+    'No analytics data available': 'No analytics data available',
+    'Cache Hit Rate': 'Cache Hit Rate',
+    'Token Usage Trend': 'Token Usage Trend',
+    'Select Series': 'Select Series',
+    'User Usage Trend': 'User Usage Trend',
+    'Search users by remark, email, username, or ID...':
+      'Search users by remark, email, username, or ID...',
+  },
+  zh: {
+    Hourly: '每小时',
+    'Updating...': '正在更新...',
+    'Group Usage Distribution': '分组使用分布',
+    'Model Distribution': '模型分布',
+    'Total Requests': '总请求数量',
+    'Successful Requests': '成功请求',
+    'Failed Requests': '失败请求',
+    'Total Spend': '总消费',
+    'Average Duration': '平均耗时',
+    'By Token': '按 Token',
+    'By Actual Charge': '按实际扣费',
+    'No analytics data available': '暂无统计数据',
+    'Cache Hit Rate': '缓存命中率',
+    'Token Usage Trend': 'Token 使用趋势',
+    'Select Series': '选择曲线',
+    'User Usage Trend': '用户使用趋势',
+    'Search users by remark, email, username, or ID...':
+      '按备注、邮箱、用户名或 ID 搜索用户...',
+  },
+  'zh-TW': {
+    Hourly: '每小時',
+    'Updating...': '正在更新...',
+    'Group Usage Distribution': '分組使用分布',
+    'Model Distribution': '模型分布',
+    'Total Requests': '總請求數量',
+    'Successful Requests': '成功請求',
+    'Failed Requests': '失敗請求',
+    'Total Spend': '總消費',
+    'Average Duration': '平均耗時',
+    'By Token': '按 Token',
+    'By Actual Charge': '按實際扣費',
+    'No analytics data available': '暫無統計資料',
+    'Cache Hit Rate': '快取命中率',
+    'Token Usage Trend': 'Token 使用趨勢',
+    'Select Series': '選擇曲線',
+    'User Usage Trend': '使用者使用趨勢',
+    'Search users by remark, email, username, or ID...':
+      '按備註、電子郵件、使用者名稱或 ID 搜尋使用者...',
+  },
+  fr: {
+    Hourly: 'Toutes les heures',
+    'Updating...': 'Mise à jour...',
+    'Group Usage Distribution': 'Répartition par groupe',
+    'Model Distribution': 'Répartition par modèle',
+    'Total Requests': 'Requêtes totales',
+    'Successful Requests': 'Requêtes réussies',
+    'Failed Requests': 'Requêtes échouées',
+    'Total Spend': 'Dépense totale',
+    'Average Duration': 'Durée moyenne',
+    'By Token': 'Par token',
+    'By Actual Charge': 'Par coût réel',
+    'No analytics data available': 'Aucune donnée statistique',
+    'Cache Hit Rate': "Taux d'utilisation du cache",
+    'Token Usage Trend': "Tendance d'utilisation des tokens",
+    'Select Series': 'Sélectionner les courbes',
+    'User Usage Trend': "Tendance d'utilisation par utilisateur",
+    'Search users by remark, email, username, or ID...':
+      'Rechercher par remarque, e-mail, nom ou ID...',
+  },
+  ja: {
+    Hourly: '毎時',
+    'Updating...': '更新中...',
+    'Group Usage Distribution': 'グループ利用分布',
+    'Model Distribution': 'モデル分布',
+    'Total Requests': '総リクエスト数',
+    'Successful Requests': '成功リクエスト',
+    'Failed Requests': '失敗リクエスト',
+    'Total Spend': '総消費',
+    'Average Duration': '平均所要時間',
+    'By Token': 'トークン別',
+    'By Actual Charge': '実際の請求別',
+    'No analytics data available': '統計データがありません',
+    'Cache Hit Rate': 'キャッシュヒット率',
+    'Token Usage Trend': 'トークン利用傾向',
+    'Select Series': '系列を選択',
+    'User Usage Trend': 'ユーザー利用傾向',
+    'Search users by remark, email, username, or ID...':
+      '備考、メール、ユーザー名、ID でユーザーを検索...',
+  },
+  ru: {
+    Hourly: 'Ежечасно',
+    'Updating...': 'Обновление...',
+    'Group Usage Distribution': 'Распределение по группам',
+    'Model Distribution': 'Распределение по моделям',
+    'Total Requests': 'Всего запросов',
+    'Successful Requests': 'Успешные запросы',
+    'Failed Requests': 'Неудачные запросы',
+    'Total Spend': 'Общие расходы',
+    'Average Duration': 'Средняя длительность',
+    'By Token': 'По токенам',
+    'By Actual Charge': 'По фактическим расходам',
+    'No analytics data available': 'Нет данных статистики',
+    'Cache Hit Rate': 'Доля попаданий в кэш',
+    'Token Usage Trend': 'Динамика использования токенов',
+    'Select Series': 'Выбрать кривые',
+    'User Usage Trend': 'Динамика использования по пользователям',
+    'Search users by remark, email, username, or ID...':
+      'Поиск пользователей по примечанию, почте, имени или ID...',
+  },
+  vi: {
+    Hourly: 'Hàng giờ',
+    'Updating...': 'Đang cập nhật...',
+    'Group Usage Distribution': 'Phân bổ sử dụng theo nhóm',
+    'Model Distribution': 'Phân bổ theo mô hình',
+    'Total Requests': 'Tổng số yêu cầu',
+    'Successful Requests': 'Yêu cầu thành công',
+    'Failed Requests': 'Yêu cầu thất bại',
+    'Total Spend': 'Tổng chi phí',
+    'Average Duration': 'Thời gian trung bình',
+    'By Token': 'Theo token',
+    'By Actual Charge': 'Theo chi phí thực tế',
+    'No analytics data available': 'Chưa có dữ liệu thống kê',
+    'Cache Hit Rate': 'Tỷ lệ cache hit',
+    'Token Usage Trend': 'Xu hướng sử dụng token',
+    'Select Series': 'Chọn đường biểu diễn',
+    'User Usage Trend': 'Xu hướng sử dụng theo người dùng',
+    'Search users by remark, email, username, or ID...':
+      'Tìm người dùng theo ghi chú, email, tên người dùng hoặc ID...',
+  },
+}
+
+for (const [locale, translations] of Object.entries(callLogsAnalyticsKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+for (const [locale, translations] of Object.entries(callLogsKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const [locale, translations] of Object.entries(apiKeyGroupSelectionKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+for (const [locale, translations] of Object.entries(channelRoutingKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const preservedLocaleValues = {
-  fr: { End: 'End', Tokens: 'Jeton' },
+  en: {
+    'footer.newapi.projectAttributionSuffix':
+      'All rights reserved. Designed and developed by the project contributors.',
+  },
+  fr: {
+    End: 'End',
+    Tokens: 'Jeton',
+    'Total Tokens': 'Jetons totaux',
+    'footer.newapi.projectAttributionSuffix':
+      'Tous droits réservés. Conçu et développé par les contributeurs du projet.',
+  },
   ja: {
     '24 hours': '24 時間',
     '30 days': '30 日間',
     '7 days': '7 日間',
     Daily: '毎日',
     Requests: 'リクエスト',
+    'Total Tokens': '合計トークン',
+    'footer.newapi.projectAttributionSuffix':
+      'すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。',
   },
   ru: {
     Daily: 'Ежедневно',
     End: 'End',
     'Estimated cost': 'Примерная стоимость',
+    'footer.newapi.projectAttributionSuffix':
+      'Все права защищены. Разработано участниками проекта.',
   },
-  vi: { Daily: 'Hàng ngày', End: 'End', Tokens: 'Mã thông báo' },
+  vi: {
+    Daily: 'Hàng ngày',
+    End: 'End',
+    Tokens: 'Mã thông báo',
+    'Total Tokens': 'Tổng số token',
+    'footer.newapi.projectAttributionSuffix':
+      'Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.',
+  },
   'zh-TW': {
     '24 hours': '24 hours',
     Daily: '每天',
     'Estimated cost': '預計成本',
     Tokens: 'Token',
+    'Total Tokens': '總 Token 數',
+    'footer.newapi.projectAttributionSuffix':
+      '版權所有，由項目貢獻者設計與開發。',
   },
-  zh: { Daily: '每天', 'Estimated cost': '预计成本', Tokens: 'Token' },
+  zh: {
+    Daily: '每天',
+    'Estimated cost': '预计成本',
+    Tokens: 'Token',
+    'Total Tokens': '总 Token 数',
+    'footer.newapi.projectAttributionSuffix':
+      '版权所有，由项目贡献者设计与开发。',
+  },
+}
+
+const groupSemanticsKeys = {
+  en: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      'Top-up ratio is keyed by the account group stored in User.Group.',
+    'No user groups yet.': 'No user groups yet.',
+  },
+  zh: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      '充值倍率按 User.Group 中保存的账户分组配置。',
+    'No user groups yet.': '暂无用户分组。',
+  },
+  fr: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      'Le taux de recharge est défini par le groupe de compte enregistré dans User.Group.',
+    'No user groups yet.': 'Aucun groupe de compte pour le moment.',
+  },
+  ja: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      'チャージ倍率は User.Group に保存されたアカウントグループごとに設定されます。',
+    'No user groups yet.': 'アカウントグループはまだありません。',
+  },
+  ru: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      'Коэффициент пополнения задаётся группой аккаунта, сохранённой в User.Group.',
+    'No user groups yet.': 'Групп аккаунтов пока нет.',
+  },
+  vi: {
+    'Top-up ratio is keyed by the account group stored in User.Group.':
+      'Tỷ lệ nạp được xác định theo nhóm tài khoản lưu trong User.Group.',
+    'No user groups yet.': 'Chưa có nhóm tài khoản nào.',
+  },
+}
+
+for (const [locale, translations] of Object.entries(groupSemanticsKeys)) {
+  Object.assign(newKeys[locale], translations)
 }
 
 for (const locale of Object.keys(newKeys)) {

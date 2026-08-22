@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -68,6 +69,25 @@ func clearChannelInfo(channel *model.Channel) {
 	if channel.ChannelInfo.IsMultiKey {
 		channel.ChannelInfo.MultiKeyDisabledReason = nil
 		channel.ChannelInfo.MultiKeyDisabledTime = nil
+	}
+}
+
+func enrichPreviousDayProbeRates(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	rates, err := model.GetPreviousDayChannelProbeSuccessRates(ids, time.Now())
+	if err != nil {
+		common.SysLog("failed to load previous-day channel probe rates: " + err.Error())
+		return
+	}
+	for _, channel := range channels {
+		if channel != nil {
+			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+		}
 	}
 }
 
@@ -168,6 +188,7 @@ func GetAllChannels(c *gin.Context) {
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
 	}
+	enrichPreviousDayProbeRates(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -374,6 +395,7 @@ func SearchChannels(c *gin.Context) {
 	for _, datum := range pagedData {
 		clearChannelInfo(datum)
 	}
+	enrichPreviousDayProbeRates(pagedData)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -400,6 +422,7 @@ func GetChannel(c *gin.Context) {
 	}
 	if channel != nil {
 		clearChannelInfo(channel)
+		enrichPreviousDayProbeRates([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -465,6 +488,27 @@ func validateTwoFactorAuth(twoFA *model.TwoFA, code string) bool {
 
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
+	if channel == nil {
+		return fmt.Errorf("channel cannot be empty")
+	}
+	if channel.ProbeIntervalSeconds < 0 || channel.ProbeIntervalSeconds > model.MaxChannelProbeIntervalSeconds {
+		return fmt.Errorf("probe interval must be between 0 and %d seconds", model.MaxChannelProbeIntervalSeconds)
+	}
+	if channel.AutoDisabledProbeIntervalSeconds < 0 || channel.AutoDisabledProbeIntervalSeconds > model.MaxChannelProbeIntervalSeconds {
+		return fmt.Errorf("auto-disabled probe interval must be between 0 and %d seconds", model.MaxChannelProbeIntervalSeconds)
+	}
+	if channel.UpstreamMaxRetries != nil && (*channel.UpstreamMaxRetries < 0 || *channel.UpstreamMaxRetries > model.MaxChannelUpstreamRetries) {
+		return fmt.Errorf("upstream max retries must be between 0 and %d", model.MaxChannelUpstreamRetries)
+	}
+	if channel.PriceMultiplier < 0 || math.IsNaN(channel.PriceMultiplier) || math.IsInf(channel.PriceMultiplier, 0) || channel.PriceMultiplier > model.MaxChannelPriceMultiplier {
+		return fmt.Errorf("price multiplier must be between 0 and %d", model.MaxChannelPriceMultiplier)
+	}
+	if channel.PriceMultiplierMode != "" && channel.GetPriceMultiplierMode() != strings.ToLower(strings.TrimSpace(channel.PriceMultiplierMode)) {
+		return fmt.Errorf("unsupported price multiplier mode")
+	}
+	if channel.ForcePriorityScope != "" && channel.GetForcePriorityScope() != strings.ToLower(strings.TrimSpace(channel.ForcePriorityScope)) {
+		return fmt.Errorf("unsupported force priority scope")
+	}
 	// 校验 channel settings
 	if err := channel.ValidateSettings(); err != nil {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())

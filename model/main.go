@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -299,6 +300,8 @@ func migrateDB() error {
 		&SystemTaskLock{},
 		&ChannelMonitor{},
 		&ChannelMonitorHistory{},
+		&ChannelProbeState{},
+		&ChannelProbeHistory{},
 		&ChannelCostEntry{},
 		&Cluster{},
 		&ClusterPool{},
@@ -401,6 +404,8 @@ func migrateDBFast() error {
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&ChannelMonitor{}, "ChannelMonitor"},
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
+		{&ChannelProbeState{}, "ChannelProbeState"},
+		{&ChannelProbeHistory{}, "ChannelProbeHistory"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&Cluster{}, "Cluster"},
 		{&ClusterPool{}, "ClusterPool"},
@@ -535,8 +540,7 @@ func migrateUnifiedClusterBillingGroup() error {
 			channel := &channels[index]
 			groups := make([]string, 0)
 			seen := make(map[string]struct{})
-			for _, group := range strings.Split(channel.Group, ",") {
-				group = strings.TrimSpace(group)
+			for _, group := range channel.GetGroups() {
 				if _, legacy := legacyGroups[group]; legacy {
 					group = UnifiedClusterBillingGroup
 				}
@@ -617,9 +621,27 @@ func migrateUnifiedClusterBillingGroup() error {
 		}
 		if ratio, ok := topupRatioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
 			ratio := float64(1)
-			for group := range legacyGroups {
+			found := false
+			for _, cluster := range clusters {
+				group := strings.TrimSpace(cluster.BillingGroup)
 				if candidate, exists := topupRatioByGroup[group]; exists && candidate >= 0 {
 					ratio = candidate
+					found = true
+					break
+				}
+			}
+			legacyGroupNames := make([]string, 0, len(legacyGroups))
+			for group := range legacyGroups {
+				legacyGroupNames = append(legacyGroupNames, group)
+			}
+			sort.Strings(legacyGroupNames)
+			for _, group := range legacyGroupNames {
+				if found {
+					break
+				}
+				if candidate, exists := topupRatioByGroup[group]; exists && candidate >= 0 {
+					ratio = candidate
+					found = true
 					break
 				}
 			}

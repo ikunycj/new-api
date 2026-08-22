@@ -135,6 +135,49 @@ func GetLogsStat(c *gin.Context) {
 	return
 }
 
+func GetLogAnalytics(c *gin.Context) {
+	logType, _ := strconv.Atoi(c.Query("type"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	channel, _ := strconv.Atoi(c.Query("channel"))
+	userLimit, _ := strconv.Atoi(c.Query("user_limit"))
+	granularity := c.DefaultQuery("granularity", "hour")
+	if granularity != "hour" && granularity != "day" {
+		granularity = "hour"
+	}
+	if userLimit != 20 {
+		userLimit = 10
+	}
+
+	analytics, err := model.GetLogAnalytics(model.LogAnalyticsFilters{
+		LogType:        logType,
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ModelName:      c.Query("model_name"),
+		Keyword:        c.Query("keyword"),
+		TokenName:      c.Query("token_name"),
+		Channel:        channel,
+		Group:          c.Query("group"),
+		Granularity:    granularity,
+		UserKeyword:    c.Query("user_keyword"),
+		UserLimit:      userLimit,
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, analytics)
+}
+
+func GetLogFilterOptions(c *gin.Context) {
+	options, err := model.GetLogFilterOptions()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, options)
+}
+
 func GetLogsSelfStat(c *gin.Context) {
 	userId := c.GetInt("id")
 	logType, _ := strconv.Atoi(c.Query("type"))

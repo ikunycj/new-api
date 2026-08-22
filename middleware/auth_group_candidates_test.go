@@ -59,3 +59,29 @@ func TestSetupContextForTokenAddsOrderedGroupCandidates(t *testing.T) {
 	assert.Equal(t, "auto", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroup))
 	assert.True(t, common.GetContextKeyBool(ctx, constant.ContextKeyTokenCrossGroupRetry))
 }
+
+func TestSetupContextForTokenNormalizesGroupRetryTimes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	token := &model.Token{Id: 10, UserId: 3, Group: "auto", CrossGroupRetry: true}
+	require.NoError(t, token.SetGroupCandidates([]string{"default", "vip"}))
+	require.NoError(t, token.SetGroupRetryTimes(map[string]int{"default": 0, "vip": 3}))
+
+	require.NoError(t, SetupContextForToken(ctx, token))
+	retryTimes, ok := common.GetContextKeyType[map[string]int](ctx, constant.ContextKeyTokenGroupRetryTimes)
+	require.True(t, ok)
+	assert.Equal(t, map[string]int{"default": 0, "vip": 3}, retryTimes)
+}
+
+func TestSetupContextForTokenRejectsInvalidGroupRetryTimes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest("GET", "/v1/models", nil)
+	token := &model.Token{Id: 11, UserId: 3, Group: "auto", CrossGroupRetry: true}
+	require.NoError(t, token.SetGroupCandidates([]string{"default"}))
+	require.NoError(t, token.SetGroupRetryTimes(map[string]int{"default": -1}))
+
+	require.Error(t, SetupContextForToken(ctx, token))
+}

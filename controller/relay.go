@@ -678,6 +678,22 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			ClusterPoolTier: c.GetInt("cluster_pool_tier"),
 			AutoBan:         &autoBanInt,
 		}
+		// The distributor has already selected the first channel, but only its
+		// request context metadata is available here. Load the complete channel
+		// so price, probe, group, and per-channel retry settings are preserved.
+		if seededChannel.Id > 0 {
+			if cachedChannel, cacheErr := model.CacheGetChannel(seededChannel.Id); cacheErr == nil && cachedChannel != nil {
+				seededChannel = cachedChannel
+			}
+		}
+		selectedGroup := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
+		if selectedGroup == "" {
+			selectedGroup = info.UsingGroup
+		}
+		if selectedGroup == "" {
+			selectedGroup = retryParam.TokenGroup
+		}
+		retryParam.RegisterSelectedChannel(seededChannel, selectedGroup)
 		if _, fixedChannel := c.Get("specific_channel_id"); fixedChannel {
 			return seededChannel, nil
 		}
@@ -923,6 +939,11 @@ func RelayTask(c *gin.Context) {
 
 		if hasLockedChannel {
 			channel = lockedChannel
+			selectedGroup := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
+			if selectedGroup == "" {
+				selectedGroup = relayInfo.UsingGroup
+			}
+			retryParam.RegisterSelectedChannel(channel, selectedGroup)
 			if retryParam.GetRetry() > 0 {
 				if setupErr := middleware.SetupContextForSelectedChannel(c, channel, relayInfo.OriginModelName); setupErr != nil {
 					taskErr = service.TaskErrorWrapperLocal(setupErr.Err, "setup_locked_channel_failed", http.StatusInternalServerError)
@@ -951,7 +972,7 @@ func RelayTask(c *gin.Context) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
-		retryParam.MarkAttempted()
+		retryParam.MarkChannelAttempted(channel.Id, channel.ClusterId)
 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
 		if taskErr == nil {
 			break
@@ -966,7 +987,7 @@ func RelayTask(c *gin.Context) {
 
 		hasNextRetry := retryParam.HasNextRetry()
 		if hasLockedChannel {
-			hasNextRetry = retryParam.GetRetry() < common.RetryTimes
+			hasNextRetry = retryParam.HasChannelRetry(channel.Id)
 		}
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, boolToRetryCount(hasNextRetry)) {
 			break

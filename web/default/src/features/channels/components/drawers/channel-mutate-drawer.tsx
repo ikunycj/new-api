@@ -330,8 +330,17 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     hasConfiguredOverrideValue(values.status_code_mapping) ||
     values.tag?.trim() ||
     values.remark?.trim() ||
-    values.priority ||
     values.weight ||
+    values.probe_interval_seconds !== 600 ||
+    values.auto_disabled_probe_interval_seconds !== 600 ||
+    values.probe_failure_auto_ban === false ||
+    values.probe_success_auto_enable === false ||
+    values.probe_model?.trim() ||
+    values.upstream_max_retries !== 3 ||
+    values.price_multiplier !== 1 ||
+    values.price_multiplier_mode !== 'usd' ||
+    values.force_priority ||
+    values.force_priority_scope === 'cross_group' ||
     values.proxy?.trim() ||
     values.system_prompt?.trim() ||
     values.force_format ||
@@ -728,10 +737,23 @@ export function ChannelMutateDrawer({
   )
   const currentSettings = form.watch('settings')
   const currentAdvancedCustom = form.watch('advanced_custom')
-  const currentPriority = form.watch('priority')
   const currentWeight = form.watch('weight')
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
+  const currentProbeIntervalSeconds = form.watch('probe_interval_seconds')
+  const currentAutoDisabledProbeIntervalSeconds = form.watch(
+    'auto_disabled_probe_interval_seconds'
+  )
+  const currentProbeFailureAutoBan = form.watch('probe_failure_auto_ban')
+  const currentProbeSuccessAutoEnable = form.watch('probe_success_auto_enable')
+  const currentProbeModel = form.watch('probe_model')
+  const currentUpstreamMaxRetries = form.watch('upstream_max_retries')
+  const currentPriceMultiplier = form.watch('price_multiplier')
+  const currentPriceMultiplierMode = form.watch('price_multiplier_mode')
+  const currentForcePriority = form.watch('force_priority')
+  const currentForcePriorityScope = form.watch('force_priority_scope')
+  const previousDayProbeSuccessRate =
+    channelData?.data?.previous_day_probe_success_rate ?? 100
   const currentTag = form.watch('tag')
   const currentRemark = form.watch('remark')
   const currentStatusCodeMapping = form.watch('status_code_mapping')
@@ -990,10 +1012,19 @@ export function ChannelMutateDrawer({
     : 'idle'
   const advancedSummary = advancedHaveErrors ? t('Error') : undefined
   const routingStrategyConfigured = Boolean(
-    currentPriority ||
     currentWeight ||
     currentTestModel?.trim() ||
-    (currentAutoBan ?? 1) !== 1
+    (currentAutoBan ?? 1) !== 1 ||
+    currentProbeIntervalSeconds !== 600 ||
+    currentAutoDisabledProbeIntervalSeconds !== 600 ||
+    currentProbeFailureAutoBan === false ||
+    currentProbeSuccessAutoEnable === false ||
+    currentProbeModel?.trim() ||
+    currentUpstreamMaxRetries !== 3 ||
+    currentPriceMultiplier !== 1 ||
+    currentPriceMultiplierMode !== 'usd' ||
+    currentForcePriority ||
+    currentForcePriorityScope === 'cross_group'
   )
   const internalNotesConfigured = Boolean(
     currentTag?.trim() || currentRemark?.trim()
@@ -1878,7 +1909,7 @@ export function ChannelMutateDrawer({
                   'Sensitive channel settings are read-only for your account.'
                 )}{' '}
                 {t(
-                  'You can still edit non-sensitive operations fields such as models, groups, priority, and weight.'
+                  'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.'
                 )}
               </AlertDescription>
             </Alert>
@@ -3613,30 +3644,6 @@ export function ChannelMutateDrawer({
                             <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
-                                name='priority'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{t('Priority')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type='number'
-                                        placeholder='0'
-                                        {...field}
-                                        onChange={(e) =>
-                                          field.onChange(Number(e.target.value))
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.PRIORITY)}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
                                 name='weight'
                                 render={({ field }) => (
                                   <FormItem>
@@ -3704,6 +3711,349 @@ export function ChannelMutateDrawer({
                                 </FormItem>
                               )}
                             />
+
+                            <div className='grid gap-4 sm:grid-cols-2'>
+                              <FormField
+                                control={form.control}
+                                name='probe_interval_seconds'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Probe interval')}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type='number'
+                                        min={0}
+                                        max={604800}
+                                        step={1}
+                                        {...field}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            Number(event.target.value)
+                                          )
+                                        }
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.PROBE_INTERVAL)}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='auto_disabled_probe_interval_seconds'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Auto-disabled probe interval')}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type='number'
+                                        min={0}
+                                        max={604800}
+                                        step={1}
+                                        {...field}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            Number(event.target.value)
+                                          )
+                                        }
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(
+                                        FIELD_DESCRIPTIONS.AUTO_DISABLED_PROBE_INTERVAL
+                                      )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='probe_model'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t('Probe model')}</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder={t(
+                                          FIELD_PLACEHOLDERS.PROBE_MODEL
+                                        )}
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.PROBE_MODEL)}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='upstream_max_retries'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Upstream max retries')}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type='number'
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        {...field}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            Number(event.target.value)
+                                          )
+                                        }
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(
+                                        FIELD_DESCRIPTIONS.UPSTREAM_MAX_RETRIES
+                                      )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <div className='grid gap-4 sm:grid-cols-2'>
+                              <FormField
+                                control={form.control}
+                                name='price_multiplier'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Channel price multiplier')}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type='number'
+                                        min={0}
+                                        max={1000}
+                                        step={0.01}
+                                        {...field}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            Number(event.target.value)
+                                          )
+                                        }
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.PRICE_MULTIPLIER)}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='price_multiplier_mode'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Price multiplier mode')}
+                                    </FormLabel>
+                                    <Select
+                                      items={[
+                                        {
+                                          value: 'usd',
+                                          label: t('USD-equivalent'),
+                                        },
+                                        { value: 'cny', label: t('CNY') },
+                                      ]}
+                                      value={field.value}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent
+                                        alignItemWithTrigger={false}
+                                      >
+                                        <SelectGroup>
+                                          <SelectItem value='usd'>
+                                            {t('USD-equivalent')}
+                                          </SelectItem>
+                                          <SelectItem value='cny'>
+                                            {t('CNY')}
+                                          </SelectItem>
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormDescription>
+                                      {t(
+                                        FIELD_DESCRIPTIONS.PRICE_MULTIPLIER_MODE
+                                      )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <div className='grid gap-4 sm:grid-cols-2'>
+                              <FormField
+                                control={form.control}
+                                name='probe_failure_auto_ban'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-start justify-between gap-4'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>
+                                        {t('Probe failure auto-ban')}
+                                      </FormLabel>
+                                      <FormDescription>
+                                        {t(
+                                          FIELD_DESCRIPTIONS.PROBE_FAILURE_AUTO_BAN
+                                        )}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        className='shrink-0'
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='probe_success_auto_enable'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-start justify-between gap-4'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>
+                                        {t('Probe success auto-enable')}
+                                      </FormLabel>
+                                      <FormDescription>
+                                        {t(
+                                          FIELD_DESCRIPTIONS.PROBE_SUCCESS_AUTO_ENABLE
+                                        )}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        className='shrink-0'
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <div className='grid gap-4 sm:grid-cols-2'>
+                              <FormField
+                                control={form.control}
+                                name='force_priority'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-start justify-between gap-4'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>{t('Force priority')}</FormLabel>
+                                      <FormDescription>
+                                        {t(FIELD_DESCRIPTIONS.FORCE_PRIORITY)}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        className='shrink-0'
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='force_priority_scope'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t('Force priority scope')}
+                                    </FormLabel>
+                                    <Select
+                                      items={[
+                                        {
+                                          value: 'group',
+                                          label: t('Current group only'),
+                                        },
+                                        {
+                                          value: 'cross_group',
+                                          label: t('Across selected groups'),
+                                        },
+                                      ]}
+                                      value={field.value}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent
+                                        alignItemWithTrigger={false}
+                                      >
+                                        <SelectGroup>
+                                          <SelectItem value='group'>
+                                            {t('Current group only')}
+                                          </SelectItem>
+                                          <SelectItem value='cross_group'>
+                                            {t('Across selected groups')}
+                                          </SelectItem>
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.FORCE_PRIORITY_SCOPE)}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <div className='border-border/60 bg-muted/20 rounded-md border p-3'>
+                              <div className='flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between'>
+                                <div>
+                                  <p className='text-sm font-medium'>
+                                    {t('Previous-day probe success rate')}
+                                  </p>
+                                  <p className='text-muted-foreground text-xs'>
+                                    {t(
+                                      FIELD_DESCRIPTIONS.PREVIOUS_DAY_PROBE_SUCCESS_RATE
+                                    )}
+                                  </p>
+                                </div>
+                                <span className='text-lg font-semibold tabular-nums'>
+                                  {isEditing
+                                    ? `${previousDayProbeSuccessRate.toFixed(1)}%`
+                                    : t('Available after the first probe')}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
                           <div

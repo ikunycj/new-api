@@ -63,6 +63,12 @@ func orderedRoutingContext(groups []string, crossGroupRetry bool) *gin.Context {
 	return ctx
 }
 
+func orderedRoutingContextWithRetryTimes(groups []string, retryTimes map[string]int) *gin.Context {
+	ctx := orderedRoutingContext(groups, true)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, retryTimes)
+	return ctx
+}
+
 func TestCacheGetRandomSatisfiedChannelUsesExplicitCandidateOrder(t *testing.T) {
 	ids := setupOrderedRoutingChannels(t, "openai", "claude")
 	ctx := orderedRoutingContext([]string{"openai", "claude"}, true)
@@ -110,6 +116,62 @@ func TestRetryParamCrossGroupTransitionIgnoresGlobalRetryCount(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, second)
 	assert.Equal(t, "claude", secondGroup)
+}
+
+func TestRetryParamUsesConfiguredPerGroupRetryLimits(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "openai", "claude")
+	originalRetryTimes := common.RetryTimes
+	common.RetryTimes = 10
+	t.Cleanup(func() { common.RetryTimes = originalRetryTimes })
+
+	ctx := orderedRoutingContextWithRetryTimes(
+		[]string{"openai", "claude"},
+		map[string]int{"openai": 0, "claude": 3},
+	)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "shared-model"}
+
+	first, firstGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.Equal(t, ids["openai"], first.Id)
+	assert.Equal(t, "openai", firstGroup)
+
+	param.MarkChannelAttempted(first.Id, first.ClusterId)
+	require.True(t, param.HasNextRetry())
+	require.True(t, param.AdvanceRetry())
+
+	second, secondGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.Equal(t, ids["claude"], second.Id)
+	assert.Equal(t, "claude", secondGroup)
+}
+
+func TestRetryParamAllowsConfiguredGroupRetries(t *testing.T) {
+	ids := setupOrderedRoutingChannels(t, "openai")
+	originalRetryTimes := common.RetryTimes
+	common.RetryTimes = 10
+	t.Cleanup(func() { common.RetryTimes = originalRetryTimes })
+
+	ctx := orderedRoutingContextWithRetryTimes([]string{"openai"}, map[string]int{"openai": 3})
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "shared-model"}
+
+	for attempt := 0; attempt < 4; attempt++ {
+		channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
+		require.NoError(t, err)
+		require.NotNil(t, channel)
+		assert.Equal(t, ids["openai"], channel.Id)
+		assert.Equal(t, "openai", selectedGroup)
+
+		param.MarkChannelAttempted(channel.Id, channel.ClusterId)
+		if attempt < 3 {
+			require.True(t, param.HasNextRetry())
+			require.True(t, param.AdvanceRetry())
+		} else {
+			assert.False(t, param.HasNextRetry())
+			assert.False(t, param.AdvanceRetry())
+		}
+	}
 }
 
 func TestRetryParamDoesNotCrossGroupsWhenDisabled(t *testing.T) {

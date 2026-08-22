@@ -51,9 +51,13 @@ func getLogSearchUserIDs(keyword string) ([]int, error) {
 	pattern := "%" + escapeLikeLiteral(strings.TrimSpace(keyword)) + "%"
 
 	var userIDs []int
-	err := DB.Unscoped().Model(&User{}).
+	query := DB.Unscoped().Model(&User{}).
 		Where("(username LIKE ? ESCAPE '!' OR display_name LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' OR remark LIKE ? ESCAPE '!')", pattern, pattern, pattern, pattern).
-		Pluck("id", &userIDs).Error
+		Select("id")
+	if userID, err := strconv.Atoi(strings.TrimSpace(keyword)); err == nil {
+		query = query.Or("id = ?", userID)
+	}
+	err := query.Pluck("id", &userIDs).Error
 	return userIDs, err
 }
 
@@ -98,6 +102,8 @@ func applyLogKeywordFilter(tx *gorm.DB, keyword string) (*gorm.DB, error) {
 
 	if channelID, err := strconv.Atoi(keyword); err == nil {
 		conditions = append(conditions, "logs.channel_id = ?")
+		args = append(args, channelID)
+		conditions = append(conditions, "logs.user_id = ?")
 		args = append(args, channelID)
 	}
 
@@ -151,6 +157,8 @@ type Log struct {
 	SubscriptionPlanId    int    `json:"subscription_plan_id,omitempty" gorm:"index;default:0"`
 	SubscriptionPlanTitle string `json:"subscription_plan_title,omitempty" gorm:"type:varchar(128);default:''"`
 	Other                 string `json:"other"`
+	Email                 string `json:"email" gorm:"-"`
+	Remark                string `json:"remark" gorm:"-"`
 }
 
 // don't use iota, avoid change log type value
@@ -616,6 +624,10 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		assignDisplayLogIds(logs, startIdx)
+	}
+
+	if err = populateLogUserDetails(logs); err != nil {
+		return logs, total, err
 	}
 
 	channelIds := types.NewSet[int]()

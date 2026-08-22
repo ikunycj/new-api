@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -41,18 +42,29 @@ type Channel struct {
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
-	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`
-	AutoBan           *int    `json:"auto_ban" gorm:"default:1"`
-	OtherInfo         string  `json:"other_info"`
-	Tag               *string `json:"tag" gorm:"index"`
-	Setting           *string `json:"setting" gorm:"type:text"` // 渠道额外设置
-	ParamOverride     *string `json:"param_override" gorm:"type:text"`
-	HeaderOverride    *string `json:"header_override" gorm:"type:text"`
-	Remark            *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
-	ClusterId         int     `json:"cluster_id" gorm:"index"`
-	ClusterPoolId     int     `json:"cluster_pool_id" gorm:"index"`
-	ClusterPoolTier   int     `json:"cluster_pool_tier" gorm:"-"`
+	StatusCodeMapping                *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
+	Priority                         *int64  `json:"priority" gorm:"bigint;default:0"`
+	AutoBan                          *int    `json:"auto_ban" gorm:"default:1"`
+	ProbeIntervalSeconds             int     `json:"probe_interval_seconds"`
+	AutoDisabledProbeIntervalSeconds int     `json:"auto_disabled_probe_interval_seconds"`
+	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
+	ProbeSuccessAutoEnable           *bool   `json:"probe_success_auto_enable"`
+	ProbeModel                       *string `json:"probe_model"`
+	UpstreamMaxRetries               *int    `json:"upstream_max_retries"`
+	PriceMultiplier                  float64 `json:"price_multiplier"`
+	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	ForcePriority                    *bool   `json:"force_priority"`
+	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
+	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
+	OtherInfo                        string  `json:"other_info"`
+	Tag                              *string `json:"tag" gorm:"index"`
+	Setting                          *string `json:"setting" gorm:"type:text"` // 渠道额外设置
+	ParamOverride                    *string `json:"param_override" gorm:"type:text"`
+	HeaderOverride                   *string `json:"header_override" gorm:"type:text"`
+	Remark                           *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	ClusterId                        int     `json:"cluster_id" gorm:"index"`
+	ClusterPoolId                    int     `json:"cluster_pool_id" gorm:"index"`
+	ClusterPoolTier                  int     `json:"cluster_pool_tier" gorm:"-"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -61,6 +73,18 @@ type Channel struct {
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
 }
+
+const (
+	DefaultChannelProbeIntervalSeconds      = 600
+	DefaultAutoDisabledProbeIntervalSeconds = 600
+	MaxChannelProbeIntervalSeconds          = 7 * 24 * 60 * 60
+	MaxChannelUpstreamRetries               = 100
+	MaxChannelPriceMultiplier               = 1000
+	ChannelPriceMultiplierModeUSD           = "usd"
+	ChannelPriceMultiplierModeCNY           = "cny"
+	ChannelForcePriorityScopeGroup          = "group"
+	ChannelForcePriorityScopeCrossGroup     = "cross_group"
+)
 
 type ChannelInfo struct {
 	IsMultiKey             bool                  `json:"is_multi_key"`                        // 是否多Key模式
@@ -300,9 +324,18 @@ func (channel *Channel) GetGroups() []string {
 	if channel.Group == "" {
 		return []string{}
 	}
-	groups := strings.Split(strings.Trim(channel.Group, ","), ",")
-	for i, group := range groups {
-		groups[i] = strings.TrimSpace(group)
+	groups := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, rawGroup := range strings.Split(channel.Group, ",") {
+		group := strings.TrimSpace(rawGroup)
+		if group == "" {
+			continue
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
 	}
 	return groups
 }
@@ -343,6 +376,98 @@ func (channel *Channel) GetAutoBan() bool {
 		return false
 	}
 	return *channel.AutoBan == 1
+}
+
+func (channel *Channel) GetProbeIntervalSeconds() int {
+	if channel == nil || channel.ProbeIntervalSeconds <= 0 {
+		return DefaultChannelProbeIntervalSeconds
+	}
+	return channel.ProbeIntervalSeconds
+}
+
+func (channel *Channel) GetAutoDisabledProbeIntervalSeconds() int {
+	if channel == nil || channel.AutoDisabledProbeIntervalSeconds <= 0 {
+		return DefaultAutoDisabledProbeIntervalSeconds
+	}
+	return channel.AutoDisabledProbeIntervalSeconds
+}
+
+func (channel *Channel) ShouldProbeFailureAutoBan() bool {
+	if channel == nil {
+		return false
+	}
+	if channel.ProbeFailureAutoBan != nil {
+		return *channel.ProbeFailureAutoBan
+	}
+	return channel.GetAutoBan()
+}
+
+func (channel *Channel) ShouldProbeSuccessAutoEnable() bool {
+	if channel == nil {
+		return false
+	}
+	if channel.ProbeSuccessAutoEnable != nil {
+		return *channel.ProbeSuccessAutoEnable
+	}
+	return true
+}
+
+func (channel *Channel) GetProbeModel() string {
+	if channel == nil {
+		return ""
+	}
+	if channel.ProbeModel != nil && strings.TrimSpace(*channel.ProbeModel) != "" {
+		return strings.TrimSpace(*channel.ProbeModel)
+	}
+	if channel.TestModel != nil {
+		return strings.TrimSpace(*channel.TestModel)
+	}
+	return ""
+}
+
+// GetUpstreamMaxRetries returns retries after the first upstream attempt. A
+// nil value keeps the existing process-wide retry setting for legacy channels.
+func (channel *Channel) GetUpstreamMaxRetries() int {
+	if channel == nil || channel.UpstreamMaxRetries == nil {
+		return common.RetryTimes
+	}
+	if *channel.UpstreamMaxRetries < 0 {
+		return 0
+	}
+	return *channel.UpstreamMaxRetries
+}
+
+func (channel *Channel) GetPriceMultiplier() float64 {
+	if channel == nil || channel.PriceMultiplier <= 0 || math.IsNaN(channel.PriceMultiplier) || math.IsInf(channel.PriceMultiplier, 0) {
+		return 1
+	}
+	return channel.PriceMultiplier
+}
+
+func (channel *Channel) GetPriceMultiplierMode() string {
+	if channel == nil {
+		return ChannelPriceMultiplierModeUSD
+	}
+	switch strings.ToLower(strings.TrimSpace(channel.PriceMultiplierMode)) {
+	case ChannelPriceMultiplierModeCNY:
+		return ChannelPriceMultiplierModeCNY
+	default:
+		return ChannelPriceMultiplierModeUSD
+	}
+}
+
+func (channel *Channel) IsForcePriority() bool {
+	return channel != nil && channel.ForcePriority != nil && *channel.ForcePriority
+}
+
+func (channel *Channel) GetForcePriorityScope() string {
+	if channel == nil {
+		return ChannelForcePriorityScopeGroup
+	}
+	if strings.EqualFold(strings.TrimSpace(channel.ForcePriorityScope), ChannelForcePriorityScopeCrossGroup) {
+		return ChannelForcePriorityScopeCrossGroup
+	}
+	return ChannelForcePriorityScopeGroup
 }
 
 func (channel *Channel) Save() error {

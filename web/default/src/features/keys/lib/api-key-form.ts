@@ -25,6 +25,8 @@ import type { ApiKey, ApiKeyFormData } from '../types'
 
 export const SYSTEM_ROUTING_VALUE = '__system_routing__'
 export const MAX_GROUP_CANDIDATES = 8
+export const DEFAULT_GROUP_RETRY_TIMES = 3
+export const MAX_GROUP_RETRY_TIMES = 100
 
 // ============================================================================
 // Form Schema
@@ -56,8 +58,12 @@ export function getApiKeyFormSchema(t: TFunction) {
           (groups) =>
             !groups.includes('auto') &&
             (!groups.includes(SYSTEM_ROUTING_VALUE) || groups.length === 1),
-          t('System routing must be used on its own')
+            t('System routing must be used on its own')
         ),
+      group_retry_times: z.record(
+        z.string(),
+        z.number().int().min(0).max(MAX_GROUP_RETRY_TIMES)
+      ),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
@@ -93,12 +99,21 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   model_limits: [],
   allow_ips: '',
   group_candidates: [],
+  group_retry_times: {},
   cross_group_retry: false,
   tokenCount: 1,
 }
 
-export function getApiKeyFormDefaultValues(): ApiKeyFormValues {
-  return { ...API_KEY_FORM_DEFAULT_VALUES }
+export function getApiKeyFormDefaultValues(
+  defaultGroup = ''
+): ApiKeyFormValues {
+  if (!defaultGroup) return { ...API_KEY_FORM_DEFAULT_VALUES }
+
+  return {
+    ...API_KEY_FORM_DEFAULT_VALUES,
+    group_candidates: [defaultGroup],
+    group_retry_times: { [defaultGroup]: DEFAULT_GROUP_RETRY_TIMES },
+  }
 }
 
 // ============================================================================
@@ -124,6 +139,14 @@ export function transformFormDataToPayload(
     groupCandidates = []
   }
 
+  const groupRetryTimes: Record<string, number> = {}
+  for (const group of groups) {
+    if (group === SYSTEM_ROUTING_VALUE) continue
+    const configured = data.group_retry_times?.[group]
+    groupRetryTimes[group] =
+      configured === undefined ? DEFAULT_GROUP_RETRY_TIMES : configured
+  }
+
   return {
     name: data.name,
     remain_quota: data.unlimited_quota
@@ -138,8 +161,10 @@ export function transformFormDataToPayload(
     allow_ips: data.allow_ips || '',
     group,
     group_candidates: groupCandidates,
-    cross_group_retry:
-      usesSystemRouting || usesOrderedGroups ? !!data.cross_group_retry : false,
+    group_retry_times: groupRetryTimes,
+    // Kept for old servers/clients. Multiple selected groups always mean that
+    // the request may continue to the next group after the configured attempts.
+    cross_group_retry: usesSystemRouting || usesOrderedGroups,
   }
 }
 
@@ -161,6 +186,14 @@ export function transformApiKeyToFormDefaults(
     }
   }
 
+  const groupRetryTimes: Record<string, number> = {}
+  for (const group of groups) {
+    if (group === SYSTEM_ROUTING_VALUE) continue
+    const configured = apiKey.group_retry_times?.[group]
+    groupRetryTimes[group] =
+      configured === undefined ? DEFAULT_GROUP_RETRY_TIMES : configured
+  }
+
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
@@ -176,6 +209,7 @@ export function transformApiKeyToFormDefaults(
       : [],
     allow_ips: apiKey.allow_ips || '',
     group_candidates: groups,
+    group_retry_times: groupRetryTimes,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
   }

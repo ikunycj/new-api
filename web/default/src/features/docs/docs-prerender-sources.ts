@@ -26,6 +26,7 @@ import { DocsCcSwitch } from './cc-switch-guide'
 import { DocsClaudeCode } from './claude-code-guide'
 import { DocsCodex } from './codex-guide'
 import type { DocsRoutePath } from './docs-config'
+import { DocsErrorSelfCheck } from './error-self-check'
 import { DocsGemini } from './gemini-guide'
 import { DocsHermes } from './hermes-guide'
 import { DocsIntegrationGuide } from './integration-guide'
@@ -41,6 +42,7 @@ export const DOCS_PRERENDER_SOURCES = {
   '/docs/quick-start': DocsQuickStart,
   '/docs/model-pricing': DocsModelPricing,
   '/docs/referral-rewards': DocsReferralRewards,
+  '/docs/error-self-check': DocsErrorSelfCheck,
   '/docs/integrations': DocsIntegrationGuide,
   '/docs/tools/cc-switch': DocsCcSwitch,
   '/docs/tools/claude-code': DocsClaudeCode,
