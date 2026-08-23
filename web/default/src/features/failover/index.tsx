@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ExternalLink,
+  Plus,
+  Save,
+  Trash2,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -11,6 +18,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getChannels } from '@/features/channels/api'
+import { getGroups } from '@/features/users/api'
 
 import {
   getFailoverConfig,
@@ -95,10 +103,22 @@ export function FailoverConfiguration() {
     queryKey: ['channel-routing-channels'],
     queryFn: () => getChannels({ page_size: 1000, id_sort: true }),
   })
+  const groupsQuery = useQuery({
+    queryKey: ['channel-routing-billing-groups'],
+    queryFn: getGroups,
+  })
   const channels = useMemo(
     () => channelsQuery.data?.data?.items ?? [],
     [channelsQuery.data]
   )
+  const billingGroups = useMemo(() => {
+    const configured = groupsQuery.data?.data ?? []
+    const routeGroups =
+      configQuery.data?.routes.map((route) => route.billing_group) ?? []
+    return [...new Set([...configured, ...routeGroups].filter(Boolean))].sort(
+      (a, b) => a.localeCompare(b)
+    )
+  }, [configQuery.data?.routes, groupsQuery.data?.data])
   const channelByID = useMemo(
     () => new Map(channels.map((channel) => [channel.id, channel])),
     [channels]
@@ -267,9 +287,10 @@ export function FailoverConfiguration() {
               <div className='grid gap-3 md:grid-cols-[1fr_1fr_180px_auto_auto] md:items-end'>
                 <div className='space-y-1.5'>
                   <Label>{t('Billing group')}</Label>
-                  <Input
+                  <NativeSelect
+                    className='w-full'
                     value={route.billing_group}
-                    placeholder='default'
+                    disabled={groupsQuery.isLoading}
                     onChange={(event) =>
                       updateRoute(
                         routeIndex,
@@ -277,7 +298,18 @@ export function FailoverConfiguration() {
                         event.target.value
                       )
                     }
-                  />
+                  >
+                    <NativeSelectOption value=''>
+                      {groupsQuery.isLoading
+                        ? t('Loading')
+                        : t('Select a group')}
+                    </NativeSelectOption>
+                    {billingGroups.map((group) => (
+                      <NativeSelectOption key={group} value={group}>
+                        {group}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                 </div>
                 <div className='space-y-1.5'>
                   <Label>{t('Display name')}</Label>
@@ -672,6 +704,29 @@ export function FailoverConfiguration() {
         </TabsContent>
 
         <TabsContent value='monitoring' className='pt-4'>
+          <div className='mb-5 flex flex-wrap items-center justify-between gap-3'>
+            <div>
+              <h3 className='font-medium'>{t('Channel monitoring')}</h3>
+              <p className='text-muted-foreground text-sm'>
+                {t('Live channel routing health and failover metrics')}
+              </p>
+            </div>
+            {monitoringQuery.data?.grafana_url ? (
+              <Button
+                variant='outline'
+                render={
+                  <a
+                    href={monitoringQuery.data.grafana_url}
+                    target='_blank'
+                    rel='noreferrer'
+                  />
+                }
+              >
+                <ExternalLink className='size-4' />
+                {t('Open Grafana')}
+              </Button>
+            ) : null}
+          </div>
           <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
             {[
               [

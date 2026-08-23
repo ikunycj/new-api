@@ -6245,6 +6245,7 @@
     "Stability first": "Ưu tiên ổn định",
     "Total timeout (ms)": "Tổng thời gian chờ (ms)",
     "Upstream error code": "Mã lỗi thượng nguồn",
-    "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Chi phí ước tính = token thực tế của kênh × giá chính thức của mô hình × hệ số nhóm tính phí × hệ số chi phí kênh."
+    "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Chi phí ước tính = token thực tế của kênh × giá chính thức của mô hình × hệ số nhóm tính phí × hệ số chi phí kênh.",
+    "Live channel routing health and failover metrics": "Tình trạng định tuyến kênh trực tiếp và chỉ số chuyển tuyến"
   }
 }

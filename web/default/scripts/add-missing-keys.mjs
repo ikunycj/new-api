@@ -13,6 +13,8 @@ const newKeys = {
     Balanced: 'Balanced',
     'Billing group routes': 'Billing group routes',
     'Channel monitoring': 'Channel monitoring',
+    'Live channel routing health and failover metrics':
+      'Live channel routing health and failover metrics',
     'Channel routing saved': 'Channel routing saved',
     'Channel switches': 'Channel switches',
     'Circuit cooldown (seconds)': 'Circuit cooldown (seconds)',
@@ -70,6 +72,8 @@ const newKeys = {
     Balanced: '均衡',
     'Billing group routes': '计费分组路由',
     'Channel monitoring': '渠道监控',
+    'Live channel routing health and failover metrics':
+      '实时渠道路由健康度和切流指标',
     'Channel routing saved': '渠道路由已保存',
     'Channel switches': '渠道切换次数',
     'Circuit cooldown (seconds)': '熔断冷却时间（秒）',
@@ -127,6 +131,8 @@ const newKeys = {
     Balanced: 'Équilibré',
     'Billing group routes': 'Routes des groupes de facturation',
     'Channel monitoring': 'Surveillance des canaux',
+    'Live channel routing health and failover metrics':
+      'État en direct du routage des canaux et indicateurs de bascule',
     'Channel routing saved': 'Routage des canaux enregistré',
     'Channel switches': 'Changements de canal',
     'Circuit cooldown (seconds)': 'Délai du circuit (secondes)',
@@ -184,6 +190,8 @@ const newKeys = {
     Balanced: 'バランス',
     'Billing group routes': '課金グループルート',
     'Channel monitoring': 'チャネル監視',
+    'Live channel routing health and failover metrics':
+      'チャネルルーティングの稼働状況とフェイルオーバー指標',
     'Channel routing saved': 'チャネルルーティングを保存しました',
     'Channel switches': 'チャネル切替回数',
     'Circuit cooldown (seconds)': 'サーキット待機時間（秒）',
@@ -241,6 +249,8 @@ const newKeys = {
     Balanced: 'Сбалансированный',
     'Billing group routes': 'Маршруты групп тарификации',
     'Channel monitoring': 'Мониторинг каналов',
+    'Live channel routing health and failover metrics':
+      'Текущее состояние маршрутизации каналов и показатели переключения',
     'Channel routing saved': 'Маршрутизация каналов сохранена',
     'Channel switches': 'Переключения каналов',
     'Circuit cooldown (seconds)': 'Пауза автомата (секунды)',
@@ -298,6 +308,8 @@ const newKeys = {
     Balanced: 'Cân bằng',
     'Billing group routes': 'Tuyến nhóm tính phí',
     'Channel monitoring': 'Giám sát kênh',
+    'Live channel routing health and failover metrics':
+      'Tình trạng định tuyến kênh trực tiếp và chỉ số chuyển tuyến',
     'Channel routing saved': 'Đã lưu định tuyến kênh',
     'Channel switches': 'Số lần chuyển kênh',
     'Circuit cooldown (seconds)': 'Thời gian chờ ngắt mạch (giây)',
@@ -355,6 +367,8 @@ const newKeys = {
     Balanced: '均衡',
     'Billing group routes': '計費分組路由',
     'Channel monitoring': '渠道監控',
+    'Live channel routing health and failover metrics':
+      '即時渠道路由健康狀態與切換指標',
     'Channel routing saved': '渠道路由已儲存',
     'Channel switches': '渠道切換次數',
     'Circuit cooldown (seconds)': '熔斷冷卻時間（秒）',

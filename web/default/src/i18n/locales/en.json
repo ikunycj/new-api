@@ -6245,6 +6245,7 @@
     "Stability first": "Stability first",
     "Total timeout (ms)": "Total timeout (ms)",
     "Upstream error code": "Upstream error code",
-    "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor."
+    "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.",
+    "Live channel routing health and failover metrics": "Live channel routing health and failover metrics"
   }
 }
