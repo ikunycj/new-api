@@ -153,7 +153,9 @@ export async function getLoadTestChannelStats(
 }
 
 function readRequestId(response: Response) {
-  for (const header of ['x-request-id', 'x-oneapi-request-id', 'request-id']) {
+  // The gateway ID is the consume-log key. Upstream providers may also return
+  // X-Request-Id, which is intentionally copied through for diagnostics.
+  for (const header of ['x-oneapi-request-id', 'x-request-id', 'request-id']) {
     const value = response.headers.get(header)?.trim()
     if (value) return value
   }

@@ -38,7 +38,7 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 	var rows []row
 	err := LOG_DB.Table("logs").
 		Select("channel_id, "+logGroupCol+" AS billing_group, COUNT(*) AS requests, COALESCE(SUM(prompt_tokens), 0) AS input_tokens, COALESCE(SUM(input_tokens_total), 0) AS input_tokens_total, COALESCE(SUM(completion_tokens), 0) AS output_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens").
-		Where("user_id = ? AND type = ? AND request_id IN ?", userID, LogTypeConsume, requestIDs).
+		Where("user_id = ? AND type = ? AND (request_id IN ? OR upstream_request_id IN ?)", userID, LogTypeConsume, requestIDs, requestIDs).
 		Group("channel_id, " + logGroupCol).
 		Scan(&rows).Error
 	if err != nil {

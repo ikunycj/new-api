@@ -36,12 +36,12 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 	InitChannelRoutingCache()
 	require.NoError(t, db.Create(&[]Log{
 		{UserId: 7, Type: LogTypeConsume, RequestId: "run-a", ChannelId: channels[0].Id, Group: "claude", PromptTokens: 100, CompletionTokens: 20},
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-b", ChannelId: channels[0].Id, Group: "claude", PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25},
+		{UserId: 7, Type: LogTypeConsume, RequestId: "run-b", UpstreamRequestId: "upstream-b", ChannelId: channels[0].Id, Group: "claude", PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25},
 		{UserId: 7, Type: LogTypeConsume, RequestId: "run-c", ChannelId: channels[1].Id, Group: "claude", PromptTokens: 40, CompletionTokens: 8},
-		{UserId: 8, Type: LogTypeConsume, RequestId: "run-d", ChannelId: channels[1].Id, PromptTokens: 999, CompletionTokens: 999},
+		{UserId: 8, Type: LogTypeConsume, RequestId: "run-d", UpstreamRequestId: "upstream-b", ChannelId: channels[1].Id, PromptTokens: 999, CompletionTokens: 999},
 	}).Error)
 
-	stats, err := GetLoadTestChannelStats(7, []string{"run-a", "run-b", "run-c", "run-c"})
+	stats, err := GetLoadTestChannelStats(7, []string{"run-a", "upstream-b", "run-c", "run-c"})
 	require.NoError(t, err)
 	require.Len(t, stats, 2)
 	require.Equal(t, channels[0].Id, stats[0].ChannelID)
