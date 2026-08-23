@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func setupChannelRoutingTables(t *testing.T) {
@@ -101,6 +102,21 @@ func TestSaveChannelRoutingConfigRejectsEnabledRouteWithoutChannel(t *testing.T)
 	})
 
 	require.EqualError(t, err, "enabled billing group route requires an enabled channel")
+}
+
+func TestDeleteBoundChannelRequiresRemovingItFromRouting(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Pro", Key: "key", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Enabled: true}).Error)
+
+	err := (&Channel{Id: 38}).Delete()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "referenced by billing-group routing")
+
+	require.NoError(t, DB.Delete(&BillingGroupChannel{}, 1).Error)
+	require.NoError(t, (&Channel{Id: 38}).Delete())
+	require.ErrorIs(t, DB.First(&Channel{}, 38).Error, gorm.ErrRecordNotFound)
 }
 
 func TestMatchUpstreamErrorMappingPrefersExactChannel(t *testing.T) {

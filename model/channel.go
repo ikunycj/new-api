@@ -456,6 +456,9 @@ func BatchDeleteChannels(ids []int) error {
 	if len(ids) == 0 {
 		return nil
 	}
+	if err := ensureChannelsCanBeDeleted(DB, ids); err != nil {
+		return err
+	}
 	// 使用事务 分批删除channel表和abilities表
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -593,6 +596,12 @@ func (channel *Channel) UpdateBalance(balance float64) {
 }
 
 func (channel *Channel) Delete() error {
+	if channel == nil || channel.Id <= 0 {
+		return errors.New("channel id must be positive")
+	}
+	if err := ensureChannelsCanBeDeleted(DB, []int{channel.Id}); err != nil {
+		return err
+	}
 	var err error
 	err = DB.Delete(channel).Error
 	if err != nil {
@@ -600,6 +609,23 @@ func (channel *Channel) Delete() error {
 	}
 	err = channel.DeleteAbilities()
 	return err
+}
+
+// ensureChannelsCanBeDeleted prevents a raw channel deletion from leaving a
+// billing-group route pointing at a missing channel. The routing editor must
+// remove the channel from its route first, preserving a valid saved config.
+func ensureChannelsCanBeDeleted(db *gorm.DB, ids []int) error {
+	if db == nil || len(ids) == 0 {
+		return nil
+	}
+	var routeChannel BillingGroupChannel
+	if err := db.Select("channel_id").Where("channel_id IN ?", ids).First(&routeChannel).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	return fmt.Errorf("channel %d is referenced by billing-group routing; remove it from the routing configuration before deleting", routeChannel.ChannelId)
 }
 
 var channelStatusLock sync.Mutex
