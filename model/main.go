@@ -17,6 +17,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var commonGroupCol string
@@ -267,6 +268,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := migrateUsernameToNonUnique(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -300,13 +304,8 @@ func migrateDB() error {
 		&ChannelMonitor{},
 		&ChannelMonitorHistory{},
 		&ChannelCostEntry{},
-		&Cluster{},
-		&ClusterPool{},
-		&FailoverPolicy{},
-		&FailoverPolicyStep{},
-		&FailoverGroup{},
-		&FailoverGroupMember{},
-		&FailoverRule{},
+		&BillingGroupRoute{},
+		&BillingGroupChannel{},
 		&UpstreamErrorMapping{},
 		&CasbinRule{},
 		&AuthzRole{},
@@ -329,12 +328,6 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
-	if err := migrateUserTypes(); err != nil {
-		return err
-	}
-	if err := migrateUnifiedClusterBillingGroup(); err != nil {
-		return err
-	}
 	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
 		return err
 	}
@@ -350,20 +343,10 @@ func migrateDB() error {
 	return nil
 }
 
-// migrateUserTypes normalizes legacy accounts and keeps the designated load
-// testing account in the B2B partition. The username match is case-insensitive
-// and works across SQLite, MySQL, and PostgreSQL.
-func migrateUserTypes() error {
-	if DB == nil {
-		return nil
-	}
-	if err := DB.Model(&User{}).Where("user_type IS NULL OR user_type = ?", "").Update("user_type", UserTypeToC).Error; err != nil {
+func migrateDBFast() error {
+	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
-	return DB.Model(&User{}).Where("LOWER(username) = ?", "dengkuntest").Update("user_type", UserTypeToB).Error
-}
-
-func migrateDBFast() error {
 
 	var wg sync.WaitGroup
 
@@ -402,13 +385,8 @@ func migrateDBFast() error {
 		{&ChannelMonitor{}, "ChannelMonitor"},
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
-		{&Cluster{}, "Cluster"},
-		{&ClusterPool{}, "ClusterPool"},
-		{&FailoverPolicy{}, "FailoverPolicy"},
-		{&FailoverPolicyStep{}, "FailoverPolicyStep"},
-		{&FailoverGroup{}, "FailoverGroup"},
-		{&FailoverGroupMember{}, "FailoverGroupMember"},
-		{&FailoverRule{}, "FailoverRule"},
+		{&BillingGroupRoute{}, "BillingGroupRoute"},
+		{&BillingGroupChannel{}, "BillingGroupChannel"},
 		{&UpstreamErrorMapping{}, "UpstreamErrorMapping"},
 		{&AffiliateRuleVersion{}, "AffiliateRuleVersion"},
 		{&AffiliateUserOverride{}, "AffiliateUserOverride"},
@@ -449,12 +427,6 @@ func migrateDBFast() error {
 			return err
 		}
 	}
-	if err := migrateUserTypes(); err != nil {
-		return err
-	}
-	if err := migrateUnifiedClusterBillingGroup(); err != nil {
-		return err
-	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -471,208 +443,95 @@ func migrateDBFast() error {
 	return nil
 }
 
-// migrateUnifiedClusterBillingGroup keeps cluster routing internal while
-// presenting one package and one configurable billing ratio to users. The
-// migration is idempotent and preserves the existing ratio when possible.
-func migrateUnifiedClusterBillingGroup() error {
-	if DB == nil || !DB.Migrator().HasTable(&Cluster{}) {
+// migrateUsernameToNonUnique removes the legacy username uniqueness constraint.
+// Email remains the sole unique user identifier; usernames are allowed to repeat.
+func migrateUsernameToNonUnique() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) {
 		return nil
 	}
 
-	var clusters []Cluster
-	if err := DB.Order("id ASC").Find(&clusters).Error; err != nil {
-		return err
-	}
-	if len(clusters) == 0 {
+	switch common.MainDatabaseType() {
+	case common.DatabaseTypeSQLite:
+		columnTypes, err := DB.Migrator().ColumnTypes(&User{})
+		if err != nil {
+			return fmt.Errorf("inspect users.username uniqueness: %w", err)
+		}
+		for _, columnType := range columnTypes {
+			if columnType.Name() != "username" {
+				continue
+			}
+			if unique, ok := columnType.Unique(); ok && unique {
+				if err := DB.Migrator().AlterColumn(&User{}, "username"); err != nil {
+					return fmt.Errorf("remove users.username uniqueness: %w", err)
+				}
+			}
+			return nil
+		}
+		return nil
+	case common.DatabaseTypeMySQL:
+		var indexNames []string
+		if err := DB.Raw(`
+SELECT index_name
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = ?
+  AND non_unique = 0
+GROUP BY index_name
+HAVING COUNT(*) = 1 AND MAX(column_name) = ?`, "users", "username").Scan(&indexNames).Error; err != nil {
+			return fmt.Errorf("inspect users.username indexes: %w", err)
+		}
+		for _, indexName := range indexNames {
+			if indexName == "PRIMARY" {
+				continue
+			}
+			if err := DB.Migrator().DropIndex(&User{}, indexName); err != nil {
+				return fmt.Errorf("remove users.username unique index %q: %w", indexName, err)
+			}
+		}
+		return nil
+	case common.DatabaseTypePostgreSQL:
+		var constraintNames []string
+		if err := DB.Raw(`
+SELECT tc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_schema = kcu.constraint_schema
+ AND tc.constraint_name = kcu.constraint_name
+ AND tc.table_name = kcu.table_name
+WHERE tc.constraint_schema = current_schema()
+  AND tc.table_name = ?
+  AND tc.constraint_type = 'UNIQUE'
+GROUP BY tc.constraint_name
+HAVING COUNT(*) = 1 AND MAX(kcu.column_name) = ?`, "users", "username").Scan(&constraintNames).Error; err != nil {
+			return fmt.Errorf("inspect users.username constraints: %w", err)
+		}
+		for _, constraintName := range constraintNames {
+			if err := DB.Exec("ALTER TABLE ? DROP CONSTRAINT ?", clause.Table{Name: "users"}, clause.Column{Name: constraintName}).Error; err != nil {
+				return fmt.Errorf("remove users.username unique constraint %q: %w", constraintName, err)
+			}
+		}
+
+		indexes, err := DB.Migrator().GetIndexes(&User{})
+		if err != nil {
+			return fmt.Errorf("inspect users.username unique indexes: %w", err)
+		}
+		for _, index := range indexes {
+			unique, ok := index.Unique()
+			columns := index.Columns()
+			if !ok || !unique || len(columns) != 1 || columns[0] != "username" {
+				continue
+			}
+			if primaryKey, ok := index.PrimaryKey(); ok && primaryKey {
+				continue
+			}
+			if err := DB.Migrator().DropIndex(&User{}, index.Name()); err != nil {
+				return fmt.Errorf("remove users.username unique index %q: %w", index.Name(), err)
+			}
+		}
+		return nil
+	default:
 		return nil
 	}
-
-	legacyGroups := make(map[string]struct{})
-	// These names were used by earlier Cluster implementations. Keep them in
-	// the migration set even when no active Cluster row still references them;
-	// old token candidates and billing options can outlive the Cluster record.
-	for _, group := range []string{"cluster", "Cluster_1", "Cluster_2", "Claude_cluster_1", "Claude_cluster_2"} {
-		legacyGroups[group] = struct{}{}
-	}
-	for _, cluster := range clusters {
-		group := strings.TrimSpace(cluster.BillingGroup)
-		if group != "" && group != UnifiedClusterBillingGroup {
-			legacyGroups[group] = struct{}{}
-		}
-	}
-
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var ratioOption Option
-		ratioByGroup := make(map[string]float64)
-		if err := tx.Where("key = ?", "GroupRatio").First(&ratioOption).Error; err == nil && ratioOption.Value != "" {
-			if err := common.UnmarshalJsonStr(ratioOption.Value, &ratioByGroup); err != nil {
-				return fmt.Errorf("decode group ratios: %w", err)
-			}
-			if ratioByGroup == nil {
-				ratioByGroup = make(map[string]float64)
-			}
-		}
-		if ratio, ok := ratioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
-			ratio = float64(1)
-			for _, cluster := range clusters {
-				group := strings.TrimSpace(cluster.BillingGroup)
-				if candidate, exists := ratioByGroup[group]; exists && candidate >= 0 {
-					ratio = candidate
-					break
-				}
-			}
-			ratioByGroup[UnifiedClusterBillingGroup] = ratio
-		}
-		for group := range legacyGroups {
-			delete(ratioByGroup, group)
-		}
-
-		var channels []Channel
-		if err := tx.Where("cluster_id > ?", 0).Find(&channels).Error; err != nil {
-			return err
-		}
-		for index := range channels {
-			channel := &channels[index]
-			groups := make([]string, 0)
-			seen := make(map[string]struct{})
-			for _, group := range strings.Split(channel.Group, ",") {
-				group = strings.TrimSpace(group)
-				if _, legacy := legacyGroups[group]; legacy {
-					group = UnifiedClusterBillingGroup
-				}
-				if group == "" {
-					continue
-				}
-				if _, exists := seen[group]; exists {
-					continue
-				}
-				seen[group] = struct{}{}
-				groups = append(groups, group)
-			}
-			if _, exists := seen[UnifiedClusterBillingGroup]; !exists {
-				groups = append(groups, UnifiedClusterBillingGroup)
-			}
-			channel.Group = strings.Join(groups, ",")
-			if err := tx.Model(channel).Select("group").Updates(channel).Error; err != nil {
-				return err
-			}
-			if err := channel.UpdateAbilities(tx); err != nil {
-				return err
-			}
-		}
-		if err := tx.Model(&Cluster{}).Where("id > ?", 0).Update("billing_group", UnifiedClusterBillingGroup).Error; err != nil {
-			return err
-		}
-
-		var tokens []Token
-		if err := tx.Unscoped().Find(&tokens).Error; err != nil {
-			return err
-		}
-		for index := range tokens {
-			token := &tokens[index]
-			changed := false
-			if _, legacy := legacyGroups[strings.TrimSpace(token.Group)]; legacy {
-				token.Group = UnifiedClusterBillingGroup
-				changed = true
-			}
-			candidates, err := token.GetGroupCandidates()
-			if err == nil && len(candidates) > 0 {
-				for candidateIndex, candidate := range candidates {
-					if _, legacy := legacyGroups[strings.TrimSpace(candidate)]; legacy {
-						candidates[candidateIndex] = UnifiedClusterBillingGroup
-						changed = true
-					}
-				}
-				if err := token.SetGroupCandidates(uniqueStrings(candidates)); err != nil {
-					return err
-				}
-			}
-			if changed {
-				if err := tx.Unscoped().Model(token).Select("group", "group_candidates").Updates(token).Error; err != nil {
-					return err
-				}
-			}
-		}
-
-		ratioJSON, err := common.Marshal(ratioByGroup)
-		if err != nil {
-			return err
-		}
-		if err := tx.Save(&Option{Key: "GroupRatio", Value: string(ratioJSON)}).Error; err != nil {
-			return err
-		}
-
-		// TopupGroupRatio is another user-facing billing map. Remove retired
-		// cluster package names here as well so they cannot remain selectable
-		// through the top-up flow.
-		var topupRatioOption Option
-		topupRatioByGroup := make(map[string]float64)
-		if err := tx.Where("key = ?", "TopupGroupRatio").First(&topupRatioOption).Error; err == nil && topupRatioOption.Value != "" {
-			if err := common.UnmarshalJsonStr(topupRatioOption.Value, &topupRatioByGroup); err != nil {
-				return fmt.Errorf("decode topup group ratios: %w", err)
-			}
-			if topupRatioByGroup == nil {
-				topupRatioByGroup = make(map[string]float64)
-			}
-		}
-		if ratio, ok := topupRatioByGroup[UnifiedClusterBillingGroup]; !ok || ratio < 0 {
-			ratio := float64(1)
-			for group := range legacyGroups {
-				if candidate, exists := topupRatioByGroup[group]; exists && candidate >= 0 {
-					ratio = candidate
-					break
-				}
-			}
-			topupRatioByGroup[UnifiedClusterBillingGroup] = ratio
-		}
-		for group := range legacyGroups {
-			delete(topupRatioByGroup, group)
-		}
-		topupRatioJSON, err := common.Marshal(topupRatioByGroup)
-		if err != nil {
-			return err
-		}
-		if err := tx.Save(&Option{Key: "TopupGroupRatio", Value: string(topupRatioJSON)}).Error; err != nil {
-			return err
-		}
-
-		var groupsOption Option
-		usableGroups := map[string]string{UnifiedClusterBillingGroup: "通用套餐"}
-		if err := tx.Where("key = ?", "UserUsableGroups").First(&groupsOption).Error; err == nil && groupsOption.Value != "" {
-			if err := common.UnmarshalJsonStr(groupsOption.Value, &usableGroups); err != nil {
-				return fmt.Errorf("decode user groups: %w", err)
-			}
-			if usableGroups == nil {
-				usableGroups = make(map[string]string)
-			}
-		}
-		for group := range legacyGroups {
-			delete(usableGroups, group)
-		}
-		usableGroups[UnifiedClusterBillingGroup] = "通用套餐"
-		groupsJSON, err := common.Marshal(usableGroups)
-		if err != nil {
-			return err
-		}
-		return tx.Save(&Option{Key: "UserUsableGroups", Value: string(groupsJSON)}).Error
-	})
-}
-
-func uniqueStrings(values []string) []string {
-	result := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
 }
 
 func removeLegacyChannelMonitorAvailabilityColumns() error {
@@ -842,7 +701,6 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`max_purchase_per_user`" + ` integer DEFAULT 0,
 ` + "`upgrade_group`" + ` varchar(64) DEFAULT '',
 ` + "`downgrade_group`" + ` varchar(64) DEFAULT '',
-` + "`routing_strategy`" + ` varchar(32) DEFAULT 'balanced',
 ` + "`total_amount`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`quota_reset_period`" + ` varchar(16) DEFAULT 'never',
 ` + "`quota_reset_custom_seconds`" + ` bigint DEFAULT 0,
@@ -880,7 +738,6 @@ PRIMARY KEY (` + "`id`" + `)
 		{Name: "max_purchase_per_user", DDL: "`max_purchase_per_user` integer DEFAULT 0"},
 		{Name: "upgrade_group", DDL: "`upgrade_group` varchar(64) DEFAULT ''"},
 		{Name: "downgrade_group", DDL: "`downgrade_group` varchar(64) DEFAULT ''"},
-		{Name: "routing_strategy", DDL: "`routing_strategy` varchar(32) DEFAULT 'balanced'"},
 		{Name: "total_amount", DDL: "`total_amount` bigint NOT NULL DEFAULT 0"},
 		{Name: "quota_reset_period", DDL: "`quota_reset_period` varchar(16) DEFAULT 'never'"},
 		{Name: "quota_reset_custom_seconds", DDL: "`quota_reset_custom_seconds` bigint DEFAULT 0"},

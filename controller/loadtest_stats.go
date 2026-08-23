@@ -17,6 +17,10 @@ type loadTestStatsRequest struct {
 }
 
 func GetLoadTestChannelStats(c *gin.Context) {
+	if group, err := model.GetUserGroup(c.GetInt("id"), false); err != nil || group != "toB" {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to ToB users only"})
+		return
+	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxLoadTestStatsRequestBodyBytes)
 	var request loadTestStatsRequest
 	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
@@ -25,16 +29,6 @@ func GetLoadTestChannelStats(c *gin.Context) {
 	}
 	if len(request.RequestIDs) > maxLoadTestStatsRequestIDs {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "too many request_ids"})
-		return
-	}
-
-	user, err := model.GetUserById(c.GetInt("id"), false)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if user.UserType != model.UserTypeToB {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to ToB accounts only"})
 		return
 	}
 

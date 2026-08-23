@@ -5,10 +5,10 @@ cd "$(dirname "$0")"
 
 profile="${1:-capacity}"
 case "$profile" in
-  smoke|step|steady|spike|burst|ramp|stream|mixed|soak|capacity) ;;
+  smoke|step|steady|spike|burst|stream|mixed|soak|capacity) ;;
   *)
     echo "Unknown profile: $profile" >&2
-    echo "Valid profiles: smoke step steady spike burst ramp stream mixed soak capacity" >&2
+    echo "Valid profiles: smoke step steady spike burst stream mixed soak capacity" >&2
     exit 2
     ;;
 esac

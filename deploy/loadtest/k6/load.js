@@ -7,18 +7,12 @@ const baseURL = normalizeBaseURL(__ENV.BASE_URL || 'http://new-api:3000');
 const loadTestModel = __ENV.LOADTEST_MODEL || 'gpt-3.5-turbo';
 const userCount = numberEnv('LOADTEST_USERS', 1000);
 const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
-const failoverMode = __ENV.FAILOVER_MODE || '';
-const routingStrategy = __ENV.LOADTEST_ROUTING_STRATEGY || 'package_default';
-const loadTestRunID = __ENV.LOADTEST_RUN_ID || profile;
-const chatTimeout = __ENV.LOADTEST_CHAT_TIMEOUT || '30s';
+const failoverMode = __ENV.FAILOVER_MODE || 'balanced';
 const mockControlA = normalizeBaseURL(__ENV.MOCK_CONTROL_A || 'http://mock-upstream:8080');
 const mockControlB = normalizeBaseURL(__ENV.MOCK_CONTROL_B || 'http://mock-upstream-b:8080');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
 const smokeVUs = numberEnv('SMOKE_VUS', 10);
 const burstMaxDuration = __ENV.BURST_MAX_DURATION || '5m';
-const rampTargetVUs = numberEnv('RAMP_TARGET_VUS', 1000);
-const rampUpDuration = __ENV.RAMP_UP_DURATION || '30s';
-const rampHoldDuration = __ENV.RAMP_HOLD_DURATION || '2m';
 const capacityRates = numberListEnv('CAPACITY_RATES', [100, 200, 300, 400, 500, 600, 700, 800]);
 const capacityRampDuration = __ENV.CAPACITY_RAMP_DURATION || '30s';
 const capacityStageDuration = __ENV.CAPACITY_STAGE_DURATION || '2m';
@@ -44,18 +38,18 @@ const commonThresholds = {
 export const options = buildOptions(profile);
 
 export function setup() {
-  if (profile !== 'pool-failover') {
+  if (profile !== 'channel-failover') {
     return;
   }
   const responses = http.batch([
-    ['POST', `${mockControlA}/control/reset?free=300&premium=300&fallback=300`, null],
-    ['POST', `${mockControlB}/control/reset?free=3000&premium=3000&fallback=3000`, null],
+    ['POST', `${mockControlA}/control/reset?tokens=300`, null],
+    ['POST', `${mockControlB}/control/reset?tokens=3000`, null],
   ]);
   const reset = check(responses, {
-    'mock clusters reset': (items) => items.every((item) => item.status === 200),
+    'mock channels reset': (items) => items.every((item) => item.status === 200),
   });
   if (!reset) {
-    throw new Error('failed to reset mock cluster pools');
+    throw new Error('failed to reset mock channels');
   }
 }
 
@@ -72,7 +66,7 @@ export function stream() {
 export function modelList() {
   const response = http.get(`${baseURL}/v1/models`, {
     headers: headersForVU(),
-    tags: { endpoint: 'models', stream: 'false', profile, routing_strategy: routingStrategy },
+    tags: { endpoint: 'models', stream: 'false', profile },
     timeout: '30s',
   });
   recordResponse(response, 'model list');
@@ -100,11 +94,11 @@ function makeChatRequest(streaming) {
     }),
     {
       headers: headersForVU(),
-      tags: { endpoint: 'chat_completions', stream: String(streaming), profile, routing_strategy: routingStrategy },
-      timeout: streaming ? '2m' : chatTimeout,
+      tags: { endpoint: 'chat_completions', stream: String(streaming), profile },
+      timeout: streaming ? '2m' : '30s',
     },
   );
-  timeToFirstByte.add(response.timings.waiting, { stream: String(streaming), profile, routing_strategy: routingStrategy });
+  timeToFirstByte.add(response.timings.waiting, { stream: String(streaming), profile });
   recordResponse(response, streaming ? 'streaming chat' : 'chat');
   if (!streaming) {
     recordUsage(response);
@@ -124,24 +118,24 @@ function recordUsage(response) {
     && Number.isFinite(usage.prompt_tokens)
     && Number.isFinite(usage.completion_tokens)
     && Number.isFinite(usage.total_tokens);
-  usageMissing.add(!valid, { profile, routing_strategy: routingStrategy });
+  usageMissing.add(!valid, { profile });
   if (!valid) {
     return;
   }
-  const tags = { profile, routing_strategy: routingStrategy };
+  const tags = { profile };
   promptTokens.add(usage.prompt_tokens, tags);
   completionTokens.add(usage.completion_tokens, tags);
   totalTokens.add(usage.total_tokens, tags);
 }
 
 function recordResponse(response, name) {
-  httpResponses.add(1, { profile, endpoint: name, status: String(response.status), routing_strategy: routingStrategy });
+  httpResponses.add(1, { profile, endpoint: name, status: String(response.status) });
   const valid = check(response, {
     [`${name}: status is 200`]: (result) => result.status === 200,
     [`${name}: no gateway error`]: (result) => !result.body || !result.body.includes('"error"'),
   });
-  applicationErrors.add(!valid, { profile, routing_strategy: routingStrategy });
-  completedRequests.add(1, { profile, routing_strategy: routingStrategy });
+  applicationErrors.add(!valid, { profile });
+  completedRequests.add(1, { profile });
 }
 
 function headersForVU() {
@@ -149,15 +143,12 @@ function headersForVU() {
   const token = loadTestTokens.length > 0
     ? loadTestTokens[(__VU - 1) % loadTestTokens.length]
     : `sk-loadtest${String(tokenNumber).padStart(5, '0')}`;
-  const headers = {
+  return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-    'X-Load-Test-ID': `${loadTestRunID}-${__VU}-${__ITER}`,
+    'X-Load-Test-ID': `${profile}-${__VU}-${__ITER}`,
+    'X-Alltoken-Failover-Mode': failoverMode,
   };
-  if (failoverMode) {
-    headers['X-Alltoken-Failover-Mode'] = failoverMode;
-  }
-  return headers;
 }
 
 function buildOptions(selectedProfile) {
@@ -218,21 +209,6 @@ function buildOptions(selectedProfile) {
         },
       },
     },
-    ramp: {
-      scenarios: {
-        ramp: {
-          executor: 'ramping-vus',
-          exec: 'chat',
-          startVUs: 0,
-          stages: [
-            { target: rampTargetVUs, duration: rampUpDuration },
-            { target: rampTargetVUs, duration: rampHoldDuration },
-            { target: 0, duration: '30s' },
-          ],
-          gracefulRampDown: '30s',
-        },
-      },
-    },
     stream: {
       scenarios: {
         stream: { executor: 'constant-vus', exec: 'stream', vus: 1000, duration: '15m', gracefulStop: '2m' },
@@ -280,9 +256,9 @@ function buildOptions(selectedProfile) {
         new_api_usage_missing: ['rate<0.001'],
       },
     },
-    'pool-failover': {
+    'channel-failover': {
       scenarios: {
-        poolFailover: {
+        channelFailover: {
           executor: 'constant-vus',
           exec: 'chat',
           vus: 5,

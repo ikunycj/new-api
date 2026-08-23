@@ -9,10 +9,8 @@ import (
 // as successful upstream token usage.
 type LoadTestChannelStats struct {
 	ChannelID        int     `json:"channel_id"`
-	TokenID          int     `json:"token_id"`
 	ChannelName      string  `json:"channel_name"`
-	ClusterID        int     `json:"cluster_id"`
-	PoolName         string  `json:"pool_name"`
+	BillingGroup     string  `json:"billing_group"`
 	CostFactor       float64 `json:"cost_factor"`
 	Requests         int64   `json:"requests"`
 	InputTokens      int64   `json:"input_tokens"`
@@ -20,7 +18,6 @@ type LoadTestChannelStats struct {
 	OutputTokens     int64   `json:"output_tokens"`
 	CacheReadTokens  int64   `json:"cache_read_tokens"`
 	CacheWriteTokens int64   `json:"cache_write_tokens"`
-	ChargedQuota     int64   `json:"charged_quota"`
 }
 
 func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannelStats, error) {
@@ -30,20 +27,19 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 
 	type row struct {
 		ChannelID        int
-		TokenID          int
+		BillingGroup     string
 		Requests         int64
 		InputTokens      int64
 		InputTokensTotal int64
 		OutputTokens     int64
 		CacheReadTokens  int64
 		CacheWriteTokens int64
-		ChargedQuota     int64
 	}
 	var rows []row
 	err := LOG_DB.Table("logs").
-		Select("channel_id, token_id, COUNT(*) AS requests, COALESCE(SUM(prompt_tokens), 0) AS input_tokens, COALESCE(SUM(input_tokens_total), 0) AS input_tokens_total, COALESCE(SUM(completion_tokens), 0) AS output_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens, COALESCE(SUM(quota), 0) AS charged_quota").
-		Where("user_id = ? AND type = ? AND (request_id IN ? OR upstream_request_id IN ?)", userID, LogTypeConsume, requestIDs, requestIDs).
-		Group("channel_id, token_id").
+		Select("channel_id, "+logGroupCol+" AS billing_group, COUNT(*) AS requests, COALESCE(SUM(prompt_tokens), 0) AS input_tokens, COALESCE(SUM(input_tokens_total), 0) AS input_tokens_total, COALESCE(SUM(completion_tokens), 0) AS output_tokens, COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens").
+		Where("user_id = ? AND type = ? AND request_id IN ?", userID, LogTypeConsume, requestIDs).
+		Group("channel_id, " + logGroupCol).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
@@ -56,55 +52,28 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 		}
 	}
 	type channelMetadata struct {
-		Id            int
-		Name          string
-		ClusterId     int
-		ClusterPoolId int
+		Id   int
+		Name string
 	}
 	var channels []channelMetadata
 	if len(channelIDs) > 0 {
-		if err := DB.Model(&Channel{}).Select("id, name, cluster_id, cluster_pool_id").Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
+		if err := DB.Model(&Channel{}).Select("id, name").Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
 			return nil, err
 		}
 	}
 	metadataByID := make(map[int]channelMetadata, len(channels))
-	poolIDs := make([]int, 0, len(channels))
 	for _, channel := range channels {
 		metadataByID[channel.Id] = channel
-		if channel.ClusterPoolId > 0 {
-			poolIDs = append(poolIDs, channel.ClusterPoolId)
-		}
-	}
-	type poolMetadata struct {
-		Id         int
-		Name       string
-		CostFactor float64
-	}
-	var pools []poolMetadata
-	if len(poolIDs) > 0 {
-		if err := DB.Model(&ClusterPool{}).Select("id, name, cost_factor").Where("id IN ?", poolIDs).Find(&pools).Error; err != nil {
-			return nil, err
-		}
-	}
-	poolByID := make(map[int]poolMetadata, len(pools))
-	for _, pool := range pools {
-		poolByID[pool.Id] = pool
 	}
 
 	stats := make([]LoadTestChannelStats, 0, len(rows))
 	for _, item := range rows {
 		channel := metadataByID[item.ChannelID]
-		pool := poolByID[channel.ClusterPoolId]
-		costFactor := pool.CostFactor
-		if pool.Id == 0 {
-			costFactor = 1
-		}
+		costFactor := ResolveChannelCostFactor(item.BillingGroup, item.ChannelID)
 		stats = append(stats, LoadTestChannelStats{
 			ChannelID:        item.ChannelID,
-			TokenID:          item.TokenID,
 			ChannelName:      channel.Name,
-			ClusterID:        channel.ClusterId,
-			PoolName:         pool.Name,
+			BillingGroup:     item.BillingGroup,
 			CostFactor:       costFactor,
 			Requests:         item.Requests,
 			InputTokens:      item.InputTokens,
@@ -112,7 +81,6 @@ func GetLoadTestChannelStats(userID int, requestIDs []string) ([]LoadTestChannel
 			OutputTokens:     item.OutputTokens,
 			CacheReadTokens:  item.CacheReadTokens,
 			CacheWriteTokens: item.CacheWriteTokens,
-			ChargedQuota:     item.ChargedQuota,
 		})
 	}
 	sort.Slice(stats, func(i, j int) bool {

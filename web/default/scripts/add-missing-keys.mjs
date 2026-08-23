@@ -5,57 +5,30 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.',
-    'Channel routing': 'Channel routing',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      'Routing policies use the configured channel order. Cluster and billing settings remain separate.',
-    'Channel order': 'Channel order',
-    'Requests try these channels from left to right.':
-      'Requests try these channels from left to right.',
-    'This policy still uses the legacy compatibility route.':
-      'This policy still uses the legacy compatibility route.',
+    'Add billing group route': 'Add billing group route',
     'Add channel': 'Add channel',
-    'Remove channel': 'Remove channel',
-    'Select channel': 'Select channel',
-    'Retry count': 'Retry count',
-    'Uses each cluster channel chain': 'Uses each cluster channel chain',
-    'Account type': 'Account type',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': 'Billing package',
-    'Unified package': 'Unified package',
-    'ToB accounts can access the load test demo.':
-      'ToB accounts can access the load test demo.',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      'Mixed channel groups combine clusters and fail over in member priority order.',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      'Set the mixed channel group name to the billing group used by its clusters.',
-    'All Model Types': 'All Model Types',
-    'Model Type': 'Model Type',
-    'View screenshot example': 'View screenshot example',
-    'Hide screenshot example': 'Hide screenshot example',
-    'Search models, providers, and groups':
-      'Search models, providers, and groups',
-    'Filter by username, name, email or remark...':
-      'Filter by username, name, email or remark...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      'Search logs by model, token, user, email, remark, or request ID...',
-    'Channel binding is incomplete': 'Channel binding is incomplete',
-    'Channel bindings': 'Channel bindings',
-    'Channel bindings saved': 'Channel bindings saved',
-    'Failed to load channel bindings': 'Failed to load channel bindings',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      'Link each channel to a cluster and one of its P1-P3 pools.',
-    'No clusters available': 'No clusters available',
-    Pool: 'Pool',
-    'Save bindings': 'Save bindings',
-    'Save a cluster and its pools before binding channels.':
-      'Save a cluster and its pools before binding channels.',
-    'Select a pool for every assigned cluster.':
-      'Select a pool for every assigned cluster.',
-    'Select pool': 'Select pool',
-    Unassigned: 'Unassigned',
+    'Add error mapping': 'Add error mapping',
+    'All channels': 'All channels',
+    'Attempts on this channel': 'Attempts on this channel',
+    Balanced: 'Balanced',
+    'Billing group routes': 'Billing group routes',
+    'Channel monitoring': 'Channel monitoring',
+    'Channel routing saved': 'Channel routing saved',
+    'Channel switches': 'Channel switches',
+    'Circuit cooldown (seconds)': 'Circuit cooldown (seconds)',
+    'Circuit failure threshold': 'Circuit failure threshold',
+    'Configure ordered channels for each billing group':
+      'Configure ordered channels for each billing group',
+    'Cost factor': 'Cost factor',
+    'Cost first': 'Cost first',
+    'In flight': 'In flight',
+    'Maximum total attempts': 'Maximum total attempts',
+    Order: 'Order',
+    'Request RPS': 'Request RPS',
+    'Routing strategy': 'Routing strategy',
+    'Stability first': 'Stability first',
+    'Total timeout (ms)': 'Total timeout (ms)',
+    'Upstream error code': 'Upstream error code',
     '24 hours': '24 hours',
     '7 days': '7 days',
     '30 days': '30 days',
@@ -71,6 +44,8 @@ const newKeys = {
     'Daily cost trend': 'Daily cost trend',
     'Estimate variance': 'Estimate variance',
     'Estimated cost': 'Estimated cost',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.',
     'Gross margin': 'Gross margin',
     'Inbound endpoints': 'Inbound endpoints',
     Loading: 'Loading',
@@ -87,55 +62,30 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      '请求按配置的渠道链路执行，必要时再切换到同一计费分组中的其他 Cluster。',
-    'Channel routing': '渠道路由',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      '路由策略使用配置的渠道顺序；Cluster 和计费设置彼此独立。',
-    'Channel order': '渠道顺序',
-    'Requests try these channels from left to right.':
-      '请求会按从左到右的顺序尝试这些渠道。',
-    'This policy still uses the legacy compatibility route.':
-      '此策略仍在使用旧版兼容路由。',
+    'Add billing group route': '添加计费分组路由',
     'Add channel': '添加渠道',
-    'Remove channel': '移除渠道',
-    'Select channel': '选择渠道',
-    'Retry count': '重试次数',
-    'Uses each cluster channel chain': '使用每个 Cluster 自己的渠道链路',
-    'Account type': '账户类型',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': '计费套餐',
-    'Unified package': '通用套餐',
-    'ToB accounts can access the load test demo.': 'ToB 账户可以使用压测 Demo。',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      '混合渠道分组会合并多个 Cluster，并按成员优先级执行切流。',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      '混合渠道分组名称要填写其 Cluster 使用的计费分组。',
-    'All Model Types': '全部模型类型',
-    'Model Type': '模型类型',
-    'View screenshot example': '查看截图示例',
-    'Hide screenshot example': '收起截图示例',
-    'Search models, providers, and groups': '搜索模型、厂商、分组',
-    'Filter by username, name, email or remark...':
-      '按用户名、姓名、邮箱或备注筛选...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      '按模型、令牌、用户、邮箱、备注或请求 ID 搜索日志...',
-    'Channel binding is incomplete': '渠道绑定不完整',
-    'Channel bindings': '渠道绑定',
-    'Channel bindings saved': '渠道绑定已保存',
-    'Failed to load channel bindings': '加载渠道绑定失败',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      '将每个渠道关联到一个 Cluster 及其 P1-P3 号池。',
-    'No clusters available': '暂无可用 Cluster',
-    Pool: '号池',
-    'Save bindings': '保存绑定',
-    'Save a cluster and its pools before binding channels.':
-      '请先保存 Cluster 及其号池，再绑定渠道。',
-    'Select a pool for every assigned cluster.':
-      '请为每个已分配的 Cluster 选择号池。',
-    'Select pool': '选择号池',
-    Unassigned: '未分配',
+    'Add error mapping': '添加错误映射',
+    'All channels': '全部渠道',
+    'Attempts on this channel': '本渠道尝试次数',
+    Balanced: '均衡',
+    'Billing group routes': '计费分组路由',
+    'Channel monitoring': '渠道监控',
+    'Channel routing saved': '渠道路由已保存',
+    'Channel switches': '渠道切换次数',
+    'Circuit cooldown (seconds)': '熔断冷却时间（秒）',
+    'Circuit failure threshold': '熔断失败阈值',
+    'Configure ordered channels for each billing group':
+      '为每个计费分组配置有序渠道',
+    'Cost factor': '成本系数',
+    'Cost first': '成本优先',
+    'In flight': '进行中请求',
+    'Maximum total attempts': '最大总尝试次数',
+    Order: '顺序',
+    'Request RPS': '请求 RPS',
+    'Routing strategy': '路由策略',
+    'Stability first': '稳定优先',
+    'Total timeout (ms)': '总超时（毫秒）',
+    'Upstream error code': '上游错误码',
     '24 hours': '24 小时',
     '7 days': '7 天',
     '30 days': '30 天',
@@ -151,6 +101,8 @@ const newKeys = {
     'Daily cost trend': '每日成本趋势',
     'Estimate variance': '估算差额',
     'Estimated cost': '估算成本',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      '估算成本 = 实际渠道 Token × 模型官方价格 × 计费分组倍率 × 渠道成本系数。',
     'Gross margin': '毛利差额',
     'Inbound endpoints': '入站端点',
     Loading: '加载中',
@@ -167,58 +119,30 @@ const newKeys = {
     'User charge': '用户扣费',
   },
   fr: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      'Les requêtes suivent la chaîne de canaux configurée, puis basculent si nécessaire vers un autre cluster du même groupe de facturation.',
-    'Channel routing': 'Routage des canaux',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      'Les politiques utilisent l’ordre configuré des canaux. Les paramètres de cluster et de facturation restent séparés.',
-    'Channel order': 'Ordre des canaux',
-    'Requests try these channels from left to right.':
-      'Les requêtes essaient ces canaux de gauche à droite.',
-    'This policy still uses the legacy compatibility route.':
-      'Cette politique utilise encore le routage de compatibilité historique.',
+    'Add billing group route': 'Ajouter une route de facturation',
     'Add channel': 'Ajouter un canal',
-    'Remove channel': 'Supprimer le canal',
-    'Select channel': 'Sélectionner un canal',
-    'Retry count': 'Nombre de tentatives',
-    'Uses each cluster channel chain': 'Utilise la chaîne de canaux de chaque cluster',
-    'Account type': 'Type de compte',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': 'Forfait de facturation',
-    'Unified package': 'Forfait unifié',
-    'ToB accounts can access the load test demo.':
-      'Les comptes ToB peuvent accéder à la démo de test de charge.',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      'Les groupes de canaux mixtes combinent les clusters et basculent selon la priorité des membres.',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      'Le nom du groupe de canaux mixtes doit correspondre au groupe de facturation de ses clusters.',
-    'All Model Types': 'Tous les types de modèles',
-    'Model Type': 'Type de modèle',
-    'View screenshot example': "Voir l'exemple de capture d'écran",
-    'Hide screenshot example': "Masquer l'exemple de capture d'écran",
-    'Search models, providers, and groups':
-      'Rechercher des modèles, fournisseurs et groupes',
-    'Filter by username, name, email or remark...':
-      "Filtrer par nom d'utilisateur, nom, e-mail ou remarque...",
-    'Search logs by model, token, user, email, remark, or request ID...':
-      'Rechercher les journaux par modèle, jeton, utilisateur, e-mail, remarque ou ID de requête...',
-    'Channel binding is incomplete': 'Association de canal incomplète',
-    'Channel bindings': 'Associations des canaux',
-    'Channel bindings saved': 'Associations des canaux enregistrées',
-    'Failed to load channel bindings':
-      'Échec du chargement des associations de canaux',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      'Associez chaque canal à un cluster et à l’un de ses pools P1-P3.',
-    'No clusters available': 'Aucun cluster disponible',
-    Pool: 'Pool',
-    'Save bindings': 'Enregistrer les associations',
-    'Save a cluster and its pools before binding channels.':
-      'Enregistrez un cluster et ses pools avant d’associer des canaux.',
-    'Select a pool for every assigned cluster.':
-      'Sélectionnez un pool pour chaque cluster attribué.',
-    'Select pool': 'Sélectionner un pool',
-    Unassigned: 'Non attribué',
+    'Add error mapping': 'Ajouter une correspondance',
+    'All channels': 'Tous les canaux',
+    'Attempts on this channel': 'Tentatives sur ce canal',
+    Balanced: 'Équilibré',
+    'Billing group routes': 'Routes des groupes de facturation',
+    'Channel monitoring': 'Surveillance des canaux',
+    'Channel routing saved': 'Routage des canaux enregistré',
+    'Channel switches': 'Changements de canal',
+    'Circuit cooldown (seconds)': 'Délai du circuit (secondes)',
+    'Circuit failure threshold': 'Seuil d’échec du circuit',
+    'Configure ordered channels for each billing group':
+      'Configurer les canaux ordonnés de chaque groupe de facturation',
+    'Cost factor': 'Facteur de coût',
+    'Cost first': 'Coût prioritaire',
+    'In flight': 'En cours',
+    'Maximum total attempts': 'Nombre maximal de tentatives',
+    Order: 'Ordre',
+    'Request RPS': 'RPS des requêtes',
+    'Routing strategy': 'Stratégie de routage',
+    'Stability first': 'Stabilité prioritaire',
+    'Total timeout (ms)': 'Délai total (ms)',
+    'Upstream error code': 'Code d’erreur amont',
     '24 hours': '24 heures',
     '7 days': '7 jours',
     '30 days': '30 jours',
@@ -234,6 +158,8 @@ const newKeys = {
     'Daily cost trend': 'Tendance quotidienne des coûts',
     'Estimate variance': 'Écart estimé',
     'Estimated cost': 'Coût estimé',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      'Coût estimé = jetons réels du canal × prix officiel du modèle × coefficient du groupe de facturation × facteur de coût du canal.',
     'Gross margin': 'Marge brute',
     'Inbound endpoints': 'Points d’entrée',
     Loading: 'Chargement',
@@ -250,58 +176,30 @@ const newKeys = {
     'User charge': 'Facturation utilisateur',
   },
   ja: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      'リクエストは設定したチャネルチェーンに従い、必要に応じて同じ課金グループの別 Cluster に切り替えます。',
-    'Channel routing': 'チャネルルーティング',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      'ルーティングポリシーは設定したチャネル順を使用します。Cluster と課金設定は独立しています。',
-    'Channel order': 'チャネル順',
-    'Requests try these channels from left to right.':
-      'リクエストは左から右の順にチャネルを試します。',
-    'This policy still uses the legacy compatibility route.':
-      'このポリシーは旧互換ルートを使用しています。',
+    'Add billing group route': '課金グループルートを追加',
     'Add channel': 'チャネルを追加',
-    'Remove channel': 'チャネルを削除',
-    'Select channel': 'チャネルを選択',
-    'Retry count': '再試行回数',
-    'Uses each cluster channel chain': '各 Cluster のチャネルチェーンを使用します',
-    'Account type': 'アカウント種別',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': '課金プラン',
-    'Unified package': '共通プラン',
-    'ToB accounts can access the load test demo.':
-      'ToB アカウントは負荷テストデモを利用できます。',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      '混合チャネルグループは複数の Cluster をまとめ、メンバー優先度順に切り替えます。',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      '混合チャネルグループ名には、その Cluster が使用する課金グループを指定します。',
-    'All Model Types': 'すべてのモデルタイプ',
-    'Model Type': 'モデルタイプ',
-    'View screenshot example': 'スクリーンショット例を表示',
-    'Hide screenshot example': 'スクリーンショット例を閉じる',
-    'Search models, providers, and groups':
-      'モデル、プロバイダー、グループを検索',
-    'Filter by username, name, email or remark...':
-      'ユーザー名、名前、メールアドレスまたは備考でフィルター...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      'モデル、トークン、ユーザー、メールアドレス、備考、リクエストIDでログを検索...',
-    'Channel binding is incomplete': 'チャネルの関連付けが未完了です',
-    'Channel bindings': 'チャネルの関連付け',
-    'Channel bindings saved': 'チャネルの関連付けを保存しました',
-    'Failed to load channel bindings':
-      'チャネルの関連付けを読み込めませんでした',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      '各チャネルを Cluster とその P1-P3 プールのいずれかに関連付けます。',
-    'No clusters available': '利用可能な Cluster がありません',
-    Pool: 'プール',
-    'Save bindings': '関連付けを保存',
-    'Save a cluster and its pools before binding channels.':
-      'チャネルを関連付ける前に Cluster とプールを保存してください。',
-    'Select a pool for every assigned cluster.':
-      '割り当てた各 Cluster のプールを選択してください。',
-    'Select pool': 'プールを選択',
-    Unassigned: '未割り当て',
+    'Add error mapping': 'エラーマッピングを追加',
+    'All channels': 'すべてのチャネル',
+    'Attempts on this channel': 'このチャネルでの試行回数',
+    Balanced: 'バランス',
+    'Billing group routes': '課金グループルート',
+    'Channel monitoring': 'チャネル監視',
+    'Channel routing saved': 'チャネルルーティングを保存しました',
+    'Channel switches': 'チャネル切替回数',
+    'Circuit cooldown (seconds)': 'サーキット待機時間（秒）',
+    'Circuit failure threshold': 'サーキット失敗しきい値',
+    'Configure ordered channels for each billing group':
+      '課金グループごとに順序付きチャネルを設定します',
+    'Cost factor': 'コスト係数',
+    'Cost first': 'コスト優先',
+    'In flight': '処理中',
+    'Maximum total attempts': '最大総試行回数',
+    Order: '順序',
+    'Request RPS': 'リクエスト RPS',
+    'Routing strategy': 'ルーティング戦略',
+    'Stability first': '安定性優先',
+    'Total timeout (ms)': '合計タイムアウト（ms）',
+    'Upstream error code': '上流エラーコード',
     '24 hours': '24時間',
     '7 days': '7日間',
     '30 days': '30日間',
@@ -317,6 +215,8 @@ const newKeys = {
     'Daily cost trend': '日別コスト推移',
     'Estimate variance': '推定差額',
     'Estimated cost': '推定コスト',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      '推定コスト = 実際のチャネルトークン数 × モデル公式価格 × 課金グループ倍率 × チャネルコスト係数。',
     'Gross margin': '粗利益差額',
     'Inbound endpoints': '受信エンドポイント',
     Loading: '読み込み中',
@@ -333,57 +233,30 @@ const newKeys = {
     'User charge': 'ユーザー請求額',
   },
   ru: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      'Запросы следуют настроенной цепочке каналов и при необходимости переключаются на другой Cluster в той же расчетной группе.',
-    'Channel routing': 'Маршрутизация каналов',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      'Политики используют заданный порядок каналов. Настройки Cluster и биллинга независимы.',
-    'Channel order': 'Порядок каналов',
-    'Requests try these channels from left to right.':
-      'Запросы проверяют эти каналы слева направо.',
-    'This policy still uses the legacy compatibility route.':
-      'Эта политика всё ещё использует старый совместимый маршрут.',
+    'Add billing group route': 'Добавить маршрут группы тарификации',
     'Add channel': 'Добавить канал',
-    'Remove channel': 'Удалить канал',
-    'Select channel': 'Выберите канал',
-    'Retry count': 'Число повторов',
-    'Uses each cluster channel chain': 'Использует цепочку каналов каждого Cluster',
-    'Account type': 'Тип аккаунта',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': 'Тарифный пакет',
-    'Unified package': 'Единый пакет',
-    'ToB accounts can access the load test demo.':
-      'Аккаунты ToB могут использовать демо нагрузочного тестирования.',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      'Смешанные группы каналов объединяют кластеры и переключаются по приоритету участников.',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      'Имя смешанной группы каналов должно совпадать с расчетной группой ее кластеров.',
-    'All Model Types': 'Все типы моделей',
-    'Model Type': 'Тип модели',
-    'View screenshot example': 'Показать пример скриншота',
-    'Hide screenshot example': 'Скрыть пример скриншота',
-    'Search models, providers, and groups':
-      'Поиск моделей, провайдеров и групп',
-    'Filter by username, name, email or remark...':
-      'Фильтр по имени пользователя, имени, email или примечанию...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      'Поиск журналов по модели, токену, пользователю, email, примечанию или ID запроса...',
-    'Channel binding is incomplete': 'Привязка канала не завершена',
-    'Channel bindings': 'Привязки каналов',
-    'Channel bindings saved': 'Привязки каналов сохранены',
-    'Failed to load channel bindings': 'Не удалось загрузить привязки каналов',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      'Свяжите каждый канал с Cluster и одним из его пулов P1-P3.',
-    'No clusters available': 'Нет доступных Cluster',
-    Pool: 'Пул',
-    'Save bindings': 'Сохранить привязки',
-    'Save a cluster and its pools before binding channels.':
-      'Сохраните Cluster и его пулы перед привязкой каналов.',
-    'Select a pool for every assigned cluster.':
-      'Выберите пул для каждого назначенного Cluster.',
-    'Select pool': 'Выберите пул',
-    Unassigned: 'Не назначено',
+    'Add error mapping': 'Добавить сопоставление ошибки',
+    'All channels': 'Все каналы',
+    'Attempts on this channel': 'Попытки на этом канале',
+    Balanced: 'Сбалансированный',
+    'Billing group routes': 'Маршруты групп тарификации',
+    'Channel monitoring': 'Мониторинг каналов',
+    'Channel routing saved': 'Маршрутизация каналов сохранена',
+    'Channel switches': 'Переключения каналов',
+    'Circuit cooldown (seconds)': 'Пауза автомата (секунды)',
+    'Circuit failure threshold': 'Порог ошибок автомата',
+    'Configure ordered channels for each billing group':
+      'Настройте порядок каналов для каждой группы тарификации',
+    'Cost factor': 'Коэффициент стоимости',
+    'Cost first': 'Приоритет стоимости',
+    'In flight': 'В обработке',
+    'Maximum total attempts': 'Максимум попыток',
+    Order: 'Порядок',
+    'Request RPS': 'RPS запросов',
+    'Routing strategy': 'Стратегия маршрутизации',
+    'Stability first': 'Приоритет стабильности',
+    'Total timeout (ms)': 'Общий тайм-аут (мс)',
+    'Upstream error code': 'Код ошибки провайдера',
     '24 hours': '24 часа',
     '7 days': '7 дней',
     '30 days': '30 дней',
@@ -399,6 +272,8 @@ const newKeys = {
     'Daily cost trend': 'Динамика затрат по дням',
     'Estimate variance': 'Отклонение оценки',
     'Estimated cost': 'Расчётная стоимость',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      'Расчётная стоимость = фактические токены канала × официальная цена модели × коэффициент группы тарификации × коэффициент стоимости канала.',
     'Gross margin': 'Валовая маржа',
     'Inbound endpoints': 'Входные точки',
     Loading: 'Загрузка',
@@ -415,57 +290,30 @@ const newKeys = {
     'User charge': 'Списание с пользователя',
   },
   vi: {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      'Yêu cầu đi theo chuỗi kênh đã cấu hình, sau đó chuyển sang Cluster khác trong cùng nhóm thanh toán khi cần.',
-    'Channel routing': 'Định tuyến kênh',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      'Chính sách định tuyến dùng thứ tự kênh đã cấu hình; cài đặt Cluster và thanh toán độc lập.',
-    'Channel order': 'Thứ tự kênh',
-    'Requests try these channels from left to right.':
-      'Yêu cầu thử các kênh này từ trái sang phải.',
-    'This policy still uses the legacy compatibility route.':
-      'Chính sách này vẫn dùng tuyến tương thích cũ.',
+    'Add billing group route': 'Thêm tuyến nhóm tính phí',
     'Add channel': 'Thêm kênh',
-    'Remove channel': 'Xóa kênh',
-    'Select channel': 'Chọn kênh',
-    'Retry count': 'Số lần thử lại',
-    'Uses each cluster channel chain': 'Dùng chuỗi kênh riêng của từng Cluster',
-    'Account type': 'Loại tài khoản',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': 'Gói thanh toán',
-    'Unified package': 'Gói dùng chung',
-    'ToB accounts can access the load test demo.':
-      'Tài khoản ToB có thể truy cập bản demo kiểm thử tải.',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      'Nhóm kênh hỗn hợp gộp các cluster và chuyển dự phòng theo thứ tự ưu tiên thành viên.',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      'Tên nhóm kênh hỗn hợp phải trùng với nhóm tính phí mà các cluster sử dụng.',
-    'All Model Types': 'Tất cả loại mô hình',
-    'Model Type': 'Loại mô hình',
-    'View screenshot example': 'Xem ví dụ ảnh chụp màn hình',
-    'Hide screenshot example': 'Ẩn ví dụ ảnh chụp màn hình',
-    'Search models, providers, and groups':
-      'Tìm kiếm mô hình, nhà cung cấp và nhóm',
-    'Filter by username, name, email or remark...':
-      'Lọc theo tên người dùng, tên, email hoặc ghi chú...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      'Tìm nhật ký theo mô hình, token, người dùng, email, ghi chú hoặc ID yêu cầu...',
-    'Channel binding is incomplete': 'Liên kết kênh chưa hoàn tất',
-    'Channel bindings': 'Liên kết kênh',
-    'Channel bindings saved': 'Đã lưu liên kết kênh',
-    'Failed to load channel bindings': 'Không thể tải liên kết kênh',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      'Liên kết từng kênh với một Cluster và một pool P1-P3 của Cluster đó.',
-    'No clusters available': 'Không có Cluster khả dụng',
-    Pool: 'Pool',
-    'Save bindings': 'Lưu liên kết',
-    'Save a cluster and its pools before binding channels.':
-      'Hãy lưu Cluster và các pool trước khi liên kết kênh.',
-    'Select a pool for every assigned cluster.':
-      'Chọn một pool cho mỗi Cluster đã gán.',
-    'Select pool': 'Chọn pool',
-    Unassigned: 'Chưa gán',
+    'Add error mapping': 'Thêm ánh xạ lỗi',
+    'All channels': 'Tất cả kênh',
+    'Attempts on this channel': 'Số lần thử trên kênh này',
+    Balanced: 'Cân bằng',
+    'Billing group routes': 'Tuyến nhóm tính phí',
+    'Channel monitoring': 'Giám sát kênh',
+    'Channel routing saved': 'Đã lưu định tuyến kênh',
+    'Channel switches': 'Số lần chuyển kênh',
+    'Circuit cooldown (seconds)': 'Thời gian chờ ngắt mạch (giây)',
+    'Circuit failure threshold': 'Ngưỡng lỗi ngắt mạch',
+    'Configure ordered channels for each billing group':
+      'Cấu hình thứ tự kênh cho từng nhóm tính phí',
+    'Cost factor': 'Hệ số chi phí',
+    'Cost first': 'Ưu tiên chi phí',
+    'In flight': 'Đang xử lý',
+    'Maximum total attempts': 'Tổng số lần thử tối đa',
+    Order: 'Thứ tự',
+    'Request RPS': 'RPS yêu cầu',
+    'Routing strategy': 'Chiến lược định tuyến',
+    'Stability first': 'Ưu tiên ổn định',
+    'Total timeout (ms)': 'Tổng thời gian chờ (ms)',
+    'Upstream error code': 'Mã lỗi thượng nguồn',
     '24 hours': '24 giờ',
     '7 days': '7 ngày',
     '30 days': '30 ngày',
@@ -481,6 +329,8 @@ const newKeys = {
     'Daily cost trend': 'Xu hướng chi phí hằng ngày',
     'Estimate variance': 'Chênh lệch ước tính',
     'Estimated cost': 'Chi phí ước tính',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      'Chi phí ước tính = token thực tế của kênh × giá chính thức của mô hình × hệ số nhóm tính phí × hệ số chi phí kênh.',
     'Gross margin': 'Chênh lệch lợi nhuận gộp',
     'Inbound endpoints': 'Điểm cuối đầu vào',
     Loading: 'Đang tải',
@@ -497,56 +347,30 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
-    'Requests follow the configured channel chain, then switch to another cluster in the same billing group when needed.':
-      '請求會依照設定的渠道鏈路執行，必要時再切換到同一計費分組中的其他 Cluster。',
-    'Channel routing': '渠道路由',
-    'Routing policies use the configured channel order. Cluster and billing settings remain separate.':
-      '路由策略使用設定的渠道順序；Cluster 和計費設定彼此獨立。',
-    'Channel order': '渠道順序',
-    'Requests try these channels from left to right.':
-      '請求會按從左到右的順序嘗試這些渠道。',
-    'This policy still uses the legacy compatibility route.':
-      '此策略仍在使用舊版相容路由。',
+    'Add billing group route': '新增計費分組路由',
     'Add channel': '新增渠道',
-    'Remove channel': '移除渠道',
-    'Select channel': '選擇渠道',
-    'Retry count': '重試次數',
-    'Uses each cluster channel chain': '使用每個 Cluster 自己的渠道鏈路',
-    'Account type': '帳戶類型',
-    ToB: 'ToB',
-    ToC: 'ToC',
-    'Billing package': '計費套餐',
-    'Unified package': '通用套餐',
-    'ToB accounts can access the load test demo.':
-      'ToB 帳戶可以使用壓測 Demo。',
-    'Mixed channel groups combine clusters and fail over in member priority order.':
-      '混合渠道分組會合併多個 Cluster，並按成員優先級執行切流。',
-    'Set the mixed channel group name to the billing group used by its clusters.':
-      '混合渠道分組名稱要填寫其 Cluster 使用的計費分組。',
-    'All Model Types': '全部模型類型',
-    'Model Type': '模型類型',
-    'View screenshot example': '查看截圖範例',
-    'Hide screenshot example': '收起截圖範例',
-    'Search models, providers, and groups': '搜尋模型、廠商、分組',
-    'Filter by username, name, email or remark...':
-      '按用戶名、姓名、電郵或備註篩選...',
-    'Search logs by model, token, user, email, remark, or request ID...':
-      '按模型、令牌、用戶、電郵、備註或請求 ID 搜尋日誌...',
-    'Channel binding is incomplete': '渠道綁定不完整',
-    'Channel bindings': '渠道綁定',
-    'Channel bindings saved': '渠道綁定已儲存',
-    'Failed to load channel bindings': '載入渠道綁定失敗',
-    'Link each channel to a cluster and one of its P1-P3 pools.':
-      '將每個渠道關聯到一個 Cluster 及其 P1-P3 號池。',
-    'No clusters available': '暫無可用 Cluster',
-    Pool: '號池',
-    'Save bindings': '儲存綁定',
-    'Save a cluster and its pools before binding channels.':
-      '請先儲存 Cluster 及其號池，再綁定渠道。',
-    'Select a pool for every assigned cluster.':
-      '請為每個已分配的 Cluster 選擇號池。',
-    'Select pool': '選擇號池',
-    Unassigned: '未分配',
+    'Add error mapping': '新增錯誤映射',
+    'All channels': '全部渠道',
+    'Attempts on this channel': '本渠道嘗試次數',
+    Balanced: '均衡',
+    'Billing group routes': '計費分組路由',
+    'Channel monitoring': '渠道監控',
+    'Channel routing saved': '渠道路由已儲存',
+    'Channel switches': '渠道切換次數',
+    'Circuit cooldown (seconds)': '熔斷冷卻時間（秒）',
+    'Circuit failure threshold': '熔斷失敗閾值',
+    'Configure ordered channels for each billing group':
+      '為每個計費分組設定有序渠道',
+    'Cost factor': '成本係數',
+    'Cost first': '成本優先',
+    'In flight': '進行中請求',
+    'Maximum total attempts': '最大總嘗試次數',
+    Order: '順序',
+    'Request RPS': '請求 RPS',
+    'Routing strategy': '路由策略',
+    'Stability first': '穩定優先',
+    'Total timeout (ms)': '總逾時（毫秒）',
+    'Upstream error code': '上游錯誤碼',
     '24 hours': '24 小時',
     '7 days': '7 天',
     '30 days': '30 天',
@@ -562,6 +386,8 @@ const newKeys = {
     'Daily cost trend': '每日成本趨勢',
     'Estimate variance': '估算差額',
     'Estimated cost': '估算成本',
+    'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.':
+      '估算成本 = 實際渠道 Token × 模型官方價格 × 計費分組倍率 × 渠道成本係數。',
     'Gross margin': '毛利差額',
     'Inbound endpoints': '入站端點',
     Loading: '載入中',
@@ -579,734 +405,11 @@ const newKeys = {
   },
 }
 
-const routingStrategyKeys = {
-  en: {
-    'Cost first': 'Cost first',
-    'Balanced cost and stability': 'Balanced cost and stability',
-    'Stability first': 'Stability first',
-    'Claude Pro cost first': 'Claude Pro cost first',
-    'Claude Pro stability first': 'Claude Pro stability first',
-    'Routing strategy': 'Routing strategy',
-    'Routing objective': 'Routing objective',
-    cost_first: 'Cost first',
-    stability_first: 'Stability first',
-    pro_cost_first: 'Claude Pro cost first',
-    pro_stability_first: 'Claude Pro stability first',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      'This objective selects the pool order; retry and circuit settings remain in failover policies.',
-    'Pool order': 'Pool order',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      'Define the ordered pool path and per-pool attempt limit for each policy.',
-    'Add pool step': 'Add pool step',
-    Order: 'Order',
-    'Maximum attempts': 'Maximum attempts',
-    'Cheap pool': 'Cheap pool',
-    'Premium pool': 'Premium pool',
-    'Fallback pool': 'Fallback pool',
-    'Emergency pool': 'Emergency pool',
-    'Delete pool step': 'Delete pool step',
-    'Failure rate': 'Failure rate',
-    'Cost per million tokens': 'Cost per million tokens',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.',
-  },
-  zh: {
-    'Cost first': '成本优先',
-    'Balanced cost and stability': '成本与稳定性均衡',
-    'Stability first': '稳定性优先',
-    'Claude Pro cost first': 'Claude Pro 成本模式',
-    'Claude Pro stability first': 'Claude Pro 稳定模式',
-    'Routing strategy': '路由策略',
-    'Routing objective': '路由目标',
-    cost_first: '成本优先',
-    stability_first: '稳定性优先',
-    pro_cost_first: 'Claude Pro 成本模式',
-    pro_stability_first: 'Claude Pro 稳定模式',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      '该目标决定号池顺序；重试和熔断参数仍在切流策略中配置。',
-    'Pool order': '号池顺序',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      '为每个策略配置有序号池路径和每个号池的尝试上限。',
-    'Add pool step': '添加号池步骤',
-    Order: '顺序',
-    'Maximum attempts': '最大尝试次数',
-    'Cheap pool': '便宜号池',
-    'Premium pool': '优质号池',
-    'Fallback pool': '兜底号池',
-    'Emergency pool': '应急号池',
-    'Delete pool step': '删除号池步骤',
-    'Failure rate': '失败率',
-    'Cost per million tokens': '每百万 Token 成本',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 为免费号池，P2 为 Pro/Plus，P3 为兜底链路，P4 为应急链路。',
-  },
-  fr: {
-    'Cost first': 'Coût prioritaire',
-    'Balanced cost and stability': 'Coût et stabilité équilibrés',
-    'Stability first': 'Stabilité prioritaire',
-    'Claude Pro cost first': 'Claude Pro priorité au coût',
-    'Claude Pro stability first': 'Claude Pro priorité à la stabilité',
-    'Routing strategy': 'Stratégie de routage',
-    'Routing objective': 'Objectif de routage',
-    cost_first: 'Coût prioritaire',
-    stability_first: 'Stabilité prioritaire',
-    pro_cost_first: 'Claude Pro priorité au coût',
-    pro_stability_first: 'Claude Pro priorité à la stabilité',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      'Cet objectif définit l’ordre des pools ; les tentatives et circuits restent dans les politiques de bascule.',
-    'Pool order': 'Ordre des pools',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      'Définissez le parcours des pools et la limite de tentatives par pool.',
-    'Add pool step': 'Ajouter une étape',
-    Order: 'Ordre',
-    'Maximum attempts': 'Tentatives maximales',
-    'Cheap pool': 'Pool économique',
-    'Premium pool': 'Pool premium',
-    'Fallback pool': 'Pool de secours',
-    'Emergency pool': 'Pool d’urgence',
-    'Delete pool step': 'Supprimer l’étape',
-    'Failure rate': 'Taux d’échec',
-    'Cost per million tokens': 'Coût par million de tokens',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 est gratuit, P2 est Pro/Plus, P3 est le secours et P4 l’urgence.',
-  },
-  ja: {
-    'Cost first': 'コスト優先',
-    'Balanced cost and stability': 'コストと安定性のバランス',
-    'Stability first': '安定性優先',
-    'Claude Pro cost first': 'Claude Pro コスト優先',
-    'Claude Pro stability first': 'Claude Pro 安定性優先',
-    'Routing strategy': 'ルーティング戦略',
-    'Routing objective': 'ルーティング目標',
-    cost_first: 'コスト優先',
-    stability_first: '安定性優先',
-    pro_cost_first: 'Claude Pro コスト優先',
-    pro_stability_first: 'Claude Pro 安定性優先',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      'この目標でプール順を選択します。再試行とサーキット設定はフェイルオーバーポリシーで管理します。',
-    'Pool order': 'プール順',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      '各ポリシーのプール経路とプールごとの試行上限を設定します。',
-    'Add pool step': 'プール手順を追加',
-    Order: '順序',
-    'Maximum attempts': '最大試行回数',
-    'Cheap pool': '低コストプール',
-    'Premium pool': 'プレミアムプール',
-    'Fallback pool': 'フォールバックプール',
-    'Emergency pool': '緊急プール',
-    'Delete pool step': 'プール手順を削除',
-    'Failure rate': '失敗率',
-    'Cost per million tokens': '100万トークン当たりのコスト',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1は無料、P2はPro/Plus、P3はフォールバック、P4は緊急経路です。',
-  },
-  ru: {
-    'Cost first': 'Приоритет стоимости',
-    'Balanced cost and stability': 'Баланс стоимости и стабильности',
-    'Stability first': 'Приоритет стабильности',
-    'Claude Pro cost first': 'Claude Pro: приоритет стоимости',
-    'Claude Pro stability first': 'Claude Pro: приоритет стабильности',
-    'Routing strategy': 'Стратегия маршрутизации',
-    'Routing objective': 'Цель маршрутизации',
-    cost_first: 'Приоритет стоимости',
-    stability_first: 'Приоритет стабильности',
-    pro_cost_first: 'Claude Pro: приоритет стоимости',
-    pro_stability_first: 'Claude Pro: приоритет стабильности',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      'Цель задаёт порядок пулов; повторы и параметры контура остаются в политиках переключения.',
-    'Pool order': 'Порядок пулов',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      'Задайте порядок пулов и лимит попыток для каждого пула.',
-    'Add pool step': 'Добавить этап пула',
-    Order: 'Порядок',
-    'Maximum attempts': 'Максимум попыток',
-    'Cheap pool': 'Экономичный пул',
-    'Premium pool': 'Премиум-пул',
-    'Fallback pool': 'Резервный пул',
-    'Emergency pool': 'Аварийный пул',
-    'Delete pool step': 'Удалить этап пула',
-    'Failure rate': 'Доля ошибок',
-    'Cost per million tokens': 'Стоимость за миллион токенов',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 — бесплатный, P2 — Pro/Plus, P3 — резервный, P4 — аварийный пул.',
-  },
-  vi: {
-    'Cost first': 'Ưu tiên chi phí',
-    'Balanced cost and stability': 'Cân bằng chi phí và ổn định',
-    'Stability first': 'Ưu tiên ổn định',
-    'Claude Pro cost first': 'Claude Pro ưu tiên chi phí',
-    'Claude Pro stability first': 'Claude Pro ưu tiên ổn định',
-    'Routing strategy': 'Chiến lược định tuyến',
-    'Routing objective': 'Mục tiêu định tuyến',
-    cost_first: 'Ưu tiên chi phí',
-    stability_first: 'Ưu tiên ổn định',
-    pro_cost_first: 'Claude Pro ưu tiên chi phí',
-    pro_stability_first: 'Claude Pro ưu tiên ổn định',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      'Mục tiêu này chọn thứ tự pool; cấu hình thử lại và mạch vẫn nằm trong chính sách chuyển tuyến.',
-    'Pool order': 'Thứ tự pool',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      'Đặt đường đi pool và giới hạn số lần thử cho từng pool.',
-    'Add pool step': 'Thêm bước pool',
-    Order: 'Thứ tự',
-    'Maximum attempts': 'Số lần thử tối đa',
-    'Cheap pool': 'Pool chi phí thấp',
-    'Premium pool': 'Pool cao cấp',
-    'Fallback pool': 'Pool dự phòng',
-    'Emergency pool': 'Pool khẩn cấp',
-    'Delete pool step': 'Xóa bước pool',
-    'Failure rate': 'Tỷ lệ thất bại',
-    'Cost per million tokens': 'Chi phí trên một triệu token',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 miễn phí, P2 là Pro/Plus, P3 dự phòng và P4 khẩn cấp.',
-  },
-  'zh-TW': {
-    'Cost first': '成本優先',
-    'Balanced cost and stability': '成本與穩定性平衡',
-    'Stability first': '穩定性優先',
-    'Claude Pro cost first': 'Claude Pro 成本模式',
-    'Claude Pro stability first': 'Claude Pro 穩定模式',
-    'Routing strategy': '路由策略',
-    'Routing objective': '路由目標',
-    cost_first: '成本優先',
-    stability_first: '穩定性優先',
-    pro_cost_first: 'Claude Pro 成本模式',
-    pro_stability_first: 'Claude Pro 穩定模式',
-    'This objective selects the pool order; retry and circuit settings remain in failover policies.':
-      '此目標決定號池順序；重試和熔斷參數仍在切流策略中設定。',
-    'Pool order': '號池順序',
-    'Define the ordered pool path and per-pool attempt limit for each policy.':
-      '為每個策略設定有序號池路徑和每個號池的嘗試上限。',
-    'Add pool step': '新增號池步驟',
-    Order: '順序',
-    'Maximum attempts': '最大嘗試次數',
-    'Cheap pool': '便宜號池',
-    'Premium pool': '優質號池',
-    'Fallback pool': '備援號池',
-    'Emergency pool': '緊急號池',
-    'Delete pool step': '刪除號池步驟',
-    'Failure rate': '失敗率',
-    'Cost per million tokens': '每百萬 Token 成本',
-    'P1 is free, P2 is Pro/Plus, P3 is fallback, and P4 is emergency.':
-      'P1 為免費號池，P2 為 Pro/Plus，P3 為備援鏈路，P4 為緊急鏈路。',
-  },
-}
-
-const cacheStatsKeys = {
-  en: { 'Cache hit rate': 'Cache hit rate' },
-  zh: { 'Cache hit rate': '缓存命中率' },
-  'zh-TW': { 'Cache hit rate': '快取命中率' },
-  fr: { 'Cache hit rate': 'Taux de réussite du cache' },
-  ja: { 'Cache hit rate': 'キャッシュヒット率' },
-  ru: { 'Cache hit rate': 'Доля попаданий в кэш' },
-  vi: { 'Cache hit rate': 'Tỷ lệ cache hit' },
-}
-
-const loadTestDemoKeys = {
-  en: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.',
-    'Input total': 'Input total',
-    'Prompt tokens': 'Prompt tokens',
-    'Channel cost': 'Channel cost',
-    'Channel statistics unavailable': 'Channel statistics unavailable',
-    'Channel token usage and cost': 'Channel token usage and cost',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      'Estimated cost = actual channel tokens × official model price × channel cost factor.',
-    'No channel usage recorded yet': 'No channel usage recorded yet',
-    'Token share': 'Token share',
-    'Token usage': 'Token usage',
-    'Load Test Demo': 'Load Test Demo',
-    'Claude Load Test Demo': 'Claude Load Test Demo',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'The demo runs for 60 seconds with a gentle request rate.',
-    'Requests per second': 'Requests per second',
-    'No Claude load-test keys found': 'No Claude load-test keys found',
-    'Claude load-test keys': 'Claude load-test keys',
-    'Run ID': 'Run ID',
-    'P50 latency': 'P50 latency',
-    'Error codes': 'Error codes',
-    'No requests sent yet': 'No requests sent yet',
-    'No errors': 'No errors',
-    'Key usage': 'Key usage',
-    'Select API Key': 'Select API Key',
-    'Input tokens': 'Input tokens',
-    'Output tokens': 'Output tokens',
-    'Cache tokens': 'Cache tokens',
-    'Load test limits are invalid': 'Load test limits are invalid',
-    'Allowed range: {{min}}-{{max}} seconds':
-      'Allowed range: {{min}}-{{max}} seconds',
-    'Allowed range: {{min}}-{{max}} RPS': 'Allowed range: {{min}}-{{max}} RPS',
-    'Prompt Cache': 'Prompt Cache',
-    'Adds a stable Claude cacheable prefix to the request.':
-      'Adds a stable Claude cacheable prefix to the request.',
-    'Maximum requests for this run': 'Maximum requests for this run',
-    'Maximum concurrency': 'Maximum concurrency',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      'Estimated cost uses the selected model and group pricing snapshot.',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.',
-    'Configure a bounded duration and request rate for a controlled test.':
-      'Configure a bounded duration and request rate for a controlled test.',
-    'Pricing is unavailable until the test starts.':
-      'Pricing is unavailable until the test starts.',
-    'The same key is used for each package comparison':
-      'The same key is used for each package comparison',
-    'Packages to compare': 'Packages to compare',
-    'Selected packages run one by one with the same key':
-      'Selected packages run one by one with the same key',
-    'Package comparison': 'Package comparison',
-    'Each package was tested sequentially with the same API key':
-      'Each package was tested sequentially with the same API key',
-    Package: 'Package',
-  },
-  zh: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      '每个选中的套餐都会依次完整运行一次。全选三项可获得完整对比；总耗时为单组时长乘以选中数量，费用会在每组完成后计算。',
-    'Input total': '输入总量',
-    'Prompt tokens': 'Prompt Token',
-    'Channel cost': '渠道成本',
-    'Channel statistics unavailable': '暂时无法获取渠道统计',
-    'Channel token usage and cost': '渠道 Token 用量与成本',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      '预计成本 = 各渠道实际 Token × 模型官方价格 × 渠道成本系数。',
-    'No channel usage recorded yet': '本次测试尚无渠道用量记录',
-    'Token share': 'Token 占比',
-    'Token usage': 'Token 用量',
-    'Load Test Demo': '压测 Demo',
-    'Claude Load Test Demo': 'Claude 压测 Demo',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'Demo 持续 60 秒，以平缓速率发送请求。',
-    'Requests per second': '每秒请求数',
-    'No Claude load-test keys found': '未找到 Claude 压测 Key',
-    'Claude load-test keys': 'Claude 压测 Key',
-    'Run ID': '运行 ID',
-    'P50 latency': 'P50 延迟',
-    'Error codes': '错误码',
-    'No requests sent yet': '尚未发送请求',
-    'No errors': '暂无错误',
-    'Key usage': 'Key 使用情况',
-    'Select API Key': '选择 API Key',
-    'Input tokens': '输入 Token',
-    'Output tokens': '输出 Token',
-    'Cache tokens': '缓存 Token',
-    'Load test limits are invalid': '压测参数超出限制',
-    'Allowed range: {{min}}-{{max}} seconds': '允许范围：{{min}}-{{max}} 秒',
-    'Allowed range: {{min}}-{{max}} RPS': '允许范围：{{min}}-{{max}} RPS',
-    'Prompt Cache': 'Prompt Cache',
-    'Adds a stable Claude cacheable prefix to the request.':
-      '为请求添加稳定的 Claude 可缓存前缀。',
-    'Maximum requests for this run': '本次运行最大请求数',
-    'Maximum concurrency': '最大并发数',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      '预计成本使用所选模型和分组的价格快照计算。',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'Token 计费包含输入、输出、缓存读取和缓存写入；按请求计费按成功请求数计算。',
-    'Configure a bounded duration and request rate for a controlled test.':
-      '可配置受限的时长和请求速率，进行可控测试。',
-    'Pricing is unavailable until the test starts.': '测试开始前无法获取价格。',
-    'The same key is used for each package comparison':
-      '每个套餐对比都使用同一个 Key',
-    'Packages to compare': '对比套餐',
-    'Selected packages run one by one with the same key':
-      '选中的套餐会使用同一个 Key 依次运行',
-    'Package comparison': '套餐对比',
-    'Each package was tested sequentially with the same API key':
-      '每个套餐都使用同一个 API Key 依次完成测试',
-    Package: '套餐',
-  },
-  'zh-TW': {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      '每個選取的套餐都會依序完整執行一次。全選三項可取得完整比較；總耗時為單組時長乘以選取數量，費用會在每組完成後計算。',
-    'Input total': '輸入總量',
-    'Prompt tokens': 'Prompt Token',
-    'Channel cost': '渠道成本',
-    'Channel statistics unavailable': '暫時無法取得渠道統計',
-    'Channel token usage and cost': '渠道 Token 用量與成本',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      '預計成本 = 各渠道實際 Token × 模型官方價格 × 渠道成本係數。',
-    'No channel usage recorded yet': '本次測試尚無渠道用量記錄',
-    'Token share': 'Token 佔比',
-    'Token usage': 'Token 用量',
-    'Load Test Demo': '壓測 Demo',
-    'Claude Load Test Demo': 'Claude 壓測 Demo',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'Demo 持續 60 秒，以平緩速率發送請求。',
-    'Requests per second': '每秒請求數',
-    'No Claude load-test keys found': '找不到 Claude 壓測 Key',
-    'Claude load-test keys': 'Claude 壓測 Key',
-    'Run ID': '執行 ID',
-    'P50 latency': 'P50 延遲',
-    'Error codes': '錯誤碼',
-    'No requests sent yet': '尚未發送請求',
-    'No errors': '沒有錯誤',
-    'Key usage': 'Key 使用情況',
-    'Select API Key': '選擇 API Key',
-    'Input tokens': '輸入 Token',
-    'Output tokens': '輸出 Token',
-    'Cache tokens': '快取 Token',
-    'Load test limits are invalid': '壓測參數超出限制',
-    'Allowed range: {{min}}-{{max}} seconds': '允許範圍：{{min}}-{{max}} 秒',
-    'Allowed range: {{min}}-{{max}} RPS': '允許範圍：{{min}}-{{max}} RPS',
-    'Prompt Cache': 'Prompt Cache',
-    'Adds a stable Claude cacheable prefix to the request.':
-      '為請求加入穩定的 Claude 可快取前綴。',
-    'Maximum requests for this run': '本次執行最大請求數',
-    'Maximum concurrency': '最大並發數',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      '預計成本使用所選模型與群組的價格快照計算。',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'Token 計費包含輸入、輸出、快取讀取和快取寫入；按請求計費按成功請求數計算。',
-    'Configure a bounded duration and request rate for a controlled test.':
-      '可設定受限的時長和請求速率，進行可控測試。',
-    'Pricing is unavailable until the test starts.': '測試開始前無法取得價格。',
-    'The same key is used for each package comparison':
-      '每個套餐比較都使用同一個 Key',
-    'Packages to compare': '比較套餐',
-    'Selected packages run one by one with the same key':
-      '選取的套餐會使用同一個 Key 依次執行',
-    'Package comparison': '套餐比較',
-    'Each package was tested sequentially with the same API key':
-      '每個套餐都使用同一個 API Key 依次完成測試',
-    Package: '套餐',
-  },
-  fr: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      'Chaque forfait sélectionné exécute un test complet à la suite. Sélectionnez les trois pour une comparaison complète ; la durée totale correspond à la durée par test multipliée par le nombre de forfaits. Le coût est calculé après chaque test.',
-    'Input total': 'Entrée totale',
-    'Prompt tokens': 'Tokens du prompt',
-    'Channel cost': 'Coût du canal',
-    'Channel statistics unavailable': 'Statistiques des canaux indisponibles',
-    'Channel token usage and cost': 'Utilisation des tokens et coût par canal',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      'Coût estimé = tokens réels du canal × tarif officiel du modèle × coefficient de coût du canal.',
-    'No channel usage recorded yet': 'Aucune utilisation de canal enregistrée',
-    'Token share': 'Part des tokens',
-    'Token usage': 'Utilisation des tokens',
-    'Load Test Demo': 'Démo de test de charge',
-    'Claude Load Test Demo': 'Démo de test de charge Claude',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'La démo dure 60 secondes à un rythme de requêtes modéré.',
-    'Requests per second': 'Requêtes par seconde',
-    'No Claude load-test keys found': 'Aucune clé de test Claude trouvée',
-    'Claude load-test keys': 'Clés de test Claude',
-    'Run ID': 'ID d’exécution',
-    'P50 latency': 'Latence P50',
-    'Error codes': 'Codes d’erreur',
-    'No requests sent yet': 'Aucune requête envoyée',
-    'No errors': 'Aucune erreur',
-    'Key usage': 'Utilisation des clés',
-    'Select API Key': 'Sélectionner une clé API',
-    'Input tokens': 'Jetons d’entrée',
-    'Output tokens': 'Jetons de sortie',
-    'Cache tokens': 'Jetons de cache',
-    'Load test limits are invalid':
-      'Les paramètres du test de charge sont invalides',
-    'Allowed range: {{min}}-{{max}} seconds':
-      'Plage autorisée : {{min}}-{{max}} secondes',
-    'Allowed range: {{min}}-{{max}} RPS':
-      'Plage autorisée : {{min}}-{{max}} RPS',
-    'Prompt Cache': 'Cache de prompt',
-    'Adds a stable Claude cacheable prefix to the request.':
-      'Ajoute un préfixe Claude stable et compatible avec le cache.',
-    'Maximum requests for this run': 'Requêtes maximales pour cette exécution',
-    'Maximum concurrency': 'Concurrence maximale',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      'Le coût estimé utilise le modèle sélectionné et l’instantané tarifaire du groupe.',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'La tarification au token inclut les entrées, sorties, lectures et écritures du cache ; la tarification à la requête facture les requêtes réussies.',
-    'Configure a bounded duration and request rate for a controlled test.':
-      'Configurez une durée et un débit limités pour un test contrôlé.',
-    'Pricing is unavailable until the test starts.':
-      'Les tarifs seront disponibles au démarrage du test.',
-    'The same key is used for each package comparison':
-      'La même clé est utilisée pour chaque comparaison de forfaits',
-    'Packages to compare': 'Forfaits à comparer',
-    'Selected packages run one by one with the same key':
-      'Les forfaits sélectionnés sont exécutés un par un avec la même clé',
-    'Package comparison': 'Comparaison des forfaits',
-    'Each package was tested sequentially with the same API key':
-      'Chaque forfait a été testé séquentiellement avec la même clé API',
-    Package: 'Forfait',
-  },
-  ja: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      '選択した各パッケージは順番に1回ずつ完全なテストを実行します。3つすべてを選ぶと完全に比較できます。合計時間は1回の時間×選択数で、コストは各テスト完了後に計算されます。',
-    'Input total': '入力合計',
-    'Prompt tokens': 'プロンプトトークン',
-    'Channel cost': 'チャネルコスト',
-    'Channel statistics unavailable': 'チャネル統計を取得できません',
-    'Channel token usage and cost': 'チャネル別トークン使用量とコスト',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      '推定コスト = チャネルの実トークン数 × モデル公式価格 × チャネルコスト係数。',
-    'No channel usage recorded yet': 'チャネル使用量はまだ記録されていません',
-    'Token share': 'トークン比率',
-    'Token usage': 'トークン使用量',
-    'Load Test Demo': '負荷テストデモ',
-    'Claude Load Test Demo': 'Claude 負荷テストデモ',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'デモは緩やかなリクエスト速度で 60 秒間実行します。',
-    'Requests per second': '1 秒あたりのリクエスト数',
-    'No Claude load-test keys found': 'Claude 負荷テストキーが見つかりません',
-    'Claude load-test keys': 'Claude 負荷テストキー',
-    'Run ID': '実行 ID',
-    'P50 latency': 'P50 レイテンシ',
-    'Error codes': 'エラーコード',
-    'No requests sent yet': 'まだリクエストはありません',
-    'No errors': 'エラーなし',
-    'Key usage': 'キー使用状況',
-    'Select API Key': 'API キーを選択',
-    'Input tokens': '入力トークン',
-    'Output tokens': '出力トークン',
-    'Cache tokens': 'キャッシュトークン',
-    'Load test limits are invalid': '負荷テストのパラメータが無効です',
-    'Allowed range: {{min}}-{{max}} seconds': '許容範囲: {{min}}-{{max}} 秒',
-    'Allowed range: {{min}}-{{max}} RPS': '許容範囲: {{min}}-{{max}} RPS',
-    'Prompt Cache': 'プロンプトキャッシュ',
-    'Adds a stable Claude cacheable prefix to the request.':
-      'リクエストに安定した Claude キャッシュ用プレフィックスを追加します。',
-    'Maximum requests for this run': '今回の実行の最大リクエスト数',
-    'Maximum concurrency': '最大同時実行数',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      '推定コストは選択したモデルとグループの料金スナップショットで計算します。',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'トークン料金には入力、出力、キャッシュ読み取り、キャッシュ書き込みが含まれ、リクエスト料金は成功したリクエスト数で計算します。',
-    'Configure a bounded duration and request rate for a controlled test.':
-      '制限された時間とリクエストレートを設定して、制御されたテストを実行します。',
-    'Pricing is unavailable until the test starts.':
-      'テスト開始まで料金を取得できません。',
-    'The same key is used for each package comparison':
-      '各パッケージの比較に同じキーを使用します',
-    'Packages to compare': '比較するパッケージ',
-    'Selected packages run one by one with the same key':
-      '選択したパッケージは同じキーで順番に実行されます',
-    'Package comparison': 'パッケージ比較',
-    'Each package was tested sequentially with the same API key':
-      '各パッケージを同じ API キーで順番にテストしました',
-    Package: 'パッケージ',
-  },
-  ru: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      'Каждый выбранный пакет последовательно проходит полный тест. Выберите все три для полного сравнения; общее время равно длительности одного теста, умноженной на число пакетов. Стоимость рассчитывается после завершения каждого теста.',
-    'Input total': 'Всего входных токенов',
-    'Prompt tokens': 'Токены промпта',
-    'Channel cost': 'Стоимость канала',
-    'Channel statistics unavailable': 'Статистика каналов недоступна',
-    'Channel token usage and cost': 'Токены и стоимость по каналам',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      'Расчётная стоимость = фактические токены канала × официальная цена модели × коэффициент стоимости канала.',
-    'No channel usage recorded yet': 'Использование каналов ещё не записано',
-    'Token share': 'Доля токенов',
-    'Token usage': 'Использование токенов',
-    'Load Test Demo': 'Демо нагрузочного теста',
-    'Claude Load Test Demo': 'Демо нагрузочного теста Claude',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'Демо длится 60 секунд при умеренной частоте запросов.',
-    'Requests per second': 'Запросов в секунду',
-    'No Claude load-test keys found':
-      'Ключи нагрузочного теста Claude не найдены',
-    'Claude load-test keys': 'Ключи нагрузочного теста Claude',
-    'Run ID': 'ID запуска',
-    'P50 latency': 'Задержка P50',
-    'Error codes': 'Коды ошибок',
-    'No requests sent yet': 'Запросы ещё не отправлялись',
-    'No errors': 'Ошибок нет',
-    'Key usage': 'Использование ключей',
-    'Select API Key': 'Выберите ключ API',
-    'Input tokens': 'Входные токены',
-    'Output tokens': 'Выходные токены',
-    'Cache tokens': 'Токены кэша',
-    'Load test limits are invalid': 'Недопустимые параметры нагрузочного теста',
-    'Allowed range: {{min}}-{{max}} seconds':
-      'Допустимый диапазон: {{min}}-{{max}} секунд',
-    'Allowed range: {{min}}-{{max}} RPS':
-      'Допустимый диапазон: {{min}}-{{max}} RPS',
-    'Prompt Cache': 'Кэш промпта',
-    'Adds a stable Claude cacheable prefix to the request.':
-      'Добавляет стабильный префикс Claude для кэширования запроса.',
-    'Maximum requests for this run': 'Максимум запросов за запуск',
-    'Maximum concurrency': 'Максимальная параллельность',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      'Расчётная стоимость использует снимок цен выбранной модели и группы.',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'Тарификация по токенам включает входные, выходные токены, чтение и запись кэша; тарификация запросов учитывает успешные запросы.',
-    'Configure a bounded duration and request rate for a controlled test.':
-      'Настройте ограниченные длительность и частоту запросов для контролируемого теста.',
-    'Pricing is unavailable until the test starts.':
-      'Цены будут доступны после запуска теста.',
-    'The same key is used for each package comparison':
-      'Для сравнения каждого пакета используется один и тот же ключ',
-    'Packages to compare': 'Пакеты для сравнения',
-    'Selected packages run one by one with the same key':
-      'Выбранные пакеты запускаются по очереди с одним и тем же ключом',
-    'Package comparison': 'Сравнение пакетов',
-    'Each package was tested sequentially with the same API key':
-      'Каждый пакет последовательно протестирован с одним и тем же ключом API',
-    Package: 'Пакет',
-  },
-  vi: {
-    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
-      'Mỗi gói đã chọn sẽ chạy một lượt kiểm thử đầy đủ theo thứ tự. Chọn cả ba để so sánh đầy đủ; tổng thời gian bằng thời lượng mỗi lượt nhân với số gói đã chọn. Chi phí được tính sau khi từng lượt hoàn tất.',
-    'Input total': 'Tổng đầu vào',
-    'Prompt tokens': 'Token prompt',
-    'Channel cost': 'Chi phí kênh',
-    'Channel statistics unavailable': 'Không thể tải thống kê kênh',
-    'Channel token usage and cost': 'Mức dùng token và chi phí theo kênh',
-    'Estimated cost = actual channel tokens × official model price × channel cost factor.':
-      'Chi phí ước tính = token thực tế theo kênh × giá chính thức của mô hình × hệ số chi phí kênh.',
-    'No channel usage recorded yet': 'Chưa ghi nhận mức dùng kênh',
-    'Token share': 'Tỷ trọng token',
-    'Token usage': 'Mức dùng token',
-    'Load Test Demo': 'Bản demo kiểm thử tải',
-    'Claude Load Test Demo': 'Bản demo kiểm thử tải Claude',
-    'The demo runs for 60 seconds with a gentle request rate.':
-      'Bản demo chạy trong 60 giây với tốc độ gửi yêu cầu vừa phải.',
-    'Requests per second': 'Số yêu cầu mỗi giây',
-    'No Claude load-test keys found': 'Không tìm thấy key kiểm thử tải Claude',
-    'Claude load-test keys': 'Key kiểm thử tải Claude',
-    'Run ID': 'ID lần chạy',
-    'P50 latency': 'Độ trễ P50',
-    'Error codes': 'Mã lỗi',
-    'No requests sent yet': 'Chưa gửi yêu cầu nào',
-    'No errors': 'Không có lỗi',
-    'Key usage': 'Mức sử dụng key',
-    'Select API Key': 'Chọn key API',
-    'Input tokens': 'Token đầu vào',
-    'Output tokens': 'Token đầu ra',
-    'Cache tokens': 'Token cache',
-    'Load test limits are invalid': 'Tham số kiểm thử tải không hợp lệ',
-    'Allowed range: {{min}}-{{max}} seconds':
-      'Phạm vi cho phép: {{min}}-{{max}} giây',
-    'Allowed range: {{min}}-{{max}} RPS':
-      'Phạm vi cho phép: {{min}}-{{max}} RPS',
-    'Prompt Cache': 'Bộ nhớ đệm prompt',
-    'Adds a stable Claude cacheable prefix to the request.':
-      'Thêm tiền tố ổn định có thể cache của Claude vào yêu cầu.',
-    'Maximum requests for this run': 'Số yêu cầu tối đa cho lần chạy này',
-    'Maximum concurrency': 'Đồng thời tối đa',
-    'Estimated cost uses the selected model and group pricing snapshot.':
-      'Chi phí ước tính dùng mô hình và ảnh chụp giá của nhóm đã chọn.',
-    'Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.':
-      'Giá theo token gồm token đầu vào, đầu ra, đọc và ghi bộ nhớ đệm; giá theo yêu cầu tính theo số yêu cầu thành công.',
-    'Configure a bounded duration and request rate for a controlled test.':
-      'Thiết lập thời lượng và tốc độ yêu cầu trong giới hạn để kiểm thử có kiểm soát.',
-    'Pricing is unavailable until the test starts.':
-      'Chưa có giá cho đến khi bắt đầu kiểm thử.',
-    'The same key is used for each package comparison':
-      'Dùng cùng một key cho từng lần so sánh gói',
-    'Packages to compare': 'Các gói cần so sánh',
-    'Selected packages run one by one with the same key':
-      'Các gói đã chọn sẽ chạy lần lượt với cùng một key',
-    'Package comparison': 'So sánh gói',
-    'Each package was tested sequentially with the same API key':
-      'Mỗi gói được kiểm thử lần lượt với cùng một API key',
-    Package: 'Gói',
-  },
-}
-
-for (const [locale, translations] of Object.entries(cacheStatsKeys)) {
-  Object.assign(newKeys[locale], translations)
-}
-for (const [locale, translations] of Object.entries(loadTestDemoKeys)) {
-  Object.assign(newKeys[locale], translations)
-}
-for (const [locale, translations] of Object.entries(routingStrategyKeys)) {
-  Object.assign(newKeys[locale], translations)
-}
-
-const preferredModelKeys = {
-  en: {
-    'Preferred Models': 'Preferred Models',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      'Models are checked in this order when selecting a default model. Use a JSON string array.',
-  },
-  zh: {
-    'Preferred Models': '偏好模型',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      '选择默认模型时将按此顺序检查。请使用 JSON 字符串数组。',
-  },
-  'zh-TW': {
-    'Preferred Models': '偏好模型',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      '選擇預設模型時將依此順序檢查。請使用 JSON 字串陣列。',
-  },
-  fr: {
-    'Preferred Models': 'Modèles préférés',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      'Les modèles sont vérifiés dans cet ordre pour choisir le modèle par défaut. Utilisez un tableau JSON de chaînes.',
-  },
-  ja: {
-    'Preferred Models': '優先モデル',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      'デフォルトモデルの選択時にこの順序で確認します。JSON文字列配列を使用してください。',
-  },
-  ru: {
-    'Preferred Models': 'Предпочтительные модели',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      'При выборе модели по умолчанию проверка выполняется в этом порядке. Используйте JSON-массив строк.',
-  },
-  vi: {
-    'Preferred Models': 'Mô hình ưu tiên',
-    'Models are checked in this order when selecting a default model. Use a JSON string array.':
-      'Các mô hình được kiểm tra theo thứ tự này khi chọn mô hình mặc định. Hãy dùng mảng chuỗi JSON.',
-  },
-}
-
-for (const [locale, translations] of Object.entries(preferredModelKeys)) {
-  Object.assign(newKeys[locale], translations)
-}
-
-const apiKeyGroupSelectionKeys = {
-  en: { 'Select one or more groups': 'Select one or more groups' },
-  zh: { 'Select one or more groups': '选择一个或多个分组' },
-  'zh-TW': { 'Select one or more groups': '選擇一個或多個分組' },
-  fr: { 'Select one or more groups': 'Sélectionnez un ou plusieurs groupes' },
-  ja: { 'Select one or more groups': '1つ以上のグループを選択' },
-  ru: { 'Select one or more groups': 'Выберите одну или несколько групп' },
-  vi: { 'Select one or more groups': 'Chọn một hoặc nhiều nhóm' },
-}
-
-for (const [locale, translations] of Object.entries(apiKeyGroupSelectionKeys)) {
-  Object.assign(newKeys[locale], translations)
-}
-
-const preservedLocaleValues = {
-  fr: { End: 'End', Tokens: 'Jeton' },
-  ja: {
-    '24 hours': '24 時間',
-    '30 days': '30 日間',
-    '7 days': '7 日間',
-    Daily: '毎日',
-    Requests: 'リクエスト',
-  },
-  ru: {
-    Daily: 'Ежедневно',
-    End: 'End',
-    'Estimated cost': 'Примерная стоимость',
-  },
-  vi: { Daily: 'Hàng ngày', End: 'End', Tokens: 'Mã thông báo' },
-  'zh-TW': {
-    '24 hours': '24 hours',
-    Daily: '每天',
-    'Estimated cost': '預計成本',
-    Tokens: 'Token',
-  },
-  zh: { Daily: '每天', 'Estimated cost': '预计成本', Tokens: 'Token' },
-}
-
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
-  Object.assign(
-    json.translation,
-    newKeys[locale],
-    cacheStatsKeys[locale],
-    loadTestDemoKeys[locale],
-    routingStrategyKeys[locale],
-    preservedLocaleValues[locale]
-  )
-  json.translation = Object.fromEntries(
-    Object.entries(json.translation).sort(([a], [b]) => a.localeCompare(b))
-  )
+  for (const [key, value] of Object.entries(newKeys[locale])) {
+    if (json.translation[key] !== value) json.translation[key] = value
+  }
   await fs.writeFile(file, `${JSON.stringify(json, null, 2)}\n`, 'utf8')
 }

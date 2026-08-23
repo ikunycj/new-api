@@ -146,7 +146,7 @@ func TestRelayErrorHandlerUsesStructuredErrorSource(t *testing.T) {
 
 	require.NotNil(t, newAPIError)
 	require.Equal(t, types.ErrorSourceIkun, newAPIError.GetErrorSource())
-	require.Equal(t, "cluster.rate_limit_exceeded", newAPIError.SourceCode())
+	require.Equal(t, "channel.rate_limit_exceeded", newAPIError.SourceCode())
 }
 
 func TestRelayErrorHandlerKeepsInvalidJSONBodyInDebugLog(t *testing.T) {

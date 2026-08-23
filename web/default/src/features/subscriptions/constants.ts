@@ -38,30 +38,10 @@ export const RESET_PERIODS = [
   { value: 'custom', labelKey: 'Custom (seconds)' },
 ] as const
 
-export const ROUTING_STRATEGIES = [
-  { value: 'cost_first', labelKey: 'Cost first' },
-  { value: 'balanced', labelKey: 'Balanced cost and stability' },
-  { value: 'stability_first', labelKey: 'Stability first' },
-  { value: 'pro_cost_first', labelKey: 'Claude Pro cost first' },
-  { value: 'pro_stability_first', labelKey: 'Claude Pro stability first' },
-] as const
-
 export function getDurationUnitOptions(t: TFunction) {
   return DURATION_UNITS.map((u) => ({ value: u.value, label: t(u.labelKey) }))
 }
 
 export function getResetPeriodOptions(t: TFunction) {
   return RESET_PERIODS.map((p) => ({ value: p.value, label: t(p.labelKey) }))
-}
-
-export function getRoutingStrategyOptions(t: TFunction) {
-  return ROUTING_STRATEGIES.map((strategy) => ({
-    value: strategy.value,
-    label: t(strategy.labelKey),
-  }))
-}
-
-export function getRoutingStrategyLabel(t: TFunction, value?: string) {
-  const strategy = ROUTING_STRATEGIES.find((item) => item.value === value)
-  return strategy ? t(strategy.labelKey) : t('Balanced cost and stability')
 }

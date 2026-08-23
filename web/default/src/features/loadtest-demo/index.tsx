@@ -16,20 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Activity,
-  AlertTriangle,
-  Info,
-  Play,
-  RefreshCw,
-  Square,
-} from 'lucide-react'
+import { Activity, AlertTriangle, Play, RefreshCw, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,7 +31,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -60,8 +51,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 import { useAuthStore } from '@/stores/auth-store'
-import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
@@ -76,29 +67,18 @@ import {
   LOAD_TEST_MODELS,
   getLoadTestChannelStats,
   loadLoadTestKeys,
+  loadLoadTestPricing,
   sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
-  type LoadTestRoutingStrategy,
+  type LoadTestPricing,
   type LoadTestRequestResult,
 } from './api'
 import {
   loadPersistedLoadTestRun,
   savePersistedLoadTestRun,
-  type LoadTestComparisonResult,
   type RunStats,
 } from './storage'
-
-const LOAD_TEST_ROUTING_STRATEGIES: Array<{
-  value: LoadTestRoutingStrategy
-  label: string
-}> = [
-  { value: 'cost_first', label: 'Cost first' },
-  { value: 'balanced', label: 'Balanced cost and stability' },
-  { value: 'stability_first', label: 'Stability first' },
-  { value: 'pro_cost_first', label: 'Claude Pro cost first' },
-  { value: 'pro_stability_first', label: 'Claude Pro stability first' },
-]
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
@@ -116,13 +96,6 @@ const EMPTY_STATS: RunStats = {
   cacheWriteTokens: 0,
 }
 
-const COMPARISON_STRATEGIES = LOAD_TEST_ROUTING_STRATEGIES.filter(
-  ({ value }) =>
-    value === 'cost_first' ||
-    value === 'balanced' ||
-    value === 'stability_first'
-)
-
 function makeRunId() {
   return `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -137,25 +110,6 @@ function percentile(values: number[], ratio: number) {
 
 function incrementCounter(counter: Record<string, number>, key: string) {
   counter[key] = (counter[key] ?? 0) + 1
-}
-
-function upsertComparisonResult(
-  results: LoadTestComparisonResult[],
-  result: LoadTestComparisonResult
-) {
-  const index = results.findIndex((item) => item.runId === result.runId)
-  if (index === -1) return [...results, result]
-  return results.map((item, itemIndex) => (itemIndex === index ? result : item))
-}
-
-function hasCompleteCost(result: LoadTestComparisonResult) {
-  const recordedRequests = result.channelStats.reduce(
-    (total, channel) => total + channel.requests,
-    0
-  )
-  return (
-    result.stats.successes === 0 || recordedRequests >= result.stats.successes
-  )
 }
 
 function accumulateResult(
@@ -186,6 +140,42 @@ function accumulateResult(
 
 function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
+}
+
+function calculateChannelCost(
+  channel: LoadTestChannelStats,
+  pricing: LoadTestPricing
+) {
+  if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    return (
+      channel.requests *
+      (pricing.model.model_price ?? 0) *
+      pricing.groupRatio *
+      channel.cost_factor
+    )
+  }
+
+  const officialInputPricePerMillion = pricing.model.model_ratio * 2
+  const officialOutputPricePerMillion =
+    officialInputPricePerMillion * pricing.model.completion_ratio
+  const officialCacheReadPricePerMillion =
+    officialInputPricePerMillion * (pricing.model.cache_ratio ?? 1)
+  const officialCacheWritePricePerMillion =
+    officialInputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
+  const baseInputTokens = Math.max(
+    0,
+    channel.input_tokens_total > 0
+      ? channel.input_tokens_total -
+          channel.cache_read_tokens -
+          channel.cache_write_tokens
+      : channel.input_tokens
+  )
+  const officialCost =
+    (baseInputTokens / 1_000_000) * officialInputPricePerMillion +
+    (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
+    (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
+    (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
+  return officialCost * pricing.groupRatio * channel.cost_factor
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -229,16 +219,10 @@ export function LoadTestDemo() {
   const { serverAddress } = useChatPresets()
   const userId = useAuthStore((state) => state.auth.user?.id)
   const [persistedRun] = useState(() => loadPersistedLoadTestRun(userId))
-  const restoredResults = persistedRun?.results ?? []
-  const restoredLastResult = restoredResults.at(-1)
-  const quotaPerUnit = useSystemConfigStore(
-    (state) => state.config.currency.quotaPerUnit
-  )
   const [keys, setKeys] = useState<LoadTestKey[]>([])
+  // Use the masked key value as the UI identity. IDs are database details and
+  // can be misleading when accounts are switched in the same browser.
   const [selectedKeyValue, setSelectedKeyValue] = useState('')
-  const [selectedStrategies, setSelectedStrategies] = useState<
-    LoadTestRoutingStrategy[]
-  >(['cost_first', 'balanced', 'stability_first'])
   const [selectedModel, setSelectedModel] = useState(
     persistedRun?.model ?? LOAD_TEST_MODEL
   )
@@ -251,19 +235,17 @@ export function LoadTestDemo() {
   const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [stats, setStats] = useState<RunStats>(
-    restoredLastResult?.stats ?? EMPTY_STATS
+    persistedRun?.stats ?? EMPTY_STATS
   )
-  const [runId, setRunId] = useState(restoredLastResult?.runId ?? '')
-  const [activeStrategy, setActiveStrategy] =
-    useState<LoadTestRoutingStrategy | null>(null)
+  const [runId, setRunId] = useState(persistedRun?.runId ?? '')
   const [elapsed, setElapsed] = useState(0)
+  const [pricing, setPricing] = useState<LoadTestPricing | null>(null)
   const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>(
-    restoredLastResult?.channelStats ?? []
+    persistedRun?.channelStats ?? []
   )
-  const [comparisonResults, setComparisonResults] =
-    useState<LoadTestComparisonResult[]>(restoredResults)
   const runAbortRef = useRef<AbortController | null>(null)
-  const requestIdsRef = useRef<string[]>([])
+  const requestIdsRef = useRef<string[]>(persistedRun?.requestIds ?? [])
+  const statsRef = useRef<RunStats>(persistedRun?.stats ?? EMPTY_STATS)
   const activeRunIdRef = useRef('')
   const runStartedAtRef = useRef(0)
 
@@ -291,75 +273,15 @@ export function LoadTestDemo() {
   }, [loadKeys])
 
   useEffect(() => {
-    savePersistedLoadTestRun(userId, selectedModel, comparisonResults)
-  }, [comparisonResults, selectedModel, userId])
-
-  useEffect(() => {
-    if (status === 'running') return
-    const pendingResults = comparisonResults.filter(
-      (result) => !hasCompleteCost(result) && result.requestIds.length > 0
-    )
-    if (pendingResults.length === 0) return
-    let cancelled = false
-
-    const refreshCosts = async () => {
-      await Promise.all(
-        pendingResults.map(async (result) => {
-          for (let attempt = 0; attempt < 30 && !cancelled; attempt += 1) {
-            try {
-              const refreshedResult = {
-                ...result,
-                channelStats: await getLoadTestChannelStats(result.requestIds),
-              }
-              if (cancelled) return
-              const previousRequests = result.channelStats.reduce(
-                (total, channel) => total + channel.requests,
-                0
-              )
-              const refreshedRequests = refreshedResult.channelStats.reduce(
-                (total, channel) => total + channel.requests,
-                0
-              )
-              const previousQuota = result.channelStats.reduce(
-                (total, channel) => total + channel.charged_quota,
-                0
-              )
-              const refreshedQuota = refreshedResult.channelStats.reduce(
-                (total, channel) => total + channel.charged_quota,
-                0
-              )
-              if (
-                refreshedRequests !== previousRequests ||
-                refreshedQuota !== previousQuota
-              ) {
-                setComparisonResults((current) =>
-                  upsertComparisonResult(current, refreshedResult)
-                )
-              }
-              if (result.runId === comparisonResults.at(-1)?.runId) {
-                setChannelStats(refreshedResult.channelStats)
-              }
-              if (
-                hasCompleteCost(refreshedResult) ||
-                refreshedRequests !== previousRequests ||
-                refreshedQuota !== previousQuota
-              ) {
-                return
-              }
-            } catch {
-              // Keep the saved result and retry while the page remains open.
-            }
-            await new Promise((resolve) => window.setTimeout(resolve, 1000))
-          }
-        })
-      )
-    }
-
-    void refreshCosts()
-    return () => {
-      cancelled = true
-    }
-  }, [comparisonResults, status])
+    if (!runId || status === 'running') return
+    savePersistedLoadTestRun(userId, {
+      model: selectedModel,
+      runId,
+      stats,
+      channelStats,
+      requestIds: requestIdsRef.current,
+    })
+  }, [channelStats, runId, selectedModel, stats, status, userId])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -369,12 +291,15 @@ export function LoadTestDemo() {
     return () => window.clearInterval(timer)
   }, [status])
 
+  const recordResult = useCallback((result: LoadTestRequestResult) => {
+    if (result.requestId) requestIdsRef.current.push(result.requestId)
+    statsRef.current = accumulateResult(statsRef.current, result)
+    setStats(statsRef.current)
+  }, [])
+
   const run = useCallback(async () => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
-    if (!serverAddress || !selectedKey || selectedStrategies.length === 0) {
-      toast.error(t('Load test limits are invalid'))
-      return
-    }
+    if (!serverAddress || !selectedKey) return
     if (
       !Number.isFinite(durationSeconds) ||
       !Number.isFinite(requestsPerSecond) ||
@@ -388,119 +313,94 @@ export function LoadTestDemo() {
     }
     const controller = new AbortController()
     runAbortRef.current = controller
-    setComparisonResults([])
+    runStartedAtRef.current = Date.now()
+    const currentRunId = makeRunId()
+    activeRunIdRef.current = currentRunId
+    setRunId(currentRunId)
+    setElapsed(0)
+    setStats(EMPTY_STATS)
+    statsRef.current = EMPTY_STATS
     setChannelStats([])
+    requestIdsRef.current = []
     setStatus('running')
 
+    try {
+      setPricing(
+        await loadLoadTestPricing(
+          selectedModel,
+          selectedKey.group?.trim() || selectedKey.group_candidates[0] || ''
+        )
+      )
+    } catch {
+      setPricing(null)
+    }
+
+    const inFlight = new Set<Promise<void>>()
     const durationMs = durationSeconds * 1000
     const requestIntervalMs = 1000 / requestsPerSecond
     const requestLimit = Math.min(
       LOAD_TEST_MAX_REQUESTS,
       Math.ceil(durationSeconds * requestsPerSecond)
     )
-    for (const strategy of selectedStrategies) {
-      if (controller.signal.aborted) break
-      const currentRunId = makeRunId()
-      const strategyStartedAt = Date.now()
-      setActiveStrategy(strategy)
-      runStartedAtRef.current = strategyStartedAt
-      activeRunIdRef.current = currentRunId
-      setRunId(currentRunId)
-      setElapsed(0)
-      setStats(EMPTY_STATS)
-      setChannelStats([])
-      requestIdsRef.current = []
-
-      const inFlight = new Set<Promise<void>>()
-      const deadline = Date.now() + durationMs
-      let sentRequests = 0
-      let strategyStats = EMPTY_STATS
-      while (
-        Date.now() < deadline &&
-        sentRequests < requestLimit &&
-        !controller.signal.aborted
-      ) {
-        if (inFlight.size >= LOAD_TEST_MAX_CONCURRENCY) {
-          await Promise.race(inFlight)
-        }
-        const request = sendLoadTestRequest(
-          serverAddress,
-          selectedKey,
-          selectedModel,
-          currentRunId,
-          promptCache,
-          strategy,
-          controller.signal
-        ).then((result) => {
-          if (result.requestId) requestIdsRef.current.push(result.requestId)
-          strategyStats = accumulateResult(strategyStats, result)
-          setStats(strategyStats)
-          setComparisonResults((current) =>
-            upsertComparisonResult(current, {
-              strategy,
-              runId: currentRunId,
-              stats: strategyStats,
-              channelStats: [],
-              requestIds: [...requestIdsRef.current],
-            })
-          )
-        })
-        inFlight.add(request)
-        void request.then(() => inFlight.delete(request))
-        sentRequests += 1
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, requestIntervalMs)
-        )
+    const deadline = Date.now() + durationMs
+    let sentRequests = 0
+    while (
+      Date.now() < deadline &&
+      sentRequests < requestLimit &&
+      !controller.signal.aborted
+    ) {
+      if (inFlight.size >= LOAD_TEST_MAX_CONCURRENCY) {
+        await Promise.race(inFlight)
       }
-      await Promise.all(inFlight)
-      if (controller.signal.aborted) break
 
-      let strategyChannelStats: LoadTestChannelStats[] = []
-      try {
-        for (let attempt = 0; attempt < 6; attempt += 1) {
-          strategyChannelStats = await getLoadTestChannelStats(
-            requestIdsRef.current
-          )
-          const recordedRequests = strategyChannelStats.reduce(
-            (total, channel) => total + channel.requests,
-            0
-          )
-          if (
-            strategyStats.successes === 0 ||
-            recordedRequests >= strategyStats.successes
-          ) {
-            break
-          }
-          await new Promise((resolve) => window.setTimeout(resolve, 750))
-          if (controller.signal.aborted) break
-        }
-        setChannelStats(strategyChannelStats)
-      } catch {
-        toast.error(t('Channel statistics unavailable'))
-      }
-      setComparisonResults((current) =>
-        upsertComparisonResult(current, {
-          strategy,
-          runId: currentRunId,
-          stats: strategyStats,
-          channelStats: strategyChannelStats,
-          requestIds: [...requestIdsRef.current],
-        })
+      const request = sendLoadTestRequest(
+        serverAddress,
+        selectedKey,
+        selectedModel,
+        currentRunId,
+        promptCache,
+        controller.signal
+      ).then(recordResult)
+      inFlight.add(request)
+      void request.then(() => inFlight.delete(request))
+      sentRequests += 1
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, requestIntervalMs)
       )
-      setElapsed(Math.min(durationMs, Date.now() - strategyStartedAt))
+    }
+
+    await Promise.all(inFlight)
+    if (activeRunIdRef.current !== currentRunId) return
+
+    try {
+      let settledStats: LoadTestChannelStats[] = []
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        settledStats = await getLoadTestChannelStats(requestIdsRef.current)
+        const recordedRequests = settledStats.reduce(
+          (total, channel) => total + channel.requests,
+          0
+        )
+        if (recordedRequests >= statsRef.current.successes) break
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
+        if (activeRunIdRef.current !== currentRunId) return
+      }
+      setChannelStats(settledStats)
+    } catch {
+      setChannelStats([])
+      toast.error(t('Channel statistics unavailable'))
     }
 
     runAbortRef.current = null
     activeRunIdRef.current = ''
-    setActiveStrategy(null)
+    setElapsed(Math.min(durationMs, Date.now() - runStartedAtRef.current))
     setStatus('complete')
   }, [
     durationSeconds,
     keys,
     promptCache,
+    recordResult,
     requestsPerSecond,
     selectedKeyValue,
-    selectedStrategies,
     selectedModel,
     serverAddress,
     t,
@@ -510,7 +410,6 @@ export function LoadTestDemo() {
     runAbortRef.current?.abort()
     runAbortRef.current = null
     activeRunIdRef.current = ''
-    setActiveStrategy(null)
     setStatus('complete')
   }, [])
 
@@ -526,14 +425,18 @@ export function LoadTestDemo() {
   const cacheHitRate = cacheAttemptTokens
     ? ((stats.cacheReadTokens / cacheAttemptTokens) * 100).toFixed(1)
     : '0.0'
-  const totalChargedQuota = channelStats.reduce(
-    (total, item) => total + item.charged_quota,
-    0
-  )
-  const totalRecordedRequests = channelStats.reduce(
-    (total, item) => total + item.requests,
-    0
-  )
+  const inputPricePerMillion = pricing
+    ? pricing.model.model_ratio * 2 * pricing.groupRatio
+    : 0
+  const outputPricePerMillion = pricing
+    ? inputPricePerMillion * pricing.model.completion_ratio
+    : 0
+  const cacheReadPricePerMillion = pricing
+    ? inputPricePerMillion * (pricing.model.cache_ratio ?? 1)
+    : 0
+  const cacheWritePricePerMillion = pricing
+    ? inputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
+    : 0
   const totalChannelTokens = channelStats.reduce(
     (total, item) =>
       total +
@@ -545,73 +448,33 @@ export function LoadTestDemo() {
       item.output_tokens,
     0
   )
-  const poolsUsed = new Set(
-    channelStats.map((channel) => channel.pool_name).filter(Boolean)
+  const billingGroupsUsed = new Set(
+    channelStats.map((channel) => channel.billing_group).filter(Boolean)
   )
-  const clustersUsed = new Set(
-    channelStats
-      .map((channel) => channel.cluster_id)
-      .filter((clusterId) => clusterId > 0)
-  )
-  const keyCostRows = channelStats.reduce((rows, channel) => {
-    const existing = rows.get(channel.token_id) ?? {
-      requests: 0,
-      quota: 0,
-      channels: new Set<number>(),
+  let estimatedCost = 0
+  if (pricing) {
+    if (channelStats.length > 0) {
+      estimatedCost = channelStats.reduce(
+        (total, channel) => total + calculateChannelCost(channel, pricing),
+        0
+      )
+    } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+      estimatedCost =
+        stats.successes * (pricing.model.model_price ?? 0) * pricing.groupRatio
+    } else {
+      estimatedCost =
+        (stats.inputTokens / 1_000_000) * inputPricePerMillion +
+        (stats.outputTokens / 1_000_000) * outputPricePerMillion +
+        (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
+        (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
     }
-    existing.requests += channel.requests
-    existing.quota += channel.charged_quota
-    existing.channels.add(channel.channel_id)
-    rows.set(channel.token_id, existing)
-    return rows
-  }, new Map<number, { requests: number; quota: number; channels: Set<number> }>())
-  const actualCost =
-    channelStats.length > 0 && quotaPerUnit > 0
-      ? totalChargedQuota / quotaPerUnit
-      : 0
-  let actualCostLabel = `$${actualCost.toFixed(6)}`
-  if (status === 'running') {
-    actualCostLabel = t('Calculating...')
-  } else if (stats.successes > 0 && totalRecordedRequests < stats.successes) {
-    actualCostLabel = '-'
   }
-  const comparisonRows = comparisonResults.map((result) => {
-    const cacheTokens =
-      result.stats.inputTokens +
-      result.stats.cacheReadTokens +
-      result.stats.cacheWriteTokens
-    const chargedQuota = result.channelStats.reduce(
-      (total, channel) => total + channel.charged_quota,
-      0
-    )
-    const recordedRequests = result.channelStats.reduce(
-      (total, channel) => total + channel.requests,
-      0
-    )
-    return {
-      ...result,
-      cacheHitRate: cacheTokens
-        ? ((result.stats.cacheReadTokens / cacheTokens) * 100).toFixed(1)
-        : '0.0',
-      p50: percentile(result.stats.latencies, 0.5),
-      p95: percentile(result.stats.latencies, 0.95),
-      costAvailable:
-        result.stats.successes === 0 ||
-        recordedRequests >= result.stats.successes,
-      actualCost:
-        quotaPerUnit > 0
-          ? (chargedQuota / quotaPerUnit).toFixed(6)
-          : '0.000000',
-    }
-  })
   const maxRequests = Math.min(
     LOAD_TEST_MAX_REQUESTS,
     Math.ceil(durationSeconds * requestsPerSecond)
   )
   const canRun =
-    (status === 'idle' || status === 'complete') &&
-    selectedKeyValue !== '' &&
-    selectedStrategies.length > 0
+    (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
 
   const statusLabel = useMemo(() => {
     if (status === 'loading-keys') return t('Loading')
@@ -656,76 +519,28 @@ export function LoadTestDemo() {
               </div>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='space-y-3'>
-                <div className='flex items-center justify-between gap-3'>
-                  <div>
-                    <Label>{t('API Key')}</Label>
-                    <p className='text-muted-foreground text-xs'>
-                      {t('The same key is used for each package comparison')}
-                    </p>
-                  </div>
-                  <Badge variant='outline'>{t('Unified package')}</Badge>
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                <div className='space-y-1.5'>
+                  <Label>{t('API Key')}</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      value && setSelectedKeyValue(value)
+                    }
+                    value={selectedKeyValue}
+                  >
+                    <SelectTrigger className='w-full'>
+                      <SelectValue placeholder={t('Select API Key')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {keys.map((key) => (
+                        <SelectItem key={key.key} value={key.key}>
+                          {key.name} ·{' '}
+                          {key.group || key.group_candidates[0] || '-'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select
-                  onValueChange={(value) => value && setSelectedKeyValue(value)}
-                  value={selectedKeyValue}
-                >
-                  <SelectTrigger className='w-full'>
-                    <SelectValue placeholder={t('Select API Key')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {keys.map((key) => (
-                      <SelectItem key={key.key} value={key.key}>
-                        {key.key}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className='space-y-2'>
-                  <Label>{t('Packages to compare')}</Label>
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Selected packages run one by one with the same key')}
-                  </p>
-                  <div className='grid gap-2 sm:grid-cols-3'>
-                    {COMPARISON_STRATEGIES.map((strategy) => {
-                      const checked = selectedStrategies.includes(
-                        strategy.value
-                      )
-                      return (
-                        <label
-                          className='hover:bg-muted/40 flex cursor-pointer items-start gap-2 rounded-lg border p-3'
-                          key={strategy.value}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(value) =>
-                              setSelectedStrategies((current) =>
-                                value
-                                  ? [...new Set([...current, strategy.value])]
-                                  : current.filter(
-                                      (item) => item !== strategy.value
-                                    )
-                              )
-                            }
-                          />
-                          <span className='text-sm leading-4'>
-                            {t(strategy.label)}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  <Alert className='bg-muted/30'>
-                    <Info />
-                    <AlertDescription>
-                      {t(
-                        'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.'
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              </div>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>{t('Test model')}</Label>
                   <Select
@@ -855,16 +670,6 @@ export function LoadTestDemo() {
                     <span>{durationSeconds}s</span>
                   </div>
                   <Progress value={progress} />
-                  {activeStrategy && (
-                    <div className='text-muted-foreground text-xs'>
-                      {t('Routing strategy')}:{' '}
-                      {t(
-                        LOAD_TEST_ROUTING_STRATEGIES.find(
-                          (item) => item.value === activeStrategy
-                        )?.label ?? activeStrategy
-                      )}
-                    </div>
-                  )}
                   <div className='text-muted-foreground text-xs'>
                     {t('Run ID')}: <code>{runId}</code>
                   </div>
@@ -872,69 +677,6 @@ export function LoadTestDemo() {
               )}
             </CardContent>
           </Card>
-
-          {comparisonRows.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('Package comparison')}</CardTitle>
-                <CardDescription>
-                  {t(
-                    'Each package was tested sequentially with the same API key'
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className='overflow-x-auto rounded-md border'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('Package')}</TableHead>
-                        <TableHead>{t('Requests')}</TableHead>
-                        <TableHead>{t('Success rate')}</TableHead>
-                        <TableHead>{t('Cache hit rate')}</TableHead>
-                        <TableHead>{t('P50 latency')}</TableHead>
-                        <TableHead>{t('P95 latency')}</TableHead>
-                        <TableHead>{t('Actual cost')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {comparisonRows.map((row) => (
-                        <TableRow key={row.strategy}>
-                          <TableCell>
-                            {t(
-                              LOAD_TEST_ROUTING_STRATEGIES.find(
-                                (item) => item.value === row.strategy
-                              )?.label ?? row.strategy
-                            )}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.stats.completed}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.stats.completed
-                              ? `${((row.stats.successes / row.stats.completed) * 100).toFixed(1)}%`
-                              : '0.0%'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.cacheHitRate}%
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.p50 ? `${row.p50}ms` : '-'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.p95 ? `${row.p95}ms` : '-'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.costAvailable ? `$${row.actualCost}` : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
             <Metric label={t('Requests')} value={String(stats.completed)} />
@@ -958,12 +700,21 @@ export function LoadTestDemo() {
               label={t('Cache tokens')}
               value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
             />
-            <Metric label={t('Actual cost')} value={actualCostLabel} />
+            <Metric
+              label={t('Estimated cost')}
+              value={
+                pricing ? `$${estimatedCost.toFixed(6)}` : t('Unavailable')
+              }
+            />
           </div>
           <Card>
             <CardHeader>
               <CardTitle>{t('Channel token usage and cost')}</CardTitle>
-              <CardDescription>{t('Actual cost')}</CardDescription>
+              <CardDescription>
+                {t(
+                  'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.'
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {channelStats.length === 0 ? (
@@ -976,7 +727,7 @@ export function LoadTestDemo() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t('Channel')}</TableHead>
-                        <TableHead>{t('Pool')}</TableHead>
+                        <TableHead>{t('Billing group')}</TableHead>
                         <TableHead>{t('Requests')}</TableHead>
                         <TableHead>{t('Prompt tokens')}</TableHead>
                         <TableHead>{t('Input total')}</TableHead>
@@ -985,7 +736,7 @@ export function LoadTestDemo() {
                         <TableHead>{t('Total tokens')}</TableHead>
                         <TableHead>{t('Token share')}</TableHead>
                         <TableHead>{t('Cost factor')}</TableHead>
-                        <TableHead>{t('Actual cost')}</TableHead>
+                        <TableHead>{t('Channel cost')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1005,11 +756,13 @@ export function LoadTestDemo() {
                           <TableRow key={channel.channel_id}>
                             <TableCell>
                               #{channel.channel_id} {channel.channel_name}
-                              {channel.cluster_id > 0
-                                ? ` · C${channel.cluster_id}`
+                              {channel.billing_group
+                                ? ` · ${channel.billing_group}`
                                 : ''}
                             </TableCell>
-                            <TableCell>{channel.pool_name || '-'}</TableCell>
+                            <TableCell>
+                              {channel.billing_group || '-'}
+                            </TableCell>
                             <TableCell className='tabular-nums'>
                               {channel.requests}
                             </TableCell>
@@ -1037,10 +790,12 @@ export function LoadTestDemo() {
                             </TableCell>
                             <TableCell className='tabular-nums'>
                               $
-                              {(quotaPerUnit > 0
-                                ? channel.charged_quota / quotaPerUnit
-                                : 0
-                              ).toFixed(6)}
+                              {pricing
+                                ? calculateChannelCost(
+                                    channel,
+                                    pricing
+                                  ).toFixed(6)
+                                : '0.000000'}
                             </TableCell>
                           </TableRow>
                         )
@@ -1057,11 +812,19 @@ export function LoadTestDemo() {
                 label={t('Channel')}
                 value={String(channelStats.length)}
               />
-              <Metric label={t('Pool')} value={String(poolsUsed.size)} />
-              <Metric label={t('Clusters')} value={String(clustersUsed.size)} />
+              <Metric
+                label={t('Billing groups')}
+                value={String(billingGroupsUsed.size)}
+              />
             </div>
           )}
-          <p className='text-muted-foreground text-xs'>{t('Actual cost')}</p>
+          <p className='text-muted-foreground text-xs'>
+            {pricing
+              ? t(
+                  'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
+                )
+              : t('Pricing is unavailable until the test starts.')}
+          </p>
 
           <div className='grid gap-4 lg:grid-cols-3'>
             <Card size='sm'>
@@ -1091,35 +854,10 @@ export function LoadTestDemo() {
                 <CardTitle>{t('Key usage')}</CardTitle>
               </CardHeader>
               <CardContent>
-                {keyCostRows.size === 0 ? (
-                  <CounterList
-                    counters={stats.keyCounts}
-                    emptyLabel={t('No requests sent yet')}
-                  />
-                ) : (
-                  <div className='space-y-2 text-sm'>
-                    {[...keyCostRows.entries()].map(([tokenId, row]) => {
-                      const key = keys.find((item) => item.id === tokenId)
-                      return (
-                        <div
-                          className='flex items-center justify-between gap-3'
-                          key={tokenId}
-                        >
-                          <span className='truncate'>
-                            {key?.name ?? `#${tokenId}`}
-                          </span>
-                          <span className='shrink-0 tabular-nums'>
-                            {row.requests} · $
-                            {(quotaPerUnit > 0
-                              ? row.quota / quotaPerUnit
-                              : 0
-                            ).toFixed(6)}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                <CounterList
+                  counters={stats.keyCounts}
+                  emptyLabel={t('No requests sent yet')}
+                />
               </CardContent>
             </Card>
           </div>

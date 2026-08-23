@@ -42,41 +42,37 @@ The authenticated AllToken admin page at `/failover` includes the same current m
 ./run.sh steady  # 1000 VUs for 30 minutes
 ./run.sh spike   # ramp from 50 to 1000 VUs in 10 seconds
 ./run.sh burst   # LOADTEST_USERS VUs, one request each
-./run.sh ramp    # short ramp to RAMP_TARGET_VUS, then hold concurrent load
 ./run.sh stream  # 1000 concurrent SSE connections
 ./run.sh mixed   # 700 stream + 200 non-stream + 100 model-list VUs
 ./run.sh soak    # 500 VUs for 2 hours, leak check
 ./run.sh capacity # configured RPS steps against the single mock channel
-./run.sh pool-failover # deterministic P1 -> P2 -> P3 -> next-cluster scenario
+./run.sh channel-failover # deterministic primary-channel -> fallback-channel scenario
 ```
 
 The default is `smoke`. Results are written to `results/summary.json`. The k6 container publishes its metrics to Prometheus through remote write, so the Grafana panel can correlate load with server and dependency metrics.
 
 The `capacity` profile uses an arrival-rate executor instead of VUs as the target. It holds each rate from `CAPACITY_RATES` after a short ramp and records input, output, and total Token TPS from the upstream `usage` response. The default mock returns 10 prompt and 20 completion tokens per successful request, so output Token TPS should be approximately `successful RPS * 20`. The highest valid step is the last rate with no dropped iterations, error rate below 1%, latency within the configured thresholds, and no sustained database or Redis pool alerts.
 
-### Deterministic pool and cluster failover
+### Deterministic channel failover
 
-Each successful mock response consumes exactly 30 tokens. Cluster A is exposed on port `18080` and Cluster B on `18081`. Reset both before a repeatable run:
+Each successful mock response consumes exactly 30 tokens. Channel A is exposed on port `18080` and Channel B on `18081`. Channel A has a deliberately small balance so traffic switches directly to Channel B after exhaustion:
 
 ```sh
-curl -X POST 'http://localhost:18080/control/reset?free=300&premium=600&fallback=900'
-curl -X POST 'http://localhost:18081/control/reset?free=600&premium=900&fallback=1200'
-./run.sh pool-failover
+curl -X POST 'http://localhost:18080/control/reset?tokens=300'
+curl -X POST 'http://localhost:18081/control/reset?tokens=3000'
+./run.sh channel-failover
 ```
 
 Control individual failure stages while watching Grafana:
 
 ```sh
-curl -X POST 'http://localhost:18080/control/exhaust?pool=free'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=premium'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=fallback'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=all'
+curl -X POST 'http://localhost:18080/control/exhaust'
 curl -X POST 'http://localhost:18080/control/disable'
 curl -X POST 'http://localhost:18080/control/enable'
 curl 'http://localhost:18080/control/state'
 ```
 
-The expected sequence is P1 consumption, P2 consumption, P3 consumption, then a switch from Cluster A to Cluster B. Verify `alltoken_pool_failover_total`, `alltoken_cluster_failover_total`, `alltoken_cluster_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
+The expected sequence is Channel A consumption, a `205001-CH<id>` exhaustion error, then a switch to Channel B. Verify `alltoken_channel_requests_total`, `alltoken_channel_switch_total`, `alltoken_channel_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
 
 For a short preliminary run:
 
@@ -103,25 +99,6 @@ CAPACITY_RATES=100,200,300 \
 ```
 
 For a local token file, use `LOADTEST_TOKEN_FILE=/absolute/path/tokens.txt`; each line may be either a token or `name token`. The file is read locally and is not part of the repository. A URL ending in `/v1` is normalized automatically, so both `https://host` and `https://host/v1` are accepted.
-
-### Compare package routing strategies
-
-Prepare three dedicated token files whose users subscribe to packages mapped to `cost_first`, `balanced`, and `stability_first`. The comparison script runs the same VU curve sequentially and preserves one summary per strategy:
-
-```sh
-CONFIRM_REMOTE_LOADTEST=yes \
-REMOTE_BASE_URL=https://approved-test-api.example.com \
-LOADTEST_MODEL=gpt-5.4-mini \
-RAMP_TARGET_VUS=200 \
-RAMP_UP_DURATION=90s \
-RAMP_HOLD_DURATION=3m \
-COST_FIRST_TOKEN_FILE=/absolute/path/cost-first.txt \
-BALANCED_TOKEN_FILE=/absolute/path/balanced.txt \
-STABILITY_FIRST_TOKEN_FILE=/absolute/path/stability-first.txt \
-./compare-strategies.sh ramp
-```
-
-The package strategy is used only when `FAILOVER_MODE` is empty. The script enforces that behavior and adds `routing_strategy` to k6 Prometheus series so cost, latency, errors, and token throughput can be compared by strategy.
 
 `run-remote.sh` does not start or seed the local new-api/PostgreSQL/Redis services; it only runs k6 on the existing Compose network. The remote Prometheus endpoint must accept authenticated remote-write traffic, or keep the default local endpoint and inspect only local k6 metrics. To see remote CPU, memory, Go, PostgreSQL and Redis panels, the remote Prometheus must scrape the corresponding remote exporters and the remote Grafana must use that Prometheus. Keep metrics and exporter endpoints on a private network or VPN; never expose them publicly just for a load test.
 

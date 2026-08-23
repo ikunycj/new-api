@@ -22,7 +22,7 @@ import { afterEach, describe, test } from 'node:test'
 import {
   loadPersistedLoadTestRun,
   savePersistedLoadTestRun,
-  type LoadTestComparisonResult,
+  type LoadTestRunResult,
 } from './storage'
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
@@ -42,8 +42,8 @@ function installLocalStorage() {
   return values
 }
 
-const result: LoadTestComparisonResult = {
-  strategy: 'balanced',
+const result: LoadTestRunResult = {
+  model: 'gpt-5.6-sol',
   runId: 'demo-result-1',
   requestIds: ['request-1'],
   stats: {
@@ -59,7 +59,20 @@ const result: LoadTestComparisonResult = {
     cacheReadTokens: 5,
     cacheWriteTokens: 0,
   },
-  channelStats: [],
+  channelStats: [
+    {
+      channel_id: 38,
+      channel_name: 'primary',
+      billing_group: 'default',
+      cost_factor: 0.2,
+      requests: 1,
+      input_tokens: 10,
+      input_tokens_total: 15,
+      output_tokens: 2,
+      cache_read_tokens: 5,
+      cache_write_tokens: 0,
+    },
+  ],
 }
 
 afterEach(() => {
@@ -72,17 +85,16 @@ afterEach(() => {
 })
 
 describe('load test result storage', () => {
-  test('restores request IDs and results only for the same user', () => {
+  test('restores channel results only for the same user', () => {
     installLocalStorage()
     Date.now = () => 1_000_000
 
-    savePersistedLoadTestRun(42, 'gpt-5.6-sol', [result])
+    savePersistedLoadTestRun(42, result)
 
     assert.deepEqual(loadPersistedLoadTestRun(42), {
       version: 1,
       savedAt: 1_000_000,
-      model: 'gpt-5.6-sol',
-      results: [result],
+      ...result,
     })
     assert.equal(loadPersistedLoadTestRun(43), null)
   })
@@ -90,20 +102,22 @@ describe('load test result storage', () => {
   test('removes results after seven days', () => {
     const values = installLocalStorage()
     Date.now = () => 1_000_000
-    savePersistedLoadTestRun(42, 'gpt-5.6-sol', [result])
+    savePersistedLoadTestRun(42, result)
     Date.now = () => 1_000_000 + 7 * 24 * 60 * 60 * 1000 + 1
 
     assert.equal(loadPersistedLoadTestRun(42), null)
     assert.equal(values.size, 0)
   })
 
-  test('does not persist an API key or secret outside the result data', () => {
+  test('does not persist an API key or cluster fields', () => {
     const values = installLocalStorage()
 
-    savePersistedLoadTestRun(42, 'gpt-5.6-sol', [result])
+    savePersistedLoadTestRun(42, result)
 
     const raw = [...values.values()][0] ?? ''
     assert.equal(raw.includes('sk-'), false)
-    assert.equal(raw.includes('secret'), false)
+    assert.equal(raw.includes('cluster_id'), false)
+    assert.equal(raw.includes('pool_name'), false)
+    assert.equal(raw.includes('billing_group'), true)
   })
 })

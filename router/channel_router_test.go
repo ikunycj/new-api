@@ -31,10 +31,6 @@ func TestChannelDeleteRoutesUseSensitiveWritePermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodPost, "/batch/tag", authz.ChannelWrite, controller.BatchSetChannelTag)
 }
 
-func TestClusterConfigurationDeleteRouteUsesChannelWritePermission(t *testing.T) {
-	assertChannelRoutePermission(t, http.MethodDelete, "/failover/cluster-config/:id", authz.ChannelWrite, controller.DeleteClusterConfiguration)
-}
-
 func TestChannelStatusRoutesRegisterWithoutConflict(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()

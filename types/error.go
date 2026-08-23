@@ -25,8 +25,8 @@ type OpenAIError struct {
 	AlltokenCode int             `json:"alltoken_code,omitempty"`
 	ErrorRef     string          `json:"error_ref,omitempty"`
 	Category     string          `json:"category,omitempty"`
-	ClusterCode  int             `json:"cluster_code,omitempty"`
-	PoolTier     int             `json:"pool_tier,omitempty"`
+	ChannelID    int             `json:"channel_id,omitempty"`
+	ChannelName  string          `json:"channel_name,omitempty"`
 	FailureScope string          `json:"failure_scope,omitempty"`
 	Action       string          `json:"action,omitempty"`
 	Cause        *ErrorCause     `json:"cause,omitempty"`
@@ -37,8 +37,8 @@ type ErrorSource string
 const (
 	ErrorSourceUnknown  ErrorSource = ""
 	ErrorSourceOpenAI   ErrorSource = "openai"
-	ErrorSourceCluster  ErrorSource = "cluster"
-	ErrorSourceIkun     ErrorSource = ErrorSourceCluster
+	ErrorSourceChannel  ErrorSource = "channel"
+	ErrorSourceIkun     ErrorSource = ErrorSourceChannel
 	ErrorSourceAllToken ErrorSource = "alltoken"
 )
 
@@ -49,8 +49,8 @@ type ErrorCause struct {
 	StatusCode   int         `json:"status_code,omitempty"`
 	AlltokenCode int         `json:"alltoken_code,omitempty"`
 	ErrorRef     string      `json:"error_ref,omitempty"`
-	ClusterCode  int         `json:"cluster_code,omitempty"`
-	PoolTier     int         `json:"pool_tier,omitempty"`
+	ChannelID    int         `json:"channel_id,omitempty"`
+	ChannelName  string      `json:"channel_name,omitempty"`
 }
 
 type ClaudeError struct {
@@ -137,8 +137,8 @@ type NewAPIError struct {
 	requestID      string
 	attemptCount   int
 	cause          *ErrorCause
-	clusterCode    int
-	poolTier       int
+	channelID      int
+	channelName    string
 	classification *errorDefinition
 }
 
@@ -168,8 +168,8 @@ func ParseErrorSource(source string) ErrorSource {
 	switch strings.ToLower(strings.TrimSpace(source)) {
 	case string(ErrorSourceOpenAI):
 		return ErrorSourceOpenAI
-	case string(ErrorSourceCluster), "ikun":
-		return ErrorSourceCluster
+	case string(ErrorSourceChannel), "cluster", "ikun":
+		return ErrorSourceChannel
 	case string(ErrorSourceAllToken), "new-api", "new_api":
 		return ErrorSourceAllToken
 	default:
@@ -180,7 +180,7 @@ func ParseErrorSource(source string) ErrorSource {
 // ResolveErrorSource applies the explicit channel setting first, then uses a
 // conservative default for OpenAI-compatible endpoints. Direct api.openai.com
 // traffic is attributed to OpenAI; other compatible upstreams are attributed
-// to the configured IKUN/cluster layer. alltoken-generated errors never call
+// to the configured channel layer. alltoken-generated errors never call
 // this function.
 func ResolveErrorSource(configured, baseURL string) ErrorSource {
 	if source := ParseErrorSource(configured); source == ErrorSourceOpenAI || source == ErrorSourceIkun {
@@ -261,16 +261,14 @@ func (e *NewAPIError) SetAttemptCount(attemptCount int) {
 	}
 }
 
-func (e *NewAPIError) SetRoutingLocation(clusterCode int, poolTier int) {
+func (e *NewAPIError) SetChannelLocation(channelID int, channelName string) {
 	if e == nil {
 		return
 	}
-	if clusterCode > 0 {
-		e.clusterCode = clusterCode
+	if channelID > 0 {
+		e.channelID = channelID
 	}
-	if poolTier >= 1 && poolTier <= 3 {
-		e.poolTier = poolTier
-	}
+	e.channelName = strings.TrimSpace(channelName)
 }
 
 func (e *NewAPIError) SetClassification(alltokenCode int, category string, failureScope string, action string, retryable bool) {
@@ -291,21 +289,21 @@ func (e *NewAPIError) AlltokenCode() int {
 }
 
 func (e *NewAPIError) ErrorRef() string {
-	return buildErrorRef(e.AlltokenCode(), e.clusterCode, e.poolTier)
+	return buildErrorRef(e.AlltokenCode(), e.channelID)
 }
 
-func (e *NewAPIError) ClusterCode() int {
+func (e *NewAPIError) ChannelID() int {
 	if e == nil {
 		return 0
 	}
-	return e.clusterCode
+	return e.channelID
 }
 
-func (e *NewAPIError) PoolTier() int {
+func (e *NewAPIError) ChannelName() string {
 	if e == nil {
-		return 0
+		return ""
 	}
-	return e.poolTier
+	return e.channelName
 }
 
 func (e *NewAPIError) ErrorCategory() string {
@@ -417,10 +415,10 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	result.AttemptCount = e.attemptCount
 	definition := classifyError(e)
 	result.AlltokenCode = definition.Code
-	result.ErrorRef = buildErrorRef(definition.Code, e.clusterCode, e.poolTier)
+	result.ErrorRef = buildErrorRef(definition.Code, e.channelID)
 	result.Category = definition.Category
-	result.ClusterCode = e.clusterCode
-	result.PoolTier = e.poolTier
+	result.ChannelID = e.channelID
+	result.ChannelName = e.channelName
 	result.FailureScope = definition.FailureScope
 	result.Action = definition.Action
 	result.Cause = e.cause
@@ -645,8 +643,8 @@ func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIEr
 		StatusCode:   lastErr.StatusCode,
 		AlltokenCode: lastErr.AlltokenCode(),
 		ErrorRef:     lastErr.ErrorRef(),
-		ClusterCode:  lastErr.clusterCode,
-		PoolTier:     lastErr.poolTier,
+		ChannelID:    lastErr.channelID,
+		ChannelName:  lastErr.channelName,
 	}
 	if cause.Source == ErrorSourceUnknown {
 		cause.Source = ErrorSourceAllToken
@@ -660,8 +658,8 @@ func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIEr
 	e.errorSource = ErrorSourceAllToken
 	e.attemptCount = attemptCount
 	e.cause = cause
-	e.clusterCode = lastErr.clusterCode
-	e.poolTier = lastErr.poolTier
+	e.channelID = lastErr.channelID
+	e.channelName = lastErr.channelName
 	e.SetRetryable(true)
 	return e
 }

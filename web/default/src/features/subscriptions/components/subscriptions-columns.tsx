@@ -26,7 +26,6 @@ import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { formatQuota } from '@/lib/format'
 
-import { getRoutingStrategyLabel } from '../constants'
 import { formatDuration, formatResetPeriod } from '../lib'
 import type { PlanRecord } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -174,17 +173,6 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
           )
         },
         size: 150,
-      },
-      {
-        id: 'routing_strategy',
-        header: t('Routing strategy'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => (
-          <span className='text-muted-foreground text-sm'>
-            {getRoutingStrategyLabel(t, row.original.plan.routing_strategy)}
-          </span>
-        ),
-        size: 170,
       },
       {
         id: 'upgrade_group',

@@ -16,17 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import assert from 'node:assert/strict'
+import { describe, test } from 'node:test'
 
-import { LoadTestDemo } from '@/features/loadtest-demo'
-import { useAuthStore } from '@/stores/auth-store'
+import { transformFormDataToPayload } from './user-form'
 
-export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
-  beforeLoad: () => {
-    const user = useAuthStore.getState().auth.user
-    if (!user || user.group !== 'toB') {
-      throw redirect({ to: '/403' })
-    }
-  },
-  component: LoadTestDemo,
+describe('user form payload', () => {
+  test('preserves the selected user group when creating a ToB user', () => {
+    const payload = transformFormDataToPayload({
+      username: 'business-user',
+      display_name: 'Business User',
+      password: 'password123',
+      role: 1,
+      group: 'toB',
+    })
+
+    assert.equal(payload.group, 'toB')
+  })
 })

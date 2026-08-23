@@ -11,8 +11,8 @@ import (
 func TestGetPackageComparisonStatsAggregatesConsumptionAndErrors(t *testing.T) {
 	now := time.Now().Unix()
 	plans := []SubscriptionPlan{
-		{Title: "comparison-basic", PriceAmount: 10, Currency: "USD", TotalAmount: 1000, RoutingStrategy: RoutingStrategyCostFirst},
-		{Title: "comparison-pro", PriceAmount: 20, Currency: "USD", TotalAmount: 2000, RoutingStrategy: RoutingStrategyStabilityFirst},
+		{Title: "comparison-basic", PriceAmount: 10, Currency: "USD", TotalAmount: 1000},
+		{Title: "comparison-pro", PriceAmount: 20, Currency: "USD", TotalAmount: 2000},
 	}
 	require.NoError(t, DB.Create(&plans).Error)
 
@@ -40,9 +40,6 @@ func TestGetPackageComparisonStatsAggregatesConsumptionAndErrors(t *testing.T) {
 	assert.Equal(t, int64(40), stats[0].CompletionTokens)
 	assert.Equal(t, int64(140), stats[0].Quota)
 	assert.InDelta(t, 0.5, stats[0].ChannelHitRate, 0.001)
-	assert.InDelta(t, 0.5, stats[0].FailureRate, 0.001)
-	assert.InDelta(t, 1_000_000, stats[0].QuotaPerMillionTokens, 0.001)
-	assert.Equal(t, RoutingStrategyCostFirst, stats[0].RoutingStrategy)
 	assert.InDelta(t, 2000, stats[0].AverageLatencyMs, 0.001)
 
 	assert.Equal(t, int64(1), stats[1].Requests)

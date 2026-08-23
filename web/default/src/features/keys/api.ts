@@ -542,8 +542,7 @@ export async function getApiKeys(
 ): Promise<GetApiKeysResponse> {
   const { p = 1, size = 10 } = params
   // Token lists are scoped to the authenticated dashboard user. They must
-  // never share the global in-flight GET deduplication entry: two accounts
-  // can open the page at the same time while sharing one browser instance.
+  // never share the global in-flight GET deduplication entry.
   const res = await api.get(`/api/token/?p=${p}&size=${size}`, {
     disableDuplicate: true,
   })

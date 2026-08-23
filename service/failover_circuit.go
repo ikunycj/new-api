@@ -12,7 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/observability"
 )
 
-const clusterCircuitAllowScript = `
+const channelCircuitAllowScript = `
 local open_until = tonumber(redis.call('HGET', KEYS[1], 'open_until_ms') or '0')
 if open_until > tonumber(ARGV[1]) then
   return 0
@@ -29,7 +29,7 @@ end
 return 1
 `
 
-const clusterCircuitFailureScript = `
+const channelCircuitFailureScript = `
 local now = tonumber(ARGV[1])
 local window_ms = tonumber(ARGV[2])
 local threshold = tonumber(ARGV[3])
@@ -52,27 +52,27 @@ if open_until > now then return 1 end
 return 0
 `
 
-type clusterCircuit struct {
+type channelCircuit struct {
 	failures        int
 	windowStartedAt time.Time
 	openUntil       time.Time
 	halfOpenProbes  int
 }
 
-var clusterCircuits = struct {
+var channelCircuits = struct {
 	sync.Mutex
-	values map[string]*clusterCircuit
-}{values: make(map[string]*clusterCircuit)}
+	values map[string]*channelCircuit
+}{values: make(map[string]*channelCircuit)}
 
-func ClusterCircuitAllows(clusterID int, route string, policy model.RuntimeFailoverPolicy) bool {
-	if clusterID <= 0 {
+func ChannelCircuitAllows(channelID int, route string, policy model.RuntimeRoutingPolicy) bool {
+	if channelID <= 0 {
 		return true
 	}
 	if common.RedisEnabled && common.RDB != nil {
 		state, err := common.RDB.Eval(
 			context.Background(),
-			clusterCircuitAllowScript,
-			[]string{clusterCircuitRedisKey(clusterID, route)},
+			channelCircuitAllowScript,
+			[]string{channelCircuitRedisKey(channelID, route)},
 			time.Now().UnixMilli(),
 			policy.CircuitHalfOpenRequests,
 			circuitRedisTTL(policy).Milliseconds(),
@@ -80,74 +80,74 @@ func ClusterCircuitAllows(clusterID int, route string, policy model.RuntimeFailo
 		if err == nil {
 			switch state {
 			case 0:
-				observability.SetClusterCircuitState(clusterID, route, "open")
+				observability.SetChannelCircuitState(channelID, route, "open")
 				return false
 			case 2:
-				observability.SetClusterCircuitState(clusterID, route, "half_open")
+				observability.SetChannelCircuitState(channelID, route, "half_open")
 				return false
 			case 3:
-				observability.SetClusterCircuitState(clusterID, route, "half_open")
+				observability.SetChannelCircuitState(channelID, route, "half_open")
 				return true
 			default:
-				observability.SetClusterCircuitState(clusterID, route, "closed")
+				observability.SetChannelCircuitState(channelID, route, "closed")
 				return true
 			}
 		}
 		common.SysError(fmt.Sprintf("failover circuit Redis allow failed: %v", err))
 	}
-	return localClusterCircuitAllows(clusterID, route, policy)
+	return localChannelCircuitAllows(channelID, route, policy)
 }
 
-func localClusterCircuitAllows(clusterID int, route string, policy model.RuntimeFailoverPolicy) bool {
-	key := clusterCircuitKey(clusterID, route)
+func localChannelCircuitAllows(channelID int, route string, policy model.RuntimeRoutingPolicy) bool {
+	key := channelCircuitKey(channelID, route)
 	now := time.Now()
-	clusterCircuits.Lock()
-	defer clusterCircuits.Unlock()
-	state := clusterCircuits.values[key]
+	channelCircuits.Lock()
+	defer channelCircuits.Unlock()
+	state := channelCircuits.values[key]
 	if state == nil {
-		observability.SetClusterCircuitState(clusterID, route, "closed")
+		observability.SetChannelCircuitState(channelID, route, "closed")
 		return true
 	}
 	if state.openUntil.After(now) {
-		observability.SetClusterCircuitState(clusterID, route, "open")
+		observability.SetChannelCircuitState(channelID, route, "open")
 		return false
 	}
 	if !state.openUntil.IsZero() {
 		if state.halfOpenProbes >= policy.CircuitHalfOpenRequests {
-			observability.SetClusterCircuitState(clusterID, route, "half_open")
+			observability.SetChannelCircuitState(channelID, route, "half_open")
 			return false
 		}
 		state.halfOpenProbes++
-		observability.SetClusterCircuitState(clusterID, route, "half_open")
+		observability.SetChannelCircuitState(channelID, route, "half_open")
 	}
 	return true
 }
 
-func RecordClusterCircuitSuccess(clusterID int, route string) {
-	if clusterID <= 0 {
+func RecordChannelCircuitSuccess(channelID int, route string) {
+	if channelID <= 0 {
 		return
 	}
 	if common.RedisEnabled && common.RDB != nil {
-		if err := common.RDB.Del(context.Background(), clusterCircuitRedisKey(clusterID, route)).Err(); err != nil {
+		if err := common.RDB.Del(context.Background(), channelCircuitRedisKey(channelID, route)).Err(); err != nil {
 			common.SysError(fmt.Sprintf("failover circuit Redis reset failed: %v", err))
 		}
 	}
-	key := clusterCircuitKey(clusterID, route)
-	clusterCircuits.Lock()
-	delete(clusterCircuits.values, key)
-	clusterCircuits.Unlock()
-	observability.SetClusterCircuitState(clusterID, route, "closed")
+	key := channelCircuitKey(channelID, route)
+	channelCircuits.Lock()
+	delete(channelCircuits.values, key)
+	channelCircuits.Unlock()
+	observability.SetChannelCircuitState(channelID, route, "closed")
 }
 
-func RecordClusterCircuitFailure(clusterID int, route string, policy model.RuntimeFailoverPolicy) {
-	if clusterID <= 0 {
+func RecordChannelCircuitFailure(channelID int, route string, policy model.RuntimeRoutingPolicy) {
+	if channelID <= 0 {
 		return
 	}
 	if common.RedisEnabled && common.RDB != nil {
 		isOpen, err := common.RDB.Eval(
 			context.Background(),
-			clusterCircuitFailureScript,
-			[]string{clusterCircuitRedisKey(clusterID, route)},
+			channelCircuitFailureScript,
+			[]string{channelCircuitRedisKey(channelID, route)},
 			time.Now().UnixMilli(),
 			int64(time.Duration(policy.CircuitWindowSeconds)*time.Second/time.Millisecond),
 			policy.CircuitFailureThreshold,
@@ -156,23 +156,23 @@ func RecordClusterCircuitFailure(clusterID int, route string, policy model.Runti
 		).Int64()
 		if err == nil {
 			if isOpen == 1 {
-				observability.SetClusterCircuitState(clusterID, route, "open")
+				observability.SetChannelCircuitState(channelID, route, "open")
 			}
 			return
 		}
 		common.SysError(fmt.Sprintf("failover circuit Redis failure update failed: %v", err))
 	}
-	localRecordClusterCircuitFailure(clusterID, route, policy)
+	localRecordChannelCircuitFailure(channelID, route, policy)
 }
 
-func localRecordClusterCircuitFailure(clusterID int, route string, policy model.RuntimeFailoverPolicy) {
-	key := clusterCircuitKey(clusterID, route)
+func localRecordChannelCircuitFailure(channelID int, route string, policy model.RuntimeRoutingPolicy) {
+	key := channelCircuitKey(channelID, route)
 	now := time.Now()
-	clusterCircuits.Lock()
-	state := clusterCircuits.values[key]
+	channelCircuits.Lock()
+	state := channelCircuits.values[key]
 	if state == nil {
-		state = &clusterCircuit{windowStartedAt: now}
-		clusterCircuits.values[key] = state
+		state = &channelCircuit{windowStartedAt: now}
+		channelCircuits.values[key] = state
 	}
 	window := time.Duration(policy.CircuitWindowSeconds) * time.Second
 	if now.Sub(state.windowStartedAt) > window {
@@ -185,22 +185,22 @@ func localRecordClusterCircuitFailure(clusterID int, route string, policy model.
 		state.halfOpenProbes = 0
 	}
 	isOpen := state.openUntil.After(now)
-	clusterCircuits.Unlock()
+	channelCircuits.Unlock()
 	if isOpen {
-		observability.SetClusterCircuitState(clusterID, route, "open")
+		observability.SetChannelCircuitState(channelID, route, "open")
 	}
 }
 
-func clusterCircuitKey(clusterID int, route string) string {
-	return fmt.Sprintf("%d:%s", clusterID, route)
+func channelCircuitKey(channelID int, route string) string {
+	return fmt.Sprintf("%d:%s", channelID, route)
 }
 
-func clusterCircuitRedisKey(clusterID int, route string) string {
+func channelCircuitRedisKey(channelID int, route string) string {
 	routeHash := sha256.Sum256([]byte(route))
-	return fmt.Sprintf("alltoken:failover:circuit:%d:%x", clusterID, routeHash[:8])
+	return fmt.Sprintf("alltoken:channel:circuit:%d:%x", channelID, routeHash[:8])
 }
 
-func circuitRedisTTL(policy model.RuntimeFailoverPolicy) time.Duration {
+func circuitRedisTTL(policy model.RuntimeRoutingPolicy) time.Duration {
 	ttl := time.Duration(policy.CircuitWindowSeconds+policy.CircuitCooldownSeconds) * time.Second
 	if ttl < time.Minute {
 		return time.Minute

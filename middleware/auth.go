@@ -526,7 +526,6 @@ func TokenAuth() func(c *gin.Context) {
 		}
 
 		userCache.WriteContext(c)
-		c.Set("user_type", userCache.UserType)
 
 		userGroup := userCache.Group
 		tokenGroup := token.Group

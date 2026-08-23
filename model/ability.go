@@ -106,29 +106,19 @@ func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
 }
 
 func GetChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
-	return GetChannelWithExclusions(group, model, retry, requestPath, nil, nil)
+	return GetChannelExcluding(group, model, retry, requestPath, nil)
 }
 
 // GetChannelExcluding is the database-backed counterpart to
 // GetRandomSatisfiedChannelExcluding. The exclusion set is request-local and
 // is never persisted or used to alter channel health.
 func GetChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
-	return GetChannelWithExclusions(group, model, retry, requestPath, excluded, nil)
-}
-
-func GetChannelWithExclusions(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*Channel, error) {
-	return GetChannelWithExclusionsAndPoolTier(group, model, retry, requestPath, excludedChannels, excludedClusters, 0)
-}
-
-// GetChannelWithExclusionsAndPoolTier limits candidates to one configured pool
-// tier. A zero tier keeps the legacy selector; a negative tier selects channels
-// that are not bound to a configured pool.
-func GetChannelWithExclusionsAndPoolTier(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}, poolTier int) (*Channel, error) {
+	excludedChannels := excluded
 	var abilities []Ability
 
 	var err error
 	var channelQuery *gorm.DB
-	if len(excludedChannels) > 0 || len(excludedClusters) > 0 || poolTier != 0 {
+	if len(excludedChannels) > 0 {
 		// Load all priorities when failing over. The highest remaining priority
 		// is selected after exclusions; querying only the original max priority
 		// would incorrectly skip a healthy lower-priority fallback.
@@ -148,53 +138,10 @@ func GetChannelWithExclusionsAndPoolTier(group string, model string, retry int, 
 		return nil, err
 	}
 	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
-	if len(excludedChannels) > 0 || len(excludedClusters) > 0 || poolTier != 0 {
-		channelIds := make([]int, 0, len(abilities))
-		for _, ability := range abilities {
-			channelIds = append(channelIds, ability.ChannelId)
-		}
-		var candidates []Channel
-		if len(channelIds) > 0 {
-			if err := DB.Select("id", "cluster_id", "cluster_pool_id").Where("id IN ?", channelIds).Find(&candidates).Error; err != nil {
-				return nil, err
-			}
-		}
-		clusterByChannel := make(map[int]int, len(candidates))
-		poolByChannel := make(map[int]int, len(candidates))
-		poolIDs := make([]int, 0, len(candidates))
-		for _, candidate := range candidates {
-			clusterByChannel[candidate.Id] = candidate.ClusterId
-			poolByChannel[candidate.Id] = candidate.ClusterPoolId
-			if candidate.ClusterPoolId > 0 {
-				poolIDs = append(poolIDs, candidate.ClusterPoolId)
-			}
-		}
-		poolTierByID := make(map[int]int, len(poolIDs))
-		if poolTier != 0 && len(poolIDs) > 0 {
-			var pools []ClusterPool
-			if err := DB.Select("id", "tier").Where("id IN ?", poolIDs).Find(&pools).Error; err != nil {
-				return nil, err
-			}
-			for _, pool := range pools {
-				poolTierByID[pool.Id] = pool.Tier
-			}
-		}
+	if len(excludedChannels) > 0 {
 		filtered := make([]Ability, 0, len(abilities))
 		for _, ability := range abilities {
 			if _, ok := excludedChannels[ability.ChannelId]; ok {
-				continue
-			}
-			clusterID := clusterByChannel[ability.ChannelId]
-			if clusterID > 0 {
-				if _, ok := excludedClusters[clusterID]; ok {
-					continue
-				}
-			}
-			channelPoolID := poolByChannel[ability.ChannelId]
-			if poolTier < 0 && channelPoolID > 0 && poolTierByID[channelPoolID] > 0 {
-				continue
-			}
-			if poolTier > 0 && poolTierByID[channelPoolID] != poolTier {
 				continue
 			}
 			filtered = append(filtered, ability)

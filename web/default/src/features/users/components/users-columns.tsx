@@ -226,20 +226,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileOrder: 20 },
     },
     {
-      accessorKey: 'user_type',
-      header: t('Account type'),
-      cell: ({ row }) => (
-        <BadgeCell>
-          {row.original.user_type === 'toB' ? t('ToB') : t('ToC')}
-        </BadgeCell>
-      ),
-      filterFn: (row, id, value) =>
-        value.includes(String(row.getValue(id))),
-      enableSorting: false,
-      size: 110,
-      meta: { mobileOrder: 25 },
-    },
-    {
       id: 'invite_info',
       header: t('Invite Info'),
       cell: ({ row }) => {

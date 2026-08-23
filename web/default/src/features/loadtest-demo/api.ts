@@ -52,12 +52,6 @@ const LOAD_TEST_CACHE_PREFIX = Array.from(
 
 export type LoadTestKey = ApiKey & { secret: string }
 export type LoadTestProvider = 'openai' | 'claude'
-export type LoadTestRoutingStrategy =
-  | 'cost_first'
-  | 'balanced'
-  | 'stability_first'
-  | 'pro_cost_first'
-  | 'pro_stability_first'
 
 export type LoadTestRequestResult = {
   keyName: string
@@ -85,8 +79,7 @@ export type LoadTestPricing = {
 export type LoadTestChannelStats = {
   channel_id: number
   channel_name: string
-  cluster_id: number
-  pool_name: string
+  billing_group: string
   cost_factor: number
   requests: number
   input_tokens: number
@@ -94,8 +87,6 @@ export type LoadTestChannelStats = {
   output_tokens: number
   cache_read_tokens: number
   cache_write_tokens: number
-  token_id: number
-  charged_quota: number
 }
 
 export function getLoadTestProvider(model: string): LoadTestProvider {
@@ -162,9 +153,7 @@ export async function getLoadTestChannelStats(
 }
 
 function readRequestId(response: Response) {
-  // The gateway ID is the consume-log key. Upstream providers may also return
-  // X-Request-Id, which is intentionally copied through for diagnostics.
-  for (const header of ['x-oneapi-request-id', 'x-request-id', 'request-id']) {
+  for (const header of ['x-request-id', 'x-oneapi-request-id', 'request-id']) {
     const value = response.headers.get(header)?.trim()
     if (value) return value
   }
@@ -311,7 +300,6 @@ export async function sendLoadTestRequest(
   model: string,
   runId: string,
   promptCache: boolean,
-  routingStrategy: LoadTestRoutingStrategy,
   signal?: AbortSignal
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
@@ -358,7 +346,6 @@ export async function sendLoadTestRequest(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.secret}`,
       'X-Load-Test-ID': runId,
-      'X-Alltoken-Routing-Strategy': routingStrategy,
     }
     if (provider === 'claude') {
       headers['anthropic-version'] = '2023-06-01'
