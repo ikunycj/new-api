@@ -16,15 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, AlertTriangle, Play, RefreshCw, Square } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  Info,
+  Play,
+  RefreshCw,
+  Square,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Card,
   CardContent,
@@ -32,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -124,7 +132,9 @@ type LoadTestComparisonResult = {
 
 const COMPARISON_STRATEGIES = LOAD_TEST_ROUTING_STRATEGIES.filter(
   ({ value }) =>
-    value === 'cost_first' || value === 'balanced' || value === 'stability_first'
+    value === 'cost_first' ||
+    value === 'balanced' ||
+    value === 'stability_first'
 )
 
 function makeRunId() {
@@ -353,9 +363,23 @@ export function LoadTestDemo() {
 
       let strategyChannelStats: LoadTestChannelStats[] = []
       try {
-        strategyChannelStats = await getLoadTestChannelStats(
-          requestIdsRef.current
-        )
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          strategyChannelStats = await getLoadTestChannelStats(
+            requestIdsRef.current
+          )
+          const recordedRequests = strategyChannelStats.reduce(
+            (total, channel) => total + channel.requests,
+            0
+          )
+          if (
+            strategyStats.successes === 0 ||
+            recordedRequests >= strategyStats.successes
+          ) {
+            break
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 750))
+          if (controller.signal.aborted) break
+        }
         setChannelStats(strategyChannelStats)
       } catch {
         toast.error(t('Channel statistics unavailable'))
@@ -447,6 +471,12 @@ export function LoadTestDemo() {
     channelStats.length > 0 && quotaPerUnit > 0
       ? totalChargedQuota / quotaPerUnit
       : 0
+  let actualCostLabel = `$${actualCost.toFixed(6)}`
+  if (status === 'running') {
+    actualCostLabel = t('Calculating...')
+  } else if (stats.successes > 0 && channelStats.length === 0) {
+    actualCostLabel = '-'
+  }
   const comparisonRows = comparisonResults.map((result) => {
     const cacheTokens =
       result.stats.inputTokens +
@@ -456,6 +486,10 @@ export function LoadTestDemo() {
       (total, channel) => total + channel.charged_quota,
       0
     )
+    const recordedRequests = result.channelStats.reduce(
+      (total, channel) => total + channel.requests,
+      0
+    )
     return {
       ...result,
       cacheHitRate: cacheTokens
@@ -463,8 +497,13 @@ export function LoadTestDemo() {
         : '0.0',
       p50: percentile(result.stats.latencies, 0.5),
       p95: percentile(result.stats.latencies, 0.95),
+      costAvailable:
+        result.stats.successes === 0 ||
+        recordedRequests >= result.stats.successes,
       actualCost:
-        quotaPerUnit > 0 ? (chargedQuota / quotaPerUnit).toFixed(6) : '0.000000',
+        quotaPerUnit > 0
+          ? (chargedQuota / quotaPerUnit).toFixed(6)
+          : '0.000000',
     }
   })
   const maxRequests = Math.min(
@@ -551,7 +590,9 @@ export function LoadTestDemo() {
                   </p>
                   <div className='grid gap-2 sm:grid-cols-3'>
                     {COMPARISON_STRATEGIES.map((strategy) => {
-                      const checked = selectedStrategies.includes(strategy.value)
+                      const checked = selectedStrategies.includes(
+                        strategy.value
+                      )
                       return (
                         <label
                           className='hover:bg-muted/40 flex cursor-pointer items-start gap-2 rounded-lg border p-3'
@@ -576,6 +617,14 @@ export function LoadTestDemo() {
                       )
                     })}
                   </div>
+                  <Alert className='bg-muted/30'>
+                    <Info />
+                    <AlertDescription>
+                      {t(
+                        'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.'
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 </div>
               </div>
               <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
@@ -731,7 +780,9 @@ export function LoadTestDemo() {
               <CardHeader>
                 <CardTitle>{t('Package comparison')}</CardTitle>
                 <CardDescription>
-                  {t('Each package was tested sequentially with the same API key')}
+                  {t(
+                    'Each package was tested sequentially with the same API key'
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -751,13 +802,13 @@ export function LoadTestDemo() {
                     <TableBody>
                       {comparisonRows.map((row) => (
                         <TableRow key={row.strategy}>
-                          <TableCell>{
-                            t(
+                          <TableCell>
+                            {t(
                               LOAD_TEST_ROUTING_STRATEGIES.find(
                                 (item) => item.value === row.strategy
                               )?.label ?? row.strategy
-                            )
-                          }</TableCell>
+                            )}
+                          </TableCell>
                           <TableCell className='tabular-nums'>
                             {row.stats.completed}
                           </TableCell>
@@ -776,7 +827,7 @@ export function LoadTestDemo() {
                             {row.p95 ? `${row.p95}ms` : '-'}
                           </TableCell>
                           <TableCell className='tabular-nums'>
-                            ${row.actualCost}
+                            {row.costAvailable ? `$${row.actualCost}` : '-'}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -809,10 +860,7 @@ export function LoadTestDemo() {
               label={t('Cache tokens')}
               value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
             />
-            <Metric
-              label={t('Actual cost')}
-              value={`$${actualCost.toFixed(6)}`}
-            />
+            <Metric label={t('Actual cost')} value={actualCostLabel} />
           </div>
           <Card>
             <CardHeader>

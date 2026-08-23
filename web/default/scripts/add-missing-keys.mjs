@@ -804,6 +804,8 @@ const cacheStatsKeys = {
 
 const loadTestDemoKeys = {
   en: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.',
     'Input total': 'Input total',
     'Prompt tokens': 'Prompt tokens',
     'Channel cost': 'Channel cost',
@@ -859,6 +861,8 @@ const loadTestDemoKeys = {
     Package: 'Package',
   },
   zh: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      '每个选中的套餐都会依次完整运行一次。全选三项可获得完整对比；总耗时为单组时长乘以选中数量，费用会在每组完成后计算。',
     'Input total': '输入总量',
     'Prompt tokens': 'Prompt Token',
     'Channel cost': '渠道成本',
@@ -912,6 +916,8 @@ const loadTestDemoKeys = {
     Package: '套餐',
   },
   'zh-TW': {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      '每個選取的套餐都會依序完整執行一次。全選三項可取得完整比較；總耗時為單組時長乘以選取數量，費用會在每組完成後計算。',
     'Input total': '輸入總量',
     'Prompt tokens': 'Prompt Token',
     'Channel cost': '渠道成本',
@@ -965,6 +971,8 @@ const loadTestDemoKeys = {
     Package: '套餐',
   },
   fr: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      'Chaque forfait sélectionné exécute un test complet à la suite. Sélectionnez les trois pour une comparaison complète ; la durée totale correspond à la durée par test multipliée par le nombre de forfaits. Le coût est calculé après chaque test.',
     'Input total': 'Entrée totale',
     'Prompt tokens': 'Tokens du prompt',
     'Channel cost': 'Coût du canal',
@@ -1022,6 +1030,8 @@ const loadTestDemoKeys = {
     Package: 'Forfait',
   },
   ja: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      '選択した各パッケージは順番に1回ずつ完全なテストを実行します。3つすべてを選ぶと完全に比較できます。合計時間は1回の時間×選択数で、コストは各テスト完了後に計算されます。',
     'Input total': '入力合計',
     'Prompt tokens': 'プロンプトトークン',
     'Channel cost': 'チャネルコスト',
@@ -1076,6 +1086,8 @@ const loadTestDemoKeys = {
     Package: 'パッケージ',
   },
   ru: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      'Каждый выбранный пакет последовательно проходит полный тест. Выберите все три для полного сравнения; общее время равно длительности одного теста, умноженной на число пакетов. Стоимость рассчитывается после завершения каждого теста.',
     'Input total': 'Всего входных токенов',
     'Prompt tokens': 'Токены промпта',
     'Channel cost': 'Стоимость канала',
@@ -1133,6 +1145,8 @@ const loadTestDemoKeys = {
     Package: 'Пакет',
   },
   vi: {
+    'Each selected package runs a full test in sequence. Select all three for a complete comparison; total time is the duration multiplied by the number selected. Cost is calculated after each package finishes.':
+      'Mỗi gói đã chọn sẽ chạy một lượt kiểm thử đầy đủ theo thứ tự. Chọn cả ba để so sánh đầy đủ; tổng thời gian bằng thời lượng mỗi lượt nhân với số gói đã chọn. Chi phí được tính sau khi từng lượt hoàn tất.',
     'Input total': 'Tổng đầu vào',
     'Prompt tokens': 'Token prompt',
     'Channel cost': 'Chi phí kênh',
