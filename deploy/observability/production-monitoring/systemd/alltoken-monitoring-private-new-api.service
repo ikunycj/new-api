@@ -1,0 +1,7 @@
+[Unit]
+Description=Private new-api metrics proxy
+Requires=alltoken-monitoring-private-new-api.socket
+After=alltoken-monitoring-private-new-api.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:8006

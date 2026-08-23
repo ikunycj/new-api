@@ -1,0 +1,67 @@
+name: alltoken-remote-monitoring
+
+services:
+  grafana:
+    image: grafana/grafana:11.5.2
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      GF_SERVER_HTTP_ADDR: 10.66.0.2
+      GF_SERVER_HTTP_PORT: 3001
+      GF_SERVER_ROOT_URL: https://alltokenapi.com/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: light
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/remote-datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.listen-address=10.66.0.2:9090
+    volumes:
+      - ./prometheus.remote.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    security_opt:
+      - no-new-privileges:true
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=10.66.0.2:9093
+      - --cluster.listen-address=
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  grafana_data:
+    external: true
+    name: alltoken-remote-grafana_grafana_data
+  prometheus_data:
+    external: true
+    name: alltoken-remote-monitoring_prometheus_data
+  alertmanager_data:
+    external: true
+    name: alltoken-remote-monitoring_alertmanager_data

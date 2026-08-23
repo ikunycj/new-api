@@ -1,0 +1,7 @@
+[Unit]
+Description=Private Prometheus proxy for the AllToken application
+Requires=alltoken-failover-private-prometheus.socket
+After=alltoken-failover-private-prometheus.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 10.66.0.2:9090
