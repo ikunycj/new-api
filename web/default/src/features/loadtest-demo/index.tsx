@@ -60,6 +60,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
@@ -81,6 +82,12 @@ import {
   type LoadTestRoutingStrategy,
   type LoadTestRequestResult,
 } from './api'
+import {
+  loadPersistedLoadTestRun,
+  savePersistedLoadTestRun,
+  type LoadTestComparisonResult,
+  type RunStats,
+} from './storage'
 
 const LOAD_TEST_ROUTING_STRATEGIES: Array<{
   value: LoadTestRoutingStrategy
@@ -95,20 +102,6 @@ const LOAD_TEST_ROUTING_STRATEGIES: Array<{
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
-type RunStats = {
-  completed: number
-  failures: number
-  latencies: number[]
-  successes: number
-  statusCodes: Record<string, number>
-  errorCodes: Record<string, number>
-  keyCounts: Record<string, number>
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-}
-
 const EMPTY_STATS: RunStats = {
   completed: 0,
   failures: 0,
@@ -121,13 +114,6 @@ const EMPTY_STATS: RunStats = {
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
-}
-
-type LoadTestComparisonResult = {
-  strategy: LoadTestRoutingStrategy
-  runId: string
-  stats: RunStats
-  channelStats: LoadTestChannelStats[]
 }
 
 const COMPARISON_STRATEGIES = LOAD_TEST_ROUTING_STRATEGIES.filter(
@@ -151,6 +137,25 @@ function percentile(values: number[], ratio: number) {
 
 function incrementCounter(counter: Record<string, number>, key: string) {
   counter[key] = (counter[key] ?? 0) + 1
+}
+
+function upsertComparisonResult(
+  results: LoadTestComparisonResult[],
+  result: LoadTestComparisonResult
+) {
+  const index = results.findIndex((item) => item.runId === result.runId)
+  if (index === -1) return [...results, result]
+  return results.map((item, itemIndex) => (itemIndex === index ? result : item))
+}
+
+function hasCompleteCost(result: LoadTestComparisonResult) {
+  const recordedRequests = result.channelStats.reduce(
+    (total, channel) => total + channel.requests,
+    0
+  )
+  return (
+    result.stats.successes === 0 || recordedRequests >= result.stats.successes
+  )
 }
 
 function accumulateResult(
@@ -222,6 +227,10 @@ function CounterList({
 export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
+  const userId = useAuthStore((state) => state.auth.user?.id)
+  const [persistedRun] = useState(() => loadPersistedLoadTestRun(userId))
+  const restoredResults = persistedRun?.results ?? []
+  const restoredLastResult = restoredResults.at(-1)
   const quotaPerUnit = useSystemConfigStore(
     (state) => state.config.currency.quotaPerUnit
   )
@@ -230,7 +239,9 @@ export function LoadTestDemo() {
   const [selectedStrategies, setSelectedStrategies] = useState<
     LoadTestRoutingStrategy[]
   >(['cost_first', 'balanced', 'stability_first'])
-  const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
+  const [selectedModel, setSelectedModel] = useState(
+    persistedRun?.model ?? LOAD_TEST_MODEL
+  )
   const [durationSeconds, setDurationSeconds] = useState(
     LOAD_TEST_DEFAULT_DURATION_SECONDS
   )
@@ -239,15 +250,18 @@ export function LoadTestDemo() {
   )
   const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
-  const [stats, setStats] = useState<RunStats>(EMPTY_STATS)
-  const [runId, setRunId] = useState('')
+  const [stats, setStats] = useState<RunStats>(
+    restoredLastResult?.stats ?? EMPTY_STATS
+  )
+  const [runId, setRunId] = useState(restoredLastResult?.runId ?? '')
   const [activeStrategy, setActiveStrategy] =
     useState<LoadTestRoutingStrategy | null>(null)
   const [elapsed, setElapsed] = useState(0)
-  const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>([])
-  const [comparisonResults, setComparisonResults] = useState<
-    LoadTestComparisonResult[]
-  >([])
+  const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>(
+    restoredLastResult?.channelStats ?? []
+  )
+  const [comparisonResults, setComparisonResults] =
+    useState<LoadTestComparisonResult[]>(restoredResults)
   const runAbortRef = useRef<AbortController | null>(null)
   const requestIdsRef = useRef<string[]>([])
   const activeRunIdRef = useRef('')
@@ -275,6 +289,77 @@ export function LoadTestDemo() {
     void loadKeys()
     return () => runAbortRef.current?.abort()
   }, [loadKeys])
+
+  useEffect(() => {
+    savePersistedLoadTestRun(userId, selectedModel, comparisonResults)
+  }, [comparisonResults, selectedModel, userId])
+
+  useEffect(() => {
+    if (status === 'running') return
+    const pendingResults = comparisonResults.filter(
+      (result) => !hasCompleteCost(result) && result.requestIds.length > 0
+    )
+    if (pendingResults.length === 0) return
+    let cancelled = false
+
+    const refreshCosts = async () => {
+      await Promise.all(
+        pendingResults.map(async (result) => {
+          for (let attempt = 0; attempt < 30 && !cancelled; attempt += 1) {
+            try {
+              const refreshedResult = {
+                ...result,
+                channelStats: await getLoadTestChannelStats(result.requestIds),
+              }
+              if (cancelled) return
+              const previousRequests = result.channelStats.reduce(
+                (total, channel) => total + channel.requests,
+                0
+              )
+              const refreshedRequests = refreshedResult.channelStats.reduce(
+                (total, channel) => total + channel.requests,
+                0
+              )
+              const previousQuota = result.channelStats.reduce(
+                (total, channel) => total + channel.charged_quota,
+                0
+              )
+              const refreshedQuota = refreshedResult.channelStats.reduce(
+                (total, channel) => total + channel.charged_quota,
+                0
+              )
+              if (
+                refreshedRequests !== previousRequests ||
+                refreshedQuota !== previousQuota
+              ) {
+                setComparisonResults((current) =>
+                  upsertComparisonResult(current, refreshedResult)
+                )
+              }
+              if (result.runId === comparisonResults.at(-1)?.runId) {
+                setChannelStats(refreshedResult.channelStats)
+              }
+              if (
+                hasCompleteCost(refreshedResult) ||
+                refreshedRequests !== previousRequests ||
+                refreshedQuota !== previousQuota
+              ) {
+                return
+              }
+            } catch {
+              // Keep the saved result and retry while the page remains open.
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 1000))
+          }
+        })
+      )
+    }
+
+    void refreshCosts()
+    return () => {
+      cancelled = true
+    }
+  }, [comparisonResults, status])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -350,6 +435,15 @@ export function LoadTestDemo() {
           if (result.requestId) requestIdsRef.current.push(result.requestId)
           strategyStats = accumulateResult(strategyStats, result)
           setStats(strategyStats)
+          setComparisonResults((current) =>
+            upsertComparisonResult(current, {
+              strategy,
+              runId: currentRunId,
+              stats: strategyStats,
+              channelStats: [],
+              requestIds: [...requestIdsRef.current],
+            })
+          )
         })
         inFlight.add(request)
         void request.then(() => inFlight.delete(request))
@@ -384,15 +478,15 @@ export function LoadTestDemo() {
       } catch {
         toast.error(t('Channel statistics unavailable'))
       }
-      setComparisonResults((current) => [
-        ...current,
-        {
+      setComparisonResults((current) =>
+        upsertComparisonResult(current, {
           strategy,
           runId: currentRunId,
           stats: strategyStats,
           channelStats: strategyChannelStats,
-        },
-      ])
+          requestIds: [...requestIdsRef.current],
+        })
+      )
       setElapsed(Math.min(durationMs, Date.now() - strategyStartedAt))
     }
 
@@ -436,6 +530,10 @@ export function LoadTestDemo() {
     (total, item) => total + item.charged_quota,
     0
   )
+  const totalRecordedRequests = channelStats.reduce(
+    (total, item) => total + item.requests,
+    0
+  )
   const totalChannelTokens = channelStats.reduce(
     (total, item) =>
       total +
@@ -474,7 +572,7 @@ export function LoadTestDemo() {
   let actualCostLabel = `$${actualCost.toFixed(6)}`
   if (status === 'running') {
     actualCostLabel = t('Calculating...')
-  } else if (stats.successes > 0 && channelStats.length === 0) {
+  } else if (stats.successes > 0 && totalRecordedRequests < stats.successes) {
     actualCostLabel = '-'
   }
   const comparisonRows = comparisonResults.map((result) => {
