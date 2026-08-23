@@ -10,7 +10,7 @@ import (
 )
 
 func GetFailoverConfig(c *gin.Context) {
-	config, err := model.GetFailoverConfig()
+	config, err := model.GetChannelRoutingConfig()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -27,20 +27,19 @@ func GetFailoverGrafanaAuth(c *gin.Context) {
 }
 
 func UpdateFailoverConfig(c *gin.Context) {
-	config := &model.FailoverConfig{}
+	config := &model.ChannelRoutingConfig{}
 	if err := c.ShouldBindJSON(config); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if err := model.SaveFailoverConfig(config); err != nil {
+	if err := model.SaveChannelRoutingConfig(config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	model.InitChannelCache()
-	recordManageAudit(c, "failover.config.update", map[string]interface{}{
-		"clusters": len(config.Clusters),
-		"pools":    len(config.Pools),
-		"policies": len(config.Policies),
+	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{
+		"routes":         len(config.Routes),
+		"route_channels": len(config.RouteChannels),
 	})
 	common.ApiSuccess(c, nil)
 }

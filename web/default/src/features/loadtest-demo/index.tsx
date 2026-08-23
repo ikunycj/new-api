@@ -24,7 +24,6 @@ import { toast } from 'sonner'
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Card,
   CardContent,
@@ -53,6 +52,7 @@ import {
 } from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
@@ -74,22 +74,13 @@ import {
   type LoadTestPricing,
   type LoadTestRequestResult,
 } from './api'
+import {
+  loadPersistedLoadTestRun,
+  savePersistedLoadTestRun,
+  type RunStats,
+} from './storage'
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
-
-type RunStats = {
-  completed: number
-  failures: number
-  latencies: number[]
-  successes: number
-  statusCodes: Record<string, number>
-  errorCodes: Record<string, number>
-  keyCounts: Record<string, number>
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-}
 
 const EMPTY_STATS: RunStats = {
   completed: 0,
@@ -104,18 +95,6 @@ const EMPTY_STATS: RunStats = {
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
 }
-
-type LoadTestComparisonResult = {
-  strategy: LoadTestRoutingStrategy
-  runId: string
-  stats: RunStats
-  channelStats: LoadTestChannelStats[]
-}
-
-const COMPARISON_STRATEGIES = LOAD_TEST_ROUTING_STRATEGIES.filter(
-  ({ value }) =>
-    value === 'cost_first' || value === 'balanced' || value === 'stability_first'
-)
 
 function makeRunId() {
   return `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -169,7 +148,10 @@ function calculateChannelCost(
 ) {
   if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
     return (
-      channel.requests * (pricing.model.model_price ?? 0) * channel.cost_factor
+      channel.requests *
+      (pricing.model.model_price ?? 0) *
+      pricing.groupRatio *
+      channel.cost_factor
     )
   }
 
@@ -193,7 +175,7 @@ function calculateChannelCost(
     (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
     (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
     (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
-  return officialCost * channel.cost_factor
+  return officialCost * pricing.groupRatio * channel.cost_factor
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -235,11 +217,15 @@ function CounterList({
 export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
+  const userId = useAuthStore((state) => state.auth.user?.id)
+  const [persistedRun] = useState(() => loadPersistedLoadTestRun(userId))
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   // Use the masked key value as the UI identity. IDs are database details and
   // can be misleading when accounts are switched in the same browser.
   const [selectedKeyValue, setSelectedKeyValue] = useState('')
-  const [selectedModel, setSelectedModel] = useState(LOAD_TEST_MODEL)
+  const [selectedModel, setSelectedModel] = useState(
+    persistedRun?.model ?? LOAD_TEST_MODEL
+  )
   const [durationSeconds, setDurationSeconds] = useState(
     LOAD_TEST_DEFAULT_DURATION_SECONDS
   )
@@ -248,18 +234,18 @@ export function LoadTestDemo() {
   )
   const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
-  const [stats, setStats] = useState<RunStats>(EMPTY_STATS)
-  const [runId, setRunId] = useState('')
-  const [activeStrategy, setActiveStrategy] =
-    useState<LoadTestRoutingStrategy | null>(null)
+  const [stats, setStats] = useState<RunStats>(
+    persistedRun?.stats ?? EMPTY_STATS
+  )
+  const [runId, setRunId] = useState(persistedRun?.runId ?? '')
   const [elapsed, setElapsed] = useState(0)
   const [pricing, setPricing] = useState<LoadTestPricing | null>(null)
-  const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>([])
-  const [comparisonResults, setComparisonResults] = useState<
-    LoadTestComparisonResult[]
-  >([])
+  const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>(
+    persistedRun?.channelStats ?? []
+  )
   const runAbortRef = useRef<AbortController | null>(null)
-  const requestIdsRef = useRef<string[]>([])
+  const requestIdsRef = useRef<string[]>(persistedRun?.requestIds ?? [])
+  const statsRef = useRef<RunStats>(persistedRun?.stats ?? EMPTY_STATS)
   const activeRunIdRef = useRef('')
   const runStartedAtRef = useRef(0)
 
@@ -287,12 +273,29 @@ export function LoadTestDemo() {
   }, [loadKeys])
 
   useEffect(() => {
+    if (!runId || status === 'running') return
+    savePersistedLoadTestRun(userId, {
+      model: selectedModel,
+      runId,
+      stats,
+      channelStats,
+      requestIds: requestIdsRef.current,
+    })
+  }, [channelStats, runId, selectedModel, stats, status, userId])
+
+  useEffect(() => {
     if (status !== 'running') return
     const timer = window.setInterval(() => {
       setElapsed(Date.now() - runStartedAtRef.current)
     }, 250)
     return () => window.clearInterval(timer)
   }, [status])
+
+  const recordResult = useCallback((result: LoadTestRequestResult) => {
+    if (result.requestId) requestIdsRef.current.push(result.requestId)
+    statsRef.current = accumulateResult(statsRef.current, result)
+    setStats(statsRef.current)
+  }, [])
 
   const run = useCallback(async () => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
@@ -310,8 +313,15 @@ export function LoadTestDemo() {
     }
     const controller = new AbortController()
     runAbortRef.current = controller
-    setComparisonResults([])
+    runStartedAtRef.current = Date.now()
+    const currentRunId = makeRunId()
+    activeRunIdRef.current = currentRunId
+    setRunId(currentRunId)
+    setElapsed(0)
+    setStats(EMPTY_STATS)
+    statsRef.current = EMPTY_STATS
     setChannelStats([])
+    requestIdsRef.current = []
     setStatus('running')
 
     try {
@@ -363,75 +373,32 @@ export function LoadTestDemo() {
     if (activeRunIdRef.current !== currentRunId) return
 
     try {
-      setChannelStats(await getLoadTestChannelStats(requestIdsRef.current))
+      let settledStats: LoadTestChannelStats[] = []
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        settledStats = await getLoadTestChannelStats(requestIdsRef.current)
+        const recordedRequests = settledStats.reduce(
+          (total, channel) => total + channel.requests,
+          0
+        )
+        if (recordedRequests >= statsRef.current.successes) break
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
+        if (activeRunIdRef.current !== currentRunId) return
+      }
+      setChannelStats(settledStats)
     } catch {
       setChannelStats([])
-      requestIdsRef.current = []
-
-      const inFlight = new Set<Promise<void>>()
-      const deadline = Date.now() + durationMs
-      let sentRequests = 0
-      let strategyStats = EMPTY_STATS
-      while (
-        Date.now() < deadline &&
-        sentRequests < requestLimit &&
-        !controller.signal.aborted
-      ) {
-        if (inFlight.size >= LOAD_TEST_MAX_CONCURRENCY) {
-          await Promise.race(inFlight)
-        }
-        const request = sendLoadTestRequest(
-          serverAddress,
-          selectedKey,
-          selectedModel,
-          currentRunId,
-          promptCache,
-          strategy,
-          controller.signal
-        ).then((result) => {
-          if (result.requestId) requestIdsRef.current.push(result.requestId)
-          strategyStats = accumulateResult(strategyStats, result)
-          setStats(strategyStats)
-        })
-        inFlight.add(request)
-        void request.then(() => inFlight.delete(request))
-        sentRequests += 1
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, requestIntervalMs)
-        )
-      }
-      await Promise.all(inFlight)
-      if (controller.signal.aborted) break
-
-      let strategyChannelStats: LoadTestChannelStats[] = []
-      try {
-        strategyChannelStats = await getLoadTestChannelStats(
-          requestIdsRef.current
-        )
-        setChannelStats(strategyChannelStats)
-      } catch {
-        toast.error(t('Channel statistics unavailable'))
-      }
-      setComparisonResults((current) => [
-        ...current,
-        {
-          strategy,
-          runId: currentRunId,
-          stats: strategyStats,
-          channelStats: strategyChannelStats,
-        },
-      ])
-      setElapsed(Math.min(durationMs, Date.now() - strategyStartedAt))
+      toast.error(t('Channel statistics unavailable'))
     }
 
     runAbortRef.current = null
     activeRunIdRef.current = ''
-    setActiveStrategy(null)
+    setElapsed(Math.min(durationMs, Date.now() - runStartedAtRef.current))
     setStatus('complete')
   }, [
     durationSeconds,
     keys,
     promptCache,
+    recordResult,
     requestsPerSecond,
     selectedKeyValue,
     selectedModel,
@@ -443,7 +410,6 @@ export function LoadTestDemo() {
     runAbortRef.current?.abort()
     runAbortRef.current = null
     activeRunIdRef.current = ''
-    setActiveStrategy(null)
     setStatus('complete')
   }, [])
 
@@ -482,13 +448,8 @@ export function LoadTestDemo() {
       item.output_tokens,
     0
   )
-  const poolsUsed = new Set(
-    channelStats.map((channel) => channel.pool_name).filter(Boolean)
-  )
-  const clustersUsed = new Set(
-    channelStats
-      .map((channel) => channel.cluster_id)
-      .filter((clusterId) => clusterId > 0)
+  const billingGroupsUsed = new Set(
+    channelStats.map((channel) => channel.billing_group).filter(Boolean)
   )
   let estimatedCost = 0
   if (pricing) {
@@ -709,16 +670,6 @@ export function LoadTestDemo() {
                     <span>{durationSeconds}s</span>
                   </div>
                   <Progress value={progress} />
-                  {activeStrategy && (
-                    <div className='text-muted-foreground text-xs'>
-                      {t('Routing strategy')}:{' '}
-                      {t(
-                        LOAD_TEST_ROUTING_STRATEGIES.find(
-                          (item) => item.value === activeStrategy
-                        )?.label ?? activeStrategy
-                      )}
-                    </div>
-                  )}
                   <div className='text-muted-foreground text-xs'>
                     {t('Run ID')}: <code>{runId}</code>
                   </div>
@@ -726,67 +677,6 @@ export function LoadTestDemo() {
               )}
             </CardContent>
           </Card>
-
-          {comparisonRows.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('Package comparison')}</CardTitle>
-                <CardDescription>
-                  {t('Each package was tested sequentially with the same API key')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className='overflow-x-auto rounded-md border'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('Package')}</TableHead>
-                        <TableHead>{t('Requests')}</TableHead>
-                        <TableHead>{t('Success rate')}</TableHead>
-                        <TableHead>{t('Cache hit rate')}</TableHead>
-                        <TableHead>{t('P50 latency')}</TableHead>
-                        <TableHead>{t('P95 latency')}</TableHead>
-                        <TableHead>{t('Actual cost')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {comparisonRows.map((row) => (
-                        <TableRow key={row.strategy}>
-                          <TableCell>{
-                            t(
-                              LOAD_TEST_ROUTING_STRATEGIES.find(
-                                (item) => item.value === row.strategy
-                              )?.label ?? row.strategy
-                            )
-                          }</TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.stats.completed}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.stats.completed
-                              ? `${((row.stats.successes / row.stats.completed) * 100).toFixed(1)}%`
-                              : '0.0%'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.cacheHitRate}%
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.p50 ? `${row.p50}ms` : '-'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            {row.p95 ? `${row.p95}ms` : '-'}
-                          </TableCell>
-                          <TableCell className='tabular-nums'>
-                            ${row.actualCost}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
             <Metric label={t('Requests')} value={String(stats.completed)} />
@@ -822,7 +712,7 @@ export function LoadTestDemo() {
               <CardTitle>{t('Channel token usage and cost')}</CardTitle>
               <CardDescription>
                 {t(
-                  'Estimated cost = actual channel tokens × official model price × channel cost factor.'
+                  'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.'
                 )}
               </CardDescription>
             </CardHeader>
@@ -837,7 +727,7 @@ export function LoadTestDemo() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t('Channel')}</TableHead>
-                        <TableHead>{t('Pool')}</TableHead>
+                        <TableHead>{t('Billing group')}</TableHead>
                         <TableHead>{t('Requests')}</TableHead>
                         <TableHead>{t('Prompt tokens')}</TableHead>
                         <TableHead>{t('Input total')}</TableHead>
@@ -866,11 +756,13 @@ export function LoadTestDemo() {
                           <TableRow key={channel.channel_id}>
                             <TableCell>
                               #{channel.channel_id} {channel.channel_name}
-                              {channel.cluster_id > 0
-                                ? ` · C${channel.cluster_id}`
+                              {channel.billing_group
+                                ? ` · ${channel.billing_group}`
                                 : ''}
                             </TableCell>
-                            <TableCell>{channel.pool_name || '-'}</TableCell>
+                            <TableCell>
+                              {channel.billing_group || '-'}
+                            </TableCell>
                             <TableCell className='tabular-nums'>
                               {channel.requests}
                             </TableCell>
@@ -920,8 +812,10 @@ export function LoadTestDemo() {
                 label={t('Channel')}
                 value={String(channelStats.length)}
               />
-              <Metric label={t('Pool')} value={String(poolsUsed.size)} />
-              <Metric label={t('Clusters')} value={String(clustersUsed.size)} />
+              <Metric
+                label={t('Billing groups')}
+                value={String(billingGroupsUsed.size)}
+              />
             </div>
           )}
           <p className='text-muted-foreground text-xs'>

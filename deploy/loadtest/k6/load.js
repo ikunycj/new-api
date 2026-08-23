@@ -38,18 +38,18 @@ const commonThresholds = {
 export const options = buildOptions(profile);
 
 export function setup() {
-  if (profile !== 'pool-failover') {
+  if (profile !== 'channel-failover') {
     return;
   }
   const responses = http.batch([
-    ['POST', `${mockControlA}/control/reset?free=300&premium=300&fallback=300`, null],
-    ['POST', `${mockControlB}/control/reset?free=3000&premium=3000&fallback=3000`, null],
+    ['POST', `${mockControlA}/control/reset?tokens=300`, null],
+    ['POST', `${mockControlB}/control/reset?tokens=3000`, null],
   ]);
   const reset = check(responses, {
-    'mock clusters reset': (items) => items.every((item) => item.status === 200),
+    'mock channels reset': (items) => items.every((item) => item.status === 200),
   });
   if (!reset) {
-    throw new Error('failed to reset mock cluster pools');
+    throw new Error('failed to reset mock channels');
   }
 }
 
@@ -256,9 +256,9 @@ function buildOptions(selectedProfile) {
         new_api_usage_missing: ['rate<0.001'],
       },
     },
-    'pool-failover': {
+    'channel-failover': {
       scenarios: {
-        poolFailover: {
+        channelFailover: {
           executor: 'constant-vus',
           exec: 'chat',
           vus: 5,

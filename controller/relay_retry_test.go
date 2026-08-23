@@ -119,7 +119,7 @@ func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
 	err := types.WithOpenAIError(types.OpenAIError{
 		Message: "vendor rejected request",
 		Code:    "vendor_policy_error",
-		Source:  types.ErrorSourceCluster,
+		Source:  types.ErrorSourceChannel,
 	}, http.StatusBadGateway)
 	err.SetClassification(207001, "policy", "request", "none", false)
 

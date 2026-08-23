@@ -200,7 +200,8 @@ function isModuleEnabled(
 function isNavItemVisible(
   item: NavItem,
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  userGroup?: string
 ): boolean {
   // Handle dynamic chat presets type — also runs the admin × user AND gate
   if ('type' in item && item.type === 'chat-presets') {
@@ -216,6 +217,7 @@ function isNavItemVisible(
 
   // Handle direct link type
   if ('url' in item && item.url) {
+    if (item.url === '/loadtest-demo' && userGroup !== 'toB') return false
     const configUrls = item.configUrls ?? [item.url]
     return configUrls.some((url) =>
       isModuleEnabled(url as string, adminConfig, userConfig)
@@ -239,7 +241,8 @@ function isNavItemVisible(
 function filterNavItems(
   items: NavItem[],
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  userGroup?: string
 ): NavItem[] {
   return items
     .map((item) => {
@@ -256,7 +259,9 @@ function filterNavItems(
       }
       return item
     })
-    .filter((item) => isNavItemVisible(item, adminConfig, userConfig))
+    .filter((item) =>
+      isNavItemVisible(item, adminConfig, userConfig, userGroup)
+    )
 }
 
 /**
@@ -304,10 +309,15 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(group.items, adminConfig, userConfig),
+          items: filterNavItems(
+            group.items,
+            adminConfig,
+            userConfig,
+            auth?.user?.group
+          ),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
-    [navGroups, adminConfig, userConfig]
+    [navGroups, adminConfig, userConfig, auth?.user?.group]
   )
 
   return filteredNavGroups

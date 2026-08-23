@@ -34,11 +34,9 @@ services:
     build:
       context: ./mock-upstream
     environment:
-      CLUSTER_ID: "1"
-      CLUSTER_NAME: mock-cluster-a
-      FREE_POOL_TOKENS: ${MOCK_A_FREE_POOL_TOKENS:-300}
-      PREMIUM_POOL_TOKENS: ${MOCK_A_PREMIUM_POOL_TOKENS:-600}
-      FALLBACK_POOL_TOKENS: ${MOCK_A_FALLBACK_POOL_TOKENS:-900}
+      CHANNEL_ID: "1"
+      CHANNEL_NAME: mock-channel-a
+      CHANNEL_TOKENS: ${MOCK_A_CHANNEL_TOKENS:-300}
       TTFT_MS: ${MOCK_TTFT_MS:-100}
       RESPONSE_MS: ${MOCK_RESPONSE_MS:-500}
       STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}
@@ -57,11 +55,9 @@ services:
     build:
       context: ./mock-upstream
     environment:
-      CLUSTER_ID: "2"
-      CLUSTER_NAME: mock-cluster-b
-      FREE_POOL_TOKENS: ${MOCK_B_FREE_POOL_TOKENS:-600}
-      PREMIUM_POOL_TOKENS: ${MOCK_B_PREMIUM_POOL_TOKENS:-900}
-      FALLBACK_POOL_TOKENS: ${MOCK_B_FALLBACK_POOL_TOKENS:-1200}
+      CHANNEL_ID: "2"
+      CHANNEL_NAME: mock-channel-b
+      CHANNEL_TOKENS: ${MOCK_B_CHANNEL_TOKENS:-3000}
       TTFT_MS: ${MOCK_B_TTFT_MS:-120}
       RESPONSE_MS: ${MOCK_B_RESPONSE_MS:-550}
       STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}

@@ -106,22 +106,19 @@ func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
 }
 
 func GetChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
-	return GetChannelWithExclusions(group, model, retry, requestPath, nil, nil)
+	return GetChannelExcluding(group, model, retry, requestPath, nil)
 }
 
 // GetChannelExcluding is the database-backed counterpart to
 // GetRandomSatisfiedChannelExcluding. The exclusion set is request-local and
 // is never persisted or used to alter channel health.
 func GetChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
-	return GetChannelWithExclusions(group, model, retry, requestPath, excluded, nil)
-}
-
-func GetChannelWithExclusions(group string, model string, retry int, requestPath string, excludedChannels map[int]struct{}, excludedClusters map[int]struct{}) (*Channel, error) {
+	excludedChannels := excluded
 	var abilities []Ability
 
 	var err error
 	var channelQuery *gorm.DB
-	if len(excludedChannels) > 0 || len(excludedClusters) > 0 {
+	if len(excludedChannels) > 0 {
 		// Load all priorities when failing over. The highest remaining priority
 		// is selected after exclusions; querying only the original max priority
 		// would incorrectly skip a healthy lower-priority fallback.
@@ -141,31 +138,11 @@ func GetChannelWithExclusions(group string, model string, retry int, requestPath
 		return nil, err
 	}
 	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
-	if len(excludedChannels) > 0 || len(excludedClusters) > 0 {
-		channelIds := make([]int, 0, len(abilities))
-		for _, ability := range abilities {
-			channelIds = append(channelIds, ability.ChannelId)
-		}
-		var candidates []Channel
-		if len(channelIds) > 0 {
-			if err := DB.Select("id", "cluster_id").Where("id IN ?", channelIds).Find(&candidates).Error; err != nil {
-				return nil, err
-			}
-		}
-		clusterByChannel := make(map[int]int, len(candidates))
-		for _, candidate := range candidates {
-			clusterByChannel[candidate.Id] = candidate.ClusterId
-		}
+	if len(excludedChannels) > 0 {
 		filtered := make([]Ability, 0, len(abilities))
 		for _, ability := range abilities {
 			if _, ok := excludedChannels[ability.ChannelId]; ok {
 				continue
-			}
-			clusterID := clusterByChannel[ability.ChannelId]
-			if clusterID > 0 {
-				if _, ok := excludedClusters[clusterID]; ok {
-					continue
-				}
 			}
 			filtered = append(filtered, ability)
 		}

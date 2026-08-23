@@ -79,8 +79,7 @@ export type LoadTestPricing = {
 export type LoadTestChannelStats = {
   channel_id: number
   channel_name: string
-  cluster_id: number
-  pool_name: string
+  billing_group: string
   cost_factor: number
   requests: number
   input_tokens: number
@@ -106,7 +105,9 @@ export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
 
   // Fetch secrets in one request. Calling the per-key endpoint concurrently
   // can trip the critical rate limit and make the whole selector appear empty.
-  const keyResponse = await fetchTokenKeysBatch(candidates.map((apiKey) => apiKey.id))
+  const keyResponse = await fetchTokenKeysBatch(
+    candidates.map((apiKey) => apiKey.id)
+  )
   const secrets = keyResponse.data?.keys ?? {}
 
   return candidates.flatMap((apiKey) => {

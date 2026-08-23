@@ -46,36 +46,33 @@ The authenticated AllToken admin page at `/failover` includes the same current m
 ./run.sh mixed   # 700 stream + 200 non-stream + 100 model-list VUs
 ./run.sh soak    # 500 VUs for 2 hours, leak check
 ./run.sh capacity # configured RPS steps against the single mock channel
-./run.sh pool-failover # deterministic P1 -> P2 -> P3 -> next-cluster scenario
+./run.sh channel-failover # deterministic primary-channel -> fallback-channel scenario
 ```
 
 The default is `smoke`. Results are written to `results/summary.json`. The k6 container publishes its metrics to Prometheus through remote write, so the Grafana panel can correlate load with server and dependency metrics.
 
 The `capacity` profile uses an arrival-rate executor instead of VUs as the target. It holds each rate from `CAPACITY_RATES` after a short ramp and records input, output, and total Token TPS from the upstream `usage` response. The default mock returns 10 prompt and 20 completion tokens per successful request, so output Token TPS should be approximately `successful RPS * 20`. The highest valid step is the last rate with no dropped iterations, error rate below 1%, latency within the configured thresholds, and no sustained database or Redis pool alerts.
 
-### Deterministic pool and cluster failover
+### Deterministic channel failover
 
-Each successful mock response consumes exactly 30 tokens. Cluster A is exposed on port `18080` and Cluster B on `18081`. Reset both before a repeatable run:
+Each successful mock response consumes exactly 30 tokens. Channel A is exposed on port `18080` and Channel B on `18081`. Channel A has a deliberately small balance so traffic switches directly to Channel B after exhaustion:
 
 ```sh
-curl -X POST 'http://localhost:18080/control/reset?free=300&premium=600&fallback=900'
-curl -X POST 'http://localhost:18081/control/reset?free=600&premium=900&fallback=1200'
-./run.sh pool-failover
+curl -X POST 'http://localhost:18080/control/reset?tokens=300'
+curl -X POST 'http://localhost:18081/control/reset?tokens=3000'
+./run.sh channel-failover
 ```
 
 Control individual failure stages while watching Grafana:
 
 ```sh
-curl -X POST 'http://localhost:18080/control/exhaust?pool=free'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=premium'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=fallback'
-curl -X POST 'http://localhost:18080/control/exhaust?pool=all'
+curl -X POST 'http://localhost:18080/control/exhaust'
 curl -X POST 'http://localhost:18080/control/disable'
 curl -X POST 'http://localhost:18080/control/enable'
 curl 'http://localhost:18080/control/state'
 ```
 
-The expected sequence is P1 consumption, P2 consumption, P3 consumption, then a switch from Cluster A to Cluster B. Verify `alltoken_pool_failover_total`, `alltoken_cluster_failover_total`, `alltoken_cluster_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
+The expected sequence is Channel A consumption, a `205001-CH<id>` exhaustion error, then a switch to Channel B. Verify `alltoken_channel_requests_total`, `alltoken_channel_switch_total`, `alltoken_channel_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
 
 For a short preliminary run:
 

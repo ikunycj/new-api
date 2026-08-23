@@ -13,7 +13,7 @@ SELECT
   2000000000,
   0,
   0,
-  'default',
+  'toB',
   'LT' || lpad(number::text, 14, '0'),
   '{}',
   extract(epoch FROM now())::bigint
@@ -52,43 +52,18 @@ ON CONFLICT ("key") DO UPDATE SET
   unlimited_quota = EXCLUDED.unlimited_quota,
   "group" = EXCLUDED."group";
 
-INSERT INTO clusters (id, name, type, status, remark, archived, created_time, updated_time)
-VALUES
-  (1, 'Mock Cluster A', 'custom', 1, 'Deterministic load-test cluster', false, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (2, 'Mock Cluster B', 'custom', 1, 'Deterministic failover target', false, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, status = EXCLUDED.status, archived = false, updated_time = EXCLUDED.updated_time;
-
-INSERT INTO cluster_pools (id, cluster_id, tier, name, status, cost_factor, remark, created_time, updated_time)
-VALUES
-  (1, 1, 1, 'Free', 1, 0.0, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (2, 1, 2, 'Pro/Plus', 1, 1.0, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (3, 1, 3, 'Fallback', 1, 1.5, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (4, 2, 1, 'Free', 1, 0.0, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (5, 2, 2, 'Pro/Plus', 1, 1.0, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint),
-  (6, 2, 3, 'Fallback', 1, 1.5, '', extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint)
-ON CONFLICT (id) DO UPDATE SET cluster_id = EXCLUDED.cluster_id, tier = EXCLUDED.tier, name = EXCLUDED.name, status = EXCLUDED.status, cost_factor = EXCLUDED.cost_factor, updated_time = EXCLUDED.updated_time;
-
-INSERT INTO failover_policies (
-  id, name, mode, enabled, same_pool_retries, connect_timeout_ms, first_byte_timeout_ms,
-  max_pool_attempts, max_cluster_attempts, max_total_attempts, total_failover_budget_ms,
-  switch_status_codes, switch_error_codes, circuit_failure_threshold, circuit_window_seconds,
-  circuit_cooldown_seconds, circuit_half_open_requests, allow_paid_escalation, allow_fallback,
-  max_cost_multiplier, created_time, updated_time
-)
-VALUES
-  (1, 'Balanced load test', 'balanced', true, 0, 1500, 3000, 3, 2, 6, 10000, '[429,500,502,503,504]', '["pool_exhausted","all_pools_exhausted"]', 3, 30, 30, 1, true, true, 2.0, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint)
-ON CONFLICT (id) DO UPDATE SET enabled = true, max_cluster_attempts = 2, max_total_attempts = 6, total_failover_budget_ms = 10000, updated_time = EXCLUDED.updated_time;
-
 DELETE FROM abilities
-WHERE channel_id IN (SELECT id FROM channels WHERE name LIKE 'Load Test Cluster %');
+WHERE channel_id IN (SELECT id FROM channels WHERE name LIKE 'Load Test Channel %');
 
-DELETE FROM channels WHERE name LIKE 'Load Test Cluster %';
+DELETE FROM billing_group_channels
+WHERE channel_id IN (SELECT id FROM channels WHERE name LIKE 'Load Test Channel %');
+
+DELETE FROM channels WHERE name LIKE 'Load Test Channel %';
 
 INSERT INTO channels (
   type, "key", status, name, weight, created_time, response_time,
   base_url, balance, balance_updated_time, models, "group", used_quota,
-  other, other_info, channel_info, settings, setting, header_override,
-  priority, cluster_id, cluster_pool_id
+  other, other_info, channel_info, settings, setting, header_override, priority
 )
 SELECT
   1,
@@ -108,19 +83,13 @@ SELECT
   '',
   '{}',
   '',
-  '{"error_source":"cluster"}',
-  seed.header_override,
-  seed.priority,
-  seed.cluster_id,
-  seed.cluster_pool_id
+  '{"error_source":"channel"}',
+  '',
+  seed.priority
 FROM (VALUES
-  ('sk-local-mock-a-p1', 'Load Test Cluster A P1', 'http://mock-upstream:8080', '{"X-Mock-Pool-Tier":"1"}', 600, 1, 1),
-  ('sk-local-mock-a-p2', 'Load Test Cluster A P2', 'http://mock-upstream:8080', '{"X-Mock-Pool-Tier":"2"}', 500, 1, 2),
-  ('sk-local-mock-a-p3', 'Load Test Cluster A P3', 'http://mock-upstream:8080', '{"X-Mock-Pool-Tier":"3"}', 400, 1, 3),
-  ('sk-local-mock-b-p1', 'Load Test Cluster B P1', 'http://mock-upstream-b:8080', '{"X-Mock-Pool-Tier":"1"}', 300, 2, 4),
-  ('sk-local-mock-b-p2', 'Load Test Cluster B P2', 'http://mock-upstream-b:8080', '{"X-Mock-Pool-Tier":"2"}', 200, 2, 5),
-  ('sk-local-mock-b-p3', 'Load Test Cluster B P3', 'http://mock-upstream-b:8080', '{"X-Mock-Pool-Tier":"3"}', 100, 2, 6)
-) AS seed(api_key, name, base_url, header_override, priority, cluster_id, cluster_pool_id);
+  ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080', 600),
+  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080', 500)
+) AS seed(api_key, name, base_url, priority);
 
 INSERT INTO abilities ("group", model, channel_id, enabled, priority, weight)
 SELECT 'default', models.model, channels.id, true, channels.priority, 100
@@ -134,15 +103,64 @@ JOIN (VALUES
   ('gpt-4o'),
   ('gpt-4.1')
 ) AS models(model) ON true
-WHERE name LIKE 'Load Test Cluster %'
+WHERE name LIKE 'Load Test Channel %'
 ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   enabled = EXCLUDED.enabled,
   priority = EXCLUDED.priority,
   weight = EXCLUDED.weight;
+
+INSERT INTO billing_group_routes (
+  billing_group, name, mode, enabled, max_total_attempts, total_timeout_ms,
+  circuit_failure_threshold, circuit_window_seconds, circuit_cooldown_seconds,
+  circuit_half_open_requests, created_time, updated_time
+)
+VALUES (
+  'default', 'Default load-test route', 'balanced', true, 4, 10000,
+  3, 30, 30, 1, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
+)
+ON CONFLICT (billing_group) DO UPDATE SET
+  name = EXCLUDED.name,
+  mode = EXCLUDED.mode,
+  enabled = EXCLUDED.enabled,
+  max_total_attempts = EXCLUDED.max_total_attempts,
+  total_timeout_ms = EXCLUDED.total_timeout_ms,
+  updated_time = EXCLUDED.updated_time;
+
+DELETE FROM billing_group_channels
+WHERE billing_group_route_id = (SELECT id FROM billing_group_routes WHERE billing_group = 'default');
+
+INSERT INTO billing_group_channels (
+  billing_group_route_id, channel_id, priority, weight, max_attempts, enabled, cost_factor
+)
+SELECT
+  (SELECT id FROM billing_group_routes WHERE billing_group = 'default'),
+  id,
+  CASE name WHEN 'Load Test Channel A' THEN 100 ELSE 90 END,
+  100,
+  1,
+  true,
+  CASE name WHEN 'Load Test Channel A' THEN 0.2 ELSE 1.0 END
+FROM channels
+WHERE name IN ('Load Test Channel A', 'Load Test Channel B');
+
+INSERT INTO channel_error_mappings (
+  channel_id, channel_type, raw_code, status_code, alltoken_code,
+  category, failure_scope, action, retryable, enabled
+)
+VALUES
+  (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true)
+ON CONFLICT (channel_id, channel_type, raw_code, status_code) DO UPDATE SET
+  alltoken_code = EXCLUDED.alltoken_code,
+  category = EXCLUDED.category,
+  failure_scope = EXCLUDED.failure_scope,
+  action = EXCLUDED.action,
+  retryable = EXCLUDED.retryable,
+  enabled = EXCLUDED.enabled;
 
 COMMIT;
 
 SELECT
   (SELECT count(*) FROM users WHERE username LIKE 'loadtest_user_%') AS users,
   (SELECT count(*) FROM tokens WHERE "key" LIKE 'loadtest%') AS tokens,
-  (SELECT count(*) FROM channels WHERE name LIKE 'Load Test Cluster %') AS channels;
+  (SELECT count(*) FROM channels WHERE name LIKE 'Load Test Channel %') AS channels;

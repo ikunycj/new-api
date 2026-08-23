@@ -448,9 +448,6 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelAutoBan, channel.GetAutoBan())
 	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
 	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
-	c.Set("cluster_id", channel.ClusterId)
-	c.Set("cluster_pool_id", channel.ClusterPoolId)
-	c.Set("cluster_pool_tier", model.ResolveChannelPoolTier(channel))
 
 	key, index, newAPIError := channel.GetNextEnabledKey()
 	if newAPIError != nil {

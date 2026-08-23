@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProviderFromBaseURL(t *testing.T) {
@@ -72,7 +73,6 @@ func TestCollectorLabelsAreBounded(t *testing.T) {
 				"request_id",
 				"client_trace_id",
 				"upstream_request_id",
-				"channel_id",
 				"channel_name",
 				"url",
 				"error_message",

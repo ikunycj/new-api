@@ -12,7 +12,7 @@ import (
 func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Channel{}, &ClusterPool{}, &Log{}))
+	require.NoError(t, db.AutoMigrate(&Channel{}, &BillingGroupRoute{}, &BillingGroupChannel{}, &Log{}))
 
 	previousDB, previousLogDB := DB, LOG_DB
 	DB, LOG_DB = db, db
@@ -22,20 +22,22 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 		common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	})
 
-	pools := []ClusterPool{
-		{ClusterId: 1, Tier: PoolTierPremium, Name: "Pro", CostFactor: 0.6},
-		{ClusterId: 1, Tier: PoolTierFallback, Name: "Official", CostFactor: 1.1},
-	}
-	require.NoError(t, db.Create(&pools).Error)
 	channels := []Channel{
-		{Name: "pro", ClusterId: 1, ClusterPoolId: pools[0].Id},
-		{Name: "official", ClusterId: 1, ClusterPoolId: pools[1].Id},
+		{Name: "pro"},
+		{Name: "official"},
 	}
 	require.NoError(t, db.Create(&channels).Error)
+	route := BillingGroupRoute{BillingGroup: "claude", Name: "Claude", Mode: RoutingModeBalanced, Enabled: true}
+	require.NoError(t, db.Create(&route).Error)
+	require.NoError(t, db.Create(&[]BillingGroupChannel{
+		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 90, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+	}).Error)
+	InitChannelRoutingCache()
 	require.NoError(t, db.Create(&[]Log{
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-a", ChannelId: channels[0].Id, PromptTokens: 100, CompletionTokens: 20},
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-b", ChannelId: channels[0].Id, PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25},
-		{UserId: 7, Type: LogTypeConsume, RequestId: "run-c", ChannelId: channels[1].Id, PromptTokens: 40, CompletionTokens: 8},
+		{UserId: 7, Type: LogTypeConsume, RequestId: "run-a", ChannelId: channels[0].Id, Group: "claude", PromptTokens: 100, CompletionTokens: 20},
+		{UserId: 7, Type: LogTypeConsume, RequestId: "run-b", ChannelId: channels[0].Id, Group: "claude", PromptTokens: 50, InputTokensTotal: 75, CompletionTokens: 10, CacheReadTokens: 25},
+		{UserId: 7, Type: LogTypeConsume, RequestId: "run-c", ChannelId: channels[1].Id, Group: "claude", PromptTokens: 40, CompletionTokens: 8},
 		{UserId: 8, Type: LogTypeConsume, RequestId: "run-d", ChannelId: channels[1].Id, PromptTokens: 999, CompletionTokens: 999},
 	}).Error)
 

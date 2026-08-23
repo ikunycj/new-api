@@ -39,8 +39,7 @@ type FailoverMonitoringMetrics struct {
 	ErrorRate         float64 `json:"error_rate"`
 	P95LatencySeconds float64 `json:"p95_latency_seconds"`
 	InFlight          float64 `json:"in_flight"`
-	ClusterFailovers  float64 `json:"cluster_failovers"`
-	PoolFailovers     float64 `json:"pool_failovers"`
+	ChannelSwitches   float64 `json:"channel_switches"`
 	OpenCircuits      float64 `json:"open_circuits"`
 	DatabaseUsage     float64 `json:"database_usage"`
 	RedisTimeouts     float64 `json:"redis_timeouts"`
@@ -53,8 +52,7 @@ type FailoverMonitoringAlert struct {
 	Status      string `json:"status"`
 	Summary     string `json:"summary"`
 	Description string `json:"description"`
-	ClusterCode string `json:"cluster_code,omitempty"`
-	PoolTier    string `json:"pool_tier,omitempty"`
+	ChannelID   string `json:"channel_id,omitempty"`
 	Instance    string `json:"instance,omitempty"`
 	StartedAt   string `json:"started_at"`
 }
@@ -112,7 +110,7 @@ type alertmanagerAlert struct {
 
 func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapshot {
 	config := failoverMonitoringConfigFromEnv()
-	cacheKey := failoverMonitoringCacheKey(config, clusterCode)
+	cacheKey := failoverMonitoringCacheKey(config)
 	now := time.Now()
 	failoverMonitoringCache.Lock()
 	if cached, ok := failoverMonitoringCache.values[cacheKey]; ok && now.Before(cached.expiresAt) {
@@ -130,7 +128,7 @@ func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapsh
 		}
 		failoverMonitoringCache.Unlock()
 
-		snapshot := getFailoverMonitoringSnapshot(ctx, config, clusterCode)
+		snapshot := getFailoverMonitoringSnapshot(ctx, config)
 		failoverMonitoringCache.Lock()
 		failoverMonitoringCache.values[cacheKey] = cachedFailoverMonitoringSnapshot{
 			snapshot:  snapshot,
@@ -142,7 +140,7 @@ func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapsh
 	return value.(FailoverMonitoringSnapshot)
 }
 
-func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitoringConfig, clusterCode int) FailoverMonitoringSnapshot {
+func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitoringConfig) FailoverMonitoringSnapshot {
 	snapshot := FailoverMonitoringSnapshot{
 		UpdatedAt: time.Now().UnixMilli(),
 		Window:    failoverMonitoringWindow,
@@ -175,10 +173,10 @@ func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitorin
 	return snapshot
 }
 
-func failoverMonitoringCacheKey(config failoverMonitoringConfig, clusterCode int) string {
-	material := fmt.Sprintf("%d\x00%s\x00%s\x00%s\x00%s\x00%s", clusterCode, config.prometheusURL, config.alertmanagerURL, config.grafanaURL, config.username, config.password+"\x00"+config.bearerToken)
+func failoverMonitoringCacheKey(config failoverMonitoringConfig) string {
+	material := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s", config.prometheusURL, config.alertmanagerURL, config.grafanaURL, config.username, config.password+"\x00"+config.bearerToken)
 	digest := sha256.Sum256([]byte(material))
-	return fmt.Sprintf("%d:%x", clusterCode, digest[:8])
+	return fmt.Sprintf("channel:%x", digest[:8])
 }
 
 func failoverMonitoringConfigFromEnv() failoverMonitoringConfig {
@@ -231,9 +229,8 @@ func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, co
 		{name: "error_rate", query: `sum(rate(new_api_relay_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001)`},
 		{name: "p95_latency_seconds", query: `histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m])))`},
 		{name: "in_flight", query: `sum(new_api_relay_in_flight)`},
-		{name: "cluster_failovers", query: `sum(increase(alltoken_cluster_failover_total[5m]))`},
-		{name: "pool_failovers", query: `sum(increase(alltoken_pool_failover_total[5m]))`},
-		{name: "open_circuits", query: `sum(alltoken_cluster_circuit_state{state="open"} == 1)`},
+		{name: "channel_switches", query: `sum(increase(alltoken_channel_switch_total[5m]))`},
+		{name: "open_circuits", query: `sum(alltoken_channel_circuit_state{state="open"} == 1)`},
 		{name: "database_usage", query: `new_api_database_connections{database="main",state="in_use"} / clamp_min(new_api_database_connections{database="main",state="max_open"}, 1)`},
 		{name: "redis_timeouts", query: `sum(increase(new_api_redis_pool_timeouts_total[5m]))`},
 	}
@@ -264,10 +261,8 @@ func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, co
 			metrics.P95LatencySeconds = values[index]
 		case "in_flight":
 			metrics.InFlight = values[index]
-		case "cluster_failovers":
-			metrics.ClusterFailovers = values[index]
-		case "pool_failovers":
-			metrics.PoolFailovers = values[index]
+		case "channel_switches":
+			metrics.ChannelSwitches = values[index]
 		case "open_circuits":
 			metrics.OpenCircuits = values[index]
 		case "database_usage":
@@ -366,8 +361,7 @@ func fetchFailoverMonitoringAlerts(ctx context.Context, client *http.Client, con
 			Status:      status,
 			Summary:     alert.Annotations["summary"],
 			Description: alert.Annotations["description"],
-			ClusterCode: alert.Labels["cluster_code"],
-			PoolTier:    alert.Labels["pool_tier"],
+			ChannelID:   alert.Labels["channel_id"],
 			Instance:    alert.Labels["instance"],
 			StartedAt:   alert.StartsAt,
 		})

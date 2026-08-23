@@ -953,6 +953,21 @@ func CreateUser(c *gin.Context) {
 	if user.DisplayName == "" {
 		user.DisplayName = user.Username
 	}
+	user.Group = strings.TrimSpace(user.Group)
+	if user.Group == "" {
+		user.Group = "default"
+	}
+	validGroup := false
+	for _, group := range managedUserGroups() {
+		if group == user.Group {
+			validGroup = true
+			break
+		}
+	}
+	if !validGroup {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
 	myRole := c.GetInt("role")
 	if user.Role >= myRole {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
@@ -964,6 +979,7 @@ func CreateUser(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
+		Group:       user.Group,
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {

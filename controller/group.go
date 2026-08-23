@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -11,15 +12,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetGroups(c *gin.Context) {
-	groupNames := make([]string, 0)
+func managedUserGroups() []string {
+	groupSet := map[string]struct{}{
+		"default": {},
+		"toB":     {},
+	}
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
+		groupSet[groupName] = struct{}{}
+	}
+	groupNames := make([]string, 0, len(groupSet))
+	for groupName := range groupSet {
 		groupNames = append(groupNames, groupName)
 	}
+	sort.Strings(groupNames)
+	return groupNames
+}
+
+func GetGroups(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    groupNames,
+		"data":    managedUserGroups(),
 	})
 }
 

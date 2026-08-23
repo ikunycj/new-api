@@ -71,31 +71,27 @@ var (
 	errorEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "alltoken", Name: "error_events_total",
 		Help: "Structured error events by bounded error and routing dimensions.",
-	}, []string{"event_kind", "alltoken_code", "category", "cluster_code", "pool_tier"})
-	poolRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "pool_requests_total",
-		Help: "Upstream attempts by cluster pool and outcome.",
-	}, []string{"cluster_code", "pool_tier", "outcome"})
-	poolFailovers = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "pool_failover_total",
-		Help: "Pool transitions inside the same cluster.",
-	}, []string{"cluster_code", "from_pool", "to_pool", "mode"})
-	clusterFailovers = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "cluster_failover_total",
-		Help: "Cross-cluster routing transitions.",
-	}, []string{"from_cluster", "to_cluster", "mode"})
+	}, []string{"event_kind", "alltoken_code", "category", "channel_id"})
+	channelRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "alltoken", Name: "channel_requests_total",
+		Help: "Upstream attempts by channel and outcome.",
+	}, []string{"channel_id", "outcome"})
+	channelSwitches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "alltoken", Name: "channel_switch_total",
+		Help: "Ordered transitions between channels.",
+	}, []string{"from_channel", "to_channel", "mode"})
 	finalErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "alltoken", Name: "final_errors_total",
 		Help: "Errors returned to clients after failover is complete.",
-	}, []string{"alltoken_code", "category", "cluster_code"})
+	}, []string{"alltoken_code", "category", "channel_id"})
 	authFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "alltoken", Name: "auth_failures_total",
 		Help: "Gateway authentication failures by bounded reason and route.",
 	}, []string{"reason", "route", "status"})
-	clusterCircuitState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "alltoken", Name: "cluster_circuit_state",
-		Help: "Cluster circuit state represented as one hot state labels.",
-	}, []string{"cluster_code", "route", "state"})
+	channelCircuitState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "alltoken", Name: "channel_circuit_state",
+		Help: "Channel circuit state represented as one hot state labels.",
+	}, []string{"channel_id", "route", "state"})
 	failoverDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "alltoken", Name: "failover_duration_seconds",
 		Help:    "Time spent before a successful failover or final exhaustion.",
@@ -108,8 +104,8 @@ func Collectors() []prometheus.Collector {
 	return []prometheus.Collector{
 		relayRequests, relayRequestDuration, relayAttempts, relayAttemptDuration,
 		relayRetries, relayInFlight, relayClientCancellations,
-		errorEvents, poolRequests, poolFailovers, clusterFailovers,
-		finalErrors, authFailures, clusterCircuitState, clusterInfo, failoverDuration,
+		errorEvents, channelRequests, channelSwitches,
+		finalErrors, authFailures, channelCircuitState, failoverDuration,
 	}
 }
 
@@ -120,48 +116,34 @@ func RecordAuthFailure(route, reason string, status int) {
 	authFailures.WithLabelValues(normalizeAuthFailureReason(reason), route, statusLabel(status)).Inc()
 }
 
-func ReplaceClusterInfo(clusterCodes []int) {
-	clusterInfo.Reset()
-	for _, clusterCode := range clusterCodes {
-		if clusterCode > 0 {
-			clusterInfo.WithLabelValues(strconv.Itoa(clusterCode)).Set(1)
-	}
-}
-}
-
 func RecordErrorEvent(eventKind string, apiErr *types.NewAPIError) {
 	if apiErr == nil {
 		return
 	}
 	code := strconv.Itoa(apiErr.AlltokenCode())
-	cluster := strconv.Itoa(apiErr.ClusterCode())
-	pool := strconv.Itoa(apiErr.PoolTier())
-	errorEvents.WithLabelValues(normalizeEventKind(eventKind), code, apiErr.ErrorCategory(), cluster, pool).Inc()
+	channel := strconv.Itoa(apiErr.ChannelID())
+	errorEvents.WithLabelValues(normalizeEventKind(eventKind), code, apiErr.ErrorCategory(), channel).Inc()
 	if eventKind == "final_response" {
-		finalErrors.WithLabelValues(code, apiErr.ErrorCategory(), cluster).Inc()
+		finalErrors.WithLabelValues(code, apiErr.ErrorCategory(), channel).Inc()
 	}
 }
 
-func RecordPoolRequest(clusterCode int, poolTier int, outcome string) {
+func RecordChannelRequest(channelID int, outcome string) {
 	if outcome != "success" {
 		outcome = "error"
 	}
-	poolRequests.WithLabelValues(strconv.Itoa(clusterCode), strconv.Itoa(poolTier), outcome).Inc()
+	channelRequests.WithLabelValues(strconv.Itoa(channelID), outcome).Inc()
 }
 
-func RecordPoolFailover(clusterCode, fromPool, toPool int, mode string) {
-	poolFailovers.WithLabelValues(strconv.Itoa(clusterCode), strconv.Itoa(fromPool), strconv.Itoa(toPool), normalizeMode(mode)).Inc()
+func RecordChannelSwitch(fromChannel, toChannel int, mode string) {
+	channelSwitches.WithLabelValues(strconv.Itoa(fromChannel), strconv.Itoa(toChannel), normalizeMode(mode)).Inc()
 }
 
-func RecordClusterFailover(fromCluster, toCluster int, mode string) {
-	clusterFailovers.WithLabelValues(strconv.Itoa(fromCluster), strconv.Itoa(toCluster), normalizeMode(mode)).Inc()
-}
-
-func SetClusterCircuitState(clusterCode int, route string, state string) {
+func SetChannelCircuitState(channelID int, route string, state string) {
 	if state != "open" && state != "half_open" {
 		state = "closed"
 	}
-	cluster := strconv.Itoa(clusterCode)
+	channel := strconv.Itoa(channelID)
 	if route == "" {
 		route = "unknown"
 	}
@@ -170,7 +152,7 @@ func SetClusterCircuitState(clusterCode int, route string, state string) {
 		if candidate == state {
 			value = 1
 		}
-		clusterCircuitState.WithLabelValues(cluster, route, candidate).Set(value)
+		channelCircuitState.WithLabelValues(channel, route, candidate).Set(value)
 	}
 }
 
@@ -397,8 +379,8 @@ type Event struct {
 	AlltokenCode      int    `json:"alltoken_code,omitempty"`
 	ErrorRef          string `json:"error_ref,omitempty"`
 	Category          string `json:"category,omitempty"`
-	ClusterCode       int    `json:"cluster_code,omitempty"`
-	PoolTier          int    `json:"pool_tier,omitempty"`
+	ChannelName       string `json:"channel_name,omitempty"`
+	BillingGroup      string `json:"billing_group,omitempty"`
 	FailureScope      string `json:"failure_scope,omitempty"`
 	Action            string `json:"action,omitempty"`
 	FailoverMode      string `json:"failover_mode,omitempty"`

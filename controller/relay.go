@@ -80,8 +80,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	finalModel := ""
 	finalStream := false
 	attemptedUpstream := false
-	previousClusterID := 0
-	previousPoolTier := 0
+	previousChannelID := 0
 	failoverOccurred := false
 	defer func() {
 		contextErr := c.Request.Context().Err()
@@ -263,55 +262,23 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.InitChannelMeta(c)
 		policy := retryParam.RuntimePolicy()
 		route := c.FullPath()
-		poolTier := model.ResolveChannelPoolTier(channel)
-		if !retryParam.CanAttemptCluster(channel.ClusterId) {
-			retryParam.ExcludeCluster(channel.ClusterId)
-			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
-				continue
-			}
-			newAPIError = types.NewErrorWithStatusCode(errors.New("cluster attempt limit reached"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
-			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
-			break
-		}
-		if !model.ChannelAllowedByFailoverPolicy(channel, policy) {
+		if !service.ChannelCircuitAllows(channel.Id, route, policy) {
 			retryParam.ExcludeChannel(channel.Id)
 			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
 				continue
 			}
-			newAPIError = types.NewErrorWithStatusCode(errors.New("no channel satisfies the failover cost policy"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
-			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
-			break
-		}
-		if !retryParam.CanAttemptPool(channel.ClusterId, poolTier) {
-			retryParam.ExcludeChannel(channel.Id)
-			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
-				continue
-			}
-			newAPIError = types.NewErrorWithStatusCode(errors.New("cluster pool attempt limit reached"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
-			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
-			break
-		}
-		if !service.ClusterCircuitAllows(channel.ClusterId, route, policy) {
-			retryParam.ExcludeCluster(channel.ClusterId)
-			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
-				continue
-			}
-			newAPIError = types.NewErrorWithStatusCode(errors.New("all candidate cluster circuits are open"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
-			newAPIError.SetRoutingLocation(channel.ClusterId, poolTier)
+			newAPIError = types.NewErrorWithStatusCode(errors.New("all candidate channel circuits are open"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetChannelLocation(channel.Id, channel.Name)
 			break
 		}
 		provider := observability.ProviderFromBaseURL(relayInfo.ChannelBaseUrl)
 		finalProvider = provider
 		finalChannelID = channel.Id
-		if previousClusterID > 0 && channel.ClusterId > 0 && previousClusterID != channel.ClusterId {
-			observability.RecordClusterFailover(previousClusterID, channel.ClusterId, policy.Mode)
-			failoverOccurred = true
-		} else if previousClusterID > 0 && previousClusterID == channel.ClusterId && previousPoolTier > 0 && poolTier > 0 && previousPoolTier != poolTier {
-			observability.RecordPoolFailover(channel.ClusterId, previousPoolTier, poolTier, policy.Mode)
+		if previousChannelID > 0 && previousChannelID != channel.Id {
+			observability.RecordChannelSwitch(previousChannelID, channel.Id, policy.Mode)
 			failoverOccurred = true
 		}
-		previousClusterID = channel.ClusterId
-		previousPoolTier = poolTier
+		previousChannelID = channel.Id
 		if previousGroup != relayInfo.UsingGroup {
 			if billingErr := reserveRelayGroupBilling(c, relayInfo, tokens, meta); billingErr != nil {
 				newAPIError = billingErr
@@ -335,8 +302,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		attemptStartedAt := time.Now()
 		finishInFlight := observability.IncInFlight(provider)
 		attemptedUpstream = true
-		retryParam.MarkChannelAttempted(channel.Id, channel.ClusterId)
-		retryParam.MarkPoolAttempted(channel.ClusterId, poolTier)
+		retryParam.MarkChannelAttempted(channel.Id)
 		func() {
 			defer finishInFlight()
 			switch relayFormat {
@@ -358,15 +324,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if newAPIError != nil {
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)
 			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
-			newAPIError.SetRoutingLocation(channel.ClusterId, model.ResolveChannelPoolTier(channel))
-			if mapping, ok := model.MatchUpstreamErrorMapping(channel.ClusterId, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
+			newAPIError.SetChannelLocation(channel.Id, channel.Name)
+			if mapping, ok := model.MatchUpstreamErrorMapping(channel.Id, channel.Type, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
 				newAPIError.SetClassification(mapping.AlltokenCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
 			}
 			observability.RecordErrorEvent("upstream_attempt", newAPIError)
-			observability.RecordPoolRequest(channel.ClusterId, poolTier, "error")
-			if newAPIError.FailureScope() == "cluster" || newAPIError.FailureScope() == "provider" {
-				retryParam.ExcludeCluster(channel.ClusterId)
-				service.RecordClusterCircuitFailure(channel.ClusterId, route, policy)
+			observability.RecordChannelRequest(channel.Id, "error")
+			if newAPIError.FailureScope() == "channel" || newAPIError.FailureScope() == "provider" {
+				retryParam.ExcludeChannel(channel.Id)
+				service.RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			attemptClass = observability.ErrorClass(newAPIError, contextErr)
 			upstreamStatus = newAPIError.StatusCode
@@ -406,16 +372,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			AlltokenCode:      errorAlltokenCode(newAPIError),
 			ErrorRef:          errorRef(newAPIError),
 			Category:          errorCategory(newAPIError),
-			ClusterCode:       channel.ClusterId,
-			PoolTier:          poolTier,
+			ChannelName:       channel.Name,
+			BillingGroup:      relayInfo.UsingGroup,
 			FailureScope:      errorFailureScope(newAPIError),
 			Action:            errorAction(newAPIError),
 			FailoverMode:      policy.Mode,
 		})
 
 		if newAPIError == nil {
-			service.RecordClusterCircuitSuccess(channel.ClusterId, route)
-			observability.RecordPoolRequest(channel.ClusterId, poolTier, "success")
+			service.RecordChannelCircuitSuccess(channel.Id, route)
+			observability.RecordChannelRequest(channel.Id, "success")
 			if failoverOccurred {
 				observability.RecordFailoverDuration("success", policy.Mode, time.Since(requestStartedAt))
 			}
@@ -653,13 +619,10 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			autoBanInt = 0
 		}
 		return &model.Channel{
-			Id:              c.GetInt("channel_id"),
-			Type:            c.GetInt("channel_type"),
-			Name:            c.GetString("channel_name"),
-			ClusterId:       c.GetInt("cluster_id"),
-			ClusterPoolId:   c.GetInt("cluster_pool_id"),
-			ClusterPoolTier: c.GetInt("cluster_pool_tier"),
-			AutoBan:         &autoBanInt,
+			Id:      c.GetInt("channel_id"),
+			Type:    c.GetInt("channel_type"),
+			Name:    c.GetString("channel_name"),
+			AutoBan: &autoBanInt,
 		}, nil
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)

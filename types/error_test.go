@@ -40,7 +40,7 @@ func TestOpenAIErrorPreservesUpstreamCodeAndSource(t *testing.T) {
 		Source:  ErrorSourceOpenAI,
 	}, http.StatusTooManyRequests)
 	apiErr.SetRetryable(true)
-	apiErr.SetRoutingLocation(23, 1)
+	apiErr.SetChannelLocation(23, "Claude Pro")
 
 	response := apiErr.ToOpenAIError()
 
@@ -50,41 +50,41 @@ func TestOpenAIErrorPreservesUpstreamCodeAndSource(t *testing.T) {
 	require.NotNil(t, response.Retryable)
 	assert.True(t, *response.Retryable)
 	assert.Equal(t, 104001, response.AlltokenCode)
-	assert.Equal(t, "104001-C23-P1", response.ErrorRef)
-	assert.Equal(t, 23, response.ClusterCode)
-	assert.Equal(t, 1, response.PoolTier)
+	assert.Equal(t, "104001-CH23", response.ErrorRef)
+	assert.Equal(t, 23, response.ChannelID)
+	assert.Equal(t, "Claude Pro", response.ChannelName)
 	assert.Equal(t, "channel", response.FailureScope)
 }
 
-func TestClusterRateLimitIsChannelScoped(t *testing.T) {
+func TestChannelRateLimitIsChannelScoped(t *testing.T) {
 	apiErr := WithOpenAIError(OpenAIError{
 		Message: "cluster rate limited",
 		Code:    "rate_limit_exceeded",
-		Source:  ErrorSourceCluster,
+		Source:  ErrorSourceChannel,
 	}, http.StatusTooManyRequests)
-	apiErr.SetRoutingLocation(23, 1)
+	apiErr.SetChannelLocation(23, "Claude Pro")
 
 	response := apiErr.ToOpenAIError()
 
 	assert.Equal(t, 204001, response.AlltokenCode)
 	assert.Equal(t, "channel", response.FailureScope)
-	assert.Equal(t, "204001-C23-P1", response.ErrorRef)
+	assert.Equal(t, "204001-CH23", response.ErrorRef)
 }
 
-func TestClusterGenericServerErrorsAreChannelScoped(t *testing.T) {
+func TestChannelGenericServerErrorsAreChannelScoped(t *testing.T) {
 	for _, statusCode := range []int{http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable} {
 		apiErr := WithOpenAIError(OpenAIError{
 			Message: "upstream server error",
 			Code:    "unknown_error",
-			Source:  ErrorSourceCluster,
+			Source:  ErrorSourceChannel,
 		}, statusCode)
-		apiErr.SetRoutingLocation(4, 1)
+		apiErr.SetChannelLocation(4, "Official")
 
 		response := apiErr.ToOpenAIError()
 
 		assert.Equal(t, 205002, response.AlltokenCode)
 		assert.Equal(t, "channel", response.FailureScope)
-		assert.Equal(t, "205002-C4-P1", response.ErrorRef)
+		assert.Equal(t, "205002-CH4", response.ErrorRef)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 	assert.Equal(t, 3, response.AttemptCount)
 	require.NotNil(t, response.Cause)
 	assert.Equal(t, ErrorSourceIkun, response.Cause.Source)
-	assert.Equal(t, "cluster.server_error", response.Cause.Code)
+	assert.Equal(t, "channel.server_error", response.Cause.Code)
 	assert.Equal(t, "server_error", response.Cause.RawCode)
 	assert.Equal(t, http.StatusBadGateway, response.Cause.StatusCode)
 }
@@ -132,20 +132,20 @@ func TestResolveErrorSource(t *testing.T) {
 	}
 }
 
-func TestClusterPoolExhaustionUsesStableLocationReference(t *testing.T) {
+func TestChannelExhaustionUsesStableLocationReference(t *testing.T) {
 	apiErr := WithOpenAIError(OpenAIError{
 		Message: "all pools exhausted",
 		Code:    "all_pools_exhausted",
-		Source:  ErrorSourceCluster,
+		Source:  ErrorSourceChannel,
 	}, http.StatusServiceUnavailable)
-	apiErr.SetRoutingLocation(17, 3)
+	apiErr.SetChannelLocation(17, "Claude Plus")
 
 	response := apiErr.ToOpenAIError()
 
 	assert.Equal(t, 205003, response.AlltokenCode)
-	assert.Equal(t, "205003-C17-P3", response.ErrorRef)
-	assert.Equal(t, "cluster", response.FailureScope)
-	assert.Equal(t, "failover", response.Action)
+	assert.Equal(t, "205003-CH17", response.ErrorRef)
+	assert.Equal(t, "channel", response.FailureScope)
+	assert.Equal(t, "switch_channel", response.Action)
 }
 
 func TestUpstreamCannotClaimAllTokenSource(t *testing.T) {
@@ -164,15 +164,15 @@ func TestConfiguredClassificationOverridesBuiltInCatalog(t *testing.T) {
 	apiErr := WithOpenAIError(OpenAIError{
 		Message: "pool depleted",
 		Code:    "vendor_pool_empty",
-		Source:  ErrorSourceCluster,
+		Source:  ErrorSourceChannel,
 	}, http.StatusServiceUnavailable)
-	apiErr.SetRoutingLocation(23, 1)
-	apiErr.SetClassification(205004, "upstream", "channel", "failover", true)
+	apiErr.SetChannelLocation(23, "Claude Pro")
+	apiErr.SetClassification(205004, "upstream", "channel", "switch_channel", true)
 
 	response := apiErr.ToOpenAIError()
 
 	assert.Equal(t, 205004, response.AlltokenCode)
-	assert.Equal(t, "205004-C23-P1", response.ErrorRef)
+	assert.Equal(t, "205004-CH23", response.ErrorRef)
 	assert.Equal(t, "channel", response.FailureScope)
 	require.NotNil(t, response.Retryable)
 	assert.True(t, *response.Retryable)

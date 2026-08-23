@@ -7,19 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestClusterCircuitOpensAndRecoversAfterSuccess(t *testing.T) {
-	policy := model.DefaultRuntimeFailoverPolicy(model.FailoverModeBalanced)
+func TestChannelCircuitOpensAndRecoversAfterSuccess(t *testing.T) {
+	policy := model.DefaultRuntimeRoutingPolicy(model.RoutingModeBalanced)
 	policy.CircuitFailureThreshold = 2
 	route := "/test/circuit"
-	clusterID := 991
-	RecordClusterCircuitSuccess(clusterID, route)
+	channelID := 991
+	RecordChannelCircuitSuccess(channelID, route)
 
-	assert.True(t, ClusterCircuitAllows(clusterID, route, policy))
-	RecordClusterCircuitFailure(clusterID, route, policy)
-	assert.True(t, ClusterCircuitAllows(clusterID, route, policy))
-	RecordClusterCircuitFailure(clusterID, route, policy)
-	assert.False(t, ClusterCircuitAllows(clusterID, route, policy))
+	assert.True(t, ChannelCircuitAllows(channelID, route, policy))
+	RecordChannelCircuitFailure(channelID, route, policy)
+	assert.True(t, ChannelCircuitAllows(channelID, route, policy))
+	RecordChannelCircuitFailure(channelID, route, policy)
+	assert.False(t, ChannelCircuitAllows(channelID, route, policy))
 
-	RecordClusterCircuitSuccess(clusterID, route)
-	assert.True(t, ClusterCircuitAllows(clusterID, route, policy))
+	RecordChannelCircuitSuccess(channelID, route)
+	assert.True(t, ChannelCircuitAllows(channelID, route, policy))
 }

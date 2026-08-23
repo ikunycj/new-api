@@ -231,48 +231,48 @@ groups:
           summary: "AllToken final relay P95 latency exceeds 30 seconds"
           description: "Compare final request latency with single-attempt latency, retries, in-flight requests, and ikun access latency."
 
-  - name: alltoken-failover
+  - name: alltoken-channel-routing
     rules:
-      - alert: AllTokenClusterCircuitOpen
-        expr: alltoken_cluster_circuit_state{state="open"} == 1
+      - alert: AllTokenChannelCircuitOpen
+        expr: alltoken_channel_circuit_state{state="open"} == 1
         for: 30s
         labels:
           severity: critical
         annotations:
-          summary: "Cluster C{{ $labels.cluster_code }} circuit is open"
-          description: "AllToken has stopped routing new requests to this cluster and is using alternate clusters."
+          summary: "Channel {{ $labels.channel_id }} circuit is open"
+          description: "AllToken has stopped routing new requests to this channel and is using the next configured channel."
 
       - alert: AllTokenUpstreamExhausted
         expr: increase(alltoken_final_errors_total{alltoken_code="305001"}[2m]) > 0
         labels:
           severity: critical
         annotations:
-          summary: "All candidate clusters are exhausted"
-          description: "At least one client received 305001 in the last two minutes. Inspect cluster and pool exhaustion panels."
+          summary: "All candidate channels are exhausted"
+          description: "At least one client received 305001 in the last two minutes. Inspect channel routing and exhaustion panels."
 
-      - alert: AllTokenPoolTokensLow
-        expr: mock_cluster_pool_remaining_tokens > 0 and mock_cluster_pool_remaining_tokens < 300
+      - alert: AllTokenMockChannelTokensLow
+        expr: mock_channel_remaining_tokens > 0 and mock_channel_remaining_tokens < 300
         for: 15s
         labels:
           severity: warning
         annotations:
-          summary: "Mock pool P{{ $labels.pool_tier }} on C{{ $labels.cluster_code }} is low"
-          description: "The deterministic pool has fewer than 300 mock tokens remaining."
+          summary: "Mock channel {{ $labels.channel_id }} token balance is low"
+          description: "The deterministic channel has fewer than 300 mock tokens remaining."
 
-      - alert: AllTokenPoolExhausted
-        expr: mock_cluster_pool_remaining_tokens == 0
+      - alert: AllTokenMockChannelExhausted
+        expr: mock_channel_remaining_tokens == 0
         for: 15s
         labels:
           severity: warning
         annotations:
-          summary: "Mock pool P{{ $labels.pool_tier }} on C{{ $labels.cluster_code }} is exhausted"
-          description: "Traffic should move to the next configured pool or cluster."
+          summary: "Mock channel {{ $labels.channel_id }} is exhausted"
+          description: "Traffic should move to the next configured channel."
 
       - alert: AllTokenFailoverSurge
-        expr: sum(rate(alltoken_cluster_failover_total[2m])) > 1
+        expr: sum(rate(alltoken_channel_switch_total[2m])) > 1
         for: 30s
         labels:
           severity: warning
         annotations:
-          summary: "Cluster failover rate exceeds one per second"
-          description: "A sustained failover surge indicates an unstable primary cluster or overly aggressive policy."
+          summary: "Channel switch rate exceeds one per second"
+          description: "A sustained switch surge indicates an unstable primary channel or overly aggressive policy."

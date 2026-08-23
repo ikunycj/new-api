@@ -120,10 +120,11 @@
       "id": 8,
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum by (from_cluster, to_cluster, reason) (increase(alltoken_cluster_failover_total[5m]))", "legendFormat": "C{{from_cluster}} -> C{{to_cluster}} / {{reason}}", "refId": "A" },
-        { "expr": "sum by (cluster_code, from_pool, to_pool, reason) (increase(alltoken_pool_failover_total[5m]))", "legendFormat": "C{{cluster_code}} P{{from_pool}} -> P{{to_pool}} / {{reason}}", "refId": "B" }
+        { "expr": "sum by (from_channel, to_channel, mode) (increase(alltoken_channel_switch_total{from_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}} / {{mode}}", "refId": "A" },
+        { "expr": "sum by (channel_id, outcome) (increase(alltoken_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" },
+        { "expr": "alltoken_channel_circuit_state{channel_id=~\"$channel\",state=~\"open|half_open\"} == 1", "legendFormat": "CH{{channel_id}} / {{state}}", "refId": "C" }
       ],
-      "title": "Failover activity (5m)",
+      "title": "Channel routing activity (5m)",
       "type": "timeseries"
     },
     {
@@ -198,7 +199,28 @@
   "refresh": "15s",
   "schemaVersion": 40,
   "tags": ["alltoken", "production", "failover"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(alltoken_channel_requests_total, channel_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Channel",
+        "multi": true,
+        "name": "channel",
+        "options": [],
+        "query": { "query": "label_values(alltoken_channel_requests_total, channel_id)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
