@@ -92,6 +92,14 @@ import {
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
+type RunSnapshot = {
+  model: string
+  keyName: string
+  packageName: string
+  durationSeconds: number
+  requestsPerSecond: number
+}
+
 const EMPTY_STATS: RunStats = {
   completed: 0,
   failures: 0,
@@ -265,6 +273,8 @@ export function LoadTestDemo() {
   const statsRef = useRef<RunStats>(persistedRun?.stats ?? EMPTY_STATS)
   const activeRunIdRef = useRef('')
   const runStartedAtRef = useRef(0)
+  const runSnapshotRef = useRef<RunSnapshot | null>(null)
+  const persistedRunIdRef = useRef('')
 
   const loadKeys = useCallback(async () => {
     setStatus('loading-keys')
@@ -389,6 +399,14 @@ export function LoadTestDemo() {
     runStartedAtRef.current = Date.now()
     const currentRunId = makeRunId()
     activeRunIdRef.current = currentRunId
+    runSnapshotRef.current = {
+      model: selectedModel,
+      keyName: selectedKey.name,
+      packageName:
+        selectedKey.group?.trim() || selectedKey.group_candidates[0] || '',
+      durationSeconds: durationValue,
+      requestsPerSecond: rpsValue,
+    }
     setRunId(currentRunId)
     setRunKeyName(selectedKey.name)
     setRunPackageName(
@@ -556,33 +574,30 @@ export function LoadTestDemo() {
   }
 
   useEffect(() => {
-    if (!runId || status === 'running') return
+    if (
+      !runId ||
+      status !== 'complete' ||
+      persistedRunIdRef.current === runId
+    ) {
+      return
+    }
+    const runSnapshot = runSnapshotRef.current
+    if (!runSnapshot) return
     savePersistedLoadTestRun(userId, {
-      model: selectedModel,
+      model: runSnapshot.model,
       runId,
-      keyName: runKeyName,
-      packageName: runPackageName,
-      durationSeconds: Number(durationSeconds) || 0,
-      requestsPerSecond: Number(requestsPerSecond) || 0,
+      keyName: runSnapshot.keyName,
+      packageName: runSnapshot.packageName,
+      durationSeconds: runSnapshot.durationSeconds,
+      requestsPerSecond: runSnapshot.requestsPerSecond,
       estimatedCost,
       stats,
       channelStats,
       requestIds: requestIdsRef.current,
     })
+    persistedRunIdRef.current = runId
     setPersistedRuns(loadPersistedLoadTestRuns(userId))
-  }, [
-    channelStats,
-    durationSeconds,
-    estimatedCost,
-    runKeyName,
-    runPackageName,
-    requestsPerSecond,
-    runId,
-    selectedModel,
-    stats,
-    status,
-    userId,
-  ])
+  }, [channelStats, estimatedCost, runId, stats, status, userId])
 
   const maxRequests =
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
