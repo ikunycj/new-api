@@ -32,6 +32,8 @@ export const LOAD_TEST_MAX_DURATION_SECONDS = 600
 export const LOAD_TEST_DEFAULT_RPS = 2
 export const LOAD_TEST_MIN_RPS = 1
 export const LOAD_TEST_MAX_RPS = 20
+export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
+export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
 export const LOAD_TEST_MAX_REQUESTS = 10_000
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_TIMEOUT_MS = 120_000
@@ -53,6 +55,66 @@ export type LoadTestModel = {
   id: string
   provider: LoadTestProvider
   endpoint: LoadTestEndpoint
+}
+
+export function getLoadTestEndpointPath(endpoint: LoadTestEndpoint): string {
+  return {
+    anthropic: '/v1/messages',
+    openai: '/v1/chat/completions',
+    'openai-response': '/v1/responses',
+    'openai-response-compact': '/v1/responses/compact',
+  }[endpoint]
+}
+
+export function buildLoadTestRequestBody(
+  model: string,
+  prompt: string,
+  promptCache: boolean,
+  endpoint: LoadTestEndpoint
+): Record<string, unknown> {
+  const isResponsesEndpoint =
+    endpoint === 'openai-response' || endpoint === 'openai-response-compact'
+  const requestBody: Record<string, unknown> = isResponsesEndpoint
+    ? {
+        model,
+        input: promptCache
+          ? [
+              { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
+              { role: 'user', content: prompt },
+            ]
+          : [{ role: 'user', content: prompt }],
+      }
+    : {
+        model,
+        max_tokens: 32,
+        messages: [{ role: 'user', content: prompt }],
+      }
+
+  if (endpoint === 'anthropic') {
+    if (promptCache) {
+      requestBody.system = [
+        {
+          type: 'text',
+          text: LOAD_TEST_CACHE_PREFIX,
+          cache_control: { type: 'ephemeral' },
+        },
+      ]
+    }
+  } else if (endpoint === 'openai') {
+    requestBody.temperature = 0
+    requestBody.stream = false
+    if (promptCache) {
+      requestBody.messages = [
+        { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
+        { role: 'user', content: prompt },
+      ]
+    }
+  } else if (endpoint === 'openai-response') {
+    requestBody.max_output_tokens = 32
+    requestBody.stream = false
+  }
+
+  return requestBody
 }
 
 export function getLoadTestApiBaseUrl(serverAddress: string): string {
@@ -366,6 +428,7 @@ export async function sendLoadTestRequest(
   apiKey: LoadTestKey,
   model: string,
   runId: string,
+  prompt: string,
   promptCache: boolean,
   signal?: AbortSignal,
   providerOverride?: LoadTestProvider,
@@ -384,53 +447,13 @@ export async function sendLoadTestRequest(
     const provider = providerOverride ?? getLoadTestProvider(model)
     const endpoint =
       endpointOverride ?? (provider === 'claude' ? 'anthropic' : 'openai')
-    const isResponsesEndpoint =
-      endpoint === 'openai-response' || endpoint === 'openai-response-compact'
-    const requestBody: Record<string, unknown> = isResponsesEndpoint
-      ? {
-          model,
-          input: promptCache
-            ? [
-                { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
-                { role: 'user', content: 'Reply with OK.' },
-              ]
-            : [{ role: 'user', content: 'Reply with OK.' }],
-        }
-      : {
-          model,
-          max_tokens: 32,
-          messages: [{ role: 'user', content: 'Reply with OK.' }],
-        }
-    if (endpoint === 'anthropic') {
-      if (promptCache) {
-        requestBody.system = [
-          {
-            type: 'text',
-            text: LOAD_TEST_CACHE_PREFIX,
-            cache_control: { type: 'ephemeral' },
-          },
-        ]
-      }
-    } else if (endpoint === 'openai') {
-      requestBody.temperature = 0
-      requestBody.stream = false
-      if (promptCache) {
-        requestBody.messages = [
-          { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
-          { role: 'user', content: 'Reply with OK.' },
-        ]
-      }
-    } else if (endpoint === 'openai-response') {
-      requestBody.max_output_tokens = 32
-      requestBody.stream = false
-    }
-
-    const endpointPath = {
-      anthropic: '/v1/messages',
-      openai: '/v1/chat/completions',
-      'openai-response': '/v1/responses',
-      'openai-response-compact': '/v1/responses/compact',
-    }[endpoint]
+    const requestBody = buildLoadTestRequestBody(
+      model,
+      prompt,
+      promptCache,
+      endpoint
+    )
+    const endpointPath = getLoadTestEndpointPath(endpoint)
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Content-Type': 'application/json',

@@ -57,6 +57,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { fetchApiKeyModels } from '@/features/keys/api'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
@@ -64,15 +65,19 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
+  LOAD_TEST_DEFAULT_PROMPT,
   LOAD_TEST_DEFAULT_RPS,
   LOAD_TEST_MAX_CONCURRENCY,
   LOAD_TEST_MAX_DURATION_SECONDS,
+  LOAD_TEST_MAX_PROMPT_CHARS,
   LOAD_TEST_MAX_REQUESTS,
   LOAD_TEST_MAX_RPS,
   LOAD_TEST_MIN_DURATION_SECONDS,
   LOAD_TEST_MIN_RPS,
+  buildLoadTestRequestBody,
   getLoadTestApiBaseUrl,
   getLoadTestChannelStats,
+  getLoadTestEndpointPath,
   getLoadTestModels,
   loadLoadTestKeys,
   loadLoadTestPricing,
@@ -94,6 +99,7 @@ type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
 type RunSnapshot = {
   model: string
+  prompt: string
   keyName: string
   packageName: string
   durationSeconds: number
@@ -258,6 +264,9 @@ export function LoadTestDemo() {
   const [requestsPerSecond, setRequestsPerSecond] = useState(
     String(persistedRun?.requestsPerSecond || LOAD_TEST_DEFAULT_RPS)
   )
+  const [prompt, setPrompt] = useState(
+    persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
+  )
   const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [stats, setStats] = useState<RunStats>(
@@ -394,6 +403,10 @@ export function LoadTestDemo() {
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
       requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
+    if (!prompt.trim()) {
+      toast.error(`${t('Prompt')}: ${t('Required')}`)
+      return
+    }
     if (
       !Number.isFinite(durationValue) ||
       durationValue < LOAD_TEST_MIN_DURATION_SECONDS ||
@@ -427,6 +440,7 @@ export function LoadTestDemo() {
     activeRunIdRef.current = currentRunId
     runSnapshotRef.current = {
       model: selectedModel,
+      prompt,
       keyName: selectedKey.name,
       packageName:
         selectedKey.group?.trim() || selectedKey.group_candidates[0] || '',
@@ -479,6 +493,7 @@ export function LoadTestDemo() {
         selectedKey,
         selectedModel,
         currentRunId,
+        prompt,
         promptCache,
         controller.signal,
         selectedModelOption.provider,
@@ -521,6 +536,7 @@ export function LoadTestDemo() {
     durationSeconds,
     keys,
     models,
+    prompt,
     promptCache,
     recordResult,
     requestsPerSecond,
@@ -620,6 +636,7 @@ export function LoadTestDemo() {
     if (!runSnapshot) return
     savePersistedLoadTestRun(userId, {
       model: runSnapshot.model,
+      prompt: runSnapshot.prompt,
       runId,
       keyName: runSnapshot.keyName,
       packageName: runSnapshot.packageName,
@@ -642,8 +659,25 @@ export function LoadTestDemo() {
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
     selectedModel !== '' &&
+    prompt.trim() !== '' &&
     !modelsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
+  const selectedModelMetadata = models.find(
+    (model) => model.id === selectedModel
+  )
+  const requestPreview = useMemo(() => {
+    if (!selectedModelMetadata) return '{}'
+    return JSON.stringify(
+      buildLoadTestRequestBody(
+        selectedModel,
+        prompt,
+        promptCache,
+        selectedModelMetadata.endpoint
+      ),
+      null,
+      2
+    )
+  }, [prompt, promptCache, selectedModel, selectedModelMetadata])
 
   const getHistoricalUserCharge = (run: (typeof persistedRuns)[number]) => {
     const runPricing = historicalPricing[run.runId]
@@ -819,6 +853,43 @@ export function LoadTestDemo() {
                   onCheckedChange={setPromptCache}
                 />
               </div>
+              <div className='grid gap-4 lg:grid-cols-2'>
+                <div className='space-y-1.5'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <Label htmlFor='load-test-prompt'>{t('Prompt')}</Label>
+                    <span className='text-muted-foreground text-xs tabular-nums'>
+                      {prompt.length.toLocaleString()} /{' '}
+                      {LOAD_TEST_MAX_PROMPT_CHARS.toLocaleString()}
+                    </span>
+                  </div>
+                  <Textarea
+                    className='min-h-52 resize-y font-mono text-sm'
+                    disabled={status === 'running'}
+                    id='load-test-prompt'
+                    maxLength={LOAD_TEST_MAX_PROMPT_CHARS}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    value={prompt}
+                  />
+                </div>
+                <div className='min-w-0 space-y-1.5'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <Label>
+                      {t('Request')} {t('Preview')}
+                    </Label>
+                    {selectedModelMetadata && (
+                      <code className='text-muted-foreground text-xs'>
+                        POST{' '}
+                        {getLoadTestEndpointPath(
+                          selectedModelMetadata.endpoint
+                        )}
+                      </code>
+                    )}
+                  </div>
+                  <pre className='bg-muted/40 h-52 overflow-auto rounded-lg border p-3 text-xs leading-relaxed break-words whitespace-pre-wrap'>
+                    {requestPreview}
+                  </pre>
+                </div>
+              </div>
               <div className='text-muted-foreground text-xs'>
                 {t('Maximum requests for this run')}: {maxRequests} ·{' '}
                 {t('Maximum concurrency')}: {LOAD_TEST_MAX_CONCURRENCY}
@@ -893,6 +964,7 @@ export function LoadTestDemo() {
                         <TableHead>{t('Run ID')}</TableHead>
                         <TableHead>{t('Completed at')}</TableHead>
                         <TableHead>{t('Test model')}</TableHead>
+                        <TableHead>{t('Prompt')}</TableHead>
                         <TableHead>{t('API Key')}</TableHead>
                         <TableHead>{t('Package')}</TableHead>
                         <TableHead>{t('Duration')}</TableHead>
@@ -924,6 +996,12 @@ export function LoadTestDemo() {
                               {new Date(run.completedAt).toLocaleString()}
                             </TableCell>
                             <TableCell>{run.model}</TableCell>
+                            <TableCell
+                              className='max-w-56 truncate'
+                              title={run.prompt}
+                            >
+                              {run.prompt}
+                            </TableCell>
                             <TableCell>{run.keyName || '-'}</TableCell>
                             <TableCell>{run.packageName || '-'}</TableCell>
                             <TableCell>{run.durationSeconds}s</TableCell>

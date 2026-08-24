@@ -51,6 +51,7 @@ const result: LoadTestRunResult = {
   packageName: '通用套餐',
   durationSeconds: 60,
   requestsPerSecond: 2,
+  prompt: 'Return one concise sentence.',
   userCharge: 0.2,
   requestIds: ['request-1'],
   stats: {
@@ -143,5 +144,19 @@ describe('load test result storage', () => {
     clearPersistedLoadTestRuns(42)
     assert.deepEqual(loadPersistedLoadTestRuns(42), [])
     assert.equal(values.size, 0)
+  })
+
+  test('restores the default prompt for existing version 2 histories', () => {
+    const values = installLocalStorage()
+    Date.now = () => 1_000_000
+    savePersistedLoadTestRun(42, result)
+    const [key, raw] = [...values.entries()][0]
+    const stored = JSON.parse(raw) as {
+      runs: Array<Record<string, unknown>>
+    }
+    delete stored.runs[0].prompt
+    values.set(key, JSON.stringify(stored))
+
+    assert.equal(loadPersistedLoadTestRun(42)?.prompt, 'Reply with OK.')
   })
 })

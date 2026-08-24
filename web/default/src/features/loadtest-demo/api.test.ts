@@ -20,6 +20,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 
 import {
+  buildLoadTestRequestBody,
   getLoadTestApiBaseUrl,
   getLoadTestModels,
   sendLoadTestRequest,
@@ -58,6 +59,7 @@ describe('load test request identity', () => {
       { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
       'gpt-5.6-sol',
       'load-test-run',
+      'Return a short answer.',
       false
     )
 
@@ -83,6 +85,7 @@ describe('load test request identity', () => {
       { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
       'o4-mini',
       'load-test-run',
+      'Describe this request.',
       false,
       undefined,
       'openai',
@@ -92,10 +95,28 @@ describe('load test request identity', () => {
     assert.equal(requestedUrl, 'https://api.example.com/v1/responses')
     assert.deepEqual(JSON.parse(requestedBody), {
       model: 'o4-mini',
-      input: [{ role: 'user', content: 'Reply with OK.' }],
+      input: [{ role: 'user', content: 'Describe this request.' }],
       max_output_tokens: 32,
       stream: false,
     })
+  })
+
+  test('builds the Anthropic preview from the same custom prompt', () => {
+    assert.deepEqual(
+      buildLoadTestRequestBody(
+        'claude-opus-4-8',
+        'Summarize the attached trajectory.',
+        false,
+        'anthropic'
+      ),
+      {
+        model: 'claude-opus-4-8',
+        max_tokens: 32,
+        messages: [
+          { role: 'user', content: 'Summarize the attached trajectory.' },
+        ],
+      }
+    )
   })
 })
 
