@@ -135,44 +135,6 @@ func TestEditPersistsLongUsername(t *testing.T) {
 	assert.Equal(t, longUsername, stored.Username)
 }
 
-func TestEditKeepsUserTypeSeparateFromUserGroup(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{
-		Username: "business-user",
-		Password: "password123",
-		UserType: UserTypeToB,
-		Group:    "default",
-		Status:   common.UserStatusEnabled,
-	}
-	require.NoError(t, user.Insert(0))
-
-	user.Group = "premium"
-	require.NoError(t, user.EditWithTx(DB, false))
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, UserTypeToB, stored.UserType)
-	assert.Equal(t, "premium", stored.Group)
-}
-
-func TestInsertDefaultsUserTypeToC(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{
-		Username: "consumer-user",
-		Password: "password123",
-		Group:    "default",
-		Status:   common.UserStatusEnabled,
-	}
-	require.NoError(t, user.Insert(0))
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, UserTypeToC, stored.UserType)
-	assert.Equal(t, "default", stored.Group)
-}
-
 func TestInsertUsesEmailWhenUsernameIsBlank(t *testing.T) {
 	setupUserUpdateTestState(t)
 
@@ -225,6 +187,27 @@ func TestMigrateUsernameToNonUniqueSQLite(t *testing.T) {
 	require.NoError(t, migrateUsernameToNonUnique())
 	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
 	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
+}
+
+func TestRemoveLegacyUserClassificationColumnSQLite(t *testing.T) {
+	legacyDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	previousDB := DB
+	previousDatabaseType := common.MainDatabaseType()
+	DB = legacyDB
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	t.Cleanup(func() {
+		DB = previousDB
+		common.SetMainDatabaseType(previousDatabaseType)
+	})
+
+	require.NoError(t, DB.Exec("CREATE TABLE `users` (`id` integer primary key, `email` varchar(255), `user_type` varchar(8))").Error)
+	require.NoError(t, DB.Exec("CREATE INDEX `idx_users_user_type` ON `users` (`user_type`)").Error)
+	require.True(t, DB.Migrator().HasColumn(&legacyUserClassificationColumn{}, "user_type"))
+	require.NoError(t, removeLegacyUserClassificationColumn())
+	assert.False(t, DB.Migrator().HasColumn(&legacyUserClassificationColumn{}, "user_type"))
+	assert.False(t, DB.Migrator().HasIndex(&legacyUserClassificationColumn{}, "idx_users_user_type"))
 }
 
 func TestInsertRejectsDuplicateEmailWithoutUniqueIndex(t *testing.T) {

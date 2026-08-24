@@ -271,6 +271,9 @@ func migrateDB() error {
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
+	if err := removeLegacyUserClassificationColumn(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -345,6 +348,9 @@ func migrateDB() error {
 
 func migrateDBFast() error {
 	if err := migrateUsernameToNonUnique(); err != nil {
+		return err
+	}
+	if err := removeLegacyUserClassificationColumn(); err != nil {
 		return err
 	}
 
@@ -547,6 +553,47 @@ func removeLegacyChannelMonitorAvailabilityColumns() error {
 		if err := migrator.DropColumn(legacy, column); err != nil {
 			return fmt.Errorf("remove legacy channel monitor column %s: %w", column, err)
 		}
+	}
+	return nil
+}
+
+type legacyUserClassificationColumn struct {
+	Value string `gorm:"column:user_type"`
+}
+
+func (legacyUserClassificationColumn) TableName() string {
+	return "users"
+}
+
+func removeLegacyUserClassificationColumn() error {
+	legacy := &legacyUserClassificationColumn{}
+	migrator := DB.Migrator()
+	if !migrator.HasTable(legacy) || !migrator.HasColumn(legacy, "user_type") {
+		return nil
+	}
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		var indexes []struct {
+			Name string
+			SQL  string
+		}
+		if err := DB.Raw("SELECT name, sql FROM sqlite_master WHERE type = ? AND tbl_name = ? AND sql IS NOT NULL", "index", "users").Scan(&indexes).Error; err != nil {
+			return fmt.Errorf("inspect users.user_type indexes: %w", err)
+		}
+		for _, index := range indexes {
+			if !strings.Contains(strings.ToLower(index.SQL), "user_type") {
+				continue
+			}
+			if err := migrator.DropIndex(legacy, index.Name); err != nil {
+				return fmt.Errorf("remove users.user_type index %s: %w", index.Name, err)
+			}
+		}
+		if err := DB.Exec("ALTER TABLE ? DROP COLUMN ?", clause.Table{Name: "users"}, clause.Column{Name: "user_type"}).Error; err != nil {
+			return fmt.Errorf("remove legacy users.user_type column: %w", err)
+		}
+		return nil
+	}
+	if err := migrator.DropColumn(legacy, "user_type"); err != nil {
+		return fmt.Errorf("remove legacy users.user_type column: %w", err)
 	}
 	return nil
 }

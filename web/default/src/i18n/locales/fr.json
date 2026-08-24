@@ -6246,10 +6246,6 @@
     "Total timeout (ms)": "Délai total (ms)",
     "Upstream error code": "Code d’erreur amont",
     "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Coût estimé = jetons réels du canal × prix officiel du modèle × coefficient du groupe de facturation × facteur de coût du canal.",
-    "Live channel routing health and failover metrics": "État en direct du routage des canaux et indicateurs de bascule",
-    "User Type": "Type d'utilisateur",
-    "ToB": "ToB",
-    "ToC": "ToC",
-    "ToB users can access the load test demo.": "Les utilisateurs ToB peuvent accéder à la démo de test de charge."
+    "Live channel routing health and failover metrics": "État en direct du routage des canaux et indicateurs de bascule"
   }
 }

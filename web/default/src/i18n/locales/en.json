@@ -6246,10 +6246,6 @@
     "Total timeout (ms)": "Total timeout (ms)",
     "Upstream error code": "Upstream error code",
     "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.",
-    "Live channel routing health and failover metrics": "Live channel routing health and failover metrics",
-    "User Type": "User Type",
-    "ToB": "ToB",
-    "ToC": "ToC",
-    "ToB users can access the load test demo.": "ToB users can access the load test demo."
+    "Live channel routing health and failover metrics": "Live channel routing health and failover metrics"
   }
 }

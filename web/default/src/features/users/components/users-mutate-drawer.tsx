@@ -306,42 +306,6 @@ export function UsersMutateDrawer({
 
                 <FormField
                   control={form.control}
-                  name='user_type'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('User Type')}</FormLabel>
-                      <Select
-                        items={[
-                          { value: 'toC', label: t('ToC') },
-                          { value: 'toB', label: t('ToB') },
-                        ]}
-                        value={field.value}
-                        onValueChange={(value) =>
-                          value !== null && field.onChange(value)
-                        }
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='toC'>{t('ToC')}</SelectItem>
-                            <SelectItem value='toB'>{t('ToB')}</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {t('ToB users can access the load test demo.')}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name='display_name'
                   render={({ field }) => (
                     <FormItem>

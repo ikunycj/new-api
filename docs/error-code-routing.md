@@ -2,16 +2,14 @@
 
 ## 1. 目标架构
 
-AllToken 保留用户类型、商业权益和请求计费三类独立维度：
+AllToken 只保留四层业务关系：
 
 ```text
-用户类型（users.user_type）
-用户 -> 用户组（users.group）-> 可用计费组 -> Token 计费组（tokens.group）-> 渠道 -> 上游服务
+用户 -> 用户分组 -> 计费分组 -> 渠道 -> 上游服务
 ```
 
 - **用户**：登录账号与 API Key 的所有者。
-- **用户类型**：复用已有的 `users.user_type`，取值为 `toC` 或 `toB`，用于产品功能授权，不参与计费路由。
-- **用户组**：复用 `users.group`，表示账号的商业权益层级，并决定该用户可选择哪些计费组。
+- **用户分组**：复用 `users.group`。`default` 表示 ToC，`toB` 表示 ToB。
 - **计费分组**：API Key 授权的计费与模型能力边界，复用 Token、Ability 和 Channel 已有的 `group`。
 - **渠道**：一个可独立请求、计费、重试、熔断和监控的上游入口。
 
@@ -221,7 +219,7 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 
 ## 8. 验收清单
 
-1. `user_type=toC` 用户看不到且无法调用 Load-test Demo 专用统计接口，`user_type=toB` 用户可以；访问结果不受 `users.group` 取值影响。
+1. `default` 用户看不到且无法调用 Load-test Demo 专用统计接口，`toB` 用户可以。
 2. 一个计费分组只能保存一条路由，且只能选择属于该分组的渠道。
 3. 高优先级渠道成功时不会访问后续渠道。
 4. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。

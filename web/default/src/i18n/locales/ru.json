@@ -6246,10 +6246,6 @@
     "Total timeout (ms)": "Общий тайм-аут (мс)",
     "Upstream error code": "Код ошибки провайдера",
     "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "Расчётная стоимость = фактические токены канала × официальная цена модели × коэффициент группы тарификации × коэффициент стоимости канала.",
-    "Live channel routing health and failover metrics": "Текущее состояние маршрутизации каналов и показатели переключения",
-    "User Type": "Тип пользователя",
-    "ToB": "ToB",
-    "ToC": "ToC",
-    "ToB users can access the load test demo.": "Пользователи ToB могут использовать демо нагрузочного тестирования."
+    "Live channel routing health and failover metrics": "Текущее состояние маршрутизации каналов и показатели переключения"
   }
 }

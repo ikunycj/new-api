@@ -164,7 +164,6 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"username":            user.Username,
 			"display_name":        user.DisplayName,
 			"role":                user.Role,
-			"user_type":           model.NormalizeUserType(user.UserType),
 			"status":              user.Status,
 			"group":               user.Group,
 			"onboarding_required": onboardingStatus.Required,
@@ -460,7 +459,6 @@ func GetSelf(c *gin.Context) {
 		"username":            user.Username,
 		"display_name":        user.DisplayName,
 		"role":                user.Role,
-		"user_type":           model.NormalizeUserType(user.UserType),
 		"status":              user.Status,
 		"email":               user.Email,
 		"github_id":           user.GitHubId,
@@ -662,11 +660,6 @@ func UpdateUser(c *gin.Context) {
 	if err := common.Validate.Struct(&updatedUser); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
-	}
-	if strings.TrimSpace(updatedUser.UserType) == "" {
-		updatedUser.UserType = originUser.UserType
-	} else {
-		updatedUser.UserType = model.NormalizeUserType(updatedUser.UserType)
 	}
 	if updatedUser.Role != common.RoleGuestUser && updatedUser.Role != originUser.Role {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
@@ -986,7 +979,6 @@ func CreateUser(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
-		UserType:    model.NormalizeUserType(user.UserType),
 		Group:       user.Group,
 	}
 	authzTouched := false

@@ -22,17 +22,15 @@ import { describe, test } from 'node:test'
 import { transformFormDataToPayload } from './user-form'
 
 describe('user form payload', () => {
-  test('keeps user type separate from the selected user group', () => {
+  test('preserves the selected user group when creating a user', () => {
     const payload = transformFormDataToPayload({
       username: 'business-user',
       display_name: 'Business User',
       password: 'password123',
       role: 1,
-      user_type: 'toB',
       group: 'premium',
     })
 
-    assert.equal(payload.user_type, 'toB')
     assert.equal(payload.group, 'premium')
   })
 })

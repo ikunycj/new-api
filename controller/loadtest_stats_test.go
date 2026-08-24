@@ -15,7 +15,7 @@ import (
 
 func TestGetLoadTestChannelStatsRejectsInvalidBody(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-invalid-body", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-invalid-body"}
+	user := &model.User{Username: "loadtest-invalid-body", Group: "toB", AffCode: "loadtest-invalid-body"}
 	require.NoError(t, db.Create(user).Error)
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
@@ -37,7 +37,7 @@ func TestGetLoadTestChannelStatsRejectsInvalidBody(t *testing.T) {
 
 func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-too-many", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-too-many"}
+	user := &model.User{Username: "loadtest-too-many", Group: "toB", AffCode: "loadtest-too-many"}
 	require.NoError(t, db.Create(user).Error)
 	gin.SetMode(gin.TestMode)
 	requestIDs := strings.Repeat(`"request",`, maxLoadTestStatsRequestIDs) + `"request"`
@@ -58,9 +58,9 @@ func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 	assert.Equal(t, "too many request_ids", response.Message)
 }
 
-func TestGetLoadTestChannelStatsRejectsToCUserInToBGroup(t *testing.T) {
+func TestGetLoadTestChannelStatsRejectsDefaultUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-toc", UserType: model.UserTypeToC, Group: "toB", AffCode: "loadtest-toc"}
+	user := &model.User{Username: "loadtest-default", Group: "default", AffCode: "loadtest-default"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
@@ -72,9 +72,9 @@ func TestGetLoadTestChannelStatsRejectsToCUserInToBGroup(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, recorder.Code)
 }
 
-func TestGetLoadTestChannelStatsAllowsToBUserInDefaultGroup(t *testing.T) {
+func TestGetLoadTestChannelStatsAllowsToBUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-tob", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-tob"}
+	user := &model.User{Username: "loadtest-tob", Group: "toB", AffCode: "loadtest-tob"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
