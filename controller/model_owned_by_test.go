@@ -6,7 +6,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -98,16 +97,4 @@ func TestGetModelListGroupsUsesOrderedTokenCandidates(t *testing.T) {
 	require.Equal(t, "default", groups.userGroup)
 	require.Equal(t, "auto", groups.tokenGroup)
 	require.Equal(t, []string{"claude-low", "openai-low"}, groups.ownerGroups)
-}
-
-func TestGetModelListGroupsKeepsLegacyAutoGroupsWithoutCandidates(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
-	common.SetContextKey(ctx, constant.ContextKeyTokenGroup, "auto")
-
-	groups, err := getModelListGroups(ctx)
-	require.NoError(t, err)
-
-	require.Equal(t, service.GetUserAutoGroup("default"), groups.ownerGroups)
 }

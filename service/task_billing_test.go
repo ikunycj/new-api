@@ -246,17 +246,14 @@ func TestRecalculateTaskQuotaByTokensUsesPersistedBillingContext(t *testing.T) {
 	savedRate := operation_setting.BillingUSDToCNYRate
 	savedModelRatios := ratio_setting.ModelRatio2JSONString()
 	savedGroupRatios := ratio_setting.GroupRatio2JSONString()
-	savedGroupGroupRatios := ratio_setting.GroupGroupRatio2JSONString()
 	t.Cleanup(func() {
 		operation_setting.BillingUSDToCNYRate = savedRate
 		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedModelRatios))
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(savedGroupRatios))
-		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(savedGroupGroupRatios))
 	})
 
 	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"test-model":99}`))
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"billing-sale":0.9}`))
-	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"billing-sale":{"billing-sale":0.8}}`))
 	operation_setting.BillingUSDToCNYRate = 99
 
 	privateData := model.TaskPrivateData{
@@ -297,23 +294,20 @@ func TestRecalculateTaskQuotaByTokensUsesPersistedBillingContext(t *testing.T) {
 	assert.Equal(t, 7.3, other["billing_usd_to_cny_rate"])
 }
 
-func TestRecalculateLegacyTaskQuotaPreservesSpecialGroupRatio(t *testing.T) {
+func TestRecalculateLegacyTaskQuotaUsesBaseGroupRatio(t *testing.T) {
 	truncate(t)
 
 	savedRate := operation_setting.BillingUSDToCNYRate
 	savedModelRatios := ratio_setting.ModelRatio2JSONString()
 	savedGroupRatios := ratio_setting.GroupRatio2JSONString()
-	savedGroupGroupRatios := ratio_setting.GroupGroupRatio2JSONString()
 	t.Cleanup(func() {
 		operation_setting.BillingUSDToCNYRate = savedRate
 		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedModelRatios))
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(savedGroupRatios))
-		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(savedGroupGroupRatios))
 	})
 
 	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"legacy-task-model":2}`))
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"legacy-task-group":0.9}`))
-	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"legacy-task-group":{"legacy-task-group":0.25}}`))
 	operation_setting.BillingUSDToCNYRate = 99
 
 	const userID, channelID = 42, 42
@@ -328,7 +322,7 @@ func TestRecalculateLegacyTaskQuotaPreservesSpecialGroupRatio(t *testing.T) {
 
 	RecalculateTaskQuotaByTokens(context.Background(), task, 1000)
 
-	const wantActualQuota = 500 // 1000 * 2 * legacy special group ratio 0.25; old tasks use billing rate 1.
+	const wantActualQuota = 1800 // 1000 * 2 * base group ratio 0.9; old tasks use billing rate 1.
 	assert.Equal(t, wantActualQuota, task.Quota)
 	assert.Equal(t, initialQuota-(wantActualQuota-preConsumedQuota), getUserQuota(t, userID))
 }

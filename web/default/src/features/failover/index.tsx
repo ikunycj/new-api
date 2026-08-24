@@ -17,8 +17,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getChannels } from '@/features/channels/api'
-import { getGroups } from '@/features/users/api'
+import { getChannels, getPricingGroups } from '@/features/channels/api'
 
 import {
   getFailoverConfig,
@@ -106,7 +105,7 @@ export function FailoverConfiguration() {
   })
   const groupsQuery = useQuery({
     queryKey: ['channel-routing-billing-groups'],
-    queryFn: getGroups,
+    queryFn: getPricingGroups,
   })
   const channels = useMemo(
     () => channelsQuery.data?.data?.items ?? [],

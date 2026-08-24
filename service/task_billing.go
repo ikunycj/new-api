@@ -310,9 +310,6 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 			return
 		}
 		finalGroupRatio = ratio_setting.GetGroupRatio(group)
-		if legacySpecialRatio, ok := ratio_setting.GetGroupGroupRatio(group, group); ok {
-			finalGroupRatio = legacySpecialRatio
-		}
 	}
 	if modelRatio <= 0 {
 		return

@@ -306,6 +306,8 @@ func migrateDB() error {
 		&SystemTaskLock{},
 		&ChannelMonitor{},
 		&ChannelMonitorHistory{},
+		&ChannelProbeState{},
+		&ChannelProbeHistory{},
 		&ChannelCostEntry{},
 		&BillingGroupRoute{},
 		&BillingGroupChannel{},
@@ -329,6 +331,12 @@ func migrateDB() error {
 		&AffiliateQuotaGrant{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := normalizeLegacyUserGroups(); err != nil {
+		return err
+	}
+	if err := removeRetiredGroupOptions(); err != nil {
 		return err
 	}
 	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
@@ -390,6 +398,8 @@ func migrateDBFast() error {
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&ChannelMonitor{}, "ChannelMonitor"},
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
+		{&ChannelProbeState{}, "ChannelProbeState"},
+		{&ChannelProbeHistory{}, "ChannelProbeHistory"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&BillingGroupRoute{}, "BillingGroupRoute"},
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
@@ -432,6 +442,12 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := normalizeLegacyUserGroups(); err != nil {
+		return err
+	}
+	if err := removeRetiredGroupOptions(); err != nil {
+		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
@@ -594,6 +610,33 @@ func removeLegacyUserClassificationColumn() error {
 	}
 	if err := migrator.DropColumn(legacy, "user_type"); err != nil {
 		return fmt.Errorf("remove legacy users.user_type column: %w", err)
+	}
+	return nil
+}
+
+// normalizeLegacyUserGroups repairs values created by the old shared
+// user/pricing-group namespace. Token, ability, channel, and historical log
+// groups are intentionally untouched because they belong to pricing/routing.
+func normalizeLegacyUserGroups() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) || !DB.Migrator().HasColumn(&User{}, "group") {
+		return nil
+	}
+	condition := commonGroupCol + " IS NULL OR TRIM(" + commonGroupCol + ") = '' OR " + commonGroupCol + " <> ?"
+	var ids []int
+	if err := DB.Model(&User{}).Where(condition, DefaultUserGroup).Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := DB.Model(&User{}).Where(condition, DefaultUserGroup).
+		Update("group", DefaultUserGroup).Error; err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := invalidateUserCache(id); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate normalized user group cache for user %d: %v", id, err))
+		}
 	}
 	return nil
 }

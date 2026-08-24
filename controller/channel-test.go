@@ -40,6 +40,26 @@ type testResult struct {
 	newAPIError *types.NewAPIError
 }
 
+const (
+	modelTestTokenName    = "模型测试"
+	channelProbeTokenName = "渠道探测"
+)
+
+func supportsChannelTest(channelType int) bool {
+	switch channelType {
+	case constant.ChannelTypeMidjourney,
+		constant.ChannelTypeMidjourneyPlus,
+		constant.ChannelTypeSunoAPI,
+		constant.ChannelTypeKling,
+		constant.ChannelTypeJimeng,
+		constant.ChannelTypeDoubaoVideo,
+		constant.ChannelTypeVidu:
+		return false
+	default:
+		return true
+	}
+}
+
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
 	normalized := strings.TrimSpace(endpointType)
 	if normalized != "" {
@@ -72,20 +92,19 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+	return testChannelWithTokenName(ctx, channel, testUserID, testModel, endpointType, isStream, modelTestTokenName)
+}
+
+func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	tik := time.Now()
-	var unsupportedTestChannelTypes = []int{
-		constant.ChannelTypeMidjourney,
-		constant.ChannelTypeMidjourneyPlus,
-		constant.ChannelTypeSunoAPI,
-		constant.ChannelTypeKling,
-		constant.ChannelTypeJimeng,
-		constant.ChannelTypeDoubaoVideo,
-		constant.ChannelTypeVidu,
+	tokenName = strings.TrimSpace(tokenName)
+	if tokenName == "" {
+		tokenName = modelTestTokenName
 	}
-	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
+	tik := time.Now()
+	if !supportsChannelTest(channel.Type) {
 		channelTypeName := constant.GetChannelTypeName(channel.Type)
 		return testResult{
 			localErr: fmt.Errorf("%s channel test is not supported", channelTypeName),
@@ -505,9 +524,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		CacheWriteTokens:    usage.PromptTokensDetails.CacheCreationTokensTotal(),
 		CacheStatsAvailable: usage.UsageSource != "" && usage.InputTokens > 0,
 		ModelName:           info.OriginModelName,
-		TokenName:           "模型测试",
+		TokenName:           tokenName,
 		Quota:               quota,
-		Content:             "模型测试",
+		Content:             tokenName,
 		UseTimeSeconds:      int(consumedTime),
 		IsStream:            info.IsStream,
 		Group:               info.UsingGroup,

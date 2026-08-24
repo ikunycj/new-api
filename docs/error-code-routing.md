@@ -9,11 +9,11 @@ AllToken 只保留四层业务关系：
 ```
 
 - **用户**：登录账号与 API Key 的所有者。
-- **用户分组**：复用 `users.group`。`default` 表示 ToC，`toB` 表示 ToB。
+- **用户分组**：复用 `users.group`；当前默认用户分组目录只包含 `default`。
 - **计费分组**：API Key 授权的计费与模型能力边界，复用 Token、Ability 和 Channel 已有的 `group`。
 - **渠道**：一个可独立请求、计费、重试、熔断和监控的上游入口。
 
-AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号池属于上游实现细节；AllToken 收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
+上游系统内部是否存在账号池属于上游实现细节；AllToken 收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
 
 ## 2. 路由配置
 
@@ -51,7 +51,7 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 
 渠道必须属于同一个计费分组并支持请求模型。高优先级渠道全部不可用后才会选择下一优先级；同优先级按权重选择。
 
-未配置或停用计费分组路由时，系统继续使用原有 Channel/Ability 的优先级与权重逻辑。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生。
+未配置或停用计费分组路由时，系统在完整能力候选集中按渠道价格倍率、昨日探测成功率、API Key 分组顺序、强制优先范围和渠道权重排序，不再读取 Channel/Ability 优先级。配置路由时，路由自身的 `priority` 先决定同组渠道层级，动态渠道信号只在同一路由优先级内生效。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生。
 
 ## 3. 切流过程
 
@@ -78,7 +78,7 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 | `channel` | 当前渠道或其上游返回的错误 | `2xxxxx` |
 | `alltoken` | AllToken 网关自身生成的错误 | `3xxxxx` |
 
-历史输入中的 `cluster` 只作为兼容别名读取，输出一律规范化为 `channel`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
+错误来源只接受当前定义的 `openai`、`channel` 和 `alltoken`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
 
 ### 4.1 六位数字格式
 
@@ -215,15 +215,15 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 - `billing_group_channels`
 - `channel_error_mappings`
 
-旧 Cluster、号池和旧切流策略表不再迁移、不再读取，但本次改造不会主动删除这些物理表或历史数据。需要回滚旧版本时，原始数据仍可供旧代码读取；确认新架构稳定并完成数据备份后，才能单独安排物理清理。
+渠道路由不依赖其他路由实体；运行时只读取上述三张表。物理数据清理由独立运维流程负责，不进入请求选路代码。
 
 ## 8. 验收清单
 
-1. `default` 用户看不到且无法调用 Load-test Demo 专用统计接口，`toB` 用户可以。
+1. 已登录用户可以调用 Load-test Demo 专用统计接口，且只能查询自己的压测数据。
 2. 一个计费分组只能保存一条路由，且只能选择属于该分组的渠道。
 3. 高优先级渠道成功时不会访问后续渠道。
 4. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。
 5. 错误记录包含正确的 `alltoken_code`、`channel_id` 和 `error_ref`。
 6. 渠道熔断后不再接收新请求，冷却后半开探测成功可恢复。
-7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断；不再依赖 Cluster/号池指标。
+7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断。
 8. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。

@@ -36,7 +36,8 @@ const SENSITIVE_MASK = '••••'
  * renderer via `flexRender`, so the table's information and interactions are
  * preserved: row selection, provider/multi-key/IO.NET type badge, id,
  * name/remark + warning icons, status (with tooltips), groups, inline
- * priority/weight spinners, balance refresh, response/test times, tag
+ * inline weight spinner, balance refresh, response/test times, previous-day
+ * probe rate, tag
  * expand-collapse, and the per-row (or per-tag) actions menu.
  */
 function ChannelCardComponent({
@@ -63,6 +64,7 @@ function ChannelCardComponent({
     balance: t('Used / Remaining'),
     response_time: t('Response'),
     test_time: t('Last Tested'),
+    previous_day_probe_success_rate: t('Previous-day probe success rate'),
   }
 
   const groups = parseGroupsList(row.original.group ?? '')
@@ -72,11 +74,13 @@ function ChannelCardComponent({
   const nameCell = renderCell('name')
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
-  const priorityCell = renderCell('priority')
   const weightCell = renderCell('weight')
   const balanceCell = renderCell('balance')
   const responseCell = renderCell('response_time')
   const testCell = renderCell('test_time')
+  const previousDayProbeSuccessRateCell = renderCell(
+    'previous_day_probe_success_rate'
+  )
 
   const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
 
@@ -109,7 +113,7 @@ function ChannelCardComponent({
         </div>
 
         {/* Body: left column (id/name + balance) paired with a right-aligned
-          column (priority/weight + response/test time). */}
+          column (weight + response/test time). */}
         <div className='flex items-start justify-between gap-3'>
           {/* Left column */}
           <div className='flex min-w-0 flex-1 flex-col gap-3 overflow-hidden'>
@@ -131,26 +135,31 @@ function ChannelCardComponent({
                 )}
               </div>
             </div>
+            <div className='min-w-0'>
+              <div
+                className={cn('mb-1', labelClass)}
+                title={t('Previous-day probe success rate')}
+              >
+                {fieldLabels.previous_day_probe_success_rate}
+              </div>
+              <div className='min-w-0 text-sm whitespace-nowrap'>
+                {previousDayProbeSuccessRateCell ?? (
+                  <span className='text-muted-foreground'>-</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Right column (sits on the right, content left-aligned). A single
-            grid with content-sized columns keeps Priority/Weight and
-            Response/Last Tested aligned without wasting horizontal space. */}
-          <div className='grid shrink-0 grid-cols-[auto_auto] items-center gap-x-3 gap-y-1'>
-            <span className={labelClass}>{t('Priority')}</span>
+          {/* Right column (sits on the right, content left-aligned). */}
+          <div className='grid shrink-0 grid-cols-[max-content_max-content] items-baseline gap-x-3 gap-y-2'>
             <span className={labelClass}>{t('Weight')}</span>
-            <div className='flex justify-start'>{priorityCell}</div>
-            <div className='flex justify-start'>{weightCell}</div>
-            <span className={cn('mt-2', labelClass)}>
-              {fieldLabels.response_time}
-            </span>
-            <span className={cn('mt-2', labelClass)}>
-              {fieldLabels.test_time}
-            </span>
-            <div className='overflow-hidden text-sm'>
+            <span className={labelClass}>{fieldLabels.response_time}</span>
+            <div className='text-sm whitespace-nowrap'>{weightCell}</div>
+            <div className='text-sm whitespace-nowrap'>
               {responseCell ?? <span className='text-muted-foreground'>-</span>}
             </div>
-            <div className='overflow-hidden text-sm'>
+            <span className={labelClass}>{fieldLabels.test_time}</span>
+            <div className='text-sm whitespace-nowrap'>
               {testCell ?? <span className='text-muted-foreground'>-</span>}
             </div>
           </div>

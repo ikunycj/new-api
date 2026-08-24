@@ -167,7 +167,7 @@ func ParseErrorSource(source string) ErrorSource {
 	switch strings.ToLower(strings.TrimSpace(source)) {
 	case string(ErrorSourceOpenAI):
 		return ErrorSourceOpenAI
-	case string(ErrorSourceChannel), "cluster":
+	case string(ErrorSourceChannel):
 		return ErrorSourceChannel
 	case string(ErrorSourceAllToken), "new-api", "new_api":
 		return ErrorSourceAllToken

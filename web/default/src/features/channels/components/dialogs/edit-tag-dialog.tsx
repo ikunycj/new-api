@@ -44,7 +44,7 @@ import {
   editTagChannels,
   getTagModels,
   getAllModels,
-  getGroups,
+  getPricingGroups,
 } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import type { TagOperationParams } from '../../types'
@@ -84,8 +84,8 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
 
   // Fetch groups
   const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
     enabled: open,
   })
 
@@ -305,9 +305,9 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
                 <div className='flex gap-2'>
                   <Select<string>
                     items={availableModels.map((model) => ({
-                        value: model,
-                        label: model,
-                      }))}
+                      value: model,
+                      label: model,
+                    }))}
                     onValueChange={(value) => {
                       if (value === null) return
                       if (!selectedModels.includes(value)) {
@@ -417,7 +417,7 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
           {/* Groups */}
           <div className='space-y-2'>
             <Label>
-              {t('Groups')}
+              {t('Pricing groups')}
               <span className='text-muted-foreground ml-2 text-xs'>
                 {t("(Override all channels' groups)")}
               </span>

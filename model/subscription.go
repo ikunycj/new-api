@@ -208,6 +208,8 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	if p.AllowWalletOverflow == nil {
 		p.AllowWalletOverflow = common.GetPointer(true)
 	}
+	p.UpgradeGroup = normalizeSubscriptionUserGroup(p.UpgradeGroup)
+	p.DowngradeGroup = normalizeSubscriptionUserGroup(p.DowngradeGroup)
 }
 
 // Subscription order (payment -> webhook -> create UserSubscription)
@@ -278,6 +280,17 @@ type UserSubscription struct {
 
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
+}
+
+// normalizeSubscriptionUserGroup keeps legacy subscription transition fields
+// from writing pricing-group names into users.group. The fields remain in the
+// schema for compatibility with existing rows and API clients, but any
+// non-empty transition now resolves to the sole account group.
+func normalizeSubscriptionUserGroup(group string) string {
+	if strings.TrimSpace(group) == "" {
+		return ""
+	}
+	return DefaultUserGroup
 }
 
 func (s *UserSubscription) BeforeCreate(tx *gorm.DB) error {
@@ -441,8 +454,8 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if tx == nil || sub == nil {
 		return "", errors.New("invalid downgrade args")
 	}
-	downgradeGroup := strings.TrimSpace(sub.DowngradeGroup)
-	upgradeGroup := strings.TrimSpace(sub.UpgradeGroup)
+	downgradeGroup := normalizeSubscriptionUserGroup(sub.DowngradeGroup)
+	upgradeGroup := normalizeSubscriptionUserGroup(sub.UpgradeGroup)
 	// Nothing to do if neither an explicit downgrade target nor an upgrade snapshot exists.
 	if downgradeGroup == "" && upgradeGroup == "" {
 		return "", nil
@@ -469,7 +482,7 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 		if currentGroup != upgradeGroup {
 			return "", nil
 		}
-		target = strings.TrimSpace(sub.PrevUserGroup)
+		target = normalizeSubscriptionUserGroup(sub.PrevUserGroup)
 	}
 	if target == "" || target == currentGroup {
 		return "", nil
@@ -514,7 +527,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if nextReset > 0 {
 		lastReset = now.Unix()
 	}
-	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
+	upgradeGroup := normalizeSubscriptionUserGroup(plan.UpgradeGroup)
 	prevGroup := ""
 	if upgradeGroup != "" {
 		currentGroup, err := getUserGroupByIdTx(tx, userId)
@@ -522,9 +535,11 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, err
 		}
 		if currentGroup != upgradeGroup {
-			prevGroup = currentGroup
+			// Keep the snapshot for legacy reporting, but never copy a pricing
+			// group into users.group. All new accounts already use default.
+			prevGroup = normalizeSubscriptionUserGroup(currentGroup)
 			if err := tx.Model(&User{}).Where("id = ?", userId).
-				Update("group", upgradeGroup).Error; err != nil {
+				Update("group", DefaultUserGroup).Error; err != nil {
 				return nil, err
 			}
 		}
@@ -546,7 +561,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		NextResetTime:       nextReset,
 		UpgradeGroup:        upgradeGroup,
 		PrevUserGroup:       prevGroup,
-		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
+		DowngradeGroup:      normalizeSubscriptionUserGroup(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
 		CreatedAt:           common.GetTimestamp(),
 		UpdatedAt:           common.GetTimestamp(),
@@ -594,7 +609,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if !plan.Enabled {
 			// still allow completion for already purchased orders
 		}
-		upgradeGroup = strings.TrimSpace(plan.UpgradeGroup)
+		upgradeGroup = normalizeSubscriptionUserGroup(plan.UpgradeGroup)
 		_, err = CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
 		if err != nil {
 			return err
@@ -709,9 +724,9 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(plan.UpgradeGroup) != "" {
-		_ = UpdateUserGroupCache(userId, plan.UpgradeGroup)
-		return fmt.Sprintf("用户分组将升级到 %s", plan.UpgradeGroup), nil
+	if upgradeGroup := normalizeSubscriptionUserGroup(plan.UpgradeGroup); upgradeGroup != "" {
+		_ = UpdateUserGroupCache(userId, upgradeGroup)
+		return fmt.Sprintf("用户分组将升级到 %s", upgradeGroup), nil
 	}
 	return "", nil
 }
@@ -799,7 +814,7 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 		logPlanTitle = plan.Title
 		logMoney = plan.PriceAmount
 		chargedQuota = requiredQuota
-		upgradeGroup = strings.TrimSpace(plan.UpgradeGroup)
+		upgradeGroup = normalizeSubscriptionUserGroup(plan.UpgradeGroup)
 		return nil
 	})
 	if err != nil {
@@ -1177,10 +1192,10 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 			// An explicit downgrade group takes precedence; otherwise revert to the
 			// group held before purchase (legacy behavior, only when the subscription
 			// actually elevated the user).
-			target := strings.TrimSpace(lastExpired.DowngradeGroup)
+			target := normalizeSubscriptionUserGroup(lastExpired.DowngradeGroup)
 			if target == "" {
-				upgradeGroup := strings.TrimSpace(lastExpired.UpgradeGroup)
-				prevGroup := strings.TrimSpace(lastExpired.PrevUserGroup)
+				upgradeGroup := normalizeSubscriptionUserGroup(lastExpired.UpgradeGroup)
+				prevGroup := normalizeSubscriptionUserGroup(lastExpired.PrevUserGroup)
 				if upgradeGroup == "" || prevGroup == "" {
 					return nil
 				}

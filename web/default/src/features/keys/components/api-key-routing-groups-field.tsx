@@ -55,7 +55,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { MAX_GROUP_CANDIDATES, SYSTEM_ROUTING_VALUE } from '../lib'
+import { MAX_GROUP_CANDIDATES } from '../lib'
 
 export type ApiKeyRoutingGroupOption = {
   value: string
@@ -65,16 +65,11 @@ export type ApiKeyRoutingGroupOption = {
 }
 
 type ApiKeyRoutingGroupsFieldProps = {
-  allowSystemRouting: boolean
   isLoadingModels: boolean
   modelsByGroup: Record<string, string[]>
   onValueChange: (value: string[]) => void
   options: ApiKeyRoutingGroupOption[]
   value: string[]
-}
-
-function isSpecialGroup(group: string) {
-  return group === SYSTEM_ROUTING_VALUE
 }
 
 function GroupRatioBadge(props: { ratio?: number | string }) {
@@ -104,7 +99,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
   const dragControls = useDragControls()
   const [isDragging, setIsDragging] = useState(false)
   const groupLabel = props.option?.label ?? props.group
-  const canReorder = props.total > 1 && !isSpecialGroup(props.group)
+  const canReorder = props.total > 1
   const orderLabel = t('Order for {{group}}', { group: groupLabel })
 
   return (
@@ -196,10 +191,8 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
           {props.option?.desc && (
             <span className='truncate'>{props.option.desc}</span>
           )}
-          {!isSpecialGroup(props.group) && props.isLoadingModels && (
-            <Skeleton className='h-3 w-16' />
-          )}
-          {!isSpecialGroup(props.group) && !props.isLoadingModels && (
+          {props.isLoadingModels && <Skeleton className='h-3 w-16' />}
+          {!props.isLoadingModels && (
             <span className='shrink-0'>
               {t('{{count}} models', { count: props.modelCount })}
             </span>
@@ -240,17 +233,7 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
     'Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.'
   )
 
-  const options = useMemo(() => {
-    const specialOptions: ApiKeyRoutingGroupOption[] = []
-    if (props.allowSystemRouting) {
-      specialOptions.push({
-        value: SYSTEM_ROUTING_VALUE,
-        label: t('System-managed routing'),
-        desc: t('Follow the group order maintained by the administrator'),
-      })
-    }
-    return [...specialOptions, ...props.options]
-  }, [props.allowSystemRouting, props.options, t])
+  const options = useMemo(() => props.options, [props.options])
 
   const optionByValue = useMemo(
     () => new Map(options.map((option) => [option.value, option])),
@@ -277,7 +260,6 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const conflicts = useMemo(() => {
     const modelGroups = new Map<string, string[]>()
     for (const group of props.value) {
-      if (isSpecialGroup(group)) continue
       for (const model of props.modelsByGroup[group] ?? []) {
         const groups = modelGroups.get(model) ?? []
         groups.push(group)
@@ -299,23 +281,15 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const firstConflict = conflicts[0]
 
   const handleSelect = (selectedValue: string) => {
-    if (isSpecialGroup(selectedValue)) {
-      props.onValueChange([selectedValue])
-      setOpen(false)
-      setSearchValue('')
-      return
-    }
-
-    const concreteGroups = props.value.filter((group) => !isSpecialGroup(group))
-    if (concreteGroups.includes(selectedValue)) {
+    if (props.value.includes(selectedValue)) {
       props.onValueChange(
-        concreteGroups.filter((group) => group !== selectedValue)
+        props.value.filter((group) => group !== selectedValue)
       )
       return
     }
-    if (concreteGroups.length >= MAX_GROUP_CANDIDATES) return
+    if (props.value.length >= MAX_GROUP_CANDIDATES) return
 
-    props.onValueChange([...concreteGroups, selectedValue])
+    props.onValueChange([...props.value, selectedValue])
   }
 
   const moveGroup = (index: number, direction: -1 | 1) => {

@@ -22,7 +22,6 @@ import { describe, test } from 'node:test'
 import type { ApiKey } from '../types'
 import {
   getApiKeyFormDefaultValues,
-  SYSTEM_ROUTING_VALUE,
   transformApiKeyToFormDefaults,
   transformFormDataToPayload,
   type ApiKeyFormValues,
@@ -75,7 +74,7 @@ describe('API key routing form mapping', () => {
     assert.equal(defaults.cross_group_retry, false)
   })
 
-  test('maps fixed, ordered, and system routing to the API contract', () => {
+  test('maps fixed and ordered groups to the API contract', () => {
     const fixed = transformFormDataToPayload(formValues(['openai-low']))
     assert.equal(fixed.group, 'openai-low')
     assert.deepEqual(fixed.group_candidates, ['openai-low'])
@@ -87,24 +86,6 @@ describe('API key routing form mapping', () => {
     assert.equal(ordered.group, 'auto')
     assert.deepEqual(ordered.group_candidates, ['openai-low', 'claude-low'])
     assert.equal(ordered.cross_group_retry, true)
-
-    const system = transformFormDataToPayload(
-      formValues([SYSTEM_ROUTING_VALUE])
-    )
-    assert.equal(system.group, 'auto')
-    assert.deepEqual(system.group_candidates, [])
-    assert.equal(system.cross_group_retry, true)
-  })
-
-  test('preserves legacy system routing without freezing global candidates', () => {
-    const defaults = transformApiKeyToFormDefaults(
-      apiKey({ group: 'auto', group_candidates: [] })
-    )
-    assert.deepEqual(defaults.group_candidates, [SYSTEM_ROUTING_VALUE])
-
-    const payload = transformFormDataToPayload(defaults)
-    assert.equal(payload.group, 'auto')
-    assert.deepEqual(payload.group_candidates, [])
   })
 
   test('maps a legacy account-group key to a visible concrete group', () => {

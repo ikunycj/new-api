@@ -37,10 +37,10 @@ export type ChannelInfo = z.infer<typeof channelInfoSchema>
 export const channelSchema = z.object({
   id: z.number(),
   type: z.number(),
-  key: z.string(),
+  key: z.string().optional(),
   openai_organization: z.string().nullish(),
   test_model: z.string().nullish(),
-  status: z.number(), // 1: enabled, 0: manual disabled, 2: auto disabled
+  status: z.number(), // 1: enabled, 2: manual disabled, 3: auto disabled
   name: z.string(),
   weight: z.number().nullish(),
   created_time: z.number(),
@@ -51,12 +51,27 @@ export const channelSchema = z.object({
   balance: z.number().default(0), // in USD
   balance_updated_time: z.number(),
   models: z.string().default(''),
-  group: z.string().default('default'),
+  group: z.string().default(''),
   used_quota: z.number().default(0),
   model_mapping: z.string().nullish(),
   status_code_mapping: z.string().nullish(),
-  priority: z.number().nullish(),
   auto_ban: z.number().nullish(),
+  probe_interval_seconds: z.number().default(600),
+  auto_disabled_probe_interval_seconds: z.number().default(600),
+  probe_failure_auto_ban: z.boolean().nullish(),
+  probe_success_auto_enable: z.boolean().nullish(),
+  upstream_max_retries: z.number().nullish(),
+  price_multiplier: z.number().default(1),
+  price_multiplier_mode: z
+    .enum(['usd', 'cny'])
+    .or(z.literal(''))
+    .default('usd'),
+  force_priority: z.boolean().nullish(),
+  force_priority_scope: z
+    .enum(['group', 'cross_group'])
+    .or(z.literal(''))
+    .default('group'),
+  previous_day_probe_success_rate: z.number().default(100),
   other_info: z.string().default(''),
   tag: z.string().nullish(),
   setting: z.string().nullish(),
@@ -169,14 +184,6 @@ export interface GetChannelResponse {
   success: boolean
   message?: string
   data?: Channel
-}
-
-export interface ChannelOpsResponse {
-  success: boolean
-  message?: string
-  data?: {
-    retry_times: number
-  }
 }
 
 export interface ChannelTestResponse {
@@ -311,7 +318,6 @@ export interface MultiKeyStatusResponse {
 export type ChannelSortBy =
   | 'id'
   | 'name'
-  | 'priority'
   | 'balance'
   | 'response_time'
   | 'test_time'
@@ -381,7 +387,6 @@ export interface BatchSetTagParams {
 export interface TagOperationParams {
   tag: string
   new_tag?: string
-  priority?: number
   weight?: number
   model_mapping?: string
   models?: string
@@ -401,10 +406,18 @@ export interface ChannelFormData {
   models: string
   group: string
   model_mapping?: string
-  priority?: number
   weight?: number
   test_model?: string
   auto_ban?: number
+  probe_interval_seconds?: number
+  auto_disabled_probe_interval_seconds?: number
+  probe_failure_auto_ban?: boolean
+  probe_success_auto_enable?: boolean
+  upstream_max_retries?: number | null
+  price_multiplier?: number
+  price_multiplier_mode?: 'usd' | 'cny'
+  force_priority?: boolean
+  force_priority_scope?: 'group' | 'cross_group'
   status: number
   status_code_mapping?: string
   tag?: string

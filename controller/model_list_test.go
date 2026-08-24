@@ -12,7 +12,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-contrib/sessions"
@@ -376,13 +375,6 @@ func TestListModelsScopesEndpointTypesToOwnerGroups(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
 
-	originalAutoGroups := setting.AutoGroups2JsonString()
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["vip","default"]`))
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateAutoGroupsByJsonString(originalAutoGroups))
-		model.InvalidatePricingCache()
-	})
-
 	const modelName = "zz-group-scoped-endpoint-model"
 	require.NoError(t, db.Create(&[]model.Channel{
 		{
@@ -422,22 +414,6 @@ func TestListModelsScopesEndpointTypesToOwnerGroups(t *testing.T) {
 		constant.EndpointTypeOpenAI,
 	}, defaultPayload.Data[0].SupportedEndpointTypes)
 
-	autoRecorder := httptest.NewRecorder()
-	autoContext, _ := gin.CreateTestContext(autoRecorder)
-	autoContext.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	common.SetContextKey(autoContext, constant.ContextKeyUserGroup, "default")
-	common.SetContextKey(autoContext, constant.ContextKeyTokenGroup, "auto")
-
-	ListModels(autoContext, constant.ChannelTypeOpenAI)
-
-	autoPayload := decodeListModelsPayload(t, autoRecorder)
-	require.Len(t, autoPayload.Data, 1)
-	require.Equal(t, modelName, autoPayload.Data[0].Id)
-	require.Equal(t, []constant.EndpointType{
-		constant.EndpointTypeJinaRerank,
-		constant.EndpointTypeAnthropic,
-		constant.EndpointTypeOpenAI,
-	}, autoPayload.Data[0].SupportedEndpointTypes)
 }
 
 func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
@@ -454,15 +430,12 @@ func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
 		{Id: 812, Type: constant.ChannelTypeCodex, Name: "first-codex", Status: common.ChannelStatusEnabled},
 		{Id: 813, Type: constant.ChannelTypeOpenAI, Name: "second-openai", Status: common.ChannelStatusEnabled},
 	}).Error)
-	lowPriority := int64(1)
-	highPriority := int64(2)
-	fallbackPriority := int64(100)
 	require.NoError(t, db.Create(&[]model.Ability{
-		{Group: "claude-low", Model: sharedModel, ChannelId: 811, Enabled: true, Priority: &lowPriority},
-		{Group: "claude-low", Model: sharedModel, ChannelId: 812, Enabled: true, Priority: &highPriority},
-		{Group: "claude-low", Model: firstOnlyModel, ChannelId: 812, Enabled: true, Priority: &highPriority},
-		{Group: "openai-low", Model: sharedModel, ChannelId: 813, Enabled: true, Priority: &fallbackPriority},
-		{Group: "openai-low", Model: secondOnlyModel, ChannelId: 813, Enabled: true, Priority: &fallbackPriority},
+		{Group: "claude-low", Model: sharedModel, ChannelId: 811, Enabled: true},
+		{Group: "claude-low", Model: sharedModel, ChannelId: 812, Enabled: true},
+		{Group: "claude-low", Model: firstOnlyModel, ChannelId: 812, Enabled: true},
+		{Group: "openai-low", Model: sharedModel, ChannelId: 813, Enabled: true},
+		{Group: "openai-low", Model: secondOnlyModel, ChannelId: 813, Enabled: true},
 	}).Error)
 
 	model.InvalidatePricingCache()
@@ -480,7 +453,7 @@ func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
 	require.Equal(t, []string{sharedModel, firstOnlyModel, secondOnlyModel}, lo.Map(firstPayload.Data, func(item dto.OpenAIModels, _ int) string {
 		return item.Id
 	}))
-	require.Equal(t, "codex", firstPayload.Data[0].OwnedBy)
+	require.Equal(t, "openai", firstPayload.Data[0].OwnedBy)
 	require.Equal(t, "codex", firstPayload.Data[1].OwnedBy)
 	require.Equal(t, "openai", firstPayload.Data[2].OwnedBy)
 
@@ -504,12 +477,6 @@ func TestListModelsOrdersEnabledModelsForEveryGroupMode(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
 
-	originalAutoGroups := setting.AutoGroups2JsonString()
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default"]`))
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateAutoGroupsByJsonString(originalAutoGroups))
-	})
-
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "zz-order-z-model", ChannelId: 821, Enabled: true},
 		{Group: "default", Model: "zz-order-a-model", ChannelId: 821, Enabled: true},
@@ -528,15 +495,6 @@ func TestListModelsOrdersEnabledModelsForEveryGroupMode(t *testing.T) {
 		{
 			name:       "fixed group",
 			tokenGroup: "default",
-			expected: []string{
-				"zz-order-a-model",
-				"zz-order-shared-model",
-				"zz-order-z-model",
-			},
-		},
-		{
-			name:       "system auto",
-			tokenGroup: "auto",
 			expected: []string{
 				"zz-order-a-model",
 				"zz-order-shared-model",

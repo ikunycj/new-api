@@ -174,7 +174,6 @@ func GetPreferredModelOwnerChannelTypes(modelNames []string, groups []string) (m
 			Select("abilities.model as model, channels.type as channel_type").
 			Joins("JOIN channels ON abilities.channel_id = channels.id").
 			Where("abilities.model IN ? AND abilities.enabled = ? AND channels.status = ?", modelNames, true, common.ChannelStatusEnabled).
-			Order("COALESCE(abilities.priority, 0) DESC").
 			Order("abilities.weight DESC").
 			Order("abilities.channel_id ASC")
 		if group != "" {

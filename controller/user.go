@@ -17,7 +17,6 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/QuantumNous/new-api/constant"
@@ -286,9 +285,6 @@ func Register(c *gin.Context) {
 			RemainQuota:        500000, // 示例额度
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
-		}
-		if setting.DefaultUseAutoGroup {
-			token.Group = "auto"
 		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
@@ -666,6 +662,17 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 	updatedUser.Role = originUser.Role
+	updatedUser.Group = strings.TrimSpace(updatedUser.Group)
+	if updatedUser.Group == "" {
+		updatedUser.Group = strings.TrimSpace(originUser.Group)
+		if updatedUser.Group == "" {
+			updatedUser.Group = defaultUserGroup
+		}
+	}
+	if !isManagedUserGroup(updatedUser.Group) {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
@@ -955,16 +962,9 @@ func CreateUser(c *gin.Context) {
 	}
 	user.Group = strings.TrimSpace(user.Group)
 	if user.Group == "" {
-		user.Group = "default"
+		user.Group = defaultUserGroup
 	}
-	validGroup := false
-	for _, group := range managedUserGroups() {
-		if group == user.Group {
-			validGroup = true
-			break
-		}
-	}
-	if !validGroup {
+	if !isManagedUserGroup(user.Group) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}

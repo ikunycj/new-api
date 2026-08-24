@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getGroups as getUserGroups } from '@/features/users/api'
 import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
@@ -25,7 +24,6 @@ import type {
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
-  ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -109,11 +107,6 @@ export async function getChannel(id: number): Promise<GetChannelResponse> {
 /**
  * Get channel operations summary for administrators
  */
-export async function getChannelOps(): Promise<ChannelOpsResponse> {
-  const res = await api.get('/api/channel/ops', channelActionConfig())
-  return res.data
-}
-
 /**
  * Create new channel(s)
  * Supports single, batch, and multi-key modes
@@ -325,7 +318,7 @@ export async function deleteDisabledChannels(): Promise<{
 }
 
 /**
- * Get channel key (requires 2FA verification)
+ * Get channel key after secure verification.
  */
 export async function getChannelKey(
   id: number,
@@ -654,9 +647,16 @@ export async function getOllamaVersion(
 // ============================================================================
 
 /**
- * Get all available groups (re-exported from users API for convenience)
+ * Get pricing groups available for channel access.
  */
-export const getGroups = getUserGroups
+export async function getPricingGroups(): Promise<{
+  success: boolean
+  message?: string
+  data?: string[]
+}> {
+  const res = await api.get('/api/group/pricing-groups')
+  return res.data
+}
 
 // ============================================================================
 // Prefill Groups (Model Groups)

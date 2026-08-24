@@ -200,11 +200,11 @@ export async function handleDeleteChannel(
 }
 
 /**
- * Update a specific channel field (e.g., priority, weight)
+ * Update a specific channel field.
  */
 export async function handleUpdateChannelField(
   id: number,
-  fieldName: string,
+  fieldName: 'weight',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void
@@ -236,7 +236,7 @@ export async function handleUpdateChannelField(
  */
 export async function handleUpdateTagField(
   tag: string,
-  fieldName: 'priority' | 'weight',
+  fieldName: 'weight',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void

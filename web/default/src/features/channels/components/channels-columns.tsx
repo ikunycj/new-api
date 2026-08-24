@@ -46,12 +46,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 import {
   formatCurrencyFromUSD,
   formatQuotaWithCurrency,
   getCurrencyLabel,
 } from '@/lib/currency'
-import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
@@ -102,6 +102,12 @@ function parseIonetMeta(otherInfo: string | null | undefined): null | {
     return null
   }
   return null
+}
+
+function getProbeSuccessRateVariant(rate: number): StatusBadgeProps['variant'] {
+  if (rate >= 99) return 'success'
+  if (rate >= 90) return 'warning'
+  return 'danger'
 }
 
 /**
@@ -165,64 +171,6 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
         />
       )}
     </div>
-  )
-}
-
-/**
- * Priority cell component with inline editing
- */
-function PriorityCell({ channel }: { channel: Channel }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const isTagRow = isTagAggregateRow(channel)
-  const priority = channel.priority
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [pendingValue, setPendingValue] = useState<number | null>(null)
-
-  // Tag row - editable with confirmation for all tag channels
-  if (isTagRow) {
-    const tag = channel.tag || ''
-    const channelCount = channel.children?.length || 0
-
-    return (
-      <>
-        <NumericSpinnerInput
-          value={priority ?? 0}
-          onChange={(value) => {
-            setPendingValue(value)
-            setConfirmOpen(true)
-          }}
-          min={-999}
-        />
-        <ConfirmDialog
-          open={confirmOpen}
-          onOpenChange={setConfirmOpen}
-          title={t('Confirm Batch Update')}
-          desc={t(
-            'This will update the priority to {{value}} for all {{count}} channel(s) with tag "{{tag}}". Continue?',
-            { value: pendingValue, count: channelCount, tag }
-          )}
-          confirmText={t('Update')}
-          handleConfirm={() => {
-            if (pendingValue !== null) {
-              handleUpdateTagField(tag, 'priority', pendingValue, queryClient)
-            }
-            setConfirmOpen(false)
-          }}
-        />
-      </>
-    )
-  }
-
-  // Regular channel row - editable
-  return (
-    <NumericSpinnerInput
-      value={priority ?? 0}
-      onChange={(value) => {
-        handleUpdateChannelField(channel.id, 'priority', value, queryClient)
-      }}
-      min={-999}
-    />
   )
 }
 
@@ -1038,15 +986,6 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
-      // Priority column
-      {
-        accessorKey: 'priority',
-        header: t('Priority'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => <PriorityCell channel={row.original} />,
-        size: 100,
-      },
-
       // Weight column
       {
         accessorKey: 'weight',
@@ -1080,7 +1019,7 @@ export function useChannelsColumns(
               variant={config.variant}
               size='sm'
               copyable={false}
-              className='-ml-1.5'
+              className='-ml-1.5 shrink-0'
             />
           )
         },
@@ -1114,7 +1053,7 @@ export function useChannelsColumns(
                       variant='neutral'
                       size='sm'
                       copyable={false}
-                      className='-ml-1.5 cursor-pointer'
+                      className='-ml-1.5 shrink-0 cursor-pointer'
                     />
                   }
                 />
@@ -1126,6 +1065,31 @@ export function useChannelsColumns(
           )
         },
         size: 120,
+        enableSorting: false,
+      },
+
+      // Previous-day probe success rate
+      {
+        accessorKey: 'previous_day_probe_success_rate',
+        header: t('Previous-day probe success rate'),
+        cell: ({ row }) => {
+          const rawRate = row.getValue(
+            'previous_day_probe_success_rate'
+          ) as number
+          const rate = Number.isFinite(rawRate)
+            ? Math.min(100, Math.max(0, rawRate))
+            : 100
+          return (
+            <StatusBadge
+              label={`${rate.toFixed(1)}%`}
+              variant={getProbeSuccessRateVariant(rate)}
+              size='sm'
+              copyable={false}
+              className='-ml-1.5 shrink-0'
+            />
+          )
+        },
+        size: 165,
         enableSorting: false,
       },
 

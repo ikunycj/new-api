@@ -17,7 +17,7 @@ const (
 
 // BillingGroupRoute owns the retry and circuit policy for one billing group.
 // The billing group is the existing group used by tokens, abilities, and
-// channels; no extra cluster or account-pool layer is involved.
+// channels, and routes directly to channels.
 type BillingGroupRoute struct {
 	Id                      int    `json:"id"`
 	BillingGroup            string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`

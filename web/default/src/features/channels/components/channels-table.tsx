@@ -29,8 +29,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
-  DISABLED_ROW_DESKTOP,
-  DISABLED_ROW_MOBILE,
   DataTablePage,
   useDebouncedColumnFilter,
   useDataTable,
@@ -46,7 +44,7 @@ import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import { getChannels, searchChannels, getGroups } from '../api'
+import { getChannels, searchChannels, getPricingGroups } from '../api'
 import {
   DEFAULT_PAGE_SIZE,
   CHANNEL_STATUS,
@@ -71,10 +69,18 @@ const CHANNELS_COLUMN_SIZING_STORAGE_KEY = 'channels:column-sizing'
 const CHANNELS_VIEW_MODE_STORAGE_KEY = 'channels:view-mode'
 const CHANNELS_STATUS_FILTER_STORAGE_KEY = 'channel-status-filter'
 
+const CHANNEL_ENABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-enabled)] hover:[--data-table-card-bg:var(--table-channel-enabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-enabled)] [background-color:var(--table-channel-enabled)] hover:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:![background-color:var(--table-channel-enabled)] [&>td]:![background-color:var(--table-channel-enabled)] hover:[&>td]:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-enabled)]'
+const CHANNEL_ENABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-enabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-enabled)] [background-color:var(--table-channel-enabled)]'
+const CHANNEL_DISABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-disabled)] hover:[--data-table-card-bg:var(--table-channel-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)] hover:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-disabled)] [&>td]:![background-color:var(--table-channel-disabled)] hover:[&>td]:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-disabled)]'
+const CHANNEL_DISABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)]'
+
 const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'id',
   'name',
-  'priority',
   'balance',
   'response_time',
   'test_time',
@@ -204,8 +210,8 @@ export function ChannelsTable() {
 
   // Fetch groups for filter
   const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
   })
 
   const groupOptions = useMemo(
@@ -481,13 +487,17 @@ export function ChannelsTable() {
         ),
       }}
       getRowClassName={(row, { isMobile }) => {
-        if (!isDisabledChannelRow(row.original)) {
+        if (isTagAggregateRow(row.original)) {
           return undefined
         }
-        if (isMobile) {
-          return DISABLED_ROW_MOBILE
+        if (isDisabledChannelRow(row.original)) {
+          return isMobile
+            ? CHANNEL_DISABLED_ROW_MOBILE
+            : CHANNEL_DISABLED_ROW_DESKTOP
         }
-        return DISABLED_ROW_DESKTOP
+        return isMobile
+          ? CHANNEL_ENABLED_ROW_MOBILE
+          : CHANNEL_ENABLED_ROW_DESKTOP
       }}
       bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />

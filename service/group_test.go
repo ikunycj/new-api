@@ -24,7 +24,7 @@ func TestValidateTokenGroupCandidates(t *testing.T) {
 		{name: "too many candidates", userGroup: "default", groups: make([]string, MaxTokenGroupCandidates+1), wantErr: true, messagePart: "不能超过"},
 		{name: "candidate name too long", userGroup: "default", groups: []string{strings.Repeat("a", MaxTokenGroupNameLength+1)}, wantErr: true, messagePart: "长度"},
 		{name: "unusable candidate", userGroup: "default", groups: []string{"hidden"}, wantErr: true, messagePart: "无权访问"},
-		{name: "candidate without ratio", userGroup: "orphan", groups: []string{"orphan"}, wantErr: true, messagePart: "已被弃用"},
+		{name: "candidate without ratio", userGroup: "orphan", groups: []string{"orphan"}, wantErr: true, messagePart: "无权访问"},
 	}
 
 	for _, tt := range tests {
@@ -46,4 +46,14 @@ func TestValidateTokenGroupAutoRequiresVirtualPermission(t *testing.T) {
 	assert.Contains(t, err.Error(), "无权访问")
 
 	require.NoError(t, ValidateTokenGroupCandidates("default", []string{"default", "vip"}))
+}
+
+func TestAccountGroupDoesNotBecomePricingGroup(t *testing.T) {
+	const accountGroup = "legacy-account-group-only"
+	_, ok := GetUserUsableGroups(accountGroup)[accountGroup]
+	assert.False(t, ok)
+
+	err := ValidateTokenGroup(accountGroup, accountGroup)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "无权访问")
 }

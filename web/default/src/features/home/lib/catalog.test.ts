@@ -51,7 +51,6 @@ const catalog: PricingData = {
   group_ratio: { default: 1 },
   usable_group: {},
   supported_endpoint: {},
-  auto_groups: [],
 }
 
 describe('home catalog helpers', () => {

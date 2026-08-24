@@ -144,10 +144,18 @@ export const channelFormSchema = z
         isOptionalModelMapping,
         'Model mapping must be a JSON object with string values'
       ),
-    priority: z.number().optional(),
     weight: z.number().optional(),
     test_model: z.string().optional(),
     auto_ban: z.number().optional(),
+    probe_interval_seconds: z.number().int().min(0).max(604800),
+    auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
+    probe_failure_auto_ban: z.boolean(),
+    probe_success_auto_enable: z.boolean(),
+    upstream_max_retries: z.number().int().min(0).max(100).nullable(),
+    price_multiplier: z.number().finite().min(0).max(1000),
+    price_multiplier_mode: z.enum(['usd', 'cny']),
+    force_priority: z.boolean(),
+    force_priority_scope: z.enum(['group', 'cross_group']),
     status: z.number(),
     status_code_mapping: z
       .string()
@@ -305,12 +313,20 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   key: '',
   openai_organization: '',
   models: '',
-  group: ['default'],
+  group: [],
   model_mapping: '',
-  priority: 0,
   weight: 0,
   test_model: '',
   auto_ban: 1,
+  probe_interval_seconds: 600,
+  auto_disabled_probe_interval_seconds: 600,
+  probe_failure_auto_ban: true,
+  probe_success_auto_enable: true,
+  upstream_max_retries: 3,
+  price_multiplier: 1,
+  price_multiplier_mode: 'usd',
+  force_priority: false,
+  force_priority_scope: 'group',
   status: CHANNEL_STATUS.ENABLED,
   status_code_mapping: '',
   tag: '',
@@ -446,12 +462,31 @@ export function transformChannelToFormDefaults(
     key: '', // Never populate key from backend for security
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
-    group: parseGroups(channel.group || 'default'),
+    group: parseGroups(channel.group || ''),
     model_mapping: channel.model_mapping || '',
-    priority: channel.priority || 0,
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 1,
+    probe_interval_seconds:
+      channel.probe_interval_seconds ??
+      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      channel.auto_disabled_probe_interval_seconds ??
+      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban:
+      channel.probe_failure_auto_ban ?? (channel.auto_ban ?? 1) === 1,
+    probe_success_auto_enable: channel.probe_success_auto_enable ?? true,
+    upstream_max_retries:
+      channel.upstream_max_retries === undefined
+        ? CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries
+        : channel.upstream_max_retries,
+    price_multiplier:
+      channel.price_multiplier ?? CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
+    price_multiplier_mode:
+      channel.price_multiplier_mode === 'cny' ? 'cny' : 'usd',
+    force_priority: channel.force_priority ?? false,
+    force_priority_scope:
+      channel.force_priority_scope === 'cross_group' ? 'cross_group' : 'group',
     status: channel.status,
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
@@ -564,12 +599,15 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     settingsObj.allow_inference_geo = formData.allow_inference_geo === true
   } else {
     if ('disable_store' in settingsObj) delete settingsObj.disable_store
-    if ('allow_safety_identifier' in settingsObj)
-      {delete settingsObj.allow_safety_identifier}
-    if ('allow_include_obfuscation' in settingsObj)
-      {delete settingsObj.allow_include_obfuscation}
-    if (formData.type !== 14 && 'allow_inference_geo' in settingsObj)
-      {delete settingsObj.allow_inference_geo}
+    if ('allow_safety_identifier' in settingsObj) {
+      delete settingsObj.allow_safety_identifier
+    }
+    if ('allow_include_obfuscation' in settingsObj) {
+      delete settingsObj.allow_include_obfuscation
+    }
+    if (formData.type !== 14 && 'allow_inference_geo' in settingsObj) {
+      delete settingsObj.allow_inference_geo
+    }
   }
 
   // Anthropic (type 14): claude_beta_query, allow_inference_geo, allow_speed
@@ -592,7 +630,14 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     settingsObj.upstream_model_update_auto_sync_enabled =
       settingsObj.upstream_model_update_check_enabled === true &&
       formData.upstream_model_update_auto_sync_enabled === true
-    settingsObj.upstream_model_update_ignored_models = [...new Set(String(formData.upstream_model_update_ignored_models || '').split(',').map((model) => model.trim()).filter(Boolean))]
+    settingsObj.upstream_model_update_ignored_models = [
+      ...new Set(
+        String(formData.upstream_model_update_ignored_models || '')
+          .split(',')
+          .map((model) => model.trim())
+          .filter(Boolean)
+      ),
+    ]
     if (
       !Array.isArray(settingsObj.upstream_model_update_last_detected_models) ||
       settingsObj.upstream_model_update_check_enabled !== true
@@ -644,10 +689,19 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     models: formData.models,
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
-    priority: formData.priority || null,
     weight: formData.weight || null,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
+    probe_interval_seconds: formData.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      formData.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban: formData.probe_failure_auto_ban,
+    probe_success_auto_enable: formData.probe_success_auto_enable,
+    upstream_max_retries: formData.upstream_max_retries,
+    price_multiplier: formData.price_multiplier,
+    price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status: formData.status,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
@@ -665,6 +719,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
       ;(channel as Record<string, unknown>)[key] = null
     }
   })
+  channel.group = formatGroups(formData.group)
 
   return {
     mode,
@@ -692,10 +747,19 @@ export function transformFormDataToUpdatePayload(
     models: formData.models,
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
-    priority: formData.priority ?? 0,
     weight: formData.weight ?? 0,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
+    probe_interval_seconds: formData.probe_interval_seconds,
+    auto_disabled_probe_interval_seconds:
+      formData.auto_disabled_probe_interval_seconds,
+    probe_failure_auto_ban: formData.probe_failure_auto_ban,
+    probe_success_auto_enable: formData.probe_success_auto_enable,
+    upstream_max_retries: formData.upstream_max_retries,
+    price_multiplier: formData.price_multiplier,
+    price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
@@ -717,6 +781,8 @@ export function transformFormDataToUpdatePayload(
       ;(payload as Record<string, unknown>)[key] = null
     }
   })
+
+  payload.group = formatGroups(formData.group)
 
   // Send explicit empty strings for nullable fields so GORM updates can clear them.
   payload.base_url = normalizeBaseUrl(formData.base_url) || ''
@@ -773,10 +839,14 @@ export function parseModels(models: string): string[] {
  */
 export function parseGroups(groups: string): string[] {
   if (!groups) return []
-  return groups
-    .split(',')
-    .map((g) => g.trim())
-    .filter((g) => g.length > 0)
+  return [
+    ...new Set(
+      groups
+        .split(',')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0)
+    ),
+  ]
 }
 
 /**
@@ -790,5 +860,5 @@ export function formatModels(models: string[]): string {
  * Format groups array to string
  */
 export function formatGroups(groups: string[]): string {
-  return groups.join(',')
+  return parseGroups(groups.join(',')).join(',')
 }

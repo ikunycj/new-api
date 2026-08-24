@@ -32,6 +32,7 @@ import {
   Radio,
   ServerCog,
   Settings,
+  Tags,
   Ticket,
   User,
   Users,
@@ -156,6 +157,12 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: t('Group Management'),
+            url: '/group-management',
+            icon: Tags,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('Redemption Codes'),

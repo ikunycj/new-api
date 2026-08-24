@@ -63,7 +63,7 @@ DELETE FROM channels WHERE name LIKE 'Load Test Channel %';
 INSERT INTO channels (
   type, "key", status, name, weight, created_time, response_time,
   base_url, balance, balance_updated_time, models, "group", used_quota,
-  other, other_info, channel_info, settings, setting, header_override, priority
+  other, other_info, channel_info, settings, setting, header_override
 )
 SELECT
   1,
@@ -84,15 +84,14 @@ SELECT
   '{}',
   '',
   '{"error_source":"channel"}',
-  '',
-  seed.priority
+  ''
 FROM (VALUES
-  ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080', 600),
-  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080', 500)
-) AS seed(api_key, name, base_url, priority);
+  ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080'),
+  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080')
+) AS seed(api_key, name, base_url);
 
-INSERT INTO abilities ("group", model, channel_id, enabled, priority, weight)
-SELECT 'default', models.model, channels.id, true, channels.priority, 100
+INSERT INTO abilities ("group", model, channel_id, enabled, weight)
+SELECT 'default', models.model, channels.id, true, 100
 FROM channels
 JOIN (VALUES
   ('gpt-3.5-turbo'),
@@ -106,7 +105,6 @@ JOIN (VALUES
 WHERE name LIKE 'Load Test Channel %'
 ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   enabled = EXCLUDED.enabled,
-  priority = EXCLUDED.priority,
   weight = EXCLUDED.weight;
 
 INSERT INTO billing_group_routes (

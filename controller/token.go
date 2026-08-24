@@ -246,6 +246,10 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if (request.GroupCandidates == nil || len(*request.GroupCandidates) == 0) && strings.TrimSpace(token.Group) == "" {
+		common.ApiError(c, fmt.Errorf("至少选择一个分组"))
+		return
+	}
 	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
 		common.ApiError(c, err)
 		return

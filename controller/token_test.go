@@ -602,6 +602,29 @@ func TestAddTokenNormalizesSingleCandidateToFixedGroup(t *testing.T) {
 	assert.False(t, token.CrossGroupRetry)
 }
 
+func TestAddTokenRequiresAtLeastOneGroup(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	body := map[string]any{
+		"name":                 "missing-group-token",
+		"expired_time":         -1,
+		"remain_quota":         100,
+		"unlimited_quota":      true,
+		"model_limits_enabled": false,
+		"model_limits":         "",
+		"group":                "",
+		"group_candidates":     []string{},
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", body, 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	assert.Contains(t, response.Message, "至少选择一个分组")
+	var token model.Token
+	assert.Error(t, db.Where("name = ?", "missing-group-token").First(&token).Error)
+}
+
 func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	fixedToken := seedToken(t, db, 1, "fixed-group-token", "fixed1234token5678")

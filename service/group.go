@@ -14,33 +14,11 @@ const (
 	MaxTokenGroupNameLength = 64
 )
 
-func GetUserUsableGroups(userGroup string) map[string]string {
-	groupsCopy := setting.GetUserUsableGroupsCopy()
-	if userGroup != "" {
-		specialSettings, b := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
-		if b {
-			// 处理特殊可用分组
-			for specialGroup, desc := range specialSettings {
-				if strings.HasPrefix(specialGroup, "-:") {
-					// 移除分组
-					groupToRemove := strings.TrimPrefix(specialGroup, "-:")
-					delete(groupsCopy, groupToRemove)
-				} else if strings.HasPrefix(specialGroup, "+:") {
-					// 添加分组
-					groupToAdd := strings.TrimPrefix(specialGroup, "+:")
-					groupsCopy[groupToAdd] = desc
-				} else {
-					// 直接添加分组
-					groupsCopy[specialGroup] = desc
-				}
-			}
-		}
-		// 如果userGroup不在UserUsableGroups中，返回UserUsableGroups + userGroup
-		if _, ok := groupsCopy[userGroup]; !ok {
-			groupsCopy[userGroup] = "用户分组"
-		}
-	}
-	return groupsCopy
+func GetUserUsableGroups(_ string) map[string]string {
+	// This catalog contains pricing/routing groups that a user may assign to
+	// tokens. The account group stored in users.group is a separate namespace
+	// and must never be implicitly promoted into this catalog.
+	return setting.GetUserUsableGroupsCopy()
 }
 
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
@@ -68,8 +46,8 @@ func ValidateTokenGroup(userGroup, group string) error {
 }
 
 // ValidateTokenGroupCandidates validates concrete groups independently of the
-// virtual "auto" group permission. Custom ordered candidates are stored with
-// Group="auto", but they must not require "auto" to be exposed to the user.
+// internal "auto" marker used for ordered candidates. The marker itself is
+// never accepted as a selectable pricing group.
 func ValidateTokenGroupCandidates(userGroup string, groups []string) error {
 	if len(groups) > MaxTokenGroupCandidates {
 		return fmt.Errorf("候选分组不能超过 %d 个", MaxTokenGroupCandidates)
@@ -104,27 +82,4 @@ func validateConcreteTokenGroup(userGroup, group string) error {
 		return fmt.Errorf("分组 %s 已被弃用", group)
 	}
 	return nil
-}
-
-// GetUserAutoGroup 根据用户分组获取自动分组设置
-func GetUserAutoGroup(userGroup string) []string {
-	groups := GetUserUsableGroups(userGroup)
-	autoGroups := make([]string, 0)
-	for _, group := range setting.GetAutoGroups() {
-		if _, ok := groups[group]; ok {
-			autoGroups = append(autoGroups, group)
-		}
-	}
-	return autoGroups
-}
-
-// GetUserGroupRatio 获取用户使用某个分组的倍率
-// userGroup 用户分组
-// group 需要获取倍率的分组
-func GetUserGroupRatio(userGroup, group string) float64 {
-	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
-	if ok {
-		return ratio
-	}
-	return ratio_setting.GetGroupRatio(group)
 }

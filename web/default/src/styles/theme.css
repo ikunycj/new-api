@@ -155,6 +155,26 @@ For commercial licensing, please contact support@quantumnous.com
   --skeleton-base: oklch(0.97 0 0);
   --skeleton-highlight: oklch(0.985 0 0);
   --table-row: var(--background);
+  --table-channel-enabled: color-mix(
+    in oklch,
+    var(--success) 10%,
+    var(--background)
+  );
+  --table-channel-enabled-hover: color-mix(
+    in oklch,
+    var(--success) 15%,
+    var(--background)
+  );
+  --table-channel-disabled: color-mix(
+    in oklch,
+    var(--destructive) 8%,
+    var(--background)
+  );
+  --table-channel-disabled-hover: color-mix(
+    in oklch,
+    var(--destructive) 13%,
+    var(--background)
+  );
   --table-header: color-mix(
     in oklch,
     var(--foreground) 1.5%,
@@ -235,6 +255,26 @@ For commercial licensing, please contact support@quantumnous.com
   --skeleton-base: oklch(0.335 0 0);
   --skeleton-highlight: oklch(0.44 0 0);
   --table-row: var(--background);
+  --table-channel-enabled: color-mix(
+    in oklch,
+    var(--success) 14%,
+    var(--background)
+  );
+  --table-channel-enabled-hover: color-mix(
+    in oklch,
+    var(--success) 20%,
+    var(--background)
+  );
+  --table-channel-disabled: color-mix(
+    in oklch,
+    var(--destructive) 13%,
+    var(--background)
+  );
+  --table-channel-disabled-hover: color-mix(
+    in oklch,
+    var(--destructive) 19%,
+    var(--background)
+  );
   --table-header: color-mix(in oklch, var(--foreground) 6%, var(--background));
   --table-header-hover: color-mix(
     in oklch,

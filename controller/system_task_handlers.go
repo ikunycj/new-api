@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/types"
 )
 
 // RegisterScheduledSystemTasks wires the periodic channel test, upstream model
@@ -19,9 +20,188 @@ import (
 // service.StartSystemTaskRunner.
 func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(channelTestHandler{})
+	service.RegisterSystemTaskHandler(channelProbeHandler{})
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+}
+
+// channelProbeHandler runs the per-channel probe scheduler. ChannelProbeState
+// carries each channel's due time and lease independently from the system task.
+type channelProbeHandler struct{}
+
+func (channelProbeHandler) Type() string { return model.SystemTaskTypeChannelProbe }
+
+func (channelProbeHandler) Enabled() bool {
+	return common.GetEnvOrDefaultBool("CHANNEL_PROBE_TASK_ENABLED", true)
+}
+
+func (channelProbeHandler) Interval() time.Duration { return time.Minute }
+
+func (channelProbeHandler) NewPayload() any { return nil }
+
+type channelProbeSummary struct {
+	Checked   int `json:"checked"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
+	Disabled  int `json:"disabled"`
+	Enabled   int `json:"enabled"`
+}
+
+func shouldRunChannelProbe(channel *model.Channel) bool {
+	if channel == nil || channel.Status == common.ChannelStatusManuallyDisabled || !supportsChannelTest(channel.Type) {
+		return false
+	}
+	// The normal relay path deliberately refuses every disabled key. Until the
+	// probe has an explicit key-only recovery path, probing an auto-disabled
+	// multi-key channel cannot recover it and must not claim otherwise.
+	return !channel.ChannelInfo.IsMultiKey || channel.Status != common.ChannelStatusAutoDisabled
+}
+
+func channelProbeIntervalSeconds(channel *model.Channel, resultingStatus int) int {
+	if resultingStatus == common.ChannelStatusAutoDisabled {
+		return channel.GetAutoDisabledProbeIntervalSeconds()
+	}
+	return channel.GetProbeIntervalSeconds()
+}
+
+func (channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := runChannelProbeTask(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+func runChannelProbeTask(ctx context.Context, report func(processed, total int)) (channelProbeSummary, error) {
+	channels, err := model.GetAllChannels(0, 0, true, false)
+	if err != nil {
+		return channelProbeSummary{}, err
+	}
+	testUserID, err := resolveChannelTestUserID(nil)
+	if err != nil {
+		return channelProbeSummary{}, err
+	}
+
+	var summary channelProbeSummary
+	total := len(channels)
+	for index, channel := range channels {
+		if ctx != nil && ctx.Err() != nil {
+			break
+		}
+		if report != nil {
+			report(index, total)
+		}
+		if !shouldRunChannelProbe(channel) {
+			continue
+		}
+
+		now := common.GetTimestamp()
+		const probeLeaseSeconds = int64(300)
+		leaseUntil := now + probeLeaseSeconds
+		claimed, err := model.ClaimChannelProbe(channel.Id, now, probeLeaseSeconds)
+		if err != nil {
+			return summary, err
+		}
+		if !claimed {
+			continue
+		}
+
+		leaseReleased := false
+		releaseLease := func() {
+			if leaseReleased {
+				return
+			}
+			leaseReleased = true
+			if releaseErr := model.ReleaseChannelProbe(channel.Id, leaseUntil); releaseErr != nil {
+				common.SysError(fmt.Sprintf("release channel probe lease failed: channel=%d error=%v", channel.Id, releaseErr))
+			}
+		}
+
+		started := time.Now()
+		result := testResult{}
+		cancelled := false
+		for attempt := 0; attempt <= channel.GetUpstreamMaxRetries(); attempt++ {
+			if ctx != nil && ctx.Err() != nil {
+				cancelled = true
+				break
+			}
+			result = testChannelWithTokenName(ctx, channel, testUserID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName)
+			if result.localErr == nil && result.newAPIError == nil {
+				break
+			}
+		}
+		if cancelled || (ctx != nil && ctx.Err() != nil) {
+			releaseLease()
+			break
+		}
+
+		latencyMs := time.Since(started).Milliseconds()
+		if latencyMs < 0 {
+			latencyMs = 0
+		}
+		success := result.localErr == nil && result.newAPIError == nil
+		statusCode := 0
+		errorMessage := ""
+		if result.newAPIError != nil {
+			statusCode = result.newAPIError.StatusCode
+			errorMessage = result.newAPIError.ErrorWithStatusCode()
+		} else if result.localErr != nil {
+			errorMessage = result.localErr.Error()
+		}
+
+		resultingStatus := channel.Status
+		if !success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusEnabled && channel.ShouldProbeFailureAutoBan() && common.AutomaticDisableChannelEnabled {
+			usingKey := ""
+			if result.context != nil {
+				usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+			}
+			service.DisableChannel(*types.NewChannelError(
+				channel.Id,
+				channel.Type,
+				channel.Name,
+				channel.ChannelInfo.IsMultiKey,
+				usingKey,
+				true,
+			), errorMessage)
+			resultingStatus = common.ChannelStatusAutoDisabled
+			summary.Disabled++
+		}
+		if success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusAutoDisabled && channel.ShouldProbeSuccessAutoEnable() && common.AutomaticEnableChannelEnabled {
+			usingKey := ""
+			if result.context != nil {
+				usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+			}
+			service.EnableChannel(channel.Id, usingKey, channel.Name)
+			resultingStatus = common.ChannelStatusEnabled
+			summary.Enabled++
+		}
+
+		if success {
+			summary.Succeeded++
+		} else {
+			summary.Failed++
+		}
+		summary.Checked++
+		checkedAt := common.GetTimestamp()
+		if err := model.SaveChannelProbeResultWithLease(channel.Id, model.ChannelProbeHistory{
+			ChannelID:    channel.Id,
+			Success:      success,
+			LatencyMs:    latencyMs,
+			StatusCode:   statusCode,
+			ErrorMessage: errorMessage,
+			CheckedAt:    checkedAt,
+		}, checkedAt+int64(channelProbeIntervalSeconds(channel, resultingStatus)), leaseUntil); err != nil {
+			releaseLease()
+			return summary, err
+		}
+		leaseReleased = true
+	}
+	if report != nil && (ctx == nil || ctx.Err() == nil) {
+		report(total, total)
+	}
+	return summary, nil
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and

@@ -15,6 +15,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// DefaultUserGroup is the only account-group value exposed by the user
+// management API. Pricing/routing groups live in token/channel/ability data
+// and must not be written into users.group.
+const DefaultUserGroup = "default"
+
 // CurrentOnboardingVersion is the latest onboarding flow shown to newly
 // registered users. A nil user value means the user is not enrolled in the
 // onboarding flow (for example, a legacy or admin-created account).
@@ -59,6 +64,16 @@ type User struct {
 	LastLoginAt       int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	OnboardingVersion *int                       `json:"-" gorm:"column:onboarding_version;type:int"`
 	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+}
+
+func (user *User) BeforeCreate(_ *gorm.DB) error {
+	user.Group = DefaultUserGroup
+	return nil
+}
+
+func (user *User) BeforeUpdate(_ *gorm.DB) error {
+	user.Group = DefaultUserGroup
+	return nil
 }
 
 // NewUserOnboardingVersion enrolls a newly self-registered user in the
@@ -465,6 +480,7 @@ func HardDeleteUserById(id int) error {
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
+	user.Group = DefaultUserGroup
 	user.Email = NormalizeEmail(user.Email)
 	user.Username = ResolveUsername(user.Username, user.Email)
 	if user.Username == "" {
@@ -634,6 +650,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		}
 	}
 	newUser := *user
+	newUser.Group = DefaultUserGroup
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -668,6 +685,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 
 	newUser := *user
+	newUser.Group = DefaultUserGroup
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err

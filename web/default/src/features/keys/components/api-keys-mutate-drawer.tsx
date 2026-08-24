@@ -79,7 +79,6 @@ import {
   getApiKeyFormSchema,
   type ApiKeyFormValues,
   getApiKeyFormDefaultValues,
-  SYSTEM_ROUTING_VALUE,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
@@ -117,7 +116,6 @@ export function ApiKeysMutateDrawer({
   })
 
   const groupsRaw = groupsData?.data
-  const backendHasAuto = Object.hasOwn(groupsRaw ?? {}, 'auto')
   const groups = useMemo<ApiKeyRoutingGroupOption[]>(
     () =>
       Object.entries(groupsRaw ?? {})
@@ -239,13 +237,9 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('group_candidates')
   const selectedModelLimits = form.watch('model_limits')
-  const concreteSelectedGroups = useMemo(
-    () => selectedGroups.filter((group) => group !== SYSTEM_ROUTING_VALUE),
-    [selectedGroups]
-  )
   const modelQueryGroups = useMemo(
-    () => (concreteSelectedGroups.length > 0 ? concreteSelectedGroups : ['']),
-    [concreteSelectedGroups]
+    () => (selectedGroups.length > 0 ? selectedGroups : ['']),
+    [selectedGroups]
   )
   const modelQueries = useQueries({
     queries: modelQueryGroups.map((group) => ({
@@ -273,7 +267,6 @@ export function ApiKeysMutateDrawer({
   }, [modelQueries, selectedModelLimits])
   const isLoadingModels = modelQueries.some((query) => query.isLoading)
   const usesMultipleGroups = selectedGroups.length > 1
-  const usesSystemRouting = selectedGroups[0] === SYSTEM_ROUTING_VALUE
   const unlimitedQuota = form.watch('unlimited_quota')
 
   return (
@@ -436,7 +429,6 @@ export function ApiKeysMutateDrawer({
                     <FormLabel>{t('Available groups')}</FormLabel>
                     <FormControl>
                       <ApiKeyRoutingGroupsField
-                        allowSystemRouting={backendHasAuto || usesSystemRouting}
                         options={groups}
                         value={field.value}
                         modelsByGroup={modelsByGroup}
@@ -444,10 +436,7 @@ export function ApiKeysMutateDrawer({
                         onValueChange={(value) => {
                           const wasUsingMultipleGroups = field.value.length > 1
                           field.onChange(value)
-                          if (
-                            value.length <= 1 &&
-                            value[0] !== SYSTEM_ROUTING_VALUE
-                          ) {
+                          if (value.length <= 1) {
                             form.setValue('cross_group_retry', false)
                           } else if (
                             value.length > 1 &&
@@ -463,7 +452,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {(usesMultipleGroups || usesSystemRouting) && (
+              {usesMultipleGroups && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'

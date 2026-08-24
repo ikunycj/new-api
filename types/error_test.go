@@ -58,7 +58,7 @@ func TestOpenAIErrorPreservesUpstreamCodeAndSource(t *testing.T) {
 
 func TestChannelRateLimitIsChannelScoped(t *testing.T) {
 	apiErr := WithOpenAIError(OpenAIError{
-		Message: "cluster rate limited",
+		Message: "channel rate limited",
 		Code:    "rate_limit_exceeded",
 		Source:  ErrorSourceChannel,
 	}, http.StatusTooManyRequests)
@@ -90,7 +90,7 @@ func TestChannelGenericServerErrorsAreChannelScoped(t *testing.T) {
 
 func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 	lastErr := WithOpenAIError(OpenAIError{
-		Message: "cluster unavailable",
+		Message: "channel unavailable",
 		Type:    "server_error",
 		Code:    "server_error",
 		Source:  ErrorSourceChannel,
@@ -119,7 +119,7 @@ func TestResolveErrorSource(t *testing.T) {
 		baseURL    string
 		want       ErrorSource
 	}{
-		{name: "explicit cluster compatibility", configured: "cluster", baseURL: "https://api.openai.com/v1", want: ErrorSourceChannel},
+		{name: "explicit channel", configured: "channel", baseURL: "https://api.openai.com/v1", want: ErrorSourceChannel},
 		{name: "official OpenAI", baseURL: "https://api.openai.com/v1", want: ErrorSourceOpenAI},
 		{name: "generic compatible endpoint", baseURL: "https://api.example.com/v1", want: ErrorSourceChannel},
 	}

@@ -273,9 +273,8 @@ export const DEFAULT_CHANNEL_VALUES = {
   base_url: '',
   key: '',
   models: '',
-  group: 'default',
+  group: '',
   status: CHANNEL_STATUS.ENABLED,
-  priority: 0,
   weight: 0,
   auto_ban: 1,
   remark: '',
@@ -292,8 +291,7 @@ export const CHANNELS_TABLE_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 // ============================================================================
 
 export const SORT_OPTIONS = [
-  { value: 'priority', label: 'Priority (Default)' },
-  { value: 'id', label: 'ID' },
+  { value: 'id', label: 'ID (Default)' },
   { value: 'name', label: 'Name' },
   { value: 'balance', label: 'Balance' },
   { value: 'response_time', label: 'Response Time' },
@@ -337,7 +335,7 @@ export const FIELD_PLACEHOLDERS = {
   BASE_URL: 'Leave empty to use default',
   KEY: 'API Key (one per line for batch mode)',
   MODELS: 'Comma-separated model names, e.g., gpt-4,gpt-3.5-turbo',
-  GROUP: 'Please Select user groups that can access this channel.',
+  GROUP: 'Select pricing groups that can access this channel.',
   MODEL_MAPPING: '{"request_model": "actual_model"}',
   TEST_MODEL: 'Model to use for testing',
   TAG: 'Optional tag for grouping channels',
@@ -354,13 +352,31 @@ export const FIELD_DESCRIPTIONS = {
   KEY: 'API key from the provider',
   MODELS:
     'List of models supported by this channel. Use comma to separate multiple models.',
-  GROUP: 'User groups that can access this channel. ',
+  GROUP: 'Pricing groups that can access this channel.',
   MODEL_MAPPING:
     'Map request model names to actual provider model names (JSON format)',
-  PRIORITY: 'Higher priority channels are selected first',
   WEIGHT: 'Used for load balancing. Higher weight = more requests',
   TEST_MODEL: 'Model to use when testing channel connectivity',
   AUTO_BAN: 'Automatically disable channel on repeated failures',
+  PROBE_INTERVAL: 'Interval for probing enabled channels, in seconds',
+  AUTO_DISABLED_PROBE_INTERVAL:
+    'Interval for probing auto-disabled channels, in seconds',
+  PROBE_FAILURE_AUTO_BAN:
+    'Automatically disable the channel when a probe fails',
+  PROBE_SUCCESS_AUTO_ENABLE:
+    'Automatically enable the channel after a successful probe',
+  UPSTREAM_MAX_RETRIES:
+    'Maximum retries for this channel after the first upstream attempt',
+  PRICE_MULTIPLIER:
+    'Relative upstream cost used for channel ranking. 1 means unchanged.',
+  PRICE_MULTIPLIER_MODE:
+    'Currency used when comparing this channel price multiplier',
+  FORCE_PRIORITY:
+    'Place this channel before ordinary channels in its selected scope',
+  FORCE_PRIORITY_SCOPE:
+    'Choose whether force priority applies within one group or across groups',
+  PREVIOUS_DAY_PROBE_SUCCESS_RATE:
+    'Read-only success rate from the previous natural day',
   STATUS_CODE_MAPPING: 'Map response status codes (JSON format)',
   TAG: 'Group channels by tag for batch operations',
   REMARK: 'Internal notes (not shown to users)',

@@ -23,7 +23,6 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
 import type { ApiKey, ApiKeyFormData } from '../types'
 
-export const SYSTEM_ROUTING_VALUE = '__system_routing__'
 export const MAX_GROUP_CANDIDATES = 8
 
 // ============================================================================
@@ -53,10 +52,8 @@ export function getApiKeyFormSchema(t: TFunction) {
           t('The same group cannot be selected more than once')
         )
         .refine(
-          (groups) =>
-            !groups.includes('auto') &&
-            (!groups.includes(SYSTEM_ROUTING_VALUE) || groups.length === 1),
-          t('System routing must be used on its own')
+          (groups) => !groups.includes('auto'),
+          t('Auto group cannot be selected directly')
         ),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
@@ -112,16 +109,10 @@ export function transformFormDataToPayload(
   data: ApiKeyFormValues
 ): ApiKeyFormData {
   const groups = data.group_candidates
-  const usesSystemRouting = groups[0] === SYSTEM_ROUTING_VALUE
   const usesOrderedGroups = groups.length > 1
   let group = groups[0] || ''
-  if (usesSystemRouting || usesOrderedGroups) {
+  if (usesOrderedGroups) {
     group = 'auto'
-  }
-
-  let groupCandidates: string[] | undefined = groups
-  if (usesSystemRouting) {
-    groupCandidates = []
   }
 
   return {
@@ -137,9 +128,8 @@ export function transformFormDataToPayload(
     model_limits: data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
     group,
-    group_candidates: groupCandidates,
-    cross_group_retry:
-      usesSystemRouting || usesOrderedGroups ? !!data.cross_group_retry : false,
+    group_candidates: groups,
+    cross_group_retry: usesOrderedGroups ? !!data.cross_group_retry : false,
   }
 }
 
@@ -152,9 +142,7 @@ export function transformApiKeyToFormDefaults(
 ): ApiKeyFormValues {
   let groups = apiKey.group_candidates
   if (groups.length === 0) {
-    if (apiKey.group === 'auto') {
-      groups = [SYSTEM_ROUTING_VALUE]
-    } else if (apiKey.group) {
+    if (apiKey.group && apiKey.group !== 'auto') {
       groups = [apiKey.group]
     } else if (defaultGroup) {
       groups = [defaultGroup]
