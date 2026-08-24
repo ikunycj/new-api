@@ -18,11 +18,12 @@ import (
 )
 
 func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
-	observability.RecordRequest(observability.ProviderIkun, observability.ErrorSuccess, http.StatusOK, time.Millisecond)
-	observability.RecordAttempt(observability.ProviderIkun, observability.ErrorUpstreamRateLimit, http.StatusTooManyRequests, time.Millisecond)
-	observability.RecordRetry(observability.ProviderIkun, observability.ErrorUpstreamRateLimit)
-	observability.RecordClientCancellation(observability.ProviderIkun, "upstream")
-	finishInFlight := observability.IncInFlight(observability.ProviderIkun)
+	const channelID = 38
+	observability.RecordRequest(observability.ProviderIkun, channelID, observability.ErrorSuccess, http.StatusOK, time.Millisecond)
+	observability.RecordAttempt(observability.ProviderIkun, channelID, observability.ErrorUpstreamRateLimit, http.StatusTooManyRequests, time.Millisecond)
+	observability.RecordRetry(observability.ProviderIkun, channelID, observability.ErrorUpstreamRateLimit)
+	observability.RecordClientCancellation(observability.ProviderIkun, channelID, "upstream")
+	finishInFlight := observability.IncInFlight(observability.ProviderIkun, channelID)
 	finishInFlight()
 
 	registry, err := NewRegistry()
@@ -31,8 +32,16 @@ func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	found := make(map[string]bool)
+	channelLabels := make(map[string]bool)
 	for _, family := range families {
 		found[family.GetName()] = true
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "channel_id" && label.GetValue() == "38" {
+					channelLabels[family.GetName()] = true
+				}
+			}
+		}
 	}
 	for _, name := range []string{
 		"new_api_relay_requests_total",
@@ -44,6 +53,7 @@ func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
 		"new_api_relay_client_cancellations_total",
 	} {
 		assert.True(t, found[name], name)
+		assert.True(t, channelLabels[name], name+" channel_id")
 	}
 }
 

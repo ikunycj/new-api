@@ -121,7 +121,7 @@ func HTTPMiddleware() gin.HandlerFunc {
 
 		if errorClass := c.GetString(observability.ContextErrorClassKey); errorClass != "" {
 			duration := time.Since(startedAt)
-			observability.RecordRequest(observability.ProviderOther, errorClass, c.Writer.Status(), duration)
+			observability.RecordRequest(observability.ProviderOther, 0, errorClass, c.Writer.Status(), duration)
 			observability.LogEvent(c, observability.Event{
 				Event:         "request_finished",
 				RequestID:     c.GetString(common.RequestIdKey),

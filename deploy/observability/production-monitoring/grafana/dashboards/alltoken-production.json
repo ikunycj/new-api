@@ -28,7 +28,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "id": 1,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "sum(rate(new_api_relay_requests_total[1m]))", "refId": "A" }],
+      "targets": [{ "expr": "sum(rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "refId": "A" }],
       "title": "Relay requests / sec",
       "type": "stat"
     },
@@ -46,7 +46,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "id": 2,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "100 * sum(rate(new_api_relay_requests_total{outcome=\"error\"}[5m])) / clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001)", "refId": "A" }],
+      "targets": [{ "expr": "100 * sum(rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\",outcome=\"error\"}[5m])) / clamp_min(sum(rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\"}[5m])), 0.001)", "refId": "A" }],
       "title": "Final error rate",
       "type": "stat"
     },
@@ -59,7 +59,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "id": 3,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m])))", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket{channel_id!=\"\",channel_id=~\"$channel\"}[5m])))", "refId": "A" }],
       "title": "P95 relay latency",
       "type": "stat"
     },
@@ -72,8 +72,8 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "id": 4,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\"})", "refId": "A" }],
-      "title": "Active alerts",
+      "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\",channel_id!=\"\",channel_id=~\"$channel\"})", "refId": "A" }],
+      "title": "Selected channel alerts",
       "type": "stat"
     },
     {
@@ -82,7 +82,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "id": 5,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [{ "expr": "sum by (provider, outcome) (rate(new_api_relay_requests_total[1m]))", "legendFormat": "{{provider}} / {{outcome}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by (provider, outcome) (rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "legendFormat": "{{provider}} / {{outcome}}", "refId": "A" }],
       "title": "Final request outcomes",
       "type": "timeseries"
     },
@@ -93,8 +93,8 @@
       "id": 6,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum by (error_class) (rate(new_api_relay_requests_total{outcome=\"error\"}[1m]))", "legendFormat": "final / {{error_class}}", "refId": "A" },
-        { "expr": "sum by (error_class, upstream_status) (rate(new_api_relay_attempts_total{error_class!=\"success\"}[1m]))", "legendFormat": "attempt / {{error_class}} / {{upstream_status}}", "refId": "B" }
+        { "expr": "sum by (error_class) (rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\",outcome=\"error\"}[1m]))", "legendFormat": "final / {{error_class}}", "refId": "A" },
+        { "expr": "sum by (error_class, upstream_status) (rate(new_api_relay_attempts_total{channel_id!=\"\",channel_id=~\"$channel\",error_class!=\"success\"}[1m]))", "legendFormat": "attempt / {{error_class}} / {{upstream_status}}", "refId": "B" }
       ],
       "title": "Error attribution",
       "type": "timeseries"
@@ -106,9 +106,9 @@
       "id": 7,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum(rate(new_api_relay_requests_total[1m]))", "legendFormat": "final requests", "refId": "A" },
-        { "expr": "sum(rate(new_api_relay_attempts_total[1m]))", "legendFormat": "upstream attempts", "refId": "B" },
-        { "expr": "sum(rate(new_api_relay_retries_total[1m]))", "legendFormat": "retries", "refId": "C" }
+        { "expr": "sum(rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "legendFormat": "final requests", "refId": "A" },
+        { "expr": "sum(rate(new_api_relay_attempts_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "legendFormat": "upstream attempts", "refId": "B" },
+        { "expr": "sum(rate(new_api_relay_retries_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "legendFormat": "retries", "refId": "C" }
       ],
       "title": "Requests, attempts, and retries",
       "type": "timeseries"
@@ -120,7 +120,7 @@
       "id": 8,
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum by (from_channel, to_channel, mode) (increase(alltoken_channel_switch_total{from_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}} / {{mode}}", "refId": "A" },
+        { "expr": "sum by (from_channel, to_channel, mode) (increase(alltoken_channel_switch_total{from_channel=~\"$channel\"}[5m]) or increase(alltoken_channel_switch_total{to_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}} / {{mode}}", "refId": "A" },
         { "expr": "sum by (channel_id, outcome) (increase(alltoken_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" },
         { "expr": "alltoken_channel_circuit_state{channel_id=~\"$channel\",state=~\"open|half_open\"} == 1", "legendFormat": "CH{{channel_id}} / {{state}}", "refId": "C" }
       ],
@@ -138,7 +138,8 @@
         { "expr": "new_api_redis_pool_connections", "legendFormat": "Redis {{state}}", "refId": "B" },
         { "expr": "rate(new_api_redis_pool_timeouts_total[1m])", "legendFormat": "Redis timeouts/sec", "refId": "C" }
       ],
-      "title": "Database and Redis pools",
+      "description": "Global infrastructure metrics; these values are shared by every channel.",
+      "title": "Global database and Redis pools",
       "type": "timeseries"
     },
     {
@@ -151,7 +152,8 @@
         { "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[1m])))", "legendFormat": "CPU busy", "refId": "A" },
         { "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})", "legendFormat": "Memory used", "refId": "B" }
       ],
-      "title": "ECS CPU and memory",
+      "description": "Global infrastructure metrics; these values are shared by every channel.",
+      "title": "Global ECS CPU and memory",
       "type": "timeseries"
     },
     {
@@ -160,8 +162,8 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
       "id": 11,
       "options": { "cellHeight": "sm", "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true },
-      "targets": [{ "expr": "ALERTS{alertstate=\"firing\"}", "format": "table", "instant": true, "refId": "A" }],
-      "title": "Active alerts",
+      "targets": [{ "expr": "ALERTS{alertstate=\"firing\",channel_id!=\"\",channel_id=~\"$channel\"}", "format": "table", "instant": true, "refId": "A" }],
+      "title": "Selected channel alerts",
       "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true, "Value": true, "__name__": true }, "indexByName": {}, "renameByName": {} } }],
       "type": "table"
     },
@@ -171,8 +173,8 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
       "id": 12,
       "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
-      "targets": [{ "expr": "{job=\"alltoken/new-api\"}", "queryType": "range", "refId": "A" }],
-      "title": "AllToken application logs",
+      "targets": [{ "expr": "{job=\"alltoken/new-api\"} |~ \"observability_event=.*\\\\\\\"channel_id\\\\\\\":($channel)(,|})\"", "queryType": "range", "refId": "A" }],
+      "title": "Selected channel application logs",
       "type": "logs"
     },
     {
@@ -181,8 +183,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
       "id": 13,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [{ "expr": "sum by (status) (rate(new_api_http_requests_total{route_tag=\"relay\"}[1m]))", "legendFormat": "HTTP {{status}}", "refId": "A" }],
-      "title": "Gateway requests by HTTP status",
+      "targets": [{ "expr": "sum by (final_status) (rate(new_api_relay_requests_total{channel_id!=\"\",channel_id=~\"$channel\"}[1m]))", "legendFormat": "HTTP {{final_status}}", "refId": "A" }],
+      "title": "Selected channel responses by HTTP status",
       "type": "timeseries"
     },
     {
@@ -192,7 +194,8 @@
       "id": 14,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [{ "expr": "sum by (reason, status) (rate(alltoken_auth_failures_total[1m]))", "legendFormat": "{{reason}} / HTTP {{status}}", "refId": "A" }],
-      "title": "Gateway authentication failures",
+      "description": "Global pre-routing metric; authentication failures happen before a channel is selected.",
+      "title": "Global gateway authentication failures",
       "type": "timeseries"
     }
   ],

@@ -91,9 +91,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		if errorClass == observability.ErrorClientCancelled {
 			status = 499
-			observability.RecordClientCancellation(finalProvider, cancellationPhase(c, attemptedUpstream))
+			observability.RecordClientCancellation(finalProvider, finalChannelID, cancellationPhase(c, attemptedUpstream))
 		}
-		observability.RecordRequest(finalProvider, errorClass, status, time.Since(requestStartedAt))
+		observability.RecordRequest(finalProvider, finalChannelID, errorClass, status, time.Since(requestStartedAt))
 		event := observability.Event{
 			Event:             "request_finished",
 			RequestID:         requestId,
@@ -300,7 +300,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		c.Request.Body = io.NopCloser(bodyStorage)
 
 		attemptStartedAt := time.Now()
-		finishInFlight := observability.IncInFlight(provider)
+		finishInFlight := observability.IncInFlight(provider, channel.Id)
 		attemptedUpstream = true
 		retryParam.MarkChannelAttempted(channel.Id)
 		func() {
@@ -351,7 +351,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 		}
 
-		observability.RecordAttempt(provider, attemptClass, upstreamStatus, attemptDuration)
+		observability.RecordAttempt(provider, channel.Id, attemptClass, upstreamStatus, attemptDuration)
 		observability.LogEvent(c, observability.Event{
 			Event:             "relay_attempt_finished",
 			RequestID:         requestId,
@@ -391,7 +391,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if !willRetry {
 			break
 		}
-		observability.RecordRetry(provider, attemptClass)
+		observability.RecordRetry(provider, channel.Id, attemptClass)
 		observability.LogEvent(c, observability.Event{
 			Event:       "relay_retry",
 			RequestID:   requestId,

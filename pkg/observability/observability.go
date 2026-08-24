@@ -41,33 +41,33 @@ var (
 	relayRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "requests_total",
 		Help: "Final relay request outcomes.",
-	}, []string{"provider", "outcome", "error_class", "final_status"})
+	}, []string{"provider", "channel_id", "outcome", "error_class", "final_status"})
 	relayRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "request_duration_seconds",
 		Help:    "Relay request duration from entry to final outcome.",
 		Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300},
-	}, []string{"provider", "outcome"})
+	}, []string{"provider", "channel_id", "outcome"})
 	relayAttempts = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "attempts_total",
 		Help: "Individual upstream relay attempt outcomes.",
-	}, []string{"provider", "outcome", "error_class", "upstream_status"})
+	}, []string{"provider", "channel_id", "outcome", "error_class", "upstream_status"})
 	relayAttemptDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "attempt_duration_seconds",
 		Help:    "Individual upstream relay attempt duration.",
 		Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300},
-	}, []string{"provider", "outcome"})
+	}, []string{"provider", "channel_id", "outcome"})
 	relayRetries = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "retries_total",
 		Help: "Relay retries by bounded reason.",
-	}, []string{"provider", "reason"})
+	}, []string{"provider", "channel_id", "reason"})
 	relayInFlight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "in_flight",
 		Help: "Current upstream relay attempts.",
-	}, []string{"provider"})
+	}, []string{"provider", "channel_id"})
 	relayClientCancellations = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "new_api", Subsystem: "relay", Name: "client_cancellations_total",
 		Help: "Client cancellations by bounded phase.",
-	}, []string{"provider", "phase"})
+	}, []string{"provider", "channel_id", "phase"})
 	errorEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "alltoken", Name: "error_events_total",
 		Help: "Structured error events by bounded error and routing dimensions.",
@@ -282,37 +282,47 @@ func statusLabel(status int) string {
 	return strconv.Itoa(status)
 }
 
-func RecordRequest(provider, errorClass string, status int, duration time.Duration) {
+func RecordRequest(provider string, channelID int, errorClass string, status int, duration time.Duration) {
 	provider = normalizeProvider(provider)
 	errorClass = normalizeErrorClass(errorClass)
 	outcome := Outcome(errorClass)
-	relayRequests.WithLabelValues(provider, outcome, errorClass, statusLabel(status)).Inc()
-	relayRequestDuration.WithLabelValues(provider, outcome).Observe(duration.Seconds())
+	channel := channelLabel(channelID)
+	relayRequests.WithLabelValues(provider, channel, outcome, errorClass, statusLabel(status)).Inc()
+	relayRequestDuration.WithLabelValues(provider, channel, outcome).Observe(duration.Seconds())
 }
 
-func RecordAttempt(provider, errorClass string, status int, duration time.Duration) {
+func RecordAttempt(provider string, channelID int, errorClass string, status int, duration time.Duration) {
 	provider = normalizeProvider(provider)
 	errorClass = normalizeErrorClass(errorClass)
 	outcome := Outcome(errorClass)
-	relayAttempts.WithLabelValues(provider, outcome, errorClass, statusLabel(status)).Inc()
-	relayAttemptDuration.WithLabelValues(provider, outcome).Observe(duration.Seconds())
+	channel := channelLabel(channelID)
+	relayAttempts.WithLabelValues(provider, channel, outcome, errorClass, statusLabel(status)).Inc()
+	relayAttemptDuration.WithLabelValues(provider, channel, outcome).Observe(duration.Seconds())
 }
 
-func RecordRetry(provider, reason string) {
-	relayRetries.WithLabelValues(normalizeProvider(provider), normalizeReason(reason)).Inc()
+func RecordRetry(provider string, channelID int, reason string) {
+	relayRetries.WithLabelValues(normalizeProvider(provider), channelLabel(channelID), normalizeReason(reason)).Inc()
 }
 
-func IncInFlight(provider string) func() {
+func IncInFlight(provider string, channelID int) func() {
 	provider = normalizeProvider(provider)
-	relayInFlight.WithLabelValues(provider).Inc()
-	return func() { relayInFlight.WithLabelValues(provider).Dec() }
+	channel := channelLabel(channelID)
+	relayInFlight.WithLabelValues(provider, channel).Inc()
+	return func() { relayInFlight.WithLabelValues(provider, channel).Dec() }
 }
 
-func RecordClientCancellation(provider, phase string) {
+func RecordClientCancellation(provider string, channelID int, phase string) {
 	if phase != "before_upstream" && phase != "upstream" && phase != "response" {
 		phase = "unknown"
 	}
-	relayClientCancellations.WithLabelValues(normalizeProvider(provider), phase).Inc()
+	relayClientCancellations.WithLabelValues(normalizeProvider(provider), channelLabel(channelID), phase).Inc()
+}
+
+func channelLabel(channelID int) string {
+	if channelID <= 0 {
+		return "0"
+	}
+	return strconv.Itoa(channelID)
 }
 
 func normalizeProvider(provider string) string {
