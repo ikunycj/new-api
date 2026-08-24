@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -19,7 +37,10 @@ import type {
   RoutingMode,
 } from '@/features/failover/types'
 
-import { channelBelongsToGroup } from './group-pricing-utils'
+import {
+  channelBelongsToGroup,
+  reorderBillingGroupChannels,
+} from './group-pricing-utils'
 
 let nextTemporaryID = -1
 
@@ -123,7 +144,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
   const routeEntries = (route: BillingGroupRoute) =>
     config?.route_channels
       .filter((entry) => entry.billing_group_route_id === route.id)
-      .sort((a, b) => b.priority - a.priority) ?? []
+      .sort((a, b) => b.priority - a.priority || a.id - b.id) ?? []
 
   const updateRoute = (
     routeIndex: number,
@@ -159,17 +180,22 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
     direction: -1 | 1
   ) => {
     updateConfig((current) => {
-      const entries = current.route_channels
-        .filter((entry) => entry.billing_group_route_id === route.id)
-        .sort((a, b) => b.priority - a.priority)
-      const index = entries.findIndex(
-        (entry) => entry.channel_id === target.channel_id
+      const entries = current.route_channels.filter(
+        (entry) => entry.billing_group_route_id === route.id
       )
-      const other = entries[index + direction]
-      if (!other) return current
-      const priority = entries[index].priority
-      entries[index].priority = other.priority
-      other.priority = priority
+      const reordered = reorderBillingGroupChannels(
+        entries,
+        target.channel_id,
+        direction
+      )
+      const priorities = new Map(
+        reordered.map((entry) => [entry.channel_id, entry.priority])
+      )
+      current.route_channels = current.route_channels.map((entry) => {
+        if (entry.billing_group_route_id !== route.id) return entry
+        const priority = priorities.get(entry.channel_id)
+        return priority == null ? entry : { ...entry, priority }
+      })
       return current
     })
   }
@@ -457,11 +483,16 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   const currentEntries = current.route_channels.filter(
                     (entry) => entry.billing_group_route_id === route.id
                   )
+                  const lastPriority = currentEntries.reduce(
+                    (lowest, entry) => Math.min(lowest, entry.priority),
+                    1
+                  )
                   current.route_channels.push({
                     id: nextTemporaryID--,
                     billing_group_route_id: route.id,
                     channel_id: channelID,
-                    priority: 100 - currentEntries.length * 10,
+                    priority:
+                      currentEntries.length === 0 ? 1 : lastPriority - 1,
                     weight: channel.weight ?? 0,
                     max_attempts: 1,
                     enabled: true,
