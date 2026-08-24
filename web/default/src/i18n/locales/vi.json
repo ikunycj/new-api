@@ -6275,6 +6275,8 @@
     "Billing group ratio": "Hệ số nhóm thanh toán",
     "Channel cost factor": "Hệ số chi phí kênh",
     "Current run metrics": "Chỉ số lượt chạy hiện tại",
-    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Chi phí thực tế của kênh = giá chính thức của mô hình × hệ số chi phí kênh; phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán."
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Chi phí thực tế của kênh = giá chính thức của mô hình × hệ số chi phí kênh; phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.",
+    "Average token price": "Giá trung bình mỗi token",
+    "User charge = official model price × billing group ratio.": "Phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán."
   }
 }

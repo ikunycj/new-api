@@ -6275,6 +6275,8 @@
     "Billing group ratio": "課金グループ倍率",
     "Channel cost factor": "チャネルコスト係数",
     "Current run metrics": "現在の実行指標",
-    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "実際のチャネルコスト = モデル公式価格 × チャネルコスト係数、ユーザー請求額 = モデル公式価格 × 課金グループ倍率。"
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "実際のチャネルコスト = モデル公式価格 × チャネルコスト係数、ユーザー請求額 = モデル公式価格 × 課金グループ倍率。",
+    "Average token price": "トークン平均単価",
+    "User charge = official model price × billing group ratio.": "ユーザー請求額 = モデル公式価格 × 課金グループ倍率。"
   }
 }

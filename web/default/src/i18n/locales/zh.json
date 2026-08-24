@@ -6275,6 +6275,8 @@
     "Billing group ratio": "分组倍率",
     "Channel cost factor": "渠道成本系数",
     "Current run metrics": "当前运行指标",
-    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "实际渠道成本 = 模型官方价格 × 渠道成本系数；用户收费 = 模型官方价格 × 分组倍率。"
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "实际渠道成本 = 模型官方价格 × 渠道成本系数；用户收费 = 模型官方价格 × 分组倍率。",
+    "Average token price": "平均每个 token 单价",
+    "User charge = official model price × billing group ratio.": "用户扣费 = 模型官方价格 × 计费分组倍率。"
   }
 }

@@ -60,6 +60,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.',
     'Average latency': 'Average latency',
+    'Average token price': 'Average token price',
+    'User charge = official model price × billing group ratio.':
+      'User charge = official model price × billing group ratio.',
     'Channel Reconciliation': 'Channel Reconciliation',
     'Cost entries': 'Cost entries',
     'Cost entry saved': 'Cost entry saved',
@@ -139,6 +142,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       '实际成本由管理员手工录入，并按所选时间段分摊。估算成本由网关根据计费快照计算。',
     'Average latency': '平均延迟',
+    'Average token price': '平均每个 token 单价',
+    'User charge = official model price × billing group ratio.':
+      '用户扣费 = 模型官方价格 × 计费分组倍率。',
     'Channel Reconciliation': '渠道对账',
     'Cost entries': '成本账期',
     'Cost entry saved': '成本记录已保存',
@@ -203,6 +209,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       'Les coûts réels sont saisis manuellement et répartis sur la période sélectionnée. Les coûts estimés sont calculés par la passerelle à partir des instantanés de facturation.',
     'Average latency': 'Latence moyenne',
+    'Average token price': 'Prix moyen par token',
+    'User charge = official model price × billing group ratio.':
+      'Facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation.',
     'Channel Reconciliation': 'Rapprochement du canal',
     'Cost entries': 'Périodes de coût',
     'Cost entry saved': 'Coût enregistré',
@@ -267,6 +276,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       '実コストは手動入力され、選択期間に按分されます。推定コストはゲートウェイの課金スナップショットから計算されます。',
     'Average latency': '平均レイテンシ',
+    'Average token price': 'トークン平均単価',
+    'User charge = official model price × billing group ratio.':
+      'ユーザー請求額 = モデル公式価格 × 課金グループ倍率。',
     'Channel Reconciliation': 'チャネル照合',
     'Cost entries': 'コスト期間',
     'Cost entry saved': 'コストを保存しました',
@@ -331,6 +343,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       'Фактические затраты вводятся вручную и распределяются по выбранному периоду. Расчётная стоимость вычисляется шлюзом по снимкам биллинга.',
     'Average latency': 'Средняя задержка',
+    'Average token price': 'Средняя цена токена',
+    'User charge = official model price × billing group ratio.':
+      'Списание с пользователя = официальная цена модели × коэффициент группы биллинга.',
     'Channel Reconciliation': 'Сверка канала',
     'Cost entries': 'Периоды затрат',
     'Cost entry saved': 'Затраты сохранены',
@@ -395,6 +410,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       'Chi phí thực tế được nhập thủ công và phân bổ theo khoảng thời gian đã chọn. Chi phí ước tính được cổng tính từ ảnh chụp dữ liệu thanh toán.',
     'Average latency': 'Độ trễ trung bình',
+    'Average token price': 'Giá trung bình mỗi token',
+    'User charge = official model price × billing group ratio.':
+      'Phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.',
     'Channel Reconciliation': 'Đối soát kênh',
     'Cost entries': 'Kỳ chi phí',
     'Cost entry saved': 'Đã lưu chi phí',
@@ -458,6 +476,9 @@ const newKeys = {
     'Actual costs are manually recorded and prorated across the selected period. Estimated costs are calculated by the gateway from billing snapshots.':
       '實際成本由管理員手動輸入，並按所選期間分攤。估算成本由閘道根據計費快照計算。',
     'Average latency': '平均延遲',
+    'Average token price': '平均每個 token 單價',
+    'User charge = official model price × billing group ratio.':
+      '使用者扣費 = 模型官方價格 × 計費分組倍率。',
     'Channel Reconciliation': '渠道對帳',
     'Cost entries': '成本帳期',
     'Cost entry saved': '成本記錄已儲存',

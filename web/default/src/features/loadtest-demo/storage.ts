@@ -60,7 +60,6 @@ const persistedRunSchema = z.object({
   packageName: z.string().default(''),
   durationSeconds: z.number().nonnegative(),
   requestsPerSecond: z.number().nonnegative(),
-  estimatedCost: z.number().nonnegative(),
   userCharge: z.number().nonnegative().default(0),
   stats: runStatsSchema,
   channelStats: z.array(channelStatsSchema),
@@ -118,7 +117,6 @@ export function loadPersistedLoadTestRuns(
           completedAt: legacyRun.data.savedAt,
           durationSeconds: 0,
           requestsPerSecond: 0,
-          estimatedCost: 0,
           userCharge: 0,
         },
       ]

@@ -191,13 +191,6 @@ function calculateOfficialChannelCost(
   return officialCost
 }
 
-function calculateChannelCost(
-  channel: LoadTestChannelStats,
-  pricing: LoadTestPricing
-) {
-  return calculateOfficialChannelCost(channel, pricing) * channel.cost_factor
-}
-
 function calculateUserCharge(
   channel: LoadTestChannelStats,
   pricing: LoadTestPricing
@@ -585,31 +578,35 @@ export function LoadTestDemo() {
   const billingGroupsUsed = new Set(
     channelStats.map((channel) => channel.billing_group).filter(Boolean)
   )
-  let estimatedCost = 0
   let userCharge = 0
   if (pricing) {
     if (channelStats.length > 0) {
-      estimatedCost = channelStats.reduce(
-        (total, channel) => total + calculateChannelCost(channel, pricing),
-        0
-      )
       userCharge = channelStats.reduce(
         (total, channel) => total + calculateUserCharge(channel, pricing),
         0
       )
     } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
       const officialCost = stats.successes * (pricing.model.model_price ?? 0)
-      estimatedCost = officialCost
       userCharge = officialCost * pricing.groupRatio
     } else {
-      estimatedCost =
+      const officialCost =
         (stats.inputTokens / 1_000_000) * inputPricePerMillion +
         (stats.outputTokens / 1_000_000) * outputPricePerMillion +
         (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
         (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
-      userCharge = estimatedCost * pricing.groupRatio
+      userCharge = officialCost * pricing.groupRatio
     }
   }
+
+  const totalTokens =
+    channelStats.length > 0
+      ? totalChannelTokens
+      : stats.inputTokens +
+        stats.outputTokens +
+        stats.cacheReadTokens +
+        stats.cacheWriteTokens
+  const averageTokenPrice =
+    pricing && totalTokens > 0 ? userCharge / totalTokens : null
 
   useEffect(() => {
     if (
@@ -628,7 +625,6 @@ export function LoadTestDemo() {
       packageName: runSnapshot.packageName,
       durationSeconds: runSnapshot.durationSeconds,
       requestsPerSecond: runSnapshot.requestsPerSecond,
-      estimatedCost,
       userCharge,
       stats,
       channelStats,
@@ -636,7 +632,7 @@ export function LoadTestDemo() {
     })
     persistedRunIdRef.current = runId
     setPersistedRuns(loadPersistedLoadTestRuns(userId))
-  }, [channelStats, estimatedCost, runId, stats, status, userId])
+  }, [channelStats, runId, stats, status, userId, userCharge])
 
   const maxRequests =
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
@@ -649,24 +645,15 @@ export function LoadTestDemo() {
     !modelsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
 
-  const getHistoricalCosts = (run: (typeof persistedRuns)[number]) => {
+  const getHistoricalUserCharge = (run: (typeof persistedRuns)[number]) => {
     const runPricing = historicalPricing[run.runId]
     if (!runPricing || run.channelStats.length === 0) {
-      return {
-        actualCost: run.estimatedCost,
-        userCharge: run.userCharge,
-      }
+      return run.userCharge
     }
-    return {
-      actualCost: run.channelStats.reduce(
-        (total, channel) => total + calculateChannelCost(channel, runPricing),
-        0
-      ),
-      userCharge: run.channelStats.reduce(
-        (total, channel) => total + calculateUserCharge(channel, runPricing),
-        0
-      ),
-    }
+    return run.channelStats.reduce(
+      (total, channel) => total + calculateUserCharge(channel, runPricing),
+      0
+    )
   }
 
   const clearHistory = useCallback(() => {
@@ -915,13 +902,19 @@ export function LoadTestDemo() {
                         <TableHead>{t('Output tokens')}</TableHead>
                         <TableHead>{t('Cache tokens')}</TableHead>
                         <TableHead>{t('Total tokens')}</TableHead>
-                        <TableHead>{t('Actual cost')}</TableHead>
+                        <TableHead>{t('Average token price')}</TableHead>
                         <TableHead>{t('User charge')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {persistedRuns.map((run) => {
-                        const costs = getHistoricalCosts(run)
+                        const historicalUserCharge =
+                          getHistoricalUserCharge(run)
+                        const historicalTotalTokens =
+                          run.stats.inputTokens +
+                          run.stats.outputTokens +
+                          run.stats.cacheReadTokens +
+                          run.stats.cacheWriteTokens
                         return (
                           <TableRow key={run.runId}>
                             <TableCell>
@@ -959,10 +952,12 @@ export function LoadTestDemo() {
                               ).toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              ${costs.actualCost.toFixed(6)}
+                              {historicalTotalTokens > 0
+                                ? `$${(historicalUserCharge / historicalTotalTokens).toFixed(8)}`
+                                : '-'}
                             </TableCell>
                             <TableCell>
-                              ${costs.userCharge.toFixed(6)}
+                              ${historicalUserCharge.toFixed(6)}
                             </TableCell>
                           </TableRow>
                         )
@@ -1000,9 +995,11 @@ export function LoadTestDemo() {
               value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
             />
             <Metric
-              label={t('Actual cost')}
+              label={t('Average token price')}
               value={
-                pricing ? `$${estimatedCost.toFixed(6)}` : t('Unavailable')
+                averageTokenPrice === null
+                  ? t('Unavailable')
+                  : `$${averageTokenPrice.toFixed(8)}`
               }
             />
             <Metric
@@ -1014,9 +1011,7 @@ export function LoadTestDemo() {
             <CardHeader>
               <CardTitle>{t('Channel token usage and cost')}</CardTitle>
               <CardDescription>
-                {t(
-                  'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.'
-                )}
+                {t('User charge = official model price × billing group ratio.')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1040,7 +1035,6 @@ export function LoadTestDemo() {
                         <TableHead>{t('Token share')}</TableHead>
                         <TableHead>{t('Billing group ratio')}</TableHead>
                         <TableHead>{t('Channel cost factor')}</TableHead>
-                        <TableHead>{t('Actual cost')}</TableHead>
                         <TableHead>{t('User charge')}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1095,15 +1089,6 @@ export function LoadTestDemo() {
                             </TableCell>
                             <TableCell className='tabular-nums'>
                               {channel.cost_factor.toFixed(2)}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              $
-                              {pricing
-                                ? calculateChannelCost(
-                                    channel,
-                                    pricing
-                                  ).toFixed(6)
-                                : '0.000000'}
                             </TableCell>
                             <TableCell className='tabular-nums'>
                               $

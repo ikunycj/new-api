@@ -51,7 +51,6 @@ const result: LoadTestRunResult = {
   packageName: '通用套餐',
   durationSeconds: 60,
   requestsPerSecond: 2,
-  estimatedCost: 0.12,
   userCharge: 0.2,
   requestIds: ['request-1'],
   stats: {

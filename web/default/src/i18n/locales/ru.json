@@ -6275,6 +6275,8 @@
     "Billing group ratio": "Коэффициент группы биллинга",
     "Channel cost factor": "Коэффициент стоимости канала",
     "Current run metrics": "Показатели текущего запуска",
-    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Фактическая стоимость канала = официальная цена модели × коэффициент стоимости канала; списание с пользователя = официальная цена модели × коэффициент группы биллинга."
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Фактическая стоимость канала = официальная цена модели × коэффициент стоимости канала; списание с пользователя = официальная цена модели × коэффициент группы биллинга.",
+    "Average token price": "Средняя цена токена",
+    "User charge = official model price × billing group ratio.": "Списание с пользователя = официальная цена модели × коэффициент группы биллинга."
   }
 }

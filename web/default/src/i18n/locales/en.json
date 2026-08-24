@@ -6275,6 +6275,8 @@
     "Billing group ratio": "Billing group ratio",
     "Channel cost factor": "Channel cost factor",
     "Current run metrics": "Current run metrics",
-    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio."
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.",
+    "Average token price": "Average token price",
+    "User charge = official model price × billing group ratio.": "User charge = official model price × billing group ratio."
   }
 }
