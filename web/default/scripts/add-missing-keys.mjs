@@ -5,6 +5,11 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'User Type': 'User Type',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.':
+      'ToB users can access the load test demo.',
     'Add billing group route': 'Add billing group route',
     'Add channel': 'Add channel',
     'Add error mapping': 'Add error mapping',
@@ -64,6 +69,10 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
+    'User Type': '用户类型',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.': 'ToB 用户可以使用压测 Demo。',
     'Add billing group route': '添加计费分组路由',
     'Add channel': '添加渠道',
     'Add error mapping': '添加错误映射',
@@ -123,6 +132,11 @@ const newKeys = {
     'User charge': '用户扣费',
   },
   fr: {
+    'User Type': "Type d'utilisateur",
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.':
+      'Les utilisateurs ToB peuvent accéder à la démo de test de charge.',
     'Add billing group route': 'Ajouter une route de facturation',
     'Add channel': 'Ajouter un canal',
     'Add error mapping': 'Ajouter une correspondance',
@@ -182,6 +196,11 @@ const newKeys = {
     'User charge': 'Facturation utilisateur',
   },
   ja: {
+    'User Type': 'ユーザー種別',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.':
+      'ToB ユーザーは負荷テストデモを利用できます。',
     'Add billing group route': '課金グループルートを追加',
     'Add channel': 'チャネルを追加',
     'Add error mapping': 'エラーマッピングを追加',
@@ -241,6 +260,11 @@ const newKeys = {
     'User charge': 'ユーザー請求額',
   },
   ru: {
+    'User Type': 'Тип пользователя',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.':
+      'Пользователи ToB могут использовать демо нагрузочного тестирования.',
     'Add billing group route': 'Добавить маршрут группы тарификации',
     'Add channel': 'Добавить канал',
     'Add error mapping': 'Добавить сопоставление ошибки',
@@ -300,6 +324,11 @@ const newKeys = {
     'User charge': 'Списание с пользователя',
   },
   vi: {
+    'User Type': 'Loại người dùng',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.':
+      'Người dùng ToB có thể truy cập bản demo kiểm thử tải.',
     'Add billing group route': 'Thêm tuyến nhóm tính phí',
     'Add channel': 'Thêm kênh',
     'Add error mapping': 'Thêm ánh xạ lỗi',
@@ -359,6 +388,10 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
+    'User Type': '使用者類型',
+    ToB: 'ToB',
+    ToC: 'ToC',
+    'ToB users can access the load test demo.': 'ToB 使用者可以使用壓測 Demo。',
     'Add billing group route': '新增計費分組路由',
     'Add channel': '新增渠道',
     'Add error mapping': '新增錯誤映射',

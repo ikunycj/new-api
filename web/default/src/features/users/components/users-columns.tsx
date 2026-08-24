@@ -181,7 +181,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
     },
     {
       accessorKey: 'group',
-      header: t('Group'),
+      header: t('User Group'),
       cell: ({ row }) => {
         const group = row.getValue('group') as string
         return (
@@ -197,6 +197,18 @@ export function useUsersColumns(): ColumnDef<User>[] {
       },
       size: 140,
       meta: { mobileOrder: 30 },
+    },
+    {
+      accessorKey: 'user_type',
+      header: t('User Type'),
+      cell: ({ row }) => (
+        <BadgeCell>
+          {row.original.user_type === 'toB' ? t('ToB') : t('ToC')}
+        </BadgeCell>
+      ),
+      enableSorting: false,
+      size: 110,
+      meta: { mobileOrder: 35 },
     },
     {
       accessorKey: 'role',

@@ -24,7 +24,7 @@ import { useAuthStore } from '@/stores/auth-store'
 export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
   beforeLoad: () => {
     const user = useAuthStore.getState().auth.user
-    if (!user || user.group !== 'toB') {
+    if (!user || user.user_type !== 'toB') {
       throw redirect({ to: '/403' })
     }
   },

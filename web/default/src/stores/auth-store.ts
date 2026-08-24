@@ -32,6 +32,7 @@ export interface AuthUser {
   display_name?: string
   email?: string
   role: number
+  user_type?: 'toB' | 'toC'
   status?: number
   group?: string
   quota?: number

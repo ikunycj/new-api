@@ -6246,6 +6246,10 @@
     "Total timeout (ms)": "总超时（毫秒）",
     "Upstream error code": "上游错误码",
     "Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.": "估算成本 = 实际渠道 Token × 模型官方价格 × 计费分组倍率 × 渠道成本系数。",
-    "Live channel routing health and failover metrics": "实时渠道路由健康度和切流指标"
+    "Live channel routing health and failover metrics": "实时渠道路由健康度和切流指标",
+    "User Type": "用户类型",
+    "ToB": "ToB",
+    "ToC": "ToC",
+    "ToB users can access the load test demo.": "ToB 用户可以使用压测 Demo。"
   }
 }

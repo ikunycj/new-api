@@ -106,6 +106,7 @@ func PostSetup(c *gin.Context) {
 			Username:    req.Username,
 			Password:    hashedPassword,
 			Role:        common.RoleRootUser,
+			UserType:    model.UserTypeToC,
 			Status:      common.UserStatusEnabled,
 			DisplayName: "Root User",
 			AccessToken: nil,

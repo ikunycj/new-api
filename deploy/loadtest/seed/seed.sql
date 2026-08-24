@@ -1,7 +1,7 @@
 BEGIN;
 
 INSERT INTO users (
-  username, password, display_name, role, status, quota, used_quota,
+  username, password, display_name, role, user_type, status, quota, used_quota,
   request_count, "group", aff_code, setting, created_at
 )
 SELECT
@@ -9,17 +9,19 @@ SELECT
   'loadtest-login-disabled',
   'Load Test ' || number,
   1,
+  'toB',
   1,
   2000000000,
   0,
   0,
-  'toB',
+  'default',
   'LT' || lpad(number::text, 14, '0'),
   '{}',
   extract(epoch FROM now())::bigint
 FROM generate_series(1, :loadtest_users) AS number
 ON CONFLICT (username) DO UPDATE SET
   status = EXCLUDED.status,
+  user_type = EXCLUDED.user_type,
   quota = EXCLUDED.quota,
   "group" = EXCLUDED."group";
 
