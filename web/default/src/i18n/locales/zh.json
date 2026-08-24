@@ -6179,6 +6179,7 @@
     "Choose whether force priority applies within one group or across groups": "选择强制优先仅适用于一个分组还是跨分组",
     "ID (Default)": "ID（默认）",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？",
-    "Please select at least one model billing group": "请选择至少一个模型计费分组"
+    "Please select at least one model billing group": "请选择至少一个模型计费分组",
+    "Automatic probe": "自动探测"
   }
 }

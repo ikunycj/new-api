@@ -32,6 +32,8 @@ type Channel struct {
 	Weight             *uint   `json:"weight" gorm:"default:0"`
 	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
 	TestTime           int64   `json:"test_time" gorm:"bigint"`
+	LastTestTime       int64   `json:"last_test_time" gorm:"-"`
+	LastTestIsAuto     bool    `json:"last_test_is_auto" gorm:"-"`
 	ResponseTime       int     `json:"response_time"` // in milliseconds
 	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
 	Other              string  `json:"other"`

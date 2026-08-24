@@ -630,6 +630,8 @@ export function aggregateChannelsByTag(
         weight: -1 as unknown as number | null,
         balance: 0,
         test_time: 0,
+        last_test_time: 0,
+        last_test_is_auto: false,
         created_time: 0,
         balance_updated_time: 0,
         models: '',

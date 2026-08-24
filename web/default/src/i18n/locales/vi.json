@@ -6179,6 +6179,7 @@
     "Choose whether force priority applies within one group or across groups": "Chọn áp dụng ưu tiên bắt buộc trong một nhóm hay trên nhiều nhóm",
     "ID (Default)": "ID (mặc định)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?",
-    "Please select at least one model billing group": "Vui lòng chọn ít nhất một nhóm tính phí mô hình"
+    "Please select at least one model billing group": "Vui lòng chọn ít nhất một nhóm tính phí mô hình",
+    "Automatic probe": "Kiểm tra tự động"
   }
 }

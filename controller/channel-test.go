@@ -115,17 +115,10 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 
 	testModel = strings.TrimSpace(testModel)
 	if testModel == "" {
-		if channel.TestModel != nil && *channel.TestModel != "" {
-			testModel = strings.TrimSpace(*channel.TestModel)
-		} else {
-			models := channel.GetModels()
-			if len(models) > 0 {
-				testModel = strings.TrimSpace(models[0])
-			}
-			if testModel == "" {
-				testModel = "gpt-4o-mini"
-			}
-		}
+		testModel = channel.GetTestModel()
+	}
+	if testModel == "" {
+		return testResult{localErr: errors.New("test model is required")}
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
@@ -964,6 +957,9 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 			report(index, total) // channels completed before this one
 		}
 		if channel.Status == common.ChannelStatusManuallyDisabled {
+			continue
+		}
+		if channel.GetTestModel() == "" {
 			continue
 		}
 		isChannelEnabled := channel.Status == common.ChannelStatusEnabled

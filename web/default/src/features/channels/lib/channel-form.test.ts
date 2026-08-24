@@ -37,6 +37,7 @@ function channel(overrides: Partial<Channel> = {}): Channel {
     response_time: 0,
     balance_updated_time: 0,
     models: 'gpt-5.6-sol',
+    test_model: 'gpt-5.6-sol',
     group: 'default',
     ...overrides,
   })
@@ -73,5 +74,12 @@ describe('channel form API mapping', () => {
 
     assert.equal(parsed.key, undefined)
     assert.equal(transformChannelToFormDefaults(parsed).key, '')
+  })
+
+  test('requires a configured test model', () => {
+    const defaults = transformChannelToFormDefaults(channel())
+    defaults.test_model = ''
+
+    assert.throws(() => channelFormSchema.parse(defaults), /Test model is required/)
   })
 })

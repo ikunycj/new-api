@@ -94,6 +94,31 @@ func enrichPreviousDayProbeRates(channels []*model.Channel) {
 	}
 }
 
+func enrichLastChannelTestTimes(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	probeTimes, err := model.GetLastChannelProbeTimes(ids)
+	if err != nil {
+		common.SysLog("failed to load last channel probe times: " + err.Error())
+	}
+
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		channel.LastTestTime = channel.TestTime
+		channel.LastTestIsAuto = false
+		if probeTime := probeTimes[channel.Id]; probeTime > channel.TestTime {
+			channel.LastTestTime = probeTime
+			channel.LastTestIsAuto = true
+		}
+	}
+}
+
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
 	if statusFilter == common.ChannelStatusEnabled {
 		return query.Where("status = ?", common.ChannelStatusEnabled)
@@ -185,6 +210,7 @@ func GetAllChannels(c *gin.Context) {
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
 	}
+	enrichLastChannelTestTimes(channelData)
 	enrichPreviousDayProbeRates(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
@@ -392,6 +418,7 @@ func SearchChannels(c *gin.Context) {
 	for _, datum := range pagedData {
 		clearChannelInfo(datum)
 	}
+	enrichLastChannelTestTimes(pagedData)
 	enrichPreviousDayProbeRates(pagedData)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -419,6 +446,7 @@ func GetChannel(c *gin.Context) {
 	}
 	if channel != nil {
 		clearChannelInfo(channel)
+		enrichLastChannelTestTimes([]*model.Channel{channel})
 		enrichPreviousDayProbeRates([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -502,6 +530,11 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	if !hasModel {
 		return fmt.Errorf("at least one model is required")
 	}
+	testModel := strings.TrimSpace(channel.GetTestModel())
+	if testModel == "" {
+		return fmt.Errorf("test model is required")
+	}
+	channel.TestModel = common.GetPointer(testModel)
 	if channel.ProbeIntervalSeconds < 0 || channel.ProbeIntervalSeconds > model.MaxChannelProbeIntervalSeconds {
 		return fmt.Errorf("probe interval must be between 0 and %d seconds", model.MaxChannelProbeIntervalSeconds)
 	}
@@ -1012,6 +1045,9 @@ func UpdateChannel(c *gin.Context) {
 	}
 	if _, hasModels := requestData["models"]; !hasModels {
 		channel.Models = originChannel.Models
+	}
+	if _, hasTestModel := requestData["test_model"]; !hasTestModel {
+		channel.TestModel = originChannel.TestModel
 	}
 
 	if err := validateChannel(&channel.Channel, false); err != nil {

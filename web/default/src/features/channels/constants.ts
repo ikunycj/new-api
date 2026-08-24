@@ -236,6 +236,7 @@ export const ERROR_MESSAGES = {
   REQUIRED_TYPE: 'Channel type is required',
   REQUIRED_KEY: 'API key is required',
   REQUIRED_MODELS: 'Models are required',
+  REQUIRED_TEST_MODEL: 'Test model is required',
   REQUIRED_GROUP: 'Group is required',
   INVALID_JSON: 'Invalid JSON format',
   INVALID_MODEL_MAPPING: 'Invalid model mapping format',

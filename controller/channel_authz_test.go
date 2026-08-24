@@ -188,7 +188,7 @@ func TestValidateChannelRequiresPricingGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel := &model.Channel{Key: "test-key", Models: "gpt-4o", Group: tt.group}
+			channel := &model.Channel{Key: "test-key", Models: "gpt-4o", TestModel: common.GetPointer("gpt-4o"), Group: tt.group}
 			err := validateChannel(channel, true)
 			if tt.valid {
 				require.NoError(t, err)
@@ -208,11 +208,17 @@ func TestValidateChannelRequiresAtLeastOneModel(t *testing.T) {
 		"empty list": " , , ",
 	} {
 		t.Run(name, func(t *testing.T) {
-			err := validateChannel(&model.Channel{Key: "test-key", Models: models, Group: "default"}, true)
+			err := validateChannel(&model.Channel{Key: "test-key", Models: models, TestModel: common.GetPointer("gpt-4o"), Group: "default"}, true)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "at least one model")
 		})
 	}
+}
+
+func TestValidateChannelRequiresTestModel(t *testing.T) {
+	err := validateChannel(&model.Channel{Key: "test-key", Models: "gpt-4o", Group: "default"}, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "test model")
 }
 
 func TestUpdateChannelRejectsStatusField(t *testing.T) {

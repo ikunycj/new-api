@@ -97,6 +97,26 @@ func SaveChannelProbeResultWithLease(channelID int, result ChannelProbeHistory, 
 	return saveChannelProbeResult(channelID, result, nextProbeAt, leaseUntil)
 }
 
+// GetLastChannelProbeTimes returns the latest automatic probe timestamp for
+// each requested channel. Missing probe-state rows are intentionally omitted.
+func GetLastChannelProbeTimes(channelIDs []int) (map[int]int64, error) {
+	times := make(map[int]int64, len(channelIDs))
+	if len(channelIDs) == 0 || DB == nil || !DB.Migrator().HasTable(&ChannelProbeState{}) {
+		return times, nil
+	}
+
+	var states []ChannelProbeState
+	if err := DB.Where("channel_id IN ?", channelIDs).Find(&states).Error; err != nil {
+		return nil, err
+	}
+	for _, state := range states {
+		if state.LastProbeAt > 0 {
+			times[state.ChannelID] = state.LastProbeAt
+		}
+	}
+	return times, nil
+}
+
 func saveChannelProbeResult(channelID int, result ChannelProbeHistory, nextProbeAt int64, leaseUntil int64) error {
 	if channelID <= 0 {
 		return errors.New("channel id is required")

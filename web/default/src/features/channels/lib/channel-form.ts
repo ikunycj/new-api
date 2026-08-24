@@ -145,7 +145,7 @@ export const channelFormSchema = z
         'Model mapping must be a JSON object with string values'
       ),
     weight: z.number().optional(),
-    test_model: z.string().optional(),
+    test_model: z.string().trim().min(1, ERROR_MESSAGES.REQUIRED_TEST_MODEL),
     auto_ban: z.number().optional(),
     probe_interval_seconds: z.number().int().min(0).max(604800),
     auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
@@ -690,7 +690,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     weight: formData.weight || null,
-    test_model: formData.test_model || null,
+    test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 1,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
@@ -748,7 +748,7 @@ export function transformFormDataToUpdatePayload(
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     weight: formData.weight ?? 0,
-    test_model: formData.test_model || null,
+    test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 1,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
@@ -787,7 +787,7 @@ export function transformFormDataToUpdatePayload(
   // Send explicit empty strings for nullable fields so GORM updates can clear them.
   payload.base_url = normalizeBaseUrl(formData.base_url) || ''
   payload.openai_organization = formData.openai_organization || ''
-  payload.test_model = formData.test_model || ''
+  payload.test_model = formData.test_model.trim()
   payload.tag = formData.tag || ''
   payload.remark = formData.remark || ''
   payload.model_mapping = formData.model_mapping || ''

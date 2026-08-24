@@ -110,6 +110,16 @@ function getProbeSuccessRateVariant(rate: number): StatusBadgeProps['variant'] {
   return 'danger'
 }
 
+function getDisplayPriceMultiplier(channel: Channel): number {
+  const multiplier = channel.price_multiplier
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
+}
+
+function getDisplayTestTime(channel: Channel): number {
+  const enrichedTime = channel.last_test_time
+  return enrichedTime > 0 ? enrichedTime : channel.test_time
+}
+
 /**
  * Upstream update tags (+N / -N) shown on channel name for model-fetchable channels
  */
@@ -996,6 +1006,73 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
+      // Price multiplier column
+      {
+        accessorKey: 'price_multiplier',
+        header: t('Channel price multiplier'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          return (
+            <StatusBadge
+              label={`×${getDisplayPriceMultiplier(row.original).toFixed(2)}`}
+              variant='neutral'
+              size='sm'
+              copyable={false}
+              className='-ml-1.5 shrink-0'
+            />
+          )
+        },
+        size: 130,
+        enableSorting: false,
+      },
+
+      // Test model column
+      {
+        accessorKey: 'test_model',
+        header: t('Test Model'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          const testModel = row.original.test_model?.trim()
+          return testModel ? (
+            <TruncatedText
+              text={testModel}
+              className='font-mono text-xs'
+              maxWidth='max-w-[180px]'
+            />
+          ) : (
+            <span className='text-muted-foreground text-xs'>-</span>
+          )
+        },
+        size: 180,
+        enableSorting: false,
+      },
+
+      // Upstream retry limit column
+      {
+        accessorKey: 'upstream_max_retries',
+        header: t('Upstream max retries'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          const retries = row.original.upstream_max_retries ?? 3
+          return (
+            <span className='text-sm tabular-nums'>
+              {retries}
+            </span>
+          )
+        },
+        size: 145,
+        enableSorting: false,
+      },
+
       // Balance column (Used/Remaining)
       {
         accessorKey: 'balance',
@@ -1032,7 +1109,8 @@ export function useChannelsColumns(
         header: t('Last Tested'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
-          const testTime = row.getValue('test_time') as number
+          const testTime = getDisplayTestTime(row.original)
+          const isAutomaticProbe = row.original.last_test_is_auto === true
 
           // For invalid timestamps, show "Never" badge
           if (!testTime || testTime === 0) {
@@ -1048,13 +1126,20 @@ export function useChannelsColumns(
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <StatusBadge
-                      label={timeText}
-                      variant='neutral'
-                      size='sm'
-                      copyable={false}
-                      className='-ml-1.5 shrink-0 cursor-pointer'
-                    />
+                    <div className='flex flex-col items-start gap-0.5'>
+                      <StatusBadge
+                        label={timeText}
+                        variant='neutral'
+                        size='sm'
+                        copyable={false}
+                        className='-ml-1.5 shrink-0 cursor-pointer'
+                      />
+                      {isAutomaticProbe && (
+                        <span className='text-muted-foreground text-[11px] leading-none'>
+                          {t('Automatic probe')}
+                        </span>
+                      )}
+                    </div>
                   }
                 />
                 <TooltipContent side='top'>
@@ -1064,7 +1149,7 @@ export function useChannelsColumns(
             </TooltipProvider>
           )
         },
-        size: 120,
+        size: 140,
         enableSorting: false,
       },
 

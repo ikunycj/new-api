@@ -49,7 +49,7 @@ type channelProbeSummary struct {
 }
 
 func shouldRunChannelProbe(channel *model.Channel) bool {
-	if channel == nil || channel.Status == common.ChannelStatusManuallyDisabled || !supportsChannelTest(channel.Type) {
+	if channel == nil || channel.Status == common.ChannelStatusManuallyDisabled || !supportsChannelTest(channel.Type) || channel.GetTestModel() == "" {
 		return false
 	}
 	// The normal relay path deliberately refuses every disabled key. Until the

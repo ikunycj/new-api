@@ -6179,6 +6179,7 @@
     "Choose whether force priority applies within one group or across groups": "強制優先を1つのグループ内だけに適用するか、グループ間に適用するかを選択",
     "ID (Default)": "ID（デフォルト）",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？",
-    "Please select at least one model billing group": "モデル課金グループを1つ以上選択してください"
+    "Please select at least one model billing group": "モデル課金グループを1つ以上選択してください",
+    "Automatic probe": "自動プローブ"
   }
 }

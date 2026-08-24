@@ -68,6 +68,7 @@ const CHANNELS_COLUMN_VISIBILITY_STORAGE_KEY = 'channels:column-visibility'
 const CHANNELS_COLUMN_SIZING_STORAGE_KEY = 'channels:column-sizing'
 const CHANNELS_VIEW_MODE_STORAGE_KEY = 'channels:view-mode'
 const CHANNELS_STATUS_FILTER_STORAGE_KEY = 'channel-status-filter'
+const CHANNELS_REFRESH_INTERVAL_MS = 15_000
 
 const CHANNEL_ENABLED_ROW_DESKTOP =
   '[--data-table-card-bg:var(--table-channel-enabled)] hover:[--data-table-card-bg:var(--table-channel-enabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-enabled)] [background-color:var(--table-channel-enabled)] hover:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:![background-color:var(--table-channel-enabled)] [&>td]:![background-color:var(--table-channel-enabled)] hover:[&>td]:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-enabled)]'
@@ -293,6 +294,9 @@ export function ChannelsTable() {
       }
     },
     placeholderData: (previousData) => previousData,
+    refetchInterval: CHANNELS_REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   })
 
   // Apply tag aggregation if tag mode is enabled

@@ -6179,6 +6179,7 @@
     "Choose whether force priority applies within one group or across groups": "Выберите, действует ли принудительный приоритет внутри одной группы или между группами",
     "ID (Default)": "ID (по умолчанию)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?",
-    "Please select at least one model billing group": "Пожалуйста, выберите хотя бы одну группу тарификации моделей"
+    "Please select at least one model billing group": "Пожалуйста, выберите хотя бы одну группу тарификации моделей",
+    "Automatic probe": "Автоматическая проверка"
   }
 }

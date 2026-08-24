@@ -126,6 +126,18 @@ func TestSaveChannelProbeResultUsesAuthoritativeChannelIDAndCleansGlobalHistory(
 	assert.Equal(t, 1006, stored[0].ChannelID)
 }
 
+func TestGetLastChannelProbeTimesReturnsLatestStateByChannel(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+	require.NoError(t, db.Create(&[]ChannelProbeState{
+		{ChannelID: 1010, LastProbeAt: 200},
+		{ChannelID: 1011, LastProbeAt: 0},
+	}).Error)
+
+	times, err := GetLastChannelProbeTimes([]int{1010, 1011, 1012})
+	require.NoError(t, err)
+	assert.Equal(t, map[int]int64{1010: 200}, times)
+}
+
 func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T) {
 	retries := 0
 	channel := &Channel{

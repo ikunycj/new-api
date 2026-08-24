@@ -45,6 +45,8 @@ export const channelSchema = z.object({
   weight: z.number().nullish(),
   created_time: z.number(),
   test_time: z.number(),
+  last_test_time: z.number().default(0),
+  last_test_is_auto: z.boolean().default(false),
   response_time: z.number(), // in milliseconds
   base_url: z.string().nullish(),
   other: z.string().default(''),

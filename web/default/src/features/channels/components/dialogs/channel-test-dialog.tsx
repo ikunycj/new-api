@@ -133,6 +133,8 @@ type BatchProgress = {
 type ChannelTestCachePatch = {
   responseTime: number
   testTime: number
+  lastTestTime: number
+  lastTestIsAuto: boolean
 }
 
 type LatestChannelTestCachePatch = {
@@ -153,6 +155,8 @@ function createChannelTestCachePatch(
   return {
     responseTime,
     testTime: Math.floor(completedAt / 1000),
+    lastTestTime: Math.floor(completedAt / 1000),
+    lastTestIsAuto: false,
   }
 }
 
@@ -513,6 +517,8 @@ function ChannelTestDialogContent({
               ...channel,
               response_time: patch.responseTime,
               test_time: patch.testTime,
+              last_test_time: patch.lastTestTime,
+              last_test_is_auto: patch.lastTestIsAuto,
             }
           })
 

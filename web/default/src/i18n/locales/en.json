@@ -6179,6 +6179,7 @@
     "Choose whether force priority applies within one group or across groups": "Choose whether force priority applies within one group or across groups",
     "ID (Default)": "ID (Default)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?",
-    "Please select at least one model billing group": "Please select at least one model billing group"
+    "Please select at least one model billing group": "Please select at least one model billing group",
+    "Automatic probe": "Automatic probe"
   }
 }

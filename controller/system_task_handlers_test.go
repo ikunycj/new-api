@@ -26,17 +26,21 @@ func TestSupportsChannelTest(t *testing.T) {
 }
 
 func TestShouldRunChannelProbeRequiresSupportedRecoverableChannel(t *testing.T) {
+	testModel := common.GetPointer("gpt-4o")
 	assert.False(t, shouldRunChannelProbe(nil))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{Status: common.ChannelStatusManuallyDisabled}))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeKling, Status: common.ChannelStatusEnabled}))
-	assert.True(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}))
-	assert.True(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusAutoDisabled}))
+	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}))
+	assert.True(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, TestModel: testModel}))
+	assert.True(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusAutoDisabled, TestModel: testModel}))
 	assert.True(t, shouldRunChannelProbe(&model.Channel{
 		Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled,
+		TestModel:   testModel,
 		ChannelInfo: model.ChannelInfo{IsMultiKey: true},
 	}))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{
 		Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusAutoDisabled,
+		TestModel:   testModel,
 		ChannelInfo: model.ChannelInfo{IsMultiKey: true},
 	}))
 }

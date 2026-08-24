@@ -64,6 +64,9 @@ function ChannelCardComponent({
     balance: t('Used / Remaining'),
     response_time: t('Response'),
     test_time: t('Last Tested'),
+    price_multiplier: t('Channel price multiplier'),
+    test_model: t('Test Model'),
+    upstream_max_retries: t('Upstream max retries'),
     previous_day_probe_success_rate: t('Previous-day probe success rate'),
   }
 
@@ -77,6 +80,9 @@ function ChannelCardComponent({
   const weightCell = renderCell('weight')
   const balanceCell = renderCell('balance')
   const responseCell = renderCell('response_time')
+  const priceMultiplierCell = renderCell('price_multiplier')
+  const testModelCell = renderCell('test_model')
+  const upstreamMaxRetriesCell = renderCell('upstream_max_retries')
   const testCell = renderCell('test_time')
   const previousDayProbeSuccessRateCell = renderCell(
     'previous_day_probe_success_rate'
@@ -136,6 +142,16 @@ function ChannelCardComponent({
               </div>
             </div>
             <div className='min-w-0'>
+              <div className={cn('mb-1', labelClass)}>
+                {fieldLabels.test_model}
+              </div>
+              <div className='min-w-0 overflow-hidden text-sm'>
+                {testModelCell ?? (
+                  <span className='text-muted-foreground'>-</span>
+                )}
+              </div>
+            </div>
+            <div className='min-w-0'>
               <div
                 className={cn('mb-1', labelClass)}
                 title={t('Previous-day probe success rate')}
@@ -154,9 +170,23 @@ function ChannelCardComponent({
           <div className='grid shrink-0 grid-cols-[max-content_max-content] items-baseline gap-x-3 gap-y-2'>
             <span className={labelClass}>{t('Weight')}</span>
             <span className={labelClass}>{fieldLabels.response_time}</span>
+            <span className={labelClass}>{fieldLabels.price_multiplier}</span>
+            <span className={labelClass}>
+              {fieldLabels.upstream_max_retries}
+            </span>
             <div className='text-sm whitespace-nowrap'>{weightCell}</div>
             <div className='text-sm whitespace-nowrap'>
               {responseCell ?? <span className='text-muted-foreground'>-</span>}
+            </div>
+            <div className='text-sm whitespace-nowrap'>
+              {priceMultiplierCell ?? (
+                <span className='text-muted-foreground'>-</span>
+              )}
+            </div>
+            <div className='text-sm whitespace-nowrap'>
+              {upstreamMaxRetriesCell ?? (
+                <span className='text-muted-foreground'>-</span>
+              )}
             </div>
             <span className={labelClass}>{fieldLabels.test_time}</span>
             <div className='text-sm whitespace-nowrap'>
