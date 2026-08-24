@@ -62,8 +62,6 @@ func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 
 func TestGetLoadTestChannelStatsAllowsCommonUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	require.NoError(t, db.AutoMigrate(&model.BillingGroupRoute{}))
-	require.NoError(t, db.Create(&model.BillingGroupRoute{BillingGroup: "toB", Enabled: true}).Error)
 	model.InitChannelRoutingCache()
 	user := &model.User{Username: "loadtest-common", Group: "toB", AffCode: "loadtest-common"}
 	require.NoError(t, db.Create(user).Error)

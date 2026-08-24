@@ -186,6 +186,11 @@ func IsBillingGroupToB(group string) bool {
 	if group == "" {
 		return false
 	}
+	// `toB` is the existing reserved user billing group. Other ToB groups are
+	// data-driven through BillingGroupRoute below.
+	if strings.EqualFold(group, BillingGroupTypeToB) {
+		return true
+	}
 	return GetBillingGroupTypes(map[string]float64{group: 1})[group] == BillingGroupTypeToB
 }
 
