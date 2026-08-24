@@ -6250,6 +6250,19 @@
     "User Type": "使用者類型",
     "ToB": "ToB",
     "ToC": "ToC",
-    "ToB users can access the load test demo.": "ToB 使用者可以使用壓測 Demo。"
+    "ToB users can access the load test demo.": "ToB 使用者可以使用壓測 Demo。",
+    "Basic information": "基本資訊",
+    "Channel priority": "渠道優先級",
+    "Channel priority and weight are read-only and managed on the Channels page.": "渠道優先級和權重僅供檢視，請在渠道頁面管理。",
+    "Error mappings saved": "錯誤映射已儲存",
+    "Group pricing": "分組定價",
+    "Group type": "分組類型",
+    "Manage channel error mappings and monitor channel health.": "管理渠道錯誤映射並監控渠道健康狀態。",
+    "No ToB groups configured": "尚未設定 ToB 分組",
+    "No ToC groups configured": "尚未設定 ToC 分組",
+    "No channels configured for this group": "此分組尚未設定渠道",
+    "ToC pricing is read-only here and is managed in Basic information.": "ToC 定價在此處僅供檢視，請在基本資訊中管理。",
+    "Groups with channel routing are ToB; other billing groups are ToC.": "包含渠道路由的分組為 ToB，其餘計費分組為 ToC。",
+    "No billing groups configured": "尚未設定計費分組"
   }
 }

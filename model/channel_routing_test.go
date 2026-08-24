@@ -24,7 +24,12 @@ func setupChannelRoutingTables(t *testing.T) {
 
 func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t *testing.T) {
 	setupChannelRoutingTables(t)
-	require.NoError(t, DB.Create(&[]Channel{{Id: 38, Name: "Pro", Group: "claude"}, {Id: 40, Name: "Official", Group: "claude"}}).Error)
+	proWeight := uint(37)
+	officialWeight := uint(83)
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 38, Name: "Pro", Group: "claude", Weight: &proWeight},
+		{Id: 40, Name: "Official", Group: "claude", Weight: &officialWeight},
+	}).Error)
 	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "old", Name: "old", Enabled: true}).Error)
 
 	config := &ChannelRoutingConfig{
@@ -50,6 +55,8 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	require.Len(t, channels, 2)
 	assert.Equal(t, 38, channels[0].ChannelId)
 	assert.Equal(t, 40, channels[1].ChannelId)
+	assert.Equal(t, 37, channels[0].Weight)
+	assert.Equal(t, 83, channels[1].Weight)
 	assert.InDelta(t, 0.6, ResolveChannelCostFactor("claude", 38), 0.0001)
 
 	var oldCount int64

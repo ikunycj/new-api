@@ -6250,6 +6250,19 @@
     "User Type": "ユーザー種別",
     "ToB": "ToB",
     "ToC": "ToC",
-    "ToB users can access the load test demo.": "ToB ユーザーは負荷テストデモを利用できます。"
+    "ToB users can access the load test demo.": "ToB ユーザーは負荷テストデモを利用できます。",
+    "Basic information": "基本情報",
+    "Channel priority": "チャネル優先度",
+    "Channel priority and weight are read-only and managed on the Channels page.": "チャネルの優先度と重みは読み取り専用です。チャネルページで管理します。",
+    "Error mappings saved": "エラーマッピングを保存しました",
+    "Group pricing": "グループ料金",
+    "Group type": "グループ種別",
+    "Manage channel error mappings and monitor channel health.": "チャネルのエラーマッピングと稼働状態を管理します。",
+    "No ToB groups configured": "ToB グループが設定されていません",
+    "No ToC groups configured": "ToC グループが設定されていません",
+    "No channels configured for this group": "このグループに設定されたチャネルはありません",
+    "ToC pricing is read-only here and is managed in Basic information.": "ToC 料金はここでは読み取り専用です。基本情報で管理します。",
+    "Groups with channel routing are ToB; other billing groups are ToC.": "チャネルルーティングがあるグループは ToB、それ以外の課金グループは ToC です。",
+    "No billing groups configured": "課金グループが設定されていません"
   }
 }

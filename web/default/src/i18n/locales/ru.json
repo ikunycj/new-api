@@ -6250,6 +6250,19 @@
     "User Type": "Тип пользователя",
     "ToB": "ToB",
     "ToC": "ToC",
-    "ToB users can access the load test demo.": "Пользователи ToB могут использовать демо нагрузочного тестирования."
+    "ToB users can access the load test demo.": "Пользователи ToB могут использовать демо нагрузочного тестирования.",
+    "Basic information": "Основная информация",
+    "Channel priority": "Приоритет канала",
+    "Channel priority and weight are read-only and managed on the Channels page.": "Приоритет и вес канала доступны только для чтения и управляются на странице каналов.",
+    "Error mappings saved": "Сопоставления ошибок сохранены",
+    "Group pricing": "Тарификация группы",
+    "Group type": "Тип группы",
+    "Manage channel error mappings and monitor channel health.": "Управляйте сопоставлениями ошибок и состоянием каналов.",
+    "No ToB groups configured": "Группы ToB не настроены",
+    "No ToC groups configured": "Группы ToC не настроены",
+    "No channels configured for this group": "Для этой группы каналы не настроены",
+    "ToC pricing is read-only here and is managed in Basic information.": "Тарификация ToC доступна только для чтения и управляется в основной информации.",
+    "Groups with channel routing are ToB; other billing groups are ToC.": "Группы с маршрутизацией каналов относятся к ToB, остальные группы биллинга — к ToC.",
+    "No billing groups configured": "Группы биллинга не настроены"
   }
 }

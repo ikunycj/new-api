@@ -53,6 +53,7 @@ import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedLoadtestDemoIndexRouteImport } from './routes/_authenticated/loadtest-demo/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedGroupStatusIndexRouteImport } from './routes/_authenticated/group-status/index'
+import { Route as AuthenticatedGroupPricingIndexRouteImport } from './routes/_authenticated/group-pricing/index'
 import { Route as AuthenticatedFailoverIndexRouteImport } from './routes/_authenticated/failover/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
@@ -320,6 +321,12 @@ const AuthenticatedGroupStatusIndexRoute =
     path: '/group-status/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedGroupPricingIndexRoute =
+  AuthenticatedGroupPricingIndexRouteImport.update({
+    id: '/group-pricing/',
+    path: '/group-pricing/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedFailoverIndexRoute =
   AuthenticatedFailoverIndexRouteImport.update({
     id: '/failover/',
@@ -554,6 +561,7 @@ export interface FileRoutesByFullPath {
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/failover/': typeof AuthenticatedFailoverIndexRoute
+  '/group-pricing/': typeof AuthenticatedGroupPricingIndexRoute
   '/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
@@ -632,6 +640,7 @@ export interface FileRoutesByTo {
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/failover': typeof AuthenticatedFailoverIndexRoute
+  '/group-pricing': typeof AuthenticatedGroupPricingIndexRoute
   '/group-status': typeof AuthenticatedGroupStatusIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo': typeof AuthenticatedLoadtestDemoIndexRoute
@@ -714,6 +723,7 @@ export interface FileRoutesById {
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/failover/': typeof AuthenticatedFailoverIndexRoute
+  '/_authenticated/group-pricing/': typeof AuthenticatedGroupPricingIndexRoute
   '/_authenticated/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
@@ -795,6 +805,7 @@ export interface FileRouteTypes {
     | '/channels/'
     | '/dashboard/'
     | '/failover/'
+    | '/group-pricing/'
     | '/group-status/'
     | '/keys/'
     | '/loadtest-demo/'
@@ -873,6 +884,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/dashboard'
     | '/failover'
+    | '/group-pricing'
     | '/group-status'
     | '/keys'
     | '/loadtest-demo'
@@ -954,6 +966,7 @@ export interface FileRouteTypes {
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/failover/'
+    | '/_authenticated/group-pricing/'
     | '/_authenticated/group-status/'
     | '/_authenticated/keys/'
     | '/_authenticated/loadtest-demo/'
@@ -1346,6 +1359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedGroupStatusIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/group-pricing/': {
+      id: '/_authenticated/group-pricing/'
+      path: '/group-pricing'
+      fullPath: '/group-pricing/'
+      preLoaderRoute: typeof AuthenticatedGroupPricingIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/failover/': {
       id: '/_authenticated/failover/'
       path: '/failover'
@@ -1689,6 +1709,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedFailoverIndexRoute: typeof AuthenticatedFailoverIndexRoute
+  AuthenticatedGroupPricingIndexRoute: typeof AuthenticatedGroupPricingIndexRoute
   AuthenticatedGroupStatusIndexRoute: typeof AuthenticatedGroupStatusIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedLoadtestDemoIndexRoute: typeof AuthenticatedLoadtestDemoIndexRoute
@@ -1717,6 +1738,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedFailoverIndexRoute: AuthenticatedFailoverIndexRoute,
+  AuthenticatedGroupPricingIndexRoute: AuthenticatedGroupPricingIndexRoute,
   AuthenticatedGroupStatusIndexRoute: AuthenticatedGroupStatusIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedLoadtestDemoIndexRoute: AuthenticatedLoadtestDemoIndexRoute,

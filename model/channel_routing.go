@@ -292,6 +292,28 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 		}
 
 		channelIDs := make([]int, 0, len(config.RouteChannels))
+		configuredChannelIDs := make([]int, 0, len(config.RouteChannels))
+		seenChannelIDs := make(map[int]struct{}, len(config.RouteChannels))
+		for _, entry := range config.RouteChannels {
+			if entry.ChannelId <= 0 {
+				continue
+			}
+			if _, exists := seenChannelIDs[entry.ChannelId]; exists {
+				continue
+			}
+			seenChannelIDs[entry.ChannelId] = struct{}{}
+			configuredChannelIDs = append(configuredChannelIDs, entry.ChannelId)
+		}
+		channelsByID := make(map[int]Channel, len(configuredChannelIDs))
+		if len(configuredChannelIDs) > 0 {
+			var configuredChannels []Channel
+			if err := tx.Where("id IN ?", configuredChannelIDs).Find(&configuredChannels).Error; err != nil {
+				return err
+			}
+			for _, channel := range configuredChannels {
+				channelsByID[channel.Id] = channel
+			}
+		}
 		seenRouteChannels := make(map[[2]int]struct{}, len(config.RouteChannels))
 		enabledChannelsByRoute := make(map[int]int, len(config.Routes))
 		for i := range config.RouteChannels {
@@ -302,7 +324,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if persistedRouteID, ok := routeIDMap[entry.BillingGroupRouteId]; ok {
 				entry.BillingGroupRouteId = persistedRouteID
 			}
-			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.Weight < 0 || entry.CostFactor <= 0 {
+			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 {
 				return errors.New("route channel contains invalid values")
 			}
 			key := [2]int{entry.BillingGroupRouteId, entry.ChannelId}
@@ -314,10 +336,11 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if !ok {
 				return errors.New("route channel references an unknown billing group route")
 			}
-			var channel Channel
-			if err := tx.First(&channel, "id = ?", entry.ChannelId).Error; err != nil {
-				return err
+			channel, ok := channelsByID[entry.ChannelId]
+			if !ok {
+				return gorm.ErrRecordNotFound
 			}
+			entry.Weight = channel.GetWeight()
 			belongsToGroup := false
 			for _, group := range strings.Split(channel.Group, ",") {
 				if strings.TrimSpace(group) == billingGroup {

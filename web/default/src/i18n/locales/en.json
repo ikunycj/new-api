@@ -6250,6 +6250,19 @@
     "User Type": "User Type",
     "ToB": "ToB",
     "ToC": "ToC",
-    "ToB users can access the load test demo.": "ToB users can access the load test demo."
+    "ToB users can access the load test demo.": "ToB users can access the load test demo.",
+    "Basic information": "Basic information",
+    "Channel priority": "Channel priority",
+    "Channel priority and weight are read-only and managed on the Channels page.": "Channel priority and weight are read-only and managed on the Channels page.",
+    "Error mappings saved": "Error mappings saved",
+    "Group pricing": "Group pricing",
+    "Group type": "Group type",
+    "Manage channel error mappings and monitor channel health.": "Manage channel error mappings and monitor channel health.",
+    "No ToB groups configured": "No ToB groups configured",
+    "No ToC groups configured": "No ToC groups configured",
+    "No channels configured for this group": "No channels configured for this group",
+    "ToC pricing is read-only here and is managed in Basic information.": "ToC pricing is read-only here and is managed in Basic information.",
+    "Groups with channel routing are ToB; other billing groups are ToC.": "Groups with channel routing are ToB; other billing groups are ToC.",
+    "No billing groups configured": "No billing groups configured"
   }
 }

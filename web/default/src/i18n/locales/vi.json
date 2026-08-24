@@ -6250,6 +6250,19 @@
     "User Type": "Loại người dùng",
     "ToB": "ToB",
     "ToC": "ToC",
-    "ToB users can access the load test demo.": "Người dùng ToB có thể truy cập bản demo kiểm thử tải."
+    "ToB users can access the load test demo.": "Người dùng ToB có thể truy cập bản demo kiểm thử tải.",
+    "Basic information": "Thông tin cơ bản",
+    "Channel priority": "Độ ưu tiên kênh",
+    "Channel priority and weight are read-only and managed on the Channels page.": "Độ ưu tiên và trọng số kênh chỉ được xem, quản lý tại trang Kênh.",
+    "Error mappings saved": "Đã lưu ánh xạ lỗi",
+    "Group pricing": "Định giá nhóm",
+    "Group type": "Loại nhóm",
+    "Manage channel error mappings and monitor channel health.": "Quản lý ánh xạ lỗi và theo dõi tình trạng kênh.",
+    "No ToB groups configured": "Chưa cấu hình nhóm ToB",
+    "No ToC groups configured": "Chưa cấu hình nhóm ToC",
+    "No channels configured for this group": "Chưa cấu hình kênh cho nhóm này",
+    "ToC pricing is read-only here and is managed in Basic information.": "Định giá ToC chỉ xem tại đây và được quản lý trong Thông tin cơ bản.",
+    "Groups with channel routing are ToB; other billing groups are ToC.": "Nhóm có định tuyến kênh là ToB; các nhóm thanh toán khác là ToC.",
+    "No billing groups configured": "Chưa cấu hình nhóm thanh toán"
   }
 }

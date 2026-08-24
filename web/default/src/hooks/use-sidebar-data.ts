@@ -32,6 +32,7 @@ import {
   Radio,
   ServerCog,
   Settings,
+  Settings2,
   Ticket,
   User,
   Users,
@@ -136,6 +137,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Group Pricing'),
+            url: '/group-pricing',
+            icon: Settings2,
           },
           {
             title: t('Channel Monitors'),
