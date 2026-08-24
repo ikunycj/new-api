@@ -135,44 +135,6 @@ func TestEditPersistsLongUsername(t *testing.T) {
 	assert.Equal(t, longUsername, stored.Username)
 }
 
-func TestEditKeepsUserTypeSeparateFromUserGroup(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{
-		Username: "business-user",
-		Password: "password123",
-		UserType: UserTypeToB,
-		Group:    "default",
-		Status:   common.UserStatusEnabled,
-	}
-	require.NoError(t, user.Insert(0))
-
-	user.Group = "premium"
-	require.NoError(t, user.EditWithTx(DB, false))
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, UserTypeToB, stored.UserType)
-	assert.Equal(t, "premium", stored.Group)
-}
-
-func TestInsertDefaultsUserTypeToC(t *testing.T) {
-	setupUserUpdateTestState(t)
-
-	user := &User{
-		Username: "consumer-user",
-		Password: "password123",
-		Group:    "default",
-		Status:   common.UserStatusEnabled,
-	}
-	require.NoError(t, user.Insert(0))
-
-	var stored User
-	require.NoError(t, DB.First(&stored, user.Id).Error)
-	assert.Equal(t, UserTypeToC, stored.UserType)
-	assert.Equal(t, "default", stored.Group)
-}
-
 func TestInsertUsesEmailWhenUsernameIsBlank(t *testing.T) {
 	setupUserUpdateTestState(t)
 

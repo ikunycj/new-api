@@ -15,12 +15,13 @@ import (
 
 func TestGetLoadTestChannelStatsRejectsInvalidBody(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-invalid-body", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-invalid-body"}
+	user := &model.User{Username: "loadtest-invalid-body", Group: "default", AffCode: "loadtest-invalid-body"}
 	require.NoError(t, db.Create(user).Error)
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", user.Id)
+	ctx.Set("role", common.RoleAdminUser)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/log/self/loadtest-stats", strings.NewReader("{"))
 
 	GetLoadTestChannelStats(ctx)
@@ -37,13 +38,14 @@ func TestGetLoadTestChannelStatsRejectsInvalidBody(t *testing.T) {
 
 func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-too-many", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-too-many"}
+	user := &model.User{Username: "loadtest-too-many", Group: "default", AffCode: "loadtest-too-many"}
 	require.NoError(t, db.Create(user).Error)
 	gin.SetMode(gin.TestMode)
 	requestIDs := strings.Repeat(`"request",`, maxLoadTestStatsRequestIDs) + `"request"`
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", user.Id)
+	ctx.Set("role", common.RoleAdminUser)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/log/self/loadtest-stats", strings.NewReader(`{"request_ids":[`+requestIDs+`]}`))
 
 	GetLoadTestChannelStats(ctx)
@@ -58,13 +60,14 @@ func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 	assert.Equal(t, "too many request_ids", response.Message)
 }
 
-func TestGetLoadTestChannelStatsRejectsToCUserInToBGroup(t *testing.T) {
+func TestGetLoadTestChannelStatsRejectsCommonUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-toc", UserType: model.UserTypeToC, Group: "toB", AffCode: "loadtest-toc"}
+	user := &model.User{Username: "loadtest-common", Group: "toB", AffCode: "loadtest-common"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", user.Id)
+	ctx.Set("role", common.RoleCommonUser)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/log/self/loadtest-stats", strings.NewReader(`{"request_ids":[]}`))
 
 	GetLoadTestChannelStats(ctx)
@@ -72,13 +75,14 @@ func TestGetLoadTestChannelStatsRejectsToCUserInToBGroup(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, recorder.Code)
 }
 
-func TestGetLoadTestChannelStatsAllowsToBUserInDefaultGroup(t *testing.T) {
+func TestGetLoadTestChannelStatsAllowsAdmin(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
-	user := &model.User{Username: "loadtest-tob", UserType: model.UserTypeToB, Group: "default", AffCode: "loadtest-tob"}
+	user := &model.User{Username: "loadtest-admin", Group: "default", AffCode: "loadtest-admin"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", user.Id)
+	ctx.Set("role", common.RoleAdminUser)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/log/self/loadtest-stats", strings.NewReader(`{"request_ids":[]}`))
 
 	GetLoadTestChannelStats(ctx)

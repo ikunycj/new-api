@@ -17,9 +17,8 @@ type loadTestStatsRequest struct {
 }
 
 func GetLoadTestChannelStats(c *gin.Context) {
-	user, err := model.GetUserById(c.GetInt("id"), false)
-	if err != nil || model.NormalizeUserType(user.UserType) != model.UserTypeToB {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to ToB users only"})
+	if c.GetInt("role") < common.RoleAdminUser {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is available to administrators only"})
 		return
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxLoadTestStatsRequestBodyBytes)
