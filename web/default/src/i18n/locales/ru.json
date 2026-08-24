@@ -6271,6 +6271,10 @@
     "Load test history": "История нагрузочных тестов",
     "Load test history cleared": "История нагрузочных тестов очищена",
     "No previous load tests": "Предыдущих нагрузочных тестов нет",
-    "Requests per second must be between {{min}} and {{max}}.": "Число запросов в секунду должно быть от {{min}} до {{max}}."
+    "Requests per second must be between {{min}} and {{max}}.": "Число запросов в секунду должно быть от {{min}} до {{max}}.",
+    "Billing group ratio": "Коэффициент группы биллинга",
+    "Channel cost factor": "Коэффициент стоимости канала",
+    "Current run metrics": "Показатели текущего запуска",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Фактическая стоимость канала = официальная цена модели × коэффициент стоимости канала; списание с пользователя = официальная цена модели × коэффициент группы биллинга."
   }
 }

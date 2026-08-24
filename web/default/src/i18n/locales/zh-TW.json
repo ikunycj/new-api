@@ -6271,6 +6271,10 @@
     "Load test history": "壓測歷史",
     "Load test history cleared": "壓測歷史已清除",
     "No previous load tests": "尚無歷史壓測記錄",
-    "Requests per second must be between {{min}} and {{max}}.": "每秒請求數必須介於 {{min}} 到 {{max}} 之間。"
+    "Requests per second must be between {{min}} and {{max}}.": "每秒請求數必須介於 {{min}} 到 {{max}} 之間。",
+    "Billing group ratio": "分組倍率",
+    "Channel cost factor": "渠道成本係數",
+    "Current run metrics": "目前執行指標",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "實際渠道成本 = 模型官方價格 × 渠道成本係數；使用者收費 = 模型官方價格 × 分組倍率。"
   }
 }

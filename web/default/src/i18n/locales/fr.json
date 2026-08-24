@@ -6271,6 +6271,10 @@
     "Load test history": "Historique des tests de charge",
     "Load test history cleared": "Historique des tests de charge effacé",
     "No previous load tests": "Aucun test de charge précédent",
-    "Requests per second must be between {{min}} and {{max}}.": "Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}."
+    "Requests per second must be between {{min}} and {{max}}.": "Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.",
+    "Billing group ratio": "Ratio du groupe de facturation",
+    "Channel cost factor": "Facteur de coût du canal",
+    "Current run metrics": "Métriques du test en cours",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Coût réel du canal = prix officiel du modèle × facteur de coût du canal ; facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation."
   }
 }

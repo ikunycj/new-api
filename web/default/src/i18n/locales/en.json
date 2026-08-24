@@ -6271,6 +6271,10 @@
     "Load test history": "Load test history",
     "Load test history cleared": "Load test history cleared",
     "No previous load tests": "No previous load tests",
-    "Requests per second must be between {{min}} and {{max}}.": "Requests per second must be between {{min}} and {{max}}."
+    "Requests per second must be between {{min}} and {{max}}.": "Requests per second must be between {{min}} and {{max}}.",
+    "Billing group ratio": "Billing group ratio",
+    "Channel cost factor": "Channel cost factor",
+    "Current run metrics": "Current run metrics",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio."
   }
 }

@@ -14,6 +14,11 @@ const newKeys = {
     'Load test history': 'Load test history',
     'Load test history cleared': 'Load test history cleared',
     'No previous load tests': 'No previous load tests',
+    'Billing group ratio': 'Billing group ratio',
+    'Channel cost factor': 'Channel cost factor',
+    'Current run metrics': 'Current run metrics',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.',
     'Requests per second must be between {{min}} and {{max}}.':
       'Requests per second must be between {{min}} and {{max}}.',
     'User Type': 'User Type',
@@ -89,6 +94,11 @@ const newKeys = {
     'Load test history': '压测历史',
     'Load test history cleared': '压测历史已清理',
     'No previous load tests': '暂无历史压测记录',
+    'Billing group ratio': '分组倍率',
+    'Channel cost factor': '渠道成本系数',
+    'Current run metrics': '当前运行指标',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      '实际渠道成本 = 模型官方价格 × 渠道成本系数；用户收费 = 模型官方价格 × 分组倍率。',
     'Requests per second must be between {{min}} and {{max}}.':
       '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
     'User Type': '用户类型',
@@ -560,6 +570,11 @@ const groupPricingWorkspaceKeys = {
     'Load test history': '壓測歷史',
     'Load test history cleared': '壓測歷史已清除',
     'No previous load tests': '尚無歷史壓測記錄',
+    'Billing group ratio': '分組倍率',
+    'Channel cost factor': '渠道成本係數',
+    'Current run metrics': '目前執行指標',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      '實際渠道成本 = 模型官方價格 × 渠道成本係數；使用者收費 = 模型官方價格 × 分組倍率。',
     'No channels configured for this group': '此分組尚未設定渠道',
     'ToC pricing is read-only here and is managed in Basic information.':
       'ToC 定價在此處僅供檢視，請在基本資訊中管理。',
@@ -590,6 +605,11 @@ const groupPricingWorkspaceKeys = {
     'Load test history': 'Historique des tests de charge',
     'Load test history cleared': 'Historique des tests de charge effacé',
     'No previous load tests': 'Aucun test de charge précédent',
+    'Billing group ratio': 'Ratio du groupe de facturation',
+    'Channel cost factor': 'Facteur de coût du canal',
+    'Current run metrics': 'Métriques du test en cours',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      'Coût réel du canal = prix officiel du modèle × facteur de coût du canal ; facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation.',
     'No channels configured for this group':
       'Aucun canal configuré pour ce groupe',
     'ToC pricing is read-only here and is managed in Basic information.':
@@ -621,6 +641,11 @@ const groupPricingWorkspaceKeys = {
     'Load test history': '負荷テスト履歴',
     'Load test history cleared': '負荷テスト履歴を消去しました',
     'No previous load tests': '過去の負荷テストはありません',
+    'Billing group ratio': '課金グループ倍率',
+    'Channel cost factor': 'チャネルコスト係数',
+    'Current run metrics': '現在の実行指標',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      '実際のチャネルコスト = モデル公式価格 × チャネルコスト係数、ユーザー請求額 = モデル公式価格 × 課金グループ倍率。',
     'No channels configured for this group':
       'このグループに設定されたチャネルはありません',
     'ToC pricing is read-only here and is managed in Basic information.':
@@ -652,6 +677,11 @@ const groupPricingWorkspaceKeys = {
     'Load test history': 'История нагрузочных тестов',
     'Load test history cleared': 'История нагрузочных тестов очищена',
     'No previous load tests': 'Предыдущих нагрузочных тестов нет',
+    'Billing group ratio': 'Коэффициент группы биллинга',
+    'Channel cost factor': 'Коэффициент стоимости канала',
+    'Current run metrics': 'Показатели текущего запуска',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      'Фактическая стоимость канала = официальная цена модели × коэффициент стоимости канала; списание с пользователя = официальная цена модели × коэффициент группы биллинга.',
     'No channels configured for this group':
       'Для этой группы каналы не настроены',
     'ToC pricing is read-only here and is managed in Basic information.':
@@ -683,6 +713,11 @@ const groupPricingWorkspaceKeys = {
     'Load test history': 'Lịch sử kiểm thử tải',
     'Load test history cleared': 'Đã xóa lịch sử kiểm thử tải',
     'No previous load tests': 'Chưa có kiểm thử tải trước đó',
+    'Billing group ratio': 'Hệ số nhóm thanh toán',
+    'Channel cost factor': 'Hệ số chi phí kênh',
+    'Current run metrics': 'Chỉ số lượt chạy hiện tại',
+    'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.':
+      'Chi phí thực tế của kênh = giá chính thức của mô hình × hệ số chi phí kênh; phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.',
     'No channels configured for this group': 'Chưa cấu hình kênh cho nhóm này',
     'ToC pricing is read-only here and is managed in Basic information.':
       'Định giá ToC chỉ xem tại đây và được quản lý trong Thông tin cơ bản.',

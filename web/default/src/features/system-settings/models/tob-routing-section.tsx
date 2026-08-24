@@ -318,13 +318,16 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                     </h3>
                   </div>
                   <div className='overflow-x-auto'>
-                    <table className='w-full min-w-[640px] text-sm'>
+                    <table className='w-full min-w-[760px] text-sm'>
                       <thead className='text-muted-foreground border-b text-left'>
                         <tr>
                           <th className='px-4 py-2'>{t('Order')}</th>
                           <th className='px-4 py-2'>{t('Channel')}</th>
                           <th className='px-4 py-2'>
                             {t('Attempts on this channel')}
+                          </th>
+                          <th className='px-4 py-2'>
+                            {t('Channel cost factor')}
                           </th>
                           <th className='px-4 py-2 text-right'>
                             {t('Actions')}
@@ -359,6 +362,20 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                                   onChange={(event) =>
                                     updateEntry(entry, {
                                       max_attempts: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className='px-4 py-2'>
+                                <Input
+                                  className='w-24'
+                                  type='number'
+                                  min={0.0001}
+                                  step={0.01}
+                                  value={entry.cost_factor}
+                                  onChange={(event) =>
+                                    updateEntry(entry, {
+                                      cost_factor: Number(event.target.value),
                                     })
                                   }
                                 />

@@ -160,17 +160,12 @@ function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
 }
 
-function calculateChannelCost(
+function calculateOfficialChannelCost(
   channel: LoadTestChannelStats,
   pricing: LoadTestPricing
 ) {
   if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-    return (
-      channel.requests *
-      (pricing.model.model_price ?? 0) *
-      pricing.groupRatio *
-      channel.cost_factor
-    )
+    return channel.requests * (pricing.model.model_price ?? 0)
   }
 
   const officialInputPricePerMillion = pricing.model.model_ratio * 2
@@ -193,7 +188,21 @@ function calculateChannelCost(
     (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
     (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
     (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
-  return officialCost * pricing.groupRatio * channel.cost_factor
+  return officialCost
+}
+
+function calculateChannelCost(
+  channel: LoadTestChannelStats,
+  pricing: LoadTestPricing
+) {
+  return calculateOfficialChannelCost(channel, pricing) * channel.cost_factor
+}
+
+function calculateUserCharge(
+  channel: LoadTestChannelStats,
+  pricing: LoadTestPricing
+) {
+  return calculateOfficialChannelCost(channel, pricing) * pricing.groupRatio
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -239,6 +248,9 @@ export function LoadTestDemo() {
   const [persistedRuns, setPersistedRuns] = useState(() =>
     loadPersistedLoadTestRuns(userId)
   )
+  const [historicalPricing, setHistoricalPricing] = useState<
+    Record<string, LoadTestPricing | null>
+  >({})
   const [persistedRun] = useState(() => persistedRuns[0] ?? null)
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   // Use the masked key value as the UI identity. IDs are database details and
@@ -298,6 +310,27 @@ export function LoadTestDemo() {
     void loadKeys()
     return () => runAbortRef.current?.abort()
   }, [loadKeys])
+
+  useEffect(() => {
+    let active = true
+    void Promise.all(
+      persistedRuns.map(async (run) => {
+        try {
+          return [
+            run.runId,
+            await loadLoadTestPricing(run.model, run.packageName),
+          ] as const
+        } catch {
+          return [run.runId, null] as const
+        }
+      })
+    ).then((entries) => {
+      if (active) setHistoricalPricing(Object.fromEntries(entries))
+    })
+    return () => {
+      active = false
+    }
+  }, [persistedRuns])
 
   useEffect(() => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
@@ -528,9 +561,7 @@ export function LoadTestDemo() {
   const cacheHitRate = cacheAttemptTokens
     ? ((stats.cacheReadTokens / cacheAttemptTokens) * 100).toFixed(1)
     : '0.0'
-  const inputPricePerMillion = pricing
-    ? pricing.model.model_ratio * 2 * pricing.groupRatio
-    : 0
+  const inputPricePerMillion = pricing ? pricing.model.model_ratio * 2 : 0
   const outputPricePerMillion = pricing
     ? inputPricePerMillion * pricing.model.completion_ratio
     : 0
@@ -555,21 +586,28 @@ export function LoadTestDemo() {
     channelStats.map((channel) => channel.billing_group).filter(Boolean)
   )
   let estimatedCost = 0
+  let userCharge = 0
   if (pricing) {
     if (channelStats.length > 0) {
       estimatedCost = channelStats.reduce(
         (total, channel) => total + calculateChannelCost(channel, pricing),
         0
       )
+      userCharge = channelStats.reduce(
+        (total, channel) => total + calculateUserCharge(channel, pricing),
+        0
+      )
     } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-      estimatedCost =
-        stats.successes * (pricing.model.model_price ?? 0) * pricing.groupRatio
+      const officialCost = stats.successes * (pricing.model.model_price ?? 0)
+      estimatedCost = officialCost
+      userCharge = officialCost * pricing.groupRatio
     } else {
       estimatedCost =
         (stats.inputTokens / 1_000_000) * inputPricePerMillion +
         (stats.outputTokens / 1_000_000) * outputPricePerMillion +
         (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
         (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
+      userCharge = estimatedCost * pricing.groupRatio
     }
   }
 
@@ -591,6 +629,7 @@ export function LoadTestDemo() {
       durationSeconds: runSnapshot.durationSeconds,
       requestsPerSecond: runSnapshot.requestsPerSecond,
       estimatedCost,
+      userCharge,
       stats,
       channelStats,
       requestIds: requestIdsRef.current,
@@ -609,6 +648,26 @@ export function LoadTestDemo() {
     selectedModel !== '' &&
     !modelsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
+
+  const getHistoricalCosts = (run: (typeof persistedRuns)[number]) => {
+    const runPricing = historicalPricing[run.runId]
+    if (!runPricing || run.channelStats.length === 0) {
+      return {
+        actualCost: run.estimatedCost,
+        userCharge: run.userCharge,
+      }
+    }
+    return {
+      actualCost: run.channelStats.reduce(
+        (total, channel) => total + calculateChannelCost(channel, runPricing),
+        0
+      ),
+      userCharge: run.channelStats.reduce(
+        (total, channel) => total + calculateUserCharge(channel, runPricing),
+        0
+      ),
+    }
+  }
 
   const clearHistory = useCallback(() => {
     clearPersistedLoadTestRuns(userId)
@@ -852,31 +911,62 @@ export function LoadTestDemo() {
                         <TableHead>{t('Duration')}</TableHead>
                         <TableHead>{t('Requests')}</TableHead>
                         <TableHead>{t('Success rate')}</TableHead>
-                        <TableHead>{t('Estimated cost')}</TableHead>
+                        <TableHead>{t('Input tokens')}</TableHead>
+                        <TableHead>{t('Output tokens')}</TableHead>
+                        <TableHead>{t('Cache tokens')}</TableHead>
+                        <TableHead>{t('Total tokens')}</TableHead>
+                        <TableHead>{t('Actual cost')}</TableHead>
+                        <TableHead>{t('User charge')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {persistedRuns.map((run) => (
-                        <TableRow key={run.runId}>
-                          <TableCell>
-                            <code className='text-xs'>{run.runId}</code>
-                          </TableCell>
-                          <TableCell className='whitespace-nowrap'>
-                            {new Date(run.completedAt).toLocaleString()}
-                          </TableCell>
-                          <TableCell>{run.model}</TableCell>
-                          <TableCell>{run.keyName || '-'}</TableCell>
-                          <TableCell>{run.packageName || '-'}</TableCell>
-                          <TableCell>{run.durationSeconds}s</TableCell>
-                          <TableCell>{run.stats.completed}</TableCell>
-                          <TableCell>
-                            {run.stats.completed
-                              ? `${((run.stats.successes / run.stats.completed) * 100).toFixed(1)}%`
-                              : '0.0%'}
-                          </TableCell>
-                          <TableCell>${run.estimatedCost.toFixed(6)}</TableCell>
-                        </TableRow>
-                      ))}
+                      {persistedRuns.map((run) => {
+                        const costs = getHistoricalCosts(run)
+                        return (
+                          <TableRow key={run.runId}>
+                            <TableCell>
+                              <code className='text-xs'>{run.runId}</code>
+                            </TableCell>
+                            <TableCell className='whitespace-nowrap'>
+                              {new Date(run.completedAt).toLocaleString()}
+                            </TableCell>
+                            <TableCell>{run.model}</TableCell>
+                            <TableCell>{run.keyName || '-'}</TableCell>
+                            <TableCell>{run.packageName || '-'}</TableCell>
+                            <TableCell>{run.durationSeconds}s</TableCell>
+                            <TableCell>{run.stats.completed}</TableCell>
+                            <TableCell>
+                              {run.stats.completed
+                                ? `${((run.stats.successes / run.stats.completed) * 100).toFixed(1)}%`
+                                : '0.0%'}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {run.stats.inputTokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {run.stats.outputTokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {run.stats.cacheReadTokens.toLocaleString()} /{' '}
+                              {run.stats.cacheWriteTokens.toLocaleString()}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              {(
+                                run.stats.inputTokens +
+                                run.stats.outputTokens +
+                                run.stats.cacheReadTokens +
+                                run.stats.cacheWriteTokens
+                              ).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              ${costs.actualCost.toFixed(6)}
+                            </TableCell>
+                            <TableCell>
+                              ${costs.userCharge.toFixed(6)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -884,6 +974,9 @@ export function LoadTestDemo() {
             </CardContent>
           </Card>
 
+          <div className='text-muted-foreground text-sm font-medium'>
+            {t('Current run metrics')}
+          </div>
           <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
             <Metric label={t('Requests')} value={String(stats.completed)} />
             <Metric label={t('Failed')} value={String(stats.failures)} />
@@ -907,10 +1000,14 @@ export function LoadTestDemo() {
               value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
             />
             <Metric
-              label={t('Estimated cost')}
+              label={t('Actual cost')}
               value={
                 pricing ? `$${estimatedCost.toFixed(6)}` : t('Unavailable')
               }
+            />
+            <Metric
+              label={t('User charge')}
+              value={pricing ? `$${userCharge.toFixed(6)}` : t('Unavailable')}
             />
           </div>
           <Card>
@@ -918,7 +1015,7 @@ export function LoadTestDemo() {
               <CardTitle>{t('Channel token usage and cost')}</CardTitle>
               <CardDescription>
                 {t(
-                  'Estimated cost = actual channel tokens × official model price × billing group ratio × channel cost factor.'
+                  'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.'
                 )}
               </CardDescription>
             </CardHeader>
@@ -941,8 +1038,10 @@ export function LoadTestDemo() {
                         <TableHead>{t('Cache tokens')}</TableHead>
                         <TableHead>{t('Total tokens')}</TableHead>
                         <TableHead>{t('Token share')}</TableHead>
-                        <TableHead>{t('Cost factor')}</TableHead>
-                        <TableHead>{t('Channel cost')}</TableHead>
+                        <TableHead>{t('Billing group ratio')}</TableHead>
+                        <TableHead>{t('Channel cost factor')}</TableHead>
+                        <TableHead>{t('Actual cost')}</TableHead>
+                        <TableHead>{t('User charge')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -992,6 +1091,9 @@ export function LoadTestDemo() {
                               {share.toFixed(2)}%
                             </TableCell>
                             <TableCell className='tabular-nums'>
+                              {pricing ? pricing.groupRatio.toFixed(2) : '-'}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
                               {channel.cost_factor.toFixed(2)}
                             </TableCell>
                             <TableCell className='tabular-nums'>
@@ -1001,6 +1103,14 @@ export function LoadTestDemo() {
                                     channel,
                                     pricing
                                   ).toFixed(6)
+                                : '0.000000'}
+                            </TableCell>
+                            <TableCell className='tabular-nums'>
+                              $
+                              {pricing
+                                ? calculateUserCharge(channel, pricing).toFixed(
+                                    6
+                                  )
                                 : '0.000000'}
                             </TableCell>
                           </TableRow>

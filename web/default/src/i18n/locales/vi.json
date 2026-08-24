@@ -6271,6 +6271,10 @@
     "Load test history": "Lịch sử kiểm thử tải",
     "Load test history cleared": "Đã xóa lịch sử kiểm thử tải",
     "No previous load tests": "Chưa có kiểm thử tải trước đó",
-    "Requests per second must be between {{min}} and {{max}}.": "Số yêu cầu mỗi giây phải nằm trong khoảng {{min}} đến {{max}}."
+    "Requests per second must be between {{min}} and {{max}}.": "Số yêu cầu mỗi giây phải nằm trong khoảng {{min}} đến {{max}}.",
+    "Billing group ratio": "Hệ số nhóm thanh toán",
+    "Channel cost factor": "Hệ số chi phí kênh",
+    "Current run metrics": "Chỉ số lượt chạy hiện tại",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Chi phí thực tế của kênh = giá chính thức của mô hình × hệ số chi phí kênh; phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán."
   }
 }

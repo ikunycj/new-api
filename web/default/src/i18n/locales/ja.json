@@ -6271,6 +6271,10 @@
     "Load test history": "負荷テスト履歴",
     "Load test history cleared": "負荷テスト履歴を消去しました",
     "No previous load tests": "過去の負荷テストはありません",
-    "Requests per second must be between {{min}} and {{max}}.": "1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。"
+    "Requests per second must be between {{min}} and {{max}}.": "1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。",
+    "Billing group ratio": "課金グループ倍率",
+    "Channel cost factor": "チャネルコスト係数",
+    "Current run metrics": "現在の実行指標",
+    "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "実際のチャネルコスト = モデル公式価格 × チャネルコスト係数、ユーザー請求額 = モデル公式価格 × 課金グループ倍率。"
   }
 }
