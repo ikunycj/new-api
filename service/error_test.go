@@ -136,16 +136,16 @@ func TestRelayErrorHandlerUsesUpstreamErrorSourceHeader(t *testing.T) {
 	require.Equal(t, "openai.server_error", newAPIError.SourceCode())
 }
 
-func TestRelayErrorHandlerUsesStructuredErrorSource(t *testing.T) {
+func TestRelayErrorHandlerUsesStructuredChannelSource(t *testing.T) {
 	resp := &http.Response{
 		StatusCode: http.StatusTooManyRequests,
-		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"cluster throttled","code":"rate_limit_exceeded","source":"ikun"}}`)),
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"channel throttled","code":"rate_limit_exceeded","source":"channel"}}`)),
 	}
 
 	newAPIError := RelayErrorHandler(context.Background(), resp, false)
 
 	require.NotNil(t, newAPIError)
-	require.Equal(t, types.ErrorSourceIkun, newAPIError.GetErrorSource())
+	require.Equal(t, types.ErrorSourceChannel, newAPIError.GetErrorSource())
 	require.Equal(t, "channel.rate_limit_exceeded", newAPIError.SourceCode())
 }
 

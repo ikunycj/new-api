@@ -13,24 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProviderFromBaseURL(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-		want string
-	}{
-		{name: "ikun https", url: "https://ikun.love/v1", want: ProviderIkun},
-		{name: "ikun subdomain", url: "https://api.ikun.love", want: ProviderIkun},
-		{name: "case and trailing dot", url: "https://IKUN.LOVE./v1", want: ProviderIkun},
-		{name: "unknown", url: "https://example.com/v1", want: ProviderOther},
-		{name: "invalid", url: "not a url", want: ProviderOther},
-		{name: "empty", url: "", want: ProviderOther},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, ProviderFromBaseURL(tt.url))
-		})
-	}
+func TestNormalizeProviderIsBounded(t *testing.T) {
+	assert.Equal(t, ProviderOther, normalizeProvider(ProviderOther))
+	assert.Equal(t, ProviderOther, normalizeProvider("arbitrary-provider"))
 }
 
 func TestErrorClass(t *testing.T) {

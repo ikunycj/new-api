@@ -148,7 +148,7 @@ groups:
   - name: end-to-end-observability
     rules:
       - alert: ObservabilityTargetDown
-        expr: up{monitoring_scope="remote",job=~"loki-alltoken|alloy-alltoken|loki-ikun|alloy-ikun|node|node-ikun"} == 0
+        expr: up{monitoring_scope="remote",job=~"loki-alltoken|alloy-alltoken|node"} == 0
         for: 2m
         labels:
           severity: critical
@@ -157,7 +157,7 @@ groups:
           description: "Prometheus has failed to scrape {{ $labels.job }} for two minutes. Check the SSH tunnel and the remote service before assuming the application is down."
 
       - alert: RemoteHostRootDiskLow
-        expr: node_filesystem_avail_bytes{monitoring_scope="remote",host=~"alltoken|ikun",mountpoint="/",fstype!~"tmpfs|overlay"} < 20 * 1024 * 1024 * 1024
+        expr: node_filesystem_avail_bytes{monitoring_scope="remote",host="alltoken",mountpoint="/",fstype!~"tmpfs|overlay"} < 20 * 1024 * 1024 * 1024
         for: 5m
         labels:
           severity: critical
@@ -166,7 +166,7 @@ groups:
           description: "The remote observability disk guard may stop Loki and Alloy to protect the host. Inspect disk growth and Loki retention data."
 
       - alert: ObservabilityAlloyConfigInvalid
-        expr: alloy_config_last_load_successful{monitoring_scope="remote",job=~"alloy-alltoken|alloy-ikun"} == 0
+        expr: alloy_config_last_load_successful{monitoring_scope="remote",job="alloy-alltoken"} == 0
         for: 2m
         labels:
           severity: critical
@@ -175,7 +175,7 @@ groups:
           description: "Alloy failed to load its latest configuration. Existing collection may be stale or stopped."
 
       - alert: ObservabilityLogEntriesDropped
-        expr: sum by (host) (increase(loki_write_dropped_entries_total{monitoring_scope="remote",job=~"alloy-alltoken|alloy-ikun"}[5m])) > 0
+        expr: sum by (host) (increase(loki_write_dropped_entries_total{monitoring_scope="remote",job="alloy-alltoken"}[5m])) > 0
         labels:
           severity: warning
         annotations:
@@ -229,7 +229,7 @@ groups:
           severity: warning
         annotations:
           summary: "AllToken final relay P95 latency exceeds 30 seconds"
-          description: "Compare final request latency with single-attempt latency, retries, in-flight requests, and ikun access latency."
+          description: "Compare final request latency with single-attempt latency, retries, and in-flight requests."
 
   - name: alltoken-channel-routing
     rules:

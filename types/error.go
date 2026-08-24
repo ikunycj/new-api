@@ -38,7 +38,6 @@ const (
 	ErrorSourceUnknown  ErrorSource = ""
 	ErrorSourceOpenAI   ErrorSource = "openai"
 	ErrorSourceChannel  ErrorSource = "channel"
-	ErrorSourceIkun     ErrorSource = ErrorSourceChannel
 	ErrorSourceAllToken ErrorSource = "alltoken"
 )
 
@@ -168,7 +167,7 @@ func ParseErrorSource(source string) ErrorSource {
 	switch strings.ToLower(strings.TrimSpace(source)) {
 	case string(ErrorSourceOpenAI):
 		return ErrorSourceOpenAI
-	case string(ErrorSourceChannel), "cluster", "ikun":
+	case string(ErrorSourceChannel), "cluster":
 		return ErrorSourceChannel
 	case string(ErrorSourceAllToken), "new-api", "new_api":
 		return ErrorSourceAllToken
@@ -183,14 +182,14 @@ func ParseErrorSource(source string) ErrorSource {
 // to the configured channel layer. alltoken-generated errors never call
 // this function.
 func ResolveErrorSource(configured, baseURL string) ErrorSource {
-	if source := ParseErrorSource(configured); source == ErrorSourceOpenAI || source == ErrorSourceIkun {
+	if source := ParseErrorSource(configured); source == ErrorSourceOpenAI || source == ErrorSourceChannel {
 		return source
 	}
 	parsed, err := url.Parse(strings.TrimSpace(baseURL))
 	if err == nil && strings.EqualFold(parsed.Hostname(), "api.openai.com") {
 		return ErrorSourceOpenAI
 	}
-	return ErrorSourceIkun
+	return ErrorSourceChannel
 }
 
 func (e *NewAPIError) GetErrorSource() ErrorSource {

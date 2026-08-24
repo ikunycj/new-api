@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +14,6 @@ import (
 )
 
 const (
-	ProviderIkun  = "ikun"
 	ProviderOther = "other"
 
 	ContextErrorClassKey = "observability_error_class"
@@ -179,25 +176,6 @@ func normalizeMode(mode string) string {
 	}
 }
 
-// ProviderFromBaseURL maps arbitrary upstream URLs into a fixed provider set.
-func ProviderFromBaseURL(raw string) string {
-	host := ""
-	if parsed, err := url.Parse(strings.TrimSpace(raw)); err == nil {
-		host = parsed.Hostname()
-	}
-	if host == "" {
-		host = strings.TrimSpace(raw)
-		if splitHost, _, err := net.SplitHostPort(host); err == nil {
-			host = splitHost
-		}
-	}
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
-	if host == "ikun.love" || strings.HasSuffix(host, ".ikun.love") {
-		return ProviderIkun
-	}
-	return ProviderOther
-}
-
 // ErrorClass converts all errors into a deliberately bounded category set.
 func ErrorClass(apiErr *types.NewAPIError, contextErr error) string {
 	// A relay can finish writing a valid response just before the client closes
@@ -326,8 +304,8 @@ func channelLabel(channelID int) string {
 }
 
 func normalizeProvider(provider string) string {
-	if provider == ProviderIkun {
-		return ProviderIkun
+	if provider == ProviderOther {
+		return provider
 	}
 	return ProviderOther
 }

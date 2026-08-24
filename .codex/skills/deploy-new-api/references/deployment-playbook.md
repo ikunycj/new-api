@@ -53,8 +53,14 @@ If GitHub HTTPS repeatedly times out, use the workstation's GitHub key over SSH 
 
 ```powershell
 $env:GIT_SSH_COMMAND = 'ssh -i C:/Users/86139/.ssh/id_ed25519_github -o IdentitiesOnly=yes -o HostKeyAlias=github.com -p 443'
-git fetch 'ssh://git@ssh.github.com:443/ikunycj/new-api.git' master:refs/remotes/origin/master
-git ls-remote 'ssh://git@ssh.github.com:443/ikunycj/new-api.git' refs/heads/master
+$originUrl = git remote get-url origin
+if ($originUrl -match '^https://github\.com/(.+?)(?:\.git)?$') {
+    $sshRemote = "ssh://git@ssh.github.com:443/$($Matches[1]).git"
+} else {
+    $sshRemote = $originUrl
+}
+git fetch $sshRemote master:refs/remotes/origin/master
+git ls-remote $sshRemote refs/heads/master
 Remove-Item Env:GIT_SSH_COMMAND
 ```
 

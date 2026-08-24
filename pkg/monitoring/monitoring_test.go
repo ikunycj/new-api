@@ -19,11 +19,11 @@ import (
 
 func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
 	const channelID = 38
-	observability.RecordRequest(observability.ProviderIkun, channelID, observability.ErrorSuccess, http.StatusOK, time.Millisecond)
-	observability.RecordAttempt(observability.ProviderIkun, channelID, observability.ErrorUpstreamRateLimit, http.StatusTooManyRequests, time.Millisecond)
-	observability.RecordRetry(observability.ProviderIkun, channelID, observability.ErrorUpstreamRateLimit)
-	observability.RecordClientCancellation(observability.ProviderIkun, channelID, "upstream")
-	finishInFlight := observability.IncInFlight(observability.ProviderIkun, channelID)
+	observability.RecordRequest(observability.ProviderOther, channelID, observability.ErrorSuccess, http.StatusOK, time.Millisecond)
+	observability.RecordAttempt(observability.ProviderOther, channelID, observability.ErrorUpstreamRateLimit, http.StatusTooManyRequests, time.Millisecond)
+	observability.RecordRetry(observability.ProviderOther, channelID, observability.ErrorUpstreamRateLimit)
+	observability.RecordClientCancellation(observability.ProviderOther, channelID, "upstream")
+	finishInFlight := observability.IncInFlight(observability.ProviderOther, channelID)
 	finishInFlight()
 
 	registry, err := NewRegistry()

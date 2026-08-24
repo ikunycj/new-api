@@ -271,7 +271,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError.SetChannelLocation(channel.Id, channel.Name)
 			break
 		}
-		provider := observability.ProviderFromBaseURL(relayInfo.ChannelBaseUrl)
+		provider := observability.ProviderOther
 		finalProvider = provider
 		finalChannelID = channel.Id
 		if previousChannelID > 0 && previousChannelID != channel.Id {
@@ -550,7 +550,7 @@ func isFailoverEligible(c *gin.Context, err *types.NewAPIError) bool {
 		return false
 	}
 	source := err.GetErrorSource()
-	return source == types.ErrorSourceOpenAI || source == types.ErrorSourceIkun || operation_setting.ShouldRetryByStatusCode(err.StatusCode)
+	return source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel || operation_setting.ShouldRetryByStatusCode(err.StatusCode)
 }
 
 // reserveRelayGroupBilling refreshes pricing after an ordered candidate
@@ -667,7 +667,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr.HasRetryable() {
 		return openaiErr.IsRetryable()
 	}
-	if source := openaiErr.GetErrorSource(); source == types.ErrorSourceOpenAI || source == types.ErrorSourceIkun {
+	if source := openaiErr.GetErrorSource(); source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel {
 		return openaiErr.StatusCode < 200 || openaiErr.StatusCode >= 300
 	}
 	code := openaiErr.StatusCode

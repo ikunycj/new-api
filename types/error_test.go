@@ -93,7 +93,7 @@ func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 		Message: "cluster unavailable",
 		Type:    "server_error",
 		Code:    "server_error",
-		Source:  ErrorSourceIkun,
+		Source:  ErrorSourceChannel,
 	}, http.StatusBadGateway)
 
 	exhausted := NewUpstreamExhaustedError(lastErr, 3)
@@ -104,7 +104,7 @@ func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 	assert.Equal(t, "alltoken.upstream_exhausted", response.SourceCode)
 	assert.Equal(t, 3, response.AttemptCount)
 	require.NotNil(t, response.Cause)
-	assert.Equal(t, ErrorSourceIkun, response.Cause.Source)
+	assert.Equal(t, ErrorSourceChannel, response.Cause.Source)
 	assert.Equal(t, "channel.server_error", response.Cause.Code)
 	assert.Equal(t, "server_error", response.Cause.RawCode)
 	assert.Equal(t, http.StatusBadGateway, response.Cause.StatusCode)
@@ -119,9 +119,9 @@ func TestResolveErrorSource(t *testing.T) {
 		baseURL    string
 		want       ErrorSource
 	}{
-		{name: "explicit cluster", configured: "cluster", baseURL: "https://api.openai.com/v1", want: ErrorSourceIkun},
+		{name: "explicit cluster compatibility", configured: "cluster", baseURL: "https://api.openai.com/v1", want: ErrorSourceChannel},
 		{name: "official OpenAI", baseURL: "https://api.openai.com/v1", want: ErrorSourceOpenAI},
-		{name: "IKUN compatible endpoint", baseURL: "https://api.ikun.love/v1", want: ErrorSourceIkun},
+		{name: "generic compatible endpoint", baseURL: "https://api.example.com/v1", want: ErrorSourceChannel},
 	}
 
 	for _, tt := range tests {
@@ -156,8 +156,8 @@ func TestUpstreamCannotClaimAllTokenSource(t *testing.T) {
 	}, http.StatusBadGateway)
 
 	assert.Equal(t, ErrorSourceUnknown, apiErr.GetErrorSource())
-	apiErr.EnsureErrorSource(ErrorSourceIkun)
-	assert.Equal(t, ErrorSourceIkun, apiErr.GetErrorSource())
+	apiErr.EnsureErrorSource(ErrorSourceChannel)
+	assert.Equal(t, ErrorSourceChannel, apiErr.GetErrorSource())
 }
 
 func TestConfiguredClassificationOverridesBuiltInCatalog(t *testing.T) {

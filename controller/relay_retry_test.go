@@ -97,7 +97,7 @@ func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
 	}{
 		{name: "openai bad request", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadRequest},
 		{name: "openai unauthorized", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized},
-		{name: "ikun server error", source: types.ErrorSourceIkun, statusCode: http.StatusBadGateway},
+		{name: "channel server error", source: types.ErrorSourceChannel, statusCode: http.StatusBadGateway},
 	}
 
 	for _, tt := range tests {
@@ -143,7 +143,7 @@ func TestShouldRetryRespectsSpecificChannelSelection(t *testing.T) {
 	err := types.WithOpenAIError(types.OpenAIError{
 		Message: "upstream failure",
 		Code:    "server_error",
-		Source:  types.ErrorSourceIkun,
+		Source:  types.ErrorSourceChannel,
 	}, http.StatusBadGateway)
 
 	assert.False(t, shouldRetry(ctx, err, 1))

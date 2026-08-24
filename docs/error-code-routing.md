@@ -80,7 +80,7 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 | `channel` | 当前渠道或其上游返回的错误 | `2xxxxx` |
 | `alltoken` | AllToken 网关自身生成的错误 | `3xxxxx` |
 
-历史输入中的 `cluster` 和 `ikun` 只作为兼容别名读取，输出一律规范化为 `channel`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
+历史输入中的 `cluster` 只作为兼容别名读取，输出一律规范化为 `channel`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
 
 ### 4.1 六位数字格式
 
