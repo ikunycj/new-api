@@ -210,7 +210,13 @@ export function ApiKeysMutateDrawer({
     }
   }
 
-  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = () => {
+  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = (errors) => {
+    const groupErrorMessage = errors.group_candidates?.message
+    if (groupErrorMessage) {
+      toast.error(t(String(groupErrorMessage)))
+      return
+    }
+
     toast.error(t('Please fix the highlighted fields before saving'))
   }
 
@@ -416,7 +422,7 @@ export function ApiKeysMutateDrawer({
                 description={
                   isUpdate
                     ? t('Choose groups and set their request order')
-                    : t('Select one or more groups')
+                    : undefined
                 }
                 icon={<Route className='size-4' />}
                 iconTone='info'

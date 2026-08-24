@@ -4751,7 +4751,6 @@
     "Select announcement type": "アナウンスメントタイプを選択",
     "Select API Key": "APIキーを選択",
     "Select at least one field to overwrite.": "上書きするフィールドを少なくとも 1 つ選択してください。",
-    "Select at least one group": "少なくとも1つのグループを選択してください",
     "Select at least one plan to compare usage": "利用状況を比較するプランを 1 つ以上選択してください",
     "Select at least one target model": "少なくとも1つの対象モデルを選択してください",
     "Select body font": "本文フォントを選択",
@@ -4788,8 +4787,6 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "処理するモデルを選択してください。未選択の「追加」モデルは無視されます。",
     "Select models to run batch tests.": "バッチテストを実行するモデルを選択してください。",
     "Select no more than {{count}} groups": "グループは{{count}}個以内で選択してください",
-    "Select one or more groups": "1つ以上のグループを選択",
-    "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.": "1つ以上のグループを選択できます。APIキーは複数グループのモデルを利用できます。同名モデルでは、先に並んだグループが優先されます。",
     "Select or enter color value": "色の値を選択または入力",
     "Select or enter method identifier": "決済方法の識別子を選択または入力",
     "Select or enter model name": "モデル名を選択または入力",
@@ -6181,6 +6178,7 @@
     "Read-only success rate from the previous natural day": "前日のプローブ成功率（読み取り専用）",
     "Choose whether force priority applies within one group or across groups": "強制優先を1つのグループ内だけに適用するか、グループ間に適用するかを選択",
     "ID (Default)": "ID（デフォルト）",
-    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？"
+    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？",
+    "Please select at least one model billing group": "モデル課金グループを1つ以上選択してください"
   }
 }

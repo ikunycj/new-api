@@ -20,6 +20,13 @@ import (
 // and must not be written into users.group.
 const DefaultUserGroup = "default"
 
+// NormalizeUserGroup collapses legacy account-group values into the only
+// supported account group. Pricing/routing group names are stored on tokens,
+// abilities, and channels instead of on users.
+func NormalizeUserGroup(_ string) string {
+	return DefaultUserGroup
+}
+
 // CurrentOnboardingVersion is the latest onboarding flow shown to newly
 // registered users. A nil user value means the user is not enrolled in the
 // onboarding flow (for example, a legacy or admin-created account).
@@ -67,12 +74,12 @@ type User struct {
 }
 
 func (user *User) BeforeCreate(_ *gorm.DB) error {
-	user.Group = DefaultUserGroup
+	user.Group = NormalizeUserGroup(user.Group)
 	return nil
 }
 
 func (user *User) BeforeUpdate(_ *gorm.DB) error {
-	user.Group = DefaultUserGroup
+	user.Group = NormalizeUserGroup(user.Group)
 	return nil
 }
 
@@ -97,7 +104,7 @@ func (user *User) OnboardingStatus() UserOnboardingStatus {
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
 		Id:       user.Id,
-		Group:    user.Group,
+		Group:    NormalizeUserGroup(user.Group),
 		Quota:    user.Quota,
 		Status:   user.Status,
 		Username: user.Username,
@@ -451,6 +458,9 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	} else {
 		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
+	if err == nil {
+		user.Group = NormalizeUserGroup(user.Group)
+	}
 	return &user, err
 }
 
@@ -480,7 +490,7 @@ func HardDeleteUserById(id int) error {
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
-	user.Group = DefaultUserGroup
+	user.Group = NormalizeUserGroup(user.Group)
 	user.Email = NormalizeEmail(user.Email)
 	user.Username = ResolveUsername(user.Username, user.Email)
 	if user.Username == "" {
@@ -650,7 +660,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		}
 	}
 	newUser := *user
-	newUser.Group = DefaultUserGroup
+	newUser.Group = NormalizeUserGroup(newUser.Group)
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -685,7 +695,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 
 	newUser := *user
-	newUser.Group = DefaultUserGroup
+	newUser.Group = NormalizeUserGroup(newUser.Group)
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -978,6 +988,7 @@ func ValidateAccessToken(token string) (*User, error) {
 		}
 		return nil, fmt.Errorf("%w: %v", ErrDatabase, err)
 	}
+	user.Group = NormalizeUserGroup(user.Group)
 	return user, nil
 }
 
@@ -1034,7 +1045,7 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 	if !fromDB && common.RedisEnabled {
 		group, err := getUserGroupCache(id)
 		if err == nil {
-			return group, nil
+			return NormalizeUserGroup(group), nil
 		}
 		// Don't return error - fall through to DB
 	}
@@ -1044,7 +1055,7 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 		return "", err
 	}
 
-	return group, nil
+	return NormalizeUserGroup(group), nil
 }
 
 // GetUserSetting gets setting from Redis first, falls back to DB if needed

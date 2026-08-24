@@ -4751,7 +4751,6 @@
     "Select announcement type": "Select announcement type",
     "Select API Key": "Select API Key",
     "Select at least one field to overwrite.": "Select at least one field to overwrite.",
-    "Select at least one group": "Select at least one group",
     "Select at least one plan to compare usage": "Select at least one plan to compare usage",
     "Select at least one target model": "Select at least one target model",
     "Select body font": "Select body font",
@@ -4788,8 +4787,6 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "Select models to process. Unselected \"add\" models will be ignored.",
     "Select models to run batch tests.": "Select models to run batch tests.",
     "Select no more than {{count}} groups": "Select no more than {{count}} groups",
-    "Select one or more groups": "Select one or more groups",
-    "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.": "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.",
     "Select or enter color value": "Select or enter color value",
     "Select or enter method identifier": "Select or enter method identifier",
     "Select or enter model name": "Select or enter model name",
@@ -6181,6 +6178,7 @@
     "Read-only success rate from the previous natural day": "Read-only success rate from the previous natural day",
     "Choose whether force priority applies within one group or across groups": "Choose whether force priority applies within one group or across groups",
     "ID (Default)": "ID (Default)",
-    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?"
+    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?",
+    "Please select at least one model billing group": "Please select at least one model billing group"
   }
 }

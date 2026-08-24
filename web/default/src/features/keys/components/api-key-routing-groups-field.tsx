@@ -229,9 +229,6 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [announcement, setAnnouncement] = useState('')
-  const groupSelectionHint = t(
-    'Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.'
-  )
 
   const options = useMemo(() => props.options, [props.options])
 
@@ -347,15 +344,15 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
               variant='outline'
               role='combobox'
               aria-expanded={open}
+              aria-label={t('Available groups')}
               className='h-10 w-full justify-between px-3'
             />
           }
         >
-          <span
-            className='text-muted-foreground min-w-0 flex-1 truncate text-left text-xs'
-            title={groupSelectionHint}
-          >
-            {groupSelectionHint}
+          <span className='min-w-0 flex-1 truncate text-left text-xs'>
+            {props.value
+              .map((group) => optionByValue.get(group)?.label ?? group)
+              .join(', ')}
           </span>
           <span className='flex shrink-0 items-center gap-2'>
             <Badge variant='secondary'>

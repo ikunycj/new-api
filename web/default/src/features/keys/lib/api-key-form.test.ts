@@ -19,13 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
+import type { TFunction } from 'i18next'
+
 import type { ApiKey } from '../types'
 import {
+  getApiKeyFormSchema,
   getApiKeyFormDefaultValues,
   transformApiKeyToFormDefaults,
   transformFormDataToPayload,
   type ApiKeyFormValues,
 } from './api-key-form'
+
+const identityT = ((key: unknown) => String(key)) as TFunction
 
 function formValues(
   groupCandidates: string[],
@@ -67,6 +72,21 @@ function apiKey(overrides: Partial<ApiKey>): ApiKey {
 }
 
 describe('API key routing form mapping', () => {
+  test('requires at least one model billing group', () => {
+    const result = getApiKeyFormSchema(identityT).safeParse(formValues([]))
+
+    assert.equal(result.success, false)
+    if (result.success) return
+
+    const groupIssue = result.error.issues.find(
+      (issue) => issue.path[0] === 'group_candidates'
+    )
+    assert.equal(
+      groupIssue?.message,
+      'Please select at least one model billing group'
+    )
+  })
+
   test('starts new keys without a default group or cross-group retry', () => {
     const defaults = getApiKeyFormDefaultValues()
 

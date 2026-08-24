@@ -4751,7 +4751,6 @@
     "Select announcement type": "選擇公告類型",
     "Select API Key": "選擇 API 金鑰",
     "Select at least one field to overwrite.": "請選擇至少一個要覆蓋的欄位。",
-    "Select at least one group": "至少選擇一個分組",
     "Select at least one plan to compare usage": "Select at least one plan to compare usage",
     "Select at least one target model": "請至少選擇一個目標模型",
     "Select body font": "選擇正文字體",
@@ -4788,8 +4787,6 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "勾選要處理的模型，未勾選的「新增」模型將作為忽略處理。",
     "Select models to run batch tests.": "選擇要執行大量測試的模型。",
     "Select no more than {{count}} groups": "最多選擇 {{count}} 個分組",
-    "Select one or more groups": "選擇一個或多個分組",
-    "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.": "選擇一個或多個分組，一個 API 可使用多個分組模型（模型名稱相同時，分組靠前的優先級較高）",
     "Select or enter color value": "選擇或輸入顏色值",
     "Select or enter method identifier": "選擇或輸入支付方式標識",
     "Select or enter model name": "選擇或輸入模型名稱",
@@ -6181,6 +6178,7 @@
     "Read-only success rate from the previous natural day": "前一自然日探測成功率（唯讀）",
     "Choose whether force priority applies within one group or across groups": "選擇強制優先僅適用於單一分組或跨分組",
     "ID (Default)": "ID（預設）",
-    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "這會根據所有渠道設定重建渠道路由索引，包括支援模型、分組和權重。重建期間路由可能短暫不完整。是否繼續？"
+    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "這會根據所有渠道設定重建渠道路由索引，包括支援模型、分組和權重。重建期間路由可能短暫不完整。是否繼續？",
+    "Please select at least one model billing group": "請至少選擇一個模型計費分組"
   }
 }

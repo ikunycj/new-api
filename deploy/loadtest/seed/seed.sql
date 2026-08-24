@@ -13,7 +13,7 @@ SELECT
   2000000000,
   0,
   0,
-  'toB',
+  'default',
   'LT' || lpad(number::text, 14, '0'),
   '{}',
   extract(epoch FROM now())::bigint

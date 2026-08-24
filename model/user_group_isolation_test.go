@@ -22,6 +22,9 @@ func TestNormalizeLegacyUserGroupsRepairsAccountGroupsOnly(t *testing.T) {
 		Group:    DefaultUserGroup,
 		AffCode:  "default-account-group",
 	}).Error)
+	// Bypass model hooks to represent a row written by the legacy version.
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", 9801).
+		UpdateColumn("group", "premium").Error)
 	require.NoError(t, DB.Create(&Channel{
 		Id:    9803,
 		Name:  "pricing-channel",

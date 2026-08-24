@@ -44,7 +44,7 @@ price = 1
 quota_per_unit = 500000
 ```
 
-这证明新代码和状态接口已经在本地生效，但数据库当前仍使用兼容默认值 `BillingUSDToCNYRate=1`，还没有保存目标值 `7.3`。公开 `/api/pricing` 同时显示基础分组倍率仍为 `ChatGPT Plus=0.3`、`ChatGPT Pro=0.5`、`ChatGPT官转=7.3`，没有目标 `0.05`。其中“官转”的 `7.3` 很可能承载旧方案中的人民币换算语义；启用独立计费汇率后若不迁移，会发生重复换算。公开接口不能确认用户到消费组的 `GroupGroupRatio` 特殊覆盖、`TopupGroupRatio` 和充值折扣。
+这证明新代码和状态接口已经在本地生效，但数据库当前仍使用兼容默认值 `BillingUSDToCNYRate=1`，还没有保存目标值 `7.3`。公开 `/api/pricing` 同时显示基础分组倍率仍为 `ChatGPT Plus=0.3`、`ChatGPT Pro=0.5`、`ChatGPT官转=7.3`，没有目标 `0.05`。其中“官转”的 `7.3` 很可能承载旧方案中的人民币换算语义；启用独立计费汇率后若不迁移，会发生重复换算。当前版本不再读取用户分组到消费分组的特殊倍率矩阵；`TopupGroupRatio` 和充值折扣仍需单独核对。
 
 本次没有替用户改数据库，也没有部署生产环境。因此当前结论是：**公式和本地代码已改好，但目标计费汇率与 GPT 分组倍率都尚未配置完成，完整生产配置也尚未完成运行态验收。**
 
@@ -195,13 +195,10 @@ actualQuota = round(actualExprOutput / 1,000,000 × 快照 Q × 快照 B × 快�
 有效消费倍率 `G` 的选择顺序是：
 
 1. 若路由上下文存在 `auto_group`，先把 `UsingGroup` 更新为实际选中的具体分组。
-2. 若存在 `GroupGroupRatio[userGroup][usingGroup]`，该特殊矩阵值直接覆盖基础倍率。
-3. 否则使用 `GroupRatio[usingGroup]`。
-4. 分组不存在时记录日志并回退为 `1`。
+2. 使用独立定价配置 `GroupRatio[usingGroup]`。
+3. 分组不存在时记录日志并回退为 `1`。
 
-见 `relay/helper/price.go:43-69`、`setting/ratio_setting/group_ratio.go:62-98`。
-
-特殊倍率是“用户所属分组 → 实际消费分组”的组合覆盖，不是单个用户的额外倍率，也不是与基础分组倍率相乘。即使基础 `GroupRatio[usingGroup]=0.05`，只要命中特殊矩阵中的其他值，最终就不会按 `0.05` 计费。
+见 `relay/helper/price.go:43-61`、`setting/ratio_setting/group_ratio.go:43-65`。用户账户分组不再改变定价分组倍率；管理员账户的归属仍单独存放在 `users.group`。
 
 ### 4.2 完成、缓存、图片和音频倍率
 
@@ -286,10 +283,9 @@ O = ratio1 × ratio2 × ...
 
 - 只返回当前用户可用分组覆盖到的模型；
 - 删除用户不可用分组的倍率；
-- 用 `GroupGroupRatio[当前用户组][消费组]` 覆盖返回给该用户的基础分组倍率；
-- 返回 `group_ratio`、`usable_group`、`auto_groups`、供应商与端点信息。
+- 返回独立的 `group_ratio`、`usable_group`、供应商与端点信息。
 
-见 `controller/pricing.go:12-76`。因此登录用户在模型广场看到的分组倍率应与普通请求的特殊倍率优先级一致。
+见 `controller/pricing.go:12-76`。因此登录用户在模型广场看到的分组倍率应与普通请求使用相同的基础 `GroupRatio`。
 
 模型广场从 `/api/status` 读取 `billing_usd_to_cny_rate`，非法或缺失时回退为 `1`，见 `web/default/src/features/pricing/hooks/use-pricing-data.ts:32-45`。当前展示规则是：
 
@@ -323,7 +319,7 @@ O = ratio1 × ratio2 × ...
 新消费日志的 `other` 会记录：
 
 - 模型倍率/固定价格；
-- 有效分组倍率和特殊倍率；
+- 有效定价分组倍率；
 - 本次冻结的 `billing_usd_to_cny_rate`；
 - 阶梯模式、表达式和命中阶梯；
 - 管理员可见的 quota 饱和标记。
@@ -450,7 +446,7 @@ TopUp.Money  = product.price
 
 ### 10.2 异步任务计费快照已补齐
 
-异步 token 任务差额结算现在优先使用任务 `BillingContext` 中持久化的 `ModelRatio`、`GroupRatio`、`BillingUSDToCNYRate` 和 `OtherRatios`，不再在任务完成时重新读取当前模型倍率或分组倍率。只有历史任务缺少整个 `BillingContext` 时，才兼容回退到当前配置，并保留旧逻辑中 `group -> group` 特殊倍率优先于普通分组倍率的语义，见 `service/task_billing.go` 中的 `RecalculateTaskQuotaByTokens`。
+异步 token 任务差额结算现在优先使用任务 `BillingContext` 中持久化的 `ModelRatio`、`GroupRatio`、`BillingUSDToCNYRate` 和 `OtherRatios`，不再在任务完成时重新读取当前模型倍率或分组倍率。只有历史任务缺少整个 `BillingContext` 时，才兼容回退到当前配置，并使用当时任务定价分组的基础 `GroupRatio`，见 `service/task_billing.go` 中的 `RecalculateTaskQuotaByTokens`。
 
 回归测试 `TestRecalculateTaskQuotaByTokensUsesPersistedBillingContext` 会在任务创建后把全局模型倍率、分组倍率和计费汇率改为不同值，确认最终仍按任务快照结算。
 
@@ -491,7 +487,7 @@ quota 按 int32 安全策略执行饱和转换，并在发生钳制时写入管�
 ## 11. 上线前验收清单
 
 1. 新进程的 `/api/status` 必须同时返回 `quota_display_type=CNY`、`usd_exchange_rate=1`、目标 `billing_usd_to_cny_rate` 和 `quota_per_unit=500000`。
-2. 核对目标用户组到目标消费组是否存在 `GroupGroupRatio` 覆盖；最终有效倍率必须确实为 `0.05`。
+2. 核对目标定价分组的 `GroupRatio`；最终有效倍率必须确实为 `0.05`，且不应依赖用户账户分组。
 3. 保证充值组倍率和档位折扣为 1；不要把消费折扣 `0.05` 配进 `TopupGroupRatio`。
 4. 审计目标 GPT 的 `ModelRatio`、`ModelPrice` 或阶梯表达式是否真的是当前官方美元价。
 5. 用一个按 token 模型验证：官方 `$10` 在模型广场显示官方 `¥73`、销售 `¥3.65`、分组 `0.05x`，实际扣费与日志一致。

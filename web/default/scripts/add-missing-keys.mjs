@@ -5,6 +5,8 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Please select at least one model billing group':
+      'Please select at least one model billing group',
     'Add billing group route': 'Add billing group route',
     'Add channel': 'Add channel',
     'Add error mapping': 'Add error mapping',
@@ -114,6 +116,8 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Please select at least one model billing group':
+      '请选择至少一个模型计费分组',
     'Add billing group route': '添加计费分组路由',
     'Add channel': '添加渠道',
     'Add error mapping': '添加错误映射',
@@ -222,6 +226,8 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Please select at least one model billing group':
+      'Veuillez sélectionner au moins un groupe de facturation de modèles',
     'Add billing group route': 'Ajouter une route de facturation',
     'Add channel': 'Ajouter un canal',
     'Add error mapping': 'Ajouter une correspondance',
@@ -334,6 +340,8 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Please select at least one model billing group':
+      'モデル課金グループを1つ以上選択してください',
     'Add billing group route': '課金グループルートを追加',
     'Add channel': 'チャネルを追加',
     'Add error mapping': 'エラーマッピングを追加',
@@ -443,6 +451,8 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Please select at least one model billing group':
+      'Пожалуйста, выберите хотя бы одну группу тарификации моделей',
     'Add billing group route': 'Добавить маршрут группы тарификации',
     'Add channel': 'Добавить канал',
     'Add error mapping': 'Добавить сопоставление ошибки',
@@ -553,6 +563,8 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Please select at least one model billing group':
+      'Vui lòng chọn ít nhất một nhóm tính phí mô hình',
     'Add billing group route': 'Thêm tuyến nhóm tính phí',
     'Add channel': 'Thêm kênh',
     'Add error mapping': 'Thêm ánh xạ lỗi',
@@ -663,6 +675,8 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'Please select at least one model billing group':
+      '請至少選擇一個模型計費分組',
     'Add billing group route': '新增計費分組路由',
     'Add channel': '新增渠道',
     'Add error mapping': '新增錯誤映射',
@@ -800,6 +814,9 @@ const retiredKeys = new Set([
   'Special usable group rules make extra token groups visible to, or hide default ones from, users of a specific user group.',
   'Special visibility rules',
   'System-managed routing',
+  'Select at least one group',
+  'Select one or more groups',
+  'Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.',
   'System routing must be used on its own',
   'The admin configured three groups and one special ratio rule:',
   'The admin wants vip users to pay even less when they use premium. That needs an override rule: in the override matrix, set the cell at row vip, column premium to 0.3.',

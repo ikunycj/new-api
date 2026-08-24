@@ -4751,7 +4751,6 @@
     "Select announcement type": "Выбрать тип объявления",
     "Select API Key": "Выберите API-ключ",
     "Select at least one field to overwrite.": "Выберите хотя бы одно поле для перезаписи.",
-    "Select at least one group": "Выберите хотя бы одну группу",
     "Select at least one plan to compare usage": "Выберите хотя бы один тариф для сравнения использования",
     "Select at least one target model": "Выберите хотя бы одну целевую модель",
     "Select body font": "Выберите шрифт текста",
@@ -4788,8 +4787,6 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "Выберите модели для обработки. Невыбранные модели «добавить» будут проигнорированы.",
     "Select models to run batch tests.": "Выберите модели для запуска пакетных тестов.",
     "Select no more than {{count}} groups": "Выберите не более {{count}} групп",
-    "Select one or more groups": "Выберите одну или несколько групп",
-    "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.": "Выберите одну или несколько групп. API-ключ может использовать модели из нескольких групп. Для одинаковых моделей приоритет имеет группа, указанная первой.",
     "Select or enter color value": "Выбрать или ввести значение цвета",
     "Select or enter method identifier": "Выберите или введите идентификатор способа",
     "Select or enter model name": "Выберите или введите имя модели",
@@ -6181,6 +6178,7 @@
     "Read-only success rate from the previous natural day": "Успешность проверок за предыдущий день (только чтение)",
     "Choose whether force priority applies within one group or across groups": "Выберите, действует ли принудительный приоритет внутри одной группы или между группами",
     "ID (Default)": "ID (по умолчанию)",
-    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?"
+    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?",
+    "Please select at least one model billing group": "Пожалуйста, выберите хотя бы одну группу тарификации моделей"
   }
 }

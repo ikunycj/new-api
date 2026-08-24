@@ -25,12 +25,16 @@ type UserBase struct {
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {
-	common.SetContextKey(c, constant.ContextKeyUserGroup, user.Group)
+	common.SetContextKey(c, constant.ContextKeyUserGroup, NormalizeUserGroup(user.Group))
 	common.SetContextKey(c, constant.ContextKeyUserQuota, user.Quota)
 	common.SetContextKey(c, constant.ContextKeyUserStatus, user.Status)
 	common.SetContextKey(c, constant.ContextKeyUserEmail, user.Email)
 	common.SetContextKey(c, constant.ContextKeyUserName, user.Username)
 	common.SetContextKey(c, constant.ContextKeyUserSetting, user.GetSetting())
+}
+
+func userCacheEnabled() bool {
+	return common.RedisEnabled && common.RDB != nil
 }
 
 func (user *UserBase) GetSetting() dto.UserSetting {
@@ -51,7 +55,7 @@ func getUserCacheKey(userId int) string {
 
 // invalidateUserCache clears user cache
 func invalidateUserCache(userId int) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisDelKey(getUserCacheKey(userId))
@@ -64,7 +68,7 @@ func InvalidateUserCache(userId int) error {
 }
 
 func populateUserCache(user User) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 
@@ -79,7 +83,7 @@ func populateUserCache(user User) error {
 // Quota is maintained by atomic quota delta paths and must not be overwritten
 // by stale user snapshots from profile/settings updates.
 func updateUserCache(user User) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	if err := updateUserGroupCache(user.Id, user.Group); err != nil {
@@ -128,7 +132,7 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 	// Create cache object from user data
 	userCache = &UserBase{
 		Id:       user.Id,
-		Group:    user.Group,
+		Group:    NormalizeUserGroup(user.Group),
 		Quota:    user.Quota,
 		Status:   user.Status,
 		Username: user.Username,
@@ -140,7 +144,7 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 }
 
 func cacheGetUserBase(userId int) (*UserBase, error) {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil, fmt.Errorf("redis is not enabled")
 	}
 	var userCache UserBase
@@ -149,12 +153,13 @@ func cacheGetUserBase(userId int) (*UserBase, error) {
 	if err != nil {
 		return nil, err
 	}
+	userCache.Group = NormalizeUserGroup(userCache.Group)
 	return &userCache, nil
 }
 
 // Add atomic quota operations using hash fields
 func cacheIncrUserQuota(userId int, delta int64) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisHIncrBy(getUserCacheKey(userId), "Quota", delta)
@@ -207,7 +212,7 @@ func getUserSettingCache(userId int) (dto.UserSetting, error) {
 
 // New functions for individual field updates
 func updateUserStatusCache(userId int, status bool) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	statusInt := common.UserStatusEnabled
@@ -218,17 +223,17 @@ func updateUserStatusCache(userId int, status bool) error {
 }
 
 func updateUserQuotaCache(userId int, quota int) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Quota", fmt.Sprintf("%d", quota))
 }
 
 func updateUserGroupCache(userId int, group string) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
-	return common.RedisHSetField(getUserCacheKey(userId), "Group", group)
+	return common.RedisHSetField(getUserCacheKey(userId), "Group", NormalizeUserGroup(group))
 }
 
 func UpdateUserGroupCache(userId int, group string) error {
@@ -236,21 +241,21 @@ func UpdateUserGroupCache(userId int, group string) error {
 }
 
 func updateUserEmailCache(userId int, email string) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Email", email)
 }
 
 func updateUserNameCache(userId int, username string) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Username", username)
 }
 
 func updateUserSettingCache(userId int, setting string) error {
-	if !common.RedisEnabled {
+	if !userCacheEnabled() {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Setting", setting)

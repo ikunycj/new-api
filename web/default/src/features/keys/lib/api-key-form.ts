@@ -40,7 +40,7 @@ export function getApiKeyFormSchema(t: TFunction) {
       allow_ips: z.string().optional(),
       group_candidates: z
         .array(z.string())
-        .min(1, t('Select at least one group'))
+        .min(1, t('Please select at least one model billing group'))
         .max(
           MAX_GROUP_CANDIDATES,
           t('Select no more than {{count}} groups', {

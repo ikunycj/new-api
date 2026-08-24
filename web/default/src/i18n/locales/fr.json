@@ -4751,7 +4751,6 @@
     "Select announcement type": "Sélectionner le type d'annonce",
     "Select API Key": "Sélectionner une clé API",
     "Select at least one field to overwrite.": "Sélectionnez au moins un champ à écraser.",
-    "Select at least one group": "Sélectionnez au moins un groupe",
     "Select at least one plan to compare usage": "Sélectionnez au moins un forfait pour comparer l’utilisation",
     "Select at least one target model": "Sélectionnez au moins un modèle cible",
     "Select body font": "Sélectionner la police du corps de texte",
@@ -4788,8 +4787,6 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "Sélectionnez les modèles à traiter. Les modèles « ajout » non sélectionnés seront ignorés.",
     "Select models to run batch tests.": "Sélectionner les modèles pour exécuter les tests par lots.",
     "Select no more than {{count}} groups": "Sélectionnez au maximum {{count}} groupes",
-    "Select one or more groups": "Sélectionnez un ou plusieurs groupes",
-    "Select one or more groups; an API key can use models from multiple groups. When model names match, groups listed first have higher priority.": "Sélectionnez un ou plusieurs groupes ; une clé API peut utiliser des modèles de plusieurs groupes. Si les noms de modèle sont identiques, le groupe placé en premier est prioritaire.",
     "Select or enter color value": "Sélectionner ou saisir une valeur de couleur",
     "Select or enter method identifier": "Sélectionner ou saisir l’identifiant du mode",
     "Select or enter model name": "Sélectionner ou saisir le nom du modèle",
@@ -6181,6 +6178,7 @@
     "Read-only success rate from the previous natural day": "Taux de réussite en lecture seule des sondes du jour précédent",
     "Choose whether force priority applies within one group or across groups": "Choisissez si la priorité forcée s’applique à un groupe ou à plusieurs groupes",
     "ID (Default)": "ID (par défaut)",
-    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?"
+    "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?",
+    "Please select at least one model billing group": "Veuillez sélectionner au moins un groupe de facturation de modèles"
   }
 }
