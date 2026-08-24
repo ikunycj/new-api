@@ -229,17 +229,18 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 	return nil, errors.New("channel not found")
 }
 
-// GetConfiguredRouteChannel selects only from the channels configured for a
-// billing group. Route priority wins over the channel's legacy priority;
-// weights apply among entries at the same route priority.
+// GetConfiguredRouteChannel selects the first eligible channel in the billing
+// group's configured order. Legacy channel priority and weight do not affect
+// configured ToB routes.
 func GetConfiguredRouteChannel(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}) (*Channel, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
+	orderedEntries := append([]BillingGroupChannel(nil), entries...)
+	SortRouteChannels(orderedEntries)
 	if !common.MemoryCacheEnabled {
-		channelIDs := make([]int, 0, len(entries))
-		entryByChannel := make(map[int]BillingGroupChannel, len(entries))
-		for _, entry := range entries {
+		channelIDs := make([]int, 0, len(orderedEntries))
+		for _, entry := range orderedEntries {
 			if !entry.Enabled {
 				continue
 			}
@@ -247,7 +248,6 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 				continue
 			}
 			channelIDs = append(channelIDs, entry.ChannelId)
-			entryByChannel[entry.ChannelId] = entry
 		}
 		if len(channelIDs) == 0 {
 			return nil, nil
@@ -282,43 +282,12 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		for i := range channels {
 			channelByID[channels[i].Id] = &channels[i]
 		}
-		bestPriority := 0
-		hasPriority := false
-		totalWeight := 0
-		candidates := make([]BillingGroupChannel, 0, len(channels))
-		for channelID := range channelByID {
-			entry := entryByChannel[channelID]
-			if !hasPriority || entry.Priority > bestPriority {
-				bestPriority = entry.Priority
-				hasPriority = true
-				candidates = candidates[:0]
-				totalWeight = 0
-			}
-			if entry.Priority != bestPriority {
-				continue
-			}
-			weight := entry.Weight
-			if weight <= 0 {
-				weight = 100
-			}
-			totalWeight += weight
-			candidates = append(candidates, entry)
-		}
-		if len(candidates) == 0 {
-			return nil, nil
-		}
-		selected := rand.Intn(totalWeight)
-		for _, entry := range candidates {
-			weight := entry.Weight
-			if weight <= 0 {
-				weight = 100
-			}
-			selected -= weight
-			if selected < 0 {
-				return channelByID[entry.ChannelId], nil
+		for _, entry := range orderedEntries {
+			if channel := channelByID[entry.ChannelId]; channel != nil {
+				return channel, nil
 			}
 		}
-		return channelByID[candidates[len(candidates)-1].ChannelId], nil
+		return nil, nil
 	}
 
 	channelSyncLock.RLock()
@@ -333,11 +302,7 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		eligible[channelID] = struct{}{}
 	}
 
-	bestPriority := 0
-	hasPriority := false
-	totalWeight := 0
-	candidates := make([]BillingGroupChannel, 0)
-	for _, entry := range entries {
+	for _, entry := range orderedEntries {
 		if !entry.Enabled {
 			continue
 		}
@@ -351,37 +316,9 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		if channel == nil || channel.Status != common.ChannelStatusEnabled {
 			continue
 		}
-		if !hasPriority || entry.Priority > bestPriority {
-			bestPriority = entry.Priority
-			hasPriority = true
-			candidates = candidates[:0]
-			totalWeight = 0
-		}
-		if entry.Priority != bestPriority {
-			continue
-		}
-		weight := entry.Weight
-		if weight <= 0 {
-			weight = 100
-		}
-		totalWeight += weight
-		candidates = append(candidates, entry)
+		return channel, nil
 	}
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-	selected := rand.Intn(totalWeight)
-	for _, entry := range candidates {
-		weight := entry.Weight
-		if weight <= 0 {
-			weight = 100
-		}
-		selected -= weight
-		if selected < 0 {
-			return channelsIDM[entry.ChannelId], nil
-		}
-	}
-	return channelsIDM[candidates[len(candidates)-1].ChannelId], nil
+	return nil, nil
 }
 
 // HasSatisfiedChannelExcluding reports whether at least one eligible channel

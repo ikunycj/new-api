@@ -48,6 +48,31 @@ describe('billing group channel ordering', () => {
     ])
   })
 
+  test('moves a channel only within its protocol while preserving global slots', () => {
+    const protocolChannelIDs = new Set([35, 36])
+    const reordered = reorderBillingGroupChannels(
+      entries,
+      36,
+      -1,
+      protocolChannelIDs
+    )
+
+    assert.deepEqual(reordered, [
+      { id: 13, channel_id: 36, priority: 3 },
+      { id: 12, channel_id: 38, priority: 2 },
+      { id: 11, channel_id: 35, priority: 1 },
+    ])
+  })
+
+  test('does not move beyond the current protocol boundary', () => {
+    const protocolChannelIDs = new Set([35, 36])
+
+    assert.strictEqual(
+      reorderBillingGroupChannels(entries, 35, -1, protocolChannelIDs),
+      entries
+    )
+  })
+
   test('returns the original entries when movement is out of bounds', () => {
     assert.strictEqual(reorderBillingGroupChannels(entries, 35, -1), entries)
     assert.strictEqual(reorderBillingGroupChannels(entries, 999, 1), entries)

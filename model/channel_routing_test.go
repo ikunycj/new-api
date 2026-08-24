@@ -38,7 +38,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 		}},
 		RouteChannels: []BillingGroupChannel{
 			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
-			{Id: 2, BillingGroupRouteId: 17, ChannelId: 40, Priority: 90, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+			{Id: 2, BillingGroupRouteId: 17, ChannelId: 40, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
 		},
 		ErrorMappings: []UpstreamErrorMapping{{
 			Id: 1, ChannelId: 38, RawCode: " RATE_LIMIT_ERROR ", StatusCode: 429,
@@ -51,12 +51,14 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	policy, channels, ok := ResolveBillingGroupRoute("claude")
 	require.True(t, ok)
 	assert.Equal(t, RoutingModeStabilityFirst, policy.Mode)
-	assert.Equal(t, 3, policy.MaxTotalAttempts)
+	assert.Equal(t, 2, policy.MaxTotalAttempts)
 	require.Len(t, channels, 2)
 	assert.Equal(t, 38, channels[0].ChannelId)
 	assert.Equal(t, 40, channels[1].ChannelId)
-	assert.Equal(t, 37, channels[0].Weight)
-	assert.Equal(t, 83, channels[1].Weight)
+	assert.Equal(t, 2, channels[0].Priority)
+	assert.Equal(t, 1, channels[1].Priority)
+	assert.Zero(t, channels[0].Weight)
+	assert.Zero(t, channels[1].Weight)
 	assert.InDelta(t, 0.6, ResolveChannelCostFactor("claude", 38), 0.0001)
 
 	var oldCount int64

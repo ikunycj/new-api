@@ -22,19 +22,18 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
+import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 import type { Channel } from '@/features/channels/types'
 import { updateFailoverConfig } from '@/features/failover/api'
 import type {
   BillingGroupChannel,
   BillingGroupRoute,
   FailoverConfig,
-  RoutingMode,
 } from '@/features/failover/types'
 
 import {
@@ -44,42 +43,13 @@ import {
 
 let nextTemporaryID = -1
 
-const routeDefaults: Record<
-  RoutingMode,
-  Pick<
-    BillingGroupRoute,
-    | 'max_total_attempts'
-    | 'total_timeout_ms'
-    | 'circuit_failure_threshold'
-    | 'circuit_window_seconds'
-    | 'circuit_cooldown_seconds'
-    | 'circuit_half_open_requests'
-  >
-> = {
-  cost_first: {
-    max_total_attempts: 6,
-    total_timeout_ms: 45000,
-    circuit_failure_threshold: 8,
-    circuit_window_seconds: 60,
-    circuit_cooldown_seconds: 60,
-    circuit_half_open_requests: 1,
-  },
-  balanced: {
-    max_total_attempts: 4,
-    total_timeout_ms: 30000,
-    circuit_failure_threshold: 5,
-    circuit_window_seconds: 60,
-    circuit_cooldown_seconds: 60,
-    circuit_half_open_requests: 1,
-  },
-  stability_first: {
-    max_total_attempts: 3,
-    total_timeout_ms: 20000,
-    circuit_failure_threshold: 3,
-    circuit_window_seconds: 60,
-    circuit_cooldown_seconds: 90,
-    circuit_half_open_requests: 1,
-  },
+const defaultRouteSettings = {
+  max_total_attempts: 1,
+  total_timeout_ms: 30000,
+  circuit_failure_threshold: 5,
+  circuit_window_seconds: 60,
+  circuit_cooldown_seconds: 60,
+  circuit_half_open_requests: 1,
 }
 
 function createRoute(): BillingGroupRoute {
@@ -89,7 +59,7 @@ function createRoute(): BillingGroupRoute {
     name: '',
     mode: 'balanced',
     enabled: false,
-    ...routeDefaults.balanced,
+    ...defaultRouteSettings,
     created_time: 0,
     updated_time: 0,
   }
@@ -115,12 +85,6 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
   const selectedRoute =
     config?.routes.find((route) => route.id === selectedRouteID) ??
     config?.routes[0]
-  const getPlanLabel = (mode: RoutingMode) => {
-    if (mode === 'cost_first') return 'Cost first'
-    if (mode === 'stability_first') return 'Stability first'
-    return 'Balanced'
-  }
-
   const saveMutation = useMutation({
     mutationFn: updateFailoverConfig,
     onSuccess: async () => {
@@ -183,10 +147,19 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       const entries = current.route_channels.filter(
         (entry) => entry.billing_group_route_id === route.id
       )
+      const targetType = channelByID.get(target.channel_id)?.type ?? 0
+      const protocolChannelIDs = new Set(
+        entries.flatMap((entry) =>
+          (channelByID.get(entry.channel_id)?.type ?? 0) === targetType
+            ? [entry.channel_id]
+            : []
+        )
+      )
       const reordered = reorderBillingGroupChannels(
         entries,
         target.channel_id,
-        direction
+        direction,
+        protocolChannelIDs
       )
       const priorities = new Map(
         reordered.map((entry) => [entry.channel_id, entry.priority])
@@ -202,12 +175,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
 
   const saveConfig = () => {
     if (!config) return
-    const synchronized = structuredClone(config)
-    synchronized.route_channels = synchronized.route_channels.map((entry) => ({
-      ...entry,
-      weight: channelByID.get(entry.channel_id)?.weight ?? 0,
-    }))
-    saveMutation.mutate(synchronized)
+    saveMutation.mutate(structuredClone(config))
   }
 
   if (props.isLoading || !config) {
@@ -263,9 +231,16 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       {config.routes.map((route, routeIndex) => {
         if (route.id !== selectedRoute?.id) return null
         const entries = routeEntries(route)
+        const entriesByProtocol = new Map<number, BillingGroupChannel[]>()
+        for (const entry of entries) {
+          const channelType = channelByID.get(entry.channel_id)?.type ?? 0
+          const protocolEntries = entriesByProtocol.get(channelType) ?? []
+          protocolEntries.push(entry)
+          entriesByProtocol.set(channelType, protocolEntries)
+        }
         return (
           <section key={route.id} className='space-y-5'>
-            <div className='grid gap-3 border-y py-4 md:grid-cols-[1fr_180px_auto_auto] md:items-end'>
+            <div className='grid gap-3 border-y py-4 md:grid-cols-[1fr_auto_auto] md:items-end'>
               <div className='space-y-1.5'>
                 <Label>{t('Billing group')}</Label>
                 {route.id < 0 ? (
@@ -301,27 +276,6 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   <Input value={route.billing_group} disabled />
                 )}
               </div>
-              <div className='space-y-1.5'>
-                <Label>{t('Routing strategy')}</Label>
-                <NativeSelect
-                  className='w-full'
-                  value={route.mode}
-                  onChange={(event) => {
-                    const mode = event.target.value as RoutingMode
-                    updateRoute(routeIndex, { mode, ...routeDefaults[mode] })
-                  }}
-                >
-                  <NativeSelectOption value='cost_first'>
-                    {t('Cost first')}
-                  </NativeSelectOption>
-                  <NativeSelectOption value='balanced'>
-                    {t('Balanced')}
-                  </NativeSelectOption>
-                  <NativeSelectOption value='stability_first'>
-                    {t('Stability first')}
-                  </NativeSelectOption>
-                </NativeSelect>
-              </div>
               <div className='flex items-center gap-2 pb-2'>
                 <Switch
                   checked={route.enabled}
@@ -352,125 +306,116 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
               </Button>
             </div>
 
-            <div className='grid gap-4 sm:grid-cols-3'>
-              <div>
-                <div className='text-muted-foreground text-xs'>{t('Plan')}</div>
-                <StatusBadge variant='info' copyable={false} className='mt-1'>
-                  {t(getPlanLabel(route.mode))}
-                </StatusBadge>
-              </div>
-              <div>
-                <div className='text-muted-foreground text-xs'>
-                  {t('Maximum total attempts')}
-                </div>
-                <div className='mt-1 font-medium'>
-                  {route.max_total_attempts}
-                </div>
-              </div>
-              <div>
-                <div className='text-muted-foreground text-xs'>
-                  {t('Total timeout (ms)')}
-                </div>
-                <div className='mt-1 font-medium'>{route.total_timeout_ms}</div>
-              </div>
-            </div>
-
-            <div className='overflow-x-auto'>
-              <table className='w-full min-w-[900px] text-sm'>
-                <thead className='text-muted-foreground border-b text-left'>
-                  <tr>
-                    <th className='py-2 pr-3'>{t('Order')}</th>
-                    <th className='py-2 pr-3'>{t('Channel')}</th>
-                    <th className='py-2 pr-3'>{t('Channel priority')}</th>
-                    <th className='py-2 pr-3'>{t('Weight')}</th>
-                    <th className='py-2 pr-3'>{t('Cost factor')}</th>
-                    <th className='py-2 pr-3'>
-                      {t('Attempts on this channel')}
-                    </th>
-                    <th className='py-2 text-right'>{t('Actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry, index) => {
-                    const channel = channelByID.get(entry.channel_id)
-                    return (
-                      <tr
-                        key={`${entry.billing_group_route_id}-${entry.channel_id}`}
-                        className='border-b'
-                      >
-                        <td className='py-2 pr-3'>{index + 1}</td>
-                        <td className='py-2 pr-3'>
-                          <div className='font-medium'>
-                            {channel?.name ?? `#${entry.channel_id}`}
-                          </div>
-                          {channel ? (
-                            <div className='text-muted-foreground text-xs'>
-                              #{channel.id}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className='py-2 pr-3'>{channel?.priority ?? 0}</td>
-                        <td className='py-2 pr-3'>{channel?.weight ?? 0}</td>
-                        <td className='py-2 pr-3'>{entry.cost_factor}</td>
-                        <td className='py-2 pr-3'>
-                          <Input
-                            className='w-24'
-                            type='number'
-                            min={1}
-                            value={entry.max_attempts}
-                            onChange={(event) =>
-                              updateEntry(entry, {
-                                max_attempts: Number(event.target.value),
-                              })
-                            }
-                          />
-                        </td>
-                        <td className='py-2 text-right'>
-                          <div className='flex justify-end gap-1'>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              title={t('Move up')}
-                              disabled={index === 0}
-                              onClick={() => moveEntry(route, entry, -1)}
+            {[...entriesByProtocol.entries()].map(
+              ([channelType, protocolEntries]) => (
+                <div
+                  key={channelType}
+                  className='overflow-hidden rounded-md border'
+                >
+                  <div className='bg-muted/40 border-b px-4 py-3'>
+                    <h3 className='text-sm font-semibold'>
+                      {t(getChannelTypeLabel(channelType))} {t('Protocol')}
+                    </h3>
+                  </div>
+                  <div className='overflow-x-auto'>
+                    <table className='w-full min-w-[640px] text-sm'>
+                      <thead className='text-muted-foreground border-b text-left'>
+                        <tr>
+                          <th className='px-4 py-2'>{t('Order')}</th>
+                          <th className='px-4 py-2'>{t('Channel')}</th>
+                          <th className='px-4 py-2'>
+                            {t('Attempts on this channel')}
+                          </th>
+                          <th className='px-4 py-2 text-right'>
+                            {t('Actions')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {protocolEntries.map((entry, index) => {
+                          const channel = channelByID.get(entry.channel_id)
+                          return (
+                            <tr
+                              key={`${entry.billing_group_route_id}-${entry.channel_id}`}
+                              className='border-b last:border-b-0'
                             >
-                              <ArrowUp className='size-4' />
-                            </Button>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              title={t('Move down')}
-                              disabled={index === entries.length - 1}
-                              onClick={() => moveEntry(route, entry, 1)}
-                            >
-                              <ArrowDown className='size-4' />
-                            </Button>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              title={t('Delete')}
-                              onClick={() =>
-                                updateConfig((current) => ({
-                                  ...current,
-                                  route_channels: current.route_channels.filter(
-                                    (candidate) =>
-                                      candidate.billing_group_route_id !==
-                                        entry.billing_group_route_id ||
-                                      candidate.channel_id !== entry.channel_id
-                                  ),
-                                }))
-                              }
-                            >
-                              <Trash2 className='size-4' />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                              <td className='px-4 py-2'>{index + 1}</td>
+                              <td className='px-4 py-2'>
+                                <div className='font-medium'>
+                                  {channel?.name ?? `#${entry.channel_id}`}
+                                </div>
+                                {channel ? (
+                                  <div className='text-muted-foreground text-xs'>
+                                    #{channel.id}
+                                  </div>
+                                ) : null}
+                              </td>
+                              <td className='px-4 py-2'>
+                                <Input
+                                  className='w-24'
+                                  type='number'
+                                  min={1}
+                                  value={entry.max_attempts}
+                                  onChange={(event) =>
+                                    updateEntry(entry, {
+                                      max_attempts: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className='px-4 py-2 text-right'>
+                                <div className='flex justify-end gap-1'>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    title={t('Move up')}
+                                    disabled={index === 0}
+                                    onClick={() => moveEntry(route, entry, -1)}
+                                  >
+                                    <ArrowUp className='size-4' />
+                                  </Button>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    title={t('Move down')}
+                                    disabled={
+                                      index === protocolEntries.length - 1
+                                    }
+                                    onClick={() => moveEntry(route, entry, 1)}
+                                  >
+                                    <ArrowDown className='size-4' />
+                                  </Button>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    title={t('Delete')}
+                                    onClick={() =>
+                                      updateConfig((current) => ({
+                                        ...current,
+                                        route_channels:
+                                          current.route_channels.filter(
+                                            (candidate) =>
+                                              candidate.billing_group_route_id !==
+                                                entry.billing_group_route_id ||
+                                              candidate.channel_id !==
+                                                entry.channel_id
+                                          ),
+                                      }))
+                                    }
+                                  >
+                                    <Trash2 className='size-4' />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            )}
 
             <NativeSelect
               className='w-full max-w-sm'
@@ -493,7 +438,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                     channel_id: channelID,
                     priority:
                       currentEntries.length === 0 ? 1 : lastPriority - 1,
-                    weight: channel.weight ?? 0,
+                    weight: 0,
                     max_attempts: 1,
                     enabled: true,
                     cost_factor: 1,

@@ -37,8 +37,8 @@ type BillingGroupRoute struct {
 }
 
 // BillingGroupChannel defines the deterministic channel order inside a billing
-// group. Equal priorities are weighted; a lower priority is only considered
-// after every eligible channel at the preceding priority is exhausted.
+// group. Weight remains only for database and API compatibility and is ignored
+// by configured ToB routing.
 type BillingGroupChannel struct {
 	Id                  int     `json:"id"`
 	BillingGroupRouteId int     `json:"billing_group_route_id" gorm:"index;uniqueIndex:idx_billing_route_channel"`
@@ -318,6 +318,34 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			routeGroupByID[route.Id] = route.BillingGroup
 		}
 
+		routeChannelIndexes := make(map[int][]int, len(config.Routes))
+		for i := range config.RouteChannels {
+			entry := &config.RouteChannels[i]
+			if entry.Id < 0 {
+				entry.Id = 0
+			}
+			if persistedRouteID, ok := routeIDMap[entry.BillingGroupRouteId]; ok {
+				entry.BillingGroupRouteId = persistedRouteID
+			}
+			routeChannelIndexes[entry.BillingGroupRouteId] = append(
+				routeChannelIndexes[entry.BillingGroupRouteId],
+				i,
+			)
+		}
+		for _, indexes := range routeChannelIndexes {
+			sort.SliceStable(indexes, func(i, j int) bool {
+				left := config.RouteChannels[indexes[i]]
+				right := config.RouteChannels[indexes[j]]
+				if left.Priority == right.Priority {
+					return left.Id < right.Id
+				}
+				return left.Priority > right.Priority
+			})
+			for position, index := range indexes {
+				config.RouteChannels[index].Priority = len(indexes) - position
+			}
+		}
+
 		channelIDs := make([]int, 0, len(config.RouteChannels))
 		configuredChannelIDs := make([]int, 0, len(config.RouteChannels))
 		seenChannelIDs := make(map[int]struct{}, len(config.RouteChannels))
@@ -343,14 +371,9 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 		}
 		seenRouteChannels := make(map[[2]int]struct{}, len(config.RouteChannels))
 		enabledChannelsByRoute := make(map[int]int, len(config.Routes))
+		totalAttemptsByRoute := make(map[int]int, len(config.Routes))
 		for i := range config.RouteChannels {
 			entry := &config.RouteChannels[i]
-			if entry.Id < 0 {
-				entry.Id = 0
-			}
-			if persistedRouteID, ok := routeIDMap[entry.BillingGroupRouteId]; ok {
-				entry.BillingGroupRouteId = persistedRouteID
-			}
 			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 {
 				return errors.New("route channel contains invalid values")
 			}
@@ -367,7 +390,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if !ok {
 				return gorm.ErrRecordNotFound
 			}
-			entry.Weight = channel.GetWeight()
+			entry.Weight = 0
 			belongsToGroup := false
 			for _, group := range strings.Split(channel.Group, ",") {
 				if strings.TrimSpace(group) == billingGroup {
@@ -380,13 +403,21 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			}
 			if entry.Enabled {
 				enabledChannelsByRoute[entry.BillingGroupRouteId]++
+				totalAttemptsByRoute[entry.BillingGroupRouteId] += entry.MaxAttempts
 			}
 			if err := tx.Save(entry).Error; err != nil {
 				return err
 			}
 			channelIDs = append(channelIDs, entry.Id)
 		}
-		for _, route := range config.Routes {
+		for i := range config.Routes {
+			route := &config.Routes[i]
+			if attempts := totalAttemptsByRoute[route.Id]; attempts > 0 {
+				route.MaxTotalAttempts = attempts
+				if err := tx.Model(route).Update("max_total_attempts", attempts).Error; err != nil {
+					return err
+				}
+			}
 			if route.Enabled && enabledChannelsByRoute[route.Id] == 0 {
 				return errors.New("enabled billing group route requires an enabled channel")
 			}

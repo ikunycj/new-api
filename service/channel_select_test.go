@@ -18,20 +18,21 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
 	}
 	priority := int64(10)
-	weight := uint(100)
+	firstWeight := uint(1)
+	secondWeight := uint(10000)
 	channels := []model.Channel{
-		{Id: 92001, Name: "Claude Pro", Key: "pro", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Priority: &priority, Weight: &weight},
-		{Id: 92002, Name: "Claude Official", Key: "official", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Priority: &priority, Weight: &weight},
+		{Id: 92001, Name: "Claude Pro", Key: "pro", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Priority: &priority, Weight: &firstWeight},
+		{Id: 92002, Name: "Claude Official", Key: "official", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Priority: &priority, Weight: &secondWeight},
 	}
 	require.NoError(t, model.DB.Create(&channels).Error)
 	for _, channel := range channels {
-		require.NoError(t, model.DB.Create(&model.Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id, Enabled: true, Priority: &priority, Weight: weight}).Error)
+		require.NoError(t, model.DB.Create(&model.Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id, Enabled: true, Priority: &priority, Weight: 100}).Error)
 	}
 	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Mode: model.RoutingModeBalanced, Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1}
 	require.NoError(t, model.DB.Create(&route).Error)
 	require.NoError(t, model.DB.Create(&[]model.BillingGroupChannel{
-		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
-		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 90, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 1, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 100, Weight: 10000, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
 	}).Error)
 	originalMemoryCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = true
@@ -75,6 +76,22 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 	assert.False(t, param.HasNextRetry())
 }
 
+func TestConfiguredRouteIgnoresWeightsAtEqualPriority(t *testing.T) {
+	channels := setupChannelRoute(t)
+	for _, memoryCacheEnabled := range []bool{true, false} {
+		common.MemoryCacheEnabled = memoryCacheEnabled
+		ctx, _ := gin.CreateTestContext(nil)
+		param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+
+		for range 10 {
+			selected, _, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, selected)
+			assert.Equal(t, channels[0].Id, selected.Id)
+		}
+	}
+}
+
 func TestConfiguredRouteSwitchActionSkipsRemainingChannelAttempts(t *testing.T) {
 	channels := setupChannelRoute(t)
 	ctx, _ := gin.CreateTestContext(nil)
@@ -109,7 +126,7 @@ func TestCrossGroupRetryRequiresTokenPermission(t *testing.T) {
 	assert.False(t, param.AdvanceRetry())
 }
 
-func TestConfiguredRouteWithoutMemoryCacheHonorsRoutePriority(t *testing.T) {
+func TestConfiguredRouteWithoutMemoryCacheHonorsRouteOrder(t *testing.T) {
 	channels := setupChannelRoute(t)
 	common.MemoryCacheEnabled = false
 	ctx, _ := gin.CreateTestContext(nil)

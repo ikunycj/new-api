@@ -33,18 +33,35 @@ export function reorderBillingGroupChannels<
     channel_id: number
     priority: number
   },
->(entries: T[], channelID: number, direction: -1 | 1): T[] {
+>(
+  entries: T[],
+  channelID: number,
+  direction: -1 | 1,
+  movableChannelIDs?: ReadonlySet<number>
+): T[] {
   const ordered = [...entries].sort(
     (a, b) => b.priority - a.priority || a.id - b.id
   )
-  const index = ordered.findIndex((entry) => entry.channel_id === channelID)
-  const targetIndex = index + direction
-  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
+  const movableIndexes = ordered.flatMap((entry, index) =>
+    !movableChannelIDs || movableChannelIDs.has(entry.channel_id) ? [index] : []
+  )
+  const movableIndex = movableIndexes.findIndex(
+    (index) => ordered[index].channel_id === channelID
+  )
+  const targetMovableIndex = movableIndex + direction
+  if (
+    movableIndex < 0 ||
+    targetMovableIndex < 0 ||
+    targetMovableIndex >= movableIndexes.length
+  ) {
     return entries
   }
 
-  const [moved] = ordered.splice(index, 1)
-  ordered.splice(targetIndex, 0, moved)
+  const index = movableIndexes[movableIndex]
+  const targetIndex = movableIndexes[targetMovableIndex]
+  const target = ordered[targetIndex]
+  ordered[targetIndex] = ordered[index]
+  ordered[index] = target
   return ordered.map((entry, position) => ({
     ...entry,
     priority: ordered.length - position,
