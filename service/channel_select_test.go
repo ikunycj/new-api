@@ -57,6 +57,7 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 	assert.Equal(t, channels[0].Id, first.Id)
 
 	param.MarkChannelAttempted(first.Id)
+	param.HandleChannelFailure(first.Id, "retry_channel")
 	require.True(t, param.HasNextRetry())
 	require.True(t, param.AdvanceRetry())
 	second, _, err := CacheGetRandomSatisfiedChannel(param)
@@ -64,6 +65,7 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 	assert.Equal(t, channels[0].Id, second.Id)
 
 	param.MarkChannelAttempted(second.Id)
+	param.HandleChannelFailure(second.Id, "retry_channel")
 	require.True(t, param.AdvanceRetry())
 	third, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
@@ -71,6 +73,25 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 
 	param.MarkChannelAttempted(third.Id)
 	assert.False(t, param.HasNextRetry())
+}
+
+func TestConfiguredRouteSwitchActionSkipsRemainingChannelAttempts(t *testing.T) {
+	channels := setupChannelRoute(t)
+	ctx, _ := gin.CreateTestContext(nil)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+
+	first, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.Equal(t, channels[0].Id, first.Id)
+
+	param.MarkChannelAttempted(first.Id)
+	param.HandleChannelFailure(first.Id, "switch_channel")
+	require.True(t, param.AdvanceRetry())
+	second, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.Equal(t, channels[1].Id, second.Id)
 }
 
 func TestCrossGroupRetryRequiresTokenPermission(t *testing.T) {

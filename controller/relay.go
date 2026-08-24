@@ -331,7 +331,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			observability.RecordErrorEvent("upstream_attempt", newAPIError)
 			observability.RecordChannelRequest(channel.Id, "error")
 			if newAPIError.FailureScope() == "channel" || newAPIError.FailureScope() == "provider" {
-				retryParam.ExcludeChannel(channel.Id)
+				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
 				service.RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			attemptClass = observability.ErrorClass(newAPIError, contextErr)

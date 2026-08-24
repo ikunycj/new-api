@@ -24,6 +24,7 @@ type RetryParam struct {
 	attemptCounts     map[int]int
 	attemptedChannels map[int]struct{}
 	excludedChannels  map[int]struct{}
+	retryChannelID    int
 	startedAt         time.Time
 	runtimePolicy     *model.RuntimeRoutingPolicy
 	routeChannels     []model.BillingGroupChannel
@@ -224,7 +225,20 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		group := groups[i]
 		var channel *model.Channel
 		if param.routeConfigured {
-			channel, err = model.GetConfiguredRouteChannel(group, param.ModelName, param.RequestPath, param.routeChannels, param.excludedChannels)
+			if param.retryChannelID > 0 {
+				retryEntries := make([]model.BillingGroupChannel, 0, 1)
+				for _, entry := range param.routeChannels {
+					if entry.ChannelId == param.retryChannelID {
+						retryEntries = append(retryEntries, entry)
+						break
+					}
+				}
+				param.retryChannelID = 0
+				channel, err = model.GetConfiguredRouteChannel(group, param.ModelName, param.RequestPath, retryEntries, param.excludedChannels)
+			}
+			if channel == nil && err == nil {
+				channel, err = model.GetConfiguredRouteChannel(group, param.ModelName, param.RequestPath, param.routeChannels, param.excludedChannels)
+			}
 		} else {
 			priorityRetry := param.GetRetry()
 			if len(param.excludedChannels) > 0 {
@@ -253,6 +267,22 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	return nil, groups[len(groups)-1], nil
 }
 
+// HandleChannelFailure applies the configured error action to the next
+// selection. retry_channel keeps the current channel while its per-channel
+// attempt budget remains; every other action advances to another candidate.
+func (p *RetryParam) HandleChannelFailure(channelID int, action string) {
+	if channelID <= 0 {
+		return
+	}
+	if action == "retry_channel" {
+		if _, excluded := p.excludedChannels[channelID]; !excluded {
+			p.retryChannelID = channelID
+		}
+		return
+	}
+	p.ExcludeChannel(channelID)
+}
+
 func (p *RetryParam) ExcludeChannel(channelID int) {
 	if channelID <= 0 {
 		return
@@ -261,6 +291,9 @@ func (p *RetryParam) ExcludeChannel(channelID int) {
 		p.excludedChannels = make(map[int]struct{})
 	}
 	p.excludedChannels[channelID] = struct{}{}
+	if p.retryChannelID == channelID {
+		p.retryChannelID = 0
+	}
 }
 
 func (p *RetryParam) withinRoutingBudget() bool {
