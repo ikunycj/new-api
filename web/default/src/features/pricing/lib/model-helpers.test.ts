@@ -21,7 +21,11 @@ import { describe, test } from 'node:test'
 
 import type { PricingModel } from '../types'
 import { filterByGroup } from './filters'
-import { expandModelsByGroup, formatGroupRatio } from './model-helpers'
+import {
+  expandModelsByGroup,
+  formatGroupRatio,
+  getDisplayGroupRatio,
+} from './model-helpers'
 
 const models: PricingModel[] = [
   {
@@ -119,6 +123,52 @@ describe('model group display entries', () => {
       result.map((model) => model.display_group),
       ['default', 'default']
     )
+  })
+
+  test('shows all ToC groups by default and separates ToB groups dynamically', () => {
+    const result = expandModelsByGroup(
+      models,
+      ['default', 'vip', 'enterprise', 'pro'],
+      { default: 1, vip: 0.8, enterprise: 1.2, pro: 1.5 },
+      { default: 'toC', vip: 'toC', enterprise: 'toB', pro: 'toB' }
+    )
+
+    assert.deepEqual(result[0].display_groups, [
+      { group: 'vip', ratio: 0.8 },
+      { group: 'default', ratio: 1 },
+    ])
+    assert.deepEqual(result[0].tob_display_groups, [
+      { group: 'enterprise', ratio: 1.2 },
+      { group: 'pro', ratio: 1.5 },
+    ])
+    assert.equal(result[0].display_group, 'vip')
+  })
+
+  test('keeps ToB-only models without exposing a hidden group as the summary', () => {
+    const result = expandModelsByGroup(
+      [
+        {
+          id: 3,
+          model_name: 'business-only-model',
+          quota_type: 0,
+          model_ratio: 1,
+          completion_ratio: 1,
+          enable_groups: ['enterprise'],
+        },
+      ],
+      ['enterprise'],
+      { enterprise: 0.5 },
+      { enterprise: 'toB' }
+    )
+
+    assert.equal(result.length, 1)
+    assert.equal(result[0].display_group, '')
+    assert.equal(result[0].display_group_ratio, 1)
+    assert.equal(getDisplayGroupRatio(result[0], result[0].display_group), 1)
+    assert.deepEqual(result[0].display_groups, [])
+    assert.deepEqual(result[0].tob_display_groups, [
+      { group: 'enterprise', ratio: 0.5 },
+    ])
   })
 
   test('treats the all capability group as matching a selected group', () => {

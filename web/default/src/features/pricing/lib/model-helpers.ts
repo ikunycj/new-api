@@ -17,7 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { EXCLUDED_GROUPS, FILTER_ALL, QUOTA_TYPE_VALUES } from '../constants'
-import type { PricingDisplayModel, PricingModel } from '../types'
+import type {
+  BillingGroupType,
+  PricingDisplayModel,
+  PricingModel,
+} from '../types'
 
 // ----------------------------------------------------------------------------
 // Model Helper Utilities
@@ -61,7 +65,8 @@ export function formatGroupRatio(
 export function expandModelsByGroup(
   models: PricingModel[],
   availableGroups: string[],
-  groupRatio: Record<string, number>
+  groupRatio: Record<string, number>,
+  billingGroupTypes: Record<string, BillingGroupType> = {}
 ): PricingDisplayModel[] {
   const selectableGroups = availableGroups.filter(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
@@ -72,23 +77,37 @@ export function expandModelsByGroup(
       : []
     const supportsAllGroups = enabledGroups.includes(FILTER_ALL)
 
-    const groups = selectableGroups
-      .filter((group) => supportsAllGroups || enabledGroups.includes(group))
-      .map((group) => ({
+    const displayGroups: Array<{ group: string; ratio: number }> = []
+    const toBDisplayGroups: Array<{ group: string; ratio: number }> = []
+    for (const group of selectableGroups) {
+      if (!supportsAllGroups && !enabledGroups.includes(group)) continue
+      const entry = {
         group,
         ratio: getConfiguredGroupRatio(groupRatio, group),
-      }))
-      .sort((a, b) => a.ratio - b.ratio || a.group.localeCompare(b.group))
+      }
+      if (billingGroupTypes[group] === 'toB') {
+        toBDisplayGroups.push(entry)
+      } else {
+        displayGroups.push(entry)
+      }
+    }
+    const byPriceThenName = (
+      a: { group: string; ratio: number },
+      b: { group: string; ratio: number }
+    ) => a.ratio - b.ratio || a.group.localeCompare(b.group)
+    displayGroups.sort(byPriceThenName)
+    toBDisplayGroups.sort(byPriceThenName)
 
-    if (groups.length === 0) return []
-    const lowest = groups[0]
+    if (displayGroups.length === 0 && toBDisplayGroups.length === 0) return []
+    const lowest = displayGroups[0] ?? { group: '', ratio: 1 }
     return [
       {
         ...model,
         key: model.key || model.model_name,
         display_group: lowest.group,
         display_group_ratio: lowest.ratio,
-        display_groups: groups,
+        display_groups: displayGroups,
+        tob_display_groups: toBDisplayGroups,
       },
     ]
   })
@@ -105,6 +124,8 @@ export function getDisplayGroupRatio(
   model: PricingModel,
   selectedGroup?: string
 ): number {
+  if (selectedGroup === '') return 1
+
   const modelEnableGroups = Array.isArray(model.enable_groups)
     ? model.enable_groups
     : []

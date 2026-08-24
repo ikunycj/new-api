@@ -84,6 +84,23 @@ func TestSaveChannelRoutingConfigRemapsTemporaryIDs(t *testing.T) {
 	assert.Equal(t, config.Routes[0].Id, config.RouteChannels[0].BillingGroupRouteId)
 }
 
+func TestGetBillingGroupTypesUsesRouteMembershipIncludingDisabledRoutes(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&[]BillingGroupRoute{
+		{Id: 1, BillingGroup: "enterprise", Enabled: true},
+		{Id: 2, BillingGroup: "internal", Enabled: false},
+	}).Error)
+	InitChannelRoutingCache()
+
+	assert.Equal(t, map[string]string{
+		"default":    BillingGroupTypeToC,
+		"enterprise": BillingGroupTypeToB,
+		"internal":   BillingGroupTypeToB,
+	}, GetBillingGroupTypes(map[string]float64{
+		"default": 1, "enterprise": 1.2, "internal": 0.8,
+	}))
+}
+
 func TestSaveChannelRoutingConfigRejectsChannelOutsideBillingGroup(t *testing.T) {
 	setupChannelRoutingTables(t)
 	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Pro", Group: "default"}).Error)

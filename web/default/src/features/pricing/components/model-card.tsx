@@ -86,12 +86,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
   const displayGroups = props.model.display_groups || []
-  const groupPreviewLimit = 3
-  const canExpandGroups = displayGroups.length > groupPreviewLimit
+  const toBDisplayGroups = props.model.tob_display_groups || []
+  const canExpandGroups = toBDisplayGroups.length > 0
   const visibleGroups = isGroupsExpanded
-    ? displayGroups
-    : displayGroups.slice(0, groupPreviewLimit)
-  const hiddenGroupCount = Math.max(displayGroups.length - groupPreviewLimit, 0)
+    ? [...displayGroups, ...toBDisplayGroups]
+    : displayGroups
+  const hiddenGroupCount = toBDisplayGroups.length
   const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
@@ -412,7 +412,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           <div
             className={cn(
               'flex min-w-0 flex-col gap-1.5',
-              isGroupsExpanded && 'max-h-40 overflow-y-auto pr-1'
+              visibleGroups.length > 4 && 'max-h-40 overflow-y-auto pr-1'
             )}
           >
             {visibleGroups.map((group) => {

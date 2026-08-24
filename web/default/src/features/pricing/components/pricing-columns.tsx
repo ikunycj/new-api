@@ -443,15 +443,20 @@ export function usePricingColumns(
     {
       accessorKey: 'display_group',
       header: t('Groups'),
-      cell: ({ row }) => (
-        <BadgeCell>
-          <GroupBadge
-            group={row.original.display_group}
-            ratio={row.original.display_group_ratio}
-            size='sm'
-          />
-        </BadgeCell>
-      ),
+      cell: ({ row }) => {
+        if (!row.original.display_group) {
+          return <span className='text-muted-foreground/30 text-xs'>—</span>
+        }
+        return (
+          <BadgeCell>
+            <GroupBadge
+              group={row.original.display_group}
+              ratio={row.original.display_group_ratio}
+              size='sm'
+            />
+          </BadgeCell>
+        )
+      },
       size: 130,
       enableSorting: false,
     },

@@ -50,6 +50,7 @@ export function Pricing() {
     models,
     vendors,
     groupRatio,
+    billingGroupTypes,
     usableGroup,
     endpointMap,
     autoGroups,
@@ -112,8 +113,13 @@ export function Pricing() {
 
   const displayModels = useMemo(
     () =>
-      expandModelsByGroup(filteredModels, availableGroups, groupRatio || {}),
-    [availableGroups, filteredModels, groupRatio]
+      expandModelsByGroup(
+        filteredModels,
+        availableGroups,
+        groupRatio || {},
+        billingGroupTypes
+      ),
+    [availableGroups, billingGroupTypes, filteredModels, groupRatio]
   )
 
   const handleClearAll = useCallback(() => {

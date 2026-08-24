@@ -13,6 +13,8 @@ const (
 	RoutingModeCostFirst      = "cost_first"
 	RoutingModeBalanced       = "balanced"
 	RoutingModeStabilityFirst = "stability_first"
+	BillingGroupTypeToB       = "toB"
+	BillingGroupTypeToC       = "toC"
 )
 
 // BillingGroupRoute owns the retry and circuit policy for one billing group.
@@ -110,29 +112,39 @@ func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
 }
 
 type channelRoutingLookupCache struct {
-	routes        map[string]BillingGroupRoute
-	routeChannels map[int][]BillingGroupChannel
-	mappings      []UpstreamErrorMapping
+	routes           map[string]BillingGroupRoute
+	toBBillingGroups map[string]struct{}
+	routeChannels    map[int][]BillingGroupChannel
+	mappings         []UpstreamErrorMapping
 }
 
 var channelRoutingLookup = struct {
 	sync.RWMutex
 	value channelRoutingLookupCache
 }{value: channelRoutingLookupCache{
-	routes:        make(map[string]BillingGroupRoute),
-	routeChannels: make(map[int][]BillingGroupChannel),
+	routes:           make(map[string]BillingGroupRoute),
+	toBBillingGroups: make(map[string]struct{}),
+	routeChannels:    make(map[int][]BillingGroupChannel),
 }}
 
 func InitChannelRoutingCache() {
 	cache := channelRoutingLookupCache{
-		routes:        make(map[string]BillingGroupRoute),
-		routeChannels: make(map[int][]BillingGroupChannel),
+		routes:           make(map[string]BillingGroupRoute),
+		toBBillingGroups: make(map[string]struct{}),
+		routeChannels:    make(map[int][]BillingGroupChannel),
 	}
 	if DB != nil && DB.Migrator().HasTable(&BillingGroupRoute{}) {
 		var routes []BillingGroupRoute
-		if err := DB.Where("enabled = ?", true).Order("id ASC").Find(&routes).Error; err == nil {
+		if err := DB.Order("id ASC").Find(&routes).Error; err == nil {
 			for _, route := range routes {
-				cache.routes[strings.TrimSpace(route.BillingGroup)] = route
+				billingGroup := strings.TrimSpace(route.BillingGroup)
+				if billingGroup == "" {
+					continue
+				}
+				cache.toBBillingGroups[billingGroup] = struct{}{}
+				if route.Enabled {
+					cache.routes[billingGroup] = route
+				}
 			}
 		}
 	}
@@ -150,6 +162,21 @@ func InitChannelRoutingCache() {
 	channelRoutingLookup.Lock()
 	channelRoutingLookup.value = cache
 	channelRoutingLookup.Unlock()
+}
+
+// GetBillingGroupTypes classifies routed billing groups as ToB and all other
+// configured groups as ToC. Disabled routes remain ToB configuration.
+func GetBillingGroupTypes(groups map[string]float64) map[string]string {
+	groupTypes := make(map[string]string, len(groups))
+	channelRoutingLookup.RLock()
+	defer channelRoutingLookup.RUnlock()
+	for group := range groups {
+		groupTypes[group] = BillingGroupTypeToC
+		if _, ok := channelRoutingLookup.value.toBBillingGroups[group]; ok {
+			groupTypes[group] = BillingGroupTypeToB
+		}
+	}
+	return groupTypes
 }
 
 func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []BillingGroupChannel, bool) {
