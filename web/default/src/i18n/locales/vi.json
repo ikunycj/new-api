@@ -6263,6 +6263,14 @@
     "No channels configured for this group": "Chưa cấu hình kênh cho nhóm này",
     "ToC pricing is read-only here and is managed in Basic information.": "Định giá ToC chỉ xem tại đây và được quản lý trong Thông tin cơ bản.",
     "Groups with channel routing are ToB; other billing groups are ToC.": "Nhóm có định tuyến kênh là ToB; các nhóm thanh toán khác là ToC.",
-    "No billing groups configured": "Chưa cấu hình nhóm thanh toán"
+    "No billing groups configured": "Chưa cấu hình nhóm thanh toán",
+    "Clear history": "Xóa lịch sử",
+    "Completed at": "Hoàn tất lúc",
+    "Each completed test is saved with its own Run ID.": "Mỗi bài kiểm thử hoàn tất được lưu bằng Run ID riêng.",
+    "Duration must be between {{min}} and {{max}} seconds.": "Thời lượng phải nằm trong khoảng {{min}} đến {{max}} giây.",
+    "Load test history": "Lịch sử kiểm thử tải",
+    "Load test history cleared": "Đã xóa lịch sử kiểm thử tải",
+    "No previous load tests": "Chưa có kiểm thử tải trước đó",
+    "Requests per second must be between {{min}} and {{max}}.": "Số yêu cầu mỗi giây phải nằm trong khoảng {{min}} đến {{max}}."
   }
 }

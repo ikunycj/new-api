@@ -6263,6 +6263,14 @@
     "No channels configured for this group": "该分组暂无渠道配置",
     "ToC pricing is read-only here and is managed in Basic information.": "ToC 定价在此处只读，请在基础信息中管理。",
     "Groups with channel routing are ToB; other billing groups are ToC.": "包含渠道路由的分组为 ToB，其余计费分组为 ToC。",
-    "No billing groups configured": "暂无计费分组配置"
+    "No billing groups configured": "暂无计费分组配置",
+    "Clear history": "清理历史记录",
+    "Completed at": "完成时间",
+    "Each completed test is saved with its own Run ID.": "每次完成的压测都会按独立 Run ID 保存。",
+    "Duration must be between {{min}} and {{max}} seconds.": "压测时长必须在 {{min}} 到 {{max}} 秒之间。",
+    "Load test history": "压测历史",
+    "Load test history cleared": "压测历史已清理",
+    "No previous load tests": "暂无历史压测记录",
+    "Requests per second must be between {{min}} and {{max}}.": "每秒请求数必须在 {{min}} 到 {{max}} 之间。"
   }
 }

@@ -20,7 +20,9 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 
 import {
+  clearPersistedLoadTestRuns,
   loadPersistedLoadTestRun,
+  loadPersistedLoadTestRuns,
   savePersistedLoadTestRun,
   type LoadTestRunResult,
 } from './storage'
@@ -45,6 +47,9 @@ function installLocalStorage() {
 const result: LoadTestRunResult = {
   model: 'gpt-5.6-sol',
   runId: 'demo-result-1',
+  durationSeconds: 60,
+  requestsPerSecond: 2,
+  estimatedCost: 0.12,
   requestIds: ['request-1'],
   stats: {
     completed: 1,
@@ -92,8 +97,9 @@ describe('load test result storage', () => {
     savePersistedLoadTestRun(42, result)
 
     assert.deepEqual(loadPersistedLoadTestRun(42), {
-      version: 1,
+      version: 2,
       savedAt: 1_000_000,
+      completedAt: 1_000_000,
       ...result,
     })
     assert.equal(loadPersistedLoadTestRun(43), null)
@@ -119,5 +125,21 @@ describe('load test result storage', () => {
     assert.equal(raw.includes('cluster_id'), false)
     assert.equal(raw.includes('pool_name'), false)
     assert.equal(raw.includes('billing_group'), true)
+  })
+
+  test('keeps multiple runs and supports clearing them', () => {
+    const values = installLocalStorage()
+    Date.now = () => 1_000_000
+    savePersistedLoadTestRun(42, result)
+    Date.now = () => 1_000_100
+    savePersistedLoadTestRun(42, { ...result, runId: 'demo-result-2' })
+
+    assert.deepEqual(
+      loadPersistedLoadTestRuns(42).map((run) => run.runId),
+      ['demo-result-2', 'demo-result-1']
+    )
+    clearPersistedLoadTestRuns(42)
+    assert.deepEqual(loadPersistedLoadTestRuns(42), [])
+    assert.equal(values.size, 0)
   })
 })

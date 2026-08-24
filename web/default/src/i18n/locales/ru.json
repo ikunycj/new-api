@@ -6263,6 +6263,14 @@
     "No channels configured for this group": "Для этой группы каналы не настроены",
     "ToC pricing is read-only here and is managed in Basic information.": "Тарификация ToC доступна только для чтения и управляется в основной информации.",
     "Groups with channel routing are ToB; other billing groups are ToC.": "Группы с маршрутизацией каналов относятся к ToB, остальные группы биллинга — к ToC.",
-    "No billing groups configured": "Группы биллинга не настроены"
+    "No billing groups configured": "Группы биллинга не настроены",
+    "Clear history": "Очистить историю",
+    "Completed at": "Время завершения",
+    "Each completed test is saved with its own Run ID.": "Каждый завершённый тест сохраняется с отдельным идентификатором запуска.",
+    "Duration must be between {{min}} and {{max}} seconds.": "Длительность должна быть от {{min}} до {{max}} секунд.",
+    "Load test history": "История нагрузочных тестов",
+    "Load test history cleared": "История нагрузочных тестов очищена",
+    "No previous load tests": "Предыдущих нагрузочных тестов нет",
+    "Requests per second must be between {{min}} and {{max}}.": "Число запросов в секунду должно быть от {{min}} до {{max}}."
   }
 }

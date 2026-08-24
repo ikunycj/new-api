@@ -6263,6 +6263,14 @@
     "No channels configured for this group": "このグループに設定されたチャネルはありません",
     "ToC pricing is read-only here and is managed in Basic information.": "ToC 料金はここでは読み取り専用です。基本情報で管理します。",
     "Groups with channel routing are ToB; other billing groups are ToC.": "チャネルルーティングがあるグループは ToB、それ以外の課金グループは ToC です。",
-    "No billing groups configured": "課金グループが設定されていません"
+    "No billing groups configured": "課金グループが設定されていません",
+    "Clear history": "履歴を消去",
+    "Completed at": "完了日時",
+    "Each completed test is saved with its own Run ID.": "完了した各テストは固有の Run ID で保存されます。",
+    "Duration must be between {{min}} and {{max}} seconds.": "テスト時間は {{min}} 秒から {{max}} 秒の間で指定してください。",
+    "Load test history": "負荷テスト履歴",
+    "Load test history cleared": "負荷テスト履歴を消去しました",
+    "No previous load tests": "過去の負荷テストはありません",
+    "Requests per second must be between {{min}} and {{max}}.": "1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。"
   }
 }

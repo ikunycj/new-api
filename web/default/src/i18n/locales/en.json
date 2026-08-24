@@ -6263,6 +6263,14 @@
     "No channels configured for this group": "No channels configured for this group",
     "ToC pricing is read-only here and is managed in Basic information.": "ToC pricing is read-only here and is managed in Basic information.",
     "Groups with channel routing are ToB; other billing groups are ToC.": "Groups with channel routing are ToB; other billing groups are ToC.",
-    "No billing groups configured": "No billing groups configured"
+    "No billing groups configured": "No billing groups configured",
+    "Clear history": "Clear history",
+    "Completed at": "Completed at",
+    "Each completed test is saved with its own Run ID.": "Each completed test is saved with its own Run ID.",
+    "Duration must be between {{min}} and {{max}} seconds.": "Duration must be between {{min}} and {{max}} seconds.",
+    "Load test history": "Load test history",
+    "Load test history cleared": "Load test history cleared",
+    "No previous load tests": "No previous load tests",
+    "Requests per second must be between {{min}} and {{max}}.": "Requests per second must be between {{min}} and {{max}}."
   }
 }

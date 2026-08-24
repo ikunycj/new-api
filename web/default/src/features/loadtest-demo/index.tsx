@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, AlertTriangle, Play, RefreshCw, Square } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  Play,
+  RefreshCw,
+  Square,
+  Trash2,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -75,7 +82,8 @@ import {
   type LoadTestRequestResult,
 } from './api'
 import {
-  loadPersistedLoadTestRun,
+  clearPersistedLoadTestRuns,
+  loadPersistedLoadTestRuns,
   savePersistedLoadTestRun,
   type RunStats,
 } from './storage'
@@ -218,7 +226,10 @@ export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
   const userId = useAuthStore((state) => state.auth.user?.id)
-  const [persistedRun] = useState(() => loadPersistedLoadTestRun(userId))
+  const [persistedRuns, setPersistedRuns] = useState(() =>
+    loadPersistedLoadTestRuns(userId)
+  )
+  const [persistedRun] = useState(() => persistedRuns[0] ?? null)
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   // Use the masked key value as the UI identity. IDs are database details and
   // can be misleading when accounts are switched in the same browser.
@@ -227,10 +238,12 @@ export function LoadTestDemo() {
     persistedRun?.model ?? LOAD_TEST_MODEL
   )
   const [durationSeconds, setDurationSeconds] = useState(
-    LOAD_TEST_DEFAULT_DURATION_SECONDS
+    String(
+      persistedRun?.durationSeconds || LOAD_TEST_DEFAULT_DURATION_SECONDS
+    )
   )
   const [requestsPerSecond, setRequestsPerSecond] = useState(
-    LOAD_TEST_DEFAULT_RPS
+    String(persistedRun?.requestsPerSecond || LOAD_TEST_DEFAULT_RPS)
   )
   const [promptCache, setPromptCache] = useState(true)
   const [status, setStatus] = useState<RunStatus>('idle')
@@ -273,17 +286,6 @@ export function LoadTestDemo() {
   }, [loadKeys])
 
   useEffect(() => {
-    if (!runId || status === 'running') return
-    savePersistedLoadTestRun(userId, {
-      model: selectedModel,
-      runId,
-      stats,
-      channelStats,
-      requestIds: requestIdsRef.current,
-    })
-  }, [channelStats, runId, selectedModel, stats, status, userId])
-
-  useEffect(() => {
     if (status !== 'running') return
     const timer = window.setInterval(() => {
       setElapsed(Date.now() - runStartedAtRef.current)
@@ -300,15 +302,36 @@ export function LoadTestDemo() {
   const run = useCallback(async () => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
     if (!serverAddress || !selectedKey) return
+    const durationValue =
+      durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
+    const rpsValue =
+      requestsPerSecond.trim() === ''
+        ? Number.NaN
+        : Number(requestsPerSecond)
     if (
-      !Number.isFinite(durationSeconds) ||
-      !Number.isFinite(requestsPerSecond) ||
-      durationSeconds < LOAD_TEST_MIN_DURATION_SECONDS ||
-      durationSeconds > LOAD_TEST_MAX_DURATION_SECONDS ||
-      requestsPerSecond < LOAD_TEST_MIN_RPS ||
-      requestsPerSecond > LOAD_TEST_MAX_RPS
+      !Number.isFinite(durationValue) ||
+      durationValue < LOAD_TEST_MIN_DURATION_SECONDS ||
+      durationValue > LOAD_TEST_MAX_DURATION_SECONDS
     ) {
-      toast.error(t('Load test limits are invalid'))
+      toast.error(
+        t('Duration must be between {{min}} and {{max}} seconds.', {
+          min: LOAD_TEST_MIN_DURATION_SECONDS,
+          max: LOAD_TEST_MAX_DURATION_SECONDS,
+        })
+      )
+      return
+    }
+    if (
+      !Number.isFinite(rpsValue) ||
+      rpsValue < LOAD_TEST_MIN_RPS ||
+      rpsValue > LOAD_TEST_MAX_RPS
+    ) {
+      toast.error(
+        t('Requests per second must be between {{min}} and {{max}}.', {
+          min: LOAD_TEST_MIN_RPS,
+          max: LOAD_TEST_MAX_RPS,
+        })
+      )
       return
     }
     const controller = new AbortController()
@@ -336,11 +359,11 @@ export function LoadTestDemo() {
     }
 
     const inFlight = new Set<Promise<void>>()
-    const durationMs = durationSeconds * 1000
-    const requestIntervalMs = 1000 / requestsPerSecond
+    const durationMs = durationValue * 1000
+    const requestIntervalMs = 1000 / rpsValue
     const requestLimit = Math.min(
       LOAD_TEST_MAX_REQUESTS,
-      Math.ceil(durationSeconds * requestsPerSecond)
+      Math.ceil(durationValue * rpsValue)
     )
     const deadline = Date.now() + durationMs
     let sentRequests = 0
@@ -413,8 +436,12 @@ export function LoadTestDemo() {
     setStatus('complete')
   }, [])
 
-  const durationMs = durationSeconds * 1000
-  const progress = Math.min(100, (elapsed / durationMs) * 100)
+  const durationValue =
+    durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
+  const rpsValue =
+    requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
+  const durationMs = Number.isFinite(durationValue) ? durationValue * 1000 : 0
+  const progress = durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
   const successRate = stats.completed
     ? ((stats.successes / stats.completed) * 100).toFixed(1)
     : '0.0'
@@ -469,12 +496,44 @@ export function LoadTestDemo() {
         (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
     }
   }
-  const maxRequests = Math.min(
-    LOAD_TEST_MAX_REQUESTS,
-    Math.ceil(durationSeconds * requestsPerSecond)
-  )
+
+  useEffect(() => {
+    if (!runId || status === 'running') return
+    savePersistedLoadTestRun(userId, {
+      model: selectedModel,
+      runId,
+      durationSeconds: Number(durationSeconds) || 0,
+      requestsPerSecond: Number(requestsPerSecond) || 0,
+      estimatedCost,
+      stats,
+      channelStats,
+      requestIds: requestIdsRef.current,
+    })
+    setPersistedRuns(loadPersistedLoadTestRuns(userId))
+  }, [
+    channelStats,
+    durationSeconds,
+    estimatedCost,
+    requestsPerSecond,
+    runId,
+    selectedModel,
+    stats,
+    status,
+    userId,
+  ])
+
+  const maxRequests =
+    Number.isFinite(durationValue) && Number.isFinite(rpsValue)
+      ? Math.min(LOAD_TEST_MAX_REQUESTS, Math.ceil(durationValue * rpsValue))
+      : 0
   const canRun =
     (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
+
+  const clearHistory = useCallback(() => {
+    clearPersistedLoadTestRuns(userId)
+    setPersistedRuns([])
+    toast.success(t('Load test history cleared'))
+  }, [t, userId])
 
   const statusLabel = useMemo(() => {
     if (status === 'loading-keys') return t('Loading')
@@ -564,21 +623,9 @@ export function LoadTestDemo() {
                   <Input
                     id='load-test-duration'
                     type='number'
-                    min={LOAD_TEST_MIN_DURATION_SECONDS}
-                    max={LOAD_TEST_MAX_DURATION_SECONDS}
                     step={1}
                     value={durationSeconds}
-                    onChange={(event) => {
-                      const value = Number(event.target.value)
-                      setDurationSeconds(
-                        Number.isFinite(value)
-                          ? Math.min(
-                              LOAD_TEST_MAX_DURATION_SECONDS,
-                              Math.max(LOAD_TEST_MIN_DURATION_SECONDS, value)
-                            )
-                          : LOAD_TEST_MIN_DURATION_SECONDS
-                      )
-                    }}
+                    onChange={(event) => setDurationSeconds(event.target.value)}
                   />
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} seconds', {
@@ -594,21 +641,11 @@ export function LoadTestDemo() {
                   <Input
                     id='load-test-rps'
                     type='number'
-                    min={LOAD_TEST_MIN_RPS}
-                    max={LOAD_TEST_MAX_RPS}
                     step={1}
                     value={requestsPerSecond}
-                    onChange={(event) => {
-                      const value = Number(event.target.value)
-                      setRequestsPerSecond(
-                        Number.isFinite(value)
-                          ? Math.min(
-                              LOAD_TEST_MAX_RPS,
-                              Math.max(LOAD_TEST_MIN_RPS, value)
-                            )
-                          : LOAD_TEST_MIN_RPS
-                      )
-                    }}
+                    onChange={(event) =>
+                      setRequestsPerSecond(event.target.value)
+                    }
                   />
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} RPS', {
@@ -673,6 +710,70 @@ export function LoadTestDemo() {
                   <div className='text-muted-foreground text-xs'>
                     {t('Run ID')}: <code>{runId}</code>
                   </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className='flex flex-row items-center justify-between gap-3'>
+              <div>
+                <CardTitle>{t('Load test history')}</CardTitle>
+                <CardDescription>
+                  {t('Each completed test is saved with its own Run ID.')}
+                </CardDescription>
+              </div>
+              <Button
+                disabled={persistedRuns.length === 0 || status === 'running'}
+                onClick={clearHistory}
+                size='sm'
+                variant='outline'
+              >
+                <Trash2 className='size-4' />
+                {t('Clear history')}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {persistedRuns.length === 0 ? (
+                <p className='text-muted-foreground text-sm'>
+                  {t('No previous load tests')}
+                </p>
+              ) : (
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('Run ID')}</TableHead>
+                        <TableHead>{t('Completed at')}</TableHead>
+                        <TableHead>{t('Test model')}</TableHead>
+                        <TableHead>{t('Duration')}</TableHead>
+                        <TableHead>{t('Requests')}</TableHead>
+                        <TableHead>{t('Success rate')}</TableHead>
+                        <TableHead>{t('Estimated cost')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {persistedRuns.map((run) => (
+                        <TableRow key={run.runId}>
+                          <TableCell>
+                            <code className='text-xs'>{run.runId}</code>
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap'>
+                            {new Date(run.completedAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell>{run.model}</TableCell>
+                          <TableCell>{run.durationSeconds}s</TableCell>
+                          <TableCell>{run.stats.completed}</TableCell>
+                          <TableCell>
+                            {run.stats.completed
+                              ? `${((run.stats.successes / run.stats.completed) * 100).toFixed(1)}%`
+                              : '0.0%'}
+                          </TableCell>
+                          <TableCell>${run.estimatedCost.toFixed(6)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>
