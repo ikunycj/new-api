@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronRight, Copy } from 'lucide-react'
-import { memo, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, Copy } from 'lucide-react'
+import { memo, type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GroupBadge } from '@/components/group-badge'
@@ -76,6 +76,7 @@ function formatTokenCount(tokens: number): string {
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const { t } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
+  const [isGroupsExpanded, setIsGroupsExpanded] = useState(false)
   const tokenUnit = props.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
@@ -84,6 +85,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
+  const displayGroups = props.model.display_groups || []
+  const groupPreviewLimit = 3
+  const canExpandGroups = displayGroups.length > groupPreviewLimit
+  const visibleGroups = isGroupsExpanded
+    ? displayGroups
+    : displayGroups.slice(0, groupPreviewLimit)
+  const hiddenGroupCount = Math.max(displayGroups.length - groupPreviewLimit, 0)
   const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
@@ -401,47 +409,86 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
       <footer className='mt-auto flex items-center justify-between gap-3 pt-4'>
         <div className='flex min-w-0 flex-1 flex-col gap-1.5'>
-          {props.model.display_groups.map((group) => {
-            const groupDynamicSummary = isDynamicPricing
-              ? getDynamicPricingSummary(props.model, {
-                  tokenUnit,
+          <div
+            className={cn(
+              'flex min-w-0 flex-col gap-1.5',
+              isGroupsExpanded && 'max-h-40 overflow-y-auto pr-1'
+            )}
+          >
+            {visibleGroups.map((group) => {
+              const groupDynamicSummary = isDynamicPricing
+                ? getDynamicPricingSummary(props.model, {
+                    tokenUnit,
+                    showRechargePrice,
+                    priceRate,
+                    usdExchangeRate,
+                    groupRatioMultiplier: group.ratio,
+                  })
+                : null
+              let price = ''
+              if (isDynamicPricing) {
+                price =
+                  groupDynamicSummary?.primaryEntries
+                    .slice(0, 2)
+                    .map((entry) => entry.formatted)
+                    .join(' / ') || t('Dynamic Pricing')
+              } else if (isTokenBased) {
+                price = `${formatPrice(props.model, 'input', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)} / ${formatPrice(props.model, 'output', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)}`
+              } else {
+                price = formatRequestPrice(
+                  props.model,
                   showRechargePrice,
                   priceRate,
                   usdExchangeRate,
-                  groupRatioMultiplier: group.ratio,
-                })
-              : null
-            let price = ''
-            if (isDynamicPricing) {
-              price =
-                groupDynamicSummary?.primaryEntries
-                  .slice(0, 2)
-                  .map((entry) => entry.formatted)
-                  .join(' / ') || t('Dynamic Pricing')
-            } else if (isTokenBased) {
-              price = `${formatPrice(props.model, 'input', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)} / ${formatPrice(props.model, 'output', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)}`
-            } else {
-              price = formatRequestPrice(
-                props.model,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate,
-                group.group
+                  group.group
+                )
+              }
+              return (
+                <div
+                  key={group.group}
+                  className='flex items-center justify-between gap-2 text-xs'
+                >
+                  <GroupBadge
+                    group={group.group}
+                    ratio={group.ratio}
+                    size='sm'
+                  />
+                  <span className='text-muted-foreground truncate'>
+                    {price}
+                  </span>
+                </div>
               )
-            }
-            return (
-              <div
-                key={group.group}
-                className='flex items-center justify-between gap-2 text-xs'
-              >
-                <GroupBadge group={group.group} ratio={group.ratio} size='sm' />
-                <span className='text-muted-foreground truncate'>{price}</span>
-              </div>
-            )
-          })}
+            })}
+          </div>
+          {canExpandGroups && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='xs'
+              className='text-muted-foreground w-fit px-1.5'
+              onClick={() => setIsGroupsExpanded((expanded) => !expanded)}
+              aria-expanded={isGroupsExpanded}
+            >
+              {isGroupsExpanded
+                ? t('Collapse')
+                : t('+{{count}} more', { count: hiddenGroupCount })}
+              <ChevronDown
+                className={cn(
+                  'transition-transform',
+                  isGroupsExpanded && 'rotate-180'
+                )}
+              />
+            </Button>
+          )}
           <ModelBillingModeBadge model={props.model} />
         </div>
-        <Button type='button' variant='ghost' size='sm' onClick={props.onClick}>
+        <Button
+          type='button'
+          variant='ghost'
+          size='lg'
+          className='shrink-0 px-3'
+          onClick={props.onClick}
+        >
           {t('Details')}
           <ChevronRight data-icon='inline-end' />
         </Button>

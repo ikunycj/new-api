@@ -30,7 +30,7 @@ const models: PricingModel[] = [
     quota_type: 0,
     model_ratio: 1,
     completion_ratio: 1,
-    enable_groups: ['default', 'vip', 'hidden'],
+    enable_groups: ['default', 'vip', 'enterprise', 'pro', 'hidden'],
   },
   {
     id: 2,
@@ -43,11 +43,17 @@ const models: PricingModel[] = [
 ]
 
 describe('model group display entries', () => {
-  test('returns one model with up to three groups ordered by price', () => {
-    const result = expandModelsByGroup(models, ['default', 'vip'], {
-      default: 1,
-      vip: 0.8,
-    })
+  test('returns one model with all available groups ordered by price', () => {
+    const result = expandModelsByGroup(
+      models,
+      ['default', 'vip', 'enterprise', 'pro'],
+      {
+        default: 1,
+        vip: 0.8,
+        enterprise: 1.2,
+        pro: 1.5,
+      }
+    )
 
     assert.deepEqual(
       result.map((model) => [
@@ -66,6 +72,8 @@ describe('model group display entries', () => {
           [
             { group: 'vip', ratio: 0.8 },
             { group: 'default', ratio: 1 },
+            { group: 'enterprise', ratio: 1.2 },
+            { group: 'pro', ratio: 1.5 },
           ],
         ],
         [
@@ -76,6 +84,8 @@ describe('model group display entries', () => {
           [
             { group: 'vip', ratio: 0.8 },
             { group: 'default', ratio: 1 },
+            { group: 'enterprise', ratio: 1.2 },
+            { group: 'pro', ratio: 1.5 },
           ],
         ],
       ]

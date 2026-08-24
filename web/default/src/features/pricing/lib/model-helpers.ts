@@ -79,7 +79,6 @@ export function expandModelsByGroup(
         ratio: getConfiguredGroupRatio(groupRatio, group),
       }))
       .sort((a, b) => a.ratio - b.ratio || a.group.localeCompare(b.group))
-      .slice(0, 3)
 
     if (groups.length === 0) return []
     const lowest = groups[0]
