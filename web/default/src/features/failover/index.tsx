@@ -90,6 +90,7 @@ export function FailoverConfiguration() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<FailoverConfig | null>(null)
+  const [selectedRouteID, setSelectedRouteID] = useState<number | null>(null)
   const configQuery = useQuery({
     queryKey: ['channel-routing-config'],
     queryFn: getFailoverConfig,
@@ -124,12 +125,16 @@ export function FailoverConfiguration() {
     [channels]
   )
   const config = draft ?? configQuery.data
+  const selectedRoute =
+    config?.routes.find((route) => route.id === selectedRouteID) ??
+    config?.routes[0]
 
   const saveMutation = useMutation({
     mutationFn: updateFailoverConfig,
     onSuccess: async () => {
       toast.success(t('Channel routing saved'))
       setDraft(null)
+      setSelectedRouteID(null)
       await queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
       })
@@ -145,13 +150,16 @@ export function FailoverConfiguration() {
   }
 
   const addRoute = () => {
+    const route = emptyRoute()
     updateConfig((current) => ({
       ...current,
-      routes: [...current.routes, emptyRoute()],
+      routes: [...current.routes, route],
     }))
+    setSelectedRouteID(route.id)
   }
 
   const removeRoute = (routeIndex: number) => {
+    const removedRouteID = config?.routes[routeIndex]?.id
     updateConfig((current) => {
       const route = current.routes[routeIndex]
       return {
@@ -162,6 +170,9 @@ export function FailoverConfiguration() {
         ),
       }
     })
+    if (removedRouteID === selectedRoute?.id) {
+      setSelectedRouteID(null)
+    }
   }
 
   const updateRoute = (
@@ -282,35 +293,77 @@ export function FailoverConfiguration() {
         </TabsList>
 
         <TabsContent value='routes' className='space-y-4 pt-4'>
+          <div className='w-full max-w-sm space-y-1.5'>
+            <Label>{t('Billing group')}</Label>
+            <NativeSelect
+              className='w-full'
+              value={selectedRoute?.id ?? ''}
+              onChange={(event) =>
+                setSelectedRouteID(Number(event.target.value))
+              }
+            >
+              <NativeSelectOption value=''>
+                {t('Select a group')}
+              </NativeSelectOption>
+              {config.routes.map((route) => (
+                <NativeSelectOption key={route.id} value={route.id}>
+                  {route.billing_group || t('Select a group')}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+
           {config.routes.map((route, routeIndex) => (
-            <section key={route.id} className='border-b pb-5'>
-              <div className='grid gap-3 md:grid-cols-[1fr_1fr_180px_auto_auto] md:items-end'>
-                <div className='space-y-1.5'>
-                  <Label>{t('Billing group')}</Label>
-                  <NativeSelect
-                    className='w-full'
-                    value={route.billing_group}
-                    disabled={groupsQuery.isLoading}
-                    onChange={(event) =>
-                      updateRoute(
-                        routeIndex,
-                        'billing_group',
-                        event.target.value
-                      )
-                    }
-                  >
-                    <NativeSelectOption value=''>
-                      {groupsQuery.isLoading
-                        ? t('Loading')
-                        : t('Select a group')}
-                    </NativeSelectOption>
-                    {billingGroups.map((group) => (
-                      <NativeSelectOption key={group} value={group}>
-                        {group}
+            <section
+              key={route.id}
+              className={
+                route.id === selectedRoute?.id ? 'border-b pb-5' : 'hidden'
+              }
+            >
+              <div
+                className={
+                  route.id < 0
+                    ? 'grid gap-3 md:grid-cols-[1fr_1fr_180px_auto_auto] md:items-end'
+                    : 'grid gap-3 md:grid-cols-[1fr_180px_auto_auto] md:items-end'
+                }
+              >
+                {route.id < 0 ? (
+                  <div className='space-y-1.5'>
+                    <Label>{t('Billing group')}</Label>
+                    <NativeSelect
+                      className='w-full'
+                      value={route.billing_group}
+                      disabled={groupsQuery.isLoading}
+                      onChange={(event) =>
+                        updateRoute(
+                          routeIndex,
+                          'billing_group',
+                          event.target.value
+                        )
+                      }
+                    >
+                      <NativeSelectOption value=''>
+                        {groupsQuery.isLoading
+                          ? t('Loading')
+                          : t('Select a group')}
                       </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </div>
+                      {billingGroups
+                        .filter(
+                          (group) =>
+                            !config.routes.some(
+                              (candidate) =>
+                                candidate.id !== route.id &&
+                                candidate.billing_group === group
+                            )
+                        )
+                        .map((group) => (
+                          <NativeSelectOption key={group} value={group}>
+                            {group}
+                          </NativeSelectOption>
+                        ))}
+                    </NativeSelect>
+                  </div>
+                ) : null}
                 <div className='space-y-1.5'>
                   <Label>{t('Display name')}</Label>
                   <Input
