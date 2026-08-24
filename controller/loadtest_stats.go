@@ -19,12 +19,12 @@ type loadTestStatsRequest struct {
 func GetLoadTestChannelStats(c *gin.Context) {
 	userID := c.GetInt("id")
 	if c.GetInt("role") < common.RoleAdminUser {
-		user, err := model.GetUserCache(userID)
+		user, err := model.GetUserById(userID, false)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		if !model.IsBillingGroupToB(user.Group) {
+		if !user.IsToB() {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "load test demo is only available to ToB users"})
 			return
 		}

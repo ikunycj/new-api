@@ -63,7 +63,7 @@ func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 func TestGetLoadTestChannelStatsAllowsCommonUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	model.InitChannelRoutingCache()
-	user := &model.User{Username: "loadtest-common", Group: "toB", AffCode: "loadtest-common"}
+	user := &model.User{Username: "loadtest-common", Group: "default", UserType: model.UserTypeToB, AffCode: "loadtest-common"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
@@ -80,6 +80,22 @@ func TestGetLoadTestChannelStatsRejectsDefaultUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	model.InitChannelRoutingCache()
 	user := &model.User{Username: "loadtest-default", Group: "default", AffCode: "loadtest-default"}
+	require.NoError(t, db.Create(user).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", user.Id)
+	ctx.Set("role", common.RoleCommonUser)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/log/self/loadtest-stats", strings.NewReader(`{"request_ids":[]}`))
+
+	GetLoadTestChannelStats(ctx)
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestGetLoadTestChannelStatsUsesUserTypeInsteadOfBillingGroup(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	model.InitChannelRoutingCache()
+	user := &model.User{Username: "loadtest-toc", Group: "toB", UserType: model.UserTypeToC, AffCode: "loadtest-toc"}
 	require.NoError(t, db.Create(user).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)

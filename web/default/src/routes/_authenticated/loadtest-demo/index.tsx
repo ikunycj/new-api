@@ -31,16 +31,15 @@ export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
       throw redirect({ to: '/403' })
     }
 
-    // Group access can be changed by an administrator while the account is
-    // still logged in. Refresh the entitlement before applying this route's
-    // guard so the sidebar and direct URL stay in sync with the server.
+    // User type can be changed by an administrator while the account is still
+    // logged in. Refresh it before applying this route's guard.
     const response = await getSelf().catch(() => null)
     if (response?.success && response.data) {
       auth.auth.setUser(response.data)
     }
 
     const user = useAuthStore.getState().auth.user
-    if (!user || (user.role < ROLE.ADMIN && user.loadtest_enabled !== true)) {
+    if (!user || (user.role < ROLE.ADMIN && user.user_type !== 'toB')) {
       throw redirect({ to: '/403' })
     }
   },

@@ -328,6 +328,9 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
+	if err := migrateUserTypes(); err != nil {
+		return err
+	}
 	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
 		return err
 	}
@@ -427,6 +430,9 @@ func migrateDBFast() error {
 			return err
 		}
 	}
+	if err := migrateUserTypes(); err != nil {
+		return err
+	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -440,6 +446,42 @@ func migrateDBFast() error {
 		return err
 	}
 	common.SysLog("database migrated")
+	return nil
+}
+
+// migrateUserTypes moves the legacy group-derived ToB permission into the
+// single users.user_type field. Existing explicit values are preserved; only
+// blank values are backfilled so future billing-group edits cannot change
+// access to the load-test demo.
+func migrateUserTypes() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) {
+		return nil
+	}
+
+	routedGroups := []string{BillingGroupTypeToB}
+	if DB.Migrator().HasTable(&BillingGroupRoute{}) {
+		var configuredGroups []string
+		if err := DB.Model(&BillingGroupRoute{}).Distinct("billing_group").Pluck("billing_group", &configuredGroups).Error; err != nil {
+			return fmt.Errorf("read ToB billing groups: %w", err)
+		}
+		routedGroups = append(routedGroups, configuredGroups...)
+	}
+	for _, group := range routedGroups {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if err := DB.Model(&User{}).
+			Where("(user_type IS NULL OR user_type = '') AND "+commonGroupCol+" = ?", group).
+			Update("user_type", UserTypeToB).Error; err != nil {
+			return fmt.Errorf("backfill ToB user type: %w", err)
+		}
+	}
+	if err := DB.Model(&User{}).
+		Where("user_type IS NULL OR user_type = ''").
+		Update("user_type", UserTypeToC).Error; err != nil {
+		return fmt.Errorf("backfill ToC user type: %w", err)
+	}
 	return nil
 }
 
