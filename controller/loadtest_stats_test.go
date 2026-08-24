@@ -60,7 +60,7 @@ func TestGetLoadTestChannelStatsRejectsTooManyRequestIDs(t *testing.T) {
 	assert.Equal(t, "too many request_ids", response.Message)
 }
 
-func TestGetLoadTestChannelStatsRejectsCommonUser(t *testing.T) {
+func TestGetLoadTestChannelStatsAllowsCommonUser(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	user := &model.User{Username: "loadtest-common", Group: "toB", AffCode: "loadtest-common"}
 	require.NoError(t, db.Create(user).Error)
@@ -72,7 +72,7 @@ func TestGetLoadTestChannelStatsRejectsCommonUser(t *testing.T) {
 
 	GetLoadTestChannelStats(ctx)
 
-	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 }
 
 func TestGetLoadTestChannelStatsAllowsAdmin(t *testing.T) {
