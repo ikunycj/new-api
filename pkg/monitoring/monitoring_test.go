@@ -6,11 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestRegistryExposesRelayObservabilityMetrics(t *testing.T) {
@@ -78,4 +82,41 @@ func TestHTTPMiddlewareUsesRouteTemplate(t *testing.T) {
 		}
 	}
 	assert.True(t, found)
+}
+
+func TestRegistryExposesEveryConfiguredChannel(t *testing.T) {
+	previousDB := model.DB
+	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, testDB.AutoMigrate(&model.Channel{}))
+	model.DB = testDB
+	t.Cleanup(func() { model.DB = previousDB })
+
+	require.NoError(t, testDB.Create(&[]model.Channel{
+		{Id: 38, Name: "Primary", Status: common.ChannelStatusEnabled, Group: "common"},
+		{Id: 39, Name: "Backup", Status: common.ChannelStatusManuallyDisabled, Group: "common"},
+	}).Error)
+
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+	families, err := registry.Gather()
+	require.NoError(t, err)
+
+	channels := map[string]map[string]string{}
+	for _, family := range families {
+		if family.GetName() != "alltoken_channel_info" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			channels[labels["channel_id"]] = labels
+		}
+	}
+	require.Len(t, channels, 2)
+	assert.Equal(t, "#38 Primary", channels["38"]["channel_label"])
+	assert.Equal(t, "enabled", channels["38"]["status"])
+	assert.Equal(t, "manually_disabled", channels["39"]["status"])
 }

@@ -45,7 +45,51 @@ var (
 		Name:      "requests_in_flight",
 		Help:      "Current number of HTTP requests being handled.",
 	})
+	channelInfoDesc = prometheus.NewDesc(
+		"alltoken_channel_info",
+		"Configured channels and their current routing metadata.",
+		[]string{"channel_id", "channel_name", "channel_label", "status", "group"},
+		nil,
+	)
 )
+
+type channelInfoCollector struct{}
+
+func (channelInfoCollector) Describe(descriptions chan<- *prometheus.Desc) {
+	descriptions <- channelInfoDesc
+}
+
+func (channelInfoCollector) Collect(metrics chan<- prometheus.Metric) {
+	if model.DB == nil {
+		return
+	}
+	var channels []model.Channel
+	if err := model.DB.Select("id", "name", "status", "group").Order("id ASC").Find(&channels).Error; err != nil {
+		common.SysError("collect channel info metrics: " + err.Error())
+		return
+	}
+	for _, channel := range channels {
+		status := "unknown"
+		switch channel.Status {
+		case common.ChannelStatusEnabled:
+			status = "enabled"
+		case common.ChannelStatusManuallyDisabled:
+			status = "manually_disabled"
+		case common.ChannelStatusAutoDisabled:
+			status = "auto_disabled"
+		}
+		metrics <- prometheus.MustNewConstMetric(
+			channelInfoDesc,
+			prometheus.GaugeValue,
+			1,
+			strconv.Itoa(channel.Id),
+			channel.Name,
+			fmt.Sprintf("#%d %s", channel.Id, channel.Name),
+			status,
+			channel.Group,
+		)
+	}
+}
 
 // HTTPMiddleware records bounded-cardinality HTTP metrics. Gin's route template
 // is used instead of the raw URL, so user-controlled path values never become labels.
@@ -103,6 +147,7 @@ func NewRegistry() (*prometheus.Registry, error) {
 		httpDuration,
 		httpResponseSize,
 		httpInFlight,
+		channelInfoCollector{},
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Namespace: "new_api",
 			Name:      "build_info",
