@@ -7,12 +7,15 @@ const newKeys = {
   en: {
     'Clear history': 'Clear history',
     'Completed at': 'Completed at',
-    'Each completed test is saved with its own Run ID.': 'Each completed test is saved with its own Run ID.',
-    'Duration must be between {{min}} and {{max}} seconds.': 'Duration must be between {{min}} and {{max}} seconds.',
+    'Each completed test is saved with its own Run ID.':
+      'Each completed test is saved with its own Run ID.',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'Duration must be between {{min}} and {{max}} seconds.',
     'Load test history': 'Load test history',
     'Load test history cleared': 'Load test history cleared',
     'No previous load tests': 'No previous load tests',
-    'Requests per second must be between {{min}} and {{max}}.': 'Requests per second must be between {{min}} and {{max}}.',
+    'Requests per second must be between {{min}} and {{max}}.':
+      'Requests per second must be between {{min}} and {{max}}.',
     'User Type': 'User Type',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -79,12 +82,15 @@ const newKeys = {
   zh: {
     'Clear history': '清理历史记录',
     'Completed at': '完成时间',
-    'Each completed test is saved with its own Run ID.': '每次完成的压测都会按独立 Run ID 保存。',
-    'Duration must be between {{min}} and {{max}} seconds.': '压测时长必须在 {{min}} 到 {{max}} 秒之间。',
+    'Each completed test is saved with its own Run ID.':
+      '每次完成的压测都会按独立 Run ID 保存。',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      '压测时长必须在 {{min}} 到 {{max}} 秒之间。',
     'Load test history': '压测历史',
     'Load test history cleared': '压测历史已清理',
     'No previous load tests': '暂无历史压测记录',
-    'Requests per second must be between {{min}} and {{max}}.': '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
+    'Requests per second must be between {{min}} and {{max}}.':
+      '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
     'User Type': '用户类型',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -472,167 +478,222 @@ const groupPricingWorkspaceKeys = {
   en: {
     'Clear history': 'Clear history',
     'Completed at': 'Completed at',
-    'Each completed test is saved with its own Run ID.': 'Each completed test is saved with its own Run ID.',
-    'Duration must be between {{min}} and {{max}} seconds.': 'Duration must be between {{min}} and {{max}} seconds.',
+    'Each completed test is saved with its own Run ID.':
+      'Each completed test is saved with its own Run ID.',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'Duration must be between {{min}} and {{max}} seconds.',
     'Basic information': 'Basic information',
     'Channel priority': 'Channel priority',
-    'Channel priority and weight are read-only and managed on the Channels page.': 'Channel priority and weight are read-only and managed on the Channels page.',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      'Channel priority and weight are read-only and managed on the Channels page.',
     'Error mappings saved': 'Error mappings saved',
     'Group pricing': 'Group pricing',
     'Group type': 'Group type',
-    'Groups with channel routing are ToB; other billing groups are ToC.': 'Groups with channel routing are ToB; other billing groups are ToC.',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      'Groups with channel routing are ToB; other billing groups are ToC.',
     'No billing groups configured': 'No billing groups configured',
-    'Manage channel error mappings and monitor channel health.': 'Manage channel error mappings and monitor channel health.',
+    'Manage channel error mappings and monitor channel health.':
+      'Manage channel error mappings and monitor channel health.',
     'No ToB groups configured': 'No ToB groups configured',
     'No ToC groups configured': 'No ToC groups configured',
     'Load test history': 'Load test history',
     'Load test history cleared': 'Load test history cleared',
     'No previous load tests': 'No previous load tests',
-    'No channels configured for this group': 'No channels configured for this group',
-    'ToC pricing is read-only here and is managed in Basic information.': 'ToC pricing is read-only here and is managed in Basic information.',
-    'Requests per second must be between {{min}} and {{max}}.': 'Requests per second must be between {{min}} and {{max}}.',
+    'No channels configured for this group':
+      'No channels configured for this group',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'ToC pricing is read-only here and is managed in Basic information.',
+    'Requests per second must be between {{min}} and {{max}}.':
+      'Requests per second must be between {{min}} and {{max}}.',
   },
   zh: {
     'Clear history': '清理历史记录',
     'Completed at': '完成时间',
-    'Each completed test is saved with its own Run ID.': '每次完成的压测都会按独立 Run ID 保存。',
-    'Duration must be between {{min}} and {{max}} seconds.': '压测时长必须在 {{min}} 到 {{max}} 秒之间。',
+    'Each completed test is saved with its own Run ID.':
+      '每次完成的压测都会按独立 Run ID 保存。',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      '压测时长必须在 {{min}} 到 {{max}} 秒之间。',
     'Basic information': '基础信息',
     'Channel priority': '渠道优先级',
-    'Channel priority and weight are read-only and managed on the Channels page.': '渠道优先级和权重只读，请在渠道页面管理。',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      '渠道优先级和权重只读，请在渠道页面管理。',
     'Error mappings saved': '错误映射已保存',
     'Group pricing': '分组定价',
     'Group type': '分组类型',
-    'Groups with channel routing are ToB; other billing groups are ToC.': '包含渠道路由的分组为 ToB，其余计费分组为 ToC。',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      '包含渠道路由的分组为 ToB，其余计费分组为 ToC。',
     'No billing groups configured': '暂无计费分组配置',
-    'Manage channel error mappings and monitor channel health.': '管理渠道错误映射并监控渠道健康状态。',
+    'Manage channel error mappings and monitor channel health.':
+      '管理渠道错误映射并监控渠道健康状态。',
     'No ToB groups configured': '暂无 ToB 分组配置',
     'No ToC groups configured': '暂无 ToC 分组配置',
     'Load test history': '压测历史',
     'Load test history cleared': '压测历史已清理',
     'No previous load tests': '暂无历史压测记录',
     'No channels configured for this group': '该分组暂无渠道配置',
-    'ToC pricing is read-only here and is managed in Basic information.': 'ToC 定价在此处只读，请在基础信息中管理。',
-    'Requests per second must be between {{min}} and {{max}}.': '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'ToC 定价在此处只读，请在基础信息中管理。',
+    'Requests per second must be between {{min}} and {{max}}.':
+      '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
   },
   'zh-TW': {
     'Clear history': '清除歷史記錄',
     'Completed at': '完成時間',
-    'Each completed test is saved with its own Run ID.': '每次完成的壓測都會以獨立 Run ID 儲存。',
-    'Duration must be between {{min}} and {{max}} seconds.': '壓測時間必須介於 {{min}} 到 {{max}} 秒之間。',
+    'Each completed test is saved with its own Run ID.':
+      '每次完成的壓測都會以獨立 Run ID 儲存。',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      '壓測時間必須介於 {{min}} 到 {{max}} 秒之間。',
     'Basic information': '基本資訊',
     'Channel priority': '渠道優先級',
-    'Channel priority and weight are read-only and managed on the Channels page.': '渠道優先級和權重僅供檢視，請在渠道頁面管理。',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      '渠道優先級和權重僅供檢視，請在渠道頁面管理。',
     'Error mappings saved': '錯誤映射已儲存',
     'Group pricing': '分組定價',
     'Group type': '分組類型',
-    'Groups with channel routing are ToB; other billing groups are ToC.': '包含渠道路由的分組為 ToB，其餘計費分組為 ToC。',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      '包含渠道路由的分組為 ToB，其餘計費分組為 ToC。',
     'No billing groups configured': '尚未設定計費分組',
-    'Manage channel error mappings and monitor channel health.': '管理渠道錯誤映射並監控渠道健康狀態。',
+    'Manage channel error mappings and monitor channel health.':
+      '管理渠道錯誤映射並監控渠道健康狀態。',
     'No ToB groups configured': '尚未設定 ToB 分組',
     'No ToC groups configured': '尚未設定 ToC 分組',
     'Load test history': '壓測歷史',
     'Load test history cleared': '壓測歷史已清除',
     'No previous load tests': '尚無歷史壓測記錄',
     'No channels configured for this group': '此分組尚未設定渠道',
-    'ToC pricing is read-only here and is managed in Basic information.': 'ToC 定價在此處僅供檢視，請在基本資訊中管理。',
-    'Requests per second must be between {{min}} and {{max}}.': '每秒請求數必須介於 {{min}} 到 {{max}} 之間。',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'ToC 定價在此處僅供檢視，請在基本資訊中管理。',
+    'Requests per second must be between {{min}} and {{max}}.':
+      '每秒請求數必須介於 {{min}} 到 {{max}} 之間。',
   },
   fr: {
     'Clear history': 'Effacer l’historique',
     'Completed at': 'Terminé le',
-    'Each completed test is saved with its own Run ID.': 'Chaque test terminé est enregistré avec son propre identifiant de session.',
-    'Duration must be between {{min}} and {{max}} seconds.': 'La durée doit être comprise entre {{min}} et {{max}} secondes.',
+    'Each completed test is saved with its own Run ID.':
+      'Chaque test terminé est enregistré avec son propre identifiant de session.',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'La durée doit être comprise entre {{min}} et {{max}} secondes.',
     'Basic information': 'Informations de base',
     'Channel priority': 'Priorité du canal',
-    'Channel priority and weight are read-only and managed on the Channels page.': 'La priorité et le poids sont en lecture seule et se gèrent dans la page des canaux.',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      'La priorité et le poids sont en lecture seule et se gèrent dans la page des canaux.',
     'Error mappings saved': 'Correspondances enregistrées',
     'Group pricing': 'Tarification du groupe',
     'Group type': 'Type de groupe',
-    'Groups with channel routing are ToB; other billing groups are ToC.': 'Les groupes avec routage de canaux sont ToB ; les autres groupes de facturation sont ToC.',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      'Les groupes avec routage de canaux sont ToB ; les autres groupes de facturation sont ToC.',
     'No billing groups configured': 'Aucun groupe de facturation configuré',
-    'Manage channel error mappings and monitor channel health.': 'Gérez les erreurs des canaux et surveillez leur état.',
+    'Manage channel error mappings and monitor channel health.':
+      'Gérez les erreurs des canaux et surveillez leur état.',
     'No ToB groups configured': 'Aucun groupe ToB configuré',
     'No ToC groups configured': 'Aucun groupe ToC configuré',
     'Load test history': 'Historique des tests de charge',
     'Load test history cleared': 'Historique des tests de charge effacé',
     'No previous load tests': 'Aucun test de charge précédent',
-    'No channels configured for this group': 'Aucun canal configuré pour ce groupe',
-    'ToC pricing is read-only here and is managed in Basic information.': 'La tarification ToC est en lecture seule ici et se gère dans les informations de base.',
-    'Requests per second must be between {{min}} and {{max}}.': 'Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.',
+    'No channels configured for this group':
+      'Aucun canal configuré pour ce groupe',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'La tarification ToC est en lecture seule ici et se gère dans les informations de base.',
+    'Requests per second must be between {{min}} and {{max}}.':
+      'Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.',
   },
   ja: {
     'Clear history': '履歴を消去',
     'Completed at': '完了日時',
-    'Each completed test is saved with its own Run ID.': '完了した各テストは固有の Run ID で保存されます。',
-    'Duration must be between {{min}} and {{max}} seconds.': 'テスト時間は {{min}} 秒から {{max}} 秒の間で指定してください。',
+    'Each completed test is saved with its own Run ID.':
+      '完了した各テストは固有の Run ID で保存されます。',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'テスト時間は {{min}} 秒から {{max}} 秒の間で指定してください。',
     'Basic information': '基本情報',
     'Channel priority': 'チャネル優先度',
-    'Channel priority and weight are read-only and managed on the Channels page.': 'チャネルの優先度と重みは読み取り専用です。チャネルページで管理します。',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      'チャネルの優先度と重みは読み取り専用です。チャネルページで管理します。',
     'Error mappings saved': 'エラーマッピングを保存しました',
     'Group pricing': 'グループ料金',
     'Group type': 'グループ種別',
-    'Groups with channel routing are ToB; other billing groups are ToC.': 'チャネルルーティングがあるグループは ToB、それ以外の課金グループは ToC です。',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      'チャネルルーティングがあるグループは ToB、それ以外の課金グループは ToC です。',
     'No billing groups configured': '課金グループが設定されていません',
-    'Manage channel error mappings and monitor channel health.': 'チャネルのエラーマッピングと稼働状態を管理します。',
+    'Manage channel error mappings and monitor channel health.':
+      'チャネルのエラーマッピングと稼働状態を管理します。',
     'No ToB groups configured': 'ToB グループが設定されていません',
     'No ToC groups configured': 'ToC グループが設定されていません',
     'Load test history': '負荷テスト履歴',
     'Load test history cleared': '負荷テスト履歴を消去しました',
     'No previous load tests': '過去の負荷テストはありません',
-    'No channels configured for this group': 'このグループに設定されたチャネルはありません',
-    'ToC pricing is read-only here and is managed in Basic information.': 'ToC 料金はここでは読み取り専用です。基本情報で管理します。',
-    'Requests per second must be between {{min}} and {{max}}.': '1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。',
+    'No channels configured for this group':
+      'このグループに設定されたチャネルはありません',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'ToC 料金はここでは読み取り専用です。基本情報で管理します。',
+    'Requests per second must be between {{min}} and {{max}}.':
+      '1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。',
   },
   ru: {
     'Clear history': 'Очистить историю',
     'Completed at': 'Время завершения',
-    'Each completed test is saved with its own Run ID.': 'Каждый завершённый тест сохраняется с отдельным идентификатором запуска.',
-    'Duration must be between {{min}} and {{max}} seconds.': 'Длительность должна быть от {{min}} до {{max}} секунд.',
+    'Each completed test is saved with its own Run ID.':
+      'Каждый завершённый тест сохраняется с отдельным идентификатором запуска.',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'Длительность должна быть от {{min}} до {{max}} секунд.',
     'Basic information': 'Основная информация',
     'Channel priority': 'Приоритет канала',
-    'Channel priority and weight are read-only and managed on the Channels page.': 'Приоритет и вес канала доступны только для чтения и управляются на странице каналов.',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      'Приоритет и вес канала доступны только для чтения и управляются на странице каналов.',
     'Error mappings saved': 'Сопоставления ошибок сохранены',
     'Group pricing': 'Тарификация группы',
     'Group type': 'Тип группы',
-    'Groups with channel routing are ToB; other billing groups are ToC.': 'Группы с маршрутизацией каналов относятся к ToB, остальные группы биллинга — к ToC.',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      'Группы с маршрутизацией каналов относятся к ToB, остальные группы биллинга — к ToC.',
     'No billing groups configured': 'Группы биллинга не настроены',
-    'Manage channel error mappings and monitor channel health.': 'Управляйте сопоставлениями ошибок и состоянием каналов.',
+    'Manage channel error mappings and monitor channel health.':
+      'Управляйте сопоставлениями ошибок и состоянием каналов.',
     'No ToB groups configured': 'Группы ToB не настроены',
     'No ToC groups configured': 'Группы ToC не настроены',
     'Load test history': 'История нагрузочных тестов',
     'Load test history cleared': 'История нагрузочных тестов очищена',
     'No previous load tests': 'Предыдущих нагрузочных тестов нет',
-    'No channels configured for this group': 'Для этой группы каналы не настроены',
-    'ToC pricing is read-only here and is managed in Basic information.': 'Тарификация ToC доступна только для чтения и управляется в основной информации.',
-    'Requests per second must be between {{min}} and {{max}}.': 'Число запросов в секунду должно быть от {{min}} до {{max}}.',
+    'No channels configured for this group':
+      'Для этой группы каналы не настроены',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'Тарификация ToC доступна только для чтения и управляется в основной информации.',
+    'Requests per second must be between {{min}} and {{max}}.':
+      'Число запросов в секунду должно быть от {{min}} до {{max}}.',
   },
   vi: {
     'Clear history': 'Xóa lịch sử',
     'Completed at': 'Hoàn tất lúc',
-    'Each completed test is saved with its own Run ID.': 'Mỗi bài kiểm thử hoàn tất được lưu bằng Run ID riêng.',
-    'Duration must be between {{min}} and {{max}} seconds.': 'Thời lượng phải nằm trong khoảng {{min}} đến {{max}} giây.',
+    'Each completed test is saved with its own Run ID.':
+      'Mỗi bài kiểm thử hoàn tất được lưu bằng Run ID riêng.',
+    'Duration must be between {{min}} and {{max}} seconds.':
+      'Thời lượng phải nằm trong khoảng {{min}} đến {{max}} giây.',
     'Basic information': 'Thông tin cơ bản',
     'Channel priority': 'Độ ưu tiên kênh',
-    'Channel priority and weight are read-only and managed on the Channels page.': 'Độ ưu tiên và trọng số kênh chỉ được xem, quản lý tại trang Kênh.',
+    'Channel priority and weight are read-only and managed on the Channels page.':
+      'Độ ưu tiên và trọng số kênh chỉ được xem, quản lý tại trang Kênh.',
     'Error mappings saved': 'Đã lưu ánh xạ lỗi',
     'Group pricing': 'Định giá nhóm',
     'Group type': 'Loại nhóm',
-    'Groups with channel routing are ToB; other billing groups are ToC.': 'Nhóm có định tuyến kênh là ToB; các nhóm thanh toán khác là ToC.',
+    'Groups with channel routing are ToB; other billing groups are ToC.':
+      'Nhóm có định tuyến kênh là ToB; các nhóm thanh toán khác là ToC.',
     'No billing groups configured': 'Chưa cấu hình nhóm thanh toán',
-    'Manage channel error mappings and monitor channel health.': 'Quản lý ánh xạ lỗi và theo dõi tình trạng kênh.',
+    'Manage channel error mappings and monitor channel health.':
+      'Quản lý ánh xạ lỗi và theo dõi tình trạng kênh.',
     'No ToB groups configured': 'Chưa cấu hình nhóm ToB',
     'No ToC groups configured': 'Chưa cấu hình nhóm ToC',
     'Load test history': 'Lịch sử kiểm thử tải',
     'Load test history cleared': 'Đã xóa lịch sử kiểm thử tải',
     'No previous load tests': 'Chưa có kiểm thử tải trước đó',
     'No channels configured for this group': 'Chưa cấu hình kênh cho nhóm này',
-    'ToC pricing is read-only here and is managed in Basic information.': 'Định giá ToC chỉ xem tại đây và được quản lý trong Thông tin cơ bản.',
-    'Requests per second must be between {{min}} and {{max}}.': 'Số yêu cầu mỗi giây phải nằm trong khoảng {{min}} đến {{max}}.',
+    'ToC pricing is read-only here and is managed in Basic information.':
+      'Định giá ToC chỉ xem tại đây và được quản lý trong Thông tin cơ bản.',
+    'Requests per second must be between {{min}} and {{max}}.':
+      'Số yêu cầu mỗi giây phải nằm trong khoảng {{min}} đến {{max}}.',
   },
 }
 
-for (const [locale, translations] of Object.entries(groupPricingWorkspaceKeys)) {
+for (const [locale, translations] of Object.entries(
+  groupPricingWorkspaceKeys
+)) {
   Object.assign(newKeys[locale], translations)
 }
 

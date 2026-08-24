@@ -238,9 +238,7 @@ export function LoadTestDemo() {
     persistedRun?.model ?? LOAD_TEST_MODEL
   )
   const [durationSeconds, setDurationSeconds] = useState(
-    String(
-      persistedRun?.durationSeconds || LOAD_TEST_DEFAULT_DURATION_SECONDS
-    )
+    String(persistedRun?.durationSeconds || LOAD_TEST_DEFAULT_DURATION_SECONDS)
   )
   const [requestsPerSecond, setRequestsPerSecond] = useState(
     String(persistedRun?.requestsPerSecond || LOAD_TEST_DEFAULT_RPS)
@@ -309,9 +307,7 @@ export function LoadTestDemo() {
     const durationValue =
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
-      requestsPerSecond.trim() === ''
-        ? Number.NaN
-        : Number(requestsPerSecond)
+      requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
     if (
       !Number.isFinite(durationValue) ||
       durationValue < LOAD_TEST_MIN_DURATION_SECONDS ||
@@ -449,7 +445,8 @@ export function LoadTestDemo() {
   const rpsValue =
     requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
   const durationMs = Number.isFinite(durationValue) ? durationValue * 1000 : 0
-  const progress = durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
+  const progress =
+    durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
   const successRate = stats.completed
     ? ((stats.successes / stats.completed) * 100).toFixed(1)
     : '0.0'
@@ -540,9 +537,7 @@ export function LoadTestDemo() {
       : 0
   const canRun =
     (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
-  const selectedKeyMetadata = keys.find(
-    (key) => key.key === selectedKeyValue
-  )
+  const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
 
   const clearHistory = useCallback(() => {
     clearPersistedLoadTestRuns(userId)
@@ -679,7 +674,8 @@ export function LoadTestDemo() {
               ) : (
                 <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-sm'>
                   <span>
-                    {t('API Key')}: {selectedKeyMetadata?.name || t('Select API Key')}
+                    {t('API Key')}:{' '}
+                    {selectedKeyMetadata?.name || t('Select API Key')}
                   </span>
                   <span>
                     {t('Package')}:{' '}

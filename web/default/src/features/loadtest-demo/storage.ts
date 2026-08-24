@@ -129,7 +129,10 @@ export function loadPersistedLoadTestRuns(
       else {
         window.localStorage.setItem(
           key,
-          JSON.stringify({ version: LOAD_TEST_RESULTS_VERSION, runs: validRuns })
+          JSON.stringify({
+            version: LOAD_TEST_RESULTS_VERSION,
+            runs: validRuns,
+          })
         )
       }
     }
