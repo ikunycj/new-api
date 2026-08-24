@@ -179,6 +179,16 @@ func GetBillingGroupTypes(groups map[string]float64) map[string]string {
 	return groupTypes
 }
 
+// IsBillingGroupToB reports whether the configured billing group is routed as
+// a ToB group. Group names remain data-driven through BillingGroupRoute.
+func IsBillingGroupToB(group string) bool {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return false
+	}
+	return GetBillingGroupTypes(map[string]float64{group: 1})[group] == BillingGroupTypeToB
+}
+
 func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []BillingGroupChannel, bool) {
 	channelRoutingLookup.RLock()
 	defer channelRoutingLookup.RUnlock()

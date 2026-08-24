@@ -103,6 +103,7 @@ export function useSidebarData(): SidebarData {
             title: t('Load Test Demo'),
             url: '/loadtest-demo',
             icon: Gauge,
+            requiresLoadTestAccess: true,
           },
           {
             title: t('Task Logs'),

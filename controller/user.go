@@ -467,6 +467,7 @@ func GetSelf(c *gin.Context) {
 		"wechat_id":           user.WeChatId,
 		"telegram_id":         user.TelegramId,
 		"group":               user.Group,
+		"loadtest_enabled":    user.Role >= common.RoleAdminUser || model.IsBillingGroupToB(user.Group),
 		"quota":               user.Quota,
 		"used_quota":          user.UsedQuota,
 		"request_count":       user.RequestCount,
