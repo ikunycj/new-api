@@ -58,6 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import { fetchApiKeyModels } from '@/features/keys/api'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -70,14 +71,15 @@ import {
   LOAD_TEST_MAX_RPS,
   LOAD_TEST_MIN_DURATION_SECONDS,
   LOAD_TEST_MIN_RPS,
-  LOAD_TEST_MODEL,
-  LOAD_TEST_MODELS,
+  getLoadTestApiBaseUrl,
   getLoadTestChannelStats,
+  getLoadTestModels,
   loadLoadTestKeys,
   loadLoadTestPricing,
   sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
+  type LoadTestModel,
   type LoadTestPricing,
   type LoadTestRequestResult,
 } from './api'
@@ -234,9 +236,9 @@ export function LoadTestDemo() {
   // Use the masked key value as the UI identity. IDs are database details and
   // can be misleading when accounts are switched in the same browser.
   const [selectedKeyValue, setSelectedKeyValue] = useState('')
-  const [selectedModel, setSelectedModel] = useState(
-    persistedRun?.model ?? LOAD_TEST_MODEL
-  )
+  const [models, setModels] = useState<LoadTestModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(persistedRun?.model ?? '')
   const [durationSeconds, setDurationSeconds] = useState(
     String(persistedRun?.durationSeconds || LOAD_TEST_DEFAULT_DURATION_SECONDS)
   )
@@ -288,6 +290,51 @@ export function LoadTestDemo() {
   }, [loadKeys])
 
   useEffect(() => {
+    const selectedKey = keys.find((key) => key.key === selectedKeyValue)
+    if (!serverAddress || !selectedKey) {
+      setModels([])
+      setSelectedModel('')
+      setModelsLoading(false)
+      return
+    }
+
+    let active = true
+    setModels([])
+    setSelectedModel('')
+    setModelsLoading(true)
+
+    void fetchApiKeyModels(
+      getLoadTestApiBaseUrl(serverAddress),
+      selectedKey.secret
+    )
+      .then((result) => {
+        if (!active) return
+        if (!result.success) {
+          setModels([])
+          return
+        }
+
+        const availableModels = getLoadTestModels(result.models)
+        setModels(availableModels)
+        setSelectedModel((current) =>
+          availableModels.some((model) => model.id === current)
+            ? current
+            : (availableModels[0]?.id ?? '')
+        )
+      })
+      .catch(() => {
+        if (active) setModels([])
+      })
+      .finally(() => {
+        if (active) setModelsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [keys, selectedKeyValue, serverAddress])
+
+  useEffect(() => {
     if (status !== 'running') return
     const timer = window.setInterval(() => {
       setElapsed(Date.now() - runStartedAtRef.current)
@@ -303,7 +350,10 @@ export function LoadTestDemo() {
 
   const run = useCallback(async () => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
-    if (!serverAddress || !selectedKey) return
+    const selectedModelOption = models.find(
+      (model) => model.id === selectedModel
+    )
+    if (!serverAddress || !selectedKey || !selectedModelOption) return
     const durationValue =
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
@@ -386,7 +436,9 @@ export function LoadTestDemo() {
         selectedModel,
         currentRunId,
         promptCache,
-        controller.signal
+        controller.signal,
+        selectedModelOption.provider,
+        selectedModelOption.endpoint
       ).then(recordResult)
       inFlight.add(request)
       void request.then(() => inFlight.delete(request))
@@ -424,6 +476,7 @@ export function LoadTestDemo() {
   }, [
     durationSeconds,
     keys,
+    models,
     promptCache,
     recordResult,
     requestsPerSecond,
@@ -536,7 +589,10 @@ export function LoadTestDemo() {
       ? Math.min(LOAD_TEST_MAX_REQUESTS, Math.ceil(durationValue * rpsValue))
       : 0
   const canRun =
-    (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
+    (status === 'idle' || status === 'complete') &&
+    selectedKeyValue !== '' &&
+    selectedModel !== '' &&
+    !modelsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
 
   const clearHistory = useCallback(() => {
@@ -546,18 +602,20 @@ export function LoadTestDemo() {
   }, [t, userId])
 
   const statusLabel = useMemo(() => {
-    if (status === 'loading-keys') return t('Loading')
+    if (status === 'loading-keys' || modelsLoading) return t('Loading')
     if (status === 'running') return t('Testing...')
     if (status === 'complete') return t('Completed')
     return t('Ready')
-  }, [status, t])
+  }, [modelsLoading, status, t])
 
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Load Test Demo')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         <Button
-          disabled={status === 'loading-keys' || status === 'running'}
+          disabled={
+            status === 'loading-keys' || status === 'running' || modelsLoading
+          }
           onClick={() => void loadKeys()}
           size='sm'
           variant='outline'
@@ -613,16 +671,17 @@ export function LoadTestDemo() {
                 <div className='space-y-1.5'>
                   <Label>{t('Test model')}</Label>
                   <Select
+                    disabled={modelsLoading || models.length === 0}
                     onValueChange={(value) => value && setSelectedModel(value)}
                     value={selectedModel}
                   >
                     <SelectTrigger className='w-full'>
-                      <SelectValue />
+                      <SelectValue placeholder={t('No available models')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {LOAD_TEST_MODELS.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
+                      {models.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.id}
                         </SelectItem>
                       ))}
                     </SelectContent>

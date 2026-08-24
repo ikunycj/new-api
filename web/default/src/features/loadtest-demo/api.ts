@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { fetchTokenKeysBatch, getApiKeys } from '@/features/keys/api'
+import {
+  fetchTokenKeysBatch,
+  getApiKeys,
+  type ApiKeyModel,
+} from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { getPricing } from '@/features/pricing/api'
 import type { PricingModel } from '@/features/pricing/types'
@@ -31,19 +35,6 @@ export const LOAD_TEST_MAX_RPS = 20
 export const LOAD_TEST_MAX_REQUESTS = 10_000
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_TIMEOUT_MS = 120_000
-export const LOAD_TEST_MODEL = 'gpt-5.6-sol'
-export const LOAD_TEST_MODELS = [
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.4-mini',
-  'gpt-4o',
-  'gpt-4.1',
-  'claude-opus-4-8',
-  'claude-sonnet-4-6',
-  'claude-3-7-sonnet',
-] as const
-
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
   (_, index) =>
@@ -52,6 +43,70 @@ const LOAD_TEST_CACHE_PREFIX = Array.from(
 
 export type LoadTestKey = ApiKey & { secret: string }
 export type LoadTestProvider = 'openai' | 'claude'
+export type LoadTestEndpoint =
+  | 'openai'
+  | 'openai-response'
+  | 'openai-response-compact'
+  | 'anthropic'
+
+export type LoadTestModel = {
+  id: string
+  provider: LoadTestProvider
+  endpoint: LoadTestEndpoint
+}
+
+export function getLoadTestApiBaseUrl(serverAddress: string): string {
+  const normalizedAddress = serverAddress.trim().replace(/\/+$/, '')
+  return normalizedAddress.endsWith('/v1')
+    ? normalizedAddress
+    : `${normalizedAddress}/v1`
+}
+
+export function getLoadTestModels(models: ApiKeyModel[]): LoadTestModel[] {
+  const seen = new Set<string>()
+  const loadTestModels: LoadTestModel[] = []
+
+  for (const model of models) {
+    const supportsOpenAI = model.supportedEndpointTypes.includes('openai')
+    const supportsOpenAIResponses =
+      model.supportedEndpointTypes.includes('openai-response')
+    const supportsOpenAICompact = model.supportedEndpointTypes.includes(
+      'openai-response-compact'
+    )
+    const supportsClaude = model.supportedEndpointTypes.includes('anthropic')
+    if (
+      !supportsOpenAI &&
+      !supportsOpenAIResponses &&
+      !supportsOpenAICompact &&
+      !supportsClaude
+    ) {
+      continue
+    }
+    if (seen.has(model.id)) continue
+
+    const provider = getLoadTestProviderFromModel(model)
+    let endpoint: LoadTestEndpoint | undefined
+    if (provider === 'claude' && supportsClaude) {
+      endpoint = 'anthropic'
+    } else if (supportsOpenAI) {
+      endpoint = 'openai'
+    } else if (supportsOpenAIResponses) {
+      endpoint = 'openai-response'
+    } else if (supportsOpenAICompact) {
+      endpoint = 'openai-response-compact'
+    }
+    if (!endpoint) continue
+
+    seen.add(model.id)
+    loadTestModels.push({
+      id: model.id,
+      provider: endpoint === 'anthropic' ? 'claude' : 'openai',
+      endpoint,
+    })
+  }
+
+  return loadTestModels
+}
 
 export type LoadTestRequestResult = {
   keyName: string
@@ -90,7 +145,17 @@ export type LoadTestChannelStats = {
 }
 
 export function getLoadTestProvider(model: string): LoadTestProvider {
-  return model.toLowerCase().startsWith('claude-') ? 'claude' : 'openai'
+  const normalizedModel = model.toLowerCase()
+  return normalizedModel.includes('claude') ||
+    normalizedModel.includes('anthropic')
+    ? 'claude'
+    : 'openai'
+}
+
+function getLoadTestProviderFromModel(model: ApiKeyModel): LoadTestProvider {
+  const owner = model.ownedBy?.toLowerCase() ?? ''
+  if (owner.includes('claude') || owner.includes('anthropic')) return 'claude'
+  return getLoadTestProvider(model.id)
 }
 
 export async function loadLoadTestKeys(): Promise<LoadTestKey[]> {
@@ -302,7 +367,9 @@ export async function sendLoadTestRequest(
   model: string,
   runId: string,
   promptCache: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  providerOverride?: LoadTestProvider,
+  endpointOverride?: LoadTestEndpoint
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
   const controller = new AbortController()
@@ -314,13 +381,27 @@ export async function sendLoadTestRequest(
   signal?.addEventListener('abort', abortRequest, { once: true })
 
   try {
-    const provider = getLoadTestProvider(model)
-    const requestBody: Record<string, unknown> = {
-      model,
-      max_tokens: 32,
-      messages: [{ role: 'user', content: 'Reply with OK.' }],
-    }
-    if (provider === 'claude') {
+    const provider = providerOverride ?? getLoadTestProvider(model)
+    const endpoint =
+      endpointOverride ?? (provider === 'claude' ? 'anthropic' : 'openai')
+    const isResponsesEndpoint =
+      endpoint === 'openai-response' || endpoint === 'openai-response-compact'
+    const requestBody: Record<string, unknown> = isResponsesEndpoint
+      ? {
+          model,
+          input: promptCache
+            ? [
+                { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
+                { role: 'user', content: 'Reply with OK.' },
+              ]
+            : [{ role: 'user', content: 'Reply with OK.' }],
+        }
+      : {
+          model,
+          max_tokens: 32,
+          messages: [{ role: 'user', content: 'Reply with OK.' }],
+        }
+    if (endpoint === 'anthropic') {
       if (promptCache) {
         requestBody.system = [
           {
@@ -330,7 +411,7 @@ export async function sendLoadTestRequest(
           },
         ]
       }
-    } else {
+    } else if (endpoint === 'openai') {
       requestBody.temperature = 0
       requestBody.stream = false
       if (promptCache) {
@@ -339,28 +420,38 @@ export async function sendLoadTestRequest(
           { role: 'user', content: 'Reply with OK.' },
         ]
       }
+    } else if (endpoint === 'openai-response') {
+      requestBody.max_output_tokens = 32
+      requestBody.stream = false
     }
 
-    const endpoint =
-      provider === 'claude' ? '/v1/messages' : '/v1/chat/completions'
+    const endpointPath = {
+      anthropic: '/v1/messages',
+      openai: '/v1/chat/completions',
+      'openai-response': '/v1/responses',
+      'openai-response-compact': '/v1/responses/compact',
+    }[endpoint]
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.secret}`,
       'X-Load-Test-ID': runId,
     }
-    if (provider === 'claude') {
+    if (endpoint === 'anthropic') {
       headers['anthropic-version'] = '2023-06-01'
       headers['x-api-key'] = apiKey.secret
     }
-    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      credentials: 'omit',
-      cache: 'no-store',
-      signal: controller.signal,
-    })
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, '')}${endpointPath}`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: controller.signal,
+      }
+    )
     const payload = await response.json().catch(() => null)
     return {
       keyName: apiKey.name,

@@ -19,7 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 
-import { sendLoadTestRequest, type LoadTestKey } from './api'
+import {
+  getLoadTestApiBaseUrl,
+  getLoadTestModels,
+  sendLoadTestRequest,
+  type LoadTestKey,
+} from './api'
 
 const originalFetch = globalThis.fetch
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
@@ -58,5 +63,86 @@ describe('load test request identity', () => {
 
     assert.equal(result.requestId, 'gateway-request-id')
     assert.equal(result.success, true)
+  })
+
+  test('uses the model endpoint reported by the gateway', async () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { clearTimeout, setTimeout },
+    })
+    let requestedUrl = ''
+    let requestedBody = ''
+    globalThis.fetch = (async (input, init) => {
+      requestedUrl = String(input)
+      requestedBody = String(init?.body ?? '')
+      return new Response(JSON.stringify({ usage: {} }), { status: 200 })
+    }) as typeof fetch
+
+    await sendLoadTestRequest(
+      'https://api.example.com',
+      { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
+      'o4-mini',
+      'load-test-run',
+      false,
+      undefined,
+      'openai',
+      'openai-response'
+    )
+
+    assert.equal(requestedUrl, 'https://api.example.com/v1/responses')
+    assert.deepEqual(JSON.parse(requestedBody), {
+      model: 'o4-mini',
+      input: [{ role: 'user', content: 'Reply with OK.' }],
+      max_output_tokens: 32,
+      stream: false,
+    })
+  })
+})
+
+describe('load test model catalog', () => {
+  test('keeps every OpenAI and Anthropic model returned for the selected key', () => {
+    const models = getLoadTestModels([
+      {
+        id: 'gpt-5.6-sol',
+        ownedBy: 'openai',
+        supportedEndpointTypes: ['openai'],
+      },
+      {
+        id: 'claude-opus-4-8',
+        ownedBy: 'anthropic',
+        supportedEndpointTypes: ['anthropic', 'openai'],
+      },
+      {
+        id: 'embedding-model',
+        ownedBy: 'openai',
+        supportedEndpointTypes: ['embeddings'],
+      },
+      {
+        id: 'o4-mini',
+        ownedBy: 'openai',
+        supportedEndpointTypes: ['openai-response'],
+      },
+    ])
+
+    assert.deepEqual(models, [
+      { id: 'gpt-5.6-sol', provider: 'openai', endpoint: 'openai' },
+      {
+        id: 'claude-opus-4-8',
+        provider: 'claude',
+        endpoint: 'anthropic',
+      },
+      { id: 'o4-mini', provider: 'openai', endpoint: 'openai-response' },
+    ])
+  })
+
+  test('normalizes the gateway model endpoint once', () => {
+    assert.equal(
+      getLoadTestApiBaseUrl('https://api.example.com/'),
+      'https://api.example.com/v1'
+    )
+    assert.equal(
+      getLoadTestApiBaseUrl('https://api.example.com/v1/'),
+      'https://api.example.com/v1'
+    )
   })
 })
