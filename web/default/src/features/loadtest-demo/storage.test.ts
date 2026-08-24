@@ -47,6 +47,8 @@ function installLocalStorage() {
 const result: LoadTestRunResult = {
   model: 'gpt-5.6-sol',
   runId: 'demo-result-1',
+  keyName: 'Loadtest key',
+  packageName: '通用套餐',
   durationSeconds: 60,
   requestsPerSecond: 2,
   estimatedCost: 0.12,

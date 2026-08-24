@@ -251,6 +251,10 @@ export function LoadTestDemo() {
     persistedRun?.stats ?? EMPTY_STATS
   )
   const [runId, setRunId] = useState(persistedRun?.runId ?? '')
+  const [runKeyName, setRunKeyName] = useState(persistedRun?.keyName ?? '')
+  const [runPackageName, setRunPackageName] = useState(
+    persistedRun?.packageName ?? ''
+  )
   const [elapsed, setElapsed] = useState(0)
   const [pricing, setPricing] = useState<LoadTestPricing | null>(null)
   const [channelStats, setChannelStats] = useState<LoadTestChannelStats[]>(
@@ -340,6 +344,10 @@ export function LoadTestDemo() {
     const currentRunId = makeRunId()
     activeRunIdRef.current = currentRunId
     setRunId(currentRunId)
+    setRunKeyName(selectedKey.name)
+    setRunPackageName(
+      selectedKey.group?.trim() || selectedKey.group_candidates[0] || ''
+    )
     setElapsed(0)
     setStats(EMPTY_STATS)
     statsRef.current = EMPTY_STATS
@@ -502,6 +510,8 @@ export function LoadTestDemo() {
     savePersistedLoadTestRun(userId, {
       model: selectedModel,
       runId,
+      keyName: runKeyName,
+      packageName: runPackageName,
       durationSeconds: Number(durationSeconds) || 0,
       requestsPerSecond: Number(requestsPerSecond) || 0,
       estimatedCost,
@@ -514,6 +524,8 @@ export function LoadTestDemo() {
     channelStats,
     durationSeconds,
     estimatedCost,
+    runKeyName,
+    runPackageName,
     requestsPerSecond,
     runId,
     selectedModel,
@@ -528,6 +540,9 @@ export function LoadTestDemo() {
       : 0
   const canRun =
     (status === 'idle' || status === 'complete') && selectedKeyValue !== ''
+  const selectedKeyMetadata = keys.find(
+    (key) => key.key === selectedKeyValue
+  )
 
   const clearHistory = useCallback(() => {
     clearPersistedLoadTestRuns(userId)
@@ -662,8 +677,16 @@ export function LoadTestDemo() {
                   <span>{t('No keys found')}</span>
                 </div>
               ) : (
-                <div className='text-muted-foreground text-sm'>
-                  {t('API Key')}: {selectedKeyValue || t('Select API Key')}
+                <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-sm'>
+                  <span>
+                    {t('API Key')}: {selectedKeyMetadata?.name || t('Select API Key')}
+                  </span>
+                  <span>
+                    {t('Package')}:{' '}
+                    {selectedKeyMetadata?.group?.trim() ||
+                      selectedKeyMetadata?.group_candidates[0] ||
+                      '-'}
+                  </span>
                 </div>
               )}
 
@@ -710,6 +733,14 @@ export function LoadTestDemo() {
                   <div className='text-muted-foreground text-xs'>
                     {t('Run ID')}: <code>{runId}</code>
                   </div>
+                  <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
+                    <span>
+                      {t('API Key')}: {runKeyName || '-'}
+                    </span>
+                    <span>
+                      {t('Package')}: {runPackageName || '-'}
+                    </span>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -746,6 +777,8 @@ export function LoadTestDemo() {
                         <TableHead>{t('Run ID')}</TableHead>
                         <TableHead>{t('Completed at')}</TableHead>
                         <TableHead>{t('Test model')}</TableHead>
+                        <TableHead>{t('API Key')}</TableHead>
+                        <TableHead>{t('Package')}</TableHead>
                         <TableHead>{t('Duration')}</TableHead>
                         <TableHead>{t('Requests')}</TableHead>
                         <TableHead>{t('Success rate')}</TableHead>
@@ -762,6 +795,8 @@ export function LoadTestDemo() {
                             {new Date(run.completedAt).toLocaleString()}
                           </TableCell>
                           <TableCell>{run.model}</TableCell>
+                          <TableCell>{run.keyName || '-'}</TableCell>
+                          <TableCell>{run.packageName || '-'}</TableCell>
                           <TableCell>{run.durationSeconds}s</TableCell>
                           <TableCell>{run.stats.completed}</TableCell>
                           <TableCell>
