@@ -19,11 +19,26 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { LoadTestDemo } from '@/features/loadtest-demo'
+import { getSelf } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
-  beforeLoad: () => {
+  beforeLoad: async () => {
+    const auth = useAuthStore.getState()
+    const currentUser = auth.auth.user
+    if (!currentUser) {
+      throw redirect({ to: '/403' })
+    }
+
+    // Group access can be changed by an administrator while the account is
+    // still logged in. Refresh the entitlement before applying this route's
+    // guard so the sidebar and direct URL stay in sync with the server.
+    const response = await getSelf().catch(() => null)
+    if (response?.success && response.data) {
+      auth.auth.setUser(response.data)
+    }
+
     const user = useAuthStore.getState().auth.user
     if (!user || (user.role < ROLE.ADMIN && user.loadtest_enabled !== true)) {
       throw redirect({ to: '/403' })
