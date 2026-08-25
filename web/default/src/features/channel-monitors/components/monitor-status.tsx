@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -72,7 +71,8 @@ export function MonitorHistoryBars(props: MonitorHistoryBarsProps) {
       {padded.map((result, index) => {
         let title = t('No test result')
         if (result) {
-          title = `${result.success ? t('Success') : t('Failed')} · ${dayjs.unix(result.checked_at).format('YYYY-MM-DD HH:mm:ss')}`
+          title = result.success ? t('Success') : t('Failed')
+          if (result.latency_ms > 0) title += ` · ${result.latency_ms} ms`
         }
         return (
           <span

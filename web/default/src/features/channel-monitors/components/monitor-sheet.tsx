@@ -20,11 +20,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Activity01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FieldGroup } from '@/components/ui/field'
 import {
   Form,
@@ -63,7 +64,6 @@ import {
 import {
   applyMonitorAvailabilityBoost,
   formatMonitorAvailability,
-  formatMonitorTime,
 } from '../lib/format'
 import {
   channelMonitorFormDefaults,
@@ -84,6 +84,27 @@ type ChannelMonitorSheetProps = {
   monitor: ChannelMonitor | null
   pricingGroupName: string
   onOpenChange: (open: boolean) => void
+  embedded?: boolean
+  disabled?: boolean
+}
+
+type ChannelMonitorFormCardProps = {
+  monitor: ChannelMonitor | null
+  pricingGroupName: string
+  disabled?: boolean
+}
+
+export function ChannelMonitorFormCard(props: ChannelMonitorFormCardProps) {
+  return (
+    <ChannelMonitorSheet
+      open
+      monitor={props.monitor}
+      pricingGroupName={props.pricingGroupName}
+      onOpenChange={() => undefined}
+      embedded
+      disabled={props.disabled}
+    />
+  )
 }
 
 type SaveMutationInput = {
@@ -120,7 +141,11 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
   const defaultRetryCountQuery = useQuery({
     queryKey: ['pricing-group-channel-count', pricingGroupName],
     queryFn: () => getPricingGroupChannelCount(pricingGroupName),
-    enabled: props.open && props.monitor === null && pricingGroupName !== '',
+    enabled:
+      props.open &&
+      !props.disabled &&
+      props.monitor === null &&
+      pricingGroupName !== '',
   })
   const form = useForm<
     ChannelMonitorFormInput,
@@ -130,12 +155,19 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
     resolver: zodResolver(channelMonitorFormSchema),
     defaultValues: buildFormDefaults(props.monitor),
   })
+  const formContextKey = `${props.monitor?.id ?? 'new'}:${pricingGroupName}`
+  const previousFormContextKey = useRef<string | null>(null)
 
   useEffect(() => {
-    if (props.open) {
-      form.reset(buildFormDefaults(props.monitor))
+    if (!props.open) {
+      previousFormContextKey.current = null
+      return
     }
-  }, [form, props.monitor, props.open, props.pricingGroupName])
+    if (previousFormContextKey.current === formContextKey) return
+
+    previousFormContextKey.current = formContextKey
+    form.reset(buildFormDefaults(props.monitor))
+  }, [form, formContextKey, props.monitor, props.open])
 
   useEffect(() => {
     if (
@@ -199,7 +231,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
           ? '监控配置已保存，可用性测试成功'
           : '监控配置已保存'
       )
-      props.onOpenChange(false)
+      if (!props.embedded) props.onOpenChange(false)
     },
     onError: (error) => {
       toast.error(error.message || '操作失败')
@@ -214,6 +246,291 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
     saveMutation.mutate({ values, runAfterSave })
   }
 
+  const formContent = (
+    <Form {...form}>
+      <form
+        className='flex min-h-0 flex-1 flex-col'
+        onSubmit={form.handleSubmit((values) => submit(values, false))}
+      >
+        <fieldset
+          disabled={props.disabled || saveMutation.isPending}
+          className='contents'
+        >
+          <div className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4'>
+            {props.monitor && (
+              <div className='bg-muted/40 flex flex-col gap-3 rounded-lg border p-3'>
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='min-w-0'>
+                    <p className='truncate text-sm font-medium'>最近测试</p>
+                    <p className='text-muted-foreground mt-0.5 text-xs'>
+                      {props.monitor.latest_latency_ms == null
+                        ? '暂无测试结果'
+                        : `${props.monitor.latest_latency_ms} ms`}
+                    </p>
+                  </div>
+                  <MonitorStatusBadge status={props.monitor.status} />
+                </div>
+                <MonitorHistoryBars
+                  results={props.monitor.recent_results}
+                  compact
+                />
+              </div>
+            )}
+
+            <FieldGroup className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='test_model'
+                render={({ field }) => (
+                  <FormItem className='sm:col-span-2'>
+                    <FormLabel>测试模型</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder='gpt-4.1-mini' />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='interval_seconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>测试间隔</FormLabel>
+                    <FormControl>
+                      <InputGroup>
+                        <InputGroupInput
+                          type='number'
+                          min={1}
+                          max={86400}
+                          step={1}
+                          value={String(field.value ?? '')}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                        />
+                        <InputGroupAddon align='inline-end'>
+                          <InputGroupText>秒</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </FormControl>
+                    <FormDescription>可设置 1 至 86400 秒</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='timeout_seconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>请求超时</FormLabel>
+                    <FormControl>
+                      <InputGroup>
+                        <InputGroupInput
+                          type='number'
+                          min={1}
+                          max={120}
+                          step={1}
+                          value={String(field.value ?? '')}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                        />
+                        <InputGroupAddon align='inline-end'>
+                          <InputGroupText>秒</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='retry_count'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>重试次数</FormLabel>
+                    <FormControl>
+                      <InputGroup>
+                        <InputGroupInput
+                          type='number'
+                          min={1}
+                          max={10000}
+                          step={1}
+                          value={String(field.value ?? '')}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                        />
+                        <InputGroupAddon align='inline-end'>
+                          <InputGroupText>次</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </FormControl>
+                    <FormDescription>
+                      {defaultRetryCountQuery.isFetching
+                        ? '正在读取分组渠道数量'
+                        : '默认按分组内渠道数量设置'}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='availability_boost_percent'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>可用率加成</FormLabel>
+                    <FormControl>
+                      <InputGroup>
+                        <InputGroupInput
+                          type='number'
+                          min={0}
+                          max={100}
+                          step={0.01}
+                          value={String(field.value ?? '')}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                        />
+                        <InputGroupAddon align='inline-end'>
+                          <InputGroupText>%</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {props.monitor && (
+                <div className='bg-muted/40 rounded-lg border p-3 sm:col-span-2'>
+                  <p className='mb-2 text-sm font-medium'>可用率加成预览</p>
+                  <div className='grid gap-2 text-sm'>
+                    <AvailabilityPreviewRow
+                      period='7 天'
+                      raw={props.monitor.raw_availability_7d}
+                      boosted={applyMonitorAvailabilityBoost(
+                        props.monitor.raw_availability_7d,
+                        boostPercent
+                      )}
+                    />
+                    <AvailabilityPreviewRow
+                      period='30 天'
+                      raw={props.monitor.raw_availability_30d}
+                      boosted={applyMonitorAvailabilityBoost(
+                        props.monitor.raw_availability_30d,
+                        boostPercent
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+            </FieldGroup>
+
+            <Separator />
+
+            <FieldGroup className='gap-1'>
+              <FormField
+                control={form.control}
+                name='enabled'
+                render={({ field }) => (
+                  <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
+                    <div>
+                      <FormLabel>启用定时测试</FormLabel>
+                      <FormDescription>
+                        按配置的间隔自动测试当前定价分组
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='visible'
+                render={({ field }) => (
+                  <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
+                    <div>
+                      <FormLabel>向登录用户展示</FormLabel>
+                      <FormDescription>
+                        在分组状态页面展示此定价分组
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </FieldGroup>
+          </div>
+
+          <SheetFooter className='flex-row justify-end border-t px-5 py-3'>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => props.onOpenChange(false)}
+              className={props.embedded ? 'hidden' : undefined}
+            >
+              取消
+            </Button>
+            <Button type='submit'>
+              {saveMutation.isPending ? (
+                <Spinner data-icon='inline-start' />
+              ) : (
+                <HugeiconsIcon icon={Tick02Icon} data-icon='inline-start' />
+              )}
+              保存
+            </Button>
+            <Button
+              type='button'
+              onClick={() =>
+                void form.handleSubmit((values) => submit(values, true))()
+              }
+            >
+              {saveMutation.isPending ? (
+                <Spinner data-icon='inline-start' />
+              ) : (
+                <HugeiconsIcon icon={Activity01Icon} data-icon='inline-start' />
+              )}
+              保存并测试
+            </Button>
+          </SheetFooter>
+        </fieldset>
+      </form>
+    </Form>
+  )
+
+  if (props.embedded) {
+    return (
+      <Card className='gap-0 overflow-hidden shadow-none'>
+        <CardHeader className='border-b px-4 py-3'>
+          <CardTitle className='text-sm'>分组监控</CardTitle>
+          <p className='text-muted-foreground text-xs'>
+            系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
+          </p>
+        </CardHeader>
+        <CardContent className='p-0'>{formContent}</CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
       <SheetContent className='gap-0 sm:max-w-xl'>
@@ -225,274 +542,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
             系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
           </SheetDescription>
         </SheetHeader>
-
-        <Form {...form}>
-          <form
-            className='flex min-h-0 flex-1 flex-col'
-            onSubmit={form.handleSubmit((values) => submit(values, false))}
-          >
-            <div className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4'>
-              {props.monitor && (
-                <div className='bg-muted/40 flex flex-col gap-3 rounded-lg border p-3'>
-                  <div className='flex items-center justify-between gap-3'>
-                    <div className='min-w-0'>
-                      <p className='truncate text-sm font-medium'>最近测试</p>
-                      <p className='text-muted-foreground mt-0.5 text-xs'>
-                        {formatMonitorTime(props.monitor.last_checked_at)}
-                        {props.monitor.latest_latency_ms != null &&
-                          ` · ${props.monitor.latest_latency_ms} ms`}
-                      </p>
-                    </div>
-                    <MonitorStatusBadge status={props.monitor.status} />
-                  </div>
-                  <MonitorHistoryBars
-                    results={props.monitor.recent_results}
-                    compact
-                  />
-                </div>
-              )}
-
-              <FieldGroup className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='test_model'
-                  render={({ field }) => (
-                    <FormItem className='sm:col-span-2'>
-                      <FormLabel>测试模型</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder='gpt-4.1-mini' />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='interval_seconds'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>测试间隔</FormLabel>
-                      <FormControl>
-                        <InputGroup>
-                          <InputGroupInput
-                            type='number'
-                            min={1}
-                            max={86400}
-                            step={1}
-                            value={String(field.value ?? '')}
-                            onChange={(event) =>
-                              field.onChange(event.target.value)
-                            }
-                          />
-                          <InputGroupAddon align='inline-end'>
-                            <InputGroupText>秒</InputGroupText>
-                          </InputGroupAddon>
-                        </InputGroup>
-                      </FormControl>
-                      <FormDescription>可设置 1 至 86400 秒</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='timeout_seconds'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>请求超时</FormLabel>
-                      <FormControl>
-                        <InputGroup>
-                          <InputGroupInput
-                            type='number'
-                            min={1}
-                            max={120}
-                            step={1}
-                            value={String(field.value ?? '')}
-                            onChange={(event) =>
-                              field.onChange(event.target.value)
-                            }
-                          />
-                          <InputGroupAddon align='inline-end'>
-                            <InputGroupText>秒</InputGroupText>
-                          </InputGroupAddon>
-                        </InputGroup>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='retry_count'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>重试次数</FormLabel>
-                      <FormControl>
-                        <InputGroup>
-                          <InputGroupInput
-                            type='number'
-                            min={1}
-                            max={10000}
-                            step={1}
-                            value={String(field.value ?? '')}
-                            onChange={(event) =>
-                              field.onChange(event.target.value)
-                            }
-                          />
-                          <InputGroupAddon align='inline-end'>
-                            <InputGroupText>次</InputGroupText>
-                          </InputGroupAddon>
-                        </InputGroup>
-                      </FormControl>
-                      <FormDescription>
-                        {defaultRetryCountQuery.isFetching
-                          ? '正在读取分组渠道数量'
-                          : '默认按分组内渠道数量设置'}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='availability_boost_percent'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>可用率加成</FormLabel>
-                      <FormControl>
-                        <InputGroup>
-                          <InputGroupInput
-                            type='number'
-                            min={0}
-                            max={100}
-                            step={0.01}
-                            value={String(field.value ?? '')}
-                            onChange={(event) =>
-                              field.onChange(event.target.value)
-                            }
-                          />
-                          <InputGroupAddon align='inline-end'>
-                            <InputGroupText>%</InputGroupText>
-                          </InputGroupAddon>
-                        </InputGroup>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {props.monitor && (
-                  <div className='bg-muted/40 rounded-lg border p-3 sm:col-span-2'>
-                    <p className='mb-2 text-sm font-medium'>可用率加成预览</p>
-                    <div className='grid gap-2 text-sm'>
-                      <AvailabilityPreviewRow
-                        period='7 天'
-                        raw={props.monitor.raw_availability_7d}
-                        boosted={applyMonitorAvailabilityBoost(
-                          props.monitor.raw_availability_7d,
-                          boostPercent
-                        )}
-                      />
-                      <AvailabilityPreviewRow
-                        period='30 天'
-                        raw={props.monitor.raw_availability_30d}
-                        boosted={applyMonitorAvailabilityBoost(
-                          props.monitor.raw_availability_30d,
-                          boostPercent
-                        )}
-                      />
-                    </div>
-                  </div>
-                )}
-              </FieldGroup>
-
-              <Separator />
-
-              <FieldGroup className='gap-1'>
-                <FormField
-                  control={form.control}
-                  name='enabled'
-                  render={({ field }) => (
-                    <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
-                      <div>
-                        <FormLabel>启用定时测试</FormLabel>
-                        <FormDescription>
-                          按配置的间隔自动测试当前定价分组
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name='visible'
-                  render={({ field }) => (
-                    <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
-                      <div>
-                        <FormLabel>向登录用户展示</FormLabel>
-                        <FormDescription>
-                          在分组状态页面展示此定价分组
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </FieldGroup>
-            </div>
-
-            <SheetFooter className='flex-row justify-end border-t px-5 py-3'>
-              <Button
-                type='button'
-                variant='outline'
-                onClick={() => props.onOpenChange(false)}
-                disabled={saveMutation.isPending}
-              >
-                取消
-              </Button>
-              <Button type='submit' disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? (
-                  <Spinner data-icon='inline-start' />
-                ) : (
-                  <HugeiconsIcon icon={Tick02Icon} data-icon='inline-start' />
-                )}
-                保存
-              </Button>
-              <Button
-                type='button'
-                disabled={saveMutation.isPending}
-                onClick={() =>
-                  void form.handleSubmit((values) => submit(values, true))()
-                }
-              >
-                {saveMutation.isPending ? (
-                  <Spinner data-icon='inline-start' />
-                ) : (
-                  <HugeiconsIcon
-                    icon={Activity01Icon}
-                    data-icon='inline-start'
-                  />
-                )}
-                保存并测试
-              </Button>
-            </SheetFooter>
-          </form>
-        </Form>
+        {formContent}
       </SheetContent>
     </Sheet>
   )

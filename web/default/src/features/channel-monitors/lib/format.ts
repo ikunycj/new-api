@@ -17,8 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import dayjs from 'dayjs'
-
 export function formatMonitorAvailability(value: number | null): string {
   return value == null ? '--' : `${value.toFixed(2)}%`
 }
@@ -30,8 +28,4 @@ export function applyMonitorAvailabilityBoost(
   if (raw == null) return null
   const boosted = raw + ((100 - raw) * boostPercent) / 100
   return Math.round(Math.min(100, Math.max(0, boosted)) * 100) / 100
-}
-
-export function formatMonitorTime(value: number | null): string {
-  return value == null ? '--' : dayjs.unix(value).format('YYYY-MM-DD HH:mm:ss')
 }

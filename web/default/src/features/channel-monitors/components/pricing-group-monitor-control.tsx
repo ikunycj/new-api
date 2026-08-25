@@ -16,10 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Activity01Icon,
-  RefreshIcon,
-} from '@hugeicons/core-free-icons'
+import { Activity01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
@@ -56,7 +53,7 @@ export function PricingGroupMonitorControl(
 ) {
   if (props.isLoading) {
     return (
-      <div className='flex w-full max-w-[24rem] items-center gap-2 py-0.5'>
+      <div className='flex w-full max-w-[21rem] items-center gap-2 py-0.5'>
         <Skeleton className='h-5 w-8 shrink-0 rounded-full' />
         <div className='flex min-w-0 flex-1 flex-col gap-2'>
           <Skeleton className='h-5 w-32' />
@@ -115,7 +112,7 @@ export function PricingGroupMonitorControl(
   }
 
   return (
-    <div className='flex w-full max-w-[24rem] items-center gap-2 py-0.5'>
+    <div className='flex w-full max-w-[21rem] items-center gap-2 py-0.5'>
       <Switch
         size='sm'
         checked={props.monitor.enabled}
@@ -138,7 +135,7 @@ export function PricingGroupMonitorControl(
           </Badge>
         </div>
 
-        <div className='text-muted-foreground flex items-center gap-2 text-xs'>
+        <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs'>
           <span>
             7日可用率{' '}
             <strong className='text-foreground font-medium tabular-nums'>
@@ -157,6 +154,12 @@ export function PricingGroupMonitorControl(
               {props.monitor.latest_latency_ms == null
                 ? '--'
                 : `${props.monitor.latest_latency_ms} ms`}
+            </strong>
+          </span>
+          <span className='whitespace-nowrap'>
+            重试{' '}
+            <strong className='text-foreground font-medium tabular-nums'>
+              {props.monitor.retry_count}
             </strong>
           </span>
         </div>
@@ -184,7 +187,6 @@ export function PricingGroupMonitorControl(
           </TooltipTrigger>
           <TooltipContent>立即测试</TooltipContent>
         </Tooltip>
-
       </div>
     </div>
   )

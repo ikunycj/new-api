@@ -65,7 +65,7 @@ import {
   MonitorHistoryBars,
   MonitorStatusBadge,
 } from './components/monitor-status'
-import { formatMonitorAvailability, formatMonitorTime } from './lib/format'
+import { formatMonitorAvailability } from './lib/format'
 import type { GroupStatusMonitor } from './types'
 
 type GroupStatusPanelProps = {
@@ -346,12 +346,7 @@ function GroupStatusCard(props: GroupStatusCardProps) {
         </div>
 
         <div className='flex items-end justify-between gap-3'>
-          <div>
-            <p className='text-muted-foreground text-xs'>{availabilityLabel}</p>
-            <p className='text-muted-foreground mt-1 text-xs'>
-              {formatMonitorTime(props.monitor.last_checked_at)}
-            </p>
-          </div>
+          <p className='text-muted-foreground text-xs'>{availabilityLabel}</p>
           <strong
             className={cn(
               'text-3xl leading-none font-semibold tabular-nums',

@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -44,7 +45,10 @@ import {
   runChannelMonitor,
   updateChannelMonitor,
 } from '@/features/channel-monitors/api'
-import { ChannelMonitorSheet } from '@/features/channel-monitors/components/monitor-sheet'
+import {
+  ChannelMonitorFormCard,
+  ChannelMonitorSheet,
+} from '@/features/channel-monitors/components/monitor-sheet'
 import { PricingGroupMonitorControl } from '@/features/channel-monitors/components/pricing-group-monitor-control'
 import type {
   ChannelMonitor,
@@ -185,8 +189,10 @@ function GroupPricingTable({
     () => new Map(monitors.map((monitor) => [monitor.pricing_group, monitor])),
     [monitors]
   )
-  const detailRow =
-    currentRows.find((row) => row._id === detailRowId) ?? null
+  const detailRow = currentRows.find((row) => row._id === detailRowId) ?? null
+  const detailMonitor = detailRow
+    ? findPricingGroupMonitor(detailRow, monitorByName)
+    : null
 
   const updateMonitorMutation = useMutation({
     mutationFn: ({
@@ -298,6 +304,8 @@ function GroupPricingTable({
         <CardContent>
           <div className='space-y-3'>
             <StaticDataTable
+              className='w-fit max-w-full'
+              tableClassName='w-[46rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
@@ -306,7 +314,8 @@ function GroupPricingTable({
                 {
                   id: 'group',
                   header: t('Group name'),
-                  className: 'w-52',
+                  className: 'w-44',
+                  cellClassName: 'w-44',
                   cell: (row) => {
                     return (
                       <Input
@@ -322,7 +331,8 @@ function GroupPricingTable({
                 {
                   id: 'ratio',
                   header: t('Ratio'),
-                  className: 'w-24',
+                  className: 'w-20',
+                  cellClassName: 'w-20',
                   cell: (row) => (
                     <Input
                       type='number'
@@ -338,7 +348,8 @@ function GroupPricingTable({
                 {
                   id: 'monitor',
                   header: '分组监控',
-                  className: 'w-[25rem]',
+                  className: 'w-[22rem]',
+                  cellClassName: 'w-[22rem]',
                   cell: (row) => {
                     const groupName = row.name.trim()
                     const monitor = findPricingGroupMonitor(row, monitorByName)
@@ -385,8 +396,8 @@ function GroupPricingTable({
                 {
                   id: 'actions',
                   header: t('Actions'),
-                  className: 'w-20 text-right',
-                  cellClassName: 'w-20 text-right',
+                  className: 'w-32 text-right',
+                  cellClassName: 'w-32 text-right',
                   cell: (row) => {
                     return (
                       <div className='flex justify-end gap-1'>
@@ -442,22 +453,13 @@ function GroupPricingTable({
 
       <GroupDetailSheet
         row={detailRow}
-        monitor={detailRow ? findPricingGroupMonitor(detailRow, monitorByName) : null}
+        monitor={detailMonitor}
         onOpenChange={(open) => {
           if (!open) setDetailRowId(null)
         }}
         onChange={(field, value) => {
           if (!detailRow) return
           updateRow(detailRow._id, field, value)
-        }}
-        onConfigure={() => {
-          if (!detailRow) return
-          const groupName = detailRow.name.trim()
-          if (!groupName) return
-          setMonitorEditor({
-            monitor: findPricingGroupMonitor(detailRow, monitorByName),
-            pricingGroupName: groupName,
-          })
         }}
         isPersisted={
           detailRow !== null &&
@@ -474,7 +476,6 @@ type GroupDetailSheetProps = {
   monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
   onChange: (field: 'name' | 'ratio', value: string) => void
-  onConfigure: () => void
   isPersisted: boolean
 }
 
@@ -486,15 +487,11 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
     <Sheet open={props.row !== null} onOpenChange={props.onOpenChange}>
       <SheetContent
         side='right'
-        className={sideDrawerContentClassName('sm:max-w-lg')}
+        className={sideDrawerContentClassName('sm:max-w-xl')}
       >
         <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>
-            详情{name ? `：${name.trim()}` : ''}
-          </SheetTitle>
-          <SheetDescription>
-            在此修改分组倍率和分组监控参数。
-          </SheetDescription>
+          <SheetTitle>详情{name ? `：${name.trim()}` : ''}</SheetTitle>
+          <SheetDescription>在此修改分组倍率和分组监控参数。</SheetDescription>
         </SheetHeader>
 
         {props.row && (
@@ -515,27 +512,22 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 min={0}
                 step={0.1}
                 value={props.row.ratio}
-                onChange={(event) => props.onChange('ratio', event.target.value)}
+                onChange={(event) =>
+                  props.onChange('ratio', event.target.value)
+                }
               />
             </div>
-            <section className='space-y-2 border-t pt-4'>
-              <h3 className='text-sm font-semibold'>分组监控</h3>
-              <p className='text-muted-foreground text-sm'>
-                {props.monitor
-                  ? `已配置：${props.monitor.test_model}，每 ${props.monitor.interval_seconds} 秒测试 ${props.monitor.retry_count} 次`
-                  : '尚未配置分组监控'}
-              </p>
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
+            <Separator />
+            <section className='flex flex-col gap-3'>
+              <ChannelMonitorFormCard
+                monitor={props.monitor}
+                pricingGroupName={props.row.name.trim()}
                 disabled={!props.isPersisted}
-                onClick={props.onConfigure}
-              >
-                {props.monitor ? '编辑监控参数' : '配置分组监控'}
-              </Button>
+              />
               {!props.isPersisted && (
-                <p className='text-muted-foreground text-xs'>请先保存分组后配置监控。</p>
+                <p className='text-muted-foreground text-xs'>
+                  请先保存分组后配置监控。
+                </p>
               )}
             </section>
           </div>
