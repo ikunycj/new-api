@@ -37,7 +37,6 @@ export const LOAD_TEST_MIN_CONCURRENCY = 1
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
 export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
-export const LOAD_TEST_MAX_REQUESTS = 10_000
 export const LOAD_TEST_TIMEOUT_MS = 120_000
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
@@ -202,7 +201,6 @@ export type LoadTestLimits = {
   max_rps: number
   min_concurrency: number
   max_concurrency: number
-  max_requests: number
 }
 
 export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
@@ -212,7 +210,6 @@ export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
   max_rps: LOAD_TEST_MAX_RPS,
   min_concurrency: LOAD_TEST_MIN_CONCURRENCY,
   max_concurrency: LOAD_TEST_MAX_CONCURRENCY,
-  max_requests: LOAD_TEST_MAX_REQUESTS,
 }
 
 export async function getLoadTestLimits(): Promise<LoadTestLimits> {
@@ -300,17 +297,38 @@ export async function getLoadTestChannelStats(
   requestIds: string[]
 ): Promise<LoadTestChannelStats[]> {
   if (requestIds.length === 0) return []
-  const response = await api.post<{
-    success: boolean
-    message?: string
-    data?: LoadTestChannelStats[]
-  }>('/api/log/self/loadtest-stats', { request_ids: requestIds })
-  if (!response.data.success) {
-    throw new Error(
-      response.data.message || 'Failed to load channel statistics'
-    )
+  const merged = new Map<string, LoadTestChannelStats>()
+  for (let offset = 0; offset < requestIds.length; offset += 10_000) {
+    const response = await api.post<{
+      success: boolean
+      message?: string
+      data?: LoadTestChannelStats[]
+    }>('/api/log/self/loadtest-stats', {
+      request_ids: requestIds.slice(offset, offset + 10_000),
+    })
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message || 'Failed to load channel statistics'
+      )
+    }
+    for (const channel of response.data.data ?? []) {
+      const key = `${channel.channel_id}:${channel.billing_group}`
+      const existing = merged.get(key)
+      if (!existing) {
+        merged.set(key, { ...channel })
+        continue
+      }
+      existing.requests += channel.requests
+      existing.input_tokens += channel.input_tokens
+      existing.input_tokens_total += channel.input_tokens_total
+      existing.output_tokens += channel.output_tokens
+      existing.cache_read_tokens += channel.cache_read_tokens
+      existing.cache_write_tokens += channel.cache_write_tokens
+    }
   }
-  return response.data.data ?? []
+  return [...merged.values()].sort(
+    (left, right) => right.requests - left.requests || left.channel_id - right.channel_id
+  )
 }
 
 function readRequestId(response: Response) {

@@ -13,10 +13,9 @@ const (
 	LoadTestDefaultMaxDurationSeconds = 600
 	LoadTestHardMaxDurationSeconds    = 3600
 	LoadTestDefaultMaxRPS             = 20
-	LoadTestHardMaxRPS                = 100
+	LoadTestHardMaxRPS                = 10_000
 	LoadTestDefaultMaxConcurrency     = 10
-	LoadTestHardMaxConcurrency        = 100
-	LoadTestMaxRequests               = 10_000
+	LoadTestHardMaxConcurrency        = 10_000
 )
 
 type LoadTestSetting struct {

@@ -15,9 +15,9 @@ func TestValidateLoadTestOption(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "duration lower bound", key: "loadtest_setting.max_duration_seconds", value: "5"},
-		{name: "rps upper bound", key: "loadtest_setting.max_rps", value: "100"},
-		{name: "concurrency upper bound", key: "loadtest_setting.max_concurrency", value: "100"},
-		{name: "duration too large", key: "loadtest_setting.max_duration_seconds", value: "3601", wantErr: true},
+		{name: "rps upper bound", key: "loadtest_setting.max_rps", value: "10000"},
+		{name: "concurrency upper bound", key: "loadtest_setting.max_concurrency", value: "10000"},
+		{name: "rps too large", key: "loadtest_setting.max_rps", value: "10001", wantErr: true},
 		{name: "rps not integer", key: "loadtest_setting.max_rps", value: "2.5", wantErr: true},
 		{name: "concurrency zero", key: "loadtest_setting.max_concurrency", value: "0", wantErr: true},
 	}

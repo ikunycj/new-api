@@ -530,10 +530,7 @@ export function LoadTestDemo() {
     const inFlight = new Set<Promise<void>>()
     const durationMs = durationValue * 1000
     const requestIntervalMs = 1000 / rpsValue
-    const requestLimit = Math.min(
-      limits.max_requests,
-      Math.ceil(durationValue * rpsValue)
-    )
+    const requestLimit = Math.ceil(durationValue * rpsValue)
     const deadline = Date.now() + durationMs
     let sentRequests = 0
     while (
@@ -713,7 +710,7 @@ export function LoadTestDemo() {
 
   const maxRequests =
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
-      ? Math.min(limits.max_requests, Math.ceil(durationValue * rpsValue))
+      ? Math.ceil(durationValue * rpsValue)
       : 0
   const canRun =
     (status === 'idle' || status === 'complete') &&
@@ -981,7 +978,7 @@ export function LoadTestDemo() {
                 </div>
               </div>
               <div className='text-muted-foreground text-xs'>
-                {t('Maximum requests for this run')}: {maxRequests} ·{' '}
+                {t('Planned requests for this run')}: {maxRequests} ·{' '}
                 {t('Maximum concurrency')}: {limits.max_concurrency}
               </div>
 

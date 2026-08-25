@@ -19,7 +19,6 @@ func GetLoadTestConfig(c *gin.Context) {
 			"max_rps":              settings.MaxRPS,
 			"min_concurrency":      1,
 			"max_concurrency":      settings.MaxConcurrency,
-			"max_requests":         operation_setting.LoadTestMaxRequests,
 		},
 	})
 }

@@ -27,14 +27,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       'Allowed range: {{min}}-{{max}} concurrent requests',
     'Load Test Limits': 'Load Test Limits',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.',
+    'These limits apply to every load-test demo run.':
+      'These limits apply to every load-test demo run.',
+    'Planned requests for this run': 'Planned requests for this run',
     'Maximum duration (seconds)': 'Maximum duration (seconds)',
     'Maximum requests per second': 'Maximum requests per second',
     'Allowed range: 5-3600 seconds': 'Allowed range: 5-3600 seconds',
-    'Allowed range: 1-100 RPS': 'Allowed range: 1-100 RPS',
-    'Allowed range: 1-100 concurrent requests':
-      'Allowed range: 1-100 concurrent requests',
+    'Allowed range: 1-10000 RPS': 'Allowed range: 1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      'Allowed range: 1-10000 concurrent requests',
     'User Type': 'User Type',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -124,13 +125,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       '允许范围：{{min}}-{{max}} 个并发请求',
     'Load Test Limits': '压测限制',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      '这些限制适用于所有压测 Demo；单次请求总数上限固定为 10,000。',
+    'These limits apply to every load-test demo run.':
+      '这些限制适用于所有压测 Demo。',
+    'Planned requests for this run': '本次运行计划请求数',
     'Maximum duration (seconds)': '最大时长（秒）',
     'Maximum requests per second': '最大每秒请求数',
     'Allowed range: 5-3600 seconds': '允许范围：5-3600 秒',
-    'Allowed range: 1-100 RPS': '允许范围：1-100 RPS',
-    'Allowed range: 1-100 concurrent requests': '允许范围：1-100 个并发请求',
+    'Allowed range: 1-10000 RPS': '允许范围：1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      '允许范围：1-10000 个并发请求',
     'User Type': '用户类型',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -246,14 +249,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       'Plage autorisée : {{min}}-{{max}} requêtes simultanées',
     'Load Test Limits': 'Limites du test de charge',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      'Ces limites s’appliquent à chaque test de charge. Le plafond est fixé à 10 000 requêtes.',
+    'These limits apply to every load-test demo run.':
+      'Ces limites s’appliquent à chaque test de charge.',
+    'Planned requests for this run': 'Requêtes prévues pour cette exécution',
     'Maximum duration (seconds)': 'Durée maximale (secondes)',
     'Maximum requests per second': 'Nombre maximal de requêtes par seconde',
     'Allowed range: 5-3600 seconds': 'Plage autorisée : 5-3600 secondes',
-    'Allowed range: 1-100 RPS': 'Plage autorisée : 1-100 RPS',
-    'Allowed range: 1-100 concurrent requests':
-      'Plage autorisée : 1-100 requêtes simultanées',
+    'Allowed range: 1-10000 RPS': 'Plage autorisée : 1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      'Plage autorisée : 1-10000 requêtes simultanées',
     'Channel Reconciliation': 'Rapprochement du canal',
     'Cost entries': 'Périodes de coût',
     'Cost entry saved': 'Coût enregistré',
@@ -327,14 +331,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       '許可範囲: {{min}}-{{max}} 件の同時リクエスト',
     'Load Test Limits': '負荷テスト制限',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      'これらの制限はすべての負荷テストに適用されます。リクエスト上限は 10,000 件です。',
+    'These limits apply to every load-test demo run.':
+      'これらの制限はすべての負荷テストに適用されます。',
+    'Planned requests for this run': '今回の実行の予定リクエスト数',
     'Maximum duration (seconds)': '最大実行時間（秒）',
     'Maximum requests per second': '最大リクエスト毎秒数',
     'Allowed range: 5-3600 seconds': '許可範囲: 5-3600 秒',
-    'Allowed range: 1-100 RPS': '許可範囲: 1-100 RPS',
-    'Allowed range: 1-100 concurrent requests':
-      '許可範囲: 1-100 件の同時リクエスト',
+    'Allowed range: 1-10000 RPS': '許可範囲: 1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      '許可範囲: 1-10000 件の同時リクエスト',
     'Channel Reconciliation': 'チャネル照合',
     'Cost entries': 'コスト期間',
     'Cost entry saved': 'コストを保存しました',
@@ -409,14 +414,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       'Допустимый диапазон: {{min}}-{{max}} параллельных запросов',
     'Load Test Limits': 'Ограничения нагрузочного теста',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      'Эти ограничения применяются к каждому нагрузочному тесту. Лимит запросов — 10 000.',
+    'These limits apply to every load-test demo run.':
+      'Эти ограничения применяются к каждому нагрузочному тесту.',
+    'Planned requests for this run': 'Запланированные запросы для запуска',
     'Maximum duration (seconds)': 'Максимальная длительность (секунды)',
     'Maximum requests per second': 'Максимальное число запросов в секунду',
     'Allowed range: 5-3600 seconds': 'Допустимый диапазон: 5-3600 секунд',
-    'Allowed range: 1-100 RPS': 'Допустимый диапазон: 1-100 RPS',
-    'Allowed range: 1-100 concurrent requests':
-      'Допустимый диапазон: 1-100 параллельных запросов',
+    'Allowed range: 1-10000 RPS': 'Допустимый диапазон: 1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      'Допустимый диапазон: 1-10000 параллельных запросов',
     'Channel Reconciliation': 'Сверка канала',
     'Cost entries': 'Периоды затрат',
     'Cost entry saved': 'Затраты сохранены',
@@ -490,14 +496,15 @@ const newKeys = {
     'Allowed range: {{min}}-{{max}} concurrent requests':
       'Phạm vi cho phép: {{min}}-{{max}} yêu cầu đồng thời',
     'Load Test Limits': 'Giới hạn kiểm thử tải',
-    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
-      'Các giới hạn này áp dụng cho mọi lần chạy kiểm thử tải. Giới hạn yêu cầu cố định là 10.000.',
+    'These limits apply to every load-test demo run.':
+      'Các giới hạn này áp dụng cho mọi lần chạy kiểm thử tải.',
+    'Planned requests for this run': 'Số yêu cầu dự kiến cho lần chạy này',
     'Maximum duration (seconds)': 'Thời lượng tối đa (giây)',
     'Maximum requests per second': 'Số yêu cầu tối đa mỗi giây',
     'Allowed range: 5-3600 seconds': 'Phạm vi cho phép: 5-3600 giây',
-    'Allowed range: 1-100 RPS': 'Phạm vi cho phép: 1-100 RPS',
-    'Allowed range: 1-100 concurrent requests':
-      'Phạm vi cho phép: 1-100 yêu cầu đồng thời',
+    'Allowed range: 1-10000 RPS': 'Phạm vi cho phép: 1-10000 RPS',
+    'Allowed range: 1-10000 concurrent requests':
+      'Phạm vi cho phép: 1-10000 yêu cầu đồng thời',
     'Channel Reconciliation': 'Đối soát kênh',
     'Cost entries': 'Kỳ chi phí',
     'Cost entry saved': 'Đã lưu chi phí',
@@ -841,6 +848,9 @@ for (const [locale, translations] of Object.entries(
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
+  delete json.translation[
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.'
+  ]
   for (const [key, value] of Object.entries(newKeys[locale])) {
     if (json.translation[key] !== value) json.translation[key] = value
   }

@@ -41,8 +41,8 @@ import { safeNumberFieldProps } from '../utils/numeric-field'
 const loadTestSchema = z.object({
   loadtest_setting: z.object({
     max_duration_seconds: z.coerce.number().int().min(5).max(3600),
-    max_rps: z.coerce.number().int().min(1).max(100),
-    max_concurrency: z.coerce.number().int().min(1).max(100),
+    max_rps: z.coerce.number().int().min(1).max(10000),
+    max_concurrency: z.coerce.number().int().min(1).max(10000),
   }),
 })
 
@@ -113,7 +113,7 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
           />
           <p className='text-muted-foreground text-sm'>
             {t(
-              'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.'
+              'These limits apply to every load-test demo run.'
             )}
           </p>
           <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
@@ -149,13 +149,13 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
                     <Input
                       type='number'
                       min={1}
-                      max={100}
+                      max={10000}
                       step={1}
                       {...safeNumberFieldProps(field)}
                     />
                   </FormControl>
                   <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: 1-100 RPS')}
+                    {t('Allowed range: 1-10000 RPS')}
                   </p>
                   <FormMessage />
                 </FormItem>
@@ -171,13 +171,13 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
                     <Input
                       type='number'
                       min={1}
-                      max={100}
+                      max={10000}
                       step={1}
                       {...safeNumberFieldProps(field)}
                     />
                   </FormControl>
                   <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: 1-100 concurrent requests')}
+                    {t('Allowed range: 1-10000 concurrent requests')}
                   </p>
                   <FormMessage />
                 </FormItem>

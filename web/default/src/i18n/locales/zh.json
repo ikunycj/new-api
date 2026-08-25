@@ -6282,11 +6282,14 @@
     "Maximum concurrency must be between {{min}} and {{max}}.": "最大并发数必须在 {{min}} 到 {{max}} 之间。",
     "Allowed range: {{min}}-{{max}} concurrent requests": "允许范围：{{min}}-{{max}} 个并发请求",
     "Load Test Limits": "压测限制",
-    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "这些限制适用于所有压测 Demo；单次请求总数上限固定为 10,000。",
     "Maximum duration (seconds)": "最大时长（秒）",
     "Maximum requests per second": "最大每秒请求数",
     "Allowed range: 5-3600 seconds": "允许范围：5-3600 秒",
     "Allowed range: 1-100 RPS": "允许范围：1-100 RPS",
-    "Allowed range: 1-100 concurrent requests": "允许范围：1-100 个并发请求"
+    "Allowed range: 1-100 concurrent requests": "允许范围：1-100 个并发请求",
+    "These limits apply to every load-test demo run.": "这些限制适用于所有压测 Demo。",
+    "Planned requests for this run": "本次运行计划请求数",
+    "Allowed range: 1-10000 RPS": "允许范围：1-10000 RPS",
+    "Allowed range: 1-10000 concurrent requests": "允许范围：1-10000 个并发请求"
   }
 }
