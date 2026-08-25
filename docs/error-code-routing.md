@@ -1,8 +1,8 @@
-# AllToken 渠道路由、错误码与监控规范
+# 网关渠道路由、错误码与监控规范
 
 ## 1. 目标架构
 
-AllToken 只保留四层业务关系：
+网关只保留四层业务关系：
 
 ```text
 用户 -> 用户分组 -> 计费分组 -> 渠道 -> 上游服务
@@ -13,21 +13,15 @@ AllToken 只保留四层业务关系：
 - **计费分组**：API Key 授权的计费与模型能力边界，复用 Token、Ability 和 Channel 已有的 `group`。
 - **渠道**：一个可独立请求、计费、重试、熔断和监控的上游入口。
 
-上游系统内部是否存在账号池属于上游实现细节；AllToken 收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
+上游系统内部是否存在账号池属于上游实现细节；网关收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
 
 ## 2. 路由配置
 
 每个计费分组最多配置一条启用的路由。路由由 `billing_group_routes` 和 `billing_group_channels` 两张表组成。
 
-### 2.1 路由策略
+### 2.1 路由参数
 
-| 策略 | 用途 | 默认总尝试次数 | 默认总超时 | 默认熔断阈值 |
-| --- | --- | ---: | ---: | ---: |
-| `cost_first` | 允许在低成本渠道上多尝试后再切换 | 6 | 45 秒 | 8 |
-| `balanced` | 在成本与稳定性之间折中 | 4 | 30 秒 | 5 |
-| `stability_first` | 更快离开异常渠道 | 3 | 20 秒 | 3 |
-
-策略默认值可以在管理后台逐项覆盖：
+路由使用统一的默认参数，创建后可以在管理后台逐项覆盖：
 
 - `max_total_attempts`：一次客户端请求允许的全部上游尝试数。
 - `total_timeout_ms`：整个渠道切换过程的时间预算，不是单个模型响应超时。
@@ -66,7 +60,7 @@ AllToken 只保留四层业务关系：
 7. 当前渠道达到尝试上限、被错误规则要求切换或被熔断时，选择下一渠道。
 8. 所有候选渠道或预算耗尽后，对客户端返回最终错误。
 
-渠道熔断按 `channel_id + route` 统计。Redis 可用时多个 AllToken 实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。
+渠道熔断按 `channel_id + route` 统计。Redis 可用时多个网关实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。
 
 ## 4. 错误分层
 
@@ -76,9 +70,9 @@ AllToken 只保留四层业务关系：
 | --- | --- | --- |
 | `openai` | 官方 OpenAI 或兼容官方协议的明确原始错误 | `1xxxxx` |
 | `channel` | 当前渠道或其上游返回的错误 | `2xxxxx` |
-| `alltoken` | AllToken 网关自身生成的错误 | `3xxxxx` |
+| 空值 | 网关自身生成的错误 | `3xxxxx` |
 
-错误来源只接受当前定义的 `openai`、`channel` 和 `alltoken`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
+上游错误来源只接受 `openai` 和 `channel`。网关自身生成的错误不设置来源。不要使用字符串包含匹配来决定切流，应优先使用六位 `stable_code`、`failure_scope`、`action` 和 `retryable`。
 
 ### 4.1 六位数字格式
 
@@ -86,11 +80,11 @@ AllToken 只保留四层业务关系：
 SCCDDD
 ```
 
-- `S`：来源层，1=OpenAI，2=渠道，3=AllToken。
+- `S`：来源层，1=OpenAI，2=渠道，3=网关。
 - `CC`：错误类别。
 - `DDD`：该类别下可扩展的具体编号。
 
-`alltoken_code` 是稳定分类，不编码某个具体渠道。具体失败渠道通过独立的 `channel_id` 和 `channel_name` 表达。
+`stable_code` 是稳定分类，不编码某个具体渠道。具体失败渠道通过独立的 `channel_id` 和 `channel_name` 表达。
 
 `error_ref` 是一条可检索的错误记录引用：
 
@@ -113,14 +107,14 @@ SCCDDD
 | `205xxx` | 渠道上游不可用或无健康账号 | `switch_channel` |
 | `210001` | 渠道超时 | `switch_channel` |
 | `301xxx` | 客户端请求格式错误 | `none` |
-| `302xxx` | AllToken 鉴权错误 | `none` |
+| `302xxx` | 网关鉴权错误 | `none` |
 | `303xxx` | 用户额度或预扣费失败 | `none` |
 | `305001` | 所有候选渠道已耗尽 | `retry_later` |
-| `306xxx` | AllToken 检测到的渠道配置/Key 错误 | `switch_channel` |
+| `306xxx` | 网关检测到的渠道配置/Key 错误 | `switch_channel` |
 | `307xxx` | 内容策略错误 | `none` 或 `manual` |
 | `308xxx` | 协议转换或响应解析错误 | 按作用域处理 |
-| `309xxx` | AllToken 内部错误 | 通常不切流 |
-| `310xxx` | AllToken 到渠道的网络错误 | `switch_channel` |
+| `309xxx` | 网关内部错误 | 通常不切流 |
+| `310xxx` | 网关到渠道的网络错误 | `switch_channel` |
 | `311001` | 渠道不支持模型 | `switch_channel` |
 
 ## 5. 错误记录
@@ -131,7 +125,7 @@ SCCDDD
 {
   "source": "channel",
   "source_code": "channel.rate_limit_error",
-  "alltoken_code": 204001,
+  "stable_code": 204001,
   "error_ref": "204001-CH38",
   "category": "rate_limit",
   "channel_id": 38,
@@ -146,11 +140,13 @@ SCCDDD
 
 响应头同步提供：
 
-- `X-Alltoken-Error-Source`
-- `X-Alltoken-Error-Code`
-- `X-Alltoken-Code`
-- `X-Alltoken-Error-Ref`
-- `X-Alltoken-Retryable`
+- `X-Error-Source`
+- `X-Error-Source-Code`
+- `X-Error-Stable-Code`
+- `X-Error-Ref`
+- `X-Error-Retryable`
+
+旧版本的产品前缀字段和响应头不再生成，也不再作为错误来源解析。当前数据库 schema 只接受 `stable_code`，旧列不会被迁移或兼容。
 
 ### 5.1 作用域
 
@@ -188,12 +184,12 @@ SCCDDD
 渠道路由只暴露有界标签，避免把 URL、Key、请求正文或用户内容写入指标。
 
 ```text
-alltoken_channel_requests_total{channel_id,outcome}
-alltoken_channel_switch_total{from_channel,to_channel,mode}
-alltoken_channel_circuit_state{channel_id,route,state}
-alltoken_error_events_total{event_kind,alltoken_code,category,channel_id}
-alltoken_final_errors_total{alltoken_code,category,channel_id}
-alltoken_failover_duration_seconds{outcome,mode}
+new_api_routing_channel_requests_total{channel_id,outcome}
+new_api_routing_channel_switch_total{from_channel,to_channel}
+new_api_routing_channel_circuit_state{channel_id,route,state}
+new_api_routing_error_events_total{event_kind,stable_code,category,channel_id}
+new_api_routing_final_errors_total{stable_code,category,channel_id}
+new_api_routing_failover_duration_seconds{outcome}
 ```
 
 Grafana 以渠道为筛选和归因维度，至少展示：
@@ -223,7 +219,7 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 2. 一个计费分组只能保存一条路由，且只能选择属于该分组的渠道。
 3. 高优先级渠道成功时不会访问后续渠道。
 4. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。
-5. 错误记录包含正确的 `alltoken_code`、`channel_id` 和 `error_ref`。
+5. 错误记录包含正确的 `stable_code`、`channel_id` 和 `error_ref`。
 6. 渠道熔断后不再接收新请求，冷却后半开探测成功可恢复。
 7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断。
 8. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。

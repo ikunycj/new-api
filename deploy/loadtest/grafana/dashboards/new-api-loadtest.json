@@ -186,28 +186,28 @@
       "id": 26, "type": "timeseries", "title": "Channel consumption and routing attempts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 82},
       "targets": [
         {"refId": "A", "expr": "rate(mock_channel_consumed_tokens_total[1m])", "legendFormat": "CH{{channel_id}} token/s"},
-        {"refId": "B", "expr": "sum by (channel_id, outcome) (rate(alltoken_channel_requests_total[1m]))", "legendFormat": "CH{{channel_id}} {{outcome}} req/s"}
+        {"refId": "B", "expr": "sum by (channel_id, outcome) (rate(new_api_routing_channel_requests_total[1m]))", "legendFormat": "CH{{channel_id}} {{outcome}} req/s"}
       ],
       "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
     },
     {
       "id": 27, "type": "timeseries", "title": "Channel switches and circuit state", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 90},
       "targets": [
-        {"refId": "A", "expr": "sum by (from_channel, to_channel, mode) (rate(alltoken_channel_switch_total[1m]))", "legendFormat": "CH{{from_channel}} to CH{{to_channel}} {{mode}}"},
-        {"refId": "B", "expr": "alltoken_channel_circuit_state{state=~\"open|half_open\"}", "legendFormat": "CH{{channel_id}} {{state}}"}
+        {"refId": "A", "expr": "sum by (from_channel, to_channel) (rate(new_api_routing_channel_switch_total[1m]))", "legendFormat": "CH{{from_channel}} to CH{{to_channel}}"},
+        {"refId": "B", "expr": "new_api_routing_channel_circuit_state{state=~\"open|half_open\"}", "legendFormat": "CH{{channel_id}} {{state}}"}
       ],
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 12}}, "overrides": []}
     },
     {
-      "id": 28, "type": "timeseries", "title": "Errors by stable AllToken code", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 90},
-      "targets": [{"refId": "A", "expr": "sum by (event_kind, alltoken_code, category, channel_id) (rate(alltoken_error_events_total[1m]))", "legendFormat": "{{event_kind}} {{alltoken_code}} {{category}} CH{{channel_id}}"}],
+      "id": 28, "type": "timeseries", "title": "Errors by stable code", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 90},
+      "targets": [{"refId": "A", "expr": "sum by (event_kind, stable_code, category, channel_id) (rate(new_api_routing_error_events_total[1m]))", "legendFormat": "{{event_kind}} {{stable_code}} {{category}} CH{{channel_id}}"}],
       "fieldConfig": {"defaults": {"unit": "reqps", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 15}}, "overrides": []}
     },
     {
       "id": 29, "type": "timeseries", "title": "Failover latency", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 98},
       "targets": [
-        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, outcome, mode) (rate(alltoken_failover_duration_seconds_bucket[5m])))", "legendFormat": "P95 {{outcome}} {{mode}}"},
-        {"refId": "B", "expr": "histogram_quantile(0.99, sum by (le, outcome, mode) (rate(alltoken_failover_duration_seconds_bucket[5m])))", "legendFormat": "P99 {{outcome}} {{mode}}"}
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(new_api_routing_failover_duration_seconds_bucket[5m])))", "legendFormat": "P95 {{outcome}}"},
+        {"refId": "B", "expr": "histogram_quantile(0.99, sum by (le, outcome) (rate(new_api_routing_failover_duration_seconds_bucket[5m])))", "legendFormat": "P99 {{outcome}}"}
       ],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
     },

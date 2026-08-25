@@ -75,6 +75,14 @@ web/             — Frontend container
 - A separate function is appropriate when it represents reusable behavior, a required interface/framework callback, an exported API, a test fixture, or complex business logic that deserves direct tests.
 - If a single-use helper is kept, its name must describe a durable domain concept rather than a mechanical step extracted only to shorten the caller.
 
+### Naming and namespace rules
+
+- Do not use a product, deployment, customer, or project nickname as a generic code namespace, protocol field, error source, metric namespace, database column, or naming convention. Names such as `ikun` and `alltoken` are not valid defaults for reusable code.
+- Prefer domain-neutral names that describe the behavior or data contract, such as `gateway`, `routing`, `stable_code`, or `error_source`.
+- A product name may appear only where it is explicitly part of an external product-facing contract (for example, a branded URL, deployment target, or compatibility identifier). Do not introduce new internal aliases or propagate such branding into generic APIs.
+- A historical migration may mention an old product-specific identifier only to rename or remove it; the old name must not remain in the current model, JSON, HTTP, metric, database, or default-configuration contract.
+- When removing or renaming a product-specific internal namespace, update the emitted JSON, HTTP headers, persistence fields, metrics, tests, and documentation together; do not retain the old name merely as a new default.
+
 ### Backend Rules
 
 **JSON package:** All JSON marshal/unmarshal operations MUST use the wrapper functions in `common/json.go`:

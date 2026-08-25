@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpenAIErrorIncludesAllTokenSourceWithoutChangingRawCode(t *testing.T) {
+func TestLocalErrorUsesNeutralSourceCode(t *testing.T) {
 	apiErr := NewErrorWithStatusCode(
 		errors.New("invalid model parameter"),
 		ErrorCodeInvalidRequest,
@@ -22,12 +23,12 @@ func TestOpenAIErrorIncludesAllTokenSourceWithoutChangingRawCode(t *testing.T) {
 	response := apiErr.ToOpenAIError()
 
 	assert.Equal(t, ErrorCodeInvalidRequest, response.Code)
-	assert.Equal(t, ErrorSourceAllToken, response.Source)
-	assert.Equal(t, "alltoken.invalid_request", response.SourceCode)
+	assert.Equal(t, ErrorSourceUnknown, response.Source)
+	assert.Equal(t, "invalid_request", response.SourceCode)
 	require.NotNil(t, response.Retryable)
 	assert.False(t, *response.Retryable)
 	assert.Equal(t, "req-local", response.RequestID)
-	assert.Equal(t, 301001, response.AlltokenCode)
+	assert.Equal(t, 301001, response.StableCode)
 	assert.Equal(t, "301001", response.ErrorRef)
 	assert.Equal(t, "request", response.FailureScope)
 }
@@ -49,7 +50,7 @@ func TestOpenAIErrorPreservesUpstreamCodeAndSource(t *testing.T) {
 	assert.Equal(t, "openai.rate_limit_exceeded", response.SourceCode)
 	require.NotNil(t, response.Retryable)
 	assert.True(t, *response.Retryable)
-	assert.Equal(t, 104001, response.AlltokenCode)
+	assert.Equal(t, 104001, response.StableCode)
 	assert.Equal(t, "104001-CH23", response.ErrorRef)
 	assert.Equal(t, 23, response.ChannelID)
 	assert.Equal(t, "Claude Pro", response.ChannelName)
@@ -66,7 +67,7 @@ func TestChannelRateLimitIsChannelScoped(t *testing.T) {
 
 	response := apiErr.ToOpenAIError()
 
-	assert.Equal(t, 204001, response.AlltokenCode)
+	assert.Equal(t, 204001, response.StableCode)
 	assert.Equal(t, "channel", response.FailureScope)
 	assert.Equal(t, "204001-CH23", response.ErrorRef)
 }
@@ -82,7 +83,7 @@ func TestChannelGenericServerErrorsAreChannelScoped(t *testing.T) {
 
 		response := apiErr.ToOpenAIError()
 
-		assert.Equal(t, 205002, response.AlltokenCode)
+		assert.Equal(t, 205002, response.StableCode)
 		assert.Equal(t, "channel", response.FailureScope)
 		assert.Equal(t, "205002-CH4", response.ErrorRef)
 	}
@@ -100,14 +101,47 @@ func TestNewUpstreamExhaustedErrorKeepsStructuredCause(t *testing.T) {
 	response := exhausted.ToOpenAIError()
 
 	assert.Equal(t, ErrorCodeUpstreamExhausted, response.Code)
-	assert.Equal(t, ErrorSourceAllToken, response.Source)
-	assert.Equal(t, "alltoken.upstream_exhausted", response.SourceCode)
+	assert.Equal(t, ErrorSourceUnknown, response.Source)
+	assert.Equal(t, "upstream_exhausted", response.SourceCode)
 	assert.Equal(t, 3, response.AttemptCount)
 	require.NotNil(t, response.Cause)
 	assert.Equal(t, ErrorSourceChannel, response.Cause.Source)
 	assert.Equal(t, "channel.server_error", response.Cause.Code)
 	assert.Equal(t, "server_error", response.Cause.RawCode)
 	assert.Equal(t, http.StatusBadGateway, response.Cause.StatusCode)
+}
+
+func TestUpstreamExhaustedResponseOmitsProductNamespace(t *testing.T) {
+	lastErr := WithOpenAIError(OpenAIError{
+		Message: "channel unavailable",
+		Code:    "server_error",
+		Source:  ErrorSourceChannel,
+	}, http.StatusBadGateway)
+
+	response := NewUpstreamExhaustedError(lastErr, 2).ToOpenAIError()
+	payload, err := common.Marshal(response)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(payload), "alltoken")
+	assert.NotContains(t, string(payload), "AllToken")
+	assert.Contains(t, string(payload), `"source_code":"upstream_exhausted"`)
+	assert.NotContains(t, string(payload), `"source":""`)
+}
+
+func TestLocalCauseOmitsUnknownSource(t *testing.T) {
+	response := NewUpstreamExhaustedError(
+		NewError(errors.New("local upstream failure"), ErrorCodeBadResponse),
+		1,
+	).ToOpenAIError()
+	payload, err := common.Marshal(response)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(payload), `"source":""`)
+}
+
+func TestParseErrorSourceRejectsProductNames(t *testing.T) {
+	assert.Equal(t, ErrorSourceUnknown, ParseErrorSource("alltoken"))
+	assert.Equal(t, ErrorSourceUnknown, ParseErrorSource("ikun"))
 }
 
 func TestResolveErrorSource(t *testing.T) {
@@ -142,17 +176,17 @@ func TestChannelExhaustionUsesStableLocationReference(t *testing.T) {
 
 	response := apiErr.ToOpenAIError()
 
-	assert.Equal(t, 205003, response.AlltokenCode)
+	assert.Equal(t, 205003, response.StableCode)
 	assert.Equal(t, "205003-CH17", response.ErrorRef)
 	assert.Equal(t, "channel", response.FailureScope)
 	assert.Equal(t, "switch_channel", response.Action)
 }
 
-func TestUpstreamCannotClaimAllTokenSource(t *testing.T) {
+func TestUnknownUpstreamSourceIsIgnored(t *testing.T) {
 	apiErr := WithOpenAIError(OpenAIError{
 		Message: "spoofed source",
 		Code:    "server_error",
-		Source:  ErrorSourceAllToken,
+		Source:  ErrorSource("product_name"),
 	}, http.StatusBadGateway)
 
 	assert.Equal(t, ErrorSourceUnknown, apiErr.GetErrorSource())
@@ -171,7 +205,7 @@ func TestConfiguredClassificationOverridesBuiltInCatalog(t *testing.T) {
 
 	response := apiErr.ToOpenAIError()
 
-	assert.Equal(t, 205004, response.AlltokenCode)
+	assert.Equal(t, 205004, response.StableCode)
 	assert.Equal(t, "205004-CH23", response.ErrorRef)
 	assert.Equal(t, "channel", response.FailureScope)
 	require.NotNil(t, response.Retryable)

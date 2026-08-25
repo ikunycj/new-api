@@ -27,7 +27,7 @@ func classifyError(err *NewAPIError) errorDefinition {
 	case ErrorSourceChannel:
 		return classifyChannelError(rawCode, err.StatusCode)
 	default:
-		return classifyAlltokenError(rawCode)
+		return classifyLocalError(rawCode)
 	}
 }
 
@@ -75,7 +75,7 @@ func classifyChannelError(rawCode string, statusCode int) errorDefinition {
 	}
 }
 
-func classifyAlltokenError(rawCode string) errorDefinition {
+func classifyLocalError(rawCode string) errorDefinition {
 	definitions := map[string]errorDefinition{
 		"invalid_request":                 {301001, "request", "request", "none"},
 		"bad_request_body":                {301002, "request", "request", "none"},

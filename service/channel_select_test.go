@@ -27,7 +27,7 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 	for _, channel := range channels {
 		require.NoError(t, model.DB.Create(&model.Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id, Enabled: true, Weight: weight}).Error)
 	}
-	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Mode: model.RoutingModeBalanced, Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1}
+	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1}
 	require.NoError(t, model.DB.Create(&route).Error)
 	require.NoError(t, model.DB.Create(&[]model.BillingGroupChannel{
 		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},

@@ -8,7 +8,7 @@ import (
 )
 
 func TestChannelCircuitOpensAndRecoversAfterSuccess(t *testing.T) {
-	policy := model.DefaultRuntimeRoutingPolicy(model.RoutingModeBalanced)
+	policy := model.DefaultRuntimeRoutingPolicy()
 	policy.CircuitFailureThreshold = 2
 	route := "/test/circuit"
 	channelID := 991

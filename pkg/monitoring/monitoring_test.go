@@ -114,7 +114,7 @@ func TestRegistryExposesEveryConfiguredChannel(t *testing.T) {
 
 	channels := map[string]map[string]string{}
 	for _, family := range families {
-		if family.GetName() != "alltoken_channel_info" {
+		if family.GetName() != "new_api_channel_info" {
 			continue
 		}
 		for _, metric := range family.GetMetric() {

@@ -46,7 +46,7 @@ var (
 		Help:      "Current number of HTTP requests being handled.",
 	})
 	channelInfoDesc = prometheus.NewDesc(
-		"alltoken_channel_info",
+		"new_api_channel_info",
 		"Configured channels and their current routing metadata.",
 		[]string{"channel_id", "channel_name", "channel_label", "status", "group"},
 		nil,

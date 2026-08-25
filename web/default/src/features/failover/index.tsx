@@ -28,7 +28,6 @@ import type {
   BillingGroupChannel,
   BillingGroupRoute,
   FailoverConfig,
-  RoutingMode,
   UpstreamErrorMapping,
 } from './types'
 
@@ -38,7 +37,6 @@ const emptyRoute = (): BillingGroupRoute => ({
   id: nextTemporaryID--,
   billing_group: '',
   name: '',
-  mode: 'balanced',
   enabled: true,
   max_total_attempts: 4,
   total_timeout_ms: 30000,
@@ -56,7 +54,7 @@ const emptyMapping = (): UpstreamErrorMapping => ({
   channel_type: 0,
   raw_code: '',
   status_code: 429,
-  alltoken_code: 204001,
+  stable_code: 204001,
   category: 'rate_limit',
   failure_scope: 'channel',
   action: 'switch_channel',
@@ -322,8 +320,8 @@ export function FailoverConfiguration() {
               <div
                 className={
                   route.id < 0
-                    ? 'grid gap-3 md:grid-cols-[1fr_1fr_180px_auto_auto] md:items-end'
-                    : 'grid gap-3 md:grid-cols-[1fr_180px_auto_auto] md:items-end'
+                    ? 'grid gap-3 md:grid-cols-[1fr_1fr_auto_auto] md:items-end'
+                    : 'grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end'
                 }
               >
                 {route.id < 0 ? (
@@ -371,30 +369,6 @@ export function FailoverConfiguration() {
                       updateRoute(routeIndex, 'name', event.target.value)
                     }
                   />
-                </div>
-                <div className='space-y-1.5'>
-                  <Label>{t('Routing strategy')}</Label>
-                  <NativeSelect
-                    className='w-full'
-                    value={route.mode}
-                    onChange={(event) =>
-                      updateRoute(
-                        routeIndex,
-                        'mode',
-                        event.target.value as RoutingMode
-                      )
-                    }
-                  >
-                    <NativeSelectOption value='cost_first'>
-                      {t('Cost first')}
-                    </NativeSelectOption>
-                    <NativeSelectOption value='balanced'>
-                      {t('Balanced')}
-                    </NativeSelectOption>
-                    <NativeSelectOption value='stability_first'>
-                      {t('Stability first')}
-                    </NativeSelectOption>
-                  </NativeSelect>
                 </div>
                 <div className='flex items-center gap-2 pb-2'>
                   <Switch
@@ -656,14 +630,14 @@ export function FailoverConfiguration() {
                 }
               />
               <NumberField
-                label={t('AllToken code')}
-                value={mapping.alltoken_code}
+                label={t('Stable code')}
+                value={mapping.stable_code}
                 min={100000}
                 onChange={(value) =>
                   updateConfig((current) => {
                     current.error_mappings[index] = {
                       ...mapping,
-                      alltoken_code: value,
+                      stable_code: value,
                     }
                     return current
                   })

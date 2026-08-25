@@ -88,7 +88,7 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		if newApiErr == nil || resp == nil {
 			return
 		}
-		for _, header := range []string{"X-Alltoken-Error-Source", "X-Error-Source", "X-Error-Layer"} {
+		for _, header := range []string{"X-Error-Source", "X-Error-Layer"} {
 			if source := types.ParseErrorSource(resp.Header.Get(header)); source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel {
 				newApiErr.SetErrorSource(source)
 				return

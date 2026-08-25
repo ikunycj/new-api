@@ -27,7 +27,7 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 		{Name: "official"},
 	}
 	require.NoError(t, db.Create(&channels).Error)
-	route := BillingGroupRoute{BillingGroup: "claude", Name: "Claude", Mode: RoutingModeBalanced, Enabled: true}
+	route := BillingGroupRoute{BillingGroup: "claude", Name: "Claude", Enabled: true}
 	require.NoError(t, db.Create(&route).Error)
 	require.NoError(t, db.Create(&[]BillingGroupChannel{
 		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},

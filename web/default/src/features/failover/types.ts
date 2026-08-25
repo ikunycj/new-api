@@ -1,4 +1,3 @@
-export type RoutingMode = 'cost_first' | 'balanced' | 'stability_first'
 export type FailureScope = 'request' | 'credential' | 'channel' | 'provider'
 export type RoutingAction =
   | 'none'
@@ -12,7 +11,6 @@ export type BillingGroupRoute = {
   id: number
   billing_group: string
   name: string
-  mode: RoutingMode
   enabled: boolean
   max_total_attempts: number
   total_timeout_ms: number
@@ -41,7 +39,7 @@ export type UpstreamErrorMapping = {
   channel_type: number
   raw_code: string
   status_code: number
-  alltoken_code: number
+  stable_code: number
   category: string
   failure_scope: FailureScope
   action: RoutingAction

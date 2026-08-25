@@ -93,7 +93,7 @@ func TestRecordAuthFailureUsesBoundedLabels(t *testing.T) {
 	metricFamilies, err := registry.Gather()
 	require.NoError(t, err)
 	for _, family := range metricFamilies {
-		if family.GetName() != "alltoken_auth_failures_total" {
+		if family.GetName() != "new_api_routing_auth_failures_total" {
 			continue
 		}
 		for _, metric := range family.GetMetric() {
@@ -107,5 +107,5 @@ func TestRecordAuthFailureUsesBoundedLabels(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("alltoken_auth_failures_total metric was not gathered")
+	t.Fatal("new_api_routing_auth_failures_total metric was not gathered")
 }

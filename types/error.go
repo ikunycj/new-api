@@ -22,7 +22,7 @@ type OpenAIError struct {
 	Retryable    *bool           `json:"retryable,omitempty"`
 	RequestID    string          `json:"request_id,omitempty"`
 	AttemptCount int             `json:"attempt_count,omitempty"`
-	AlltokenCode int             `json:"alltoken_code,omitempty"`
+	StableCode   int             `json:"stable_code,omitempty"`
 	ErrorRef     string          `json:"error_ref,omitempty"`
 	Category     string          `json:"category,omitempty"`
 	ChannelID    int             `json:"channel_id,omitempty"`
@@ -35,21 +35,20 @@ type OpenAIError struct {
 type ErrorSource string
 
 const (
-	ErrorSourceUnknown  ErrorSource = ""
-	ErrorSourceOpenAI   ErrorSource = "openai"
-	ErrorSourceChannel  ErrorSource = "channel"
-	ErrorSourceAllToken ErrorSource = "alltoken"
+	ErrorSourceUnknown ErrorSource = ""
+	ErrorSourceOpenAI  ErrorSource = "openai"
+	ErrorSourceChannel ErrorSource = "channel"
 )
 
 type ErrorCause struct {
-	Source       ErrorSource `json:"source"`
-	Code         string      `json:"code"`
-	RawCode      string      `json:"raw_code,omitempty"`
-	StatusCode   int         `json:"status_code,omitempty"`
-	AlltokenCode int         `json:"alltoken_code,omitempty"`
-	ErrorRef     string      `json:"error_ref,omitempty"`
-	ChannelID    int         `json:"channel_id,omitempty"`
-	ChannelName  string      `json:"channel_name,omitempty"`
+	Source      ErrorSource `json:"source,omitempty"`
+	Code        string      `json:"code"`
+	RawCode     string      `json:"raw_code,omitempty"`
+	StatusCode  int         `json:"status_code,omitempty"`
+	StableCode  int         `json:"stable_code,omitempty"`
+	ErrorRef    string      `json:"error_ref,omitempty"`
+	ChannelID   int         `json:"channel_id,omitempty"`
+	ChannelName string      `json:"channel_name,omitempty"`
 }
 
 type ClaudeError struct {
@@ -169,8 +168,6 @@ func ParseErrorSource(source string) ErrorSource {
 		return ErrorSourceOpenAI
 	case string(ErrorSourceChannel):
 		return ErrorSourceChannel
-	case string(ErrorSourceAllToken), "new-api", "new_api":
-		return ErrorSourceAllToken
 	default:
 		return ErrorSourceUnknown
 	}
@@ -179,8 +176,8 @@ func ParseErrorSource(source string) ErrorSource {
 // ResolveErrorSource applies the explicit channel setting first, then uses a
 // conservative default for OpenAI-compatible endpoints. Direct api.openai.com
 // traffic is attributed to OpenAI; other compatible upstreams are attributed
-// to the configured channel layer. alltoken-generated errors never call
-// this function.
+// to the configured channel layer. Locally generated errors do not have an
+// upstream source and never call this function.
 func ResolveErrorSource(configured, baseURL string) ErrorSource {
 	if source := ParseErrorSource(configured); source == ErrorSourceOpenAI || source == ErrorSourceChannel {
 		return source
@@ -200,10 +197,14 @@ func (e *NewAPIError) GetErrorSource() ErrorSource {
 }
 
 func (e *NewAPIError) SetErrorSource(source ErrorSource) {
-	if e == nil || source == ErrorSourceUnknown {
+	if e == nil || !isSupportedErrorSource(source) {
 		return
 	}
 	e.errorSource = source
+}
+
+func isSupportedErrorSource(source ErrorSource) bool {
+	return source == ErrorSourceOpenAI || source == ErrorSourceChannel
 }
 
 func (e *NewAPIError) EnsureErrorSource(source ErrorSource) {
@@ -217,17 +218,16 @@ func (e *NewAPIError) SourceCode() string {
 	if e == nil {
 		return ""
 	}
-	source := e.errorSource
-	if source == ErrorSourceUnknown {
-		source = ErrorSourceAllToken
-	}
 	code := strings.TrimSpace(string(e.errorCode))
 	if code == "" {
 		code = "unknown_error"
 	}
 	code = strings.ReplaceAll(code, ":", ".")
-	prefix := string(source) + "."
-	if strings.HasPrefix(strings.ToLower(code), prefix) {
+	if e.errorSource == ErrorSourceUnknown {
+		return code
+	}
+	prefix := string(e.errorSource) + "."
+	if strings.HasPrefix(strings.ToLower(code), strings.ToLower(prefix)) {
 		return code
 	}
 	return prefix + code
@@ -270,12 +270,12 @@ func (e *NewAPIError) SetChannelLocation(channelID int, channelName string) {
 	e.channelName = strings.TrimSpace(channelName)
 }
 
-func (e *NewAPIError) SetClassification(alltokenCode int, category string, failureScope string, action string, retryable bool) {
-	if e == nil || alltokenCode < 100000 || alltokenCode > 999999 {
+func (e *NewAPIError) SetClassification(stableCode int, category string, failureScope string, action string, retryable bool) {
+	if e == nil || stableCode < 100000 || stableCode > 999999 {
 		return
 	}
 	e.classification = &errorDefinition{
-		Code:         alltokenCode,
+		Code:         stableCode,
 		Category:     strings.TrimSpace(category),
 		FailureScope: strings.TrimSpace(failureScope),
 		Action:       strings.TrimSpace(action),
@@ -283,12 +283,12 @@ func (e *NewAPIError) SetClassification(alltokenCode int, category string, failu
 	e.SetRetryable(retryable)
 }
 
-func (e *NewAPIError) AlltokenCode() int {
+func (e *NewAPIError) StableCode() int {
 	return classifyError(e).Code
 }
 
 func (e *NewAPIError) ErrorRef() string {
-	return buildErrorRef(e.AlltokenCode(), e.channelID)
+	return buildErrorRef(e.StableCode(), e.channelID)
 }
 
 func (e *NewAPIError) ChannelID() int {
@@ -405,15 +405,12 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 		result.Message = string(e.errorType)
 	}
 	result.Source = e.errorSource
-	if result.Source == ErrorSourceUnknown {
-		result.Source = ErrorSourceAllToken
-	}
 	result.SourceCode = e.SourceCode()
 	result.Retryable = e.retryable
 	result.RequestID = e.requestID
 	result.AttemptCount = e.attemptCount
 	definition := classifyError(e)
-	result.AlltokenCode = definition.Code
+	result.StableCode = definition.Code
 	result.ErrorRef = buildErrorRef(definition.Code, e.channelID)
 	result.Category = definition.Category
 	result.ChannelID = e.channelID
@@ -465,12 +462,11 @@ func NewError(err error, errorCode ErrorCode, ops ...NewAPIErrorOptions) *NewAPI
 		return newErr
 	}
 	e := &NewAPIError{
-		Err:         err,
-		RelayError:  nil,
-		errorType:   ErrorTypeNewAPIError,
-		StatusCode:  http.StatusInternalServerError,
-		errorCode:   errorCode,
-		errorSource: ErrorSourceAllToken,
+		Err:        err,
+		RelayError: nil,
+		errorType:  ErrorTypeNewAPIError,
+		StatusCode: http.StatusInternalServerError,
+		errorCode:  errorCode,
 	}
 	for _, op := range ops {
 		op(e)
@@ -489,7 +485,6 @@ func NewOpenAIError(err error, errorCode ErrorCode, statusCode int, ops ...NewAP
 				Code:    errorCode,
 			}
 			newErr.RelayError = openaiError
-			newErr.EnsureErrorSource(ErrorSourceAllToken)
 		}
 		for _, op := range ops {
 			op(newErr)
@@ -505,7 +500,6 @@ func NewOpenAIError(err error, errorCode ErrorCode, statusCode int, ops ...NewAP
 		Type:    string(errorCode),
 		Code:    errorCode,
 	}
-	ops = append([]NewAPIErrorOptions{ErrOptionWithErrorSource(ErrorSourceAllToken)}, ops...)
 	return WithOpenAIError(openaiError, statusCode, ops...)
 }
 
@@ -524,10 +518,9 @@ func NewErrorWithStatusCode(err error, errorCode ErrorCode, statusCode int, ops 
 			Message: err.Error(),
 			Type:    string(errorCode),
 		},
-		errorType:   ErrorTypeNewAPIError,
-		StatusCode:  statusCode,
-		errorCode:   errorCode,
-		errorSource: ErrorSourceAllToken,
+		errorType:  ErrorTypeNewAPIError,
+		StatusCode: statusCode,
+		errorCode:  errorCode,
 	}
 	for _, op := range ops {
 		op(e)
@@ -549,11 +542,6 @@ func WithOpenAIError(openAIError OpenAIError, statusCode int, ops ...NewAPIError
 		openAIError.Type = "upstream_error"
 	}
 	source := ParseErrorSource(string(openAIError.Source))
-	if source == ErrorSourceAllToken {
-		// The alltoken namespace is reserved for errors created locally. An
-		// upstream payload cannot claim ownership of the gateway layer.
-		source = ErrorSourceUnknown
-	}
 	e := &NewAPIError{
 		RelayError:  openAIError,
 		errorType:   ErrorTypeOpenAIError,
@@ -636,17 +624,14 @@ func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIEr
 		return NewError(errors.New("all upstream routes failed"), ErrorCodeUpstreamExhausted)
 	}
 	cause := &ErrorCause{
-		Source:       lastErr.GetErrorSource(),
-		Code:         lastErr.SourceCode(),
-		RawCode:      string(lastErr.GetErrorCode()),
-		StatusCode:   lastErr.StatusCode,
-		AlltokenCode: lastErr.AlltokenCode(),
-		ErrorRef:     lastErr.ErrorRef(),
-		ChannelID:    lastErr.channelID,
-		ChannelName:  lastErr.channelName,
-	}
-	if cause.Source == ErrorSourceUnknown {
-		cause.Source = ErrorSourceAllToken
+		Source:      lastErr.GetErrorSource(),
+		Code:        lastErr.SourceCode(),
+		RawCode:     string(lastErr.GetErrorCode()),
+		StatusCode:  lastErr.StatusCode,
+		StableCode:  lastErr.StableCode(),
+		ErrorRef:    lastErr.ErrorRef(),
+		ChannelID:   lastErr.channelID,
+		ChannelName: lastErr.channelName,
 	}
 	e := NewErrorWithStatusCode(
 		fmt.Errorf("all upstream routes failed: %w", lastErr),
@@ -654,7 +639,7 @@ func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIEr
 		lastErr.StatusCode,
 	)
 	e.errorType = ErrorTypeUpstreamError
-	e.errorSource = ErrorSourceAllToken
+	e.errorSource = ErrorSourceUnknown
 	e.attemptCount = attemptCount
 	e.cause = cause
 	e.channelID = lastErr.channelID

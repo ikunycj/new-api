@@ -30,7 +30,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 
 	config := &ChannelRoutingConfig{
 		Routes: []BillingGroupRoute{{
-			Id: 17, BillingGroup: " claude ", Name: " Claude ", Mode: RoutingModeStabilityFirst, Enabled: true,
+			Id: 17, BillingGroup: " claude ", Name: " Claude ", Enabled: true,
 		}},
 		RouteChannels: []BillingGroupChannel{
 			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
@@ -38,7 +38,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 		},
 		ErrorMappings: []UpstreamErrorMapping{{
 			Id: 1, ChannelId: 38, RawCode: " RATE_LIMIT_ERROR ", StatusCode: 429,
-			AlltokenCode: 204001, Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true,
+			StableCode: 204001, Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true,
 		}},
 	}
 
@@ -46,8 +46,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	InitChannelRoutingCache()
 	policy, channels, ok := ResolveBillingGroupRoute("claude")
 	require.True(t, ok)
-	assert.Equal(t, RoutingModeStabilityFirst, policy.Mode)
-	assert.Equal(t, 3, policy.MaxTotalAttempts)
+	assert.Equal(t, 4, policy.MaxTotalAttempts)
 	require.Len(t, channels, 2)
 	assert.Equal(t, 38, channels[0].ChannelId)
 	assert.Equal(t, 40, channels[1].ChannelId)
@@ -64,7 +63,7 @@ func TestSaveChannelRoutingConfigRemapsTemporaryIDs(t *testing.T) {
 
 	config := &ChannelRoutingConfig{
 		Routes: []BillingGroupRoute{{
-			Id: -10, BillingGroup: "claude", Name: "Claude", Mode: RoutingModeBalanced, Enabled: true,
+			Id: -10, BillingGroup: "claude", Name: "Claude", Enabled: true,
 		}},
 		RouteChannels: []BillingGroupChannel{{
 			Id: -20, BillingGroupRouteId: -10, ChannelId: 38, Priority: 100,
@@ -168,13 +167,13 @@ func TestDeleteDisabledChannelRemovesOwnedChannelRecords(t *testing.T) {
 func TestMatchUpstreamErrorMappingPrefersExactChannel(t *testing.T) {
 	setupChannelRoutingTables(t)
 	require.NoError(t, DB.Create(&[]UpstreamErrorMapping{
-		{Id: 1, RawCode: "*", StatusCode: 503, AlltokenCode: 205002, Category: "upstream", FailureScope: "provider", Action: "switch_channel", Retryable: true, Enabled: true},
-		{Id: 2, ChannelId: 38, ChannelType: 14, RawCode: "overloaded_error", StatusCode: 503, AlltokenCode: 205004, Category: "upstream", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true},
+		{Id: 1, RawCode: "*", StatusCode: 503, StableCode: 205002, Category: "upstream", FailureScope: "provider", Action: "switch_channel", Retryable: true, Enabled: true},
+		{Id: 2, ChannelId: 38, ChannelType: 14, RawCode: "overloaded_error", StatusCode: 503, StableCode: 205004, Category: "upstream", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true},
 	}).Error)
 	InitChannelRoutingCache()
 
 	mapping, ok := MatchUpstreamErrorMapping(38, 14, "OVERLOADED_ERROR", 503)
 	require.True(t, ok)
-	assert.Equal(t, 205004, mapping.AlltokenCode)
+	assert.Equal(t, 205004, mapping.StableCode)
 	assert.Equal(t, "channel", mapping.FailureScope)
 }

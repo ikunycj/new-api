@@ -197,7 +197,7 @@ func channelCircuitKey(channelID int, route string) string {
 
 func channelCircuitRedisKey(channelID int, route string) string {
 	routeHash := sha256.Sum256([]byte(route))
-	return fmt.Sprintf("alltoken:channel:circuit:%d:%x", channelID, routeHash[:8])
+	return fmt.Sprintf("new_api:routing:channel:circuit:%d:%x", channelID, routeHash[:8])
 }
 
 func circuitRedisTTL(policy model.RuntimeRoutingPolicy) time.Duration {

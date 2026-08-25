@@ -7,7 +7,6 @@ const baseURL = normalizeBaseURL(__ENV.BASE_URL || 'http://new-api:3000');
 const loadTestModel = __ENV.LOADTEST_MODEL || 'gpt-3.5-turbo';
 const userCount = numberEnv('LOADTEST_USERS', 1000);
 const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
-const failoverMode = __ENV.FAILOVER_MODE || 'balanced';
 const mockControlA = normalizeBaseURL(__ENV.MOCK_CONTROL_A || 'http://mock-upstream:8080');
 const mockControlB = normalizeBaseURL(__ENV.MOCK_CONTROL_B || 'http://mock-upstream-b:8080');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
@@ -147,7 +146,6 @@ function headersForVU() {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'X-Load-Test-ID': `${profile}-${__VU}-${__ITER}`,
-    'X-Alltoken-Failover-Mode': failoverMode,
   };
 }
 

@@ -50,7 +50,7 @@ groups:
           description: One or more upstream channels are unstable or exhausted.
 
       - alert: AllTokenChannelCircuitOpen
-        expr: alltoken_channel_circuit_state{state="open"} == 1
+        expr: new_api_routing_channel_circuit_state{state="open"} == 1
         for: 30s
         labels:
           severity: critical
@@ -59,7 +59,7 @@ groups:
           description: New requests are being routed to another eligible channel.
 
       - alert: AllTokenFailoverSurge
-        expr: sum(rate(alltoken_channel_switch_total[2m])) > 1
+        expr: sum(rate(new_api_routing_channel_switch_total[2m])) > 1
         for: 30s
         labels:
           severity: warning
@@ -68,7 +68,7 @@ groups:
           description: Check the primary channels and current billing-group route.
 
       - alert: AllTokenUpstreamExhausted
-        expr: increase(alltoken_final_errors_total{alltoken_code="305001"}[2m]) > 0
+        expr: increase(new_api_routing_final_errors_total{stable_code="305001"}[2m]) > 0
         labels:
           severity: critical
         annotations:

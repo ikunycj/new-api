@@ -136,11 +136,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			newAPIError.SetRequestID(requestId)
 			newAPIError.SetAttemptCount(len(c.GetStringSlice("use_channel")))
-			c.Header("X-Alltoken-Error-Source", string(newAPIError.GetErrorSource()))
-			c.Header("X-Alltoken-Error-Code", newAPIError.SourceCode())
-			c.Header("X-Alltoken-Code", fmt.Sprintf("%06d", newAPIError.AlltokenCode()))
-			c.Header("X-Alltoken-Error-Ref", newAPIError.ErrorRef())
-			c.Header("X-Alltoken-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
+			if source := newAPIError.GetErrorSource(); source != types.ErrorSourceUnknown {
+				c.Header("X-Error-Source", string(source))
+			}
+			c.Header("X-Error-Source-Code", newAPIError.SourceCode())
+			c.Header("X-Error-Stable-Code", fmt.Sprintf("%06d", newAPIError.StableCode()))
+			c.Header("X-Error-Ref", newAPIError.ErrorRef())
+			c.Header("X-Error-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 			switch relayFormat {
@@ -275,7 +277,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		finalProvider = provider
 		finalChannelID = channel.Id
 		if previousChannelID > 0 && previousChannelID != channel.Id {
-			observability.RecordChannelSwitch(previousChannelID, channel.Id, policy.Mode)
+			observability.RecordChannelSwitch(previousChannelID, channel.Id)
 			failoverOccurred = true
 		}
 		previousChannelID = channel.Id
@@ -326,7 +328,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
 			newAPIError.SetChannelLocation(channel.Id, channel.Name)
 			if mapping, ok := model.MatchUpstreamErrorMapping(channel.Id, channel.Type, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
-				newAPIError.SetClassification(mapping.AlltokenCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
+				newAPIError.SetClassification(mapping.StableCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
 			}
 			observability.RecordErrorEvent("upstream_attempt", newAPIError)
 			observability.RecordChannelRequest(channel.Id, "error")
@@ -369,21 +371,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			SourceCode:        sourceCode(newAPIError),
 			AttemptDurationMS: attemptDuration.Milliseconds(),
 			Retried:           willRetry,
-			AlltokenCode:      errorAlltokenCode(newAPIError),
+			StableCode:        errorStableCode(newAPIError),
 			ErrorRef:          errorRef(newAPIError),
 			Category:          errorCategory(newAPIError),
 			ChannelName:       channel.Name,
 			BillingGroup:      relayInfo.UsingGroup,
 			FailureScope:      errorFailureScope(newAPIError),
 			Action:            errorAction(newAPIError),
-			FailoverMode:      policy.Mode,
 		})
 
 		if newAPIError == nil {
 			service.RecordChannelCircuitSuccess(channel.Id, route)
 			observability.RecordChannelRequest(channel.Id, "success")
 			if failoverOccurred {
-				observability.RecordFailoverDuration("success", policy.Mode, time.Since(requestStartedAt))
+				observability.RecordFailoverDuration("success", time.Since(requestStartedAt))
 			}
 			relayInfo.LastError = nil
 			return
@@ -415,7 +416,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if newAPIError != nil {
 		observability.RecordErrorEvent("final_response", newAPIError)
 		if failoverOccurred || attemptedUpstream {
-			observability.RecordFailoverDuration("exhausted", retryParam.RuntimePolicy().Mode, time.Since(requestStartedAt))
+			observability.RecordFailoverDuration("exhausted", time.Since(requestStartedAt))
 		}
 	}
 	if len(useChannel) > 1 {
@@ -492,11 +493,11 @@ func sourceCode(err *types.NewAPIError) string {
 	return err.SourceCode()
 }
 
-func errorAlltokenCode(err *types.NewAPIError) int {
+func errorStableCode(err *types.NewAPIError) int {
 	if err == nil {
 		return 0
 	}
-	return err.AlltokenCode()
+	return err.StableCode()
 }
 
 func errorRef(err *types.NewAPIError) string {
@@ -728,6 +729,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other["error_code"] = err.GetErrorCode()
 		other["error_source"] = err.GetErrorSource()
 		other["source_code"] = err.SourceCode()
+		other["stable_code"] = err.StableCode()
 		other["retryable"] = err.IsRetryable()
 		other["status_code"] = err.StatusCode
 		other["channel_id"] = channelId

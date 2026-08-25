@@ -66,34 +66,34 @@ var (
 		Help: "Client cancellations by bounded phase.",
 	}, []string{"provider", "channel_id", "phase"})
 	errorEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "error_events_total",
+		Namespace: "new_api", Subsystem: "routing", Name: "error_events_total",
 		Help: "Structured error events by bounded error and routing dimensions.",
-	}, []string{"event_kind", "alltoken_code", "category", "channel_id"})
+	}, []string{"event_kind", "stable_code", "category", "channel_id"})
 	channelRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "channel_requests_total",
+		Namespace: "new_api", Subsystem: "routing", Name: "channel_requests_total",
 		Help: "Upstream attempts by channel and outcome.",
 	}, []string{"channel_id", "outcome"})
 	channelSwitches = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "channel_switch_total",
+		Namespace: "new_api", Subsystem: "routing", Name: "channel_switch_total",
 		Help: "Ordered transitions between channels.",
-	}, []string{"from_channel", "to_channel", "mode"})
+	}, []string{"from_channel", "to_channel"})
 	finalErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "final_errors_total",
+		Namespace: "new_api", Subsystem: "routing", Name: "final_errors_total",
 		Help: "Errors returned to clients after failover is complete.",
-	}, []string{"alltoken_code", "category", "channel_id"})
+	}, []string{"stable_code", "category", "channel_id"})
 	authFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "alltoken", Name: "auth_failures_total",
+		Namespace: "new_api", Subsystem: "routing", Name: "auth_failures_total",
 		Help: "Gateway authentication failures by bounded reason and route.",
 	}, []string{"reason", "route", "status"})
 	channelCircuitState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "alltoken", Name: "channel_circuit_state",
+		Namespace: "new_api", Subsystem: "routing", Name: "channel_circuit_state",
 		Help: "Channel circuit state represented as one hot state labels.",
 	}, []string{"channel_id", "route", "state"})
 	failoverDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "alltoken", Name: "failover_duration_seconds",
+		Namespace: "new_api", Subsystem: "routing", Name: "failover_duration_seconds",
 		Help:    "Time spent before a successful failover or final exhaustion.",
 		Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30},
-	}, []string{"outcome", "mode"})
+	}, []string{"outcome"})
 )
 
 // Collectors returns all relay collectors for registration in the application registry.
@@ -117,7 +117,7 @@ func RecordErrorEvent(eventKind string, apiErr *types.NewAPIError) {
 	if apiErr == nil {
 		return
 	}
-	code := strconv.Itoa(apiErr.AlltokenCode())
+	code := strconv.Itoa(apiErr.StableCode())
 	channel := strconv.Itoa(apiErr.ChannelID())
 	errorEvents.WithLabelValues(normalizeEventKind(eventKind), code, apiErr.ErrorCategory(), channel).Inc()
 	if eventKind == "final_response" {
@@ -132,8 +132,8 @@ func RecordChannelRequest(channelID int, outcome string) {
 	channelRequests.WithLabelValues(strconv.Itoa(channelID), outcome).Inc()
 }
 
-func RecordChannelSwitch(fromChannel, toChannel int, mode string) {
-	channelSwitches.WithLabelValues(strconv.Itoa(fromChannel), strconv.Itoa(toChannel), normalizeMode(mode)).Inc()
+func RecordChannelSwitch(fromChannel, toChannel int) {
+	channelSwitches.WithLabelValues(strconv.Itoa(fromChannel), strconv.Itoa(toChannel)).Inc()
 }
 
 func SetChannelCircuitState(channelID int, route string, state string) {
@@ -153,11 +153,11 @@ func SetChannelCircuitState(channelID int, route string, state string) {
 	}
 }
 
-func RecordFailoverDuration(outcome, mode string, duration time.Duration) {
+func RecordFailoverDuration(outcome string, duration time.Duration) {
 	if outcome != "success" {
 		outcome = "exhausted"
 	}
-	failoverDuration.WithLabelValues(outcome, normalizeMode(mode)).Observe(duration.Seconds())
+	failoverDuration.WithLabelValues(outcome).Observe(duration.Seconds())
 }
 
 func normalizeEventKind(kind string) string {
@@ -165,15 +165,6 @@ func normalizeEventKind(kind string) string {
 		return kind
 	}
 	return "final_response"
-}
-
-func normalizeMode(mode string) string {
-	switch mode {
-	case "conservative", "aggressive":
-		return mode
-	default:
-		return "balanced"
-	}
 }
 
 // ErrorClass converts all errors into a deliberately bounded category set.
@@ -364,14 +355,13 @@ type Event struct {
 	DurationMS        int64  `json:"duration_ms,omitempty"`
 	AttemptDurationMS int64  `json:"attempt_duration_ms,omitempty"`
 	Retried           bool   `json:"retried,omitempty"`
-	AlltokenCode      int    `json:"alltoken_code,omitempty"`
+	StableCode        int    `json:"stable_code,omitempty"`
 	ErrorRef          string `json:"error_ref,omitempty"`
 	Category          string `json:"category,omitempty"`
 	ChannelName       string `json:"channel_name,omitempty"`
 	BillingGroup      string `json:"billing_group,omitempty"`
 	FailureScope      string `json:"failure_scope,omitempty"`
 	Action            string `json:"action,omitempty"`
-	FailoverMode      string `json:"failover_mode,omitempty"`
 	AuthFailureReason string `json:"auth_failure_reason,omitempty"`
 }
 

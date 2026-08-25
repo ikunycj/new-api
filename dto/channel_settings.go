@@ -12,7 +12,7 @@ import (
 
 type ChannelSettings struct {
 	// ErrorSource identifies the layer that owns upstream error codes. When it
-	// is empty, alltoken infers OpenAI for api.openai.com and channel for other
+	// is empty, the gateway infers OpenAI for api.openai.com and channel for other
 	// OpenAI-compatible upstreams. An upstream may also send an X-Error-Source
 	// header to override the inference per response.
 	ErrorSource            string `json:"error_source,omitempty"`

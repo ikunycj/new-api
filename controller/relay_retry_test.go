@@ -127,7 +127,7 @@ func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
 	assert.False(t, isFailoverEligible(ctx, err))
 }
 
-func TestShouldRetryDoesNotFailoverAllTokenClientErrors(t *testing.T) {
+func TestShouldRetryDoesNotFailoverLocalClientErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	err := types.NewErrorWithStatusCode(errors.New("invalid request"), types.ErrorCodeInvalidRequest, http.StatusBadRequest)

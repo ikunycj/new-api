@@ -283,7 +283,7 @@ func (p *RetryParam) loadGroupPolicy(group string) (model.RuntimeRoutingPolicy, 
 func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 	group, err := p.currentGroup()
 	if err != nil {
-		policy := model.DefaultRuntimeRoutingPolicy(model.RoutingModeBalanced)
+		policy := model.DefaultRuntimeRoutingPolicy()
 		p.runtimePolicy = &policy
 		p.runtimePolicyGroup = ""
 		p.routeChannels = nil

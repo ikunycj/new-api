@@ -72,7 +72,7 @@ curl -X POST 'http://localhost:18080/control/enable'
 curl 'http://localhost:18080/control/state'
 ```
 
-The expected sequence is Channel A consumption, a `205001-CH<id>` exhaustion error, then a switch to Channel B. Verify `alltoken_channel_requests_total`, `alltoken_channel_switch_total`, `alltoken_channel_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
+The expected sequence is Channel A consumption, a `205001-CH<id>` exhaustion error, then a switch to Channel B. Verify `new_api_routing_channel_requests_total`, `new_api_routing_channel_switch_total`, `new_api_routing_channel_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
 
 For a short preliminary run:
 

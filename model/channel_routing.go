@@ -9,12 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	RoutingModeCostFirst      = "cost_first"
-	RoutingModeBalanced       = "balanced"
-	RoutingModeStabilityFirst = "stability_first"
-)
-
 // BillingGroupRoute owns the retry and circuit policy for one billing group.
 // The billing group is the existing group used by tokens, abilities, and
 // channels, and routes directly to channels.
@@ -22,7 +16,6 @@ type BillingGroupRoute struct {
 	Id                      int    `json:"id"`
 	BillingGroup            string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
 	Name                    string `json:"name" gorm:"type:varchar(128)"`
-	Mode                    string `json:"mode" gorm:"type:varchar(32)"`
 	Enabled                 bool   `json:"enabled" gorm:"index"`
 	MaxTotalAttempts        int    `json:"max_total_attempts"`
 	TotalTimeoutMs          int    `json:"total_timeout_ms"`
@@ -48,7 +41,7 @@ type BillingGroupChannel struct {
 	CostFactor          float64 `json:"cost_factor"`
 }
 
-// UpstreamErrorMapping translates a provider/channel error into AllToken's
+// UpstreamErrorMapping translates a provider/channel error into the gateway's
 // stable error taxonomy. ChannelId is an optional exact override; ChannelType
 // is the provider adapter type and 0 means any type.
 type UpstreamErrorMapping struct {
@@ -57,7 +50,7 @@ type UpstreamErrorMapping struct {
 	ChannelType  int    `json:"channel_type" gorm:"index;uniqueIndex:idx_error_mapping_v2"`
 	RawCode      string `json:"raw_code" gorm:"type:varchar(128);uniqueIndex:idx_error_mapping_v2"`
 	StatusCode   int    `json:"status_code" gorm:"uniqueIndex:idx_error_mapping_v2"`
-	AlltokenCode int    `json:"alltoken_code" gorm:"index"`
+	StableCode   int    `json:"stable_code" gorm:"index"`
 	Category     string `json:"category" gorm:"type:varchar(64);index"`
 	FailureScope string `json:"failure_scope" gorm:"type:varchar(32)"`
 	Action       string `json:"action" gorm:"type:varchar(32)"`
@@ -76,7 +69,6 @@ type ChannelRoutingConfig struct {
 }
 
 type RuntimeRoutingPolicy struct {
-	Mode                    string
 	MaxTotalAttempts        int
 	TotalTimeoutMs          int
 	CircuitFailureThreshold int
@@ -85,9 +77,8 @@ type RuntimeRoutingPolicy struct {
 	CircuitHalfOpenRequests int
 }
 
-func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
-	policy := RuntimeRoutingPolicy{
-		Mode:                    normalizeRoutingMode(mode),
+func DefaultRuntimeRoutingPolicy() RuntimeRoutingPolicy {
+	return RuntimeRoutingPolicy{
 		MaxTotalAttempts:        4,
 		TotalTimeoutMs:          30000,
 		CircuitFailureThreshold: 5,
@@ -95,18 +86,6 @@ func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
 		CircuitCooldownSeconds:  60,
 		CircuitHalfOpenRequests: 1,
 	}
-	switch policy.Mode {
-	case RoutingModeCostFirst:
-		policy.MaxTotalAttempts = 6
-		policy.TotalTimeoutMs = 45000
-		policy.CircuitFailureThreshold = 8
-	case RoutingModeStabilityFirst:
-		policy.MaxTotalAttempts = 3
-		policy.TotalTimeoutMs = 20000
-		policy.CircuitFailureThreshold = 3
-		policy.CircuitCooldownSeconds = 90
-	}
-	return policy
 }
 
 type channelRoutingLookupCache struct {
@@ -157,9 +136,9 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	defer channelRoutingLookup.RUnlock()
 	route, ok := channelRoutingLookup.value.routes[strings.TrimSpace(billingGroup)]
 	if !ok {
-		return DefaultRuntimeRoutingPolicy(RoutingModeBalanced), nil, false
+		return DefaultRuntimeRoutingPolicy(), nil, false
 	}
-	policy := DefaultRuntimeRoutingPolicy(route.Mode)
+	policy := DefaultRuntimeRoutingPolicy()
 	if route.MaxTotalAttempts > 0 {
 		policy.MaxTotalAttempts = route.MaxTotalAttempts
 	}
@@ -271,7 +250,6 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			}
 			route.BillingGroup = strings.TrimSpace(route.BillingGroup)
 			route.Name = strings.TrimSpace(route.Name)
-			route.Mode = normalizeRoutingMode(route.Mode)
 			if route.BillingGroup == "" {
 				return errors.New("billing_group is required")
 			}
@@ -352,8 +330,8 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			mapping.Category = strings.TrimSpace(mapping.Category)
 			mapping.FailureScope = strings.TrimSpace(mapping.FailureScope)
 			mapping.Action = strings.TrimSpace(mapping.Action)
-			if mapping.AlltokenCode < 100000 || mapping.AlltokenCode > 999999 {
-				return errors.New("error mapping alltoken_code must be a six-digit number")
+			if mapping.StableCode < 100000 || mapping.StableCode > 999999 {
+				return errors.New("error mapping stable_code must be a six-digit number")
 			}
 			if mapping.StatusCode != 0 && (mapping.StatusCode < 100 || mapping.StatusCode > 599) {
 				return errors.New("error mapping status_code must be 0 or a valid HTTP status")
@@ -398,7 +376,7 @@ func deleteMissingRows(tx *gorm.DB, value any, column string, ids []int) error {
 }
 
 func applyRouteDefaults(route *BillingGroupRoute) {
-	defaults := DefaultRuntimeRoutingPolicy(route.Mode)
+	defaults := DefaultRuntimeRoutingPolicy()
 	if route.MaxTotalAttempts <= 0 {
 		route.MaxTotalAttempts = defaults.MaxTotalAttempts
 	}
@@ -416,17 +394,6 @@ func applyRouteDefaults(route *BillingGroupRoute) {
 	}
 	if route.CircuitHalfOpenRequests <= 0 {
 		route.CircuitHalfOpenRequests = defaults.CircuitHalfOpenRequests
-	}
-}
-
-func normalizeRoutingMode(mode string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case RoutingModeCostFirst:
-		return RoutingModeCostFirst
-	case RoutingModeStabilityFirst:
-		return RoutingModeStabilityFirst
-	default:
-		return RoutingModeBalanced
 	}
 }
 

@@ -229,8 +229,8 @@ func fetchFailoverMonitoringMetrics(ctx context.Context, client *http.Client, co
 		{name: "error_rate", query: `sum(rate(new_api_relay_requests_total{outcome="error"}[5m])) / clamp_min(sum(rate(new_api_relay_requests_total[5m])), 0.001)`},
 		{name: "p95_latency_seconds", query: `histogram_quantile(0.95, sum by (le) (rate(new_api_relay_request_duration_seconds_bucket[5m])))`},
 		{name: "in_flight", query: `sum(new_api_relay_in_flight)`},
-		{name: "channel_switches", query: `sum(increase(alltoken_channel_switch_total[5m]))`},
-		{name: "open_circuits", query: `sum(alltoken_channel_circuit_state{state="open"} == 1)`},
+		{name: "channel_switches", query: `sum(increase(new_api_routing_channel_switch_total[5m]))`},
+		{name: "open_circuits", query: `sum(new_api_routing_channel_circuit_state{state="open"} == 1)`},
 		{name: "database_usage", query: `new_api_database_connections{database="main",state="in_use"} / clamp_min(new_api_database_connections{database="main",state="max_open"}, 1)`},
 		{name: "redis_timeouts", query: `sum(increase(new_api_redis_pool_timeouts_total[5m]))`},
 	}

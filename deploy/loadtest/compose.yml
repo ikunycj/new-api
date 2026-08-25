@@ -258,7 +258,6 @@ services:
       LOAD_PROFILE: ${LOAD_PROFILE:-smoke}
       LOADTEST_USERS: ${LOADTEST_USERS:-1000}
       LOADTEST_TOKENS: ${LOADTEST_TOKENS:-}
-      FAILOVER_MODE: ${FAILOVER_MODE:-balanced}
       MOCK_CONTROL_A: http://mock-upstream:8080
       MOCK_CONTROL_B: http://mock-upstream-b:8080
       SMOKE_DURATION: ${SMOKE_DURATION:-1m}

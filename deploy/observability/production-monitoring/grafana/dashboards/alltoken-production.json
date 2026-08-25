@@ -120,9 +120,9 @@
       "id": 8,
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum by (from_channel, to_channel, mode) (increase(alltoken_channel_switch_total{from_channel=~\"$channel\"}[5m]) or increase(alltoken_channel_switch_total{to_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}} / {{mode}}", "refId": "A" },
-        { "expr": "sum by (channel_id, outcome) (increase(alltoken_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" },
-        { "expr": "alltoken_channel_circuit_state{channel_id=~\"$channel\",state=~\"open|half_open\"} == 1", "legendFormat": "CH{{channel_id}} / {{state}}", "refId": "C" }
+        { "expr": "sum by (from_channel, to_channel) (increase(new_api_routing_channel_switch_total{from_channel=~\"$channel\"}[5m]) or increase(new_api_routing_channel_switch_total{to_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}}", "refId": "A" },
+        { "expr": "sum by (channel_id, outcome) (increase(new_api_routing_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" },
+        { "expr": "new_api_routing_channel_circuit_state{channel_id=~\"$channel\",state=~\"open|half_open\"} == 1", "legendFormat": "CH{{channel_id}} / {{state}}", "refId": "C" }
       ],
       "title": "Channel routing activity (5m)",
       "type": "timeseries"
@@ -193,7 +193,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
       "id": 14,
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [{ "expr": "sum by (reason, status) (rate(alltoken_auth_failures_total[1m]))", "legendFormat": "{{reason}} / HTTP {{status}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by (reason, status) (rate(new_api_routing_auth_failures_total[1m]))", "legendFormat": "{{reason}} / HTTP {{status}}", "refId": "A" }],
       "description": "Global pre-routing metric; authentication failures happen before a channel is selected.",
       "title": "Global gateway authentication failures",
       "type": "timeseries"
@@ -208,14 +208,14 @@
         "allValue": ".*",
         "current": { "selected": true, "text": "All", "value": "$__all" },
         "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "definition": "query_result(alltoken_channel_info)",
+        "definition": "query_result(new_api_channel_info)",
         "hide": 0,
         "includeAll": true,
         "label": "Channel",
         "multi": true,
         "name": "channel",
         "options": [],
-        "query": { "query": "query_result(alltoken_channel_info)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
+        "query": { "query": "query_result(new_api_channel_info)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
         "refresh": 2,
         "regex": "/channel_id=\"(?<value>[^\"]+)\".*channel_label=\"(?<text>[^\"]+)\"/",
         "skipUrlSync": false,

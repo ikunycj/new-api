@@ -108,17 +108,16 @@ ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   weight = EXCLUDED.weight;
 
 INSERT INTO billing_group_routes (
-  billing_group, name, mode, enabled, max_total_attempts, total_timeout_ms,
+  billing_group, name, enabled, max_total_attempts, total_timeout_ms,
   circuit_failure_threshold, circuit_window_seconds, circuit_cooldown_seconds,
   circuit_half_open_requests, created_time, updated_time
 )
 VALUES (
-  'default', 'Default load-test route', 'balanced', true, 4, 10000,
+  'default', 'Default load-test route', true, 4, 10000,
   3, 30, 30, 1, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
 )
 ON CONFLICT (billing_group) DO UPDATE SET
   name = EXCLUDED.name,
-  mode = EXCLUDED.mode,
   enabled = EXCLUDED.enabled,
   max_total_attempts = EXCLUDED.max_total_attempts,
   total_timeout_ms = EXCLUDED.total_timeout_ms,
@@ -142,14 +141,14 @@ FROM channels
 WHERE name IN ('Load Test Channel A', 'Load Test Channel B');
 
 INSERT INTO channel_error_mappings (
-  channel_id, channel_type, raw_code, status_code, alltoken_code,
+  channel_id, channel_type, raw_code, status_code, stable_code,
   category, failure_scope, action, retryable, enabled
 )
 VALUES
   (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
   (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true)
 ON CONFLICT (channel_id, channel_type, raw_code, status_code) DO UPDATE SET
-  alltoken_code = EXCLUDED.alltoken_code,
+  stable_code = EXCLUDED.stable_code,
   category = EXCLUDED.category,
   failure_scope = EXCLUDED.failure_scope,
   action = EXCLUDED.action,
