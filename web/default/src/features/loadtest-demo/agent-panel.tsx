@@ -236,6 +236,9 @@ export function AgentPanel(props: AgentPanelProps) {
   const onlineAgents = agents.filter(
     (agent) => agent.last_seen_at >= onlineBefore
   )
+  const selectedAgent = onlineAgents.find(
+    (agent) => agent.id === selectedAgentId
+  )
 
   return (
     <>
@@ -283,7 +286,11 @@ export function AgentPanel(props: AgentPanelProps) {
                 value={selectedAgentId}
               >
                 <SelectTrigger className='w-full'>
-                  <SelectValue placeholder={t('No online agents')} />
+                  <SelectValue placeholder={t('No online agents')}>
+                    {selectedAgent
+                      ? `${selectedAgent.name} · ${selectedAgent.max_rps} RPS · C${selectedAgent.max_concurrency}`
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {onlineAgents.map((agent) => (
