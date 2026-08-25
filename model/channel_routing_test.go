@@ -50,7 +50,6 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	require.Len(t, channels, 2)
 	assert.Equal(t, 38, channels[0].ChannelId)
 	assert.Equal(t, 40, channels[1].ChannelId)
-	assert.InDelta(t, 0.6, ResolveChannelCostFactor("claude", 38), 0.0001)
 
 	var oldCount int64
 	require.NoError(t, DB.Model(&BillingGroupRoute{}).Where("id = ?", 9).Count(&oldCount).Error)

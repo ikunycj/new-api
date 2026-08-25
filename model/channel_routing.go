@@ -161,19 +161,6 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	return policy, channels, true
 }
 
-func ResolveChannelCostFactor(billingGroup string, channelID int) float64 {
-	_, channels, ok := ResolveBillingGroupRoute(billingGroup)
-	if !ok {
-		return 1
-	}
-	for _, channel := range channels {
-		if channel.ChannelId == channelID && channel.CostFactor > 0 {
-			return channel.CostFactor
-		}
-	}
-	return 1
-}
-
 func MatchUpstreamErrorMapping(channelID int, channelType int, rawCode string, statusCode int) (UpstreamErrorMapping, bool) {
 	channelRoutingLookup.RLock()
 	defer channelRoutingLookup.RUnlock()

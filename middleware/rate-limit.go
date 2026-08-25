@@ -112,15 +112,6 @@ func CriticalRateLimit() func(c *gin.Context) {
 	return defNext
 }
 
-// TokenKeyRateLimit uses a separate bucket for bulk key retrieval so legacy
-// per-key requests cannot exhaust the limit for the load-test key selector.
-func TokenKeyRateLimit() func(c *gin.Context) {
-	if common.CriticalRateLimitEnable {
-		return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "TK")
-	}
-	return defNext
-}
-
 func DownloadRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(common.DownloadRateLimitNum, common.DownloadRateLimitDuration, "DW")
 }

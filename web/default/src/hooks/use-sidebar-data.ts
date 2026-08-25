@@ -21,7 +21,6 @@ import {
   Box,
   CreditCard,
   FileText,
-  Gauge,
   FlaskConical,
   Key,
   LayoutDashboard,
@@ -91,11 +90,6 @@ export function useSidebarData(): SidebarData {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,
-          },
-          {
-            title: t('Load Test Demo'),
-            url: '/loadtest-demo',
-            icon: Gauge,
           },
           {
             title: t('Task Logs'),
