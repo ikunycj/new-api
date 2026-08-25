@@ -232,6 +232,8 @@ export interface LogOtherData {
   cost_reconciliation?: {
     version?: number
     status?: 'estimated' | 'unavailable' | string
+    billing_usd_to_cny_rate?: number
+    quota_per_unit?: number
     user_charge_usd_micros?: number
     provider_base_cost_usd_micros?: number
     estimated_cost_usd_micros?: number

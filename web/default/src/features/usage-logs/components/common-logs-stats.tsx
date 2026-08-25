@@ -21,11 +21,12 @@ import { getRouteApi } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatLogQuota } from '@/lib/format'
+import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
 import { getCostReconciliation, getLogStats, getUserLogStats } from '../api'
 import { DEFAULT_LOG_STATS } from '../constants'
+import { formatUsageLogQuotaUSD, formatUsageLogUSDMicros } from '../lib/money'
 import { buildApiParams } from '../lib/utils'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
 
@@ -52,6 +53,7 @@ export function CommonLogsStats() {
   const { isAdminView: isAdmin } = useLogsViewScope()
   const searchParams = route.useSearch()
   const { sensitiveVisible } = useUsageLogsContext()
+  const { status } = useStatus()
 
   const costQuery = useQuery({
     queryKey: ['usage-logs-cost-reconciliation', searchParams],
@@ -113,16 +115,23 @@ export function CommonLogsStats() {
     ? `${(stats?.cache_hit_rate || 0).toFixed(1)}%`
     : '-'
   const costTotals = costQuery.data?.data?.totals
-  const formatUSD = (micros: number | undefined) =>
-    microssafe(micros) ? `$${((micros ?? 0) / 1_000_000).toFixed(4)}` : '-'
-
   return (
     <div className='flex flex-wrap items-center gap-2'>
-      <StatBadge
-        label={t('Usage')}
-        value={sensitiveVisible ? formatLogQuota(stats?.quota || 0) : '••••'}
-        accent='bg-sky-500/70'
-      />
+      {!isAdmin && (
+        <StatBadge
+          label={t('Usage')}
+          value={
+            sensitiveVisible
+              ? formatUsageLogQuotaUSD(stats?.quota || 0, {
+                  billingUSDToCNYRate: Number(
+                    status?.billing_usd_to_cny_rate ?? 1
+                  ),
+                })
+              : '••••'
+          }
+          accent='bg-sky-500/70'
+        />
+      )}
       <StatBadge
         label={t('RPM')}
         value={stats?.rpm || 0}
@@ -142,27 +151,35 @@ export function CommonLogsStats() {
         <>
           <StatBadge
             label={t('Estimated cost')}
-            value={formatUSD(costTotals?.estimated_cost_usd_micros)}
+            value={formatUsageLogUSDMicros(
+              costTotals?.estimated_cost_usd_micros
+            )}
             accent='bg-amber-500/70'
           />
           <StatBadge
             label={t('User charge')}
-            value={formatUSD(costTotals?.user_charge_usd_micros)}
+            value={
+              sensitiveVisible
+                ? formatUsageLogUSDMicros(costTotals?.user_charge_usd_micros)
+                : '••••'
+            }
             accent='bg-cyan-500/70'
           />
           <StatBadge
             label={t('Retry')}
-            value={formatUSD(costTotals?.retry_cost_usd_micros)}
+            value={formatUsageLogUSDMicros(costTotals?.retry_cost_usd_micros)}
             accent='bg-violet-500/70'
           />
           <StatBadge
             label={t('Estimate variance')}
-            value={formatUSD(costTotals?.diff_usd_micros)}
+            value={formatUsageLogUSDMicros(costTotals?.diff_usd_micros)}
             accent='bg-fuchsia-500/70'
           />
           <StatBadge
             label={t('Failed')}
-            value={formatUSD(costTotals?.failed_partial_cost_usd_micros)}
+            value={formatUsageLogUSDMicros(
+              costTotals?.failed_partial_cost_usd_micros
+            )}
             accent='bg-rose-500/70'
           />
           <StatBadge
@@ -174,8 +191,4 @@ export function CommonLogsStats() {
       )}
     </div>
   )
-}
-
-function microssafe(value: number | undefined): boolean {
-  return typeof value === 'number' && Number.isFinite(value)
 }

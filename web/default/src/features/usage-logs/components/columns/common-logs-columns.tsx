@@ -36,8 +36,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
@@ -50,6 +49,7 @@ import {
   isViolationFeeLog,
   renderAuditContent,
 } from '../../lib/format'
+import { formatUsageLogQuotaUSD, formatUsageLogUSD } from '../../lib/money'
 import {
   isDisplayableLogType,
   isTimingLogType,
@@ -145,7 +145,13 @@ function buildTypeDetailSegments(
       })
     }
     segments.push({
-      text: `${t('Fee')}: ${formatLogQuota(other?.fee_quota ?? log.quota)}`,
+      text: `${t('Fee')}: ${formatUsageLogQuotaUSD(
+        other?.fee_quota ?? log.quota,
+        {
+          billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
+          quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
+        }
+      )}`,
       muted: true,
     })
     return segments
@@ -155,16 +161,8 @@ function buildTypeDetailSegments(
 
   const segments: DetailSegment[] = []
 
-  const priceOpts = {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-    billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-  }
-  const formatPrice = (price: number) =>
-    `${formatBillingCurrencyFromUSD(price, priceOpts)}/M`
-  const formatPriceCompact = (price: number) =>
-    formatBillingCurrencyFromUSD(price, priceOpts)
+  const formatPrice = (price: number) => `${formatUsageLogUSD(price)}/M`
+  const formatPriceCompact = (price: number) => formatUsageLogUSD(price)
   const formatPriceList = (prices: string[], showUnit: boolean) => {
     const text = prices.join(' / ')
     return showUnit ? `${text}/M` : text
@@ -228,7 +226,7 @@ function buildTypeDetailSegments(
     const isPerCall = isPerCallBilling(modelPrice)
     if (isPerCall && modelPrice != null) {
       segments.push({
-        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
+        text: `${t('Per-call')} · ${formatUsageLogUSD(modelPrice)}`,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
@@ -739,7 +737,11 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 />
                 <TooltipContent>
                   <span>
-                    {t('Deducted by subscription')}: {formatLogQuota(quota)}
+                    {t('Deducted by subscription')}:{' '}
+                    {formatUsageLogQuotaUSD(quota, {
+                      billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
+                      quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
+                    })}
                   </span>
                 </TooltipContent>
               </Tooltip>
@@ -747,7 +749,10 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           )
         }
 
-        const quotaStr = formatLogQuota(quota)
+        const quotaStr = formatUsageLogQuotaUSD(quota, {
+          billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
+          quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
+        })
         const quotaDisplay = splitQuotaDisplay(quotaStr)
 
         return (
