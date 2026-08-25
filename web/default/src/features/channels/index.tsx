@@ -24,9 +24,11 @@ import { ChannelsDialogs } from './components/channels-dialogs'
 import { ChannelsPrimaryButtons } from './components/channels-primary-buttons'
 import { ChannelsProvider } from './components/channels-provider'
 import { ChannelsTable } from './components/channels-table'
+import { useChannelProbeRefresh } from './hooks/use-channel-probe-refresh'
 
 export function Channels() {
   const { t } = useTranslation()
+  useChannelProbeRefresh()
 
   return (
     <ChannelsProvider>

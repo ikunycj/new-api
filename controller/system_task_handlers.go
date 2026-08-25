@@ -67,6 +67,9 @@ func channelProbeIntervalSeconds(channel *model.Channel, resultingStatus int) in
 
 func (channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	summary, err := runChannelProbeTask(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
+	if summary.Checked > 0 {
+		service.PublishChannelProbeRefresh()
+	}
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return

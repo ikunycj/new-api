@@ -41,6 +41,7 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/search", permission: authz.ChannelRead, handler: controller.SearchChannels},
 	{method: http.MethodGet, path: "/models", permission: authz.ChannelRead, handler: controller.ChannelListModels},
 	{method: http.MethodGet, path: "/models_enabled", permission: authz.ChannelRead, handler: controller.EnabledListModels},
+	{method: http.MethodGet, path: "/probe/events", permission: authz.ChannelRead, handler: controller.StreamChannelProbeEvents},
 	{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetChannel},
 	{method: http.MethodGet, path: "/:id/reconciliation", permission: authz.ChannelRead, handler: controller.GetChannelReconciliation},
 	{method: http.MethodPost, path: "/:id/reconciliation/costs", permission: authz.ChannelWrite, handler: controller.CreateChannelCostEntry},
