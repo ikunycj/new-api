@@ -41,8 +41,15 @@ func GetUserGroups(c *gin.Context) {
 	userGroup := ""
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
+	isToBUser := false
+	if user, err := model.GetUserById(userId, false); err == nil {
+		isToBUser = user.IsToB()
+	}
 	userUsableGroups := service.GetUserUsableGroups(userGroup)
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
+		if isToBUser && !model.IsBillingGroupToB(groupName) {
+			continue
+		}
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]interface{}{
@@ -51,10 +58,12 @@ func GetUserGroups(c *gin.Context) {
 			}
 		}
 	}
-	if _, ok := userUsableGroups["auto"]; ok {
-		usableGroups["auto"] = map[string]interface{}{
-			"ratio": "自动",
-			"desc":  setting.GetUsableGroupDescription("auto"),
+	if !isToBUser {
+		if _, ok := userUsableGroups["auto"]; ok {
+			usableGroups["auto"] = map[string]interface{}{
+				"ratio": "自动",
+				"desc":  setting.GetUsableGroupDescription("auto"),
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
