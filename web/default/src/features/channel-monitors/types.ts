@@ -34,7 +34,6 @@ export type ChannelMonitor = {
   test_model: string
   interval_seconds: number
   timeout_seconds: number
-  retry_count: number
   enabled: boolean
   visible: boolean
   status: ChannelMonitorStatus
@@ -52,6 +51,29 @@ export type ChannelMonitor = {
   availability_boost_percent: number
   recent_results: ChannelMonitorResult[]
   created_at: number
+  updated_at: number
+}
+
+export type PricingGroupUsagePeriod = {
+  tokens: number
+  quota: number
+}
+
+export type PricingGroupMetrics = {
+  pricing_group: string
+  usage: {
+    today: PricingGroupUsagePeriod
+    yesterday: PricingGroupUsagePeriod
+    total: PricingGroupUsagePeriod
+  }
+  channels: {
+    available: number
+    total: number
+  }
+  activity: {
+    users: number
+    connections: number
+  }
   updated_at: number
 }
 
@@ -78,7 +100,6 @@ export type ChannelMonitorSettingsPayload = {
   test_model: string
   interval_seconds: number
   timeout_seconds: number
-  retry_count: number
   enabled: boolean
   visible: boolean
   availability_boost_percent: number

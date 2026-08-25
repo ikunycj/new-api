@@ -16,7 +16,6 @@ func newTestChannelMonitor(pricingGroup string) *ChannelMonitor {
 		TestModel:                "gpt-test",
 		IntervalSeconds:          60,
 		TimeoutSeconds:           15,
-		RetryCount:               2,
 		Enabled:                  true,
 		Visible:                  true,
 		AvailabilityBoostPercent: 12.5,
@@ -33,7 +32,6 @@ func TestChannelMonitorIsOwnedByUniquePricingGroup(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "enterprise-pricing", persisted.PricingGroup)
 	assert.Equal(t, "gpt-test", persisted.TestModel)
-	assert.Equal(t, 2, persisted.RetryCount)
 
 	duplicate := newTestChannelMonitor("enterprise-pricing")
 	require.Error(t, CreateChannelMonitor(duplicate))
@@ -93,13 +91,11 @@ func TestUpdateChannelMonitorSettings(t *testing.T) {
 	require.NoError(t, CreateChannelMonitor(monitor))
 
 	monitor.AvailabilityBoostPercent = 7.75
-	monitor.RetryCount = 4
 	require.NoError(t, UpdateChannelMonitor(monitor))
 
 	updated, err := GetChannelMonitorByID(monitor.Id)
 	require.NoError(t, err)
 	assert.Equal(t, 7.75, updated.AvailabilityBoostPercent)
-	assert.Equal(t, 4, updated.RetryCount)
 }
 
 func TestDeleteChannelMonitorsOutsidePricingGroupsRemovesOwnedHistory(t *testing.T) {

@@ -219,6 +219,8 @@ export type ModelSettings = {
   'billing_setting.billing_expr': string
   'tool_price_setting.prices': string
   GroupRatio: string
+  PricingGroupOrder: string
+  PricingGroupRetryPolicy: string
   RetryTimes: number
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
@@ -266,6 +268,8 @@ export type BillingSettings = {
   'billing_setting.billing_expr': string
   'tool_price_setting.prices': string
   GroupRatio: string
+  PricingGroupOrder: string
+  PricingGroupRetryPolicy: string
   PayAddress: string
   EpayId: string
   EpayKey: string

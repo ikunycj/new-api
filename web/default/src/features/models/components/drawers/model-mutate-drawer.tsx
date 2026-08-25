@@ -194,6 +194,8 @@ export function ModelMutateDrawer({
       'billing_setting.billing_expr': '{}',
       'tool_price_setting.prices': '{}',
       GroupRatio: '',
+      PricingGroupOrder: '[]',
+      PricingGroupRetryPolicy: '{}',
       CreateCacheRatio: '',
       'grok.violation_deduction_enabled': false,
       'grok.violation_deduction_amount': 0,

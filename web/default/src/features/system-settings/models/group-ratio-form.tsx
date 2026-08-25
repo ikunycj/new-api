@@ -28,6 +28,8 @@ import { GroupRatioVisualEditor } from './group-ratio-visual-editor'
 
 type GroupFormValues = {
   GroupRatio: string
+  PricingGroupOrder: string
+  PricingGroupRetryPolicy: string
 }
 
 type GroupRatioFormProps = {
@@ -69,6 +71,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       </SettingsPageActionsPortal>
       <GroupRatioVisualEditor
         groupRatio={form.watch('GroupRatio')}
+        pricingGroupOrder={form.watch('PricingGroupOrder')}
+        pricingGroupRetryPolicy={form.watch('PricingGroupRetryPolicy')}
         savedGroupRatio={savedGroupRatio}
         onChange={(field, value) =>
           handleFieldChange(field as keyof GroupFormValues, value)

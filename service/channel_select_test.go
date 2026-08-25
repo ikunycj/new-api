@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -284,6 +285,57 @@ func TestRetryParamTracksIndependentGroupRetryBudgets(t *testing.T) {
 	assert.True(t, param.groupHasBudget("claude"))
 	param.MarkChannelAttempted(2)
 	assert.False(t, param.groupHasBudget("claude"))
+}
+
+func TestPricingGroupRetryPolicyCapsTokenRetryBudget(t *testing.T) {
+	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"openai":{"mode":"fixed","retry_times":2}}`,
+	))
+
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{"openai": 5})
+	param := &RetryParam{Ctx: ctx, TokenGroup: "openai"}
+	limit, configured := param.groupRetryLimit("openai")
+	require.True(t, configured)
+	assert.Equal(t, 3, limit)
+
+	ctx, _ = gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{"openai": 1})
+	param = &RetryParam{Ctx: ctx, TokenGroup: "openai"}
+	limit, configured = param.groupRetryLimit("openai")
+	require.True(t, configured)
+	assert.Equal(t, 2, limit)
+}
+
+func TestActiveChannelRetryPolicyUsesRequestScopedChannelCount(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"claude":{"mode":"active_channels","retry_times":0}}`,
+	))
+
+	param := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", RequestPath: "/v1/messages"}
+	limit, configured := param.groupRetryLimit("claude")
+	require.True(t, configured)
+	assert.Equal(t, 3, limit)
+
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("status", common.ChannelStatusManuallyDisabled).Error)
+	model.InitChannelCache()
+	cachedLimit, configured := param.groupRetryLimit("claude")
+	require.True(t, configured)
+	assert.Equal(t, 3, cachedLimit)
+
+	newRequest := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", RequestPath: "/v1/messages"}
+	newLimit, configured := newRequest.groupRetryLimit("claude")
+	require.True(t, configured)
+	assert.Equal(t, 2, newLimit)
 }
 
 func TestUnconfiguredRouteHonorsChannelRetryBudget(t *testing.T) {

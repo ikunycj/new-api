@@ -45,6 +45,8 @@ export const defaultBillingSettings: BillingSettings = {
   'billing_setting.billing_expr': '{}',
   'tool_price_setting.prices': '{}',
   GroupRatio: '',
+  PricingGroupOrder: '[]',
+  PricingGroupRetryPolicy: '{}',
   PayAddress: '',
   EpayId: '',
   EpayKey: '',
@@ -124,4 +126,6 @@ export const getModelDefaults = (settings: BillingSettings) => ({
 
 export const getGroupDefaults = (settings: BillingSettings) => ({
   GroupRatio: settings.GroupRatio,
+  PricingGroupOrder: settings.PricingGroupOrder,
+  PricingGroupRetryPolicy: settings.PricingGroupRetryPolicy,
 })

@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,6 +34,7 @@ type RetryParam struct {
 	channelGroups      map[int]string
 	channelLimits      map[int]int
 	groupAttemptCounts map[string]int
+	groupRetryLimits   map[string]int
 	excludedChannels   map[int]struct{}
 	currentChannelID   int
 	startedAt          time.Time
@@ -206,21 +208,58 @@ func (p *RetryParam) canCrossGroups() bool {
 }
 
 func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
-	if p == nil || p.Ctx == nil {
+	if p == nil {
 		return 0, false
 	}
-	values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes)
-	if !ok {
+	group = strings.TrimSpace(group)
+	if p.groupRetryLimits == nil {
+		p.groupRetryLimits = make(map[string]int)
+	}
+	if limit, exists := p.groupRetryLimits[group]; exists {
+		return limit, true
+	}
+
+	limit := 0
+	configured := false
+	if policy, exists := ratio_setting.GetPricingGroupRetryPolicy(group); exists {
+		configured = true
+		switch policy.Mode {
+		case ratio_setting.PricingGroupRetryModeFixed:
+			limit = policy.RetryTimes + 1
+		case ratio_setting.PricingGroupRetryModeActiveChannels:
+			channels, err := model.GetEligibleChannels(group, p.ModelName, p.RequestPath, nil)
+			if err != nil {
+				logger.LogError(p.Ctx, "failed to count active channels for retry budget: "+err.Error())
+				limit = 1
+			} else {
+				limit = len(channels) + 1
+			}
+		default:
+			limit = 1
+		}
+	}
+	if p.Ctx != nil {
+		if values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes); ok {
+			if retryTimes, exists := values[group]; exists {
+				configured = true
+				tokenLimit := retryTimes + 1
+				if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
+					tokenLimit = 1
+				}
+				if limit == 0 || tokenLimit < limit {
+					limit = tokenLimit
+				}
+			}
+		}
+	}
+	if !configured {
 		return 0, false
 	}
-	retryTimes, ok := values[group]
-	if !ok {
-		return 0, false
+	if limit < 1 {
+		limit = 1
 	}
-	if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
-		return 0, true
-	}
-	return retryTimes + 1, true
+	p.groupRetryLimits[group] = limit
+	return limit, true
 }
 
 func (p *RetryParam) groupHasBudget(group string) bool {

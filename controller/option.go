@@ -207,6 +207,24 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "PricingGroupOrder":
+		err = ratio_setting.CheckPricingGroupOrder(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "PricingGroupRetryPolicy":
+		err = ratio_setting.CheckPricingGroupRetryPolicy(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case "BillingUSDToCNYRate":
 		rate, parseErr := strconv.ParseFloat(strings.TrimSpace(option.Value.(string)), 64)
 		if parseErr != nil || rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {

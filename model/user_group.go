@@ -34,6 +34,8 @@ type UserGroupSummary struct {
 	Id               int      `json:"id"`
 	Name             string   `json:"name"`
 	UserCount        int64    `json:"user_count"`
+	ActiveToday      int64    `json:"active_today" gorm:"-"`
+	ActiveMonth      int64    `json:"active_month" gorm:"-"`
 	CreatedAt        int64    `json:"created_at"`
 	UpdatedAt        int64    `json:"updated_at"`
 	TopupRatio       float64  `json:"topup_ratio"`
@@ -41,10 +43,20 @@ type UserGroupSummary struct {
 	PricingGroupsAll bool     `json:"pricing_groups_all"`
 }
 
-// UserGroupUpdate contains the mutable configuration of an account group.
-// The group name is intentionally excluded: it is a stable identity used by
-// users, billing, and authorization checks.
+type userGroupActivityRow struct {
+	UserId       int   `gorm:"column:user_id"`
+	LastActiveAt int64 `gorm:"column:last_active_at"`
+}
+
+type userGroupMembershipRow struct {
+	Id        int    `gorm:"column:id"`
+	UserGroup string `gorm:"column:user_group"`
+}
+
+// UserGroupUpdate contains the mutable identity and configuration of an
+// account group. The built-in default group keeps its stable name.
 type UserGroupUpdate struct {
+	Name             *string
 	TopupRatio       *float64
 	PricingGroups    *[]string
 	PricingGroupsAll *bool
@@ -124,7 +136,7 @@ func IsUserGroupName(name string) (bool, error) {
 	return count > 0, err
 }
 
-func ListUserGroupSummaries() ([]UserGroupSummary, error) {
+func listUserGroupSummaries() ([]UserGroupSummary, error) {
 	if DB == nil {
 		return nil, errors.New("database is not initialized")
 	}
@@ -148,12 +160,73 @@ func ListUserGroupSummaries() ([]UserGroupSummary, error) {
 	return groups, nil
 }
 
+func listUserGroupSummariesAt(now time.Time) ([]UserGroupSummary, error) {
+	groups, err := listUserGroupSummaries()
+	if err != nil {
+		return nil, err
+	}
+	if len(groups) == 0 {
+		return groups, nil
+	}
+	if LOG_DB == nil {
+		return nil, errors.New("log database is not initialized")
+	}
+
+	todayStart, tomorrowStart, _, rollingMonthStart, _ := adminConsoleTimeBounds(now)
+	var activityRows []userGroupActivityRow
+	if err := LOG_DB.Model(&Log{}).
+		Select("user_id, MAX(created_at) AS last_active_at").
+		Where("type = ? AND user_id <> 0 AND created_at >= ? AND created_at < ?", LogTypeConsume, rollingMonthStart, tomorrowStart).
+		Group("user_id").
+		Scan(&activityRows).Error; err != nil {
+		return nil, err
+	}
+
+	groupByName := make(map[string]*UserGroupSummary, len(groups))
+	lastActiveByUser := make(map[int]int64, len(activityRows))
+	activeUserIds := make([]int, 0, len(activityRows))
+	for index := range groups {
+		groupByName[groups[index].Name] = &groups[index]
+	}
+	for _, activity := range activityRows {
+		lastActiveByUser[activity.UserId] = activity.LastActiveAt
+		activeUserIds = append(activeUserIds, activity.UserId)
+	}
+
+	const membershipBatchSize = 1000
+	for start := 0; start < len(activeUserIds); start += membershipBatchSize {
+		end := min(start+membershipBatchSize, len(activeUserIds))
+		var memberships []userGroupMembershipRow
+		if err := DB.Model(&User{}).
+			Select("id, "+commonGroupCol+" AS user_group").
+			Where("id IN ?", activeUserIds[start:end]).
+			Scan(&memberships).Error; err != nil {
+			return nil, err
+		}
+		for _, membership := range memberships {
+			summary := groupByName[membership.UserGroup]
+			if summary == nil {
+				continue
+			}
+			summary.ActiveMonth++
+			if lastActiveByUser[membership.Id] >= todayStart {
+				summary.ActiveToday++
+			}
+		}
+	}
+	return groups, nil
+}
+
+func ListUserGroupSummaries() ([]UserGroupSummary, error) {
+	return listUserGroupSummariesAt(time.Now())
+}
+
 func GetUserGroupSummary(name string) (*UserGroupSummary, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("用户分组名称不能为空")
 	}
-	groups, err := ListUserGroupSummaries()
+	groups, err := listUserGroupSummaries()
 	if err != nil {
 		return nil, err
 	}
@@ -209,57 +282,144 @@ func normalizeUserGroupPricingSelection(groups []string) ([]string, error) {
 	return result, nil
 }
 
-func persistUserGroupConfiguration(name string, update UserGroupUpdate, remove bool) error {
-	ratioMap := make(map[string]float64)
-	if err := common.UnmarshalJsonStr(common.TopupGroupRatio2JSONString(), &ratioMap); err != nil {
-		return err
-	}
-	pricingMap := setting.GetUserGroupPricingGroupsCopy()
-	if remove {
-		delete(ratioMap, name)
-		delete(pricingMap, name)
-	} else {
-		if update.TopupRatio != nil {
-			ratioMap[name] = *update.TopupRatio
+func validateUserGroupTopupRatios(ratios map[string]float64) error {
+	for name, ratio := range ratios {
+		if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 {
+			return fmt.Errorf("充值倍率必须是大于等于 0 的有限数值: %s", name)
 		}
-		if update.PricingGroups != nil {
-			pricingMap[name] = *update.PricingGroups
-		}
-	}
-	ratioJSON, err := common.Marshal(ratioMap)
-	if err != nil {
-		return err
-	}
-	pricingJSON, err := common.Marshal(pricingMap)
-	if err != nil {
-		return err
-	}
-	if err := UpdateOptionsBulk(map[string]string{
-		"TopupGroupRatio":        string(ratioJSON),
-		"UserGroupPricingGroups": string(pricingJSON),
-	}); err != nil {
-		return err
 	}
 	return nil
 }
 
-func UpdateUserGroupConfiguration(name string, update UserGroupUpdate) error {
+func buildUserGroupConfigurationOptionsFromMaps(currentName, nextName string, update UserGroupUpdate, remove bool, ratioMap map[string]float64, pricingMap map[string][]string) (map[string]string, error) {
+	if remove {
+		delete(ratioMap, currentName)
+		delete(pricingMap, currentName)
+	} else {
+		if nextName != currentName {
+			ratio, ok := ratioMap[currentName]
+			if !ok {
+				ratio = 1
+			}
+			pricingGroups, ok := pricingMap[currentName]
+			if !ok {
+				pricingGroups = []string{setting.AllPricingGroups}
+			}
+			delete(ratioMap, currentName)
+			delete(pricingMap, currentName)
+			ratioMap[nextName] = ratio
+			pricingMap[nextName] = pricingGroups
+		}
+		if update.TopupRatio != nil {
+			ratioMap[nextName] = *update.TopupRatio
+		}
+		if update.PricingGroups != nil {
+			pricingMap[nextName] = *update.PricingGroups
+		}
+	}
+	if err := validateUserGroupTopupRatios(ratioMap); err != nil {
+		return nil, err
+	}
+	ratioJSON, err := common.Marshal(ratioMap)
+	if err != nil {
+		return nil, err
+	}
+	pricingJSON, err := common.Marshal(pricingMap)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		topupGroupRatioOption:        string(ratioJSON),
+		userGroupPricingGroupsOption: string(pricingJSON),
+	}, nil
+}
+
+func buildUserGroupConfigurationOptions(currentName, nextName string, update UserGroupUpdate, remove bool) (map[string]string, error) {
+	ratioMap := make(map[string]float64)
+	if err := common.UnmarshalJsonStr(common.TopupGroupRatio2JSONString(), &ratioMap); err != nil {
+		return nil, err
+	}
+	pricingMap := setting.GetUserGroupPricingGroupsCopy()
+	return buildUserGroupConfigurationOptionsFromMaps(currentName, nextName, update, remove, ratioMap, pricingMap)
+}
+
+const (
+	topupGroupRatioOption        = "TopupGroupRatio"
+	userGroupPricingGroupsOption = "UserGroupPricingGroups"
+)
+
+func loadLockedUserGroupConfiguration(tx *gorm.DB) (map[string]float64, map[string][]string, error) {
+	ratioFallback := common.TopupGroupRatio2JSONString()
+	pricingFallback := setting.UserGroupPricingGroups2JSONString()
+	optionValues := map[string]string{
+		topupGroupRatioOption:        ratioFallback,
+		userGroupPricingGroupsOption: pricingFallback,
+	}
+
+	// Always lock these shared option rows in the same order. User-group rows
+	// are locked before this helper is called, so concurrent group updates
+	// serialize before replacing the full JSON maps.
+	for _, key := range []string{topupGroupRatioOption, userGroupPricingGroupsOption} {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&Option{
+			Key:   key,
+			Value: optionValues[key],
+		}).Error; err != nil {
+			return nil, nil, err
+		}
+		var option Option
+		if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(&option).Error; err != nil {
+			return nil, nil, err
+		}
+		optionValues[key] = option.Value
+	}
+
+	ratioMap := make(map[string]float64)
+	if err := common.UnmarshalJsonStr(optionValues[topupGroupRatioOption], &ratioMap); err != nil {
+		return nil, nil, err
+	}
+	pricingMap := make(map[string][]string)
+	if err := common.UnmarshalJsonStr(optionValues[userGroupPricingGroupsOption], &pricingMap); err != nil {
+		return nil, nil, err
+	}
+	return ratioMap, pricingMap, nil
+}
+
+func persistUserGroupConfiguration(name string, update UserGroupUpdate, remove bool) error {
+	values, err := buildUserGroupConfigurationOptions(name, name, update, remove)
+	if err != nil {
+		return err
+	}
+	return UpdateOptionsBulk(values)
+}
+
+func UpdateUserGroupConfiguration(name string, update UserGroupUpdate) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return errors.New("用户分组名称不能为空")
+		return "", errors.New("用户分组名称不能为空")
 	}
-	if update.TopupRatio == nil && update.PricingGroups == nil && update.PricingGroupsAll == nil {
-		return errors.New("没有可更新的用户分组配置")
+	if update.Name == nil && update.TopupRatio == nil && update.PricingGroups == nil && update.PricingGroupsAll == nil {
+		return "", errors.New("没有可更新的用户分组配置")
+	}
+	nextName := name
+	if update.Name != nil {
+		normalized, err := normalizeUserGroupName(*update.Name)
+		if err != nil {
+			return "", err
+		}
+		if name == DefaultUserGroup && normalized != DefaultUserGroup {
+			return "", errors.New("default 分组不能重命名")
+		}
+		nextName = normalized
 	}
 	if update.PricingGroupsAll != nil && !*update.PricingGroupsAll && update.PricingGroups == nil {
-		return errors.New("关闭全部定价分组时必须选择至少一个定价分组")
+		return "", errors.New("关闭全部定价分组时必须选择至少一个定价分组")
 	}
 	if update.PricingGroupsAll != nil && !*update.PricingGroupsAll && update.PricingGroups != nil && len(*update.PricingGroups) == 0 {
-		return errors.New("请选择至少一个定价分组")
+		return "", errors.New("请选择至少一个定价分组")
 	}
 	if update.TopupRatio != nil {
 		if math.IsNaN(*update.TopupRatio) || math.IsInf(*update.TopupRatio, 0) || *update.TopupRatio < 0 {
-			return errors.New("充值倍率必须是大于等于 0 的有限数值")
+			return "", errors.New("充值倍率必须是大于等于 0 的有限数值")
 		}
 	}
 	if update.PricingGroupsAll != nil && *update.PricingGroupsAll {
@@ -268,24 +428,88 @@ func UpdateUserGroupConfiguration(name string, update UserGroupUpdate) error {
 	} else if update.PricingGroups != nil {
 		normalized, err := normalizeUserGroupPricingSelection(*update.PricingGroups)
 		if err != nil {
-			return err
+			return "", err
 		}
 		update.PricingGroups = &normalized
 	}
 	if DB == nil {
-		return errors.New("database is not initialized")
+		return "", errors.New("database is not initialized")
 	}
-	var group UserGroup
-	if err := DB.Where("name = ?", name).First(&group).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("用户分组不存在")
+	userIDs := make([]int, 0)
+	var optionValues map[string]string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var group UserGroup
+		if err := lockForUpdate(tx).Where("name = ?", name).First(&group).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("用户分组不存在")
+			}
+			return err
 		}
-		return err
+		if nextName != name {
+			var duplicateCount int64
+			if err := tx.Model(&UserGroup{}).Where("name = ?", nextName).Count(&duplicateCount).Error; err != nil {
+				return err
+			}
+			if duplicateCount > 0 {
+				return errors.New("用户分组已存在")
+			}
+			if err := tx.Unscoped().Model(&User{}).
+				Where(commonGroupCol+" = ?", name).
+				Pluck("id", &userIDs).Error; err != nil {
+				return err
+			}
+			if err := tx.Unscoped().Model(&User{}).
+				Where(commonGroupCol+" = ?", name).
+				UpdateColumn("group", nextName).Error; err != nil {
+				return err
+			}
+			group.Name = nextName
+		}
+		ratioMap, pricingMap, err := loadLockedUserGroupConfiguration(tx)
+		if err != nil {
+			return err
+		}
+		optionValues, err = buildUserGroupConfigurationOptionsFromMaps(name, nextName, update, false, ratioMap, pricingMap)
+		if err != nil {
+			return err
+		}
+		group.UpdatedAt = time.Now().Unix()
+		if err := tx.Save(&group).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return errors.New("用户分组已存在")
+			}
+			return err
+		}
+		for _, key := range []string{topupGroupRatioOption, userGroupPricingGroupsOption} {
+			value := optionValues[key]
+			option := Option{Key: key}
+			if err := tx.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+				return err
+			}
+			option.Value = value
+			if err := tx.Save(&option).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
-	if err := persistUserGroupConfiguration(name, update, false); err != nil {
-		return err
+	for _, key := range []string{topupGroupRatioOption, userGroupPricingGroupsOption} {
+		value := optionValues[key]
+		if err := updateOptionMap(key, value); err != nil {
+			common.SysLog(fmt.Sprintf("failed to refresh user-group option %s after commit: %v", key, err))
+			loadOptionsFromDatabase()
+			break
+		}
 	}
-	return DB.Model(&group).Update("updated_at", time.Now().Unix()).Error
+	for _, userID := range userIDs {
+		if err := invalidateUserCache(userID); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate renamed user group cache for user %d: %v", userID, err))
+		}
+	}
+	return nextName, nil
 }
 
 func CreateUserGroup(name string) (*UserGroup, error) {

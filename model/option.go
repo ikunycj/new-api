@@ -21,7 +21,9 @@ type Option struct {
 	Value string `json:"value"`
 }
 
-var retiredGroupOptionKeys = []string{
+var errRetiredOption = errors.New("option has been retired")
+
+var retiredOptionKeys = []string{
 	"AutoGroups",
 	"DefaultUseAutoGroup",
 	"GroupGroupRatio",
@@ -30,11 +32,20 @@ var retiredGroupOptionKeys = []string{
 	"UserUsableGroups",
 }
 
-func removeRetiredGroupOptions() error {
-	if len(retiredGroupOptionKeys) == 0 {
+func isRetiredOptionKey(key string) bool {
+	for _, retiredKey := range retiredOptionKeys {
+		if key == retiredKey {
+			return true
+		}
+	}
+	return false
+}
+
+func removeRetiredOptions() error {
+	if len(retiredOptionKeys) == 0 {
 		return nil
 	}
-	return DB.Where(commonKeyCol+" IN ?", retiredGroupOptionKeys).Delete(&Option{}).Error
+	return DB.Where(commonKeyCol+" IN ?", retiredOptionKeys).Delete(&Option{}).Error
 }
 
 func AllOption() ([]*Option, error) {
@@ -159,6 +170,8 @@ func InitOptionMap() {
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
 	common.OptionMap["CreateCacheRatio"] = ratio_setting.CreateCacheRatio2JSONString()
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
+	common.OptionMap["PricingGroupOrder"] = ratio_setting.PricingGroupOrder2JSONString()
+	common.OptionMap["PricingGroupRetryPolicy"] = ratio_setting.PricingGroupRetryPolicy2JSONString()
 	common.OptionMap["UserGroupPricingGroups"] = setting.UserGroupPricingGroups2JSONString()
 	common.OptionMap["CompletionRatio"] = ratio_setting.CompletionRatio2JSONString()
 	common.OptionMap["ImageRatio"] = ratio_setting.ImageRatio2JSONString()
@@ -203,6 +216,9 @@ func InitOptionMap() {
 func loadOptionsFromDatabase() {
 	options, _ := AllOption()
 	for _, option := range options {
+		if isRetiredOptionKey(option.Key) {
+			continue
+		}
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
@@ -219,11 +235,25 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
+	if isRetiredOptionKey(key) {
+		return errRetiredOption
+	}
 	if key == "GroupRatio" {
 		var ratios map[string]float64
 		if err := common.UnmarshalJsonStr(value, &ratios); err != nil {
 			return err
 		}
+		retryPolicies := ratio_setting.GetPricingGroupRetryPolicyCopy()
+		for group := range retryPolicies {
+			if _, exists := ratios[group]; !exists {
+				delete(retryPolicies, group)
+			}
+		}
+		retryPolicyData, err := common.Marshal(retryPolicies)
+		if err != nil {
+			return err
+		}
+		retryPolicyValue := string(retryPolicyData)
 		pricingGroups := make([]string, 0, len(ratios))
 		for name := range ratios {
 			pricingGroups = append(pricingGroups, name)
@@ -243,11 +273,22 @@ func UpdateOption(key string, value string) error {
 			if err := tx.Save(&option).Error; err != nil {
 				return err
 			}
+			retryPolicyOption := Option{Key: "PricingGroupRetryPolicy"}
+			if err := tx.FirstOrCreate(&retryPolicyOption, Option{Key: retryPolicyOption.Key}).Error; err != nil {
+				return err
+			}
+			retryPolicyOption.Value = retryPolicyValue
+			if err := tx.Save(&retryPolicyOption).Error; err != nil {
+				return err
+			}
 			return DeleteChannelMonitorsOutsidePricingGroups(tx, pricingGroups)
 		}); err != nil {
 			return err
 		}
-		return updateOptionMap(key, value)
+		if err := updateOptionMap(key, value); err != nil {
+			return err
+		}
+		return updateOptionMap("PricingGroupRetryPolicy", retryPolicyValue)
 	}
 
 	// Save to database first
@@ -278,6 +319,11 @@ func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
 	}
+	for key := range values {
+		if isRetiredOptionKey(key) {
+			return errRetiredOption
+		}
+	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		for k, v := range values {
 			option := Option{Key: k}
@@ -303,6 +349,9 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	if isRetiredOptionKey(key) {
+		return errRetiredOption
+	}
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
 	if common.OptionMap == nil {
@@ -574,6 +623,10 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":
 		err = ratio_setting.UpdateGroupRatioByJSONString(value)
+	case "PricingGroupOrder":
+		err = ratio_setting.UpdatePricingGroupOrderByJSONString(value)
+	case "PricingGroupRetryPolicy":
+		err = ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(value)
 	case "UserGroupPricingGroups":
 		err = setting.UpdateUserGroupPricingGroupsByJSONString(value)
 	case "CompletionRatio":

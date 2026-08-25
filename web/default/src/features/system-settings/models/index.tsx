@@ -57,6 +57,8 @@ const defaultModelSettings: ModelSettings = {
   'billing_setting.billing_expr': '{}',
   'tool_price_setting.prices': '{}',
   GroupRatio: '',
+  PricingGroupOrder: '[]',
+  PricingGroupRetryPolicy: '{}',
   RetryTimes: 0,
   ChannelDisableThreshold: '',
   AutomaticDisableChannelEnabled: false,

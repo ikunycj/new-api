@@ -35,11 +35,6 @@ export const channelMonitorFormSchema = z.object({
     .int('请输入整数')
     .min(1, '请求超时不能少于 1 秒')
     .max(120, '请求超时不能超过 120 秒'),
-  retry_count: z.coerce
-    .number('请输入数字')
-    .int('请输入整数')
-    .min(1, '重试次数不能少于 1 次')
-    .max(10000, '重试次数不能超过 10000 次'),
   enabled: z.boolean(),
   visible: z.boolean(),
   availability_boost_percent: z.coerce
@@ -55,7 +50,6 @@ export const channelMonitorFormDefaults: ChannelMonitorFormInput = {
   test_model: '',
   interval_seconds: 300,
   timeout_seconds: 15,
-  retry_count: 1,
   enabled: true,
   visible: true,
   availability_boost_percent: 0,

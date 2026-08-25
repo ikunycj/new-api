@@ -22,6 +22,8 @@ export type UserGroupSummary = {
   id: number
   name: string
   user_count: number
+  active_today: number
+  active_month: number
   created_at: number
   updated_at: number
   topup_ratio: number
@@ -30,6 +32,7 @@ export type UserGroupSummary = {
 }
 
 export type UpdateUserGroupRequest = {
+  name: string
   topup_ratio: number
   pricing_groups: string[]
   pricing_groups_all: boolean

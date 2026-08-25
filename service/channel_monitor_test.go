@@ -20,6 +20,7 @@ func setupChannelMonitorServiceTest(t *testing.T) {
 	t.Helper()
 
 	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
+	previousRetryPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	previousMemoryCacheEnabled := common.MemoryCacheEnabled
 	t.Cleanup(func() {
 		for _, table := range []string{
@@ -33,6 +34,7 @@ func setupChannelMonitorServiceTest(t *testing.T) {
 			assert.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
 		}
 		assert.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+		assert.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousRetryPolicies))
 		common.MemoryCacheEnabled = previousMemoryCacheEnabled
 		model.InitChannelRoutingCache()
 		if previousMemoryCacheEnabled {
@@ -59,6 +61,9 @@ func setupChannelMonitorServiceTest(t *testing.T) {
 		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
 	}
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"monitor-pricing":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"monitor-pricing":{"mode":"fixed","retry_times":3}}`,
+	))
 	common.MemoryCacheEnabled = false
 	model.InitChannelRoutingCache()
 }
@@ -69,7 +74,6 @@ func validChannelMonitorInput() ChannelMonitorInput {
 		TestModel:                "gpt-test",
 		IntervalSeconds:          60,
 		TimeoutSeconds:           15,
-		RetryCount:               1,
 		Enabled:                  true,
 		Visible:                  true,
 		AvailabilityBoostPercent: 0,
@@ -170,18 +174,6 @@ func TestCreateChannelMonitorRequiresExistingPricingGroup(t *testing.T) {
 	assert.Equal(t, channelMonitorTestPricingGroup, monitor.PricingGroup)
 }
 
-func TestCreateChannelMonitorDefaultsRetryCountToPricingGroupChannelCount(t *testing.T) {
-	setupChannelMonitorServiceTest(t)
-	seedChannelMonitorCandidate(t)
-	seedAdditionalChannelMonitorCandidate(t, 93002)
-
-	input := validChannelMonitorInput()
-	input.RetryCount = 0
-	monitor, err := CreateChannelMonitor(input)
-	require.NoError(t, err)
-	assert.Equal(t, 2, monitor.RetryCount)
-}
-
 func TestUpdateChannelMonitorEnablesAndDisablesScheduling(t *testing.T) {
 	setupChannelMonitorServiceTest(t)
 
@@ -272,13 +264,15 @@ func TestRunChannelMonitorCheckPersistsFailureWhenNoChannelIsAvailable(t *testin
 	assert.False(t, history[0].Success)
 }
 
-func TestRunChannelMonitorCheckRetriesDifferentChannels(t *testing.T) {
+func TestRunChannelMonitorCheckUsesPricingGroupRetryPolicyAcrossDifferentChannels(t *testing.T) {
 	setupChannelMonitorServiceTest(t)
 	seedChannelMonitorCandidate(t)
 	seedAdditionalChannelMonitorCandidate(t, 93002)
-	input := validChannelMonitorInput()
-	input.RetryCount = 2
-	monitor, err := CreateChannelMonitor(input)
+	seedAdditionalChannelMonitorCandidate(t, 93003)
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"monitor-pricing":{"mode":"fixed","retry_times":1}}`,
+	))
+	monitor, err := CreateChannelMonitor(validChannelMonitorInput())
 	require.NoError(t, err)
 
 	attempted := make(map[int]int)

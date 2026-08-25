@@ -341,7 +341,7 @@ func migrateDB() error {
 	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
-	if err := removeRetiredGroupOptions(); err != nil {
+	if err := removeRetiredOptions(); err != nil {
 		return err
 	}
 	return nil
@@ -443,7 +443,7 @@ func migrateDBFast() error {
 	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
-	if err := removeRetiredGroupOptions(); err != nil {
+	if err := removeRetiredOptions(); err != nil {
 		return err
 	}
 	common.SysLog("database migrated")
@@ -560,6 +560,11 @@ func resetChannelMonitorSchema() error {
 		}
 	}
 	if !hasObsoleteSchema {
+		if migrator.HasColumn(&ChannelMonitor{}, "retry_count") {
+			if err := migrator.DropColumn(&ChannelMonitor{}, "retry_count"); err != nil {
+				return fmt.Errorf("remove obsolete channel monitor retry count: %w", err)
+			}
+		}
 		return nil
 	}
 	if migrator.HasTable(&ChannelMonitorHistory{}) {

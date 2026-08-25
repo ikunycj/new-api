@@ -16,12 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Delete02Icon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
 import { useState, useMemo, useCallback, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import {
   sideDrawerContentClassName,
@@ -32,6 +39,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
@@ -40,6 +55,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Spinner } from '@/components/ui/spinner'
 import {
   getChannelMonitors,
   runChannelMonitor,
@@ -59,6 +75,8 @@ import { safeJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
+  pricingGroupOrder: string
+  pricingGroupRetryPolicy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
 }
@@ -67,12 +85,27 @@ type GroupPricingRow = {
   _id: string
   name: string
   ratio: string
+  retryMode: PricingGroupRetryMode
+  retryTimes: string
+}
+
+type PricingGroupRetryMode = 'fixed' | 'active_channels'
+
+type PricingGroupRetryPolicy = {
+  mode: PricingGroupRetryMode
+  retry_times: number
 }
 
 const sectionCardClassName =
   'relative shadow-sm ring-0 before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:border before:border-border/90'
 const sectionHeaderClassName = 'border-b bg-muted/20'
 const EMPTY_CHANNEL_MONITORS: ChannelMonitor[] = []
+const DEFAULT_GROUP_RETRY_TIMES = 3
+const MAX_GROUP_RETRY_TIMES = 100
+const RETRY_MODE_ITEMS = [
+  { value: 'fixed', label: '固定次数' },
+  { value: 'active_channels', label: '当前活跃渠道数' },
+] as const
 
 let groupPricingIdCounter = 0
 function createGroupPricingId() {
@@ -92,37 +125,138 @@ function parseRatioMap(value: string): Record<string, number> {
   })
 }
 
-function buildGroupPricingRows(groupRatio: string): GroupPricingRow[] {
-  const ratioMap = parseRatioMap(groupRatio)
+function parsePricingGroupOrder(value: string): string[] {
+  return safeJsonParse<string[]>(value, {
+    fallback: [],
+    silent: true,
+  }).filter((name) => typeof name === 'string' && name.trim() !== '')
+}
 
-  return Object.keys(ratioMap).map((name) => ({
-    _id: createGroupPricingId(),
-    name,
-    ratio: String(normalizeRatio(ratioMap[name])),
-  }))
+function parsePricingGroupRetryPolicy(
+  value: string
+): Record<string, PricingGroupRetryPolicy> {
+  const parsed = safeJsonParse<
+    Record<string, Partial<PricingGroupRetryPolicy>>
+  >(value, {
+    fallback: {},
+    silent: true,
+  })
+  const result: Record<string, PricingGroupRetryPolicy> = {}
+  for (const [group, policy] of Object.entries(parsed)) {
+    const mode: PricingGroupRetryMode =
+      policy.mode === 'active_channels' ? 'active_channels' : 'fixed'
+    const retryTimes = Number(policy.retry_times)
+    result[group] = {
+      mode,
+      retry_times:
+        mode === 'fixed' && Number.isInteger(retryTimes)
+          ? Math.min(MAX_GROUP_RETRY_TIMES, Math.max(0, retryTimes))
+          : 0,
+    }
+  }
+  return result
+}
+
+function normalizeRetryTimes(value: string): number {
+  if (value.trim() === '') return DEFAULT_GROUP_RETRY_TIMES
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return DEFAULT_GROUP_RETRY_TIMES
+  return Math.min(MAX_GROUP_RETRY_TIMES, Math.max(0, Math.trunc(parsed)))
+}
+
+function getOrderedGroupNames(
+  groupRatio: string,
+  pricingGroupOrder: string
+): string[] {
+  const ratioMap = parseRatioMap(groupRatio)
+  const configuredNames = Object.keys(ratioMap)
+  const configuredOrder = parsePricingGroupOrder(pricingGroupOrder)
+  return [
+    ...configuredOrder.filter((name) => name in ratioMap),
+    ...configuredNames.filter((name) => !configuredOrder.includes(name)),
+  ]
+}
+
+function buildGroupPricingRows(
+  groupRatio: string,
+  pricingGroupOrder: string,
+  pricingGroupRetryPolicy: string
+): GroupPricingRow[] {
+  const ratioMap = parseRatioMap(groupRatio)
+  const orderedNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+  const retryPolicies = parsePricingGroupRetryPolicy(pricingGroupRetryPolicy)
+
+  return orderedNames.map((name) => {
+    const retryPolicy = retryPolicies[name] ?? {
+      mode: 'fixed',
+      retry_times: DEFAULT_GROUP_RETRY_TIMES,
+    }
+    return {
+      _id: createGroupPricingId(),
+      name,
+      ratio: String(normalizeRatio(ratioMap[name])),
+      retryMode: retryPolicy.mode,
+      retryTimes: String(retryPolicy.retry_times),
+    }
+  })
 }
 
 function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
+  const pricingGroupOrder: string[] = []
+  const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
 
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
+    if (!(name in groupRatio)) pricingGroupOrder.push(name)
     groupRatio[name] = normalizeRatio(row.ratio)
+    pricingGroupRetryPolicy[name] = {
+      mode: row.retryMode,
+      retry_times:
+        row.retryMode === 'fixed' ? normalizeRetryTimes(row.retryTimes) : 0,
+    }
   }
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
+    PricingGroupOrder: JSON.stringify(pricingGroupOrder),
+    PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
   }
 }
 
 function groupPricingSignature(rows: GroupPricingRow[]): string {
   const serialized = serializeGroupPricingRows(rows)
-  return JSON.stringify(parseRatioMap(serialized.GroupRatio))
+  return JSON.stringify({
+    ratios: parseRatioMap(serialized.GroupRatio),
+    order: parsePricingGroupOrder(serialized.PricingGroupOrder),
+    retryPolicies: parsePricingGroupRetryPolicy(
+      serialized.PricingGroupRetryPolicy
+    ),
+  })
 }
 
-function sourceGroupPricingSignature(groupRatio: string): string {
-  return JSON.stringify(parseRatioMap(groupRatio))
+function sourceGroupPricingSignature(
+  groupRatio: string,
+  pricingGroupOrder: string,
+  pricingGroupRetryPolicy: string
+): string {
+  const names = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+  const configuredPolicies = parsePricingGroupRetryPolicy(
+    pricingGroupRetryPolicy
+  )
+  const retryPolicies: Record<string, PricingGroupRetryPolicy> = {}
+  for (const name of names) {
+    retryPolicies[name] = configuredPolicies[name] ?? {
+      mode: 'fixed',
+      retry_times: DEFAULT_GROUP_RETRY_TIMES,
+    }
+  }
+  return JSON.stringify({
+    ratios: parseRatioMap(groupRatio),
+    order: names,
+    retryPolicies,
+  })
 }
 
 function findPricingGroupMonitor(
@@ -134,12 +268,16 @@ function findPricingGroupMonitor(
 
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
+  pricingGroupOrder,
+  pricingGroupRetryPolicy,
   savedGroupRatio,
   onChange,
 }: GroupRatioVisualEditorProps) {
   return (
     <GroupPricingTable
       groupRatio={groupRatio}
+      pricingGroupOrder={pricingGroupOrder}
+      pricingGroupRetryPolicy={pricingGroupRetryPolicy}
       savedGroupRatio={savedGroupRatio}
       onChange={onChange}
     />
@@ -148,29 +286,47 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 
 type GroupPricingTableProps = {
   groupRatio: string
+  pricingGroupOrder: string
+  pricingGroupRetryPolicy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
 }
 
 function GroupPricingTable({
   groupRatio,
+  pricingGroupOrder,
+  pricingGroupRetryPolicy,
   savedGroupRatio,
   onChange,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio)
+    buildGroupPricingRows(
+      groupRatio,
+      pricingGroupOrder,
+      pricingGroupRetryPolicy
+    )
   )
   const [monitorEditor, setMonitorEditor] = useState<{
     monitor: ChannelMonitor | null
     pricingGroupName: string
   } | null>(null)
   const [detailRowId, setDetailRowId] = useState<string | null>(null)
-  const incomingSignature = sourceGroupPricingSignature(groupRatio)
+  const [deleteRowId, setDeleteRowId] = useState<string | null>(null)
+  const incomingSignature = sourceGroupPricingSignature(
+    groupRatio,
+    pricingGroupOrder,
+    pricingGroupRetryPolicy
+  )
   const parsedRows = useMemo(
-    () => buildGroupPricingRows(groupRatio),
-    [groupRatio]
+    () =>
+      buildGroupPricingRows(
+        groupRatio,
+        pricingGroupOrder,
+        pricingGroupRetryPolicy
+      ),
+    [groupRatio, pricingGroupOrder, pricingGroupRetryPolicy]
   )
   const currentRows =
     groupPricingSignature(rows) === incomingSignature ? rows : parsedRows
@@ -178,7 +334,6 @@ function GroupPricingTable({
     () => new Set(Object.keys(parseRatioMap(savedGroupRatio))),
     [savedGroupRatio]
   )
-
   const monitorsQuery = useQuery({
     queryKey: ['channel-monitors'],
     queryFn: getChannelMonitors,
@@ -193,6 +348,7 @@ function GroupPricingTable({
   const detailMonitor = detailRow
     ? findPricingGroupMonitor(detailRow, monitorByName)
     : null
+  const deleteRow = currentRows.find((row) => row._id === deleteRowId) ?? null
 
   const updateMonitorMutation = useMutation({
     mutationFn: ({
@@ -206,7 +362,6 @@ function GroupPricingTable({
         test_model: monitor.test_model,
         interval_seconds: monitor.interval_seconds,
         timeout_seconds: monitor.timeout_seconds,
-        retry_count: monitor.retry_count,
         enabled,
         visible: monitor.visible,
         availability_boost_percent: monitor.availability_boost_percent,
@@ -240,12 +395,18 @@ function GroupPricingTable({
       setRows(nextRows)
       const serialized = serializeGroupPricingRows(nextRows)
       onChange('GroupRatio', serialized.GroupRatio)
+      onChange('PricingGroupOrder', serialized.PricingGroupOrder)
+      onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
     },
     [onChange]
   )
 
   const updateRow = useCallback(
-    (id: string, field: 'name' | 'ratio', value: string) => {
+    (
+      id: string,
+      field: 'name' | 'ratio' | 'retryMode' | 'retryTimes',
+      value: string
+    ) => {
       emitRows(
         currentRows.map((row) =>
           row._id === id ? { ...row, [field]: value } : row
@@ -269,6 +430,8 @@ function GroupPricingTable({
         _id: createGroupPricingId(),
         name,
         ratio: '1',
+        retryMode: 'fixed',
+        retryTimes: String(DEFAULT_GROUP_RETRY_TIMES),
       },
     ])
   }, [currentRows, emitRows])
@@ -276,6 +439,25 @@ function GroupPricingTable({
   const removeRow = useCallback(
     (id: string) => {
       emitRows(currentRows.filter((row) => row._id !== id))
+    },
+    [currentRows, emitRows]
+  )
+
+  const moveRow = useCallback(
+    (id: string, direction: -1 | 1) => {
+      const sourceIndex = currentRows.findIndex((row) => row._id === id)
+      const targetIndex = sourceIndex + direction
+      if (
+        sourceIndex < 0 ||
+        targetIndex < 0 ||
+        targetIndex >= currentRows.length
+      ) {
+        return
+      }
+      const nextRows = [...currentRows]
+      const [moved] = nextRows.splice(sourceIndex, 1)
+      nextRows.splice(targetIndex, 0, moved)
+      emitRows(nextRows)
     },
     [currentRows, emitRows]
   )
@@ -297,7 +479,7 @@ function GroupPricingTable({
       <Card className={sectionCardClassName}>
         <CardHeader className={sectionHeaderClassName}>
           <Button onClick={addRow} size='sm' className='justify-self-end'>
-            <Plus className='mr-2 h-4 w-4' />
+            <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
             {t('Add group')}
           </Button>
         </CardHeader>
@@ -305,12 +487,44 @@ function GroupPricingTable({
           <div className='space-y-3'>
             <StaticDataTable
               className='w-fit max-w-full'
-              tableClassName='w-[46rem] table-fixed'
+              tableClassName='w-[71rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
               emptyContent={t('No groups yet. Add a group to get started.')}
               columns={[
+                {
+                  id: 'order',
+                  header: '顺序',
+                  className: 'w-20',
+                  cellClassName: 'w-20',
+                  cell: (row, index) => (
+                    <div className='flex items-center gap-0.5'>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon-sm'
+                        disabled={index === 0}
+                        aria-label={`上移 ${row.name || '未命名分组'}`}
+                        title='上移'
+                        onClick={() => moveRow(row._id, -1)}
+                      >
+                        <HugeiconsIcon icon={ArrowUp01Icon} />
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon-sm'
+                        disabled={index === currentRows.length - 1}
+                        aria-label={`下移 ${row.name || '未命名分组'}`}
+                        title='下移'
+                        onClick={() => moveRow(row._id, 1)}
+                      >
+                        <HugeiconsIcon icon={ArrowDown01Icon} />
+                      </Button>
+                    </div>
+                  ),
+                },
                 {
                   id: 'group',
                   header: t('Group name'),
@@ -346,6 +560,24 @@ function GroupPricingTable({
                   ),
                 },
                 {
+                  id: 'retries',
+                  header: '重试次数',
+                  className: 'w-72',
+                  cellClassName: 'w-72',
+                  cell: (row) => (
+                    <RetryPolicyControl
+                      mode={row.retryMode}
+                      retryTimes={row.retryTimes}
+                      onModeChange={(value) =>
+                        updateRow(row._id, 'retryMode', value)
+                      }
+                      onRetryTimesChange={(value) =>
+                        updateRow(row._id, 'retryTimes', value)
+                      }
+                    />
+                  ),
+                },
+                {
                   id: 'monitor',
                   header: '分组监控',
                   className: 'w-[22rem]',
@@ -369,10 +601,6 @@ function GroupPricingTable({
                           updateMonitorMutation.variables?.monitor.id ===
                             monitor?.id
                         }
-                        isRunning={
-                          runMonitorMutation.isPending &&
-                          runMonitorMutation.variables === monitor?.id
-                        }
                         onConfigure={() => {
                           if (!groupName) return
                           setMonitorEditor({
@@ -386,9 +614,6 @@ function GroupPricingTable({
                             updateMonitorMutation.mutate({ monitor, enabled })
                           }
                         }}
-                        onRun={() => {
-                          if (monitor) runMonitorMutation.mutate(monitor.id)
-                        }}
                       />
                     )
                   },
@@ -396,27 +621,46 @@ function GroupPricingTable({
                 {
                   id: 'actions',
                   header: t('Actions'),
-                  className: 'w-32 text-right',
-                  cellClassName: 'w-32 text-right',
+                  className: 'w-40 text-right',
+                  cellClassName: 'w-40 text-right',
                   cell: (row) => {
+                    const monitor = findPricingGroupMonitor(row, monitorByName)
+                    const isRunning =
+                      runMonitorMutation.isPending &&
+                      runMonitorMutation.variables === monitor?.id
                     return (
                       <div className='flex justify-end gap-1'>
                         <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          disabled={!monitor || isRunning}
+                          onClick={() => {
+                            if (monitor) runMonitorMutation.mutate(monitor.id)
+                          }}
+                          aria-label='测试'
+                        >
+                          {isRunning && <Spinner data-icon='inline-start' />}
+                          测试
+                        </Button>
+                        <Button
+                          type='button'
                           variant='ghost'
                           size='sm'
                           onClick={() => setDetailRowId(row._id)}
                           disabled={!row.name.trim()}
-                          aria-label='详情'
+                          aria-label='编辑'
                         >
-                          详情
+                          编辑
                         </Button>
                         <Button
+                          type='button'
                           variant='ghost'
                           size='sm'
-                          onClick={() => removeRow(row._id)}
+                          onClick={() => setDeleteRowId(row._id)}
                           aria-label={t('Delete')}
                         >
-                          <Trash2 className='h-4 w-4' />
+                          <HugeiconsIcon icon={Delete02Icon} />
                         </Button>
                       </div>
                     )
@@ -467,6 +711,26 @@ function GroupPricingTable({
           !duplicateNames.includes(detailRow.name.trim())
         }
       />
+
+      <ConfirmDialog
+        open={deleteRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteRowId(null)
+        }}
+        title='确认删除分组？'
+        desc={
+          deleteRow
+            ? `删除“${deleteRow.name || '未命名分组'}”后，保存设置将同时移除该分组的监控配置和历史记录。`
+            : ''
+        }
+        destructive
+        confirmText='删除'
+        handleConfirm={() => {
+          if (!deleteRow) return
+          removeRow(deleteRow._id)
+          setDeleteRowId(null)
+        }}
+      />
     </>
   )
 }
@@ -475,7 +739,10 @@ type GroupDetailSheetProps = {
   row: GroupPricingRow | null
   monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
-  onChange: (field: 'name' | 'ratio', value: string) => void
+  onChange: (
+    field: 'name' | 'ratio' | 'retryMode' | 'retryTimes',
+    value: string
+  ) => void
   isPersisted: boolean
 }
 
@@ -487,11 +754,13 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
     <Sheet open={props.row !== null} onOpenChange={props.onOpenChange}>
       <SheetContent
         side='right'
-        className={sideDrawerContentClassName('sm:max-w-xl')}
+        className={sideDrawerContentClassName('sm:max-w-lg')}
       >
         <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>详情{name ? `：${name.trim()}` : ''}</SheetTitle>
-          <SheetDescription>在此修改分组倍率和分组监控参数。</SheetDescription>
+          <SheetTitle>编辑{name ? `：${name.trim()}` : ''}</SheetTitle>
+          <SheetDescription>
+            修改分组倍率、重试策略和监控功能。
+          </SheetDescription>
         </SheetHeader>
 
         {props.row && (
@@ -503,6 +772,21 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 value={props.row.name}
                 onChange={(event) => props.onChange('name', event.target.value)}
               />
+            </div>
+            <div className='space-y-2'>
+              <Label>重试次数</Label>
+              <RetryPolicyControl
+                mode={props.row.retryMode}
+                retryTimes={props.row.retryTimes}
+                onModeChange={(value) => props.onChange('retryMode', value)}
+                onRetryTimesChange={(value) =>
+                  props.onChange('retryTimes', value)
+                }
+              />
+              <p className='text-muted-foreground text-xs'>
+                首次请求失败后允许再次尝试的次数；动态模式按本次请求可用的渠道数计算。API
+                Key 和路由配置可以进一步限制实际重试次数。
+              </p>
             </div>
             <div className='space-y-2'>
               <Label htmlFor='group-detail-ratio'>{t('Ratio')}</Label>
@@ -534,5 +818,55 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+type RetryPolicyControlProps = {
+  mode: PricingGroupRetryMode
+  retryTimes: string
+  onModeChange: (value: PricingGroupRetryMode) => void
+  onRetryTimesChange: (value: string) => void
+}
+
+function RetryPolicyControl(props: RetryPolicyControlProps) {
+  return (
+    <div className='flex min-w-0 items-center gap-2'>
+      <Select
+        items={RETRY_MODE_ITEMS}
+        value={props.mode}
+        onValueChange={(value) => {
+          if (value === 'fixed' || value === 'active_channels') {
+            props.onModeChange(value)
+          }
+        }}
+      >
+        <SelectTrigger className='w-40'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            <SelectItem value='fixed'>固定次数</SelectItem>
+            <SelectItem value='active_channels'>当前活跃渠道数</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {props.mode === 'fixed' && (
+        <Input
+          type='number'
+          min={0}
+          max={MAX_GROUP_RETRY_TIMES}
+          step={1}
+          value={props.retryTimes}
+          onChange={(event) => props.onRetryTimesChange(event.target.value)}
+          onBlur={() =>
+            props.onRetryTimesChange(
+              String(normalizeRetryTimes(props.retryTimes))
+            )
+          }
+          aria-label='固定重试次数'
+          className='w-20 tabular-nums'
+        />
+      )}
+    </div>
   )
 }

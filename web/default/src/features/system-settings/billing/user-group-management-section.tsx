@@ -17,13 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { MultiSelect, type Option } from '@/components/multi-select'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -40,25 +39,23 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { formatTimestampToDate } from '@/lib/format'
 
+import { UserGroupTableRow } from './user-group-table-row'
 import {
   createUserGroup,
   deleteUserGroup,
@@ -71,6 +68,12 @@ import {
 
 const USER_GROUP_QUERY_KEY = ['admin', 'user-groups'] as const
 
+type UpdateUserGroupVariables = {
+  group: UserGroupSummary
+  request: UpdateUserGroupRequest
+  closeDialog: boolean
+}
+
 export function UserGroupManagementSection() {
   const queryClient = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
@@ -79,6 +82,7 @@ export function UserGroupManagementSection() {
     null
   )
   const [editTarget, setEditTarget] = useState<UserGroupSummary | null>(null)
+  const [editName, setEditName] = useState('')
   const [topupRatio, setTopupRatio] = useState('1')
   const [pricingGroups, setPricingGroups] = useState<string[]>([])
   const [allPricingGroups, setAllPricingGroups] = useState(true)
@@ -87,6 +91,7 @@ export function UserGroupManagementSection() {
     const selectedGroups = group.pricing_groups ?? []
     const isAll =
       group.pricing_groups_all === true || selectedGroups.includes('*')
+    setEditName(group.name)
     setTopupRatio(String(group.topup_ratio ?? 1))
     setAllPricingGroups(isAll)
     setPricingGroups(isAll ? [] : selectedGroups)
@@ -144,19 +149,28 @@ export function UserGroupManagementSection() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({
-      name: groupName,
-      request,
-    }: {
-      name: string
-      request: UpdateUserGroupRequest
-    }) => updateUserGroup(groupName, request),
-    onSuccess: async () => {
-      setEditTarget(null)
+    mutationFn: (variables: UpdateUserGroupVariables) =>
+      updateUserGroup(variables.group.name, variables.request),
+    onSuccess: async (updatedGroup, variables) => {
+      queryClient.setQueryData<UserGroupSummary[]>(
+        USER_GROUP_QUERY_KEY,
+        (groups) =>
+          groups?.map((group) =>
+            group.id === updatedGroup.id
+              ? {
+                  ...updatedGroup,
+                  active_today: group.active_today,
+                  active_month: group.active_month,
+                }
+              : group
+          )
+      )
+      if (variables.closeDialog) setEditTarget(null)
       toast.success('用户分组已更新')
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: USER_GROUP_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
       ])
     },
     onError: (error) => {
@@ -178,8 +192,17 @@ export function UserGroupManagementSection() {
     event.preventDefault()
     if (!editTarget) return
 
+    const trimmedName = editName.trim()
+    if (!trimmedName) {
+      toast.error('请输入用户分组名')
+      return
+    }
     const parsedRatio = Number(topupRatio)
-    if (!Number.isFinite(parsedRatio) || parsedRatio < 0) {
+    if (
+      topupRatio.trim() === '' ||
+      !Number.isFinite(parsedRatio) ||
+      parsedRatio < 0
+    ) {
       toast.error('请输入有效的充值倍率')
       return
     }
@@ -189,12 +212,14 @@ export function UserGroupManagementSection() {
     }
 
     updateMutation.mutate({
-      name: editTarget.name,
+      group: editTarget,
       request: {
+        name: editTarget.name === 'default' ? editTarget.name : trimmedName,
         topup_ratio: parsedRatio,
         pricing_groups: allPricingGroups ? ['*'] : pricingGroups,
         pricing_groups_all: allPricingGroups,
       },
+      closeDialog: true,
     })
   }
 
@@ -223,7 +248,7 @@ export function UserGroupManagementSection() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>分组名</TableHead>
+            <TableHead>名称</TableHead>
             <TableHead>用户数</TableHead>
             <TableHead>充值倍率</TableHead>
             <TableHead>定价分组</TableHead>
@@ -233,73 +258,36 @@ export function UserGroupManagementSection() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groupsQuery.data.map((group) => {
-            const isDefault = group.name === 'default'
-            const selectedPricingGroups = group.pricing_groups ?? []
-            const pricingGroupsLabel =
-              group.pricing_groups_all === true ||
-              selectedPricingGroups.includes('*') ||
-              selectedPricingGroups.length === 0
-                ? '全部'
-                : selectedPricingGroups.join('、')
-            return (
-              <TableRow key={group.id}>
-                <TableCell className='font-medium'>{group.name}</TableCell>
-                <TableCell>{group.user_count.toLocaleString()}</TableCell>
-                <TableCell>{group.topup_ratio ?? 1}</TableCell>
-                <TableCell className='w-64 max-w-64'>
-                  <TooltipProvider delay={100}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span
-                            className='block max-w-64 cursor-help truncate'
-                            tabIndex={0}
-                          />
-                        }
-                      >
-                        {pricingGroupsLabel}
-                      </TooltipTrigger>
-                      <TooltipContent className='max-w-sm break-words whitespace-normal'>
-                        {pricingGroupsLabel}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </TableCell>
-                <TableCell className='text-muted-foreground'>
-                  {formatTimestampToDate(group.created_at)}
-                </TableCell>
-                <TableCell className='text-muted-foreground'>
-                  {formatTimestampToDate(group.updated_at)}
-                </TableCell>
-                <TableCell className='text-right'>
-                  <div className='flex justify-end gap-1'>
-                    <Button
-                      variant='ghost'
-                      size='icon-sm'
-                      aria-label={`编辑用户分组 ${group.name}`}
-                      title={`编辑用户分组 ${group.name}`}
-                      onClick={() => openEditDialog(group)}
-                    >
-                      <Pencil />
-                    </Button>
-                    {!isDefault && (
-                      <Button
-                        variant='ghost'
-                        size='icon-sm'
-                        aria-label={`删除用户分组 ${group.name}`}
-                        title={`删除用户分组 ${group.name}`}
-                        onClick={() => setDeleteTarget(group)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    )}
-                    {isDefault && <Badge variant='outline'>默认</Badge>}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )
-          })}
+          {groupsQuery.data.map((group) => (
+            <UserGroupTableRow
+              key={JSON.stringify([
+                group.id,
+                group.name,
+                group.topup_ratio,
+                group.pricing_groups_all === true,
+                group.pricing_groups ?? [],
+              ])}
+              group={group}
+              pricingGroupOptions={pricingGroupOptions}
+              pricingGroupsUnavailable={
+                pricingGroupsQuery.isLoading || pricingGroupsQuery.isError
+              }
+              disabled={updateMutation.isPending}
+              saving={
+                updateMutation.isPending &&
+                updateMutation.variables?.group.id === group.id
+              }
+              onUpdate={(request) =>
+                updateMutation.mutateAsync({
+                  group,
+                  request,
+                  closeDialog: false,
+                })
+              }
+              onEdit={() => openEditDialog(group)}
+              onDelete={() => setDeleteTarget(group)}
+            />
+          ))}
         </TableBody>
       </Table>
     )
@@ -383,59 +371,87 @@ export function UserGroupManagementSection() {
               {editTarget ? `修改“${editTarget.name}”的分组配置。` : ''}
             </DialogDescription>
           </DialogHeader>
-          <form
-            id='edit-user-group-form'
-            onSubmit={submitEdit}
-            className='space-y-5'
-          >
-            <div className='space-y-2'>
-              <Label htmlFor='user-group-topup-ratio'>充值倍率</Label>
-              <Input
-                id='user-group-topup-ratio'
-                type='number'
-                min={0}
-                step={0.1}
-                value={topupRatio}
-                onChange={(event) => setTopupRatio(event.target.value)}
-                disabled={updateMutation.isPending}
-              />
-            </div>
-            <div className='space-y-2'>
-              <Label>定价分组</Label>
-              <label className='flex items-center gap-2 text-sm'>
-                <Checkbox
-                  checked={allPricingGroups}
-                  onCheckedChange={(checked) => {
-                    const checkedAll = checked === true
-                    setAllPricingGroups(checkedAll)
-                    if (checkedAll) setPricingGroups([])
-                  }}
+          <form id='edit-user-group-form' onSubmit={submitEdit}>
+            <FieldGroup>
+              <Field
+                data-disabled={
+                  updateMutation.isPending || editTarget?.name === 'default'
+                }
+              >
+                <FieldLabel htmlFor='user-group-name'>名称</FieldLabel>
+                <Input
+                  id='user-group-name'
+                  value={editName}
+                  maxLength={64}
+                  title={
+                    editTarget?.name === 'default'
+                      ? 'default 分组名称不可修改'
+                      : undefined
+                  }
+                  disabled={
+                    updateMutation.isPending || editTarget?.name === 'default'
+                  }
+                  onChange={(event) => setEditName(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor='user-group-topup-ratio'>
+                  充值倍率
+                </FieldLabel>
+                <Input
+                  id='user-group-topup-ratio'
+                  type='number'
+                  min={0}
+                  step={0.1}
+                  value={topupRatio}
+                  onChange={(event) => setTopupRatio(event.target.value)}
                   disabled={updateMutation.isPending}
                 />
-                全部
-              </label>
-              <MultiSelect
-                options={pricingGroupOptions}
-                selected={pricingGroups}
-                onChange={(groups) => {
-                  setPricingGroups(groups)
-                  if (groups.length > 0) setAllPricingGroups(false)
-                }}
-                placeholder={
-                  pricingGroupsQuery.isLoading
-                    ? '加载定价分组...'
-                    : '选择定价分组'
-                }
-                emptyText='暂无定价分组'
-                disabled={
-                  pricingGroupsQuery.isError || updateMutation.isPending
-                }
-                maxVisibleChips={4}
-              />
-              {pricingGroupsQuery.isError && (
-                <p className='text-destructive text-sm'>定价分组加载失败</p>
-              )}
-            </div>
+              </Field>
+              <Field>
+                <FieldLabel>定价分组</FieldLabel>
+                <Field orientation='horizontal'>
+                  <Checkbox
+                    id='all-pricing-groups'
+                    checked={allPricingGroups}
+                    onCheckedChange={(checked) => {
+                      const checkedAll = checked === true
+                      setAllPricingGroups(checkedAll)
+                      if (checkedAll) setPricingGroups([])
+                    }}
+                    disabled={updateMutation.isPending}
+                  />
+                  <FieldLabel
+                    htmlFor='all-pricing-groups'
+                    className='font-normal'
+                  >
+                    全部
+                  </FieldLabel>
+                </Field>
+                <MultiSelect
+                  id='user-group-pricing-groups'
+                  options={pricingGroupOptions}
+                  selected={pricingGroups}
+                  onChange={(groups) => {
+                    setPricingGroups(groups)
+                    if (groups.length > 0) setAllPricingGroups(false)
+                  }}
+                  placeholder={
+                    pricingGroupsQuery.isLoading
+                      ? '加载定价分组...'
+                      : '选择定价分组'
+                  }
+                  emptyText='暂无定价分组'
+                  disabled={
+                    pricingGroupsQuery.isError || updateMutation.isPending
+                  }
+                  maxVisibleChips={4}
+                />
+                {pricingGroupsQuery.isError && (
+                  <FieldError>定价分组加载失败</FieldError>
+                )}
+              </Field>
+            </FieldGroup>
           </form>
           <DialogFooter>
             <Button

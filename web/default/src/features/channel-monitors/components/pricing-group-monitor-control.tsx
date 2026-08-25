@@ -16,13 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
+import { RefreshIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
@@ -41,11 +40,9 @@ export type PricingGroupMonitorControlProps = {
   isLoading: boolean
   hasError: boolean
   isUpdating: boolean
-  isRunning: boolean
   onRetry: () => void
   onConfigure: () => void
   onToggleEnabled: (enabled: boolean) => void
-  onRun: () => void
 }
 
 export function PricingGroupMonitorControl(
@@ -59,7 +56,6 @@ export function PricingGroupMonitorControl(
           <Skeleton className='h-5 w-32' />
           <Skeleton className='h-3 w-52 max-w-full' />
         </div>
-        <Skeleton className='size-7 shrink-0' />
       </div>
     )
   }
@@ -156,37 +152,7 @@ export function PricingGroupMonitorControl(
                 : `${props.monitor.latest_latency_ms} ms`}
             </strong>
           </span>
-          <span className='whitespace-nowrap'>
-            重试{' '}
-            <strong className='text-foreground font-medium tabular-nums'>
-              {props.monitor.retry_count}
-            </strong>
-          </span>
         </div>
-      </div>
-
-      <div className='flex shrink-0 items-center gap-0.5'>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon-sm'
-                disabled={props.isRunning}
-                aria-label={`立即测试 ${props.groupName} 的分组监控`}
-                onClick={props.onRun}
-              />
-            }
-          >
-            {props.isRunning ? (
-              <Spinner />
-            ) : (
-              <HugeiconsIcon icon={Activity01Icon} />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>立即测试</TooltipContent>
-        </Tooltip>
       </div>
     </div>
   )

@@ -12,6 +12,7 @@ func registerChannelMonitorRoutes(apiRouter *gin.RouterGroup) {
 	adminRoute.Use(middleware.AdminAuth())
 	{
 		adminRoute.GET("/", controller.GetAllChannelMonitors)
+		adminRoute.GET("/metrics", controller.GetPricingGroupMetrics)
 		adminRoute.POST("/", controller.CreateChannelMonitor)
 		adminRoute.GET("/:id", controller.GetChannelMonitor)
 		adminRoute.PUT("/:id", controller.UpdateChannelMonitor)

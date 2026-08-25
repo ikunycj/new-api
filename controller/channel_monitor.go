@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -18,7 +19,6 @@ type channelMonitorCreateRequest struct {
 	TestModel                string   `json:"test_model"`
 	IntervalSeconds          int      `json:"interval_seconds"`
 	TimeoutSeconds           int      `json:"timeout_seconds"`
-	RetryCount               int      `json:"retry_count"`
 	Enabled                  *bool    `json:"enabled"`
 	Visible                  *bool    `json:"visible"`
 	AvailabilityBoostPercent *float64 `json:"availability_boost_percent"`
@@ -28,7 +28,6 @@ type channelMonitorUpdateRequest struct {
 	TestModel                string   `json:"test_model"`
 	IntervalSeconds          int      `json:"interval_seconds"`
 	TimeoutSeconds           int      `json:"timeout_seconds"`
-	RetryCount               int      `json:"retry_count"`
 	Enabled                  *bool    `json:"enabled"`
 	Visible                  *bool    `json:"visible"`
 	AvailabilityBoostPercent *float64 `json:"availability_boost_percent"`
@@ -49,7 +48,6 @@ type channelMonitorResponse struct {
 	TestModel                string                         `json:"test_model"`
 	IntervalSeconds          int                            `json:"interval_seconds"`
 	TimeoutSeconds           int                            `json:"timeout_seconds"`
-	RetryCount               int                            `json:"retry_count"`
 	Enabled                  bool                           `json:"enabled"`
 	Visible                  bool                           `json:"visible"`
 	Status                   string                         `json:"status"`
@@ -115,7 +113,6 @@ func channelMonitorViewToResponse(view *service.ChannelMonitorView) channelMonit
 		TestModel:                monitor.TestModel,
 		IntervalSeconds:          monitor.IntervalSeconds,
 		TimeoutSeconds:           monitor.TimeoutSeconds,
-		RetryCount:               monitor.RetryCount,
 		Enabled:                  monitor.Enabled,
 		Visible:                  monitor.Visible,
 		Status:                   view.Status,
@@ -199,6 +196,15 @@ func GetAllChannelMonitors(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"items": items})
 }
 
+func GetPricingGroupMetrics(c *gin.Context) {
+	items, err := service.GetPricingGroupMetrics(ratio_setting.GetPricingGroupOrder())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": items})
+}
+
 func GetChannelMonitor(c *gin.Context) {
 	id, ok := parseChannelMonitorId(c)
 	if !ok {
@@ -235,7 +241,6 @@ func CreateChannelMonitor(c *gin.Context) {
 		TestModel:                request.TestModel,
 		IntervalSeconds:          request.IntervalSeconds,
 		TimeoutSeconds:           request.TimeoutSeconds,
-		RetryCount:               request.RetryCount,
 		Enabled:                  enabled,
 		Visible:                  visible,
 		AvailabilityBoostPercent: availabilityBoostPercent,
@@ -285,7 +290,6 @@ func UpdateChannelMonitor(c *gin.Context) {
 		TestModel:                request.TestModel,
 		IntervalSeconds:          request.IntervalSeconds,
 		TimeoutSeconds:           request.TimeoutSeconds,
-		RetryCount:               request.RetryCount,
 		Enabled:                  enabled,
 		Visible:                  visible,
 		AvailabilityBoostPercent: availabilityBoostPercent,

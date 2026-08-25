@@ -147,6 +147,12 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		finishGroupActivity := service.BeginPricingGroupActivity(
+			common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+			common.GetContextKeyInt(c, constant.ContextKeyUserId),
+			c.GetString(common.RequestIdKey),
+		)
+		defer finishGroupActivity()
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)

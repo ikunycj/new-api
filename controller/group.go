@@ -65,6 +65,7 @@ type userGroupRequest struct {
 }
 
 type updateUserGroupRequest struct {
+	Name             *string   `json:"name"`
 	TopupRatio       *float64  `json:"topup_ratio"`
 	PricingGroups    *[]string `json:"pricing_groups"`
 	PricingGroupsAll *bool     `json:"pricing_groups_all"`
@@ -81,11 +82,12 @@ func CreateManagedUserGroup(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if summary, summaryErr := model.GetUserGroupSummary(group.Name); summaryErr == nil {
-		common.ApiSuccess(c, summary)
+	summary, err := model.GetUserGroupSummary(group.Name)
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, group)
+	common.ApiSuccess(c, summary)
 }
 
 func UpdateManagedUserGroup(c *gin.Context) {
@@ -94,15 +96,17 @@ func UpdateManagedUserGroup(c *gin.Context) {
 		common.ApiErrorMsg(c, "无效的用户分组配置")
 		return
 	}
-	if err := model.UpdateUserGroupConfiguration(c.Param("name"), model.UserGroupUpdate{
+	updatedName, err := model.UpdateUserGroupConfiguration(c.Param("name"), model.UserGroupUpdate{
+		Name:             req.Name,
 		TopupRatio:       req.TopupRatio,
 		PricingGroups:    req.PricingGroups,
 		PricingGroupsAll: req.PricingGroupsAll,
-	}); err != nil {
+	})
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	group, err := model.GetUserGroupSummary(c.Param("name"))
+	group, err := model.GetUserGroupSummary(updatedName)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -124,11 +128,12 @@ func GetUserGroups(c *gin.Context) {
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
 	pricingGroups := service.GetUserGroupPricingGroups(userGroup)
-	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
+	for order, groupName := range ratio_setting.GetPricingGroupOrder() {
 		if _, ok := pricingGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]interface{}{
 				"ratio": ratio_setting.GetGroupRatio(groupName),
 				"desc":  groupName,
+				"order": order,
 			}
 		}
 	}

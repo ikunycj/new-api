@@ -28,8 +28,6 @@ const (
 	channelMonitorMaxInterval             = 86400
 	channelMonitorMinTimeout              = 1
 	channelMonitorMaxTimeout              = 120
-	channelMonitorMinRetryCount           = 1
-	channelMonitorMaxRetryCount           = 10000
 	ChannelMonitorUserTestCooldownSeconds = int64(10)
 )
 
@@ -48,7 +46,6 @@ type ChannelMonitorInput struct {
 	TestModel                string
 	IntervalSeconds          int
 	TimeoutSeconds           int
-	RetryCount               int
 	Enabled                  bool
 	Visible                  bool
 	AvailabilityBoostPercent float64
@@ -116,19 +113,6 @@ func normalizeChannelMonitorInput(input ChannelMonitorInput) (ChannelMonitorInpu
 	if input.TimeoutSeconds < channelMonitorMinTimeout || input.TimeoutSeconds > channelMonitorMaxTimeout {
 		return input, fmt.Errorf("request timeout must be between %d and %d seconds", channelMonitorMinTimeout, channelMonitorMaxTimeout)
 	}
-	if input.RetryCount == 0 {
-		channelCount, err := model.CountChannelsByPricingGroup(input.PricingGroup)
-		if err != nil {
-			return input, fmt.Errorf("count pricing group channels: %w", err)
-		}
-		input.RetryCount = channelCount
-		if input.RetryCount < channelMonitorMinRetryCount {
-			input.RetryCount = channelMonitorMinRetryCount
-		}
-	}
-	if input.RetryCount < channelMonitorMinRetryCount || input.RetryCount > channelMonitorMaxRetryCount {
-		return input, fmt.Errorf("retry count must be between %d and %d", channelMonitorMinRetryCount, channelMonitorMaxRetryCount)
-	}
 	if err := validateChannelMonitorAvailabilityBoost(input.AvailabilityBoostPercent); err != nil {
 		return input, err
 	}
@@ -146,7 +130,6 @@ func CreateChannelMonitor(input ChannelMonitorInput) (*model.ChannelMonitor, err
 		TestModel:                normalized.TestModel,
 		IntervalSeconds:          normalized.IntervalSeconds,
 		TimeoutSeconds:           normalized.TimeoutSeconds,
-		RetryCount:               normalized.RetryCount,
 		Enabled:                  normalized.Enabled,
 		Visible:                  normalized.Visible,
 		AvailabilityBoostPercent: normalized.AvailabilityBoostPercent,
@@ -176,7 +159,6 @@ func UpdateChannelMonitor(id int, input ChannelMonitorInput) (*model.ChannelMoni
 	monitor.TestModel = normalized.TestModel
 	monitor.IntervalSeconds = normalized.IntervalSeconds
 	monitor.TimeoutSeconds = normalized.TimeoutSeconds
-	monitor.RetryCount = normalized.RetryCount
 	monitor.Enabled = normalized.Enabled
 	monitor.Visible = normalized.Visible
 	monitor.AvailabilityBoostPercent = normalized.AvailabilityBoostPercent
@@ -345,9 +327,9 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 		}
 		ctx, cancel := context.WithTimeout(parent, time.Duration(monitor.TimeoutSeconds)*time.Second)
 		var lastErr error
-		attemptLimit := monitor.RetryCount
-		if attemptLimit < channelMonitorMinRetryCount {
-			attemptLimit = channelMonitorMinRetryCount
+		attemptLimit, configured := retryParam.groupRetryLimit(monitor.PricingGroup)
+		if !configured {
+			attemptLimit = 1
 		}
 		for attempt := 0; attempt < attemptLimit; attempt++ {
 			if err := ctx.Err(); err != nil {

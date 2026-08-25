@@ -121,6 +121,14 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
+    PricingGroupOrder: createJsonStringField(t, {
+      predicate: (value) =>
+        Array.isArray(value) && value.every((item) => typeof item === 'string'),
+    }),
+    PricingGroupRetryPolicy: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' && value !== null && !Array.isArray(value),
+    }),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -188,6 +196,10 @@ export function RatioSettingsCard({
 
   const initialGroupValues = {
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+    PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
+    PricingGroupRetryPolicy: normalizeJsonString(
+      groupDefaults.PricingGroupRetryPolicy
+    ),
   }
   const groupNormalizedDefaults = useRef(initialGroupValues)
   const [savedGroupValues, setSavedGroupValues] = useState(initialGroupValues)
@@ -219,6 +231,10 @@ export function RatioSettingsCard({
     mode: 'onChange',
     defaultValues: {
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
     },
   })
 
@@ -260,11 +276,19 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+      PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: normalizeJsonString(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
     }
     setSavedGroupValues(groupNormalizedDefaults.current)
 
     groupForm.reset({
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
     })
   }, [groupDefaults, groupForm])
 
@@ -315,6 +339,10 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
+        PricingGroupOrder: normalizeJsonString(values.PricingGroupOrder),
+        PricingGroupRetryPolicy: normalizeJsonString(
+          values.PricingGroupRetryPolicy
+        ),
       }
 
       const updates = (
@@ -335,6 +363,8 @@ export function RatioSettingsCard({
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
           queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+          queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
+          queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
         ])
       }
 

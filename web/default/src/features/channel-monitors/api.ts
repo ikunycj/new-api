@@ -28,6 +28,7 @@ import type {
   ChannelMonitorSettingsPayload,
   GroupStatusMonitor,
   GroupStatusTestResponse,
+  PricingGroupMetrics,
 } from './types'
 
 type ApiResponse<T> = {
@@ -50,21 +51,11 @@ export async function getChannelMonitors(): Promise<ChannelMonitor[]> {
   return requireData(response.data).items
 }
 
-export async function getPricingGroupChannelCount(
-  pricingGroup: string
-): Promise<number> {
-  const response = await api.get<
-    ApiResponse<{
-      total: number
-    }>
-  >('/api/channel', {
-    params: {
-      p: 1,
-      page_size: 1,
-      group: pricingGroup,
-    },
-  })
-  return Math.max(1, requireData(response.data).total)
+export async function getPricingGroupMetrics(): Promise<PricingGroupMetrics[]> {
+  const response = await api.get<ApiResponse<{ items: PricingGroupMetrics[] }>>(
+    '/api/monitor/channel/metrics'
+  )
+  return requireData(response.data).items
 }
 
 export async function createChannelMonitor(

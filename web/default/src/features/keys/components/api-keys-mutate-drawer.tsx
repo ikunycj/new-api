@@ -121,6 +121,11 @@ export function ApiKeysMutateDrawer({
     () =>
       Object.entries(groupsRaw ?? {})
         .filter(([key]) => key !== 'auto')
+        .sort(
+          ([, left], [, right]) =>
+            (left.order ?? Number.MAX_SAFE_INTEGER) -
+            (right.order ?? Number.MAX_SAFE_INTEGER)
+        )
         .map(([key, info]) => ({
           value: key,
           label: key,

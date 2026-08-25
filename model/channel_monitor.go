@@ -17,7 +17,6 @@ type ChannelMonitor struct {
 	TestModel                string                  `json:"test_model" gorm:"size:200;not null"`
 	IntervalSeconds          int                     `json:"interval_seconds" gorm:"not null"`
 	TimeoutSeconds           int                     `json:"timeout_seconds" gorm:"not null"`
-	RetryCount               int                     `json:"retry_count" gorm:"not null"`
 	Enabled                  bool                    `json:"enabled" gorm:"index:idx_channel_monitor_due,priority:1;not null"`
 	Visible                  bool                    `json:"visible" gorm:"index;not null"`
 	AvailabilityBoostPercent float64                 `json:"availability_boost_percent" gorm:"column:availability_boost_percent"`
@@ -59,31 +58,6 @@ func CreateChannelMonitor(monitor *ChannelMonitor) error {
 	return DB.Create(monitor).Error
 }
 
-func CountChannelsByPricingGroup(pricingGroup string) (int, error) {
-	var count int64
-	query := DB.Model(&Channel{})
-	if commonGroupCol == "" {
-		countedIDs := make(map[int]struct{})
-		var channels []Channel
-		if err := query.Select("id", "group").Find(&channels).Error; err != nil {
-			return 0, err
-		}
-		for _, channel := range channels {
-			for _, group := range channel.GetGroups() {
-				if group == pricingGroup {
-					countedIDs[channel.Id] = struct{}{}
-					break
-				}
-			}
-		}
-		return len(countedIDs), nil
-	}
-	if err := ApplyChannelGroupFilter(query, pricingGroup).Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return int(count), nil
-}
-
 func UpdateChannelMonitor(monitor *ChannelMonitor) error {
 	monitor.UpdatedAt = common.GetTimestamp()
 	return DB.Model(&ChannelMonitor{}).
@@ -92,7 +66,6 @@ func UpdateChannelMonitor(monitor *ChannelMonitor) error {
 			"test_model":                 monitor.TestModel,
 			"interval_seconds":           monitor.IntervalSeconds,
 			"timeout_seconds":            monitor.TimeoutSeconds,
-			"retry_count":                monitor.RetryCount,
 			"enabled":                    monitor.Enabled,
 			"visible":                    monitor.Visible,
 			"availability_boost_percent": monitor.AvailabilityBoostPercent,

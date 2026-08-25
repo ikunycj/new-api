@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Activity01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -57,7 +57,6 @@ import { Switch } from '@/components/ui/switch'
 
 import {
   createChannelMonitor,
-  getPricingGroupChannelCount,
   runChannelMonitor,
   updateChannelMonitor,
 } from '../api'
@@ -128,7 +127,6 @@ function buildFormDefaults(
     test_model: monitor.test_model,
     interval_seconds: monitor.interval_seconds,
     timeout_seconds: monitor.timeout_seconds,
-    retry_count: monitor.retry_count,
     enabled: monitor.enabled,
     visible: monitor.visible,
     availability_boost_percent: monitor.availability_boost_percent,
@@ -138,15 +136,6 @@ function buildFormDefaults(
 export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
   const queryClient = useQueryClient()
   const pricingGroupName = props.pricingGroupName.trim()
-  const defaultRetryCountQuery = useQuery({
-    queryKey: ['pricing-group-channel-count', pricingGroupName],
-    queryFn: () => getPricingGroupChannelCount(pricingGroupName),
-    enabled:
-      props.open &&
-      !props.disabled &&
-      props.monitor === null &&
-      pricingGroupName !== '',
-  })
   const form = useForm<
     ChannelMonitorFormInput,
     unknown,
@@ -169,18 +158,6 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
     form.reset(buildFormDefaults(props.monitor))
   }, [form, formContextKey, props.monitor, props.open])
 
-  useEffect(() => {
-    if (
-      !props.open ||
-      props.monitor !== null ||
-      defaultRetryCountQuery.data === undefined ||
-      form.getFieldState('retry_count').isDirty
-    ) {
-      return
-    }
-    form.setValue('retry_count', defaultRetryCountQuery.data)
-  }, [defaultRetryCountQuery.data, form, props.monitor, props.open])
-
   const watchedBoostPercent = useWatch({
     control: form.control,
     name: 'availability_boost_percent',
@@ -200,7 +177,6 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
         test_model: input.values.test_model.trim(),
         interval_seconds: input.values.interval_seconds,
         timeout_seconds: input.values.timeout_seconds,
-        retry_count: input.values.retry_count,
         enabled: input.values.enabled,
         visible: input.values.visible,
         availability_boost_percent: input.values.availability_boost_percent,
@@ -351,39 +327,6 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
 
               <FormField
                 control={form.control}
-                name='retry_count'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>重试次数</FormLabel>
-                    <FormControl>
-                      <InputGroup>
-                        <InputGroupInput
-                          type='number'
-                          min={1}
-                          max={10000}
-                          step={1}
-                          value={String(field.value ?? '')}
-                          onChange={(event) =>
-                            field.onChange(event.target.value)
-                          }
-                        />
-                        <InputGroupAddon align='inline-end'>
-                          <InputGroupText>次</InputGroupText>
-                        </InputGroupAddon>
-                      </InputGroup>
-                    </FormControl>
-                    <FormDescription>
-                      {defaultRetryCountQuery.isFetching
-                        ? '正在读取分组渠道数量'
-                        : '默认按分组内渠道数量设置'}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name='availability_boost_percent'
                 render={({ field }) => (
                   <FormItem>
@@ -521,7 +464,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
     return (
       <Card className='gap-0 overflow-hidden shadow-none'>
         <CardHeader className='border-b px-4 py-3'>
-          <CardTitle className='text-sm'>分组监控</CardTitle>
+          <CardTitle className='text-sm'>监控功能</CardTitle>
           <p className='text-muted-foreground text-xs'>
             系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
           </p>
@@ -536,7 +479,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
       <SheetContent className='gap-0 sm:max-w-xl'>
         <SheetHeader className='border-b px-5 py-4'>
           <SheetTitle>
-            {props.monitor ? '编辑分组监控' : '配置分组监控'}
+            {props.monitor ? '编辑监控功能' : '配置监控功能'}
           </SheetTitle>
           <SheetDescription>
             系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
