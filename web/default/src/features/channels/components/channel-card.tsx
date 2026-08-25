@@ -95,7 +95,7 @@ function ChannelCardComponent({
     test_time: t('Last Tested'),
     price_multiplier: t('Channel price multiplier'),
     test_model: t('Test Model'),
-    upstream_max_retries: t('Upstream max retries'),
+    upstream_max_retries: t('Retry Times'),
     previous_day_probe_success_rate: t('Previous-day probe success rate'),
   }
 

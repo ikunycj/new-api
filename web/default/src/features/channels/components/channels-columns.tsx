@@ -254,24 +254,50 @@ function PriceMultiplierCell({ channel }: { channel: Channel }) {
   }
 
   return (
-    <div className='flex items-center gap-1'>
-      <span className='text-muted-foreground text-xs'>×</span>
-      <NumericSpinnerInput
-        value={getDisplayPriceMultiplier(channel)}
-        min={0}
-        max={1000}
-        step={0.01}
-        precision={2}
-        onChange={(value) => {
-          handleUpdateChannelField(
-            channel.id,
-            'price_multiplier',
-            value,
-            queryClient
-          )
-        }}
-      />
-    </div>
+    <NumericSpinnerInput
+      value={getDisplayPriceMultiplier(channel)}
+      min={0}
+      max={1000}
+      step={0.01}
+      precision={2}
+      onChange={(value) => {
+        handleUpdateChannelField(
+          channel.id,
+          'price_multiplier',
+          value,
+          queryClient
+        )
+      }}
+    />
+  )
+}
+
+/**
+ * Inline upstream retry count editor. The effective default is 3 when a
+ * channel has no explicit value, matching the backend's retry behavior.
+ */
+function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+
+  return (
+    <NumericSpinnerInput
+      value={channel.upstream_max_retries ?? 3}
+      min={0}
+      max={100}
+      step={1}
+      onChange={(value) => {
+        handleUpdateChannelField(
+          channel.id,
+          'upstream_max_retries',
+          value,
+          queryClient
+        )
+      }}
+    />
   )
 }
 
@@ -1159,15 +1185,9 @@ export function useChannelsColumns(
       // Upstream retry limit column
       {
         accessorKey: 'upstream_max_retries',
-        header: t('Upstream max retries'),
+        header: t('Retry Times'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          if (isTagAggregateRow(row.original)) {
-            return <span className='text-muted-foreground text-xs'>-</span>
-          }
-          const retries = row.original.upstream_max_retries ?? 3
-          return <span className='text-sm tabular-nums'>{retries}</span>
-        },
+        cell: ({ row }) => <UpstreamMaxRetriesCell channel={row.original} />,
         size: 125,
         enableSorting: false,
       },

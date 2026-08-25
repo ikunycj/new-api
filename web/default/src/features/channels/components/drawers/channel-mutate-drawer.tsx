@@ -3775,9 +3775,7 @@ export function ChannelMutateDrawer({
                                 name='upstream_max_retries'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>
-                                      {t('Upstream max retries')}
-                                    </FormLabel>
+                                    <FormLabel>{t('Retry Times')}</FormLabel>
                                     <FormControl>
                                       <Input
                                         type='number'
