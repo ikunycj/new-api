@@ -64,7 +64,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { fetchApiKeyModels } from '@/features/keys/api'
-import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { AgentPanel } from './agent-panel'
@@ -91,6 +90,7 @@ import {
   type LoadTestPricing,
   type LoadTestRequestResult,
 } from './api'
+import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
 import {
   clearPersistedLoadTestRuns,
   loadPersistedLoadTestRuns,
@@ -170,21 +170,10 @@ function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
 }
 
-function calculateOfficialChannelCost(
+function calculateChannelUserCharge(
   channel: LoadTestChannelStats,
   pricing: LoadTestPricing
 ) {
-  if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-    return channel.requests * (pricing.model.model_price ?? 0)
-  }
-
-  const officialInputPricePerMillion = pricing.model.model_ratio * 2
-  const officialOutputPricePerMillion =
-    officialInputPricePerMillion * pricing.model.completion_ratio
-  const officialCacheReadPricePerMillion =
-    officialInputPricePerMillion * (pricing.model.cache_ratio ?? 1)
-  const officialCacheWritePricePerMillion =
-    officialInputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
   const baseInputTokens = Math.max(
     0,
     channel.input_tokens_total > 0
@@ -193,19 +182,16 @@ function calculateOfficialChannelCost(
           channel.cache_write_tokens
       : channel.input_tokens
   )
-  const officialCost =
-    (baseInputTokens / 1_000_000) * officialInputPricePerMillion +
-    (channel.output_tokens / 1_000_000) * officialOutputPricePerMillion +
-    (channel.cache_read_tokens / 1_000_000) * officialCacheReadPricePerMillion +
-    (channel.cache_write_tokens / 1_000_000) * officialCacheWritePricePerMillion
-  return officialCost
-}
-
-function calculateUserCharge(
-  channel: LoadTestChannelStats,
-  pricing: LoadTestPricing
-) {
-  return calculateOfficialChannelCost(channel, pricing) * pricing.groupRatio
+  return calculateLoadTestUserCharge(
+    {
+      successes: channel.requests,
+      inputTokens: baseInputTokens,
+      outputTokens: channel.output_tokens,
+      cacheReadTokens: channel.cache_read_tokens,
+      cacheWriteTokens: channel.cache_write_tokens,
+    },
+    pricing
+  )
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -633,16 +619,6 @@ export function LoadTestDemo() {
   const cacheHitRate = cacheAttemptTokens
     ? ((stats.cacheReadTokens / cacheAttemptTokens) * 100).toFixed(1)
     : '0.0'
-  const inputPricePerMillion = pricing ? pricing.model.model_ratio * 2 : 0
-  const outputPricePerMillion = pricing
-    ? inputPricePerMillion * pricing.model.completion_ratio
-    : 0
-  const cacheReadPricePerMillion = pricing
-    ? inputPricePerMillion * (pricing.model.cache_ratio ?? 1)
-    : 0
-  const cacheWritePricePerMillion = pricing
-    ? inputPricePerMillion * (pricing.model.create_cache_ratio ?? 1)
-    : 0
   const totalChannelTokens = channelStats.reduce(
     (total, item) =>
       total +
@@ -661,19 +637,12 @@ export function LoadTestDemo() {
   if (pricing) {
     if (channelStats.length > 0) {
       userCharge = channelStats.reduce(
-        (total, channel) => total + calculateUserCharge(channel, pricing),
+        (total, channel) =>
+          total + calculateChannelUserCharge(channel, pricing),
         0
       )
-    } else if (pricing.model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
-      const officialCost = stats.successes * (pricing.model.model_price ?? 0)
-      userCharge = officialCost * pricing.groupRatio
     } else {
-      const officialCost =
-        (stats.inputTokens / 1_000_000) * inputPricePerMillion +
-        (stats.outputTokens / 1_000_000) * outputPricePerMillion +
-        (stats.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion +
-        (stats.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion
-      userCharge = officialCost * pricing.groupRatio
+      userCharge = calculateLoadTestUserCharge(stats, pricing)
     }
   }
 
@@ -774,7 +743,8 @@ export function LoadTestDemo() {
       return run.userCharge
     }
     return run.channelStats.reduce(
-      (total, channel) => total + calculateUserCharge(channel, runPricing),
+      (total, channel) =>
+        total + calculateChannelUserCharge(channel, runPricing),
       0
     )
   }
@@ -1124,10 +1094,7 @@ export function LoadTestDemo() {
                             const historicalUserCharge =
                               getHistoricalUserCharge(run)
                             const historicalTotalTokens =
-                              run.stats.inputTokens +
-                              run.stats.outputTokens +
-                              run.stats.cacheReadTokens +
-                              run.stats.cacheWriteTokens
+                              getLoadTestTotalTokens(run.stats)
                             return (
                               <TableRow key={run.runId}>
                                 <TableCell>
@@ -1327,7 +1294,7 @@ export function LoadTestDemo() {
                                 <TableCell className='tabular-nums'>
                                   $
                                   {pricing
-                                    ? calculateUserCharge(
+                                    ? calculateChannelUserCharge(
                                         channel,
                                         pricing
                                       ).toFixed(6)

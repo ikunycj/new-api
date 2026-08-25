@@ -69,10 +69,13 @@ import {
   createLoadTestAgentRun,
   deleteLoadTestAgent,
   getLoadTestAgentState,
+  loadLoadTestPricing,
   type CreateLoadTestAgentRun,
   type LoadTestAgent,
   type LoadTestAgentRun,
+  type LoadTestPricing,
 } from './api'
+import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
 
 type AgentPanelProps = {
   disabled: boolean
@@ -97,6 +100,10 @@ function formatMemory(bytes: number) {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`
 }
 
+function loadTestPricingKey(model: string, packageName: string) {
+  return `${model}\u0000${packageName}`
+}
+
 export function AgentPanel(props: AgentPanelProps) {
   const { t } = useTranslation()
   const isAdmin = useIsAdmin()
@@ -104,10 +111,14 @@ export function AgentPanel(props: AgentPanelProps) {
   const [onlineBefore, setOnlineBefore] = useState(0)
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [runs, setRuns] = useState<LoadTestAgentRun[]>([])
+  const [pricingByKey, setPricingByKey] = useState<
+    Record<string, LoadTestPricing | null>
+  >({})
   const [pairing, setPairing] = useState<Pairing | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const refreshInFlightRef = useRef(false)
+  const pricingByKeyRef = useRef<Record<string, LoadTestPricing | null>>({})
 
   const refresh = useCallback(
     async (showError = false) => {
@@ -119,11 +130,46 @@ export function AgentPanel(props: AgentPanelProps) {
           props.mode === 'managed' ? state.managed_agents : state.local_agents
         setAgents(nextAgents)
         setOnlineBefore(state.online_before)
-        setRuns(
-          state.runs.filter(
-            (run) => run.agent_managed === (props.mode === 'managed')
-          )
+        const nextRuns = state.runs.filter(
+          (run) => run.agent_managed === (props.mode === 'managed')
         )
+        setRuns(nextRuns)
+        const missingPricing = new Map<
+          string,
+          { model: string; packageName: string }
+        >()
+        for (const run of nextRuns) {
+          const key = loadTestPricingKey(run.model, run.package_name)
+          if (!Object.hasOwn(pricingByKeyRef.current, key)) {
+            missingPricing.set(key, {
+              model: run.model,
+              packageName: run.package_name,
+            })
+          }
+        }
+        if (missingPricing.size > 0) {
+          for (const key of missingPricing.keys()) {
+            pricingByKeyRef.current[key] = null
+          }
+          const pricingEntries = await Promise.all(
+            [...missingPricing.entries()].map(
+              async ([key, { model, packageName }]) => {
+                try {
+                  return [
+                    key,
+                    await loadLoadTestPricing(model, packageName),
+                  ] as const
+                } catch {
+                  return [key, null] as const
+                }
+              }
+            )
+          )
+          for (const [key, pricing] of pricingEntries) {
+            pricingByKeyRef.current[key] = pricing
+          }
+          setPricingByKey({ ...pricingByKeyRef.current })
+        }
         setSelectedAgentId((current) => {
           const currentAgent = nextAgents.find((agent) => agent.id === current)
           if (
@@ -364,8 +410,15 @@ export function AgentPanel(props: AgentPanelProps) {
                     <TableHead>{t('Status')}</TableHead>
                     <TableHead>{t('API Key')}</TableHead>
                     <TableHead>{t('Test model')}</TableHead>
+                    <TableHead>{t('Duration')}</TableHead>
                     <TableHead>{t('Requests')}</TableHead>
                     <TableHead>{t('Success rate')}</TableHead>
+                    <TableHead>{t('Input tokens')}</TableHead>
+                    <TableHead>{t('Output tokens')}</TableHead>
+                    <TableHead>{t('Cache tokens')}</TableHead>
+                    <TableHead>{t('Total tokens')}</TableHead>
+                    <TableHead>{t('Average token price')}</TableHead>
+                    <TableHead>{t('User charge')}</TableHead>
                     <TableHead>P95</TableHead>
                     <TableHead>{t('Errors')}</TableHead>
                     <TableHead />
@@ -376,6 +429,21 @@ export function AgentPanel(props: AgentPanelProps) {
                     const successRate = run.completed
                       ? ((run.successes / run.completed) * 100).toFixed(1)
                       : '0.0'
+                    const usage = {
+                      successes: run.successes,
+                      inputTokens: run.input_tokens,
+                      outputTokens: run.output_tokens,
+                      cacheReadTokens: run.cache_read_tokens,
+                      cacheWriteTokens: run.cache_write_tokens,
+                    }
+                    const totalTokens = getLoadTestTotalTokens(usage)
+                    const runPricing =
+                      pricingByKey[
+                        loadTestPricingKey(run.model, run.package_name)
+                      ]
+                    const userCharge = runPricing
+                      ? calculateLoadTestUserCharge(usage, runPricing)
+                      : null
                     const active = ACTIVE_RUN_STATUSES.has(run.status)
                     return (
                       <TableRow key={run.id}>
@@ -389,8 +457,34 @@ export function AgentPanel(props: AgentPanelProps) {
                         </TableCell>
                         <TableCell>{run.key_name}</TableCell>
                         <TableCell>{run.model}</TableCell>
-                        <TableCell>{run.completed}</TableCell>
+                        <TableCell>{run.duration_seconds}s</TableCell>
+                        <TableCell className='tabular-nums'>
+                          {run.completed.toLocaleString()}
+                        </TableCell>
                         <TableCell>{successRate}%</TableCell>
+                        <TableCell className='tabular-nums'>
+                          {run.input_tokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className='tabular-nums'>
+                          {run.output_tokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap tabular-nums'>
+                          {run.cache_read_tokens.toLocaleString()} /{' '}
+                          {run.cache_write_tokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className='tabular-nums'>
+                          {totalTokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap tabular-nums'>
+                          {userCharge !== null && totalTokens > 0
+                            ? `$${(userCharge / totalTokens).toFixed(8)}`
+                            : '-'}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap tabular-nums'>
+                          {userCharge === null
+                            ? '-'
+                            : `$${userCharge.toFixed(6)}`}
+                        </TableCell>
                         <TableCell>{Math.round(run.p95_ms)} ms</TableCell>
                         <TableCell>
                           {Object.entries(run.error_counts)
