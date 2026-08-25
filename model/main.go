@@ -262,6 +262,9 @@ func InitLogDB() (err error) {
 }
 
 func migrateDB() error {
+	if err := migrateSubscriptionPlanPriceAmount(); err != nil {
+		return err
+	}
 	// Migrate model_limits column from varchar to text for existing tables
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
@@ -296,6 +299,10 @@ func migrateDB() error {
 		&TwoFA{},
 		&TwoFABackupCode{},
 		&Checkin{},
+		&SubscriptionPlan{},
+		&SubscriptionOrder{},
+		&UserSubscription{},
+		&SubscriptionPreConsumeRecord{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
@@ -376,6 +383,10 @@ func migrateDBFast() error {
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
 		{&Checkin{}, "Checkin"},
+		{&SubscriptionPlan{}, "SubscriptionPlan"},
+		{&SubscriptionOrder{}, "SubscriptionOrder"},
+		{&UserSubscription{}, "UserSubscription"},
+		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
@@ -774,6 +785,30 @@ func clickHouseLogTableHasTTL() (bool, error) {
 func clickHouseCreateTableHasTTL(createTableSQL string) bool {
 	upperSQL := strings.ToUpper(createTableSQL)
 	return strings.Contains(upperSQL, "\nTTL ") || strings.Contains(upperSQL, " TTL ")
+}
+
+func migrateSubscriptionPlanPriceAmount() error {
+	if !common.UsingMainDatabase(common.DatabaseTypePostgreSQL) ||
+		!DB.Migrator().HasTable(&SubscriptionPlan{}) ||
+		!DB.Migrator().HasColumn(&SubscriptionPlan{}, "price_amount") {
+		return nil
+	}
+
+	var dataType string
+	if err := DB.Raw(`SELECT data_type FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
+		"subscription_plans", "price_amount").Scan(&dataType).Error; err != nil {
+		return fmt.Errorf("inspect subscription_plans.price_amount: %w", err)
+	}
+	if dataType == "numeric" {
+		return nil
+	}
+	if err := DB.Exec(`ALTER TABLE subscription_plans
+		ALTER COLUMN price_amount TYPE decimal(10,6)
+		USING price_amount::decimal(10,6)`).Error; err != nil {
+		return fmt.Errorf("migrate subscription_plans.price_amount: %w", err)
+	}
+	return nil
 }
 
 // migrateTokenModelLimitsToText migrates model_limits column from varchar(1024) to text

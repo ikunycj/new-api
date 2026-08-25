@@ -122,6 +122,7 @@ func InitOptionMap() {
 	common.OptionMap["WaffoMerchantId"] = setting.WaffoMerchantId
 	common.OptionMap["WaffoNotifyUrl"] = setting.WaffoNotifyUrl
 	common.OptionMap["WaffoReturnUrl"] = setting.WaffoReturnUrl
+	common.OptionMap["WaffoSubscriptionReturnUrl"] = setting.WaffoSubscriptionReturnUrl
 	common.OptionMap["WaffoCurrency"] = setting.WaffoCurrency
 	common.OptionMap["WaffoUnitPrice"] = strconv.FormatFloat(setting.WaffoUnitPrice, 'f', -1, 64)
 	common.OptionMap["WaffoMinTopUp"] = strconv.Itoa(setting.WaffoMinTopUp)
@@ -495,6 +496,8 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoNotifyUrl = value
 	case "WaffoReturnUrl":
 		setting.WaffoReturnUrl = value
+	case "WaffoSubscriptionReturnUrl":
+		setting.WaffoSubscriptionReturnUrl = value
 	case "WaffoCurrency":
 		setting.WaffoCurrency = value
 	case "WaffoUnitPrice":

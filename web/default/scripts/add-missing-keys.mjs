@@ -743,6 +743,24 @@ const newKeys = {
 }
 
 const retiredKeys = new Set([
+  // Removed package comparison dashboard.
+  'Channel hit rate',
+  'Package',
+  'Package comparison',
+  'Packages to compare',
+  'Plan quota',
+  'Select at least one plan to compare usage',
+  'Select plans',
+  'The same key is used for each package comparison',
+  'Each package was tested sequentially with the same API key',
+  'Selected packages run one by one with the same key',
+  'Unknown plan',
+  'Usage cost',
+  'Usage is attributed to the plan selected when each request is billed.',
+
+  // Superseded by the subscription-aware compliance copy.
+  'Payment and redemption codes are locked until the root administrator confirms the compliance terms.',
+  'This confirmation unlocks payment and redemption code features. Please read the statements carefully.',
   'Add billing group route',
   'Add channel',
   'Add error mapping',

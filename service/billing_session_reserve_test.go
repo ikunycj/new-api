@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
@@ -23,6 +24,7 @@ func TestBillingSessionReserveRechecksWalletBeforeHigherCandidate(t *testing.T) 
 	info := &relaycommon.RelayInfo{
 		UserId:          userID,
 		IsPlayground:    true,
+		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 		ForcePreConsume: true,
 	}
 
@@ -47,6 +49,7 @@ func TestBillingSessionReserveRejectsInsufficientWalletForHigherCandidate(t *tes
 	info := &relaycommon.RelayInfo{
 		UserId:          userID,
 		IsPlayground:    true,
+		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 		ForcePreConsume: true,
 	}
 
@@ -77,6 +80,7 @@ func TestBillingSessionReserveRechecksTrustedWalletForHigherCandidate(t *testing
 		UserId:          userID,
 		TokenUnlimited:  true,
 		IsPlayground:    true,
+		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 		ForcePreConsume: false,
 	}
 

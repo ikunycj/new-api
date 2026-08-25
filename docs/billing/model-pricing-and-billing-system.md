@@ -1,6 +1,6 @@
 # 分组、模型计价与账务系统梳理
 
-本文以 2026-07-28 当前工作区源码为准，梳理从模型基础价、分组倍率、计费汇率，到预扣、结算、充值、兑换码和前端展示的完整规则。文中的“官方价格”指项目中配置的美元基础价；系统不会在线查询厂商官网，因此只有配置本身准确、及时，页面上的“官方原价”才等于真实官方价。
+本文以 2026-07-28 当前工作区源码为准，梳理从模型基础价、分组倍率、计费汇率，到预扣、结算、充值、兑换码、订阅和前端展示的完整规则。文中的“官方价格”指项目中配置的美元基础价；系统不会在线查询厂商官网，因此只有配置本身准确、及时，页面上的“官方原价”才等于真实官方价。
 
 ## 1. 结论先行
 
@@ -60,7 +60,7 @@ quota_per_unit = 500000
 
 ### 2.1 原始 quota
 
-用户余额、令牌余额、消费日志和兑换码等仍保存原始 quota。`QuotaPerUnit` 只是原始 quota 与账户单位之间的比例：
+用户余额、令牌余额、消费日志、兑换码、订阅总额度等仍保存原始 quota。`QuotaPerUnit` 只是原始 quota 与账户单位之间的比例：
 
 ```text
 账户单位 u = 原始 quota q / QuotaPerUnit
@@ -255,9 +255,11 @@ O = ratio1 × ratio2 × ...
 
 普通请求的 `PriceData` 保留本次模型价/倍率、分组倍率、计费汇率和其他倍率，结算使用该请求数据，而不是单纯重新读取所有全局配置。
 
-### 5.2 钱包资金来源
+### 5.2 钱包与订阅资金来源
 
-`BillingSession` 只使用钱包余额作为资金来源，统一处理预扣、差额结算和失败退款。异步任务的退款与补扣也只调整钱包余额；API Key 独立额度仍作为额外限制同步调整，见 `service/billing_session.go` 和 `service/task_billing.go`。
+`BillingSession` 支持钱包和订阅资金来源，并按用户偏好执行 `subscription_only`、`wallet_only`、`wallet_first`、`subscription_first` 及允许的回退。预扣成功后会同步 `FinalPreConsumedQuota`，见 `service/billing_session.go:331-448`。
+
+订阅额度同样以原始 quota 记账；它不是免扣费机制。异步任务会要求足额预扣，不依赖信任额度绕过，相关路径见 `service/billing_session.go:295-328`。
 
 ### 5.3 异步任务快照
 
@@ -306,9 +308,10 @@ O = ratio1 × ratio2 × ...
 
 ## 7. 钱包与消费日志展示
 
-钱包余额、已用额度和兑换结果统一使用原始 quota 的展示函数，见：
+钱包余额、已用额度、订阅额度和兑换结果统一使用原始 quota 的展示函数，见：
 
 - `web/default/src/features/wallet/components/wallet-stats-card.tsx:58-65`
+- `web/default/src/features/wallet/components/subscription-plans-card.tsx:489-543`
 - `web/default/src/lib/format.ts:68-116`
 
 消费日志的总扣费列也按 `q / Q × USDExchangeRate` 显示，且使用更高小数精度，见 `web/default/src/lib/format.ts:204-214`、`web/default/src/features/usage-logs/components/common-logs-stats.tsx:92`。
@@ -414,7 +417,7 @@ TopUp.Money  = product.price
 
 见 `model/topup.go:362-433`。这避免了对 Creem 再乘一次 `QuotaPerUnit`；维护新支付通道时必须明确其 `Amount` 语义。
 
-## 9. 兑换码和管理员调额
+## 9. 兑换码、管理员调额和订阅
 
 ### 9.1 兑换码
 
@@ -425,6 +428,15 @@ TopUp.Money  = product.price
 ### 9.2 管理员调额
 
 后端的增加、减少和覆盖操作都接收原始 quota，见 `controller/user.go:1111-1146`。默认前端使用 `parseQuotaFromDollars` 做显示金额到原始 quota 的换算，见 `web/default/src/features/users/components/user-quota-dialog.tsx:48-85`。
+
+### 9.3 订阅
+
+- 余额购买套餐扣除 `ceil(plan.PriceAmount × Q)` 原始 quota，见 `model/subscription.go:719-819`。
+- 默认前端保存套餐时固定 `currency: USD`，套餐总额度则按当前显示模式转成原始 quota，见 `web/default/src/features/subscriptions/lib/plan-form.ts:95-119`。
+- 外部支付完成后创建 `UserSubscription`，不会给钱包增加可消费余额；用于订单历史的 `TopUp.Amount=0`，见 `model/subscription.go:484-668`。
+- 管理员绑定订阅同样不移动钱包余额，见 `model/subscription.go:697-716`。
+
+`BillingUSDToCNYRate` 不参与套餐售价、购买扣款或订阅额度面值。若站点把钱包账户单位解释为人民币，`PriceAmount` 和外部订阅支付产品仍需单独按这一业务语义配置并验收。
 
 ## 10. 已修复边界、已知风险与未验证项
 
@@ -482,7 +494,7 @@ quota 按 int32 安全策略执行饱和转换，并在发生钳制时写入管�
 6. 分别验证一个固定按次模型、一个阶梯模型、缓存、图片、音频、工具调用和异步任务。
 7. 验证普通请求、跨组重试和长任务执行期间修改配置时的快照行为；10.2 至 10.5 已有回归测试，10.6 所列实时配置读取仍应避免在请求处理中途变更。
 8. 对每个启用的支付通道做小额受控真实支付，核对实付币种、实付金额、订单金额、到账 quota 和最终钱包显示。
-9. 对兑换码和管理员调额分别验收，确认它们不受 `BillingUSDToCNYRate` 影响。
+9. 对兑换码、管理员调额、余额购买订阅和外部订阅分别验收，确认它们不受 `BillingUSDToCNYRate` 影响。
 10. 检查消费日志中的有效分组倍率、计费汇率、模型价、预扣与结算差额；确认没有 quota 饱和告警。
 
 只有上述运行态与支付验收完成后，才能确认“充值 1 人民币得到 1 人民币额度，并按官方人民币价格的 5% 销售 GPT”完整成功。

@@ -79,6 +79,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     redemption: true,
     user: true,
     setting: true,
+    subscription: true,
   },
 }
 
@@ -204,7 +205,6 @@ export function parseSidebarModulesAdmin(
       Object.entries(raw as Record<string, unknown>).forEach(
         ([moduleKey, moduleValue]) => {
           if (moduleKey === 'enabled') return
-          if (sectionKey === 'admin' && moduleKey === 'subscription') return
           sectionConfig[moduleKey] = toBoolean(
             moduleValue,
             defaultSection[moduleKey] ?? true
@@ -238,13 +238,5 @@ export function parseSidebarModulesAdmin(
 export function serializeSidebarModulesAdmin(
   config: SidebarModulesAdminConfig
 ): string {
-  const normalized = Object.fromEntries(
-    Object.entries(config).map(([sectionKey, sectionConfig]) => {
-      if (sectionKey !== 'admin') return [sectionKey, sectionConfig]
-      const admin = { ...sectionConfig }
-      delete admin.subscription
-      return [sectionKey, admin]
-    })
-  )
-  return JSON.stringify(normalized)
+  return JSON.stringify(config)
 }

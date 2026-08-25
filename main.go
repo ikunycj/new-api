@@ -122,6 +122,9 @@ func main() {
 	service.StartCodexCredentialAutoRefreshTask()
 	service.StartChannelProbeRefreshSubscriber()
 
+	// Subscription quota reset task (daily/weekly/monthly/custom)
+	service.StartSubscriptionQuotaResetTask()
+
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.
 	service.StartSystemInstanceReporter()

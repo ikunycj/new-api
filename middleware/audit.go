@@ -86,6 +86,11 @@ var auditRouteActions = map[string]string{
 	"POST /api/deployments/":      "deployment.create",
 	"PUT /api/deployments/:id":    "deployment.update",
 	"DELETE /api/deployments/:id": "deployment.delete",
+
+	// 订阅（管理员）
+	"POST /api/subscription/admin/plans":    "subscription.plan_create",
+	"PUT /api/subscription/admin/plans/:id": "subscription.plan_update",
+	"POST /api/subscription/admin/bind":     "subscription.bind",
 }
 
 // beginAdminAudit 在管理/root 写操作进入 handler 前包装 ResponseWriter，
