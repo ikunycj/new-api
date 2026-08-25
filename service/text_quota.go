@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -58,6 +59,9 @@ type textQuotaSummary struct {
 	AudioInputPrice          float64
 	ImageGenerationCallPrice float64
 	ToolCallSurchargeQuota   decimal.Decimal
+	ProviderBaseCostUSD      float64
+	ProviderCostAvailable    bool
+	ProviderCostBasis        string
 }
 
 func cacheWriteTokensTotal(summary textQuotaSummary) int {
@@ -176,6 +180,52 @@ func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaS
 	)
 	noteQuotaClamp(relayInfo, clamp)
 	return total
+}
+
+func textSurchargeUSD(summary textQuotaSummary) decimal.Decimal {
+	surcharge := decimal.Zero
+	surcharge = surcharge.Add(decimal.NewFromFloat(summary.WebSearchPrice).
+		Mul(decimal.NewFromInt(int64(summary.WebSearchCallCount))).
+		Div(decimal.NewFromInt(1000)))
+	surcharge = surcharge.Add(decimal.NewFromFloat(summary.ClaudeWebSearchPrice).
+		Mul(decimal.NewFromInt(int64(summary.ClaudeWebSearchCallCount))).
+		Div(decimal.NewFromInt(1000)))
+	surcharge = surcharge.Add(decimal.NewFromFloat(summary.FileSearchPrice).
+		Mul(decimal.NewFromInt(int64(summary.FileSearchCallCount))).
+		Div(decimal.NewFromInt(1000)))
+	surcharge = surcharge.Add(decimal.NewFromFloat(summary.AudioInputPrice).
+		Mul(decimal.NewFromInt(int64(summary.AudioTokens))).
+		Div(decimal.NewFromInt(1_000_000)))
+	surcharge = surcharge.Add(decimal.NewFromFloat(summary.ImageGenerationCallPrice))
+	return surcharge
+}
+
+func applyTieredProviderCost(relayInfo *relaycommon.RelayInfo, usage *dto.Usage, summary *textQuotaSummary) {
+	if relayInfo == nil || usage == nil || summary == nil || relayInfo.TieredBillingSnapshot == nil {
+		return
+	}
+	snap := relayInfo.TieredBillingSnapshot
+	requestInput := billingexpr.RequestInput{}
+	if relayInfo.BillingRequestInput != nil {
+		requestInput = *relayInfo.BillingRequestInput
+	}
+	result, err := billingexpr.ComputeTieredQuotaWithRequest(
+		snap,
+		BuildTieredTokenParams(usage, summary.IsClaudeUsageSemantic, billingexpr.UsedVars(snap.ExprString)),
+		requestInput,
+	)
+	if err != nil {
+		summary.ProviderCostAvailable = false
+		return
+	}
+	rate := snap.EffectiveBillingUSDToCNYRate()
+	baseCost := decimal.NewFromFloat(result.ActualQuotaBeforeGroup).
+		Div(decimal.NewFromFloat(common.QuotaPerUnit)).
+		Div(decimal.NewFromFloat(rate)).
+		Add(textSurchargeUSD(*summary))
+	summary.ProviderBaseCostUSD, _ = baseCost.Float64()
+	summary.ProviderCostAvailable = summary.ProviderBaseCostUSD >= 0 && !math.IsNaN(summary.ProviderBaseCostUSD) && !math.IsInf(summary.ProviderBaseCostUSD, 0)
+	summary.ProviderCostBasis = "actual_usage_tiered_expression_x_channel_cost_factor"
 }
 
 // calculateTextQuotaSummary expects a usage already remapped by
@@ -336,6 +386,14 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quota, clamp := common.QuotaFromDecimalChecked(quotaCalculateDecimal)
 		summary.Quota = quota
 		noteQuotaClamp(relayInfo, clamp)
+		providerCost := promptQuota.Add(completionQuota).
+			Mul(dModelRatio).
+			Div(decimal.NewFromFloat(common.QuotaPerUnit)).
+			Add(textSurchargeUSD(summary))
+		providerCost = relayInfo.PriceData.ApplyOtherRatiosToDecimal(providerCost)
+		summary.ProviderBaseCostUSD, _ = providerCost.Float64()
+		summary.ProviderCostAvailable = true
+		summary.ProviderCostBasis = "actual_usage_model_pricing_x_channel_cost_factor"
 	} else {
 		quotaCalculateDecimal := dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
@@ -344,10 +402,17 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quota, clamp := common.QuotaFromDecimalChecked(quotaCalculateDecimal)
 		summary.Quota = quota
 		noteQuotaClamp(relayInfo, clamp)
+		providerCost := dModelPrice.Add(textSurchargeUSD(summary))
+		providerCost = relayInfo.PriceData.ApplyOtherRatiosToDecimal(providerCost)
+		summary.ProviderBaseCostUSD, _ = providerCost.Float64()
+		summary.ProviderCostAvailable = true
+		summary.ProviderCostBasis = "fixed_request_price_x_channel_cost_factor"
 	}
 
 	if summary.TotalTokens == 0 {
 		summary.Quota = 0
+		summary.ProviderCostAvailable = false
+		summary.ProviderCostBasis = ""
 	} else if !ratio.IsZero() && summary.Quota == 0 {
 		summary.Quota = 1
 	}
@@ -390,6 +455,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			tieredBillingApplied = true
 			tieredResult = tieredRes
 			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
+			applyTieredProviderCost(relayInfo, billingUsage, &summary)
 		}
 	}
 
@@ -511,8 +577,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		summary.PromptTokens,
 		summary.CompletionTokens,
 		summary.Quota,
-		summary.ModelPrice,
-		summary.GroupRatio,
+		summary.ProviderBaseCostUSD,
+		summary.ProviderCostAvailable,
+		summary.ProviderCostBasis,
 		summary.BillingUSDToCNYRate,
 	)
 

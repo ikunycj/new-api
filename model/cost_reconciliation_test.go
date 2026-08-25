@@ -67,3 +67,9 @@ func TestRebuildCostReconciliationRollupIsIdempotent(t *testing.T) {
 	require.Equal(t, int64(2), total)
 	require.Len(t, rows, 2)
 }
+
+func TestParseCostSnapshotReadsFailedPartialUsageCost(t *testing.T) {
+	snapshot := parseCostSnapshot(`{"cost_reconciliation":{"status":"estimated","failed_partial_usage_cost_usd_micros":321}}`)
+
+	require.Equal(t, int64(321), snapshot.FailedPartialCostUSDMicros)
+}

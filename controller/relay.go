@@ -318,7 +318,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}()
 		attemptDuration := time.Since(attemptStartedAt)
 		if newAPIError != nil && relayInfo.ClaudeConvertInfo != nil {
-			service.RecordFailedAttemptUsage(c, relayInfo.UsingGroup, channel.Id, relayInfo.ClaudeConvertInfo.Usage)
+			service.RecordFailedAttemptUsage(c, relayInfo, relayInfo.UsingGroup, channel.Id, relayInfo.ClaudeConvertInfo.Usage)
 		}
 
 		contextErr := c.Request.Context().Err()

@@ -87,12 +87,16 @@ func parseCostSnapshot(other string) costSnapshot {
 		}
 		return int64(value)
 	}
+	failedPartialCost := read("failed_partial_cost_usd_micros")
+	if failedPartialCost == 0 {
+		failedPartialCost = read("failed_partial_usage_cost_usd_micros")
+	}
 	return costSnapshot{
 		UserChargeUSDMicros:        read("user_charge_usd_micros"),
 		EstimatedCostUSDMicros:     read("estimated_cost_usd_micros"),
 		SuccessfulCostUSDMicros:    read("successful_cost_usd_micros"),
 		RetryCostUSDMicros:         read("retry_cost_usd_micros"),
-		FailedPartialCostUSDMicros: read("failed_partial_cost_usd_micros"),
+		FailedPartialCostUSDMicros: failedPartialCost,
 		Status:                     fmt.Sprint(raw["status"]),
 	}
 }

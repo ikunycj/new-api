@@ -233,11 +233,13 @@ export interface LogOtherData {
     version?: number
     status?: 'estimated' | 'unavailable' | string
     user_charge_usd_micros?: number
+    provider_base_cost_usd_micros?: number
     estimated_cost_usd_micros?: number
     successful_cost_usd_micros?: number
     retry_cost_usd_micros?: number
     failed_partial_usage_cost_usd_micros?: number
     channel_cost_factor_source?: string
+    cost_basis?: string
     retry_cost_basis?: string
     failed_partial_usage_basis?: string
   }
