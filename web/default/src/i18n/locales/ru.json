@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "Эти ограничения применяются к каждому нагрузочному тесту.",
     "Planned requests for this run": "Запланированные запросы для запуска",
     "Allowed range: 1-10000 RPS": "Допустимый диапазон: 1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "Допустимый диапазон: 1-10000 параллельных запросов"
+    "Allowed range: 1-10000 concurrent requests": "Допустимый диапазон: 1-10000 параллельных запросов",
+    "Local load-test agent": "Локальный агент нагрузочного теста",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "Запускайте высокую нагрузку вне браузера и сохраняйте результаты в этой учётной записи.",
+    "Pair agent": "Подключить агент",
+    "Load generator": "Генератор нагрузки",
+    "No online agents": "Нет агентов в сети",
+    "Start with agent": "Запустить через агент",
+    "Offline": "Не в сети",
+    "Remove agent": "Удалить агент",
+    "Agent load test queued": "Нагрузочный тест поставлен в очередь",
+    "Pair local agent": "Подключить локальный агент",
+    "Run this command on the computer that will generate load.": "Выполните эту команду на компьютере, который будет создавать нагрузку.",
+    "Pairing code expires in 5 minutes.": "Код подключения действует 5 минут.",
+    "Copy command": "Копировать команду",
+    "Start in browser": "Запустить в браузере",
+    "queued": "В очереди",
+    "dispatched": "Отправлено",
+    "cancel_requested": "Останавливается",
+    "completed": "Завершено",
+    "cancelled": "Отменено"
   }
 }

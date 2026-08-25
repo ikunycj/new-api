@@ -203,6 +203,80 @@ export type LoadTestLimits = {
   max_concurrency: number
 }
 
+export type LoadTestAgent = {
+  id: string
+  name: string
+  platform: string
+  version: string
+  last_seen_at: number
+  created_at: number
+}
+
+export type LoadTestAgentList = {
+  agents: LoadTestAgent[]
+  online_before: number
+}
+
+export type LoadTestAgentState = LoadTestAgentList & {
+  runs: LoadTestAgentRun[]
+}
+
+export type LoadTestAgentRunStatus =
+  | 'queued'
+  | 'dispatched'
+  | 'running'
+  | 'cancel_requested'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type LoadTestAgentRun = {
+  id: string
+  agent_id: string
+  token_id: number
+  key_name: string
+  package_name: string
+  model: string
+  endpoint: LoadTestEndpoint
+  prompt: string
+  prompt_cache: boolean
+  duration_seconds: number
+  requests_per_second: number
+  concurrency: number
+  status: LoadTestAgentRunStatus
+  sent: number
+  completed: number
+  successes: number
+  failures: number
+  dropped: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  current_rps: number
+  p50_ms: number
+  p95_ms: number
+  p99_ms: number
+  error_counts: Record<string, number>
+  error_message: string
+  created_at: number
+  started_at: number
+  finished_at: number
+  updated_at: number
+}
+
+export type CreateLoadTestAgentRun = {
+  agent_id: string
+  token_id: number
+  model: string
+  endpoint: LoadTestEndpoint
+  prompt: string
+  prompt_cache: boolean
+  duration_seconds: number
+  requests_per_second: number
+  concurrency: number
+}
+
 export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
   min_duration_seconds: LOAD_TEST_MIN_DURATION_SECONDS,
   max_duration_seconds: LOAD_TEST_MAX_DURATION_SECONDS,
@@ -220,6 +294,108 @@ export async function getLoadTestLimits(): Promise<LoadTestLimits> {
   }>('/api/loadtest/config')
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Failed to load load-test limits')
+  }
+  return response.data.data
+}
+
+export async function createLoadTestAgentPairing(): Promise<{
+  agent_id: string
+  code: string
+  expires_at: number
+}> {
+  const response = await api.post<{
+    success: boolean
+    message?: string
+    data?: { agent_id: string; code: string; expires_at: number }
+  }>('/api/loadtest/agents/pairing', undefined, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to create pairing code')
+  }
+  return response.data.data
+}
+
+export async function getLoadTestAgents(): Promise<LoadTestAgentList> {
+  const response = await api.get<{
+    success: boolean
+    message?: string
+    data?: LoadTestAgentList
+  }>('/api/loadtest/agents', {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to load agents')
+  }
+  return response.data.data
+}
+
+export async function deleteLoadTestAgent(agentId: string): Promise<void> {
+  const response = await api.delete<{ success: boolean; message?: string }>(
+    `/api/loadtest/agents/${encodeURIComponent(agentId)}`,
+    { skipBusinessError: true, skipErrorHandler: true }
+  )
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Failed to remove agent')
+  }
+}
+
+export async function createLoadTestAgentRun(
+  request: CreateLoadTestAgentRun
+): Promise<LoadTestAgentRun> {
+  const response = await api.post<{
+    success: boolean
+    message?: string
+    data?: LoadTestAgentRun
+  }>('/api/loadtest/runs', request, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to create agent run')
+  }
+  return response.data.data
+}
+
+export async function getLoadTestAgentRuns(): Promise<LoadTestAgentRun[]> {
+  const response = await api.get<{
+    success: boolean
+    message?: string
+    data?: LoadTestAgentRun[]
+  }>('/api/loadtest/runs?limit=30', {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Failed to load agent runs')
+  }
+  return response.data.data ?? []
+}
+
+export async function cancelLoadTestAgentRun(runId: string): Promise<void> {
+  const response = await api.post<{ success: boolean; message?: string }>(
+    `/api/loadtest/runs/${encodeURIComponent(runId)}/cancel`,
+    undefined,
+    { skipBusinessError: true, skipErrorHandler: true }
+  )
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Failed to cancel agent run')
+  }
+}
+
+export async function getLoadTestAgentState(): Promise<LoadTestAgentState> {
+  const response = await api.get<{
+    success: boolean
+    message?: string
+    data?: LoadTestAgentState
+  }>('/api/loadtest/state', {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to load agent state')
   }
   return response.data.data
 }

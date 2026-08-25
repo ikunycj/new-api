@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "これらの制限はすべての負荷テストに適用されます。",
     "Planned requests for this run": "今回の実行の予定リクエスト数",
     "Allowed range: 1-10000 RPS": "許可範囲: 1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "許可範囲: 1-10000 件の同時リクエスト"
+    "Allowed range: 1-10000 concurrent requests": "許可範囲: 1-10000 件の同時リクエスト",
+    "Local load-test agent": "ローカル負荷テスト Agent",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "ブラウザ外で大規模テストを実行し、結果をこのアカウントに保存します。",
+    "Pair agent": "Agent をペアリング",
+    "Load generator": "負荷生成マシン",
+    "No online agents": "オンラインの Agent がありません",
+    "Start with agent": "Agent で開始",
+    "Offline": "オフライン",
+    "Remove agent": "Agent を削除",
+    "Agent load test queued": "Agent 負荷テストをキューに追加しました",
+    "Pair local agent": "ローカル Agent をペアリング",
+    "Run this command on the computer that will generate load.": "負荷を生成するコンピューターでこのコマンドを実行してください。",
+    "Pairing code expires in 5 minutes.": "ペアリングコードは 5 分で期限切れになります。",
+    "Copy command": "コマンドをコピー",
+    "Start in browser": "ブラウザで開始",
+    "queued": "待機中",
+    "dispatched": "送信済み",
+    "cancel_requested": "停止中",
+    "completed": "完了",
+    "cancelled": "キャンセル済み"
   }
 }

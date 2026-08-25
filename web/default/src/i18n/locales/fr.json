@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "Ces limites s’appliquent à chaque test de charge.",
     "Planned requests for this run": "Requêtes prévues pour cette exécution",
     "Allowed range: 1-10000 RPS": "Plage autorisée : 1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "Plage autorisée : 1-10000 requêtes simultanées"
+    "Allowed range: 1-10000 concurrent requests": "Plage autorisée : 1-10000 requêtes simultanées",
+    "Local load-test agent": "Agent de test de charge local",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "Exécutez les tests intensifs hors du navigateur et associez les résultats à ce compte.",
+    "Pair agent": "Associer l’agent",
+    "Load generator": "Générateur de charge",
+    "No online agents": "Aucun agent en ligne",
+    "Start with agent": "Démarrer avec l’agent",
+    "Offline": "Hors ligne",
+    "Remove agent": "Supprimer l’agent",
+    "Agent load test queued": "Test de charge mis en attente",
+    "Pair local agent": "Associer un agent local",
+    "Run this command on the computer that will generate load.": "Exécutez cette commande sur l’ordinateur qui générera la charge.",
+    "Pairing code expires in 5 minutes.": "Le code expire dans 5 minutes.",
+    "Copy command": "Copier la commande",
+    "Start in browser": "Démarrer dans le navigateur",
+    "queued": "En attente",
+    "dispatched": "Envoyé",
+    "cancel_requested": "Arrêt en cours",
+    "completed": "Terminé",
+    "cancelled": "Annulé"
   }
 }

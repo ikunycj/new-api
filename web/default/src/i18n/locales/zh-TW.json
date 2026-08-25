@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "These limits apply to every load-test demo run.",
     "Planned requests for this run": "Planned requests for this run",
     "Allowed range: 1-10000 RPS": "Allowed range: 1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "Allowed range: 1-10000 concurrent requests"
+    "Allowed range: 1-10000 concurrent requests": "Allowed range: 1-10000 concurrent requests",
+    "Local load-test agent": "Local load-test agent",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "Run high-volume tests outside the browser and keep results linked to this account.",
+    "Pair agent": "Pair agent",
+    "Load generator": "Load generator",
+    "No online agents": "No online agents",
+    "Start with agent": "Start with agent",
+    "Offline": "Offline",
+    "Remove agent": "Remove agent",
+    "Agent load test queued": "Agent load test queued",
+    "Pair local agent": "Pair local agent",
+    "Run this command on the computer that will generate load.": "Run this command on the computer that will generate load.",
+    "Pairing code expires in 5 minutes.": "Pairing code expires in 5 minutes.",
+    "Copy command": "Copy command",
+    "Start in browser": "Start in browser",
+    "queued": "Queued",
+    "dispatched": "Dispatched",
+    "cancel_requested": "Stopping",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
   }
 }

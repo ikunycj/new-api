@@ -31,6 +31,25 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/admin/analytics/package-comparison", middleware.AdminAuth(), controller.GetPackageComparison)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/loadtest/config", middleware.UserAuth(), controller.GetLoadTestConfig)
+		loadTestRoute := apiRouter.Group("/loadtest")
+		loadTestRoute.Use(middleware.UserAuth())
+		{
+			loadTestRoute.GET("/state", controller.GetLoadTestState)
+			loadTestRoute.POST("/agents/pairing", controller.CreateLoadTestAgentPairing)
+			loadTestRoute.GET("/agents", controller.ListLoadTestAgents)
+			loadTestRoute.DELETE("/agents/:id", controller.DeleteLoadTestAgent)
+			loadTestRoute.POST("/runs", controller.CreateLoadTestRun)
+			loadTestRoute.GET("/runs", controller.ListLoadTestRuns)
+			loadTestRoute.GET("/runs/:id", controller.GetLoadTestRun)
+			loadTestRoute.POST("/runs/:id/cancel", controller.CancelLoadTestRun)
+		}
+		loadTestAgentRoute := apiRouter.Group("/loadtest-agent")
+		{
+			loadTestAgentRoute.POST("/pair", controller.PairLoadTestAgent)
+			loadTestAgentRoute.POST("/poll", controller.PollLoadTestAgent)
+			loadTestAgentRoute.POST("/runs/:id/progress", controller.UpdateLoadTestRunProgress)
+			loadTestAgentRoute.POST("/runs/:id/complete", controller.FinishLoadTestRun)
+		}
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)

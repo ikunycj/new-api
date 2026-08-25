@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "这些限制适用于所有压测 Demo。",
     "Planned requests for this run": "本次运行计划请求数",
     "Allowed range: 1-10000 RPS": "允许范围：1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "允许范围：1-10000 个并发请求"
+    "Allowed range: 1-10000 concurrent requests": "允许范围：1-10000 个并发请求",
+    "Local load-test agent": "本地压测 Agent",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "在浏览器外执行大规模压测，并将结果保存到当前账户。",
+    "Pair agent": "配对 Agent",
+    "Load generator": "压测机",
+    "No online agents": "没有在线 Agent",
+    "Start with agent": "使用 Agent 开始",
+    "Offline": "离线",
+    "Remove agent": "移除 Agent",
+    "Agent load test queued": "Agent 压测任务已排队",
+    "Pair local agent": "配对本地 Agent",
+    "Run this command on the computer that will generate load.": "请在用于发起压测的电脑上运行此命令。",
+    "Pairing code expires in 5 minutes.": "配对码将在 5 分钟后过期。",
+    "Copy command": "复制命令",
+    "Start in browser": "在浏览器中开始",
+    "queued": "排队中",
+    "dispatched": "已下发",
+    "cancel_requested": "正在停止",
+    "completed": "已完成",
+    "cancelled": "已取消"
   }
 }

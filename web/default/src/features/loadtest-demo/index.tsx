@@ -92,6 +92,7 @@ import {
   savePersistedLoadTestRun,
   type RunStats,
 } from './storage'
+import { AgentPanel } from './agent-panel'
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
@@ -985,7 +986,7 @@ export function LoadTestDemo() {
               <div className='flex flex-wrap items-center gap-2'>
                 <Button disabled={!canRun} onClick={() => void run()}>
                   <Play className='size-4' />
-                  {t('Start test')}
+                  {t('Start in browser')}
                 </Button>
                 <Button
                   disabled={status !== 'running'}
@@ -1019,6 +1020,24 @@ export function LoadTestDemo() {
               )}
             </CardContent>
           </Card>
+
+          <AgentPanel
+            disabled={!canRun}
+            request={
+              selectedKeyMetadata && selectedModelMetadata
+                ? {
+                    token_id: selectedKeyMetadata.id,
+                    model: selectedModel,
+                    endpoint: selectedModelMetadata.endpoint,
+                    prompt,
+                    prompt_cache: promptCache,
+                    duration_seconds: durationValue,
+                    requests_per_second: rpsValue,
+                    concurrency: Number(concurrency),
+                  }
+                : null
+            }
+          />
 
           <Card>
             <CardHeader className='flex flex-row items-center justify-between gap-3'>

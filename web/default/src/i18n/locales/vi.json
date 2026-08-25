@@ -6290,6 +6290,25 @@
     "These limits apply to every load-test demo run.": "Các giới hạn này áp dụng cho mọi lần chạy kiểm thử tải.",
     "Planned requests for this run": "Số yêu cầu dự kiến cho lần chạy này",
     "Allowed range: 1-10000 RPS": "Phạm vi cho phép: 1-10000 RPS",
-    "Allowed range: 1-10000 concurrent requests": "Phạm vi cho phép: 1-10000 yêu cầu đồng thời"
+    "Allowed range: 1-10000 concurrent requests": "Phạm vi cho phép: 1-10000 yêu cầu đồng thời",
+    "Local load-test agent": "Agent kiểm thử tải cục bộ",
+    "Run high-volume tests outside the browser and keep results linked to this account.": "Chạy kiểm thử tải lớn ngoài trình duyệt và lưu kết quả vào tài khoản này.",
+    "Pair agent": "Ghép nối Agent",
+    "Load generator": "Máy tạo tải",
+    "No online agents": "Không có Agent trực tuyến",
+    "Start with agent": "Bắt đầu bằng Agent",
+    "Offline": "Ngoại tuyến",
+    "Remove agent": "Xóa Agent",
+    "Agent load test queued": "Đã xếp hàng kiểm thử tải Agent",
+    "Pair local agent": "Ghép nối Agent cục bộ",
+    "Run this command on the computer that will generate load.": "Chạy lệnh này trên máy tính sẽ tạo tải.",
+    "Pairing code expires in 5 minutes.": "Mã ghép nối hết hạn sau 5 phút.",
+    "Copy command": "Sao chép lệnh",
+    "Start in browser": "Bắt đầu trong trình duyệt",
+    "queued": "Đang chờ",
+    "dispatched": "Đã gửi",
+    "cancel_requested": "Đang dừng",
+    "completed": "Đã hoàn tất",
+    "cancelled": "Đã hủy"
   }
 }
