@@ -12,18 +12,18 @@ import (
 func TestReadK6SummaryBuildsTerminalResult(t *testing.T) {
 	summary := `{
   "metrics": {
-    "http_reqs": {"values": {"count": 100}},
-    "http_req_failed": {"values": {"rate": 0.03, "passes": 3, "fails": 97}},
-    "dropped_iterations": {"values": {"count": 2}},
-    "http_req_duration": {"values": {"med": 120, "p(95)": 400, "p(99)": 800}},
-    "alltoken_status_429": {"values": {"count": 2}},
-    "alltoken_status_500": {"values": {"count": 1}},
-    "alltoken_errors{code:alltoken.upstream_exhausted}": {"values": {"count": 2}},
-    "alltoken_errors{code:provider_error}": {"values": {"count": 1}},
-    "alltoken_input_tokens": {"values": {"count": 1000}},
-    "alltoken_output_tokens": {"values": {"count": 200}},
-    "alltoken_cache_read_tokens": {"values": {"count": 600}},
-    "alltoken_cache_write_tokens": {"values": {"count": 100}}
+	"http_reqs": {"count": 100, "rate": 20},
+	"http_req_failed": {"value": 0.03, "passes": 3, "fails": 97},
+	"dropped_iterations": {"count": 2, "rate": 0.4},
+	"http_req_duration": {"med": 120, "p(95)": 400, "p(99)": 800},
+	"alltoken_status_429": {"count": 2},
+	"alltoken_status_500": {"count": 1},
+	"alltoken_errors{code:alltoken.upstream_exhausted}": {"count": 2},
+	"alltoken_errors{code:provider_error}": {"count": 1},
+	"alltoken_input_tokens": {"count": 1000},
+	"alltoken_output_tokens": {"count": 200},
+	"alltoken_cache_read_tokens": {"count": 600},
+	"alltoken_cache_write_tokens": {"count": 100}
   }
 }`
 	path := filepath.Join(t.TempDir(), "summary.json")
@@ -41,6 +41,33 @@ func TestReadK6SummaryBuildsTerminalResult(t *testing.T) {
 	}, result.ErrorCounts)
 	assert.Equal(t, float64(400), result.P95MS)
 	assert.Equal(t, int64(600), result.CacheReadTokens)
+}
+
+func TestReadK6SummarySupportsLegacyValuesObject(t *testing.T) {
+	summary := `{
+  "metrics": {
+    "http_reqs": {"values": {"count": 10}},
+    "http_req_failed": {"values": {"rate": 0.2, "passes": 2, "fails": 8}},
+    "http_req_duration": {"values": {"med": 50, "p(95)": 90, "p(99)": 100}}
+  }
+}`
+	path := filepath.Join(t.TempDir(), "summary.json")
+	require.NoError(t, os.WriteFile(path, []byte(summary), 0o600))
+
+	result, err := readK6Summary(path, 5)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), result.Completed)
+	assert.Equal(t, int64(8), result.Successes)
+	assert.Equal(t, int64(2), result.Failures)
+	assert.Equal(t, float64(90), result.P95MS)
+}
+
+func TestReadK6SummaryRejectsRunWithoutRequests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "summary.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{"metrics": {}}`), 0o600))
+
+	_, err := readK6Summary(path, 5)
+	require.EqualError(t, err, "k6 completed without issuing any HTTP requests")
 }
 
 func TestValidateServerURLRequiresHTTPSOutsideLoopback(t *testing.T) {

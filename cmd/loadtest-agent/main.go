@@ -116,10 +116,61 @@ type finishPayload struct {
 	ErrorMessage     string           `json:"error_message"`
 }
 
+type k6Metric struct {
+	Values map[string]float64 `json:"values"`
+	Count  float64            `json:"count"`
+	Rate   float64            `json:"rate"`
+	Passes float64            `json:"passes"`
+	Fails  float64            `json:"fails"`
+	Value  float64            `json:"value"`
+	Min    float64            `json:"min"`
+	Med    float64            `json:"med"`
+	Max    float64            `json:"max"`
+	Avg    float64            `json:"avg"`
+	P90    float64            `json:"p(90)"`
+	P95    float64            `json:"p(95)"`
+	P99    float64            `json:"p(99)"`
+}
+
+func (metric k6Metric) get(name string) float64 {
+	if metric.Values != nil {
+		return metric.Values[name]
+	}
+	switch name {
+	case "count":
+		return metric.Count
+	case "rate":
+		if metric.Rate != 0 {
+			return metric.Rate
+		}
+		return metric.Value
+	case "passes":
+		return metric.Passes
+	case "fails":
+		return metric.Fails
+	case "value":
+		return metric.Value
+	case "min":
+		return metric.Min
+	case "med":
+		return metric.Med
+	case "max":
+		return metric.Max
+	case "avg":
+		return metric.Avg
+	case "p(90)":
+		return metric.P90
+	case "p(95)":
+		return metric.P95
+	case "p(99)":
+		return metric.P99
+	default:
+		return 0
+	}
+}
+
 type k6Summary struct {
-	Metrics map[string]struct {
-		Values map[string]float64 `json:"values"`
-	} `json:"metrics"`
+	Metrics map[string]k6Metric `json:"metrics"`
 }
 
 func main() {
@@ -398,9 +449,12 @@ func readK6Summary(path string, configuredRPS int) (finishPayload, error) {
 	if err := common.Unmarshal(data, &summary); err != nil {
 		return finishPayload{}, err
 	}
-	metric := func(name, key string) float64 { return summary.Metrics[name].Values[key] }
+	metric := func(name, key string) float64 { return summary.Metrics[name].get(key) }
 	count := func(name string) int64 { return int64(metric(name, "count")) }
 	completed := count("http_reqs")
+	if completed == 0 {
+		return finishPayload{}, errors.New("k6 completed without issuing any HTTP requests")
+	}
 	failed := int64(metric("http_req_failed", "passes"))
 	if failed == 0 {
 		failed = int64(metric("http_req_failed", "rate") * float64(completed))
@@ -424,7 +478,7 @@ func readK6Summary(path string, configuredRPS int) (finishPayload, error) {
 		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, "}") {
 			code := strings.TrimSuffix(strings.TrimPrefix(name, prefix), "}")
 			if code != "" {
-				errorCounts[code] += int64(values.Values["count"])
+				errorCounts[code] += int64(values.get("count"))
 			}
 		}
 	}
