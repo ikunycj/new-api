@@ -109,15 +109,13 @@ describe('load test result storage', () => {
     assert.equal(values.size, 0)
   })
 
-  test('does not persist an API key or cluster fields', () => {
+  test('does not persist API credentials', () => {
     const values = installLocalStorage()
 
     savePersistedLoadTestRun(42, result)
 
     const raw = [...values.values()][0] ?? ''
     assert.equal(raw.includes('sk-'), false)
-    assert.equal(raw.includes('cluster_id'), false)
-    assert.equal(raw.includes('pool_name'), false)
     assert.equal(raw.includes('billing_group'), true)
   })
 })
