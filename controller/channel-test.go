@@ -92,10 +92,38 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
-	return testChannelWithTokenName(ctx, channel, testUserID, testModel, endpointType, isStream, modelTestTokenName)
+	return testChannelWithTokenName(ctx, channel, testUserID, testModel, endpointType, isStream, modelTestTokenName, "")
 }
 
-func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string) testResult {
+// ProbePricingGroupChannel tests the channel selected for a pricing-group
+// monitor with the channel's own upstream credentials.
+func ProbePricingGroupChannel(ctx context.Context, channel *model.Channel, monitor *model.ChannelMonitor) (int, int, error) {
+	if channel == nil || monitor == nil {
+		return 0, 0, errors.New("pricing group monitor has no channel")
+	}
+	testUserID, err := resolveChannelTestUserID(nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	startedAt := time.Now()
+	result := testChannelWithTokenName(
+		ctx,
+		channel,
+		testUserID,
+		monitor.TestModel,
+		"",
+		shouldUseStreamForAutomaticChannelTest(channel),
+		channelProbeTokenName,
+		monitor.PricingGroup,
+	)
+	latencyMs := int(time.Since(startedAt).Milliseconds())
+	if result.localErr != nil {
+		return 0, latencyMs, result.localErr
+	}
+	return http.StatusOK, latencyMs, nil
+}
+
+func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -183,6 +211,9 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
 	c.Set("group", group)
+	if pricingGroup != "" {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, pricingGroup)
+	}
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {

@@ -43,32 +43,3 @@ func TestNormalizeLegacyUserGroupsRepairsAccountGroupsOnly(t *testing.T) {
 	require.NoError(t, DB.First(&channel, 9803).Error)
 	assert.Equal(t, "premium", channel.Group)
 }
-
-func TestSubscriptionDoesNotChangeAccountGroup(t *testing.T) {
-	truncateTables(t)
-
-	require.NoError(t, DB.Create(&User{
-		Id:       9811,
-		Username: "subscription-group-user",
-		Group:    DefaultUserGroup,
-		AffCode:  "subscription-group-user",
-	}).Error)
-	plan := &SubscriptionPlan{
-		Id:            9812,
-		Title:         "Standard plan",
-		DurationUnit:  SubscriptionDurationMonth,
-		DurationValue: 1,
-	}
-	require.NoError(t, DB.Create(plan).Error)
-
-	// The helper accepts a DB handle directly; using it this way also keeps the
-	// single-connection in-memory SQLite test database from self-deadlocking
-	// while the helper reads the database clock.
-	subscription, err := CreateUserSubscriptionFromPlanTx(DB, 9811, plan, "test")
-	require.NoError(t, err)
-	require.NotNil(t, subscription)
-
-	var user User
-	require.NoError(t, DB.First(&user, 9811).Error)
-	assert.Equal(t, DefaultUserGroup, user.Group)
-}

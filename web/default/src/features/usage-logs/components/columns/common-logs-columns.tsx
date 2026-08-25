@@ -782,34 +782,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (!isDisplayableLogType(log.type)) return null
 
         const quota = row.getValue('quota') as number
-        const other = parseLogOther(log.other)
-        const isSubscription = other?.billing_source === 'subscription'
-
-        if (isSubscription) {
-          return (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={t('Subscription')}
-                      variant='success'
-                      size='sm'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <span>
-                    {t('Deducted by subscription')}: {formatLogQuota(quota)}
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
-        }
-
         const quotaStr = formatLogQuota(quota)
         const quotaDisplay = splitQuotaDisplay(quotaStr)
 

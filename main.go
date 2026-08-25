@@ -122,9 +122,6 @@ func main() {
 	service.StartCodexCredentialAutoRefreshTask()
 	service.StartChannelProbeRefreshSubscriber()
 
-	// Subscription quota reset task (daily/weekly/monthly/custom)
-	service.StartSubscriptionQuotaResetTask()
-
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.
 	service.StartSystemInstanceReporter()
@@ -147,7 +144,7 @@ func main() {
 	// switch are enforced inside the runner and each handler's Enabled().
 	controller.RegisterScheduledSystemTasks()
 	service.StartSystemTaskRunner()
-	service.StartChannelMonitorRunner()
+	service.StartChannelMonitorRunner(controller.ProbePricingGroupChannel)
 
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
 		common.BatchUpdateEnabled = true

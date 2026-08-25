@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ var retiredGroupOptionKeys = []string{
 	"GroupGroupRatio",
 	"group_ratio_setting.group_group_ratio",
 	"group_ratio_setting.group_special_usable_group",
+	"UserUsableGroups",
 }
 
 func removeRetiredGroupOptions() error {
@@ -120,7 +122,6 @@ func InitOptionMap() {
 	common.OptionMap["WaffoMerchantId"] = setting.WaffoMerchantId
 	common.OptionMap["WaffoNotifyUrl"] = setting.WaffoNotifyUrl
 	common.OptionMap["WaffoReturnUrl"] = setting.WaffoReturnUrl
-	common.OptionMap["WaffoSubscriptionReturnUrl"] = setting.WaffoSubscriptionReturnUrl
 	common.OptionMap["WaffoCurrency"] = setting.WaffoCurrency
 	common.OptionMap["WaffoUnitPrice"] = strconv.FormatFloat(setting.WaffoUnitPrice, 'f', -1, 64)
 	common.OptionMap["WaffoMinTopUp"] = strconv.Itoa(setting.WaffoMinTopUp)
@@ -157,7 +158,6 @@ func InitOptionMap() {
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
 	common.OptionMap["CreateCacheRatio"] = ratio_setting.CreateCacheRatio2JSONString()
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
-	common.OptionMap["UserUsableGroups"] = setting.UserUsableGroups2JSONString()
 	common.OptionMap["UserGroupPricingGroups"] = setting.UserGroupPricingGroups2JSONString()
 	common.OptionMap["CompletionRatio"] = ratio_setting.CompletionRatio2JSONString()
 	common.OptionMap["ImageRatio"] = ratio_setting.ImageRatio2JSONString()
@@ -218,17 +218,52 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == "GroupRatio" {
+		var ratios map[string]float64
+		if err := common.UnmarshalJsonStr(value, &ratios); err != nil {
+			return err
+		}
+		pricingGroups := make([]string, 0, len(ratios))
+		for name := range ratios {
+			pricingGroups = append(pricingGroups, name)
+		}
+		if err := DB.Transaction(func(tx *gorm.DB) error {
+			var option Option
+			err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(&option).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				option.Key = key
+				if err := tx.Create(&option).Error; err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+			option.Value = value
+			if err := tx.Save(&option).Error; err != nil {
+				return err
+			}
+			return DeleteChannelMonitorsOutsidePricingGroups(tx, pricingGroups)
+		}); err != nil {
+			return err
+		}
+		return updateOptionMap(key, value)
+	}
+
 	// Save to database first
 	option := Option{
 		Key: key,
 	}
 	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
+	if err := DB.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+		return err
+	}
 	option.Value = value
 	// Save is a combination function.
 	// If save value does not contain primary key, it will execute Create,
 	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
+	if err := DB.Save(&option).Error; err != nil {
+		return err
+	}
 	// Update OptionMap
 	return updateOptionMap(key, value)
 }
@@ -460,8 +495,6 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoNotifyUrl = value
 	case "WaffoReturnUrl":
 		setting.WaffoReturnUrl = value
-	case "WaffoSubscriptionReturnUrl":
-		setting.WaffoSubscriptionReturnUrl = value
 	case "WaffoCurrency":
 		setting.WaffoCurrency = value
 	case "WaffoUnitPrice":
@@ -538,8 +571,6 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":
 		err = ratio_setting.UpdateGroupRatioByJSONString(value)
-	case "UserUsableGroups":
-		err = setting.UpdateUserUsableGroupsByJSONString(value)
 	case "UserGroupPricingGroups":
 		err = setting.UpdateUserGroupPricingGroupsByJSONString(value)
 	case "CompletionRatio":

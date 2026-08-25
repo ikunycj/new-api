@@ -63,14 +63,25 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     redemption: true,
     user: true,
     setting: true,
-    subscription: true,
   },
+}
+
+const removeRetiredSidebarModules = (
+  config: SidebarModulesAdminConfig
+): SidebarModulesAdminConfig => {
+  const normalized = { ...config }
+  if (normalized.admin) {
+    const admin = { ...normalized.admin }
+    delete admin.subscription
+    normalized.admin = admin
+  }
+  return normalized
 }
 
 const mergeWithDefaultSidebarModules = (
   config: SidebarModulesAdminConfig
 ): SidebarModulesAdminConfig => {
-  const merged: SidebarModulesAdminConfig = { ...config }
+  const merged = removeRetiredSidebarModules(config)
 
   Object.entries(DEFAULT_SIDEBAR_MODULES).forEach(
     ([sectionKey, defaultSection]) => {
@@ -115,7 +126,6 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/models/deployments': { section: 'admin', module: 'models' },
   '/users': { section: 'admin', module: 'user' },
   '/redemption-codes': { section: 'admin', module: 'redemption' },
-  '/subscriptions': { section: 'admin', module: 'subscription' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
 }
@@ -155,7 +165,7 @@ function parseUserSidebarConfig(
   try {
     const parsed = JSON.parse(value) as SidebarModulesAdminConfig
     if (!parsed || typeof parsed !== 'object') return null
-    return parsed
+    return removeRetiredSidebarModules(parsed)
   } catch {
     return null
   }

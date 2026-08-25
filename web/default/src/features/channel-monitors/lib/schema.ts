@@ -20,45 +20,42 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 
 export const channelMonitorFormSchema = z.object({
-  name: z.string().trim().min(1, 'Monitor name is required').max(100),
-  api_url: z
+  test_model: z
     .string()
     .trim()
-    .url('Enter a valid API URL')
-    .refine(
-      (value) => value.startsWith('http://') || value.startsWith('https://'),
-      'API URL must use HTTP or HTTPS'
-    ),
-  api_key: z.string().trim().max(5000),
-  test_model: z.string().trim().min(1, 'Test model is required').max(200),
+    .min(1, '请输入测试模型')
+    .max(200, '测试模型不能超过 200 个字符'),
   interval_seconds: z.coerce
-    .number()
-    .int('Enter a whole number')
-    .min(1, 'Test interval must be at least 1 second')
-    .max(86400, 'Test interval cannot exceed 86400 seconds'),
+    .number('请输入数字')
+    .int('请输入整数')
+    .min(1, '测试间隔不能少于 1 秒')
+    .max(86400, '测试间隔不能超过 86400 秒'),
   timeout_seconds: z.coerce
-    .number()
-    .int('Enter a whole number')
-    .min(1, 'Request timeout must be at least 1 second')
-    .max(120, 'Request timeout cannot exceed 120 seconds'),
+    .number('请输入数字')
+    .int('请输入整数')
+    .min(1, '请求超时不能少于 1 秒')
+    .max(120, '请求超时不能超过 120 秒'),
+  retry_count: z.coerce
+    .number('请输入数字')
+    .int('请输入整数')
+    .min(1, '重试次数不能少于 1 次')
+    .max(10000, '重试次数不能超过 10000 次'),
   enabled: z.boolean(),
   visible: z.boolean(),
   availability_boost_percent: z.coerce
-    .number('Enter a number')
-    .min(0, 'Availability boost must be between 0 and 100')
-    .max(100, 'Availability boost must be between 0 and 100'),
+    .number('请输入数字')
+    .min(0, '可用率加成必须在 0 到 100 之间')
+    .max(100, '可用率加成必须在 0 到 100 之间'),
 })
 
 export type ChannelMonitorFormInput = z.input<typeof channelMonitorFormSchema>
 export type ChannelMonitorFormValues = z.output<typeof channelMonitorFormSchema>
 
 export const channelMonitorFormDefaults: ChannelMonitorFormInput = {
-  name: '',
-  api_url: '',
-  api_key: '',
   test_model: '',
   interval_seconds: 300,
   timeout_seconds: 15,
+  retry_count: 1,
   enabled: true,
   visible: true,
   availability_boost_percent: 0,

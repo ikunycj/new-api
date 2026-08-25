@@ -16,20 +16,16 @@ const (
 	MaxTokenGroupRetryTimes     = 100
 )
 
-func GetUserUsableGroups(userGroup string) map[string]string {
+func GetUserGroupPricingGroups(userGroup string) map[string]string {
 	// This catalog contains pricing/routing groups that a user may assign to
 	// tokens. The account group stored in users.group is a separate namespace
 	// and must never be implicitly promoted into this catalog.
-	descriptions := setting.GetUserUsableGroupsCopy()
 	groups := make(map[string]string)
 	for group := range ratio_setting.GetGroupRatioCopy() {
 		if group == "auto" {
 			continue
 		}
-		groups[group] = descriptions[group]
-		if groups[group] == "" {
-			groups[group] = group
-		}
+		groups[group] = group
 	}
 	if setting.UserGroupPricingGroupsAreAll(userGroup) {
 		return groups
@@ -47,8 +43,8 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	return groups
 }
 
-func GroupInUserUsableGroups(userGroup, groupName string) bool {
-	_, ok := GetUserUsableGroups(userGroup)[groupName]
+func UserGroupCanUsePricingGroup(userGroup, pricingGroup string) bool {
+	_, ok := GetUserGroupPricingGroups(userGroup)[pricingGroup]
 	return ok
 }
 
@@ -63,7 +59,7 @@ func ValidateTokenGroup(userGroup, group string) error {
 		return fmt.Errorf("分组名称长度不能超过 %d 个字符", MaxTokenGroupNameLength)
 	}
 	if group == "auto" {
-		if !GroupInUserUsableGroups(userGroup, group) {
+		if !UserGroupCanUsePricingGroup(userGroup, group) {
 			return fmt.Errorf("无权访问 %s 分组", group)
 		}
 		return nil
@@ -121,7 +117,7 @@ func NormalizeTokenGroupRetryTimes(groups []string, values map[string]int) (map[
 }
 
 func validateConcreteTokenGroup(userGroup, group string) error {
-	if !GroupInUserUsableGroups(userGroup, group) {
+	if !UserGroupCanUsePricingGroup(userGroup, group) {
 		return fmt.Errorf("无权访问 %s 分组", group)
 	}
 	if !ratio_setting.ContainsGroupRatio(group) {

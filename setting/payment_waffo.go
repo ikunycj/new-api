@@ -9,15 +9,14 @@ var (
 	WaffoEnabled           bool
 	WaffoApiKey            string
 	WaffoPrivateKey        string
-	WaffoPublicCert         string
-	WaffoSandboxPublicCert  string
+	WaffoPublicCert        string
+	WaffoSandboxPublicCert string
 	WaffoSandboxApiKey     string
 	WaffoSandboxPrivateKey string
 	WaffoSandbox           bool
 	WaffoMerchantId        string
-	WaffoNotifyUrl             string
-	WaffoReturnUrl             string
-	WaffoSubscriptionReturnUrl string
+	WaffoNotifyUrl         string
+	WaffoReturnUrl         string
 	WaffoCurrency          string
 	WaffoUnitPrice         float64 = 1.0
 	WaffoMinTopUp          int     = 1

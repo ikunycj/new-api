@@ -30,14 +30,13 @@ export type ChannelMonitorResult = {
 
 export type ChannelMonitor = {
   id: number
-  name: string
-  api_url: string
+  pricing_group: string
   test_model: string
   interval_seconds: number
   timeout_seconds: number
+  retry_count: number
   enabled: boolean
   visible: boolean
-  has_api_key: boolean
   status: ChannelMonitorStatus
   latest_latency_ms: number | null
   latest_status_code: number | null
@@ -59,8 +58,7 @@ export type ChannelMonitor = {
 export type GroupStatusMonitor = Pick<
   ChannelMonitor,
   | 'id'
-  | 'name'
-  | 'api_url'
+  | 'pricing_group'
   | 'test_model'
   | 'interval_seconds'
   | 'status'
@@ -76,16 +74,18 @@ export type GroupStatusMonitor = Pick<
   user_test_available_at: number | null
 }
 
-export type ChannelMonitorPayload = {
-  name: string
-  api_url: string
-  api_key: string
+export type ChannelMonitorSettingsPayload = {
   test_model: string
   interval_seconds: number
   timeout_seconds: number
+  retry_count: number
   enabled: boolean
   visible: boolean
   availability_boost_percent: number
+}
+
+export type ChannelMonitorCreatePayload = ChannelMonitorSettingsPayload & {
+  pricing_group: string
 }
 
 export type ChannelMonitorRunResponse = {

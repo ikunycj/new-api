@@ -50,7 +50,7 @@ func TestValidateTokenGroupAutoRequiresVirtualPermission(t *testing.T) {
 
 func TestAccountGroupDoesNotBecomePricingGroup(t *testing.T) {
 	const accountGroup = "legacy-account-group-only"
-	_, ok := GetUserUsableGroups(accountGroup)[accountGroup]
+	_, ok := GetUserGroupPricingGroups(accountGroup)[accountGroup]
 	assert.False(t, ok)
 
 	err := ValidateTokenGroup(accountGroup, accountGroup)

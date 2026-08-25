@@ -16,9 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Info, Plus, Trash2 } from 'lucide-react'
-import { useState, useMemo, useEffect, useCallback, memo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, Trash2 } from 'lucide-react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import {
@@ -27,15 +29,9 @@ import {
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Sheet,
   SheetContent,
@@ -43,12 +39,23 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  getChannelMonitors,
+  runChannelMonitor,
+  updateChannelMonitor,
+} from '@/features/channel-monitors/api'
+import { ChannelMonitorSheet } from '@/features/channel-monitors/components/monitor-sheet'
+import { PricingGroupMonitorControl } from '@/features/channel-monitors/components/pricing-group-monitor-control'
+import type {
+  ChannelMonitor,
+  ChannelMonitorSettingsPayload,
+} from '@/features/channel-monitors/types'
 
 import { safeJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
-  userUsableGroups: string
+  savedGroupRatio: string
   onChange: (field: string, value: string) => void
 }
 
@@ -56,18 +63,12 @@ type GroupPricingRow = {
   _id: string
   name: string
   ratio: string
-  selectable: boolean
-  description: string
-}
-
-type RegistryEntry = {
-  name: string
-  ratio: number
 }
 
 const sectionCardClassName =
   'relative shadow-sm ring-0 before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:border before:border-border/90'
 const sectionHeaderClassName = 'border-b bg-muted/20'
+const EMPTY_CHANNEL_MONITORS: ChannelMonitor[] = []
 
 let groupPricingIdCounter = 0
 function createGroupPricingId() {
@@ -87,161 +88,169 @@ function parseRatioMap(value: string): Record<string, number> {
   })
 }
 
-function parseUsableMap(value: string): Record<string, string> {
-  return safeJsonParse<Record<string, string>>(value, {
-    fallback: {},
-    silent: true,
-  })
-}
-
-function buildGroupPricingRows(
-  groupRatio: string,
-  userUsableGroups: string
-): GroupPricingRow[] {
+function buildGroupPricingRows(groupRatio: string): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
-  const usableMap = parseUsableMap(userUsableGroups)
-  const names = new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])
 
-  return [...names].map((name) => ({
+  return Object.keys(ratioMap).map((name) => ({
     _id: createGroupPricingId(),
     name,
     ratio: String(normalizeRatio(ratioMap[name])),
-    selectable: Object.hasOwn(usableMap, name),
-    description: String(usableMap[name] ?? ''),
   }))
 }
 
 function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
-  const userUsableGroups: Record<string, string> = {}
 
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
     groupRatio[name] = normalizeRatio(row.ratio)
-    if (row.selectable) {
-      userUsableGroups[name] = row.description
-    }
   }
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
-    UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
   }
 }
 
 function groupPricingSignature(rows: GroupPricingRow[]): string {
   const serialized = serializeGroupPricingRows(rows)
-  return JSON.stringify({
-    groupRatio: parseRatioMap(serialized.GroupRatio),
-    userUsableGroups: parseUsableMap(serialized.UserUsableGroups),
-  })
+  return JSON.stringify(parseRatioMap(serialized.GroupRatio))
 }
 
-function sourceGroupPricingSignature(
-  groupRatio: string,
-  userUsableGroups: string
-): string {
-  return JSON.stringify({
-    groupRatio: parseRatioMap(groupRatio),
-    userUsableGroups: parseUsableMap(userUsableGroups),
-  })
+function sourceGroupPricingSignature(groupRatio: string): string {
+  return JSON.stringify(parseRatioMap(groupRatio))
+}
+
+function findPricingGroupMonitor(
+  row: GroupPricingRow,
+  monitorByName: ReadonlyMap<string, ChannelMonitor>
+): ChannelMonitor | null {
+  return monitorByName.get(row.name.trim()) ?? null
 }
 
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
-  userUsableGroups,
+  savedGroupRatio,
   onChange,
 }: GroupRatioVisualEditorProps) {
-  const [detailGroup, setDetailGroup] = useState<string | null>(null)
-
-  const registry = useMemo<RegistryEntry[]>(() => {
-    const ratioMap = parseRatioMap(groupRatio)
-    const usableMap = parseUsableMap(userUsableGroups)
-    const names = new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])
-    return [...names].map((name) => ({
-      name,
-      ratio: normalizeRatio(ratioMap[name]),
-    }))
-  }, [groupRatio, userUsableGroups])
-
   return (
-    <div className='space-y-4'>
-      <GroupPricingTable
-        groupRatio={groupRatio}
-        userUsableGroups={userUsableGroups}
-        onChange={onChange}
-        onShowDetail={setDetailGroup}
-      />
-
-      <GroupDetailSheet
-        groupName={detailGroup}
-        onOpenChange={(open) => {
-          if (!open) setDetailGroup(null)
-        }}
-        registry={registry}
-        userUsableGroups={userUsableGroups}
-      />
-    </div>
+    <GroupPricingTable
+      groupRatio={groupRatio}
+      savedGroupRatio={savedGroupRatio}
+      onChange={onChange}
+    />
   )
 })
 
 type GroupPricingTableProps = {
   groupRatio: string
-  userUsableGroups: string
+  savedGroupRatio: string
   onChange: (field: string, value: string) => void
-  onShowDetail: (name: string) => void
 }
 
 function GroupPricingTable({
   groupRatio,
-  userUsableGroups,
+  savedGroupRatio,
   onChange,
-  onShowDetail,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio, userUsableGroups)
+    buildGroupPricingRows(groupRatio)
+  )
+  const [monitorEditor, setMonitorEditor] = useState<{
+    monitor: ChannelMonitor | null
+    pricingGroupName: string
+  } | null>(null)
+  const [detailRowId, setDetailRowId] = useState<string | null>(null)
+  const incomingSignature = sourceGroupPricingSignature(groupRatio)
+  const parsedRows = useMemo(
+    () => buildGroupPricingRows(groupRatio),
+    [groupRatio]
+  )
+  const currentRows =
+    groupPricingSignature(rows) === incomingSignature ? rows : parsedRows
+  const persistedGroupNames = useMemo(
+    () => new Set(Object.keys(parseRatioMap(savedGroupRatio))),
+    [savedGroupRatio]
   )
 
-  useEffect(() => {
-    const incomingSignature = sourceGroupPricingSignature(
-      groupRatio,
-      userUsableGroups
-    )
-    setRows((currentRows) => {
-      if (groupPricingSignature(currentRows) === incomingSignature) {
-        return currentRows
+  const monitorsQuery = useQuery({
+    queryKey: ['channel-monitors'],
+    queryFn: getChannelMonitors,
+    refetchInterval: 10_000,
+  })
+  const monitors = monitorsQuery.data ?? EMPTY_CHANNEL_MONITORS
+  const monitorByName = useMemo(
+    () => new Map(monitors.map((monitor) => [monitor.pricing_group, monitor])),
+    [monitors]
+  )
+  const detailRow =
+    currentRows.find((row) => row._id === detailRowId) ?? null
+
+  const updateMonitorMutation = useMutation({
+    mutationFn: ({
+      monitor,
+      enabled,
+    }: {
+      monitor: ChannelMonitor
+      enabled: boolean
+    }) => {
+      const payload: ChannelMonitorSettingsPayload = {
+        test_model: monitor.test_model,
+        interval_seconds: monitor.interval_seconds,
+        timeout_seconds: monitor.timeout_seconds,
+        retry_count: monitor.retry_count,
+        enabled,
+        visible: monitor.visible,
+        availability_boost_percent: monitor.availability_boost_percent,
       }
-      return buildGroupPricingRows(groupRatio, userUsableGroups)
-    })
-  }, [groupRatio, userUsableGroups])
+      return updateChannelMonitor(monitor.id, payload)
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+      ])
+    },
+    onError: (error) => toast.error(error.message || '更新监控失败'),
+  })
+
+  const runMonitorMutation = useMutation({
+    mutationFn: runChannelMonitor,
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+      ])
+      if (result.result.success) toast.success('可用性测试成功')
+      else toast.error('可用性测试失败')
+    },
+    onError: (error) => toast.error(error.message || '可用性测试失败'),
+  })
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
       setRows(nextRows)
       const serialized = serializeGroupPricingRows(nextRows)
       onChange('GroupRatio', serialized.GroupRatio)
-      onChange('UserUsableGroups', serialized.UserUsableGroups)
     },
     [onChange]
   )
 
   const updateRow = useCallback(
-    (
-      id: string,
-      field: Exclude<keyof GroupPricingRow, '_id'>,
-      value: string | number | boolean
-    ) => {
+    (id: string, field: 'name' | 'ratio', value: string) => {
       emitRows(
-        rows.map((row) => (row._id === id ? { ...row, [field]: value } : row))
+        currentRows.map((row) =>
+          row._id === id ? { ...row, [field]: value } : row
+        )
       )
     },
-    [emitRows, rows]
+    [currentRows, emitRows]
   )
 
   const addRow = useCallback(() => {
-    const existingNames = new Set(rows.map((row) => row.name))
+    const existingNames = new Set(currentRows.map((row) => row.name))
     let index = 1
     let name = `group_${index}`
     while (existingNames.has(name)) {
@@ -249,27 +258,25 @@ function GroupPricingTable({
       name = `group_${index}`
     }
     emitRows([
-      ...rows,
+      ...currentRows,
       {
         _id: createGroupPricingId(),
         name,
         ratio: '1',
-        selectable: true,
-        description: '',
       },
     ])
-  }, [emitRows, rows])
+  }, [currentRows, emitRows])
 
   const removeRow = useCallback(
     (id: string) => {
-      emitRows(rows.filter((row) => row._id !== id))
+      emitRows(currentRows.filter((row) => row._id !== id))
     },
-    [emitRows, rows]
+    [currentRows, emitRows]
   )
 
   const duplicateNames = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const row of rows) {
+    for (const row of currentRows) {
       const name = row.name.trim()
       if (!name) continue
       counts.set(name, (counts.get(name) ?? 0) + 1)
@@ -277,208 +284,259 @@ function GroupPricingTable({
     return [...counts.entries()]
       .filter(([, count]) => count > 1)
       .map(([name]) => name)
-  }, [rows])
+  }, [currentRows])
 
   return (
-    <Card className={sectionCardClassName}>
-      <CardHeader className={sectionHeaderClassName}>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-          <div>
-            <CardTitle>{t('Pricing groups')}</CardTitle>
-            <CardDescription>
-              定价分组与用户分组是两个独立概念。定价分组控制令牌路由和计费；用户分组用于标识账号，不会自动成为定价分组。
-            </CardDescription>
-          </div>
-          <Button onClick={addRow} size='sm' className='sm:self-start'>
+    <>
+      <Card className={sectionCardClassName}>
+        <CardHeader className={sectionHeaderClassName}>
+          <Button onClick={addRow} size='sm' className='justify-self-end'>
             <Plus className='mr-2 h-4 w-4' />
             {t('Add group')}
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className='space-y-3'>
-          <StaticDataTable
-            data={rows}
-            getRowKey={(row) => row._id}
-            emptyClassName='text-muted-foreground h-20 text-sm'
-            emptyContent={t('No groups yet. Add a group to get started.')}
-            columns={[
-              {
-                id: 'group',
-                header: t('Group name'),
-                className: 'min-w-40',
-                cell: (row) => (
-                  <Input
-                    value={row.name}
-                    onChange={(event) =>
-                      updateRow(row._id, 'name', event.target.value)
-                    }
-                    aria-invalid={duplicateNames.includes(row.name.trim())}
-                  />
-                ),
-              },
-              {
-                id: 'ratio',
-                header: t('Ratio'),
-                className: 'w-28',
-                cell: (row) => (
-                  <Input
-                    type='number'
-                    min={0}
-                    step={0.1}
-                    value={row.ratio}
-                    onChange={(event) =>
-                      updateRow(row._id, 'ratio', event.target.value)
-                    }
-                  />
-                ),
-              },
-              {
-                id: 'selectable',
-                header: t('User selectable'),
-                className: 'w-28 text-center',
-                cell: (row) => (
-                  <div className='flex justify-center'>
-                    <Checkbox
-                      checked={row.selectable}
-                      onCheckedChange={(checked) =>
-                        updateRow(row._id, 'selectable', checked === true)
-                      }
-                      aria-label={t('User selectable')}
-                    />
-                  </div>
-                ),
-              },
-              {
-                id: 'description',
-                header: t('Description'),
-                className: 'min-w-56',
-                cell: (row) =>
-                  row.selectable ? (
+        </CardHeader>
+        <CardContent>
+          <div className='space-y-3'>
+            <StaticDataTable
+              data={currentRows}
+              getRowKey={(row) => row._id}
+              emptyClassName='text-muted-foreground h-20 text-sm'
+              emptyContent={t('No groups yet. Add a group to get started.')}
+              columns={[
+                {
+                  id: 'group',
+                  header: t('Group name'),
+                  className: 'w-52',
+                  cell: (row) => {
+                    return (
+                      <Input
+                        value={row.name}
+                        onChange={(event) =>
+                          updateRow(row._id, 'name', event.target.value)
+                        }
+                        aria-invalid={duplicateNames.includes(row.name.trim())}
+                      />
+                    )
+                  },
+                },
+                {
+                  id: 'ratio',
+                  header: t('Ratio'),
+                  className: 'w-24',
+                  cell: (row) => (
                     <Input
-                      value={row.description}
-                      placeholder={t('Group description')}
+                      type='number'
+                      min={0}
+                      step={0.1}
+                      value={row.ratio}
                       onChange={(event) =>
-                        updateRow(row._id, 'description', event.target.value)
+                        updateRow(row._id, 'ratio', event.target.value)
                       }
                     />
-                  ) : (
-                    <span className='text-muted-foreground px-3 text-sm'>
-                      -
-                    </span>
                   ),
-              },
-              {
-                id: 'actions',
-                header: t('Actions'),
-                className: 'text-right',
-                cellClassName: 'text-right',
-                cell: (row) => (
-                  <div className='flex justify-end gap-1'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => onShowDetail(row.name.trim())}
-                      disabled={!row.name.trim()}
-                      aria-label={t('Details')}
-                    >
-                      <Info className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => removeRow(row._id)}
-                      aria-label={t('Delete')}
-                    >
-                      <Trash2 className='h-4 w-4' />
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
+                },
+                {
+                  id: 'monitor',
+                  header: '分组监控',
+                  className: 'w-[25rem]',
+                  cell: (row) => {
+                    const groupName = row.name.trim()
+                    const monitor = findPricingGroupMonitor(row, monitorByName)
+                    return (
+                      <PricingGroupMonitorControl
+                        groupName={groupName || '未命名分组'}
+                        monitor={monitor}
+                        isPersisted={
+                          groupName !== '' &&
+                          persistedGroupNames.has(groupName) &&
+                          !duplicateNames.includes(groupName)
+                        }
+                        isLoading={monitorsQuery.isLoading}
+                        hasError={monitorsQuery.isError}
+                        isUpdating={
+                          updateMonitorMutation.isPending &&
+                          updateMonitorMutation.variables?.monitor.id ===
+                            monitor?.id
+                        }
+                        isRunning={
+                          runMonitorMutation.isPending &&
+                          runMonitorMutation.variables === monitor?.id
+                        }
+                        onConfigure={() => {
+                          if (!groupName) return
+                          setMonitorEditor({
+                            monitor,
+                            pricingGroupName: groupName,
+                          })
+                        }}
+                        onRetry={() => void monitorsQuery.refetch()}
+                        onToggleEnabled={(enabled) => {
+                          if (monitor) {
+                            updateMonitorMutation.mutate({ monitor, enabled })
+                          }
+                        }}
+                        onRun={() => {
+                          if (monitor) runMonitorMutation.mutate(monitor.id)
+                        }}
+                      />
+                    )
+                  },
+                },
+                {
+                  id: 'actions',
+                  header: t('Actions'),
+                  className: 'w-20 text-right',
+                  cellClassName: 'w-20 text-right',
+                  cell: (row) => {
+                    return (
+                      <div className='flex justify-end gap-1'>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => setDetailRowId(row._id)}
+                          disabled={!row.name.trim()}
+                          aria-label='详情'
+                        >
+                          详情
+                        </Button>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => removeRow(row._id)}
+                          aria-label={t('Delete')}
+                        >
+                          <Trash2 className='h-4 w-4' />
+                        </Button>
+                      </div>
+                    )
+                  },
+                },
+              ]}
+            />
 
-          {duplicateNames.length > 0 && (
-            <p className='text-destructive text-sm'>
-              {t('Duplicate group names: {{names}}', {
-                names: duplicateNames.join(', '),
-              })}
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            {monitorsQuery.isError && (
+              <p className='text-destructive text-sm'>
+                分组监控加载失败：{monitorsQuery.error.message}
+              </p>
+            )}
+
+            {duplicateNames.length > 0 && (
+              <p className='text-destructive text-sm'>
+                {t('Duplicate group names: {{names}}', {
+                  names: duplicateNames.join(', '),
+                })}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ChannelMonitorSheet
+        open={monitorEditor !== null}
+        monitor={monitorEditor?.monitor ?? null}
+        pricingGroupName={monitorEditor?.pricingGroupName ?? ''}
+        onOpenChange={(open) => {
+          if (!open) setMonitorEditor(null)
+        }}
+      />
+
+      <GroupDetailSheet
+        row={detailRow}
+        monitor={detailRow ? findPricingGroupMonitor(detailRow, monitorByName) : null}
+        onOpenChange={(open) => {
+          if (!open) setDetailRowId(null)
+        }}
+        onChange={(field, value) => {
+          if (!detailRow) return
+          updateRow(detailRow._id, field, value)
+        }}
+        onConfigure={() => {
+          if (!detailRow) return
+          const groupName = detailRow.name.trim()
+          if (!groupName) return
+          setMonitorEditor({
+            monitor: findPricingGroupMonitor(detailRow, monitorByName),
+            pricingGroupName: groupName,
+          })
+        }}
+        isPersisted={
+          detailRow !== null &&
+          persistedGroupNames.has(detailRow.name.trim()) &&
+          !duplicateNames.includes(detailRow.name.trim())
+        }
+      />
+    </>
   )
 }
 
 type GroupDetailSheetProps = {
-  groupName: string | null
+  row: GroupPricingRow | null
+  monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
-  registry: RegistryEntry[]
-  userUsableGroups: string
+  onChange: (field: 'name' | 'ratio', value: string) => void
+  onConfigure: () => void
+  isPersisted: boolean
 }
 
 function GroupDetailSheet(props: GroupDetailSheetProps) {
   const { t } = useTranslation()
-  const name = props.groupName
-
-  const detail = useMemo(() => {
-    if (!name) return null
-
-    const entry = props.registry.find((item) => item.name === name)
-    const usableMap = parseUsableMap(props.userUsableGroups)
-
-    return {
-      ratio: entry?.ratio,
-      selectable: Object.hasOwn(usableMap, name),
-      description: String(usableMap[name] ?? ''),
-    }
-  }, [name, props.registry, props.userUsableGroups])
+  const name = props.row?.name ?? ''
 
   return (
-    <Sheet open={name !== null} onOpenChange={props.onOpenChange}>
+    <Sheet open={props.row !== null} onOpenChange={props.onOpenChange}>
       <SheetContent
         side='right'
         className={sideDrawerContentClassName('sm:max-w-lg')}
       >
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>
-            {t('Group details')}
-            {name ? `: ${name}` : ''}
+            详情{name ? `：${name.trim()}` : ''}
           </SheetTitle>
           <SheetDescription>
-            {t('Everything configured for this group, in one place.')}
+            在此修改分组倍率和分组监控参数。
           </SheetDescription>
         </SheetHeader>
 
-        {detail && (
+        {props.row && (
           <div className={sideDrawerFormClassName('gap-5')}>
-            <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>{t('Overview')}</h3>
-              <dl className='space-y-1.5 text-sm'>
-                <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>{t('Ratio')}</dt>
-                  <dd className='font-medium'>{detail.ratio ?? '-'}</dd>
-                </div>
-                <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>
-                    {t('User selectable')}
-                  </dt>
-                  <dd className='font-medium'>
-                    {detail.selectable ? t('Yes') : t('No')}
-                  </dd>
-                </div>
-                {detail.selectable && detail.description && (
-                  <div className='flex justify-between gap-4'>
-                    <dt className='text-muted-foreground'>
-                      {t('Description')}
-                    </dt>
-                    <dd className='text-right font-medium'>
-                      {detail.description}
-                    </dd>
-                  </div>
-                )}
-              </dl>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-name'>{t('Group name')}</Label>
+              <Input
+                id='group-detail-name'
+                value={props.row.name}
+                onChange={(event) => props.onChange('name', event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-ratio'>{t('Ratio')}</Label>
+              <Input
+                id='group-detail-ratio'
+                type='number'
+                min={0}
+                step={0.1}
+                value={props.row.ratio}
+                onChange={(event) => props.onChange('ratio', event.target.value)}
+              />
+            </div>
+            <section className='space-y-2 border-t pt-4'>
+              <h3 className='text-sm font-semibold'>分组监控</h3>
+              <p className='text-muted-foreground text-sm'>
+                {props.monitor
+                  ? `已配置：${props.monitor.test_model}，每 ${props.monitor.interval_seconds} 秒测试 ${props.monitor.retry_count} 次`
+                  : '尚未配置分组监控'}
+              </p>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={!props.isPersisted}
+                onClick={props.onConfigure}
+              >
+                {props.monitor ? '编辑监控参数' : '配置分组监控'}
+              </Button>
+              {!props.isPersisted && (
+                <p className='text-muted-foreground text-xs'>请先保存分组后配置监控。</p>
+              )}
             </section>
           </div>
         )}

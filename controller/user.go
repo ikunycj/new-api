@@ -597,7 +597,7 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserGroupPricingGroups(user.Group)
 	group := c.Query("group")
 	if group != "" {
 		if _, ok := groups[group]; !ok {

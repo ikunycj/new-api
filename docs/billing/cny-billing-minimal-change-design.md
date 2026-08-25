@@ -51,7 +51,7 @@ BillingUSDToCNYRate = 7.3
 | `GroupRatio` | 实际模型消费分组倍率 | 模型预扣费和结算 |
 | `TopupGroupRatio` | 充值价格或到账规则中的充值分组倍率 | 充值，不得用于模型消费 |
 
-`BillingUSDToCNYRate` 不得进入充值、兑换码、管理员调额、余额转账或订阅额度面值换算。`USDExchangeRate` 也不得替代 `BillingUSDToCNYRate` 参与模型扣费。
+`BillingUSDToCNYRate` 不得进入充值、兑换码、管理员调额或余额转账。`USDExchangeRate` 也不得替代 `BillingUSDToCNYRate` 参与模型扣费。
 
 ## 3. 钱包面值
 

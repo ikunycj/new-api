@@ -15,7 +15,6 @@ func registerChannelMonitorRoutes(apiRouter *gin.RouterGroup) {
 		adminRoute.POST("/", controller.CreateChannelMonitor)
 		adminRoute.GET("/:id", controller.GetChannelMonitor)
 		adminRoute.PUT("/:id", controller.UpdateChannelMonitor)
-		adminRoute.DELETE("/:id", controller.DeleteChannelMonitor)
 		adminRoute.POST("/:id/run", controller.RunChannelMonitor)
 		adminRoute.GET("/:id/history", controller.GetChannelMonitorHistory)
 	}

@@ -6,7 +6,7 @@ import "github.com/gin-gonic/gin"
 // 由 service.BillingSession 实现，存储在 RelayInfo 上以避免循环引用。
 type BillingSettler interface {
 	// Settle 根据实际消耗额度进行结算，计算 delta = actualQuota - preConsumedQuota，
-	// 同时调整资金来源（钱包/订阅）和令牌额度。
+	// 同时调整钱包和令牌额度。
 	Settle(actualQuota int) error
 
 	// Refund 退还所有预扣费额度（资金来源 + 令牌），幂等安全。

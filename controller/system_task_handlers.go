@@ -130,7 +130,7 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 				cancelled = true
 				break
 			}
-			result = testChannelWithTokenName(ctx, channel, testUserID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName)
+			result = testChannelWithTokenName(ctx, channel, testUserID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName, "")
 			if result.localErr == nil && result.newAPIError == nil {
 				break
 			}

@@ -121,7 +121,6 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
-    UserUsableGroups: createJsonStringField(t),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -169,7 +168,7 @@ export function RatioSettingsCard({
     },
   })
 
-  const modelNormalizedDefaults = useRef({
+  const initialModelValues = {
     ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
     ModelRatio: normalizeJsonString(modelDefaults.ModelRatio),
     CacheRatio: normalizeJsonString(modelDefaults.CacheRatio),
@@ -183,15 +182,15 @@ export function RatioSettingsCard({
     ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
     BillingMode: normalizeJsonString(modelDefaults.BillingMode),
     BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
-  })
-  const [savedModelValues, setSavedModelValues] = useState(
-    modelNormalizedDefaults.current
-  )
+  }
+  const modelNormalizedDefaults = useRef(initialModelValues)
+  const [savedModelValues, setSavedModelValues] = useState(initialModelValues)
 
-  const groupNormalizedDefaults = useRef({
+  const initialGroupValues = {
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-    UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
-  })
+  }
+  const groupNormalizedDefaults = useRef(initialGroupValues)
+  const [savedGroupValues, setSavedGroupValues] = useState(initialGroupValues)
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
 
@@ -220,7 +219,6 @@ export function RatioSettingsCard({
     mode: 'onChange',
     defaultValues: {
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
     },
   })
 
@@ -262,12 +260,11 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-      UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
     }
+    setSavedGroupValues(groupNormalizedDefaults.current)
 
     groupForm.reset({
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
     })
   }, [groupDefaults, groupForm])
 
@@ -318,7 +315,6 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
-        UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
       }
 
       const updates = (
@@ -328,10 +324,24 @@ export function RatioSettingsCard({
       )
 
       for (const key of updates) {
-        await updateOption.mutateAsync({ key, value: normalized[key] })
+        const result = await updateOption.mutateAsync({
+          key,
+          value: normalized[key],
+        })
+        if (!result.success) return
       }
+
+      if (updates.length > 0) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+          queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+        ])
+      }
+
+      groupNormalizedDefaults.current = normalized
+      setSavedGroupValues(normalized)
     },
-    [updateOption]
+    [queryClient, updateOption]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -378,6 +388,7 @@ export function RatioSettingsCard({
       return (
         <GroupRatioForm
           form={groupForm}
+          savedGroupRatio={savedGroupValues.GroupRatio}
           onSave={saveGroupRatios}
           isSaving={updateOption.isPending}
         />

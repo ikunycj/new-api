@@ -17,57 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
-import type { PlanRecord } from '@/features/subscriptions/types'
 
 import type {
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
 } from './types'
-
-export interface PackageComparisonStat {
-  plan_id: number
-  plan_title: string
-  plan_price: number
-  currency: string
-  plan_quota: number
-  requests: number
-  success_requests: number
-  error_requests: number
-  success_rate: number
-  prompt_tokens: number
-  completion_tokens: number
-  total_tokens: number
-  quota: number
-  average_latency_ms: number
-  channel_hit_rate: number
-}
-
-export async function getAdminPlans(): Promise<{
-  success: boolean
-  data?: PlanRecord[]
-}> {
-  const res = await api.get<{ success: boolean; data?: PlanRecord[] }>(
-    '/api/subscription/admin/plans'
-  )
-  return res.data
-}
-
-export async function getPackageComparison(params: {
-  plan_ids: number[]
-  start_timestamp: number
-  end_timestamp: number
-  model_name?: string
-  group?: string
-}) {
-  const res = await api.get<{
-    success: boolean
-    data?: { plans: PackageComparisonStat[] }
-  }>('/api/admin/analytics/package-comparison', {
-    params: { ...params, plan_ids: params.plan_ids.join(',') },
-  })
-  return res.data
-}
 
 // ============================================================================
 // Dashboard APIs

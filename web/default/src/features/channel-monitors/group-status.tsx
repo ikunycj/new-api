@@ -20,7 +20,6 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity01Icon,
   Alert02Icon,
-  ApiIcon,
   CheckmarkCircle02Icon,
   ClockIcon,
   RefreshIcon,
@@ -66,11 +65,7 @@ import {
   MonitorHistoryBars,
   MonitorStatusBadge,
 } from './components/monitor-status'
-import {
-  formatMonitorAvailability,
-  formatMonitorTime,
-  getMonitorApiHost,
-} from './lib/format'
+import { formatMonitorAvailability, formatMonitorTime } from './lib/format'
 import type { GroupStatusMonitor } from './types'
 
 type GroupStatusPanelProps = {
@@ -317,17 +312,13 @@ function GroupStatusCard(props: GroupStatusCardProps) {
   return (
     <Card className='min-w-0 gap-0 py-0'>
       <CardHeader className='border-b px-4 py-4'>
-        <CardTitle className='truncate'>{props.monitor.name}</CardTitle>
+        <CardTitle className='truncate'>
+          {props.monitor.pricing_group}
+        </CardTitle>
         <CardAction>
           <MonitorStatusBadge status={props.monitor.status} />
         </CardAction>
         <div className='text-muted-foreground col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
-          <span className='inline-flex min-w-0 items-center gap-1.5'>
-            <HugeiconsIcon icon={ApiIcon} className='size-3.5 shrink-0' />
-            <span className='truncate'>
-              {getMonitorApiHost(props.monitor.api_url)}
-            </span>
-          </span>
           <code className='truncate'>{props.monitor.test_model}</code>
         </div>
       </CardHeader>

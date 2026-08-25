@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"math"
 	"time"
 
@@ -11,37 +10,25 @@ import (
 )
 
 const channelMonitorHistoryRetention = 31 * 24 * time.Hour
-const channelMonitorEncryptionOptionKey = "ChannelMonitorEncryptionKey"
 
 type ChannelMonitor struct {
-	Id                       int     `json:"id"`
-	Name                     string  `json:"name" gorm:"size:100;not null;uniqueIndex"`
-	ApiURL                   string  `json:"api_url" gorm:"size:500;not null"`
-	ApiKeyEncrypted          string  `json:"-" gorm:"type:text;not null"`
-	TestModel                string  `json:"test_model" gorm:"size:200;not null"`
-	IntervalSeconds          int     `json:"interval_seconds" gorm:"not null"`
-	TimeoutSeconds           int     `json:"timeout_seconds" gorm:"not null"`
-	Enabled                  bool    `json:"enabled" gorm:"index:idx_channel_monitor_due,priority:1;not null"`
-	Visible                  bool    `json:"visible" gorm:"index;not null"`
-	AvailabilityBoostPercent float64 `json:"availability_boost_percent" gorm:"column:availability_boost_percent"`
-	UserTestAvailableAt      *int64  `json:"-" gorm:"column:user_test_available_at;bigint"`
-	LastCheckedAt            *int64  `json:"last_checked_at" gorm:"bigint"`
-	NextCheckAt              *int64  `json:"next_check_at" gorm:"bigint;index:idx_channel_monitor_due,priority:2"`
-	LeaseExpiresAt           *int64  `json:"-" gorm:"bigint;index:idx_channel_monitor_due,priority:3"`
-	CreatedBy                int     `json:"created_by" gorm:"index"`
-	CreatedAt                int64   `json:"created_at" gorm:"bigint"`
-	UpdatedAt                int64   `json:"updated_at" gorm:"bigint"`
-}
-
-// channelMonitorLegacyAvailability keeps the removed columns addressable for
-// the one-time schema cleanup without reintroducing them to ChannelMonitor.
-type channelMonitorLegacyAvailability struct {
-	ManualAvailability7d  *float64 `gorm:"column:manual_availability_7d"`
-	ManualAvailability30d *float64 `gorm:"column:manual_availability_30d"`
-}
-
-func (channelMonitorLegacyAvailability) TableName() string {
-	return "channel_monitors"
+	Id                       int                     `json:"id"`
+	PricingGroup             string                  `json:"pricing_group" gorm:"size:100;not null;uniqueIndex"`
+	TestModel                string                  `json:"test_model" gorm:"size:200;not null"`
+	IntervalSeconds          int                     `json:"interval_seconds" gorm:"not null"`
+	TimeoutSeconds           int                     `json:"timeout_seconds" gorm:"not null"`
+	RetryCount               int                     `json:"retry_count" gorm:"not null"`
+	Enabled                  bool                    `json:"enabled" gorm:"index:idx_channel_monitor_due,priority:1;not null"`
+	Visible                  bool                    `json:"visible" gorm:"index;not null"`
+	AvailabilityBoostPercent float64                 `json:"availability_boost_percent" gorm:"column:availability_boost_percent"`
+	UserTestAvailableAt      *int64                  `json:"-" gorm:"column:user_test_available_at;bigint"`
+	LastCheckedAt            *int64                  `json:"last_checked_at" gorm:"bigint"`
+	NextCheckAt              *int64                  `json:"next_check_at" gorm:"bigint;index:idx_channel_monitor_due,priority:2"`
+	LeaseExpiresAt           *int64                  `json:"-" gorm:"bigint;index:idx_channel_monitor_due,priority:3"`
+	CreatedBy                int                     `json:"created_by" gorm:"index"`
+	CreatedAt                int64                   `json:"created_at" gorm:"bigint"`
+	UpdatedAt                int64                   `json:"updated_at" gorm:"bigint"`
+	Histories                []ChannelMonitorHistory `json:"-" gorm:"foreignKey:MonitorId;references:Id;constraint:OnDelete:CASCADE"`
 }
 
 type ChannelMonitorHistory struct {
@@ -72,27 +59,12 @@ func CreateChannelMonitor(monitor *ChannelMonitor) error {
 	return DB.Create(monitor).Error
 }
 
-func GetOrCreateChannelMonitorEncryptionSecret() (string, error) {
-	var option Option
-	err := DB.Where("key = ?", channelMonitorEncryptionOptionKey).First(&option).Error
-	if err == nil {
-		return option.Value, nil
+func CountChannelsByPricingGroup(pricingGroup string) (int, error) {
+	var count int64
+	if err := ApplyChannelGroupFilter(DB.Model(&Channel{}), pricingGroup).Count(&count).Error; err != nil {
+		return 0, err
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", err
-	}
-	secret, err := common.GenerateRandomKey(48)
-	if err != nil {
-		return "", err
-	}
-	option = Option{Key: channelMonitorEncryptionOptionKey, Value: secret}
-	if err := DB.Create(&option).Error; err == nil {
-		return secret, nil
-	}
-	if err := DB.Where("key = ?", channelMonitorEncryptionOptionKey).First(&option).Error; err != nil {
-		return "", err
-	}
-	return option.Value, nil
+	return int(count), nil
 }
 
 func UpdateChannelMonitor(monitor *ChannelMonitor) error {
@@ -100,12 +72,10 @@ func UpdateChannelMonitor(monitor *ChannelMonitor) error {
 	return DB.Model(&ChannelMonitor{}).
 		Where("id = ?", monitor.Id).
 		Updates(map[string]any{
-			"name":                       monitor.Name,
-			"api_url":                    monitor.ApiURL,
-			"api_key_encrypted":          monitor.ApiKeyEncrypted,
 			"test_model":                 monitor.TestModel,
 			"interval_seconds":           monitor.IntervalSeconds,
 			"timeout_seconds":            monitor.TimeoutSeconds,
+			"retry_count":                monitor.RetryCount,
 			"enabled":                    monitor.Enabled,
 			"visible":                    monitor.Visible,
 			"availability_boost_percent": monitor.AvailabilityBoostPercent,
@@ -131,13 +101,24 @@ func CompleteChannelMonitorUserTest(id int, availableAt int64) error {
 		Update("user_test_available_at", availableAt).Error
 }
 
-func DeleteChannelMonitor(id int) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("monitor_id = ?", id).Delete(&ChannelMonitorHistory{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&ChannelMonitor{}, id).Error
-	})
+// DeleteChannelMonitorsOutsidePricingGroups keeps monitor ownership aligned
+// with the current pricing-group catalog inside the caller's transaction.
+func DeleteChannelMonitorsOutsidePricingGroups(tx *gorm.DB, pricingGroups []string) error {
+	query := tx.Model(&ChannelMonitor{}).Select("id")
+	if len(pricingGroups) > 0 {
+		query = query.Where("pricing_group NOT IN ?", pricingGroups)
+	}
+	var monitorIDs []int
+	if err := query.Pluck("id", &monitorIDs).Error; err != nil {
+		return err
+	}
+	if len(monitorIDs) == 0 {
+		return nil
+	}
+	if err := tx.Where("monitor_id IN ?", monitorIDs).Delete(&ChannelMonitorHistory{}).Error; err != nil {
+		return err
+	}
+	return tx.Where("id IN ?", monitorIDs).Delete(&ChannelMonitor{}).Error
 }
 
 func GetChannelMonitorByID(id int) (*ChannelMonitor, error) {
@@ -198,17 +179,21 @@ func ClaimDueChannelMonitors(now int64, leaseSeconds int64, limit int) ([]*Chann
 func SaveChannelMonitorResult(monitor *ChannelMonitor, result *ChannelMonitorHistory) error {
 	nextCheckAt := result.CheckedAt + int64(monitor.IntervalSeconds)
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(result).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&ChannelMonitor{}).
+		update := tx.Model(&ChannelMonitor{}).
 			Where("id = ?", monitor.Id).
 			Updates(map[string]any{
 				"last_checked_at":  result.CheckedAt,
 				"next_check_at":    nextCheckAt,
 				"lease_expires_at": nil,
 				"updated_at":       result.CheckedAt,
-			}).Error; err != nil {
+			})
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if err := tx.Create(result).Error; err != nil {
 			return err
 		}
 		cutoff := result.CheckedAt - int64(channelMonitorHistoryRetention/time.Second)

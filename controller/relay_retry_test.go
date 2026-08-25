@@ -10,7 +10,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -47,7 +46,6 @@ func newOrderedRoutingBillingInfo(userID int) *relaycommon.RelayInfo {
 		OriginModelName: "ordered-routing-price",
 		IsPlayground:    true,
 		ForcePreConsume: true,
-		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 	}
 }
 

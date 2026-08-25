@@ -52,16 +52,13 @@ func TestUserGroupConfigurationUpdatesDefaultAndCustomGroups(t *testing.T) {
 	previousTopupRatios := common.TopupGroupRatio2JSONString()
 	previousPricingGroups := setting.UserGroupPricingGroups2JSONString()
 	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
-	previousUsableGroups := setting.UserUsableGroups2JSONString()
 	t.Cleanup(func() {
 		require.NoError(t, common.UpdateTopupGroupRatioByJSONString(previousTopupRatios))
 		require.NoError(t, setting.UpdateUserGroupPricingGroupsByJSONString(previousPricingGroups))
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
-		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(previousUsableGroups))
 	})
 
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":0.8}`))
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"默认","vip":"VIP"}`))
 	require.NoError(t, EnsureDefaultUserGroup())
 	custom, err := CreateUserGroup("enterprise")
 	require.NoError(t, err)

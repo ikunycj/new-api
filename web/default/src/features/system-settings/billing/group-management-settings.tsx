@@ -2,9 +2,9 @@
 Copyright (C) 2023-2026 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
 import { SettingsPageFrame } from '../components/settings-page'
 import { useSystemOptions, getOptionValue } from '../hooks/use-system-options'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
@@ -30,7 +32,17 @@ import {
 } from './settings-defaults'
 import { UserGroupManagementSection } from './user-group-management-section'
 
-export function GroupManagementSettings() {
+export type GroupManagementTab = 'user-groups' | 'pricing-groups'
+
+type GroupManagementSettingsProps = {
+  activeTab: GroupManagementTab
+  onTabChange: (tab: GroupManagementTab) => void
+}
+
+export function GroupManagementSettings({
+  activeTab,
+  onTabChange,
+}: GroupManagementSettingsProps) {
   const { t } = useTranslation()
   const { data, isLoading } = useSystemOptions()
   const settings = useMemo(
@@ -45,16 +57,28 @@ export function GroupManagementSettings() {
           {t('Loading settings...')}
         </div>
       ) : (
-        <>
-          <UserGroupManagementSection />
-          <RatioSettingsCard
-            titleKey='定价分组'
-            modelDefaults={getModelDefaults(settings)}
-            groupDefaults={getGroupDefaults(settings)}
-            toolPricesDefault={settings['tool_price_setting.prices']}
-            visibleTabs={['groups']}
-          />
-        </>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => onTabChange(value as GroupManagementTab)}
+          className='min-h-0 gap-4'
+        >
+          <TabsList className='grid w-full max-w-md grid-cols-2'>
+            <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
+            <TabsTrigger value='pricing-groups'>定价分组</TabsTrigger>
+          </TabsList>
+          <TabsContent value='user-groups' className='min-h-0'>
+            <UserGroupManagementSection />
+          </TabsContent>
+          <TabsContent value='pricing-groups' className='min-h-0'>
+            <RatioSettingsCard
+              titleKey='定价分组'
+              modelDefaults={getModelDefaults(settings)}
+              groupDefaults={getGroupDefaults(settings)}
+              toolPricesDefault={settings['tool_price_setting.prices']}
+              visibleTabs={['groups']}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </SettingsPageFrame>
   )

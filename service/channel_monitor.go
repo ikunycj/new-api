@@ -2,30 +2,23 @@ package service
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
-	"net/url"
-	"os"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 const (
-	channelMonitorEncryptionPrefix        = "v1:"
 	channelMonitorRunnerInterval          = time.Second
 	channelMonitorLeaseSeconds            = int64(180)
 	channelMonitorClaimLimit              = 16
@@ -35,6 +28,8 @@ const (
 	channelMonitorMaxInterval             = 86400
 	channelMonitorMinTimeout              = 1
 	channelMonitorMaxTimeout              = 120
+	channelMonitorMinRetryCount           = 1
+	channelMonitorMaxRetryCount           = 10000
 	ChannelMonitorUserTestCooldownSeconds = int64(10)
 )
 
@@ -49,17 +44,18 @@ func (err *ChannelMonitorUserTestCooldownError) Error() string {
 }
 
 type ChannelMonitorInput struct {
-	Name                     string
-	ApiURL                   string
-	ApiKey                   string
+	PricingGroup             string
 	TestModel                string
 	IntervalSeconds          int
 	TimeoutSeconds           int
+	RetryCount               int
 	Enabled                  bool
 	Visible                  bool
 	AvailabilityBoostPercent float64
 	CreatedBy                int
 }
+
+type ChannelMonitorProbe func(context.Context, *model.Channel, *model.ChannelMonitor) (statusCode int, latencyMs int, err error)
 
 type ChannelMonitorView struct {
 	Monitor            *model.ChannelMonitor
@@ -98,24 +94,15 @@ func applyChannelMonitorAvailabilityBoost(raw *float64, boost float64) *float64 
 	return &value
 }
 
-func normalizeChannelMonitorInput(input ChannelMonitorInput, requireAPIKey bool) (ChannelMonitorInput, error) {
-	input.Name = strings.TrimSpace(input.Name)
-	input.ApiURL = strings.TrimRight(strings.TrimSpace(input.ApiURL), "/")
-	input.ApiKey = strings.TrimSpace(input.ApiKey)
+func normalizeChannelMonitorInput(input ChannelMonitorInput) (ChannelMonitorInput, error) {
+	input.PricingGroup = strings.TrimSpace(input.PricingGroup)
 	input.TestModel = strings.TrimSpace(input.TestModel)
 
-	if input.Name == "" || len(input.Name) > 100 {
-		return input, errors.New("monitor name must contain 1 to 100 characters")
+	if input.PricingGroup == "" || len(input.PricingGroup) > 100 {
+		return input, errors.New("pricing group must contain 1 to 100 characters")
 	}
-	if input.ApiURL == "" || len(input.ApiURL) > 500 {
-		return input, errors.New("API URL must contain 1 to 500 characters")
-	}
-	parsed, err := url.ParseRequestURI(input.ApiURL)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return input, errors.New("API URL must be an absolute HTTP or HTTPS URL without query parameters")
-	}
-	if requireAPIKey && input.ApiKey == "" {
-		return input, errors.New("API key is required")
+	if !ratio_setting.ContainsGroupRatio(input.PricingGroup) {
+		return input, errors.New("pricing group does not exist")
 	}
 	if input.TestModel == "" || len(input.TestModel) > 200 {
 		return input, errors.New("test model must contain 1 to 200 characters")
@@ -129,94 +116,37 @@ func normalizeChannelMonitorInput(input ChannelMonitorInput, requireAPIKey bool)
 	if input.TimeoutSeconds < channelMonitorMinTimeout || input.TimeoutSeconds > channelMonitorMaxTimeout {
 		return input, fmt.Errorf("request timeout must be between %d and %d seconds", channelMonitorMinTimeout, channelMonitorMaxTimeout)
 	}
+	if input.RetryCount == 0 {
+		channelCount, err := model.CountChannelsByPricingGroup(input.PricingGroup)
+		if err != nil {
+			return input, fmt.Errorf("count pricing group channels: %w", err)
+		}
+		input.RetryCount = channelCount
+		if input.RetryCount < channelMonitorMinRetryCount {
+			input.RetryCount = channelMonitorMinRetryCount
+		}
+	}
+	if input.RetryCount < channelMonitorMinRetryCount || input.RetryCount > channelMonitorMaxRetryCount {
+		return input, fmt.Errorf("retry count must be between %d and %d", channelMonitorMinRetryCount, channelMonitorMaxRetryCount)
+	}
 	if err := validateChannelMonitorAvailabilityBoost(input.AvailabilityBoostPercent); err != nil {
 		return input, err
 	}
 	return input, nil
 }
 
-func encryptChannelMonitorAPIKey(apiKey string) (string, error) {
-	key, err := channelMonitorEncryptionKey()
-	if err != nil {
-		return "", err
-	}
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
-	}
-	ciphertext := gcm.Seal(nil, nonce, []byte(apiKey), nil)
-	payload := append(nonce, ciphertext...)
-	return channelMonitorEncryptionPrefix + base64.RawStdEncoding.EncodeToString(payload), nil
-}
-
-func decryptChannelMonitorAPIKey(encrypted string) (string, error) {
-	if !strings.HasPrefix(encrypted, channelMonitorEncryptionPrefix) {
-		return "", errors.New("unsupported API key encryption format")
-	}
-	payload, err := base64.RawStdEncoding.DecodeString(strings.TrimPrefix(encrypted, channelMonitorEncryptionPrefix))
-	if err != nil {
-		return "", err
-	}
-	key, err := channelMonitorEncryptionKey()
-	if err != nil {
-		return "", err
-	}
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	if len(payload) < gcm.NonceSize() {
-		return "", errors.New("invalid encrypted API key")
-	}
-	nonce := payload[:gcm.NonceSize()]
-	plaintext, err := gcm.Open(nil, nonce, payload[gcm.NonceSize():], nil)
-	if err != nil {
-		return "", err
-	}
-	return string(plaintext), nil
-}
-
-func channelMonitorEncryptionKey() ([sha256.Size]byte, error) {
-	secret := common.CryptoSecret
-	if os.Getenv("CRYPTO_SECRET") == "" && os.Getenv("SESSION_SECRET") == "" {
-		persisted, err := model.GetOrCreateChannelMonitorEncryptionSecret()
-		if err != nil {
-			return [sha256.Size]byte{}, err
-		}
-		secret = persisted
-	}
-	return sha256.Sum256([]byte(secret)), nil
-}
-
 func CreateChannelMonitor(input ChannelMonitorInput) (*model.ChannelMonitor, error) {
-	normalized, err := normalizeChannelMonitorInput(input, true)
-	if err != nil {
-		return nil, err
-	}
-	encryptedKey, err := encryptChannelMonitorAPIKey(normalized.ApiKey)
+	normalized, err := normalizeChannelMonitorInput(input)
 	if err != nil {
 		return nil, err
 	}
 	now := common.GetTimestamp()
 	monitor := &model.ChannelMonitor{
-		Name:                     normalized.Name,
-		ApiURL:                   normalized.ApiURL,
-		ApiKeyEncrypted:          encryptedKey,
+		PricingGroup:             normalized.PricingGroup,
 		TestModel:                normalized.TestModel,
 		IntervalSeconds:          normalized.IntervalSeconds,
 		TimeoutSeconds:           normalized.TimeoutSeconds,
+		RetryCount:               normalized.RetryCount,
 		Enabled:                  normalized.Enabled,
 		Visible:                  normalized.Visible,
 		AvailabilityBoostPercent: normalized.AvailabilityBoostPercent,
@@ -236,21 +166,17 @@ func UpdateChannelMonitor(id int, input ChannelMonitorInput) (*model.ChannelMoni
 	if err != nil {
 		return nil, err
 	}
-	normalized, err := normalizeChannelMonitorInput(input, false)
+	normalized, err := normalizeChannelMonitorInput(input)
 	if err != nil {
 		return nil, err
 	}
-	if normalized.ApiKey != "" {
-		monitor.ApiKeyEncrypted, err = encryptChannelMonitorAPIKey(normalized.ApiKey)
-		if err != nil {
-			return nil, err
-		}
+	if normalized.PricingGroup != monitor.PricingGroup {
+		return nil, errors.New("pricing group cannot be changed on a monitor")
 	}
-	monitor.Name = normalized.Name
-	monitor.ApiURL = normalized.ApiURL
 	monitor.TestModel = normalized.TestModel
 	monitor.IntervalSeconds = normalized.IntervalSeconds
 	monitor.TimeoutSeconds = normalized.TimeoutSeconds
+	monitor.RetryCount = normalized.RetryCount
 	monitor.Enabled = normalized.Enabled
 	monitor.Visible = normalized.Visible
 	monitor.AvailabilityBoostPercent = normalized.AvailabilityBoostPercent
@@ -264,10 +190,6 @@ func UpdateChannelMonitor(id int, input ChannelMonitorInput) (*model.ChannelMoni
 		return nil, err
 	}
 	return model.GetChannelMonitorByID(id)
-}
-
-func DeleteChannelMonitor(id int) error {
-	return model.DeleteChannelMonitor(id)
 }
 
 func ListChannelMonitorViews(visibleOnly bool) ([]*ChannelMonitorView, error) {
@@ -341,15 +263,15 @@ func ListChannelMonitorHistory(id int, limit int) ([]*model.ChannelMonitorHistor
 	return model.ListChannelMonitorHistory(id, limit)
 }
 
-func RunChannelMonitorCheck(ctx context.Context, id int) (*model.ChannelMonitorHistory, error) {
+func RunChannelMonitorCheck(ctx context.Context, id int, probe ChannelMonitorProbe) (*model.ChannelMonitorHistory, error) {
 	monitor, err := model.GetChannelMonitorByID(id)
 	if err != nil {
 		return nil, err
 	}
-	return runChannelMonitorCheck(ctx, monitor)
+	return runChannelMonitorCheck(ctx, monitor, probe)
 }
 
-func RunUserChannelMonitorTest(ctx context.Context, id int) (*ChannelMonitorUserTestResult, error) {
+func RunUserChannelMonitorTest(ctx context.Context, id int, probe ChannelMonitorProbe) (*ChannelMonitorUserTestResult, error) {
 	monitor, err := model.GetChannelMonitorByID(id)
 	if err != nil {
 		return nil, err
@@ -376,7 +298,7 @@ func RunUserChannelMonitorTest(ctx context.Context, id int) (*ChannelMonitorUser
 		return nil, &ChannelMonitorUserTestCooldownError{NextTestAt: nextTestAt}
 	}
 
-	history, err := runChannelMonitorCheck(ctx, monitor)
+	history, err := runChannelMonitorCheck(ctx, monitor, probe)
 	if err != nil {
 		return nil, err
 	}
@@ -392,20 +314,66 @@ func RunUserChannelMonitorTest(ctx context.Context, id int) (*ChannelMonitorUser
 	return result, nil
 }
 
-func runChannelMonitorCheck(ctx context.Context, monitor *model.ChannelMonitor) (*model.ChannelMonitorHistory, error) {
+func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonitor, probe ChannelMonitorProbe) (*model.ChannelMonitorHistory, error) {
 	checkedAt := common.GetTimestamp()
 	result := &model.ChannelMonitorHistory{
 		MonitorId: monitor.Id,
 		CheckedAt: checkedAt,
 	}
-	apiKey, err := decryptChannelMonitorAPIKey(monitor.ApiKeyEncrypted)
-	if err != nil {
-		result.ErrorMessage = "API key could not be decrypted; re-enter it in monitor settings"
+	if probe == nil {
+		result.ErrorMessage = "pricing group monitor probe is not configured"
 	} else {
-		result.StatusCode, result.LatencyMs, err = executeChannelMonitorRequest(ctx, monitor, apiKey)
-		result.Success = err == nil
-		if err != nil {
-			result.ErrorMessage = truncateChannelMonitorError(err.Error())
+		if parent == nil {
+			parent = context.Background()
+		}
+		requestPath := "/v1/chat/completions"
+		modelName := strings.ToLower(monitor.TestModel)
+		switch {
+		case strings.Contains(modelName, "embedding") || strings.HasPrefix(modelName, "m3e") || strings.Contains(modelName, "bge-"):
+			requestPath = "/v1/embeddings"
+		case strings.Contains(modelName, "rerank"):
+			requestPath = "/v1/rerank"
+		case strings.Contains(modelName, "codex") || strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix):
+			requestPath = "/v1/responses"
+		}
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		retryParam := &RetryParam{
+			Ctx:         c,
+			TokenGroup:  monitor.PricingGroup,
+			ModelName:   monitor.TestModel,
+			RequestPath: requestPath,
+		}
+		ctx, cancel := context.WithTimeout(parent, time.Duration(monitor.TimeoutSeconds)*time.Second)
+		var lastErr error
+		attemptLimit := monitor.RetryCount
+		if attemptLimit < channelMonitorMinRetryCount {
+			attemptLimit = channelMonitorMinRetryCount
+		}
+		for attempt := 0; attempt < attemptLimit; attempt++ {
+			if err := ctx.Err(); err != nil {
+				lastErr = err
+				break
+			}
+			channel, _, err := CacheGetRandomSatisfiedChannel(retryParam)
+			if err != nil {
+				lastErr = err
+				break
+			}
+			if channel == nil {
+				lastErr = fmt.Errorf("no enabled channel for pricing group %q and model %q", monitor.PricingGroup, monitor.TestModel)
+				break
+			}
+			result.StatusCode, result.LatencyMs, lastErr = probe(ctx, channel, monitor)
+			retryParam.MarkChannelAttempted(channel.Id)
+			if lastErr == nil {
+				result.Success = true
+				break
+			}
+			retryParam.ExcludeChannel(channel.Id)
+		}
+		cancel()
+		if lastErr != nil {
+			result.ErrorMessage = truncateChannelMonitorError(lastErr.Error())
 		}
 	}
 	if err := model.SaveChannelMonitorResult(monitor, result); err != nil {
@@ -414,53 +382,6 @@ func runChannelMonitorCheck(ctx context.Context, monitor *model.ChannelMonitor) 
 		return nil, err
 	}
 	return result, nil
-}
-
-func executeChannelMonitorRequest(parent context.Context, monitor *model.ChannelMonitor, apiKey string) (int, int, error) {
-	body, err := common.Marshal(map[string]any{
-		"model": monitor.TestModel,
-		"messages": []map[string]string{
-			{"role": "user", "content": "ping"},
-		},
-		"max_tokens": 1,
-		"stream":     false,
-	})
-	if err != nil {
-		return 0, 0, err
-	}
-	ctx, cancel := context.WithTimeout(parent, time.Duration(monitor.TimeoutSeconds)*time.Second)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, channelMonitorRequestURL(monitor.ApiURL), strings.NewReader(string(body)))
-	if err != nil {
-		return 0, 0, err
-	}
-	request.Header.Set("Authorization", "Bearer "+apiKey)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-
-	startedAt := time.Now()
-	response, err := GetSSRFProtectedHTTPClient().Do(request)
-	latencyMs := int(time.Since(startedAt).Milliseconds())
-	if err != nil {
-		return 0, latencyMs, err
-	}
-	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64*1024))
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return response.StatusCode, latencyMs, fmt.Errorf("upstream returned HTTP %d", response.StatusCode)
-	}
-	return response.StatusCode, latencyMs, nil
-}
-
-func channelMonitorRequestURL(apiURL string) string {
-	trimmed := strings.TrimRight(apiURL, "/")
-	if strings.HasSuffix(trimmed, "/chat/completions") {
-		return trimmed
-	}
-	if strings.HasSuffix(trimmed, "/v1") {
-		return trimmed + "/chat/completions"
-	}
-	return trimmed + "/v1/chat/completions"
 }
 
 func truncateChannelMonitorError(message string) string {
@@ -473,8 +394,12 @@ func truncateChannelMonitorError(message string) string {
 
 var channelMonitorRunnerOnce sync.Once
 
-func StartChannelMonitorRunner() {
+func StartChannelMonitorRunner(probe ChannelMonitorProbe) {
 	if !common.IsMasterNode {
+		return
+	}
+	if probe == nil {
+		common.SysError("channel monitor scheduler requires a pricing group probe")
 		return
 	}
 	channelMonitorRunnerOnce.Do(func() {
@@ -493,7 +418,7 @@ func StartChannelMonitorRunner() {
 					semaphore <- struct{}{}
 					go func(claimed *model.ChannelMonitor) {
 						defer func() { <-semaphore }()
-						if _, err := runChannelMonitorCheck(context.Background(), claimed); err != nil {
+						if _, err := runChannelMonitorCheck(context.Background(), claimed, probe); err != nil {
 							common.SysError(fmt.Sprintf("channel monitor %d failed to persist result: %v", claimed.Id, err))
 						}
 					}(monitor)

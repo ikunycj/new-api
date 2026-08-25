@@ -114,31 +114,15 @@ quota.insufficient: "Insufficient quota"
 quota.warning_invalid: "Invalid warning type"
 quota.threshold_gt_zero: "Warning threshold must be greater than 0"
 
-# Subscription messages
-subscription.not_enabled: "Subscription plan is not enabled"
-subscription.title_empty: "Subscription plan title cannot be empty"
-subscription.price_negative: "Price cannot be negative"
-subscription.price_max: "Price cannot exceed 9999"
-subscription.purchase_limit_negative: "Purchase limit cannot be negative"
-subscription.quota_negative: "Total quota cannot be negative"
-subscription.group_not_exists: "Upgrade group does not exist"
-subscription.reset_cycle_gt_zero: "Custom reset cycle must be greater than 0 seconds"
-subscription.purchase_max: "Purchase limit for this plan has been reached"
-subscription.invalid_id: "Invalid subscription ID"
-subscription.invalid_user_id: "Invalid user ID"
-
 # Payment messages
 payment.not_configured: "Payment information has not been configured by administrator"
 payment.method_not_exists: "Payment method does not exist"
 payment.callback_error: "Callback URL configuration error"
 payment.create_failed: "Failed to create order"
 payment.start_failed: "Failed to start payment"
-payment.amount_too_low: "Plan amount is too low"
 payment.stripe_not_configured: "Stripe is not configured or key is invalid"
 payment.webhook_not_configured: "Webhook is not configured"
-payment.price_id_not_configured: "StripePriceId is not configured for this plan"
-payment.creem_not_configured: "CreemProductId is not configured for this plan"
-payment.compliance_required: "Payment, redemption, subscription, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them."
+payment.compliance_required: "Payment, redemption, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them."
 
 # Topup messages
 topup.not_provided: "Payment order number not provided"

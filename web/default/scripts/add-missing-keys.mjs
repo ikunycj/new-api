@@ -862,6 +862,13 @@ const retiredKeys = new Set([
   'The token has no group, so it is billed as the user group vip, using the base ratio of vip.',
   'Three calls made by the same user, whose user group is vip:',
   'Three groups; the override matrix has exactly one cell filled in (highlighted).',
+  'Group pricing usage guide',
+  'JSON map of group → ratio applied when the user selects the group explicitly.',
+  'Pricing group example',
+  'The two roles of a group',
+  'Token group',
+  'Usage guide',
+  'decides which channels are used and which base ratio applies.',
 ])
 
 const localeFiles = (await fs.readdir(LOCALES_DIR, { withFileTypes: true }))

@@ -35,11 +35,3 @@ export function applyMonitorAvailabilityBoost(
 export function formatMonitorTime(value: number | null): string {
   return value == null ? '--' : dayjs.unix(value).format('YYYY-MM-DD HH:mm:ss')
 }
-
-export function getMonitorApiHost(apiURL: string): string {
-  try {
-    return new URL(apiURL).host
-  } catch {
-    return apiURL
-  }
-}

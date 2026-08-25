@@ -7,12 +7,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
-var userUsableGroups = map[string]string{
-	"default": "默认分组",
-	"vip":     "vip分组",
-}
-var userUsableGroupsMutex sync.RWMutex
-
 // UserGroupPricingGroups stores the pricing groups available to each account
 // group. A missing entry, or an entry containing "*", means all pricing
 // groups. The account-group catalog and the pricing-group catalog are kept
@@ -23,49 +17,6 @@ var userGroupPricingGroups = map[string][]string{
 	"default": {AllPricingGroups},
 }
 var userGroupPricingGroupsMutex sync.RWMutex
-
-func GetUserUsableGroupsCopy() map[string]string {
-	userUsableGroupsMutex.RLock()
-	defer userUsableGroupsMutex.RUnlock()
-
-	copyUserUsableGroups := make(map[string]string)
-	for k, v := range userUsableGroups {
-		copyUserUsableGroups[k] = v
-	}
-	return copyUserUsableGroups
-}
-
-func UserUsableGroups2JSONString() string {
-	userUsableGroupsMutex.RLock()
-	defer userUsableGroupsMutex.RUnlock()
-
-	jsonBytes, err := common.Marshal(userUsableGroups)
-	if err != nil {
-		common.SysLog("error marshalling user groups: " + err.Error())
-	}
-	return string(jsonBytes)
-}
-
-func UpdateUserUsableGroupsByJSONString(jsonStr string) error {
-	updated := make(map[string]string)
-	if err := common.UnmarshalJsonStr(jsonStr, &updated); err != nil {
-		return err
-	}
-	userUsableGroupsMutex.Lock()
-	defer userUsableGroupsMutex.Unlock()
-	userUsableGroups = updated
-	return nil
-}
-
-func GetUsableGroupDescription(groupName string) string {
-	userUsableGroupsMutex.RLock()
-	defer userUsableGroupsMutex.RUnlock()
-
-	if desc, ok := userUsableGroups[groupName]; ok {
-		return desc
-	}
-	return groupName
-}
 
 func normalizeUserGroupPricingGroups(groups []string) []string {
 	if len(groups) == 0 {
@@ -146,19 +97,4 @@ func UpdateUserGroupPricingGroupsByJSONString(jsonStr string) error {
 	defer userGroupPricingGroupsMutex.Unlock()
 	userGroupPricingGroups = updated
 	return nil
-}
-
-func SetUserGroupPricingGroups(userGroup string, pricingGroups []string) {
-	userGroupPricingGroupsMutex.Lock()
-	defer userGroupPricingGroupsMutex.Unlock()
-	if userGroupPricingGroups == nil {
-		userGroupPricingGroups = make(map[string][]string)
-	}
-	userGroupPricingGroups[userGroup] = normalizeUserGroupPricingGroups(pricingGroups)
-}
-
-func DeleteUserGroupPricingGroups(userGroup string) {
-	userGroupPricingGroupsMutex.Lock()
-	defer userGroupPricingGroupsMutex.Unlock()
-	delete(userGroupPricingGroups, userGroup)
 }

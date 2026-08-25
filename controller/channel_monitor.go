@@ -14,24 +14,21 @@ import (
 )
 
 type channelMonitorCreateRequest struct {
-	Name                     string   `json:"name"`
-	ApiURL                   string   `json:"api_url"`
-	ApiKey                   string   `json:"api_key"`
+	PricingGroup             string   `json:"pricing_group"`
 	TestModel                string   `json:"test_model"`
 	IntervalSeconds          int      `json:"interval_seconds"`
 	TimeoutSeconds           int      `json:"timeout_seconds"`
+	RetryCount               int      `json:"retry_count"`
 	Enabled                  *bool    `json:"enabled"`
 	Visible                  *bool    `json:"visible"`
 	AvailabilityBoostPercent *float64 `json:"availability_boost_percent"`
 }
 
 type channelMonitorUpdateRequest struct {
-	Name                     string   `json:"name"`
-	ApiURL                   string   `json:"api_url"`
-	ApiKey                   string   `json:"api_key"`
 	TestModel                string   `json:"test_model"`
 	IntervalSeconds          int      `json:"interval_seconds"`
 	TimeoutSeconds           int      `json:"timeout_seconds"`
+	RetryCount               int      `json:"retry_count"`
 	Enabled                  *bool    `json:"enabled"`
 	Visible                  *bool    `json:"visible"`
 	AvailabilityBoostPercent *float64 `json:"availability_boost_percent"`
@@ -48,14 +45,13 @@ type channelMonitorResultResponse struct {
 
 type channelMonitorResponse struct {
 	Id                       int                            `json:"id"`
-	Name                     string                         `json:"name"`
-	ApiURL                   string                         `json:"api_url"`
+	PricingGroup             string                         `json:"pricing_group"`
 	TestModel                string                         `json:"test_model"`
 	IntervalSeconds          int                            `json:"interval_seconds"`
 	TimeoutSeconds           int                            `json:"timeout_seconds"`
+	RetryCount               int                            `json:"retry_count"`
 	Enabled                  bool                           `json:"enabled"`
 	Visible                  bool                           `json:"visible"`
-	HasAPIKey                bool                           `json:"has_api_key"`
 	Status                   string                         `json:"status"`
 	LatestLatencyMs          *int                           `json:"latest_latency_ms"`
 	LatestStatusCode         *int                           `json:"latest_status_code"`
@@ -76,8 +72,7 @@ type channelMonitorResponse struct {
 
 type groupStatusResponse struct {
 	Id                  int                            `json:"id"`
-	Name                string                         `json:"name"`
-	ApiURL              string                         `json:"api_url"`
+	PricingGroup        string                         `json:"pricing_group"`
 	TestModel           string                         `json:"test_model"`
 	IntervalSeconds     int                            `json:"interval_seconds"`
 	Status              string                         `json:"status"`
@@ -116,14 +111,13 @@ func channelMonitorViewToResponse(view *service.ChannelMonitorView) channelMonit
 	monitor := view.Monitor
 	response := channelMonitorResponse{
 		Id:                       monitor.Id,
-		Name:                     monitor.Name,
-		ApiURL:                   monitor.ApiURL,
+		PricingGroup:             monitor.PricingGroup,
 		TestModel:                monitor.TestModel,
 		IntervalSeconds:          monitor.IntervalSeconds,
 		TimeoutSeconds:           monitor.TimeoutSeconds,
+		RetryCount:               monitor.RetryCount,
 		Enabled:                  monitor.Enabled,
 		Visible:                  monitor.Visible,
-		HasAPIKey:                monitor.ApiKeyEncrypted != "",
 		Status:                   view.Status,
 		LastCheckedAt:            monitor.LastCheckedAt,
 		NextCheckAt:              monitor.NextCheckAt,
@@ -153,8 +147,7 @@ func channelMonitorViewToGroupStatus(view *service.ChannelMonitorView) groupStat
 	monitor := view.Monitor
 	response := groupStatusResponse{
 		Id:                  monitor.Id,
-		Name:                monitor.Name,
-		ApiURL:              monitor.ApiURL,
+		PricingGroup:        monitor.PricingGroup,
 		TestModel:           monitor.TestModel,
 		IntervalSeconds:     monitor.IntervalSeconds,
 		Status:              view.Status,
@@ -238,12 +231,11 @@ func CreateChannelMonitor(c *gin.Context) {
 		availabilityBoostPercent = *request.AvailabilityBoostPercent
 	}
 	monitor, err := service.CreateChannelMonitor(service.ChannelMonitorInput{
-		Name:                     request.Name,
-		ApiURL:                   request.ApiURL,
-		ApiKey:                   request.ApiKey,
+		PricingGroup:             request.PricingGroup,
 		TestModel:                request.TestModel,
 		IntervalSeconds:          request.IntervalSeconds,
 		TimeoutSeconds:           request.TimeoutSeconds,
+		RetryCount:               request.RetryCount,
 		Enabled:                  enabled,
 		Visible:                  visible,
 		AvailabilityBoostPercent: availabilityBoostPercent,
@@ -289,12 +281,11 @@ func UpdateChannelMonitor(c *gin.Context) {
 		availabilityBoostPercent = *request.AvailabilityBoostPercent
 	}
 	_, err = service.UpdateChannelMonitor(id, service.ChannelMonitorInput{
-		Name:                     request.Name,
-		ApiURL:                   request.ApiURL,
-		ApiKey:                   request.ApiKey,
+		PricingGroup:             current.Monitor.PricingGroup,
 		TestModel:                request.TestModel,
 		IntervalSeconds:          request.IntervalSeconds,
 		TimeoutSeconds:           request.TimeoutSeconds,
+		RetryCount:               request.RetryCount,
 		Enabled:                  enabled,
 		Visible:                  visible,
 		AvailabilityBoostPercent: availabilityBoostPercent,
@@ -311,24 +302,12 @@ func UpdateChannelMonitor(c *gin.Context) {
 	common.ApiSuccess(c, channelMonitorViewToResponse(view))
 }
 
-func DeleteChannelMonitor(c *gin.Context) {
-	id, ok := parseChannelMonitorId(c)
-	if !ok {
-		return
-	}
-	if err := service.DeleteChannelMonitor(id); err != nil {
-		respondChannelMonitorError(c, err)
-		return
-	}
-	common.ApiSuccess(c, nil)
-}
-
 func RunChannelMonitor(c *gin.Context) {
 	id, ok := parseChannelMonitorId(c)
 	if !ok {
 		return
 	}
-	result, err := service.RunChannelMonitorCheck(c.Request.Context(), id)
+	result, err := service.RunChannelMonitorCheck(c.Request.Context(), id, ProbePricingGroupChannel)
 	if err != nil {
 		respondChannelMonitorError(c, err)
 		return
@@ -380,7 +359,7 @@ func RunGroupStatusTest(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := service.RunUserChannelMonitorTest(c.Request.Context(), id)
+	result, err := service.RunUserChannelMonitorTest(c.Request.Context(), id, ProbePricingGroupChannel)
 	if err != nil {
 		var cooldownErr *service.ChannelMonitorUserTestCooldownError
 		if errors.As(err, &cooldownErr) {

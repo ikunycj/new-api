@@ -22,12 +22,10 @@ import { describe, test } from 'node:test'
 import { channelMonitorFormSchema } from './schema'
 
 const validMonitor = {
-  name: 'Status monitor',
-  api_url: 'https://example.com/v1',
-  api_key: 'sk-test',
   test_model: 'gpt-test',
   interval_seconds: 60,
   timeout_seconds: 15,
+  retry_count: 3,
   enabled: true,
   visible: true,
   availability_boost_percent: 0,
@@ -51,6 +49,24 @@ describe('channel monitor availability boost', () => {
         channelMonitorFormSchema.safeParse({
           ...validMonitor,
           availability_boost_percent: value,
+        }).success,
+        false
+      )
+    }
+  })
+})
+
+describe('channel monitor retry count', () => {
+  test('accepts a positive attempt budget', () => {
+    assert.equal(channelMonitorFormSchema.safeParse(validMonitor).success, true)
+  })
+
+  test('rejects zero, fractional, and excessive values', () => {
+    for (const value of [0, 1.5, 10001]) {
+      assert.equal(
+        channelMonitorFormSchema.safeParse({
+          ...validMonitor,
+          retry_count: value,
         }).success,
         false
       )

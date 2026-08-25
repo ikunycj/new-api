@@ -19,11 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
-  CreditCard,
   FileText,
   Gauge,
   FlaskConical,
-  HeartPulse,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -139,11 +137,6 @@ export function useSidebarData(): SidebarData {
             requiredRole: ROLE.ADMIN,
           },
           {
-            title: t('Channel Monitors'),
-            url: '/channel-monitors',
-            icon: HeartPulse,
-          },
-          {
             title: t('Models'),
             url: '/models/metadata',
             icon: Box,
@@ -169,11 +162,6 @@ export function useSidebarData(): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
-          },
-          {
-            title: t('Subscriptions'),
-            url: '/subscriptions',
-            icon: CreditCard,
           },
           {
             title: t('System Info'),

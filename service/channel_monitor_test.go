@@ -4,17 +4,124 @@ import (
 	"context"
 	"errors"
 	"math"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const channelMonitorTestPricingGroup = "monitor-pricing"
+
+func setupChannelMonitorServiceTest(t *testing.T) {
+	t.Helper()
+
+	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
+	previousMemoryCacheEnabled := common.MemoryCacheEnabled
+	t.Cleanup(func() {
+		for _, table := range []string{
+			"channel_monitor_histories",
+			"channel_monitors",
+			"billing_group_channels",
+			"billing_group_routes",
+			"abilities",
+			"channels",
+		} {
+			assert.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
+		}
+		assert.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+		common.MemoryCacheEnabled = previousMemoryCacheEnabled
+		model.InitChannelRoutingCache()
+		if previousMemoryCacheEnabled {
+			model.InitChannelCache()
+		}
+	})
+
+	require.NoError(t, model.DB.AutoMigrate(
+		&model.Channel{},
+		&model.Ability{},
+		&model.BillingGroupRoute{},
+		&model.BillingGroupChannel{},
+		&model.ChannelMonitor{},
+		&model.ChannelMonitorHistory{},
+	))
+	for _, table := range []string{
+		"channel_monitor_histories",
+		"channel_monitors",
+		"billing_group_channels",
+		"billing_group_routes",
+		"abilities",
+		"channels",
+	} {
+		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
+	}
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"monitor-pricing":1}`))
+	common.MemoryCacheEnabled = false
+	model.InitChannelRoutingCache()
+}
+
+func validChannelMonitorInput() ChannelMonitorInput {
+	return ChannelMonitorInput{
+		PricingGroup:             channelMonitorTestPricingGroup,
+		TestModel:                "gpt-test",
+		IntervalSeconds:          60,
+		TimeoutSeconds:           15,
+		RetryCount:               1,
+		Enabled:                  true,
+		Visible:                  true,
+		AvailabilityBoostPercent: 0,
+		CreatedBy:                1,
+	}
+}
+
+func seedChannelMonitorCandidate(t *testing.T) *model.Channel {
+	t.Helper()
+	weight := uint(100)
+	channel := &model.Channel{
+		Id:     93001,
+		Name:   "Monitor candidate",
+		Key:    "sk-internal",
+		Status: common.ChannelStatusEnabled,
+		Models: "gpt-test",
+		Group:  channelMonitorTestPricingGroup,
+		Weight: &weight,
+	}
+	require.NoError(t, model.DB.Create(channel).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     channelMonitorTestPricingGroup,
+		Model:     "gpt-test",
+		ChannelId: channel.Id,
+		Enabled:   true,
+		Weight:    weight,
+	}).Error)
+	return channel
+}
+
+func seedAdditionalChannelMonitorCandidate(t *testing.T, id int) *model.Channel {
+	t.Helper()
+	weight := uint(100)
+	channel := &model.Channel{
+		Id:     id,
+		Name:   "Additional monitor candidate",
+		Key:    "sk-internal-additional",
+		Status: common.ChannelStatusEnabled,
+		Models: "gpt-test",
+		Group:  channelMonitorTestPricingGroup,
+		Weight: &weight,
+	}
+	require.NoError(t, model.DB.Create(channel).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     channelMonitorTestPricingGroup,
+		Model:     "gpt-test",
+		ChannelId: channel.Id,
+		Enabled:   true,
+		Weight:    weight,
+	}).Error)
+	return channel
+}
 
 func TestChannelMonitorAvailabilityBoostValidation(t *testing.T) {
 	require.NoError(t, validateChannelMonitorAvailabilityBoost(99.95))
@@ -50,138 +157,82 @@ func TestApplyChannelMonitorAvailabilityBoostUsesFailureGap(t *testing.T) {
 	assert.Nil(t, applyChannelMonitorAvailabilityBoost(nil, 100))
 }
 
-func TestChannelMonitorAPIKeyEncryptionRoundTrip(t *testing.T) {
-	originalSecret := common.CryptoSecret
-	t.Cleanup(func() { common.CryptoSecret = originalSecret })
-	t.Setenv("CRYPTO_SECRET", "stable-test-secret")
-	common.CryptoSecret = "stable-test-secret"
+func TestCreateChannelMonitorRequiresExistingPricingGroup(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
 
-	encrypted, err := encryptChannelMonitorAPIKey("sk-test-secret")
+	input := validChannelMonitorInput()
+	input.PricingGroup = "missing-pricing"
+	_, err := CreateChannelMonitor(input)
+	require.EqualError(t, err, "pricing group does not exist")
+
+	monitor, err := CreateChannelMonitor(validChannelMonitorInput())
 	require.NoError(t, err)
-	assert.NotEqual(t, "sk-test-secret", encrypted)
-	assert.Contains(t, encrypted, channelMonitorEncryptionPrefix)
-
-	decrypted, err := decryptChannelMonitorAPIKey(encrypted)
-	require.NoError(t, err)
-	assert.Equal(t, "sk-test-secret", decrypted)
-
-	common.CryptoSecret = "different-secret"
-	_, err = decryptChannelMonitorAPIKey(encrypted)
-	require.Error(t, err)
+	assert.Equal(t, channelMonitorTestPricingGroup, monitor.PricingGroup)
 }
 
-func TestChannelMonitorRequestURL(t *testing.T) {
-	tests := []struct {
-		name     string
-		apiURL   string
-		expected string
-	}{
-		{name: "origin", apiURL: "https://example.com", expected: "https://example.com/v1/chat/completions"},
-		{name: "v1 base", apiURL: "https://example.com/v1", expected: "https://example.com/v1/chat/completions"},
-		{name: "full endpoint", apiURL: "https://example.com/v1/chat/completions", expected: "https://example.com/v1/chat/completions"},
+func TestCreateChannelMonitorDefaultsRetryCountToPricingGroupChannelCount(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+	seedChannelMonitorCandidate(t)
+	seedAdditionalChannelMonitorCandidate(t, 93002)
+
+	input := validChannelMonitorInput()
+	input.RetryCount = 0
+	monitor, err := CreateChannelMonitor(input)
+	require.NoError(t, err)
+	assert.Equal(t, 2, monitor.RetryCount)
+}
+
+func TestUpdateChannelMonitorEnablesAndDisablesScheduling(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+
+	input := validChannelMonitorInput()
+	input.Enabled = false
+	monitor, err := CreateChannelMonitor(input)
+	require.NoError(t, err)
+	assert.Nil(t, monitor.NextCheckAt)
+
+	input.Enabled = true
+	enabled, err := UpdateChannelMonitor(monitor.Id, input)
+	require.NoError(t, err)
+	require.NotNil(t, enabled.NextCheckAt)
+
+	input.Enabled = false
+	disabled, err := UpdateChannelMonitor(monitor.Id, input)
+	require.NoError(t, err)
+	assert.Nil(t, disabled.NextCheckAt)
+}
+
+func TestRunUserChannelMonitorTestPersistsProbeResultAndEnforcesCooldown(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+	channel := seedChannelMonitorCandidate(t)
+	monitor, err := CreateChannelMonitor(validChannelMonitorInput())
+	require.NoError(t, err)
+
+	probeCalls := 0
+	probe := func(ctx context.Context, selected *model.Channel, selectedMonitor *model.ChannelMonitor) (int, int, error) {
+		probeCalls++
+		assert.Equal(t, channel.Id, selected.Id)
+		assert.Equal(t, channelMonitorTestPricingGroup, selectedMonitor.PricingGroup)
+		assert.Equal(t, "gpt-test", selectedMonitor.TestModel)
+		_, hasDeadline := ctx.Deadline()
+		assert.True(t, hasDeadline)
+		return 204, 37, nil
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expected, channelMonitorRequestURL(test.apiURL))
-		})
-	}
-}
-
-func TestExecuteChannelMonitorRequestSendsOpenAICompatibleProbe(t *testing.T) {
-	fetchSetting := system_setting.GetFetchSetting()
-	originalSetting := *fetchSetting
-	t.Cleanup(func() {
-		*fetchSetting = originalSetting
-		InitHttpClient()
-	})
-	fetchSetting.EnableSSRFProtection = false
-	InitHttpClient()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
-		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
-		var body struct {
-			Model     string `json:"model"`
-			MaxTokens int    `json:"max_tokens"`
-			Stream    bool   `json:"stream"`
-		}
-		require.NoError(t, common.DecodeJson(r.Body, &body))
-		assert.Equal(t, "gpt-test", body.Model)
-		assert.Equal(t, 1, body.MaxTokens)
-		assert.False(t, body.Stream)
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-
-	statusCode, latencyMs, err := executeChannelMonitorRequest(
-		context.Background(),
-		&model.ChannelMonitor{
-			ApiURL:         server.URL,
-			TestModel:      "gpt-test",
-			TimeoutSeconds: 2,
-		},
-		"sk-test",
-	)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, statusCode)
-	assert.GreaterOrEqual(t, latencyMs, 0)
-}
-
-func TestRunUserChannelMonitorTestPersistsOfficialHistory(t *testing.T) {
-	fetchSetting := system_setting.GetFetchSetting()
-	originalSetting := *fetchSetting
-	originalSecret := common.CryptoSecret
-	t.Cleanup(func() {
-		*fetchSetting = originalSetting
-		common.CryptoSecret = originalSecret
-		InitHttpClient()
-	})
-	t.Setenv("CRYPTO_SECRET", "channel-monitor-user-test-secret")
-	common.CryptoSecret = "channel-monitor-user-test-secret"
-	fetchSetting.EnableSSRFProtection = false
-	InitHttpClient()
-
-	require.NoError(t, model.DB.AutoMigrate(&model.ChannelMonitor{}, &model.ChannelMonitorHistory{}))
-	require.NoError(t, model.DB.Exec("DELETE FROM channel_monitor_histories").Error)
-	require.NoError(t, model.DB.Exec("DELETE FROM channel_monitors").Error)
-	t.Cleanup(func() {
-		_ = model.DB.Exec("DELETE FROM channel_monitor_histories").Error
-		_ = model.DB.Exec("DELETE FROM channel_monitors").Error
-	})
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-
-	monitor, err := CreateChannelMonitor(ChannelMonitorInput{
-		Name:            "User test history isolation",
-		ApiURL:          server.URL,
-		ApiKey:          "sk-test",
-		TestModel:       "gpt-test",
-		IntervalSeconds: 60,
-		TimeoutSeconds:  2,
-		Enabled:         true,
-		Visible:         true,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, monitor.NextCheckAt)
-	result, err := RunUserChannelMonitorTest(context.Background(), monitor.Id)
+	result, err := RunUserChannelMonitorTest(context.Background(), monitor.Id, probe)
 	require.NoError(t, err)
 	assert.True(t, result.Success)
+	assert.Equal(t, 37, result.LatencyMs)
+	assert.Equal(t, 1, probeCalls)
 	assert.GreaterOrEqual(t, result.NextTestAt, result.CheckedAt+ChannelMonitorUserTestCooldownSeconds)
 
-	var historyCount int64
-	require.NoError(t, model.DB.Model(&model.ChannelMonitorHistory{}).
-		Where("monitor_id = ?", monitor.Id).
-		Count(&historyCount).Error)
-	assert.Equal(t, int64(1), historyCount)
-
-	var history model.ChannelMonitorHistory
-	require.NoError(t, model.DB.Where("monitor_id = ?", monitor.Id).First(&history).Error)
-	assert.True(t, history.Success)
-	assert.Equal(t, result.CheckedAt, history.CheckedAt)
+	history, err := model.ListChannelMonitorHistory(monitor.Id, 10)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.True(t, history[0].Success)
+	assert.Equal(t, 204, history[0].StatusCode)
+	assert.Equal(t, 37, history[0].LatencyMs)
+	assert.Equal(t, result.CheckedAt, history[0].CheckedAt)
 
 	updated, err := model.GetChannelMonitorByID(monitor.Id)
 	require.NoError(t, err)
@@ -190,8 +241,55 @@ func TestRunUserChannelMonitorTestPersistsOfficialHistory(t *testing.T) {
 	require.NotNil(t, updated.NextCheckAt)
 	assert.Equal(t, result.CheckedAt+int64(monitor.IntervalSeconds), *updated.NextCheckAt)
 
-	_, err = RunUserChannelMonitorTest(context.Background(), monitor.Id)
+	_, err = RunUserChannelMonitorTest(context.Background(), monitor.Id, probe)
 	var cooldownErr *ChannelMonitorUserTestCooldownError
 	require.True(t, errors.As(err, &cooldownErr))
 	assert.Equal(t, result.NextTestAt, cooldownErr.NextTestAt)
+	assert.Equal(t, 1, probeCalls)
+}
+
+func TestRunChannelMonitorCheckPersistsFailureWhenNoChannelIsAvailable(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+	monitor, err := CreateChannelMonitor(validChannelMonitorInput())
+	require.NoError(t, err)
+
+	probeCalled := false
+	result, err := RunChannelMonitorCheck(context.Background(), monitor.Id, func(context.Context, *model.Channel, *model.ChannelMonitor) (int, int, error) {
+		probeCalled = true
+		return 200, 1, nil
+	})
+	require.NoError(t, err)
+	assert.False(t, probeCalled)
+	assert.False(t, result.Success)
+	assert.Zero(t, result.StatusCode)
+	assert.Contains(t, result.ErrorMessage, "no enabled channel")
+	assert.Contains(t, result.ErrorMessage, channelMonitorTestPricingGroup)
+
+	history, err := model.ListChannelMonitorHistory(monitor.Id, 10)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, result.ErrorMessage, history[0].ErrorMessage)
+	assert.False(t, history[0].Success)
+}
+
+func TestRunChannelMonitorCheckRetriesDifferentChannels(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+	seedChannelMonitorCandidate(t)
+	seedAdditionalChannelMonitorCandidate(t, 93002)
+	input := validChannelMonitorInput()
+	input.RetryCount = 2
+	monitor, err := CreateChannelMonitor(input)
+	require.NoError(t, err)
+
+	attempted := make(map[int]int)
+	result, err := RunChannelMonitorCheck(context.Background(), monitor.Id, func(_ context.Context, channel *model.Channel, _ *model.ChannelMonitor) (int, int, error) {
+		attempted[channel.Id]++
+		return 503, 8, errors.New("upstream unavailable")
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Success)
+	assert.Len(t, attempted, 2)
+	for _, attempts := range attempted {
+		assert.Equal(t, 1, attempts)
+	}
 }

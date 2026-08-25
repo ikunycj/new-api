@@ -16,14 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Activity01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -58,6 +56,7 @@ import { Switch } from '@/components/ui/switch'
 
 import {
   createChannelMonitor,
+  getPricingGroupChannelCount,
   runChannelMonitor,
   updateChannelMonitor,
 } from '../api'
@@ -74,7 +73,8 @@ import {
 } from '../lib/schema'
 import type {
   ChannelMonitor,
-  ChannelMonitorPayload,
+  ChannelMonitorCreatePayload,
+  ChannelMonitorSettingsPayload,
   ChannelMonitorRunResponse,
 } from '../types'
 import { MonitorHistoryBars, MonitorStatusBadge } from './monitor-status'
@@ -82,6 +82,7 @@ import { MonitorHistoryBars, MonitorStatusBadge } from './monitor-status'
 type ChannelMonitorSheetProps = {
   open: boolean
   monitor: ChannelMonitor | null
+  pricingGroupName: string
   onOpenChange: (open: boolean) => void
 }
 
@@ -99,14 +100,14 @@ type SaveMutationResult = {
 function buildFormDefaults(
   monitor: ChannelMonitor | null
 ): ChannelMonitorFormInput {
-  if (!monitor) return channelMonitorFormDefaults
+  if (!monitor) {
+    return { ...channelMonitorFormDefaults }
+  }
   return {
-    name: monitor.name,
-    api_url: monitor.api_url,
-    api_key: '',
     test_model: monitor.test_model,
     interval_seconds: monitor.interval_seconds,
     timeout_seconds: monitor.timeout_seconds,
+    retry_count: monitor.retry_count,
     enabled: monitor.enabled,
     visible: monitor.visible,
     availability_boost_percent: monitor.availability_boost_percent,
@@ -114,8 +115,13 @@ function buildFormDefaults(
 }
 
 export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
-  const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pricingGroupName = props.pricingGroupName.trim()
+  const defaultRetryCountQuery = useQuery({
+    queryKey: ['pricing-group-channel-count', pricingGroupName],
+    queryFn: () => getPricingGroupChannelCount(pricingGroupName),
+    enabled: props.open && props.monitor === null && pricingGroupName !== '',
+  })
   const form = useForm<
     ChannelMonitorFormInput,
     unknown,
@@ -126,8 +132,22 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
   })
 
   useEffect(() => {
-    if (props.open) form.reset(buildFormDefaults(props.monitor))
-  }, [form, props.monitor, props.open])
+    if (props.open) {
+      form.reset(buildFormDefaults(props.monitor))
+    }
+  }, [form, props.monitor, props.open, props.pricingGroupName])
+
+  useEffect(() => {
+    if (
+      !props.open ||
+      props.monitor !== null ||
+      defaultRetryCountQuery.data === undefined ||
+      form.getFieldState('retry_count').isDirty
+    ) {
+      return
+    }
+    form.setValue('retry_count', defaultRetryCountQuery.data)
+  }, [defaultRetryCountQuery.data, form, props.monitor, props.open])
 
   const watchedBoostPercent = useWatch({
     control: form.control,
@@ -144,16 +164,21 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
     SaveMutationInput
   >({
     mutationFn: async (input) => {
-      const payload: ChannelMonitorPayload = {
-        ...input.values,
-        name: input.values.name.trim(),
-        api_url: input.values.api_url.trim(),
-        api_key: input.values.api_key.trim(),
+      const payload: ChannelMonitorSettingsPayload = {
         test_model: input.values.test_model.trim(),
+        interval_seconds: input.values.interval_seconds,
+        timeout_seconds: input.values.timeout_seconds,
+        retry_count: input.values.retry_count,
+        enabled: input.values.enabled,
+        visible: input.values.visible,
+        availability_boost_percent: input.values.availability_boost_percent,
       }
       const saved = props.monitor
         ? await updateChannelMonitor(props.monitor.id, payload)
-        : await createChannelMonitor(payload)
+        : await createChannelMonitor({
+            ...payload,
+            pricing_group: props.pricingGroupName.trim(),
+          } satisfies ChannelMonitorCreatePayload)
       if (!input.runAfterSave) {
         return { monitor: saved, runAfterSave: false }
       }
@@ -161,27 +186,29 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
       return { monitor: test.monitor, test, runAfterSave: true }
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['channel-monitors'] })
-      await queryClient.invalidateQueries({ queryKey: ['group-status'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+      ])
       if (result.runAfterSave && result.test && !result.test.result.success) {
-        toast.error(t('Configuration saved, but the availability test failed'))
+        toast.error('监控配置已保存，但可用性测试失败')
         return
       }
       toast.success(
         result.runAfterSave
-          ? t('Monitor saved and tested successfully')
-          : t('Monitor saved successfully')
+          ? '监控配置已保存，可用性测试成功'
+          : '监控配置已保存'
       )
       props.onOpenChange(false)
     },
     onError: (error) => {
-      toast.error(error.message || t('Operation failed'))
+      toast.error(error.message || '操作失败')
     },
   })
 
   const submit = (values: ChannelMonitorFormValues, runAfterSave: boolean) => {
-    if (!props.monitor && values.api_key.trim() === '') {
-      form.setError('api_key', { message: 'API key is required' })
+    if (!props.monitor && !props.pricingGroupName.trim()) {
+      toast.error('请先保存定价分组，再配置监控')
       return
     }
     saveMutation.mutate({ values, runAfterSave })
@@ -192,10 +219,10 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
       <SheetContent className='gap-0 sm:max-w-xl'>
         <SheetHeader className='border-b px-5 py-4'>
           <SheetTitle>
-            {props.monitor ? t('Edit monitor') : t('Create monitor')}
+            {props.monitor ? '编辑分组监控' : '配置分组监控'}
           </SheetTitle>
           <SheetDescription>
-            {t('Configure an OpenAI-compatible API availability test')}
+            系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
           </SheetDescription>
         </SheetHeader>
 
@@ -209,9 +236,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                 <div className='bg-muted/40 flex flex-col gap-3 rounded-lg border p-3'>
                   <div className='flex items-center justify-between gap-3'>
                     <div className='min-w-0'>
-                      <p className='truncate text-sm font-medium'>
-                        {t('Latest test')}
-                      </p>
+                      <p className='truncate text-sm font-medium'>最近测试</p>
                       <p className='text-muted-foreground mt-0.5 text-xs'>
                         {formatMonitorTime(props.monitor.last_checked_at)}
                         {props.monitor.latest_latency_ms != null &&
@@ -230,73 +255,10 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
               <FieldGroup className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
                 <FormField
                   control={form.control}
-                  name='name'
-                  render={({ field }) => (
-                    <FormItem className='sm:col-span-2'>
-                      <FormLabel>{t('Monitor name')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder='ChatGPT Pro' />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='api_url'
-                  render={({ field }) => (
-                    <FormItem className='sm:col-span-2'>
-                      <FormLabel>{t('Group API')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          inputMode='url'
-                          placeholder='https://api.openai.com/v1'
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Enter the API base URL or the full chat completions endpoint'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='api_key'
-                  render={({ field }) => (
-                    <FormItem className='sm:col-span-2'>
-                      <FormLabel>{t('API Key')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='password'
-                          autoComplete='new-password'
-                          placeholder={
-                            props.monitor
-                              ? t('Leave blank to keep the current key')
-                              : 'sk-...'
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t('The API key is encrypted before being stored')}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name='test_model'
                   render={({ field }) => (
                     <FormItem className='sm:col-span-2'>
-                      <FormLabel>{t('Test model')}</FormLabel>
+                      <FormLabel>测试模型</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder='gpt-4.1-mini' />
                       </FormControl>
@@ -310,7 +272,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                   name='interval_seconds'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Test interval')}</FormLabel>
+                      <FormLabel>测试间隔</FormLabel>
                       <FormControl>
                         <InputGroup>
                           <InputGroupInput
@@ -324,13 +286,11 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                             }
                           />
                           <InputGroupAddon align='inline-end'>
-                            <InputGroupText>{t('seconds')}</InputGroupText>
+                            <InputGroupText>秒</InputGroupText>
                           </InputGroupAddon>
                         </InputGroup>
                       </FormControl>
-                      <FormDescription>
-                        {t('Allowed range: 1 to 86400 seconds')}
-                      </FormDescription>
+                      <FormDescription>可设置 1 至 86400 秒</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -341,7 +301,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                   name='timeout_seconds'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Request timeout')}</FormLabel>
+                      <FormLabel>请求超时</FormLabel>
                       <FormControl>
                         <InputGroup>
                           <InputGroupInput
@@ -355,7 +315,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                             }
                           />
                           <InputGroupAddon align='inline-end'>
-                            <InputGroupText>{t('seconds')}</InputGroupText>
+                            <InputGroupText>秒</InputGroupText>
                           </InputGroupAddon>
                         </InputGroup>
                       </FormControl>
@@ -366,10 +326,43 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
 
                 <FormField
                   control={form.control}
+                  name='retry_count'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>重试次数</FormLabel>
+                      <FormControl>
+                        <InputGroup>
+                          <InputGroupInput
+                            type='number'
+                            min={1}
+                            max={10000}
+                            step={1}
+                            value={String(field.value ?? '')}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                          <InputGroupAddon align='inline-end'>
+                            <InputGroupText>次</InputGroupText>
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </FormControl>
+                      <FormDescription>
+                        {defaultRetryCountQuery.isFetching
+                          ? '正在读取分组渠道数量'
+                          : '默认按分组内渠道数量设置'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name='availability_boost_percent'
                   render={({ field }) => (
-                    <FormItem className='sm:col-span-2'>
-                      <FormLabel>{t('Availability boost')}</FormLabel>
+                    <FormItem>
+                      <FormLabel>可用率加成</FormLabel>
                       <FormControl>
                         <InputGroup>
                           <InputGroupInput
@@ -394,12 +387,10 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
 
                 {props.monitor && (
                   <div className='bg-muted/40 rounded-lg border p-3 sm:col-span-2'>
-                    <p className='mb-2 text-sm font-medium'>
-                      {t('Availability boost preview')}
-                    </p>
+                    <p className='mb-2 text-sm font-medium'>可用率加成预览</p>
                     <div className='grid gap-2 text-sm'>
                       <AvailabilityPreviewRow
-                        period={t('7 days')}
+                        period='7 天'
                         raw={props.monitor.raw_availability_7d}
                         boosted={applyMonitorAvailabilityBoost(
                           props.monitor.raw_availability_7d,
@@ -407,7 +398,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                         )}
                       />
                       <AvailabilityPreviewRow
-                        period={t('30 days')}
+                        period='30 天'
                         raw={props.monitor.raw_availability_30d}
                         boosted={applyMonitorAvailabilityBoost(
                           props.monitor.raw_availability_30d,
@@ -428,9 +419,9 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                   render={({ field }) => (
                     <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
                       <div>
-                        <FormLabel>{t('Enable scheduled tests')}</FormLabel>
+                        <FormLabel>启用定时测试</FormLabel>
                         <FormDescription>
-                          {t('Send test requests at the configured interval')}
+                          按配置的间隔自动测试当前定价分组
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -448,9 +439,9 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                   render={({ field }) => (
                     <FormItem className='flex items-center justify-between gap-4 rounded-lg px-1 py-2'>
                       <div>
-                        <FormLabel>{t('Show to signed-in users')}</FormLabel>
+                        <FormLabel>向登录用户展示</FormLabel>
                         <FormDescription>
-                          {t('Display this group on the group status page')}
+                          在分组状态页面展示此定价分组
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -472,7 +463,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                 onClick={() => props.onOpenChange(false)}
                 disabled={saveMutation.isPending}
               >
-                {t('Cancel')}
+                取消
               </Button>
               <Button type='submit' disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? (
@@ -480,7 +471,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                 ) : (
                   <HugeiconsIcon icon={Tick02Icon} data-icon='inline-start' />
                 )}
-                {t('Save')}
+                保存
               </Button>
               <Button
                 type='button'
@@ -497,7 +488,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
                     data-icon='inline-start'
                   />
                 )}
-                {t('Save and test')}
+                保存并测试
               </Button>
             </SheetFooter>
           </form>

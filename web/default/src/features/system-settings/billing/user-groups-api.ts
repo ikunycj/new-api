@@ -32,6 +32,7 @@ export type UserGroupSummary = {
 export type UpdateUserGroupRequest = {
   topup_ratio: number
   pricing_groups: string[]
+  pricing_groups_all: boolean
 }
 
 type ApiResponse<T> = {
