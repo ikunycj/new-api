@@ -196,13 +196,14 @@ func ListCostReconciliationRollups(query CostReconciliationQuery) ([]CostReconci
 	if DB == nil {
 		return nil, 0, CostReconciliationTotals{}, errors.New("database is not initialized")
 	}
-	base := applyCostRollupFilters(DB.Model(&CostReconciliationRollup{}), query)
 	var total int64
-	if err := base.Count(&total).Error; err != nil {
+	countQuery := applyCostRollupFilters(DB.Model(&CostReconciliationRollup{}), query)
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, CostReconciliationTotals{}, err
 	}
 	var totals CostReconciliationTotals
-	if err := base.Select("COALESCE(SUM(request_count),0) as request_count, COALESCE(SUM(user_charge_usd_micros),0) as user_charge_usd_micros, COALESCE(SUM(estimated_cost_usd_micros),0) as estimated_cost_usd_micros, COALESCE(SUM(successful_cost_usd_micros),0) as successful_cost_usd_micros, COALESCE(SUM(retry_cost_usd_micros),0) as retry_cost_usd_micros, COALESCE(SUM(failed_partial_cost_usd_micros),0) as failed_partial_cost_usd_micros, COALESCE(SUM(diff_usd_micros),0) as diff_usd_micros, COALESCE(SUM(estimated_count),0) as estimated_count, COALESCE(SUM(unavailable_count),0) as unavailable_count").Scan(&totals).Error; err != nil {
+	totalsQuery := applyCostRollupFilters(DB.Model(&CostReconciliationRollup{}), query)
+	if err := totalsQuery.Select("COALESCE(SUM(request_count),0) as request_count, COALESCE(SUM(user_charge_usd_micros),0) as user_charge_usd_micros, COALESCE(SUM(estimated_cost_usd_micros),0) as estimated_cost_usd_micros, COALESCE(SUM(successful_cost_usd_micros),0) as successful_cost_usd_micros, COALESCE(SUM(retry_cost_usd_micros),0) as retry_cost_usd_micros, COALESCE(SUM(failed_partial_cost_usd_micros),0) as failed_partial_cost_usd_micros, COALESCE(SUM(diff_usd_micros),0) as diff_usd_micros, COALESCE(SUM(estimated_count),0) as estimated_count, COALESCE(SUM(unavailable_count),0) as unavailable_count").Scan(&totals).Error; err != nil {
 		return nil, 0, CostReconciliationTotals{}, err
 	}
 	limit := query.Limit
@@ -214,7 +215,8 @@ func ListCostReconciliationRollups(query CostReconciliationQuery) ([]CostReconci
 		offset = 0
 	}
 	var rows []CostReconciliationRollup
-	if err := base.Order("bucket_start desc, id desc").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
+	rowsQuery := applyCostRollupFilters(DB.Model(&CostReconciliationRollup{}), query)
+	if err := rowsQuery.Order("bucket_start desc, id desc").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, 0, CostReconciliationTotals{}, err
 	}
 	return rows, total, totals, nil
