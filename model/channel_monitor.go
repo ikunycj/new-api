@@ -61,7 +61,24 @@ func CreateChannelMonitor(monitor *ChannelMonitor) error {
 
 func CountChannelsByPricingGroup(pricingGroup string) (int, error) {
 	var count int64
-	if err := ApplyChannelGroupFilter(DB.Model(&Channel{}), pricingGroup).Count(&count).Error; err != nil {
+	query := DB.Model(&Channel{})
+	if commonGroupCol == "" {
+		countedIDs := make(map[int]struct{})
+		var channels []Channel
+		if err := query.Select("id", "group").Find(&channels).Error; err != nil {
+			return 0, err
+		}
+		for _, channel := range channels {
+			for _, group := range channel.GetGroups() {
+				if group == pricingGroup {
+					countedIDs[channel.Id] = struct{}{}
+					break
+				}
+			}
+		}
+		return len(countedIDs), nil
+	}
+	if err := ApplyChannelGroupFilter(query, pricingGroup).Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return int(count), nil
