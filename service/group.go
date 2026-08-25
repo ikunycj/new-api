@@ -10,10 +10,9 @@ import (
 )
 
 const (
-	MaxTokenGroupCandidates     = 8
-	MaxTokenGroupNameLength     = 64
-	DefaultTokenGroupRetryTimes = 3
-	MaxTokenGroupRetryTimes     = 100
+	MaxTokenGroupCandidates = 8
+	MaxTokenGroupNameLength = 64
+	MaxTokenGroupRetryTimes = 100
 )
 
 func GetUserGroupPricingGroups(userGroup string) map[string]string {
@@ -96,17 +95,17 @@ func ValidateTokenGroupCandidates(userGroup string, groups []string) error {
 	return nil
 }
 
-// NormalizeTokenGroupRetryTimes keeps retry counts only for concrete groups
-// selected by the token. Missing counts receive the product default.
+// NormalizeTokenGroupRetryTimes keeps explicit retry limits only for concrete
+// groups selected by the token. Missing limits inherit the pricing-group policy.
 func NormalizeTokenGroupRetryTimes(groups []string, values map[string]int) (map[string]int, error) {
-	result := make(map[string]int, len(groups))
+	result := make(map[string]int, len(values))
 	for _, group := range groups {
 		if strings.TrimSpace(group) == "" || group == "auto" {
 			continue
 		}
-		retryTimes := DefaultTokenGroupRetryTimes
-		if configured, ok := values[group]; ok {
-			retryTimes = configured
+		retryTimes, configured := values[group]
+		if !configured {
+			continue
 		}
 		if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
 			return nil, fmt.Errorf("分组 %s 的重试次数必须在 0 到 %d 之间", group, MaxTokenGroupRetryTimes)

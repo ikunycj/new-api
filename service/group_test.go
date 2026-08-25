@@ -66,7 +66,6 @@ func TestNormalizeTokenGroupRetryTimes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, map[string]int{
 		"openai-low": 0,
-		"claude-low": DefaultTokenGroupRetryTimes,
 	}, normalized)
 
 	for _, value := range []int{-1, MaxTokenGroupRetryTimes + 1} {

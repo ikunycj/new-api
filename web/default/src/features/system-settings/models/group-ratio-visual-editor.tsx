@@ -24,7 +24,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useMemo, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, useEffect, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -58,6 +58,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import {
   getChannelMonitors,
+  getPricingGroupMetrics,
   runChannelMonitor,
   updateChannelMonitor,
 } from '@/features/channel-monitors/api'
@@ -69,7 +70,9 @@ import { PricingGroupMonitorControl } from '@/features/channel-monitors/componen
 import type {
   ChannelMonitor,
   ChannelMonitorSettingsPayload,
+  PricingGroupMetrics,
 } from '@/features/channel-monitors/types'
+import { formatQuota } from '@/lib/format'
 
 import { safeJsonParse } from '../utils/json-parser'
 
@@ -79,6 +82,7 @@ type GroupRatioVisualEditorProps = {
   pricingGroupRetryPolicy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
+  onValidationChange: (isValid: boolean) => void
 }
 
 type GroupPricingRow = {
@@ -100,6 +104,7 @@ const sectionCardClassName =
   'relative shadow-sm ring-0 before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:border before:border-border/90'
 const sectionHeaderClassName = 'border-b bg-muted/20'
 const EMPTY_CHANNEL_MONITORS: ChannelMonitor[] = []
+const EMPTY_PRICING_GROUP_METRICS: PricingGroupMetrics[] = []
 const DEFAULT_GROUP_RETRY_TIMES = 3
 const MAX_GROUP_RETRY_TIMES = 100
 const RETRY_MODE_ITEMS = [
@@ -144,7 +149,7 @@ function parsePricingGroupRetryPolicy(
   const result: Record<string, PricingGroupRetryPolicy> = {}
   for (const [group, policy] of Object.entries(parsed)) {
     const mode: PricingGroupRetryMode =
-      policy.mode === 'active_channels' ? 'active_channels' : 'fixed'
+      policy.mode === 'fixed' ? 'fixed' : 'active_channels'
     const retryTimes = Number(policy.retry_times)
     result[group] = {
       mode,
@@ -162,6 +167,39 @@ function normalizeRetryTimes(value: string): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return DEFAULT_GROUP_RETRY_TIMES
   return Math.min(MAX_GROUP_RETRY_TIMES, Math.max(0, Math.trunc(parsed)))
+}
+
+function isValidFixedRetryTimes(value: string): boolean {
+  if (value.trim() === '') return false
+  const retryTimes = Number(value)
+  return (
+    Number.isInteger(retryTimes) &&
+    retryTimes >= 0 &&
+    retryTimes <= MAX_GROUP_RETRY_TIMES
+  )
+}
+
+function isValidGroupRatio(value: string): boolean {
+  if (value.trim() === '') return false
+  const ratio = Number(value)
+  return Number.isFinite(ratio) && ratio >= 0
+}
+
+function isValidGroupPricingRow(row: GroupPricingRow): boolean {
+  if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
+  if (row.retryMode === 'active_channels') return true
+  return isValidFixedRetryTimes(row.retryTimes)
+}
+
+function groupPricingRowsAreValid(rows: GroupPricingRow[]): boolean {
+  const names = new Set<string>()
+  for (const row of rows) {
+    if (!isValidGroupPricingRow(row)) return false
+    const name = row.name.trim()
+    if (names.has(name)) return false
+    names.add(name)
+  }
+  return true
 }
 
 function getOrderedGroupNames(
@@ -188,8 +226,8 @@ function buildGroupPricingRows(
 
   return orderedNames.map((name) => {
     const retryPolicy = retryPolicies[name] ?? {
-      mode: 'fixed',
-      retry_times: DEFAULT_GROUP_RETRY_TIMES,
+      mode: 'active_channels',
+      retry_times: 0,
     }
     return {
       _id: createGroupPricingId(),
@@ -248,8 +286,8 @@ function sourceGroupPricingSignature(
   const retryPolicies: Record<string, PricingGroupRetryPolicy> = {}
   for (const name of names) {
     retryPolicies[name] = configuredPolicies[name] ?? {
-      mode: 'fixed',
-      retry_times: DEFAULT_GROUP_RETRY_TIMES,
+      mode: 'active_channels',
+      retry_times: 0,
     }
   }
   return JSON.stringify({
@@ -272,6 +310,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   pricingGroupRetryPolicy,
   savedGroupRatio,
   onChange,
+  onValidationChange,
 }: GroupRatioVisualEditorProps) {
   return (
     <GroupPricingTable
@@ -280,6 +319,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       pricingGroupRetryPolicy={pricingGroupRetryPolicy}
       savedGroupRatio={savedGroupRatio}
       onChange={onChange}
+      onValidationChange={onValidationChange}
     />
   )
 })
@@ -290,6 +330,7 @@ type GroupPricingTableProps = {
   pricingGroupRetryPolicy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
+  onValidationChange: (isValid: boolean) => void
 }
 
 function GroupPricingTable({
@@ -298,6 +339,7 @@ function GroupPricingTable({
   pricingGroupRetryPolicy,
   savedGroupRatio,
   onChange,
+  onValidationChange,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -330,6 +372,13 @@ function GroupPricingTable({
   )
   const currentRows =
     groupPricingSignature(rows) === incomingSignature ? rows : parsedRows
+  const currentRowsAreValid = useMemo(
+    () => groupPricingRowsAreValid(currentRows),
+    [currentRows]
+  )
+  useEffect(() => {
+    onValidationChange(currentRowsAreValid)
+  }, [currentRowsAreValid, onValidationChange])
   const persistedGroupNames = useMemo(
     () => new Set(Object.keys(parseRatioMap(savedGroupRatio))),
     [savedGroupRatio]
@@ -339,10 +388,21 @@ function GroupPricingTable({
     queryFn: getChannelMonitors,
     refetchInterval: 10_000,
   })
+  const metricsQuery = useQuery({
+    queryKey: ['pricing-group-metrics'],
+    queryFn: getPricingGroupMetrics,
+    refetchInterval: 3_000,
+    refetchIntervalInBackground: false,
+  })
   const monitors = monitorsQuery.data ?? EMPTY_CHANNEL_MONITORS
+  const metrics = metricsQuery.data ?? EMPTY_PRICING_GROUP_METRICS
   const monitorByName = useMemo(
     () => new Map(monitors.map((monitor) => [monitor.pricing_group, monitor])),
     [monitors]
+  )
+  const metricsByName = useMemo(
+    () => new Map(metrics.map((metric) => [metric.pricing_group, metric])),
+    [metrics]
   )
   const detailRow = currentRows.find((row) => row._id === detailRowId) ?? null
   const detailMonitor = detailRow
@@ -430,8 +490,8 @@ function GroupPricingTable({
         _id: createGroupPricingId(),
         name,
         ratio: '1',
-        retryMode: 'fixed',
-        retryTimes: String(DEFAULT_GROUP_RETRY_TIMES),
+        retryMode: 'active_channels',
+        retryTimes: '0',
       },
     ])
   }, [currentRows, emitRows])
@@ -473,6 +533,14 @@ function GroupPricingTable({
       .filter(([, count]) => count > 1)
       .map(([name]) => name)
   }, [currentRows])
+  const hasEmptyName = currentRows.some((row) => row.name.trim() === '')
+  const hasInvalidRatio = currentRows.some(
+    (row) => !isValidGroupRatio(row.ratio)
+  )
+  const hasInvalidRetryTimes = currentRows.some(
+    (row) =>
+      row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
+  )
 
   return (
     <>
@@ -486,8 +554,8 @@ function GroupPricingTable({
         <CardContent>
           <div className='space-y-3'>
             <StaticDataTable
-              className='w-fit max-w-full'
-              tableClassName='w-[71rem] table-fixed'
+              className='w-full'
+              tableClassName='w-full min-w-[106rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
@@ -537,7 +605,10 @@ function GroupPricingTable({
                         onChange={(event) =>
                           updateRow(row._id, 'name', event.target.value)
                         }
-                        aria-invalid={duplicateNames.includes(row.name.trim())}
+                        aria-invalid={
+                          !row.name.trim() ||
+                          duplicateNames.includes(row.name.trim())
+                        }
                       />
                     )
                   },
@@ -553,9 +624,46 @@ function GroupPricingTable({
                       min={0}
                       step={0.1}
                       value={row.ratio}
+                      aria-invalid={!isValidGroupRatio(row.ratio)}
                       onChange={(event) =>
                         updateRow(row._id, 'ratio', event.target.value)
                       }
+                    />
+                  ),
+                },
+                {
+                  id: 'usage',
+                  header: '用量',
+                  className: 'w-52',
+                  cellClassName: 'w-52',
+                  cell: (row) => (
+                    <GroupUsageCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
+                    />
+                  ),
+                },
+                {
+                  id: 'channels',
+                  header: '渠道数',
+                  className: 'w-36',
+                  cellClassName: 'w-36',
+                  cell: (row) => (
+                    <GroupChannelCountCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
+                    />
+                  ),
+                },
+                {
+                  id: 'activity',
+                  header: '活跃',
+                  className: 'w-52',
+                  cellClassName: 'w-52',
+                  cell: (row) => (
+                    <GroupActivityCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
                     />
                   ),
                 },
@@ -568,6 +676,10 @@ function GroupPricingTable({
                     <RetryPolicyControl
                       mode={row.retryMode}
                       retryTimes={row.retryTimes}
+                      isInvalid={
+                        row.retryMode === 'fixed' &&
+                        !isValidFixedRetryTimes(row.retryTimes)
+                      }
                       onModeChange={(value) =>
                         updateRow(row._id, 'retryMode', value)
                       }
@@ -675,11 +787,30 @@ function GroupPricingTable({
               </p>
             )}
 
+            {metricsQuery.isError && (
+              <p className='text-destructive text-sm'>
+                分组指标加载失败：{metricsQuery.error.message}
+              </p>
+            )}
+
             {duplicateNames.length > 0 && (
               <p className='text-destructive text-sm'>
                 {t('Duplicate group names: {{names}}', {
                   names: duplicateNames.join(', '),
                 })}
+              </p>
+            )}
+            {hasEmptyName && (
+              <p className='text-destructive text-sm'>分组名称不能为空</p>
+            )}
+            {hasInvalidRatio && (
+              <p className='text-destructive text-sm'>
+                倍率必须是大于等于 0 的数值
+              </p>
+            )}
+            {hasInvalidRetryTimes && (
+              <p className='text-destructive text-sm'>
+                固定重试次数必须是 0 到 100 之间的整数
               </p>
             )}
           </div>
@@ -710,6 +841,11 @@ function GroupPricingTable({
           persistedGroupNames.has(detailRow.name.trim()) &&
           !duplicateNames.includes(detailRow.name.trim())
         }
+        nameInvalid={
+          detailRow !== null &&
+          (!detailRow.name.trim() ||
+            duplicateNames.includes(detailRow.name.trim()))
+        }
       />
 
       <ConfirmDialog
@@ -735,6 +871,112 @@ function GroupPricingTable({
   )
 }
 
+function formatMetricTokens(tokens: number): string {
+  if (!Number.isFinite(tokens)) return '-'
+  const absolute = Math.abs(tokens)
+  let divisor = 1
+  let suffix = ''
+  if (absolute >= 1_000_000_000) {
+    divisor = 1_000_000_000
+    suffix = 'B'
+  } else if (absolute >= 1_000_000) {
+    divisor = 1_000_000
+    suffix = 'M'
+  } else if (absolute >= 1_000) {
+    divisor = 1_000
+    suffix = 'K'
+  }
+  const value = tokens / divisor
+  let digits = 2
+  if (Math.abs(value) >= 100) {
+    digits = 0
+  } else if (Math.abs(value) >= 10) {
+    digits = 1
+  }
+  return `${Number(value.toFixed(digits))}${suffix}`
+}
+
+type GroupMetricCellProps = {
+  metrics?: PricingGroupMetrics
+  isLoading: boolean
+}
+
+function GroupUsageCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div className='space-y-0.5 text-xs leading-5'>
+      <div>
+        <span className='text-muted-foreground'>今日：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.today.tokens)}/
+          {formatQuota(props.metrics.usage.today.quota)}
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>昨日：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.yesterday.tokens)}/
+          {formatQuota(props.metrics.usage.yesterday.quota)}
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>累计：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.total.tokens)}/
+          {formatQuota(props.metrics.usage.total.quota)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function GroupChannelCountCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div className='space-y-0.5 text-xs leading-5'>
+      <div>
+        <span className='text-muted-foreground'>可用：</span>
+        <span className='font-semibold'>
+          {props.metrics.channels.available}个渠道
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>总量：</span>
+        <span className='font-medium'>
+          {props.metrics.channels.total}个渠道
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function GroupActivityCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div
+      className='text-xs leading-5 font-medium'
+      title='连接数按当前正在处理的请求统计'
+    >
+      {`活跃用户${props.metrics.activity.users}/活跃连接${props.metrics.activity.connections}`}
+    </div>
+  )
+}
+
 type GroupDetailSheetProps = {
   row: GroupPricingRow | null
   monitor: ChannelMonitor | null
@@ -744,6 +986,7 @@ type GroupDetailSheetProps = {
     value: string
   ) => void
   isPersisted: boolean
+  nameInvalid: boolean
 }
 
 function GroupDetailSheet(props: GroupDetailSheetProps) {
@@ -770,6 +1013,7 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
               <Input
                 id='group-detail-name'
                 value={props.row.name}
+                aria-invalid={props.nameInvalid}
                 onChange={(event) => props.onChange('name', event.target.value)}
               />
             </div>
@@ -778,6 +1022,10 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
               <RetryPolicyControl
                 mode={props.row.retryMode}
                 retryTimes={props.row.retryTimes}
+                isInvalid={
+                  props.row.retryMode === 'fixed' &&
+                  !isValidFixedRetryTimes(props.row.retryTimes)
+                }
                 onModeChange={(value) => props.onChange('retryMode', value)}
                 onRetryTimesChange={(value) =>
                   props.onChange('retryTimes', value)
@@ -796,6 +1044,7 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 min={0}
                 step={0.1}
                 value={props.row.ratio}
+                aria-invalid={!isValidGroupRatio(props.row.ratio)}
                 onChange={(event) =>
                   props.onChange('ratio', event.target.value)
                 }
@@ -824,6 +1073,7 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
 type RetryPolicyControlProps = {
   mode: PricingGroupRetryMode
   retryTimes: string
+  isInvalid: boolean
   onModeChange: (value: PricingGroupRetryMode) => void
   onRetryTimesChange: (value: string) => void
 }
@@ -857,6 +1107,7 @@ function RetryPolicyControl(props: RetryPolicyControlProps) {
           max={MAX_GROUP_RETRY_TIMES}
           step={1}
           value={props.retryTimes}
+          aria-invalid={props.isInvalid}
           onChange={(event) => props.onRetryTimesChange(event.target.value)}
           onBlur={() =>
             props.onRetryTimesChange(

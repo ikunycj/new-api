@@ -39,6 +39,12 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type PricingGroupConfigurationRequest = {
+  group_ratio: string
+  pricing_group_order: string
+  pricing_group_retry_policy: string
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string

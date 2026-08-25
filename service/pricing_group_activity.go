@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -17,7 +18,8 @@ const (
 	pricingGroupActivityLease        = 30 * time.Second
 	pricingGroupActivityHeartbeat    = 10 * time.Second
 	pricingGroupActivityRedisTimeout = 500 * time.Millisecond
-	pricingGroupActivityKeyPrefix    = "new-api:pricing-group:activity:"
+	pricingGroupActivityKeyPrefix    = "routing:pricing-group:activity:"
+	pricingGroupActivityContextKey   = "pricing_group_activity_session"
 )
 
 type PricingGroupActivity struct {
@@ -30,10 +32,33 @@ type pricingGroupActivityEntry struct {
 	expiresAt int64
 }
 
+type pricingGroupActivityRedisOperation struct {
+	group     string
+	member    string
+	expiresAt int64
+	remove    bool
+}
+
+type pricingGroupActivitySession struct {
+	sync.Mutex
+	group      string
+	member     string
+	userID     int
+	done       chan struct{}
+	heartbeat  sync.WaitGroup
+	finishOnce sync.Once
+	finished   bool
+}
+
 var localPricingGroupActivity = struct {
 	sync.Mutex
 	groups map[string]map[string]pricingGroupActivityEntry
 }{groups: make(map[string]map[string]pricingGroupActivityEntry)}
+
+var (
+	pricingGroupActivityRedisOnce       sync.Once
+	pricingGroupActivityRedisOperations = make(chan pricingGroupActivityRedisOperation, 4096)
+)
 
 func pricingGroupActivityRedisKey(group string) string {
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(group))
@@ -61,34 +86,110 @@ func removeLocalPricingGroupActivity(group, member string) {
 	}
 }
 
-func refreshRedisPricingGroupActivity(group, member string, expiresAt int64) {
+func enqueuePricingGroupActivityRedisOperation(operation pricingGroupActivityRedisOperation) {
 	if !common.RedisEnabled || common.RDB == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
-	defer cancel()
-	pipeline := common.RDB.TxPipeline()
-	pipeline.ZAdd(ctx, pricingGroupActivityRedisKey(group), &redis.Z{
-		Score:  float64(expiresAt),
-		Member: member,
+	pricingGroupActivityRedisOnce.Do(func() { go runPricingGroupActivityRedisWriter() })
+	select {
+	case pricingGroupActivityRedisOperations <- operation:
+	default:
+		common.SysError("pricing group activity Redis queue is full")
+	}
+}
+
+func runPricingGroupActivityRedisWriter() {
+	for first := range pricingGroupActivityRedisOperations {
+		pending := map[string]pricingGroupActivityRedisOperation{
+			first.group + "\x00" + first.member: first,
+		}
+		for len(pending) < 512 {
+			select {
+			case operation := <-pricingGroupActivityRedisOperations:
+				pending[operation.group+"\x00"+operation.member] = operation
+			default:
+				goto flush
+			}
+		}
+	flush:
+		if !common.RedisEnabled || common.RDB == nil {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
+		pipeline := common.RDB.TxPipeline()
+		for _, operation := range pending {
+			key := pricingGroupActivityRedisKey(operation.group)
+			if operation.remove {
+				pipeline.ZRem(ctx, key, operation.member)
+				continue
+			}
+			pipeline.ZAdd(ctx, key, &redis.Z{
+				Score:  float64(operation.expiresAt),
+				Member: operation.member,
+			})
+			pipeline.Expire(ctx, key, 2*pricingGroupActivityLease)
+		}
+		_, _ = pipeline.Exec(ctx)
+		cancel()
+	}
+}
+
+func (session *pricingGroupActivitySession) refreshLocked() {
+	if session.group == "" || session.finished {
+		return
+	}
+	expiresAt := time.Now().Add(pricingGroupActivityLease).UnixMilli()
+	refreshLocalPricingGroupActivity(session.group, session.member, session.userID, expiresAt)
+	enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
+		group: session.group, member: session.member, expiresAt: expiresAt,
 	})
-	pipeline.Expire(ctx, pricingGroupActivityRedisKey(group), 2*pricingGroupActivityLease)
-	_, _ = pipeline.Exec(ctx)
 }
 
-func removeRedisPricingGroupActivity(group, member string) {
-	if !common.RedisEnabled || common.RDB == nil {
+func (session *pricingGroupActivitySession) refresh() {
+	session.Lock()
+	defer session.Unlock()
+	session.refreshLocked()
+}
+
+func (session *pricingGroupActivitySession) move(group string) {
+	group = strings.TrimSpace(group)
+	session.Lock()
+	defer session.Unlock()
+	if session.finished || group == session.group {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
-	defer cancel()
-	_ = common.RDB.ZRem(ctx, pricingGroupActivityRedisKey(group), member).Err()
+	if session.group != "" {
+		removeLocalPricingGroupActivity(session.group, session.member)
+		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
+			group: session.group, member: session.member, remove: true,
+		})
+	}
+	session.group = group
+	session.refreshLocked()
 }
 
-// BeginPricingGroupActivity registers one in-flight relay request. The returned
-// function must be deferred so normal completions disappear immediately; the
-// short renewable lease also removes requests left behind by a crashed node.
-func BeginPricingGroupActivity(group string, userID int, requestID string) func() {
+func (session *pricingGroupActivitySession) finish() {
+	session.finishOnce.Do(func() {
+		close(session.done)
+		session.heartbeat.Wait()
+		session.Lock()
+		defer session.Unlock()
+		session.finished = true
+		if session.group == "" {
+			return
+		}
+		removeLocalPricingGroupActivity(session.group, session.member)
+		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
+			group: session.group, member: session.member, remove: true,
+		})
+	})
+}
+
+// BeginPricingGroupActivity registers one in-flight relay request on the Gin
+// context. The returned function must be deferred so normal completions
+// disappear immediately; the renewable lease also removes requests left behind
+// by a crashed node.
+func BeginPricingGroupActivity(ctx *gin.Context, group string, userID int, requestID string) func() {
 	group = strings.TrimSpace(group)
 	if group == "" {
 		return func() {}
@@ -97,40 +198,47 @@ func BeginPricingGroupActivity(group string, userID int, requestID string) func(
 	if requestID == "" {
 		requestID = common.NewRequestId()
 	}
-	member := strconv.Itoa(userID) + "|" + common.NodeName + "|" + requestID
-
-	refresh := func() {
-		expiresAt := time.Now().Add(pricingGroupActivityLease).UnixMilli()
-		refreshLocalPricingGroupActivity(group, member, userID, expiresAt)
-		refreshRedisPricingGroupActivity(group, member, expiresAt)
+	session := &pricingGroupActivitySession{
+		group:  group,
+		member: strconv.Itoa(userID) + "|" + common.NodeName + "|" + requestID,
+		userID: userID,
+		done:   make(chan struct{}),
 	}
-	refresh()
+	if ctx != nil {
+		ctx.Set(pricingGroupActivityContextKey, session)
+	}
+	session.refresh()
 
-	done := make(chan struct{})
-	var heartbeat sync.WaitGroup
-	heartbeat.Add(1)
+	session.heartbeat.Add(1)
 	go func() {
-		defer heartbeat.Done()
+		defer session.heartbeat.Done()
 		ticker := time.NewTicker(pricingGroupActivityHeartbeat)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				refresh()
-			case <-done:
+				session.refresh()
+			case <-session.done:
 				return
 			}
 		}
 	}()
+	return session.finish
+}
 
-	var finishOnce sync.Once
-	return func() {
-		finishOnce.Do(func() {
-			close(done)
-			heartbeat.Wait()
-			removeLocalPricingGroupActivity(group, member)
-			removeRedisPricingGroupActivity(group, member)
-		})
+// UpdatePricingGroupActivity moves the in-flight request when automatic routing
+// selects a different pricing group during a retry.
+func UpdatePricingGroupActivity(ctx *gin.Context, group string) {
+	if ctx == nil {
+		return
+	}
+	value, exists := ctx.Get(pricingGroupActivityContextKey)
+	if !exists {
+		return
+	}
+	session, ok := value.(*pricingGroupActivitySession)
+	if ok {
+		session.move(group)
 	}
 }
 

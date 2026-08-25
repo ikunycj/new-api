@@ -76,7 +76,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import { createApiKey, updateApiKey, getApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
-  DEFAULT_GROUP_RETRY_TIMES,
   getApiKeyFormSchema,
   type ApiKeyFormValues,
   getApiKeyFormDefaultValues,
@@ -147,21 +146,30 @@ export function ApiKeysMutateDrawer({
     resolver: zodResolver(schema),
     defaultValues: getApiKeyFormDefaultValues(),
   })
+  const [invalidRetryGroups, setInvalidRetryGroups] = useState<Set<string>>(
+    () => new Set()
+  )
 
   // Load existing data when updating
   useEffect(() => {
     if (open && isUpdate && currentRow) {
+      setInvalidRetryGroups(new Set())
       void getApiKey(currentRow.id).then((result) => {
         if (result.success && result.data) {
           form.reset(transformApiKeyToFormDefaults(result.data, defaultGroup))
         }
       })
     } else if (open && !isUpdate) {
-      form.reset(getApiKeyFormDefaultValues(defaultGroup))
+      setInvalidRetryGroups(new Set())
+      form.reset(getApiKeyFormDefaultValues())
     }
   }, [open, isUpdate, currentRow, form, defaultGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
+    if (invalidRetryGroups.size > 0) {
+      toast.error(t('Please fix the highlighted fields before saving'))
+      return
+    }
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
@@ -285,7 +293,7 @@ export function ApiKeysMutateDrawer({
     const previous = form.getValues('group_retry_times')
     const next: Record<string, number> = {}
     for (const group of value) {
-      next[group] = previous[group] ?? DEFAULT_GROUP_RETRY_TIMES
+      if (previous[group] !== undefined) next[group] = previous[group]
     }
     form.setValue('group_retry_times', next, {
       shouldDirty: true,
@@ -293,6 +301,22 @@ export function ApiKeysMutateDrawer({
     })
     form.setValue('cross_group_retry', value.length > 1, {
       shouldDirty: true,
+    })
+    setInvalidRetryGroups((current) => {
+      const next = new Set<string>()
+      for (const group of current) {
+        if (value.includes(group)) next.add(group)
+      }
+      return next
+    })
+  }
+
+  const handleRetryTimesValidityChange = (group: string, isValid: boolean) => {
+    setInvalidRetryGroups((current) => {
+      const next = new Set(current)
+      if (isValid) next.delete(group)
+      else next.add(group)
+      return next
     })
   }
 
@@ -440,9 +464,6 @@ export function ApiKeysMutateDrawer({
             <SideDrawerSection>
               <SideDrawerSectionHeader
                 title={t('Model groups and routing')}
-                description={t(
-                  'Select one or more groups and set the default retry count for each group.'
-                )}
                 icon={<Route className='size-4' />}
                 iconTone='info'
               />
@@ -464,15 +485,19 @@ export function ApiKeysMutateDrawer({
                           handleGroupSelectionChange(value)
                         }}
                         onRetryTimesChange={(group, value) => {
-                          form.setValue(
-                            'group_retry_times',
-                            {
-                              ...form.getValues('group_retry_times'),
-                              [group]: value,
-                            },
-                            { shouldDirty: true, shouldValidate: true }
-                          )
+                          const next = {
+                            ...form.getValues('group_retry_times'),
+                          }
+                          if (value === undefined) delete next[group]
+                          else next[group] = value
+                          form.setValue('group_retry_times', next, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
                         }}
+                        onRetryTimesValidityChange={
+                          handleRetryTimesValidityChange
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -644,7 +669,7 @@ export function ApiKeysMutateDrawer({
           <Button
             type='button'
             onClick={form.handleSubmit(onSubmit, onInvalid)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || invalidRetryGroups.size > 0}
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}

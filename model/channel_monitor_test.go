@@ -127,16 +127,27 @@ func TestDeleteChannelMonitorsOutsidePricingGroupsRemovesOwnedHistory(t *testing
 	assert.Zero(t, removedHistoryCount)
 }
 
-func TestUpdateOptionGroupRatioRemovesDeletedPricingGroupMonitorAndHistory(t *testing.T) {
+func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testing.T) {
 	truncateTables(t)
 
 	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
+	originalGroupOrder := ratio_setting.PricingGroupOrder2JSONString()
+	originalRetryPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	t.Cleanup(func() {
 		assert.NoError(t, updateOptionMap("GroupRatio", originalGroupRatios))
+		assert.NoError(t, updateOptionMap("PricingGroupOrder", originalGroupOrder))
+		assert.NoError(t, updateOptionMap("PricingGroupRetryPolicy", originalRetryPolicies))
 	})
 
 	initialGroupRatios := `{"kept-pricing":1,"removed-pricing":1}`
-	require.NoError(t, UpdateOption("GroupRatio", initialGroupRatios))
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		initialGroupRatios,
+		`["kept-pricing","removed-pricing"]`,
+		`{
+			"kept-pricing":{"mode":"fixed","retry_times":3},
+			"removed-pricing":{"mode":"fixed","retry_times":3}
+		}`,
+	))
 
 	kept := newTestChannelMonitor("kept-pricing")
 	removed := newTestChannelMonitor("removed-pricing")
@@ -148,7 +159,11 @@ func TestUpdateOptionGroupRatioRemovesDeletedPricingGroupMonitorAndHistory(t *te
 	}).Error)
 
 	updatedGroupRatios := `{"kept-pricing":1}`
-	require.NoError(t, UpdateOption("GroupRatio", updatedGroupRatios))
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		updatedGroupRatios,
+		`["kept-pricing"]`,
+		`{"kept-pricing":{"mode":"fixed","retry_times":3}}`,
+	))
 
 	var stored Option
 	require.NoError(t, DB.Where(commonKeyCol+" = ?", "GroupRatio").First(&stored).Error)

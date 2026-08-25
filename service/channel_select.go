@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -198,7 +199,10 @@ func (p *RetryParam) HasChannelRetry(channelID int) bool {
 	if limit <= 0 {
 		limit = model.DefaultChannelUpstreamMaxRetries + 1
 	}
-	return p.attemptCounts[channelID] < limit && p.channelGroupHasBudget(channelID) && p.withinRoutingBudget()
+	return p.attemptCounts[channelID] < limit &&
+		p.channelGroupHasBudget(channelID) &&
+		p.channelGroupWithinRoutingAttemptBudget(channelID) &&
+		p.withinRoutingBudget()
 }
 
 func (p *RetryParam) IsAutoRouting() bool { return p != nil && p.TokenGroup == "auto" }
@@ -232,6 +236,21 @@ func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
 				logger.LogError(p.Ctx, "failed to count active channels for retry budget: "+err.Error())
 				limit = 1
 			} else {
+				if _, entries, routeConfigured := p.loadGroupPolicy(group); routeConfigured {
+					routeChannelIDs := make(map[int]struct{}, len(entries))
+					for _, entry := range entries {
+						if entry.Enabled && entry.ChannelId > 0 {
+							routeChannelIDs[entry.ChannelId] = struct{}{}
+						}
+					}
+					channels = slices.DeleteFunc(channels, func(channel *model.Channel) bool {
+						if channel == nil {
+							return true
+						}
+						_, allowed := routeChannelIDs[channel.Id]
+						return !allowed
+					})
+				}
 				limit = len(channels) + 1
 			}
 		default:
@@ -271,11 +290,30 @@ func (p *RetryParam) channelGroupHasBudget(channelID int) bool {
 	if p == nil {
 		return false
 	}
+	return p.groupHasBudget(p.groupForChannel(channelID))
+}
+
+func (p *RetryParam) groupForChannel(channelID int) string {
 	group := p.channelGroups[channelID]
 	if group == "" && p.TokenGroup != "auto" {
-		group = strings.TrimSpace(p.TokenGroup)
+		return strings.TrimSpace(p.TokenGroup)
 	}
-	return p.groupHasBudget(group)
+	return group
+}
+
+func (p *RetryParam) groupWithinRoutingAttemptBudget(group string) bool {
+	if p == nil {
+		return false
+	}
+	policy, _, configured := p.loadGroupPolicy(group)
+	return !configured || policy.MaxTotalAttempts <= 0 || p.groupAttemptCounts[group] < policy.MaxTotalAttempts
+}
+
+func (p *RetryParam) channelGroupWithinRoutingAttemptBudget(channelID int) bool {
+	if p == nil {
+		return false
+	}
+	return p.groupWithinRoutingAttemptBudget(p.groupForChannel(channelID))
 }
 
 func (p *RetryParam) HasNextRetry() bool {
@@ -292,7 +330,8 @@ func (p *RetryParam) AdvanceRetry() bool {
 	// Keep the current channel contiguous until its configured budget is used.
 	if p.currentChannelID > 0 && !p.isExcluded(p.currentChannelID) &&
 		p.attemptCounts[p.currentChannelID] < p.channelLimits[p.currentChannelID] &&
-		p.channelGroupHasBudget(p.currentChannelID) {
+		p.channelGroupHasBudget(p.currentChannelID) &&
+		p.channelGroupWithinRoutingAttemptBudget(p.currentChannelID) {
 		p.IncreaseRetry()
 		return true
 	}
@@ -450,15 +489,11 @@ func (p *RetryParam) withinRoutingBudget() bool {
 	if p.startedAt.IsZero() {
 		p.startedAt = time.Now()
 	}
-	totalAttempts := 0
-	for _, attempts := range p.attemptCounts {
-		totalAttempts += attempts
-	}
-	// A missing route has no explicit global attempt budget. In that case the
-	// complete candidate set plus each channel's own retry limit is the bound;
-	// applying DefaultRuntimeRoutingPolicy's fallback value here would silently
-	// truncate an explicitly configured channel retry budget.
-	if p.routeConfigured && policy.MaxTotalAttempts > 0 && totalAttempts >= policy.MaxTotalAttempts {
+	// Route attempt budgets belong to one pricing group. Cross-group routing
+	// checks them while building candidates so an exhausted group cannot block
+	// the next group.
+	group, err := p.currentGroup()
+	if !p.canCrossGroups() && err == nil && !p.groupWithinRoutingAttemptBudget(group) {
 		return false
 	}
 	if policy.TotalTimeoutMs > 0 && time.Since(p.startedAt) >= time.Duration(policy.TotalTimeoutMs)*time.Millisecond {
@@ -535,6 +570,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, selected.group)
 	}
 	common.SetContextKey(param.Ctx, constant.ContextKeyUsingGroup, selected.group)
+	UpdatePricingGroupActivity(param.Ctx, selected.group)
 	logger.LogDebug(param.Ctx, "selected billing group %s channel %d", selected.group, selected.channel.Id)
 	return selected.channel, selected.group, nil
 }
@@ -549,12 +585,8 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int) ([]d
 			continue
 		}
 		groupIndex := groupIndices[index]
-		policy, entries, configured := p.loadGroupPolicy(group)
-		total := 0
-		for _, attempts := range p.attemptCounts {
-			total += attempts
-		}
-		if configured && policy.MaxTotalAttempts > 0 && total >= policy.MaxTotalAttempts {
+		_, entries, configured := p.loadGroupPolicy(group)
+		if !p.groupWithinRoutingAttemptBudget(group) {
 			continue
 		}
 		channels, err := model.GetEligibleChannels(group, p.ModelName, p.RequestPath, p.excludedChannels)

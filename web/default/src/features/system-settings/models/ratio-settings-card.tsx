@@ -27,7 +27,7 @@ import * as z from 'zod'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-import { resetModelRatios } from '../api'
+import { resetModelRatios, updatePricingGroupConfiguration } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -175,6 +175,24 @@ export function RatioSettingsCard({
       toast.error(error.message || t('Failed to reset model ratios'))
     },
   })
+  const pricingGroupMutation = useMutation({
+    mutationFn: updatePricingGroupConfiguration,
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('定价分组设置已保存')
+        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      } else {
+        toast.error(data.message || '定价分组设置保存失败')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '定价分组设置保存失败')
+    },
+  })
+  const {
+    mutateAsync: savePricingGroupConfiguration,
+    isPending: isSavingPricingGroups,
+  } = pricingGroupMutation
 
   const initialModelValues = {
     ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
@@ -351,27 +369,27 @@ export function RatioSettingsCard({
         (key) => normalized[key] !== groupNormalizedDefaults.current[key]
       )
 
-      for (const key of updates) {
-        const result = await updateOption.mutateAsync({
-          key,
-          value: normalized[key],
-        })
-        if (!result.success) return
-      }
+      if (updates.length === 0) return
 
-      if (updates.length > 0) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
-          queryClient.invalidateQueries({ queryKey: ['group-status'] }),
-          queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
-          queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
-        ])
-      }
+      const result = await savePricingGroupConfiguration({
+        group_ratio: normalized.GroupRatio,
+        pricing_group_order: normalized.PricingGroupOrder,
+        pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
+      })
+      if (!result.success) return
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing-group-metrics'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
+      ])
 
       groupNormalizedDefaults.current = normalized
       setSavedGroupValues(normalized)
     },
-    [queryClient, updateOption]
+    [queryClient, savePricingGroupConfiguration]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -420,7 +438,7 @@ export function RatioSettingsCard({
           form={groupForm}
           savedGroupRatio={savedGroupValues.GroupRatio}
           onSave={saveGroupRatios}
-          isSaving={updateOption.isPending}
+          isSaving={isSavingPricingGroups}
         />
       )
     }

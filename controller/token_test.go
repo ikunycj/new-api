@@ -15,7 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -608,7 +607,7 @@ func TestAddTokenNormalizesSingleCandidateToFixedGroup(t *testing.T) {
 	assert.False(t, token.CrossGroupRetry)
 	retryTimes, err := token.GetGroupRetryTimes()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"vip": service.DefaultTokenGroupRetryTimes}, retryTimes)
+	assert.Empty(t, retryTimes)
 }
 
 func TestAddTokenRequiresAtLeastOneGroup(t *testing.T) {
@@ -652,7 +651,7 @@ func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {
 	require.NoError(t, common.Unmarshal(fixedResponse.Data, &fixedItem))
 	assert.Equal(t, "default", fixedItem.Group)
 	assert.Equal(t, []string{"default"}, fixedItem.GroupCandidates)
-	assert.Equal(t, map[string]int{"default": service.DefaultTokenGroupRetryTimes}, fixedItem.GroupRetryTimes)
+	assert.Empty(t, fixedItem.GroupRetryTimes)
 	assert.Equal(t, fixedToken.GetMaskedKey(), fixedItem.Key)
 
 	multiCtx, multiRecorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/"+strconv.Itoa(multiToken.Id), nil, 1)

@@ -166,6 +166,79 @@ func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	assert.Equal(t, "economy", thirdGroup)
 }
 
+func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
+	channels := setupChannelRoute(t)
+	weight := uint(100)
+	economyChannel := model.Channel{
+		Id:     92003,
+		Name:   "Economy",
+		Key:    "economy",
+		Status: common.ChannelStatusEnabled,
+		Models: "claude-test",
+		Group:  "economy",
+		Weight: &weight,
+	}
+	require.NoError(t, model.DB.Create(&economyChannel).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     "economy",
+		Model:     "claude-test",
+		ChannelId: economyChannel.Id,
+		Enabled:   true,
+		Weight:    weight,
+	}).Error)
+	require.NoError(t, model.DB.Model(&model.BillingGroupRoute{}).
+		Where("id = ?", 81).
+		Update("max_total_attempts", 2).Error)
+	economyRoute := model.BillingGroupRoute{
+		Id:                      82,
+		BillingGroup:            "economy",
+		Name:                    "Economy",
+		Enabled:                 true,
+		MaxTotalAttempts:        1,
+		TotalTimeoutMs:          30000,
+		CircuitFailureThreshold: 5,
+		CircuitWindowSeconds:    60,
+		CircuitCooldownSeconds:  60,
+		CircuitHalfOpenRequests: 1,
+	}
+	require.NoError(t, model.DB.Create(&economyRoute).Error)
+	require.NoError(t, model.DB.Create(&model.BillingGroupChannel{
+		BillingGroupRouteId: economyRoute.Id,
+		ChannelId:           economyChannel.Id,
+		Priority:            100,
+		Weight:              100,
+		MaxAttempts:         1,
+		Enabled:             true,
+		CostFactor:          1,
+	}).Error)
+	model.InitChannelCache()
+
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "economy"})
+	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+
+	for _, expectedChannelID := range []int{channels[0].Id, channels[1].Id} {
+		channel, group, err := CacheGetRandomSatisfiedChannel(param)
+		require.NoError(t, err)
+		require.NotNil(t, channel)
+		assert.Equal(t, expectedChannelID, channel.Id)
+		assert.Equal(t, "claude", group)
+		param.MarkChannelAttempted(channel.Id)
+		param.HandleChannelFailure(channel.Id, "switch_channel")
+		require.True(t, param.HasNextRetry())
+		require.True(t, param.AdvanceRetry())
+	}
+
+	channel, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, economyChannel.Id, channel.Id)
+	assert.Equal(t, "economy", group)
+	assert.Equal(t, 2, param.groupAttemptCounts["claude"])
+	assert.Zero(t, param.groupAttemptCounts["economy"])
+}
+
 func TestConfiguredRouteWithoutMemoryCacheHonorsRoutePriority(t *testing.T) {
 	channels := setupChannelRoute(t)
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("price_multiplier", 100).Error)
@@ -336,6 +409,27 @@ func TestActiveChannelRetryPolicyUsesRequestScopedChannelCount(t *testing.T) {
 	newLimit, configured := newRequest.groupRetryLimit("claude")
 	require.True(t, configured)
 	assert.Equal(t, 2, newLimit)
+}
+
+func TestActiveChannelRetryPolicyCountsOnlyConfiguredRouteChannels(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"claude":{"mode":"active_channels","retry_times":0}}`,
+	))
+	require.NoError(t, model.DB.Model(&model.BillingGroupChannel{}).
+		Where("billing_group_route_id = ? AND channel_id = ?", 81, channels[1].Id).
+		Update("enabled", false).Error)
+	model.InitChannelCache()
+
+	param := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", RequestPath: "/v1/messages"}
+	limit, configured := param.groupRetryLimit("claude")
+
+	require.True(t, configured)
+	assert.Equal(t, 2, limit)
 }
 
 func TestUnconfiguredRouteHonorsChannelRetryBudget(t *testing.T) {

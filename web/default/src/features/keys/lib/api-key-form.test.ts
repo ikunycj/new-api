@@ -34,9 +34,7 @@ const identityT = ((key: unknown) => String(key)) as TFunction
 
 function formValues(
   groupCandidates: string[],
-  groupRetryTimes: Record<string, number> = Object.fromEntries(
-    groupCandidates.map((group) => [group, 3])
-  ),
+  groupRetryTimes: Record<string, number> = {},
   crossGroupRetry = true
 ): ApiKeyFormValues {
   return {
@@ -100,14 +98,6 @@ describe('API key routing form mapping', () => {
     assert.equal(defaults.cross_group_retry, false)
   })
 
-  test('starts new keys in the supplied default group with three retries', () => {
-    const defaults = getApiKeyFormDefaultValues('openai-low')
-
-    assert.deepEqual(defaults.group_candidates, ['openai-low'])
-    assert.deepEqual(defaults.group_retry_times, { 'openai-low': 3 })
-    assert.equal(defaults.cross_group_retry, false)
-  })
-
   test('maps one selected group and ignores stale retry state', () => {
     const fixed = transformFormDataToPayload(
       formValues(['openai-low'], { 'openai-low': 0, stale: 9 }, true)
@@ -144,7 +134,7 @@ describe('API key routing form mapping', () => {
     )
 
     assert.deepEqual(defaults.group_candidates, ['openai-low'])
-    assert.deepEqual(defaults.group_retry_times, { 'openai-low': 3 })
+    assert.deepEqual(defaults.group_retry_times, {})
   })
 
   test('keeps candidate order and retry values when editing', () => {
@@ -171,14 +161,13 @@ describe('API key routing form mapping', () => {
     })
   })
 
-  test('defaults missing selected-group retry values to three', () => {
+  test('omits missing selected-group retry values so they inherit group policy', () => {
     const payload = transformFormDataToPayload(
       formValues(['openai-low', 'claude-low'], { 'openai-low': 1 })
     )
 
     assert.deepEqual(payload.group_retry_times, {
       'openai-low': 1,
-      'claude-low': 3,
     })
   })
 

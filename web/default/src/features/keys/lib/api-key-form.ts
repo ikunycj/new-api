@@ -24,7 +24,6 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import type { ApiKey, ApiKeyFormData } from '../types'
 
 export const MAX_GROUP_CANDIDATES = 8
-export const DEFAULT_GROUP_RETRY_TIMES = 3
 export const MAX_GROUP_RETRY_TIMES = 100
 
 // ============================================================================
@@ -101,15 +100,12 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   tokenCount: 1,
 }
 
-export function getApiKeyFormDefaultValues(
-  defaultGroup = ''
-): ApiKeyFormValues {
-  if (!defaultGroup) return { ...API_KEY_FORM_DEFAULT_VALUES }
-
+export function getApiKeyFormDefaultValues(): ApiKeyFormValues {
   return {
     ...API_KEY_FORM_DEFAULT_VALUES,
-    group_candidates: [defaultGroup],
-    group_retry_times: { [defaultGroup]: DEFAULT_GROUP_RETRY_TIMES },
+    model_limits: [],
+    group_candidates: [],
+    group_retry_times: {},
   }
 }
 
@@ -132,8 +128,8 @@ export function transformFormDataToPayload(
 
   const groupRetryTimes: Record<string, number> = {}
   for (const group of groups) {
-    groupRetryTimes[group] =
-      data.group_retry_times[group] ?? DEFAULT_GROUP_RETRY_TIMES
+    const retryTimes = data.group_retry_times[group]
+    if (retryTimes !== undefined) groupRetryTimes[group] = retryTimes
   }
 
   return {
@@ -173,8 +169,8 @@ export function transformApiKeyToFormDefaults(
 
   const groupRetryTimes: Record<string, number> = {}
   for (const group of groups) {
-    groupRetryTimes[group] =
-      apiKey.group_retry_times[group] ?? DEFAULT_GROUP_RETRY_TIMES
+    const retryTimes = apiKey.group_retry_times[group]
+    if (retryTimes !== undefined) groupRetryTimes[group] = retryTimes
   }
 
   return {

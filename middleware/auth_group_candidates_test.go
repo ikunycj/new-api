@@ -7,7 +7,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,10 +60,7 @@ func TestSetupContextForTokenAddsOrderedGroupCandidates(t *testing.T) {
 	assert.True(t, common.GetContextKeyBool(ctx, constant.ContextKeyTokenCrossGroupRetry))
 	retryTimes, ok := common.GetContextKeyType[map[string]int](ctx, constant.ContextKeyTokenGroupRetryTimes)
 	require.True(t, ok)
-	assert.Equal(t, map[string]int{
-		"default": service.DefaultTokenGroupRetryTimes,
-		"vip":     service.DefaultTokenGroupRetryTimes,
-	}, retryTimes)
+	assert.Empty(t, retryTimes)
 }
 
 func TestSetupContextForTokenUsesConfiguredGroupRetryTimes(t *testing.T) {

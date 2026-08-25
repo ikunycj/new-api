@@ -29,13 +29,13 @@ func GetPricingGroupUsageAt(now time.Time) (map[string]PricingGroupUsage, error)
 	tomorrowStart := todayStart.AddDate(0, 0, 1)
 
 	type usageRow struct {
-		PricingGroup   string `gorm:"column:pricing_group"`
-		TokensToday    int64  `gorm:"column:tokens_today"`
-		QuotaToday     int64  `gorm:"column:quota_today"`
-		TokensYesterday int64 `gorm:"column:tokens_yesterday"`
-		QuotaYesterday int64  `gorm:"column:quota_yesterday"`
-		TokensTotal    int64  `gorm:"column:tokens_total"`
-		QuotaTotal     int64  `gorm:"column:quota_total"`
+		PricingGroup    string `gorm:"column:pricing_group"`
+		TokensToday     int64  `gorm:"column:tokens_today"`
+		QuotaToday      int64  `gorm:"column:quota_today"`
+		TokensYesterday int64  `gorm:"column:tokens_yesterday"`
+		QuotaYesterday  int64  `gorm:"column:quota_yesterday"`
+		TokensTotal     int64  `gorm:"column:tokens_total"`
+		QuotaTotal      int64  `gorm:"column:quota_total"`
 	}
 
 	var rows []usageRow

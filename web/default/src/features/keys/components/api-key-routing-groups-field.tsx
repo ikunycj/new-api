@@ -26,7 +26,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -55,11 +55,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import {
-  DEFAULT_GROUP_RETRY_TIMES,
-  MAX_GROUP_CANDIDATES,
-  MAX_GROUP_RETRY_TIMES,
-} from '../lib'
+import { MAX_GROUP_CANDIDATES, MAX_GROUP_RETRY_TIMES } from '../lib'
+
+const NON_NEGATIVE_INTEGER_PATTERN = /^[0-9]+$/
 
 export type ApiKeyRoutingGroupOption = {
   value: string
@@ -71,7 +69,8 @@ export type ApiKeyRoutingGroupOption = {
 type ApiKeyRoutingGroupsFieldProps = {
   isLoadingModels: boolean
   modelsByGroup: Record<string, string[]>
-  onRetryTimesChange: (group: string, value: number) => void
+  onRetryTimesChange: (group: string, value?: number) => void
+  onRetryTimesValidityChange: (group: string, isValid: boolean) => void
   onValueChange: (value: string[]) => void
   options: ApiKeyRoutingGroupOption[]
   retryTimes: Record<string, number>
@@ -96,7 +95,8 @@ type RoutingGroupRowProps = {
   onMove: (index: number, direction: -1 | 1) => void
   onMoveTo: (group: string, targetIndex: number) => void
   onRemove: (group: string) => void
-  onRetryTimesChange: (group: string, value: number) => void
+  onRetryTimesChange: (group: string, value?: number) => void
+  onRetryTimesValidityChange: (group: string, isValid: boolean) => void
   option?: ApiKeyRoutingGroupOption
   retryTimes: Record<string, number>
   total: number
@@ -110,6 +110,22 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
   const canReorder = props.total > 1
   const orderLabel = t('Order for {{group}}', { group: groupLabel })
   const retryLabel = t('Retries for {{group}}', { group: groupLabel })
+  const retryTimes = props.retryTimes[props.group]
+  const [retryTimesInput, setRetryTimesInput] = useState(() =>
+    retryTimes === undefined ? '' : String(retryTimes)
+  )
+  const retryTimesInputIsValid =
+    retryTimesInput === '' ||
+    (NON_NEGATIVE_INTEGER_PATTERN.test(retryTimesInput) &&
+      Number(retryTimesInput) <= MAX_GROUP_RETRY_TIMES)
+  const retryInputLabel =
+    retryTimes === undefined
+      ? `${retryLabel}: ${t('Inherit group policy')}`
+      : retryLabel
+
+  useEffect(() => {
+    setRetryTimesInput(retryTimes === undefined ? '' : String(retryTimes))
+  }, [retryTimes])
 
   return (
     <Reorder.Item
@@ -216,12 +232,14 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
               <span className='text-muted-foreground cursor-help text-xs' />
             }
           >
-            {t('Default retries')}
+            {t('Max Retries')}
           </TooltipTrigger>
           <TooltipContent>
-            {t(
-              'Number of additional attempts in this group before moving to the next one.'
-            )}
+            {retryTimes === undefined
+              ? t('Inherit group policy')
+              : t(
+                  'Number of additional attempts in this group before moving to the next one.'
+                )}
           </TooltipContent>
         </Tooltip>
         <Input
@@ -229,19 +247,25 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
           min={0}
           max={MAX_GROUP_RETRY_TIMES}
           step={1}
-          value={props.retryTimes[props.group] ?? DEFAULT_GROUP_RETRY_TIMES}
-          aria-label={retryLabel}
-          title={retryLabel}
+          value={retryTimesInput}
+          placeholder='-'
+          aria-invalid={!retryTimesInputIsValid}
+          aria-label={retryInputLabel}
+          title={retryInputLabel}
           className='h-9 w-16 px-1 text-center tabular-nums sm:h-8 sm:w-14'
           onChange={(event) => {
-            const value = Number.parseInt(event.target.value, 10)
-            if (
-              Number.isInteger(value) &&
-              value >= 0 &&
-              value <= MAX_GROUP_RETRY_TIMES
-            ) {
-              props.onRetryTimesChange(props.group, value)
+            const input = event.target.value
+            setRetryTimesInput(input)
+            if (input === '') {
+              props.onRetryTimesValidityChange(props.group, true)
+              props.onRetryTimesChange(props.group)
+              return
             }
+            const isValid =
+              NON_NEGATIVE_INTEGER_PATTERN.test(input) &&
+              Number(input) <= MAX_GROUP_RETRY_TIMES
+            props.onRetryTimesValidityChange(props.group, isValid)
+            if (isValid) props.onRetryTimesChange(props.group, Number(input))
           }}
         />
       </div>
@@ -476,6 +500,7 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
             onMoveTo={moveGroupTo}
             onRemove={removeGroup}
             onRetryTimesChange={props.onRetryTimesChange}
+            onRetryTimesValidityChange={props.onRetryTimesValidityChange}
             retryTimes={props.retryTimes}
           />
         ))}

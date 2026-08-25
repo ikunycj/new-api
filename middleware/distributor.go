@@ -148,6 +148,7 @@ func Distribute() func(c *gin.Context) {
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		finishGroupActivity := service.BeginPricingGroupActivity(
+			c,
 			common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
 			common.GetContextKeyInt(c, constant.ContextKeyUserId),
 			c.GetString(common.RequestIdKey),

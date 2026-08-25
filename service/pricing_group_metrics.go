@@ -14,8 +14,8 @@ type PricingGroupMetrics struct {
 	PricingGroup string                         `json:"pricing_group"`
 	Usage        model.PricingGroupUsage        `json:"usage"`
 	Channels     model.PricingGroupChannelCount `json:"channels"`
-	Activity     PricingGroupActivity            `json:"activity"`
-	UpdatedAt    int64                           `json:"updated_at"`
+	Activity     PricingGroupActivity           `json:"activity"`
+	UpdatedAt    int64                          `json:"updated_at"`
 }
 
 type pricingGroupBaseMetrics struct {

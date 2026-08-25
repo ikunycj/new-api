@@ -108,6 +108,32 @@ type OptionUpdateRequest struct {
 	Value any    `json:"value"`
 }
 
+type pricingGroupConfigurationUpdateRequest struct {
+	GroupRatio              string `json:"group_ratio"`
+	PricingGroupOrder       string `json:"pricing_group_order"`
+	PricingGroupRetryPolicy string `json:"pricing_group_retry_policy"`
+}
+
+func UpdatePricingGroupConfiguration(c *gin.Context) {
+	var request pricingGroupConfigurationUpdateRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorMsg(c, "无效的参数")
+		return
+	}
+	if err := model.UpdatePricingGroupConfiguration(
+		request.GroupRatio,
+		request.PricingGroupOrder,
+		request.PricingGroupRetryPolicy,
+	); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "option.update", map[string]interface{}{
+		"key": "pricing_groups",
+	})
+	common.ApiSuccess(c, nil)
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -130,6 +156,10 @@ func UpdateOption(c *gin.Context) {
 	}
 	if isPaymentComplianceOptionKey(option.Key) {
 		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
+		return
+	}
+	if option.Key == "GroupRatio" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" {
+		common.ApiErrorMsg(c, "定价分组配置必须统一保存")
 		return
 	}
 	switch option.Key {
@@ -195,33 +225,6 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "无法启用 Telegram OAuth，请先填入 Telegram Bot Token！",
-			})
-			return
-		}
-	case "GroupRatio":
-		err = ratio_setting.CheckGroupRatio(option.Value.(string))
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
-	case "PricingGroupOrder":
-		err = ratio_setting.CheckPricingGroupOrder(option.Value.(string))
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
-	case "PricingGroupRetryPolicy":
-		err = ratio_setting.CheckPricingGroupRetryPolicy(option.Value.(string))
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
 			})
 			return
 		}

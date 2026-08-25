@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Option struct {
@@ -22,12 +24,51 @@ type Option struct {
 }
 
 var errRetiredOption = errors.New("option has been retired")
+var errPricingGroupOptionRequiresAtomicUpdate = errors.New("pricing group options must be updated together")
+var pricingGroupConfigurationUpdateMutex sync.Mutex
+
+var pricingGroupOptionKeys = []string{
+	"GroupRatio",
+	"PricingGroupOrder",
+	"PricingGroupRetryPolicy",
+}
+
+func isPricingGroupOptionKey(key string) bool {
+	for _, pricingGroupKey := range pricingGroupOptionKeys {
+		if key == pricingGroupKey {
+			return true
+		}
+	}
+	return false
+}
+
+func pricingGroupOptionValues(configuration *ratio_setting.PricingGroupConfiguration) (map[string]string, error) {
+	ratioData, err := common.Marshal(configuration.GroupRatios)
+	if err != nil {
+		return nil, err
+	}
+	orderData, err := common.Marshal(configuration.GroupOrder)
+	if err != nil {
+		return nil, err
+	}
+	retryPolicyData, err := common.Marshal(configuration.RetryPolicies)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		"GroupRatio":              string(ratioData),
+		"PricingGroupOrder":       string(orderData),
+		"PricingGroupRetryPolicy": string(retryPolicyData),
+	}, nil
+}
 
 var retiredOptionKeys = []string{
 	"AutoGroups",
 	"DefaultUseAutoGroup",
 	"GroupGroupRatio",
+	"group_ratio_setting.group_ratio",
 	"group_ratio_setting.group_group_ratio",
+	"group_ratio_setting.pricing_group_retry_policy",
 	"group_ratio_setting.group_special_usable_group",
 	"UserUsableGroups",
 }
@@ -206,6 +247,9 @@ func InitOptionMap() {
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
 	for k, v := range modelConfigs {
+		if isRetiredOptionKey(k) {
+			continue
+		}
 		common.OptionMap[k] = v
 	}
 
@@ -214,16 +258,56 @@ func InitOptionMap() {
 }
 
 func loadOptionsFromDatabase() {
-	options, _ := AllOption()
+	pricingGroupConfigurationUpdateMutex.Lock()
+	defer pricingGroupConfigurationUpdateMutex.Unlock()
+
+	options, err := AllOption()
+	if err != nil {
+		common.SysLog("failed to load options from database: " + err.Error())
+		return
+	}
+	pricingGroupValues := map[string]string{
+		"GroupRatio":              ratio_setting.GroupRatio2JSONString(),
+		"PricingGroupOrder":       ratio_setting.PricingGroupOrder2JSONString(),
+		"PricingGroupRetryPolicy": ratio_setting.PricingGroupRetryPolicy2JSONString(),
+	}
 	for _, option := range options {
 		if isRetiredOptionKey(option.Key) {
 			continue
 		}
-		err := updateOptionMap(option.Key, option.Value)
-		if err != nil {
+		if isPricingGroupOptionKey(option.Key) {
+			pricingGroupValues[option.Key] = option.Value
+			continue
+		}
+		if err := updateOptionMap(option.Key, option.Value); err != nil {
 			common.SysLog("failed to update option map: " + err.Error())
 		}
 	}
+
+	configuration, err := ratio_setting.ParsePersistedPricingGroupConfiguration(
+		pricingGroupValues["GroupRatio"],
+		pricingGroupValues["PricingGroupOrder"],
+		pricingGroupValues["PricingGroupRetryPolicy"],
+	)
+	if err != nil {
+		common.SysLog("failed to load pricing group configuration: " + err.Error())
+		return
+	}
+	pricingGroupValues, err = pricingGroupOptionValues(configuration)
+	if err != nil {
+		common.SysLog("failed to marshal pricing group configuration: " + err.Error())
+		return
+	}
+
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	for _, key := range pricingGroupOptionKeys {
+		common.OptionMap[key] = pricingGroupValues[key]
+	}
+	ratio_setting.ApplyPricingGroupConfiguration(configuration)
+	common.OptionMapRWMutex.Unlock()
 }
 
 func SyncOptions(frequency int) {
@@ -238,57 +322,8 @@ func UpdateOption(key string, value string) error {
 	if isRetiredOptionKey(key) {
 		return errRetiredOption
 	}
-	if key == "GroupRatio" {
-		var ratios map[string]float64
-		if err := common.UnmarshalJsonStr(value, &ratios); err != nil {
-			return err
-		}
-		retryPolicies := ratio_setting.GetPricingGroupRetryPolicyCopy()
-		for group := range retryPolicies {
-			if _, exists := ratios[group]; !exists {
-				delete(retryPolicies, group)
-			}
-		}
-		retryPolicyData, err := common.Marshal(retryPolicies)
-		if err != nil {
-			return err
-		}
-		retryPolicyValue := string(retryPolicyData)
-		pricingGroups := make([]string, 0, len(ratios))
-		for name := range ratios {
-			pricingGroups = append(pricingGroups, name)
-		}
-		if err := DB.Transaction(func(tx *gorm.DB) error {
-			var option Option
-			err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(&option).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				option.Key = key
-				if err := tx.Create(&option).Error; err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			}
-			option.Value = value
-			if err := tx.Save(&option).Error; err != nil {
-				return err
-			}
-			retryPolicyOption := Option{Key: "PricingGroupRetryPolicy"}
-			if err := tx.FirstOrCreate(&retryPolicyOption, Option{Key: retryPolicyOption.Key}).Error; err != nil {
-				return err
-			}
-			retryPolicyOption.Value = retryPolicyValue
-			if err := tx.Save(&retryPolicyOption).Error; err != nil {
-				return err
-			}
-			return DeleteChannelMonitorsOutsidePricingGroups(tx, pricingGroups)
-		}); err != nil {
-			return err
-		}
-		if err := updateOptionMap(key, value); err != nil {
-			return err
-		}
-		return updateOptionMap("PricingGroupRetryPolicy", retryPolicyValue)
+	if isPricingGroupOptionKey(key) {
+		return errPricingGroupOptionRequiresAtomicUpdate
 	}
 
 	// Save to database first
@@ -310,6 +345,56 @@ func UpdateOption(key string, value string) error {
 	return updateOptionMap(key, value)
 }
 
+func UpdatePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON string) error {
+	configuration, err := ratio_setting.ParsePricingGroupConfiguration(
+		groupRatioJSON,
+		groupOrderJSON,
+		retryPolicyJSON,
+	)
+	if err != nil {
+		return err
+	}
+	pricingGroupConfigurationUpdateMutex.Lock()
+	defer pricingGroupConfigurationUpdateMutex.Unlock()
+
+	values, err := pricingGroupOptionValues(configuration)
+	if err != nil {
+		return err
+	}
+
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		for _, key := range pricingGroupOptionKeys {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&Option{
+				Key:   key,
+				Value: values[key],
+			}).Error; err != nil {
+				return err
+			}
+			var option Option
+			if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(&option).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&option).Update("value", values[key]).Error; err != nil {
+				return err
+			}
+		}
+		return DeleteChannelMonitorsOutsidePricingGroups(tx, configuration.GroupOrder)
+	}); err != nil {
+		return err
+	}
+
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	for _, key := range pricingGroupOptionKeys {
+		common.OptionMap[key] = values[key]
+	}
+	ratio_setting.ApplyPricingGroupConfiguration(configuration)
+	common.OptionMapRWMutex.Unlock()
+	return nil
+}
+
 // UpdateOptionsBulk persists multiple key/value pairs in a single database
 // transaction, then dispatches them through updateOptionMap in one pass. If
 // any DB write fails the whole transaction rolls back and no in-memory state
@@ -322,6 +407,9 @@ func UpdateOptionsBulk(values map[string]string) error {
 	for key := range values {
 		if isRetiredOptionKey(key) {
 			return errRetiredOption
+		}
+		if isPricingGroupOptionKey(key) {
+			return errPricingGroupOptionRequiresAtomicUpdate
 		}
 	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
