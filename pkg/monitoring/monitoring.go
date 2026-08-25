@@ -3,10 +3,13 @@ package monitoring
 import (
 	"database/sql"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
+	"net/mail"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -54,6 +57,16 @@ var (
 )
 
 type channelInfoCollector struct{}
+
+type alertmanagerWebhook struct {
+	Status string `json:"status"`
+	Alerts []struct {
+		Status      string            `json:"status"`
+		Labels      map[string]string `json:"labels"`
+		Annotations map[string]string `json:"annotations"`
+		StartsAt    string            `json:"startsAt"`
+	} `json:"alerts"`
+}
 
 func (channelInfoCollector) Describe(descriptions chan<- *prometheus.Desc) {
 	descriptions <- channelInfoDesc
@@ -203,6 +216,7 @@ func Start() (*http.Server, error) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
+	mux.Handle("/internal/alerts/email", newAlertEmailHandler(common.SendEmail))
 	server := &http.Server{
 		Addr:              address,
 		Handler:           mux,
@@ -214,6 +228,63 @@ func Start() (*http.Server, error) {
 		}
 	}()
 	return server, nil
+}
+
+func newAlertEmailHandler(sendEmail func(subject, receiver, content string) error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		recipient, err := mail.ParseAddress(strings.TrimSpace(request.URL.Query().Get("to")))
+		if err != nil || recipient.Address == "" {
+			http.Error(w, "invalid recipient", http.StatusBadRequest)
+			return
+		}
+
+		request.Body = http.MaxBytesReader(w, request.Body, 64<<10)
+		var payload alertmanagerWebhook
+		if err := common.DecodeJson(request.Body, &payload); err != nil {
+			http.Error(w, "invalid alert payload", http.StatusBadRequest)
+			return
+		}
+		if len(payload.Alerts) == 0 {
+			http.Error(w, "alert payload is empty", http.StatusBadRequest)
+			return
+		}
+
+		status := strings.ToLower(strings.TrimSpace(payload.Status))
+		if status != "resolved" {
+			status = "firing"
+		}
+		subject := fmt.Sprintf("[AllToken] Profit margin alert %s", status)
+		var content strings.Builder
+		content.WriteString("<h2>Profit margin protection alert</h2>")
+		content.WriteString("<p>Status: <strong>" + html.EscapeString(status) + "</strong></p>")
+		matchedAlerts := 0
+		for _, alert := range payload.Alerts {
+			if alert.Labels["alertname"] != "AllTokenProfitMarginRisk" {
+				continue
+			}
+			matchedAlerts++
+			content.WriteString("<hr><p><strong>" + html.EscapeString(alert.Annotations["summary"]) + "</strong></p>")
+			content.WriteString("<p>" + html.EscapeString(alert.Annotations["description"]) + "</p>")
+			if alert.StartsAt != "" {
+				content.WriteString("<p>Started at: " + html.EscapeString(alert.StartsAt) + "</p>")
+			}
+		}
+		if matchedAlerts == 0 {
+			http.Error(w, "profit margin alert is missing", http.StatusBadRequest)
+			return
+		}
+		if err := sendEmail(subject, recipient.Address, content.String()); err != nil {
+			common.SysError("send profit guard alert email: " + err.Error())
+			http.Error(w, "email delivery failed", http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
 
 func registerDatabaseCollectors(registry *prometheus.Registry, name string, database *sql.DB) {

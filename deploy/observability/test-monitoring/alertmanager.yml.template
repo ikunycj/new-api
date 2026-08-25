@@ -1,0 +1,20 @@
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: discard
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 2h
+  routes:
+    - receiver: profit-email
+      matchers:
+        - alertname="AllTokenProfitMarginRisk"
+
+receivers:
+  - name: discard
+  - name: profit-email
+    webhook_configs:
+      - url: http://new-api:8006/internal/alerts/email?to=__ALERT_EMAIL__
+        send_resolved: true

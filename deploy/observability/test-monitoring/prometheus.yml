@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 5m
+  external_labels:
+    environment: test
+    host: aliyun
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alltoken-test-alertmanager:9093]
+
+scrape_configs:
+  - job_name: new-api
+    static_configs:
+      - targets: [new-api:8006]

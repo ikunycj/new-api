@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -129,4 +130,35 @@ func TestRegistryExposesEveryConfiguredChannel(t *testing.T) {
 	assert.Equal(t, "#38 Primary", channels["38"]["channel_label"])
 	assert.Equal(t, "enabled", channels["38"]["status"])
 	assert.Equal(t, "manually_disabled", channels["39"]["status"])
+}
+
+func TestAlertEmailHandlerSendsProfitGuardNotification(t *testing.T) {
+	var subject, receiver, content string
+	handler := newAlertEmailHandler(func(gotSubject, gotReceiver, gotContent string) error {
+		subject, receiver, content = gotSubject, gotReceiver, gotContent
+		return nil
+	})
+	payload := []byte(`{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"AllTokenProfitMarginRisk"},"annotations":{"summary":"Profit margin risk detected","description":"Three warnings were recorded in two hours."},"startsAt":"2026-08-25T12:00:00Z"}]}`)
+	request := httptest.NewRequest(http.MethodPost, "/internal/alerts/email?to=654125664%40qq.com", bytes.NewReader(payload))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+	assert.Equal(t, "[AllToken] Profit margin alert firing", subject)
+	assert.Equal(t, "654125664@qq.com", receiver)
+	assert.Contains(t, content, "Three warnings were recorded in two hours.")
+}
+
+func TestAlertEmailHandlerRejectsInvalidRecipient(t *testing.T) {
+	handler := newAlertEmailHandler(func(_, _, _ string) error {
+		t.Fatal("email sender must not be called")
+		return nil
+	})
+	request := httptest.NewRequest(http.MethodPost, "/internal/alerts/email?to=invalid", bytes.NewReader([]byte(`{"status":"firing","alerts":[{}]}`)))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 }

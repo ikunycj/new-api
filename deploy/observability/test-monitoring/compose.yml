@@ -1,0 +1,49 @@
+name: alltoken-test-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: alltoken-test-prometheus
+    restart: unless-stopped
+    mem_limit: 192m
+    cpus: 0.5
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=3d
+    ports:
+      - 127.0.0.1:19090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    security_opt:
+      - no-new-privileges:true
+    networks: [new-api-network]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: alltoken-test-alertmanager
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - 127.0.0.1:19093:9093
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    security_opt:
+      - no-new-privileges:true
+    networks: [new-api-network]
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+
+networks:
+  new-api-network:
+    external: true
+    name: new-api_new-api-network

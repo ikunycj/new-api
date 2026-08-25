@@ -1,0 +1,10 @@
+groups:
+  - name: alltoken-profit-protection
+    rules:
+      - alert: AllTokenProfitMarginRisk
+        expr: increase(alltoken_profit_guard_decisions_total{mode="warn",decision="warn"}[2h]) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Profit margin risk detected
+          description: At least three profit margin warnings were recorded during the rolling two-hour window.
