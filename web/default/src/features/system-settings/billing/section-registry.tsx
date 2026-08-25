@@ -87,20 +87,6 @@ const BILLING_SECTIONS = [
     ),
   },
   {
-    id: 'group-pricing',
-    titleKey: 'Group Management',
-    showInNav: false,
-    build: (settings: BillingSettings) => (
-      <RatioSettingsCard
-        titleKey='Group Management'
-        modelDefaults={getModelDefaults(settings)}
-        groupDefaults={getGroupDefaults(settings)}
-        toolPricesDefault={settings['tool_price_setting.prices']}
-        visibleTabs={['groups']}
-      />
-    ),
-  },
-  {
     id: 'payment',
     titleKey: 'Payment Gateway',
     build: (settings: BillingSettings) => (

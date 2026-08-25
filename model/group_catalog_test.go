@@ -22,6 +22,6 @@ func TestGetPricingGroupNamesUsesConfiguredGroupsOnly(t *testing.T) {
 
 	groups, err := GetPricingGroupNames()
 	require.NoError(t, err)
-	assert.Equal(t, []string{"configured-ratio", "configured-visible", "shared"}, groups)
+	assert.Equal(t, []string{"configured-ratio", "shared"}, groups)
 	assert.NotContains(t, groups, "auto")
 }

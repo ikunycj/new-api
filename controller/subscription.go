@@ -184,20 +184,6 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "总额度不能为负数")
 		return
 	}
-	req.Plan.UpgradeGroup = strings.TrimSpace(req.Plan.UpgradeGroup)
-	if req.Plan.UpgradeGroup != "" {
-		if req.Plan.UpgradeGroup != defaultUserGroup {
-			common.ApiErrorMsg(c, "升级用户分组只能是 default")
-			return
-		}
-	}
-	req.Plan.DowngradeGroup = strings.TrimSpace(req.Plan.DowngradeGroup)
-	if req.Plan.DowngradeGroup != "" {
-		if req.Plan.DowngradeGroup != defaultUserGroup {
-			common.ApiErrorMsg(c, "降级用户分组只能是 default")
-			return
-		}
-	}
 	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
 	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
@@ -258,20 +244,6 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "总额度不能为负数")
 		return
 	}
-	req.Plan.UpgradeGroup = strings.TrimSpace(req.Plan.UpgradeGroup)
-	if req.Plan.UpgradeGroup != "" {
-		if req.Plan.UpgradeGroup != defaultUserGroup {
-			common.ApiErrorMsg(c, "升级用户分组只能是 default")
-			return
-		}
-	}
-	req.Plan.DowngradeGroup = strings.TrimSpace(req.Plan.DowngradeGroup)
-	if req.Plan.DowngradeGroup != "" {
-		if req.Plan.DowngradeGroup != defaultUserGroup {
-			common.ApiErrorMsg(c, "降级用户分组只能是 default")
-			return
-		}
-	}
 	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
 	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
@@ -295,8 +267,6 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"waffo_pancake_product_id":   req.Plan.WaffoPancakeProductId,
 			"max_purchase_per_user":      req.Plan.MaxPurchasePerUser,
 			"total_amount":               req.Plan.TotalAmount,
-			"upgrade_group":              req.Plan.UpgradeGroup,
-			"downgrade_group":            req.Plan.DowngradeGroup,
 			"quota_reset_period":         req.Plan.QuotaResetPeriod,
 			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
 			"updated_at":                 common.GetTimestamp(),

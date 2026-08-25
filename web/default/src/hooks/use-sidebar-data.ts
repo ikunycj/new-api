@@ -22,7 +22,6 @@ import {
   CreditCard,
   FileText,
   Gauge,
-  GitBranch,
   FlaskConical,
   HeartPulse,
   Key,
@@ -85,11 +84,6 @@ export function useSidebarData(): SidebarData {
             icon: LayoutDashboard,
           },
           {
-            title: t('Group Status'),
-            url: '/group-status',
-            icon: HeartPulse,
-          },
-          {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
@@ -142,11 +136,6 @@ export function useSidebarData(): SidebarData {
             title: t('Channel Monitors'),
             url: '/channel-monitors',
             icon: HeartPulse,
-          },
-          {
-            title: t('Monitoring & Alerts'),
-            url: '/failover',
-            icon: GitBranch,
           },
           {
             title: t('Models'),

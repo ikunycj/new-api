@@ -44,8 +44,10 @@ export type ChannelMonitor = {
   latest_error?: string
   last_checked_at: number | null
   next_check_at: number | null
+  raw_availability_24h: number | null
   raw_availability_7d: number | null
   raw_availability_30d: number | null
+  availability_24h: number | null
   availability_7d: number | null
   availability_30d: number | null
   availability_boost_percent: number
@@ -65,6 +67,7 @@ export type GroupStatusMonitor = Pick<
   | 'latest_latency_ms'
   | 'last_checked_at'
   | 'next_check_at'
+  | 'availability_24h'
   | 'availability_7d'
   | 'availability_30d'
   | 'recent_results'

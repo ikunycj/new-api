@@ -44,7 +44,7 @@ func TestNormalizeLegacyUserGroupsRepairsAccountGroupsOnly(t *testing.T) {
 	assert.Equal(t, "premium", channel.Group)
 }
 
-func TestSubscriptionTransitionCannotWritePricingGroupToUser(t *testing.T) {
+func TestSubscriptionDoesNotChangeAccountGroup(t *testing.T) {
 	truncateTables(t)
 
 	require.NoError(t, DB.Create(&User{
@@ -54,12 +54,10 @@ func TestSubscriptionTransitionCannotWritePricingGroupToUser(t *testing.T) {
 		AffCode:  "subscription-group-user",
 	}).Error)
 	plan := &SubscriptionPlan{
-		Id:             9812,
-		Title:          "Legacy premium plan",
-		DurationUnit:   SubscriptionDurationMonth,
-		DurationValue:  1,
-		UpgradeGroup:   "premium",
-		DowngradeGroup: "standard",
+		Id:            9812,
+		Title:         "Standard plan",
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
 	}
 	require.NoError(t, DB.Create(plan).Error)
 
@@ -69,8 +67,6 @@ func TestSubscriptionTransitionCannotWritePricingGroupToUser(t *testing.T) {
 	subscription, err := CreateUserSubscriptionFromPlanTx(DB, 9811, plan, "test")
 	require.NoError(t, err)
 	require.NotNil(t, subscription)
-	assert.Equal(t, DefaultUserGroup, subscription.UpgradeGroup)
-	assert.Equal(t, DefaultUserGroup, subscription.DowngradeGroup)
 
 	var user User
 	require.NoError(t, DB.First(&user, 9811).Error)

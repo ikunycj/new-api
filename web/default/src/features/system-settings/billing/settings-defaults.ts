@@ -44,7 +44,6 @@ export const defaultBillingSettings: BillingSettings = {
   'billing_setting.billing_mode': '{}',
   'billing_setting.billing_expr': '{}',
   'tool_price_setting.prices': '{}',
-  TopupGroupRatio: '',
   GroupRatio: '',
   UserUsableGroups: '',
   PayAddress: '',
@@ -125,7 +124,6 @@ export const getModelDefaults = (settings: BillingSettings) => ({
 })
 
 export const getGroupDefaults = (settings: BillingSettings) => ({
-  TopupGroupRatio: settings.TopupGroupRatio,
   GroupRatio: settings.GroupRatio,
   UserUsableGroups: settings.UserUsableGroups,
 })

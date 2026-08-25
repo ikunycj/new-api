@@ -66,7 +66,6 @@ import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import {
   createPlan,
   updatePlan,
-  getGroups,
   createWaffoPancakeSubscriptionProduct,
   listWaffoPancakeSubscriptionProductOptions,
 } from '../api'
@@ -99,7 +98,6 @@ export function SubscriptionsMutateDrawer({
   const tokensOnly = currencyMeta.kind === 'tokens'
   const currencyLabel = getCurrencyLabel()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [groupOptions, setGroupOptions] = useState<string[]>([])
   const [creatingPancakeProduct, setCreatingPancakeProduct] = useState(false)
   const [pancakeProducts, setPancakeProducts] = useState<
     { id: string; name: string; status: string }[]
@@ -118,11 +116,6 @@ export function SubscriptionsMutateDrawer({
       } else {
         form.reset(PLAN_FORM_DEFAULTS)
       }
-      getGroups()
-        .then((res) => {
-          if (res.success) setGroupOptions(res.data || [])
-        })
-        .catch(() => {})
       // Best-effort — empty list still lets the operator use "+ Create".
       listWaffoPancakeSubscriptionProductOptions()
         .then((res) => {
@@ -387,94 +380,6 @@ export function SubscriptionsMutateDrawer({
               </div>
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='upgrade_group'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Upgrade Group')}</FormLabel>
-                      <Select
-                        items={[
-                          { value: '__none__', label: t('No Upgrade') },
-                          ...groupOptions.map((g) => ({ value: g, label: g })),
-                        ]}
-                        onValueChange={(v) =>
-                          field.onChange(v === '__none__' ? '' : v)
-                        }
-                        value={field.value || ''}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('No Upgrade')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='__none__'>
-                              {t('No Upgrade')}
-                            </SelectItem>
-                            {groupOptions.map((g) => (
-                              <SelectItem key={g} value={g}>
-                                {g}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='downgrade_group'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Downgrade Group')}</FormLabel>
-                      <Select
-                        items={[
-                          {
-                            value: '__none__',
-                            label: t('Downgrade to pre-purchase group'),
-                          },
-                          ...groupOptions.map((g) => ({ value: g, label: g })),
-                        ]}
-                        onValueChange={(v) =>
-                          field.onChange(v === '__none__' ? '' : v)
-                        }
-                        value={field.value || ''}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={t('Downgrade to pre-purchase group')}
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='__none__'>
-                              {t('Downgrade to pre-purchase group')}
-                            </SelectItem>
-                            {groupOptions.map((g) => (
-                              <SelectItem key={g} value={g}>
-                                {g}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {t(
-                          'Downgrade to this group after the subscription expires'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name='max_purchase_per_user'

@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
-import { GroupBadge } from '@/components/group-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -306,14 +305,6 @@ export function SubscriptionPurchaseDialog(props: Props) {
               {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
             </span>
           </div>
-          {plan.upgrade_group && (
-            <div className='flex items-center justify-between'>
-              <span className='text-muted-foreground text-sm'>
-                {t('Upgrade Group')}
-              </span>
-              <GroupBadge group={plan.upgrade_group} />
-            </div>
-          )}
           <Separator />
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
@@ -406,9 +397,9 @@ export function SubscriptionPurchaseDialog(props: Props) {
               <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                 <Select
                   items={(props.epayMethods || []).map((m) => ({
-                      value: m.type,
-                      label: m.name || m.type,
-                    }))}
+                    value: m.type,
+                    label: m.name || m.type,
+                  }))}
                   value={selectedEpayMethod}
                   onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
                   disabled={limitReached}

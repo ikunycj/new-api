@@ -14,11 +14,35 @@ const (
 	MaxTokenGroupNameLength = 64
 )
 
-func GetUserUsableGroups(_ string) map[string]string {
+func GetUserUsableGroups(userGroup string) map[string]string {
 	// This catalog contains pricing/routing groups that a user may assign to
 	// tokens. The account group stored in users.group is a separate namespace
 	// and must never be implicitly promoted into this catalog.
-	return setting.GetUserUsableGroupsCopy()
+	descriptions := setting.GetUserUsableGroupsCopy()
+	groups := make(map[string]string)
+	for group := range ratio_setting.GetGroupRatioCopy() {
+		if group == "auto" {
+			continue
+		}
+		groups[group] = descriptions[group]
+		if groups[group] == "" {
+			groups[group] = group
+		}
+	}
+	if setting.UserGroupPricingGroupsAreAll(userGroup) {
+		return groups
+	}
+	allowed := setting.GetUserGroupPricingGroups(userGroup)
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, group := range allowed {
+		allowedSet[group] = struct{}{}
+	}
+	for group := range groups {
+		if _, ok := allowedSet[group]; !ok {
+			delete(groups, group)
+		}
+	}
+	return groups
 }
 
 func GroupInUserUsableGroups(userGroup, groupName string) bool {

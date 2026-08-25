@@ -121,7 +121,6 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
-    TopupGroupRatio: createJsonStringField(t),
     UserUsableGroups: createJsonStringField(t),
   })
 
@@ -191,7 +190,6 @@ export function RatioSettingsCard({
 
   const groupNormalizedDefaults = useRef({
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-    TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
     UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
   })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
@@ -222,7 +220,6 @@ export function RatioSettingsCard({
     mode: 'onChange',
     defaultValues: {
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
     },
   })
@@ -265,13 +262,11 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-      TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
       UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
     }
 
     groupForm.reset({
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
     })
   }, [groupDefaults, groupForm])
@@ -323,7 +318,6 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
-        TopupGroupRatio: normalizeJsonString(values.TopupGroupRatio),
         UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
       }
 

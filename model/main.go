@@ -274,10 +274,10 @@ func migrateDB() error {
 	if err := removeLegacyUserClassificationColumn(); err != nil {
 		return err
 	}
-
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
+		&UserGroup{},
 		&User{},
 		&PasskeyCredential{},
 		&Option{},
@@ -361,7 +361,6 @@ func migrateDBFast() error {
 	if err := removeLegacyUserClassificationColumn(); err != nil {
 		return err
 	}
-
 	var wg sync.WaitGroup
 
 	migrations := []struct {
@@ -370,6 +369,7 @@ func migrateDBFast() error {
 	}{
 		{&Channel{}, "Channel"},
 		{&Token{}, "Token"},
+		{&UserGroup{}, "UserGroup"},
 		{&User{}, "User"},
 		{&PasskeyCredential{}, "PasskeyCredential"},
 		{&Option{}, "Option"},
@@ -621,21 +621,55 @@ func normalizeLegacyUserGroups() error {
 	if DB == nil || !DB.Migrator().HasTable(&User{}) || !DB.Migrator().HasColumn(&User{}, "group") {
 		return nil
 	}
-	condition := commonGroupCol + " IS NULL OR TRIM(" + commonGroupCol + ") = '' OR " + commonGroupCol + " <> ?"
+	if err := EnsureDefaultUserGroup(); err != nil {
+		return err
+	}
+	condition := commonGroupCol + " IS NULL OR TRIM(" + commonGroupCol + ") = ''"
 	var ids []int
-	if err := DB.Model(&User{}).Where(condition, DefaultUserGroup).Pluck("id", &ids).Error; err != nil {
+	if err := DB.Model(&User{}).Where(condition).Pluck("id", &ids).Error; err != nil {
 		return err
 	}
 	if len(ids) == 0 {
-		return nil
+		return normalizeUnknownUserGroups()
 	}
-	if err := DB.Model(&User{}).Where(condition, DefaultUserGroup).
+	if err := DB.Model(&User{}).Where(condition).
 		Update("group", DefaultUserGroup).Error; err != nil {
 		return err
 	}
 	for _, id := range ids {
 		if err := invalidateUserCache(id); err != nil {
 			common.SysLog(fmt.Sprintf("failed to invalidate normalized user group cache for user %d: %v", id, err))
+		}
+	}
+	return normalizeUnknownUserGroups()
+}
+
+func normalizeUnknownUserGroups() error {
+	var groups []string
+	if err := DB.Model(&User{}).
+		Where(commonGroupCol+" IS NOT NULL AND TRIM("+commonGroupCol+") <> '' AND "+commonGroupCol+" <> ?", DefaultUserGroup).
+		Distinct().Pluck("group", &groups).Error; err != nil {
+		return err
+	}
+	for _, group := range groups {
+		known, err := IsUserGroupName(group)
+		if err != nil {
+			return err
+		}
+		if known {
+			continue
+		}
+		var ids []int
+		if err := DB.Model(&User{}).Where(commonGroupCol+" = ?", group).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if err := DB.Model(&User{}).Where(commonGroupCol+" = ?", group).Update("group", DefaultUserGroup).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := invalidateUserCache(id); err != nil {
+				common.SysLog(fmt.Sprintf("failed to invalidate normalized user group cache for user %d: %v", id, err))
+			}
 		}
 	}
 	return nil
@@ -789,8 +823,6 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`creem_product_id`" + ` varchar(128) DEFAULT '',
 ` + "`waffo_pancake_product_id`" + ` varchar(128) DEFAULT '',
 ` + "`max_purchase_per_user`" + ` integer DEFAULT 0,
-` + "`upgrade_group`" + ` varchar(64) DEFAULT '',
-` + "`downgrade_group`" + ` varchar(64) DEFAULT '',
 ` + "`total_amount`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`quota_reset_period`" + ` varchar(16) DEFAULT 'never',
 ` + "`quota_reset_custom_seconds`" + ` bigint DEFAULT 0,
@@ -826,8 +858,6 @@ PRIMARY KEY (` + "`id`" + `)
 		{Name: "creem_product_id", DDL: "`creem_product_id` varchar(128) DEFAULT ''"},
 		{Name: "waffo_pancake_product_id", DDL: "`waffo_pancake_product_id` varchar(128) DEFAULT ''"},
 		{Name: "max_purchase_per_user", DDL: "`max_purchase_per_user` integer DEFAULT 0"},
-		{Name: "upgrade_group", DDL: "`upgrade_group` varchar(64) DEFAULT ''"},
-		{Name: "downgrade_group", DDL: "`downgrade_group` varchar(64) DEFAULT ''"},
 		{Name: "total_amount", DDL: "`total_amount` bigint NOT NULL DEFAULT 0"},
 		{Name: "quota_reset_period", DDL: "`quota_reset_period` varchar(16) DEFAULT 'never'"},
 		{Name: "quota_reset_custom_seconds", DDL: "`quota_reset_custom_seconds` bigint DEFAULT 0"},

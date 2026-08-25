@@ -15,16 +15,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// DefaultUserGroup is the only account-group value exposed by the user
-// management API. Pricing/routing groups live in token/channel/ability data
-// and must not be written into users.group.
+// DefaultUserGroup is the built-in account group. Pricing/routing groups live
+// in token/channel/ability data and are separate from users.group.
 const DefaultUserGroup = "default"
 
-// NormalizeUserGroup collapses legacy account-group values into the only
-// supported account group. Pricing/routing group names are stored on tokens,
-// abilities, and channels instead of on users.
-func NormalizeUserGroup(_ string) string {
-	return DefaultUserGroup
+// NormalizeUserGroup trims account-group values and falls back to default for
+// empty values. It does not validate catalog membership; controllers validate
+// user-provided names against user_groups before persistence.
+func NormalizeUserGroup(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return DefaultUserGroup
+	}
+	return group
 }
 
 // CurrentOnboardingVersion is the latest onboarding flow shown to newly
@@ -56,7 +59,7 @@ type User struct {
 	Quota             int                        `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota         int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount      int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group             string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
+	Group             string                     `json:"group" gorm:"type:varchar(64);default:'default';index"`
 	AffCode           string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount          int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota          int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度

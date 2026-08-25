@@ -32,8 +32,6 @@ Open:
 - Load-test API: http://localhost:3100/api/status
 - pprof: http://localhost:8005/debug/pprof/
 
-The authenticated AllToken admin page at `/failover` includes the same current metrics, Alertmanager alerts, and embedded Grafana dashboard. The backend reads Prometheus and Alertmanager over the private Compose network; only `FAILOVER_GRAFANA_PUBLIC_URL` is sent to the browser.
-
 ## Run profiles
 
 ```sh

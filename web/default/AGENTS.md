@@ -57,19 +57,20 @@
 
 ### 3.1 国际化
 
-- **页面文本**：所有面向用户的文案均需支持 i18n，使用 `useTranslation()` 的 `t()` 进行翻译。
+- **页面文本**：除管理员专用内部功能外，所有面向用户的文案均需支持 i18n，使用 `useTranslation()` 的 `t()` 进行翻译。
+- **管理员专用功能例外**：仅管理员可见且不面向普通用户的后台运维、审计页面、控件和诊断文案默认使用中文，可不接入 i18n；不得让中文管理员界面显示英文 fallback key。共享页面、普通用户可见内容以及管理员与用户共用的组件仍必须使用 `t()`。
 - **使用场景**
-  - **React 组件**：必须使用 `const { t } = useTranslation()`，以保证语言切换时组件会重新渲染。
-  - **非 React 环境**（工具函数、常量、类方法）：可使用 `import { t } from 'i18next'`；此类用法不会随语言切换自动更新，仅在不依赖响应式更新的场景使用。
-  - 即使父组件已使用 `useTranslation()`，子组件仍应自行使用，以保证独立性。
+  - **React 组件**：对于包含普通用户或公共文案的组件，必须使用 `const { t } = useTranslation()`，以保证语言切换时组件会重新渲染；管理员专用内部文案默认使用中文，且不得显示英文 fallback key。
+  - **非 React 环境**（工具函数、常量、类方法）：对于需要 i18n 的文案，可使用 `import { t } from 'i18next'`；此类用法不会随语言切换自动更新，仅在不依赖响应式更新的场景使用。
+  - 即使父组件已使用 `useTranslation()`，包含需要 i18n 文案的子组件仍应自行使用，以保证独立性。
 - **专有名词**：品牌、产品、技术术语等可保留英文（如 API、React、TypeScript）；若有约定俗成的译法则使用翻译。
 - **翻译键**：使用有层级、语义清晰的键名，如 `dashboard.overview.title`，并保持命名一致。
 
 - **枚举与文案（常量中的 i18n）**  
   各 feature 的 `constants.ts` 中常出现「枚举/状态 + 展示文案」或「成功/错误消息」，须统一约定以免遗漏 i18n、用法混乱：
-  - **成功/错误/提示类消息**（如 `SUCCESS_MESSAGES`、`ERROR_MESSAGES`）：常量值仅表示 **i18n 键**（与英文 fallback 同字面量）。展示时**必须**通过 `t()` 使用，例如 `toast.success(t(SUCCESS_MESSAGES.API_KEY_CREATED))`、`toast.error(t(ERROR_MESSAGES.UNEXPECTED))`，**禁止**直接 `toast.success(SUCCESS_MESSAGES.xxx)` 当作最终文案。
+  - **成功/错误/提示类消息**（如 `SUCCESS_MESSAGES`、`ERROR_MESSAGES`）：对于需要 i18n 的功能，常量值仅表示 **i18n 键**（与英文 fallback 同字面量）。展示时**必须**通过 `t()` 使用，例如 `toast.success(t(SUCCESS_MESSAGES.API_KEY_CREATED))`、`toast.error(t(ERROR_MESSAGES.UNEXPECTED))`，**禁止**直接 `toast.success(SUCCESS_MESSAGES.xxx)` 当作最终文案。管理员专用功能默认使用中文，且不得显示英文 fallback key。
   - **状态/选项的 label**：在常量中统一用 **labelKey**（字符串，即 i18n 键），组件中通过 `t(config.labelKey)` 渲染；或约定用 `label` 存与 en 一致的 key 字符串，组件用 `t(config.label)`。同一 feature 内只采用一种方式，避免混用。
-  - **新增此类常量时**：同步在 `src/i18n/static-keys.ts` 中登记对应 key（若项目用其做提取），或确保文案以 `t('...')` 字面量形式出现以便扫描，避免遗漏翻译。
+  - **新增此类常量时**：对于需要 i18n 的功能，同步在 `src/i18n/static-keys.ts` 中登记对应 key（若项目用其做提取），或确保文案以 `t('...')` 字面量形式出现以便扫描，避免遗漏翻译。
 
 ### 3.2 代码风格与类型
 
@@ -117,7 +118,7 @@
 
 ### 3.9 错误处理
 
-- **服务端错误**：统一使用 `handleServerError`，在 React Query 全局配置与拦截器中接入；按 HTTP 状态码给出合适提示，文案使用 i18n。
+- **服务端错误**：统一使用 `handleServerError`，在 React Query 全局配置与拦截器中接入；按 HTTP 状态码给出合适提示。需要 i18n 的功能使用翻译文案，管理员专用内部功能默认使用中文，且不得显示英文 fallback key。
 - **展示**：使用 `toast.error` 等统一方式；路由级错误由 `errorComponent` 承接，提供友好错误页并记录便于排查的信息。
 - **表单**：校验与服务端错误映射到字段后，在字段下方展示；使用 `form.setError` 等与表单库一致的方式。
 

@@ -53,8 +53,6 @@ import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedLoadtestDemoIndexRouteImport } from './routes/_authenticated/loadtest-demo/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
-import { Route as AuthenticatedGroupStatusIndexRouteImport } from './routes/_authenticated/group-status/index'
-import { Route as AuthenticatedFailoverIndexRouteImport } from './routes/_authenticated/failover/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelMonitorsIndexRouteImport } from './routes/_authenticated/channel-monitors/index'
@@ -321,18 +319,6 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedGroupStatusIndexRoute =
-  AuthenticatedGroupStatusIndexRouteImport.update({
-    id: '/group-status/',
-    path: '/group-status/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedFailoverIndexRoute =
-  AuthenticatedFailoverIndexRouteImport.update({
-    id: '/failover/',
-    path: '/failover/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -561,8 +547,6 @@ export interface FileRoutesByFullPath {
   '/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
-  '/failover/': typeof AuthenticatedFailoverIndexRoute
-  '/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
@@ -640,8 +624,6 @@ export interface FileRoutesByTo {
   '/channel-monitors': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
-  '/failover': typeof AuthenticatedFailoverIndexRoute
-  '/group-status': typeof AuthenticatedGroupStatusIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
@@ -723,8 +705,6 @@ export interface FileRoutesById {
   '/_authenticated/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
-  '/_authenticated/failover/': typeof AuthenticatedFailoverIndexRoute
-  '/_authenticated/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
@@ -805,8 +785,6 @@ export interface FileRouteTypes {
     | '/channel-monitors/'
     | '/channels/'
     | '/dashboard/'
-    | '/failover/'
-    | '/group-status/'
     | '/keys/'
     | '/loadtest-demo/'
     | '/models/'
@@ -884,8 +862,6 @@ export interface FileRouteTypes {
     | '/channel-monitors'
     | '/channels'
     | '/dashboard'
-    | '/failover'
-    | '/group-status'
     | '/keys'
     | '/loadtest-demo'
     | '/models'
@@ -966,8 +942,6 @@ export interface FileRouteTypes {
     | '/_authenticated/channel-monitors/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
-    | '/_authenticated/failover/'
-    | '/_authenticated/group-status/'
     | '/_authenticated/keys/'
     | '/_authenticated/loadtest-demo/'
     | '/_authenticated/models/'
@@ -1359,20 +1333,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/group-status/': {
-      id: '/_authenticated/group-status/'
-      path: '/group-status'
-      fullPath: '/group-status/'
-      preLoaderRoute: typeof AuthenticatedGroupStatusIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/failover/': {
-      id: '/_authenticated/failover/'
-      path: '/failover'
-      fullPath: '/failover/'
-      preLoaderRoute: typeof AuthenticatedFailoverIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
       path: '/dashboard'
@@ -1709,8 +1669,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChannelMonitorsIndexRoute: typeof AuthenticatedChannelMonitorsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
-  AuthenticatedFailoverIndexRoute: typeof AuthenticatedFailoverIndexRoute
-  AuthenticatedGroupStatusIndexRoute: typeof AuthenticatedGroupStatusIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedLoadtestDemoIndexRoute: typeof AuthenticatedLoadtestDemoIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
@@ -1738,8 +1696,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedChannelMonitorsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
-  AuthenticatedFailoverIndexRoute: AuthenticatedFailoverIndexRoute,
-  AuthenticatedGroupStatusIndexRoute: AuthenticatedGroupStatusIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedLoadtestDemoIndexRoute: AuthenticatedLoadtestDemoIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,

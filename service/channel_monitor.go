@@ -65,8 +65,10 @@ type ChannelMonitorView struct {
 	Monitor            *model.ChannelMonitor
 	Status             string
 	Latest             *model.ChannelMonitorHistory
+	RawAvailability24h *float64
 	RawAvailability7d  *float64
 	RawAvailability30d *float64
+	Availability24h    *float64
 	Availability7d     *float64
 	Availability30d    *float64
 	RecentResults      []*model.ChannelMonitorHistory
@@ -307,6 +309,10 @@ func buildChannelMonitorView(monitor *model.ChannelMonitor) (*ChannelMonitorView
 			view.Status = "failed"
 		}
 	}
+	view.RawAvailability24h, err = model.GetChannelMonitorAvailability(monitor.Id, now-24*60*60)
+	if err != nil {
+		return nil, err
+	}
 	view.RawAvailability7d, err = model.GetChannelMonitorAvailability(monitor.Id, now-7*24*60*60)
 	if err != nil {
 		return nil, err
@@ -315,6 +321,7 @@ func buildChannelMonitorView(monitor *model.ChannelMonitor) (*ChannelMonitorView
 	if err != nil {
 		return nil, err
 	}
+	view.Availability24h = applyChannelMonitorAvailabilityBoost(view.RawAvailability24h, monitor.AvailabilityBoostPercent)
 	view.Availability7d = applyChannelMonitorAvailabilityBoost(view.RawAvailability7d, monitor.AvailabilityBoostPercent)
 	view.Availability30d = applyChannelMonitorAvailabilityBoost(view.RawAvailability30d, monitor.AvailabilityBoostPercent)
 	view.RecentResults, err = model.ListChannelMonitorHistory(monitor.Id, 30)

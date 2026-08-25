@@ -22,7 +22,7 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 
 - **Backend**: Go 1.22+, Gin web framework, GORM v2 ORM
 - **Frontend**: React 19, TypeScript, Rsbuild, Base UI, Tailwind CSS
-- **Databases**: SQLite, MySQL, PostgreSQL (all three must be supported)
+- **Database**: PostgreSQL >= 9.6
 - **Cache**: Redis (go-redis) + in-memory cache
 - **Auth**: JWT, WebAuthn/Passkeys, OAuth (GitHub, Discord, OIDC, etc.)
 - **Frontend package manager**: Bun (preferred over npm/yarn/pnpm)
@@ -65,6 +65,10 @@ web/             — Frontend container
 - Usage: `useTranslation()` hook, call `t('English key')` in components
 - CLI tools: `bun run i18n:sync` (from `web/default/`)
 
+### Administrator-only UI exception
+- Internal pages, menus, controls, and messages that are exclusively visible to administrators or super administrators do not require multilingual translations; the default language is Chinese. Do not leave English source keys or fallback text in the Chinese administrator UI.
+- Shared components, regular-user-visible content, public pages, and external API responses must still follow the normal i18n rules.
+
 ## Rules
 
 ### Common Code Quality
@@ -95,19 +99,16 @@ web/             — Frontend container
 
 Do NOT directly import or call `encoding/json` in business code. `json.RawMessage`, `json.Number`, and other type definitions from `encoding/json` may still be referenced as types, but actual marshal/unmarshal calls must go through `common.*`.
 
-**Database compatibility:** All database code MUST work with SQLite, MySQL >= 5.7.8, and PostgreSQL >= 9.6 simultaneously.
+**Database:** The project targets PostgreSQL >= 9.6. New or modified database code, migrations, and tests only need to be validated against PostgreSQL; do not add SQLite/MySQL compatibility branches unless a task explicitly requires maintaining an existing compatibility path.
 
 - Prefer GORM methods (`Create`, `Find`, `Where`, `Updates`, etc.) over raw SQL.
-- Let GORM handle primary key generation; do not use `AUTO_INCREMENT` or `SERIAL` directly.
-- Standard `SELECT ... FOR UPDATE` row locks built with GORM query methods in `model/` MUST use `lockForUpdate(tx)`. Do not use the legacy GORM v1 pattern `tx.Set("gorm:query_option", "FOR UPDATE")`, because GORM v2 silently ignores it and no lock is acquired. Do not duplicate `clause.Locking{Strength: "UPDATE"}` at call sites; the shared helper emits `FOR UPDATE` for MySQL/PostgreSQL and skips it for SQLite, where the syntax is unsupported. Dialect-specific locking with different semantics (for example, a MySQL next-key/gap lock) may use raw SQL only behind explicit database-type branches with valid fallbacks for every supported database.
-- When raw SQL is unavoidable, account for dialect differences:
-  - PostgreSQL uses `"column"` quoting, while MySQL/SQLite use `` `column` ``.
-  - Use `commonGroupCol`, `commonKeyCol` from `model/main.go` for reserved-word columns like `group` and `key`.
-  - Use `commonTrueVal`/`commonFalseVal` for boolean values.
-  - Use `common.UsingMainDatabase(...)` for primary database branches and `common.UsingLogDatabase(...)` for log database branches.
-- Do not use database-specific features without cross-DB fallback, including MySQL-only functions, PostgreSQL-only operators, SQLite-unsupported `ALTER COLUMN`, or database-specific JSON column types without a `TEXT` fallback.
-- Migrations must work on all three databases. For SQLite, use `ALTER TABLE ... ADD COLUMN` instead of `ALTER COLUMN` (see `model/main.go` for patterns).
-- Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. MySQL and PostgreSQL can normalize boolean defaults differently, causing GORM `AutoMigrate` to repeatedly issue `ALTER TABLE` on restart. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic; do not replace `default:true` with `default:1` unless the behavior is verified across SQLite, MySQL, and PostgreSQL.
+- Let GORM handle primary key generation; do not use database-specific auto-increment syntax directly.
+- Standard `SELECT ... FOR UPDATE` row locks built with GORM query methods in `model/` MUST use `lockForUpdate(tx)`. Do not use the legacy GORM v1 pattern `tx.Set("gorm:query_option", "FOR UPDATE")`, because GORM v2 silently ignores it and no lock is acquired. Do not duplicate `clause.Locking{Strength: "UPDATE"}` at call sites.
+- When raw SQL is unavoidable, use PostgreSQL syntax and double-quote reserved identifiers such as `group` and `key`. Use `commonGroupCol` and `commonKeyCol` from `model/main.go` where applicable.
+- Use `common.UsingMainDatabase(...)` for primary database branches and `common.UsingLogDatabase(...)` for log database branches.
+- PostgreSQL-specific features are allowed when they make the implementation clearer; do not add SQLite/MySQL fallback branches.
+- Migrations only need to support PostgreSQL. Use PostgreSQL `ALTER TABLE` and other PostgreSQL-native migration syntax where appropriate.
+- Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic.
 
 **Relay and provider behavior:**
 
@@ -150,8 +151,8 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
   - `bun run dev` for development server
   - `bun run build` for production build
   - `bun run i18n:*` for i18n tooling
-- Frontend UI text must support i18n with `i18next`/`react-i18next`. Use flat JSON locale files in `web/default/src/i18n/locales/{lang}.json`, with English source strings as keys.
-- In React components, use `useTranslation()` and call `t('English key')` for user-facing text.
+- Frontend UI text for regular users and public pages must support i18n with `i18next`/`react-i18next`. Internal administrator-only UI defaults to Chinese and may omit multilingual translations. Use flat JSON locale files in `web/default/src/i18n/locales/{lang}.json`, with English source strings as keys when i18n is required.
+- In React components that contain regular-user or public-facing text, use `useTranslation()` and call `t('English key')`. Administrator-only internal text defaults to Chinese and must not render English fallback keys in the Chinese UI.
 - Follow `web/default/AGENTS.md` for detailed frontend conventions, including TypeScript, component structure, styling, accessibility, testing, and build checks.
 
 ### Local Development Ports

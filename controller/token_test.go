@@ -620,7 +620,7 @@ func TestAddTokenRequiresAtLeastOneGroup(t *testing.T) {
 
 	response := decodeAPIResponse(t, recorder)
 	assert.False(t, response.Success)
-	assert.Contains(t, response.Message, "至少选择一个分组")
+	assert.Contains(t, response.Message, "请选择至少一个模型计费分组")
 	var token model.Token
 	assert.Error(t, db.Where("name = ?", "missing-group-token").First(&token).Error)
 }

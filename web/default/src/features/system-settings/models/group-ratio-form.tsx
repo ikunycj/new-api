@@ -56,7 +56,6 @@ import { GroupRatioVisualEditor } from './group-ratio-visual-editor'
 
 type GroupFormValues = {
   GroupRatio: string
-  TopupGroupRatio: string
   UserUsableGroups: string
 }
 
@@ -128,7 +127,6 @@ export const GroupRatioForm = memo(function GroupRatioForm({
           <div className='space-y-6'>
             <GroupRatioVisualEditor
               groupRatio={form.watch('GroupRatio')}
-              topupGroupRatio={form.watch('TopupGroupRatio')}
               userUsableGroups={form.watch('UserUsableGroups')}
               onChange={(field, value) =>
                 handleFieldChange(field as keyof GroupFormValues, value)
@@ -150,26 +148,6 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                     {t(
                       'JSON map of group → ratio applied when the user selects the group explicitly.'
                     )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='TopupGroupRatio'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Top-up group ratios')}</FormLabel>
-                  <FormControl>
-                    <Textarea rows={6} {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Optional multiplier per user group used when calculating recharge pricing. Provide a JSON object such as'
-                    )}
-                    {` { "default": 1, "vip": 1.2 }`}.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -234,9 +212,7 @@ function GroupPricingGuide({ open, onOpenChange }: GroupPricingGuideProps) {
             </h3>
             <div className='text-muted-foreground space-y-2 text-sm leading-6'>
               <p>
-                {t(
-                  'Pricing groups and user groups are separate concepts. Pricing groups control token routing and billing; user groups identify accounts and do not automatically become pricing groups.'
-                )}
+                定价分组与用户分组是两个独立概念。定价分组控制令牌路由和计费；用户分组用于标识账号，不会自动成为定价分组。
               </p>
               <p>
                 <span className='text-foreground font-medium'>

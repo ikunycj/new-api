@@ -16,15 +16,6 @@ type permissionRoute struct {
 	handler    gin.HandlerFunc
 }
 
-func registerFailoverGrafanaAuthRoute(router gin.IRoutes) {
-	router.GET("/api/channel/failover/grafana-auth",
-		middleware.RouteTag("api"),
-		middleware.AdminSessionAuth(),
-		middleware.RequirePermission(authz.ChannelRead),
-		controller.GetFailoverGrafanaAuth,
-	)
-}
-
 func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 	channelRoute := apiRouter.Group("/channel")
 	channelRoute.Use(middleware.AdminAuth())
@@ -50,9 +41,6 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/search", permission: authz.ChannelRead, handler: controller.SearchChannels},
 	{method: http.MethodGet, path: "/models", permission: authz.ChannelRead, handler: controller.ChannelListModels},
 	{method: http.MethodGet, path: "/models_enabled", permission: authz.ChannelRead, handler: controller.EnabledListModels},
-	{method: http.MethodGet, path: "/failover/config", permission: authz.ChannelRead, handler: controller.GetFailoverConfig},
-	{method: http.MethodGet, path: "/failover/monitoring", permission: authz.ChannelRead, handler: controller.GetFailoverMonitoring},
-	{method: http.MethodPut, path: "/failover/config", permission: authz.ChannelWrite, handler: controller.UpdateFailoverConfig},
 	{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetChannel},
 	{method: http.MethodGet, path: "/:id/reconciliation", permission: authz.ChannelRead, handler: controller.GetChannelReconciliation},
 	{method: http.MethodPost, path: "/:id/reconciliation/costs", permission: authz.ChannelWrite, handler: controller.CreateChannelCostEntry},

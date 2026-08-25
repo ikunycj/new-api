@@ -32,7 +32,6 @@ export const BILLING_SECTION_IDS: readonly string[] = [
   'quota',
   'currency',
   'model-pricing',
-  'group-pricing',
   'payment',
   'affiliate',
   'checkin',

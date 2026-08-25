@@ -396,9 +396,6 @@ export const STATIC_I18N_KEYS = [
   'Price',
   'Priority',
   'Payment Channel',
-  'No Upgrade',
-  'Downgrade to pre-purchase group',
-  'Downgrade Group',
   'Downgrade to this group after the subscription expires',
   'Allow wallet balance after quota used up',
   'Unlimited',
@@ -568,7 +565,6 @@ export const STATIC_I18N_KEYS = [
   // Misc
   'Cancel',
   'Status',
-  'Upgrade Group',
   'Regenerate',
   'Untitled',
   'Open in new tab',

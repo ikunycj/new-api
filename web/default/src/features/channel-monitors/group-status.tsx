@@ -31,7 +31,6 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,7 +50,6 @@ import {
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   Tooltip,
   TooltipContent,
@@ -75,11 +73,12 @@ import {
 } from './lib/format'
 import type { GroupStatusMonitor } from './types'
 
-type AvailabilityPeriod = '7' | '30'
+type GroupStatusPanelProps = {
+  periodHours: number
+}
 
-export function GroupStatus() {
+export function GroupStatusPanel(props: GroupStatusPanelProps) {
   const { t } = useTranslation()
-  const [period, setPeriod] = useState<AvailabilityPeriod>('7')
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
   const statusQuery = useQuery({
     queryKey: ['group-status'],
@@ -104,9 +103,16 @@ export function GroupStatus() {
   ).length
 
   return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Group Status')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>
+    <div className='space-y-3 border-t pt-4'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
+        <div className='flex min-w-0 items-center gap-2'>
+          <div className='bg-info/10 text-info grid size-7 shrink-0 place-items-center rounded-md'>
+            <HugeiconsIcon icon={Activity01Icon} className='size-3.5' />
+          </div>
+          <h4 className='truncate text-sm font-semibold'>
+            {t('Group Status')}
+          </h4>
+        </div>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -127,126 +133,78 @@ export function GroupStatus() {
           </TooltipTrigger>
           <TooltipContent>{t('Refresh')}</TooltipContent>
         </Tooltip>
-      </SectionPageLayout.Actions>
-      <SectionPageLayout.Content>
-        <div className='mx-auto flex w-full max-w-7xl flex-col gap-4'>
-          <div className='bg-background flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div>
-              <p className='font-medium'>{t('Availability period')}</p>
-              <p className='text-muted-foreground mt-0.5 text-xs'>
-                {period === '7'
-                  ? t('Showing 7-day stability')
-                  : t('Showing 30-day stability')}
-              </p>
-            </div>
-            <ToggleGroup
-              value={[period]}
-              onValueChange={(values) => {
-                const next = values[0]
-                if (next === '7' || next === '30') setPeriod(next)
-              }}
-              className='bg-muted/60 grid w-full grid-cols-2 rounded-lg border p-1 sm:w-72'
-              aria-label={t('Availability period')}
-            >
-              <ToggleGroupItem
-                value='7'
-                className='aria-pressed:bg-primary aria-pressed:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-10 w-full px-3 text-center leading-tight whitespace-normal'
-              >
-                {period === '7' && (
-                  <HugeiconsIcon
-                    icon={CheckmarkCircle02Icon}
-                    data-icon='inline-start'
-                  />
-                )}
-                {t('Last 7 days')}
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value='30'
-                className='aria-pressed:bg-primary aria-pressed:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-10 w-full px-3 text-center leading-tight whitespace-normal'
-              >
-                {period === '30' && (
-                  <HugeiconsIcon
-                    icon={CheckmarkCircle02Icon}
-                    data-icon='inline-start'
-                  />
-                )}
-                {t('Last 30 days')}
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+      </div>
 
-          <div className='divide-border bg-background grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4 sm:divide-x'>
-            <StatusSummary
-              label={t('Monitored groups')}
-              value={monitors.length}
-              icon={Activity01Icon}
-            />
-            <StatusSummary
-              label={t('Operational')}
-              value={operational}
-              icon={CheckmarkCircle02Icon}
-              tone='success'
-            />
-            <StatusSummary
-              label={t('Failed')}
-              value={failed}
-              icon={Alert02Icon}
-              tone='destructive'
-            />
-            <StatusSummary
-              label={t('Last refreshed')}
-              value={
-                statusQuery.dataUpdatedAt
-                  ? new Date(statusQuery.dataUpdatedAt).toLocaleTimeString()
-                  : '--'
-              }
-              icon={ClockIcon}
-            />
-          </div>
+      <div className='divide-border bg-background grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4 sm:divide-x'>
+        <StatusSummary
+          label={t('Monitored groups')}
+          value={monitors.length}
+          icon={Activity01Icon}
+        />
+        <StatusSummary
+          label={t('Operational')}
+          value={operational}
+          icon={CheckmarkCircle02Icon}
+          tone='success'
+        />
+        <StatusSummary
+          label={t('Failed')}
+          value={failed}
+          icon={Alert02Icon}
+          tone='destructive'
+        />
+        <StatusSummary
+          label={t('Last refreshed')}
+          value={
+            statusQuery.dataUpdatedAt
+              ? new Date(statusQuery.dataUpdatedAt).toLocaleTimeString()
+              : '--'
+          }
+          icon={ClockIcon}
+        />
+      </div>
 
-          {statusQuery.isError && (
-            <Alert variant='destructive'>
-              <HugeiconsIcon icon={Alert02Icon} />
-              <AlertTitle>{t('Failed to load group status')}</AlertTitle>
-              <AlertDescription>{statusQuery.error.message}</AlertDescription>
-            </Alert>
-          )}
+      {statusQuery.isError && (
+        <Alert variant='destructive'>
+          <HugeiconsIcon icon={Alert02Icon} />
+          <AlertTitle>{t('Failed to load group status')}</AlertTitle>
+          <AlertDescription>{statusQuery.error.message}</AlertDescription>
+        </Alert>
+      )}
 
-          {statusQuery.isLoading && (
-            <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
-              {Array.from({ length: 3 }, (_, index) => (
-                <Skeleton key={index} className='h-80 w-full' />
-              ))}
-            </div>
-          )}
-          {!statusQuery.isLoading && monitors.length === 0 && (
-            <Empty className='bg-background min-h-80 rounded-lg border'>
-              <EmptyHeader>
-                <EmptyMedia variant='icon'>
-                  <HugeiconsIcon icon={Activity01Icon} />
-                </EmptyMedia>
-                <EmptyTitle>{t('No group status available')}</EmptyTitle>
-                <EmptyDescription>
-                  {t('No monitored pricing groups are currently visible')}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          )}
-          {!statusQuery.isLoading && monitors.length > 0 && (
-            <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
-              {monitors.map((monitor) => (
-                <GroupStatusCard
-                  key={monitor.id}
-                  monitor={monitor}
-                  period={period}
-                  now={now}
-                />
-              ))}
-            </div>
-          )}
+      {statusQuery.isLoading && (
+        <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton key={index} className='h-80 w-full' />
+          ))}
         </div>
-      </SectionPageLayout.Content>
-    </SectionPageLayout>
+      )}
+      {!statusQuery.isLoading && monitors.length === 0 && (
+        <Empty className='bg-background min-h-80 rounded-lg border'>
+          <EmptyHeader>
+            <EmptyMedia variant='icon'>
+              <HugeiconsIcon icon={Activity01Icon} />
+            </EmptyMedia>
+            <EmptyTitle>{t('No group status available')}</EmptyTitle>
+            <EmptyDescription>
+              {t('No monitored pricing groups are currently visible')}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+      {!statusQuery.isLoading && monitors.length > 0 && (
+        <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+          {monitors.map((monitor) => (
+            <GroupStatusCard
+              key={monitor.id}
+              monitor={monitor}
+              periodHours={props.periodHours}
+              now={now}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -284,7 +242,7 @@ function StatusSummary(props: StatusSummaryProps) {
 
 type GroupStatusCardProps = {
   monitor: GroupStatusMonitor
-  period: AvailabilityPeriod
+  periodHours: number
   now: number
 }
 
@@ -316,10 +274,8 @@ function GroupStatusCard(props: GroupStatusCardProps) {
       toast.error(error.message || t('Operation failed'))
     },
   })
-  const availability =
-    props.period === '7'
-      ? props.monitor.availability_7d
-      : props.monitor.availability_30d
+  const availability = getAvailability(props.monitor, props.periodHours)
+  const availabilityLabel = getAvailabilityLabel(t, props.periodHours)
   let statusLabel = t('Not tested')
   if (props.monitor.status === 'success') statusLabel = t('Operational')
   if (props.monitor.status === 'failed') statusLabel = t('Failed')
@@ -400,11 +356,7 @@ function GroupStatusCard(props: GroupStatusCardProps) {
 
         <div className='flex items-end justify-between gap-3'>
           <div>
-            <p className='text-muted-foreground text-xs'>
-              {props.period === '7'
-                ? t('7-day stability')
-                : t('30-day stability')}
-            </p>
+            <p className='text-muted-foreground text-xs'>{availabilityLabel}</p>
             <p className='text-muted-foreground mt-1 text-xs'>
               {formatMonitorTime(props.monitor.last_checked_at)}
             </p>
@@ -464,6 +416,24 @@ function GroupStatusCard(props: GroupStatusCardProps) {
       </CardFooter>
     </Card>
   )
+}
+
+function getAvailability(
+  monitor: GroupStatusMonitor,
+  periodHours: number
+): number | null {
+  if (periodHours <= 24) return monitor.availability_24h
+  if (periodHours <= 24 * 7) return monitor.availability_7d
+  return monitor.availability_30d
+}
+
+function getAvailabilityLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  periodHours: number
+): string {
+  if (periodHours <= 24) return t('Last 24 hours')
+  if (periodHours <= 24 * 7) return t('7-day stability')
+  return t('30-day stability')
 }
 
 function NextCheckCountdown(props: { value: number | null; now: number }) {

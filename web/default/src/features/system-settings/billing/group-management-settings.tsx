@@ -28,6 +28,7 @@ import {
   getGroupDefaults,
   getModelDefaults,
 } from './settings-defaults'
+import { UserGroupManagementSection } from './user-group-management-section'
 
 export function GroupManagementSettings() {
   const { t } = useTranslation()
@@ -44,13 +45,16 @@ export function GroupManagementSettings() {
           {t('Loading settings...')}
         </div>
       ) : (
-        <RatioSettingsCard
-          titleKey='Group Management'
-          modelDefaults={getModelDefaults(settings)}
-          groupDefaults={getGroupDefaults(settings)}
-          toolPricesDefault={settings['tool_price_setting.prices']}
-          visibleTabs={['groups']}
-        />
+        <>
+          <UserGroupManagementSection />
+          <RatioSettingsCard
+            titleKey='定价分组'
+            modelDefaults={getModelDefaults(settings)}
+            groupDefaults={getGroupDefaults(settings)}
+            toolPricesDefault={settings['tool_price_setting.prices']}
+            visibleTabs={['groups']}
+          />
+        </>
       )}
     </SettingsPageFrame>
   )

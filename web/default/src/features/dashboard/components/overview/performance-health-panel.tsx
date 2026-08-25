@@ -18,11 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Gauge, HeartPulse, Timer } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { GroupStatusPanel } from '@/features/channel-monitors/group-status'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -34,8 +36,9 @@ import {
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
-const PERFORMANCE_WINDOW_HOURS = 24
+const PERFORMANCE_WINDOW_HOURS = [24, 24 * 7, 24 * 30] as const
 const TOP_MODEL_LIMIT = 6
+type PerformanceWindowHours = (typeof PERFORMANCE_WINDOW_HOURS)[number]
 
 type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
 
@@ -57,9 +60,10 @@ function simpleAverage(
 
 export function PerformanceHealthPanel() {
   const { t } = useTranslation()
+  const [windowHours, setWindowHours] = useState<PerformanceWindowHours>(24)
   const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
-    queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
+    queryKey: ['perf-metrics-summary', windowHours],
+    queryFn: () => getPerfMetricsSummary(windowHours),
     staleTime: 60 * 1000,
     retry: false,
   })
@@ -93,14 +97,48 @@ export function PerformanceHealthPanel() {
 
   return (
     <section className='bg-card h-full overflow-hidden rounded-2xl border shadow-xs'>
-      <div className='flex items-center gap-2 border-b px-4 py-3 sm:px-5'>
+      <div className='flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:flex-nowrap sm:px-5'>
         <IconBadge tone='success' size='sm'>
           <HeartPulse />
         </IconBadge>
         <h3 className='text-sm font-semibold'>{t('Performance health')}</h3>
-        <span className='text-muted-foreground ml-auto text-xs'>
-          {t('Performance metrics for the last 24 hours')}
-        </span>
+        <ToggleGroup
+          value={[String(windowHours)]}
+          onValueChange={(values) => {
+            const next = Number(values[0])
+            if (
+              next === PERFORMANCE_WINDOW_HOURS[0] ||
+              next === PERFORMANCE_WINDOW_HOURS[1] ||
+              next === PERFORMANCE_WINDOW_HOURS[2]
+            ) {
+              setWindowHours(next)
+            }
+          }}
+          className='bg-muted/60 ml-auto grid w-full grid-cols-3 rounded-md border p-0.5 sm:w-fit'
+          aria-label={t('Period')}
+        >
+          <ToggleGroupItem
+            value='24'
+            size='sm'
+            className='h-7 min-w-0 px-1 text-[10px] leading-none whitespace-nowrap sm:px-2 sm:text-[11px]'
+          >
+            {t('Last 24 hours')}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value='168'
+            size='sm'
+            className='h-7 min-w-0 px-1 text-[10px] leading-none whitespace-nowrap sm:px-2 sm:text-[11px]'
+          >
+            {t('Last 7 days')}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value='720'
+            size='sm'
+            className='h-7 min-w-0 px-1 text-[10px] leading-none whitespace-nowrap sm:px-2 sm:text-[11px]'
+          >
+            {t('Last 30 days')}
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       <div className='space-y-3 p-4 sm:p-5'>
@@ -173,6 +211,8 @@ export function PerformanceHealthPanel() {
             </div>
           )
         )}
+
+        <GroupStatusPanel periodHours={windowHours} />
       </div>
     </section>
   )

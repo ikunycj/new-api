@@ -106,9 +106,6 @@ services:
       PYROSCOPE_URL: http://pyroscope:4040
       PYROSCOPE_APP_NAME: new-api-loadtest
       NODE_NAME: loadtest-node-1
-      FAILOVER_PROMETHEUS_URL: http://prometheus:9090
-      FAILOVER_ALERTMANAGER_URL: http://alertmanager:9093
-      FAILOVER_GRAFANA_PUBLIC_URL: http://localhost:3001/d/new-api-loadtest?orgId=1&from=now-30m&to=now&timezone=browser&refresh=5s&kiosk
     ulimits:
       nofile:
         soft: 65535

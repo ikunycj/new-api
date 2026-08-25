@@ -10,7 +10,7 @@ import (
 
 func addPricingGroupName(names map[string]struct{}, rawName string) {
 	name := strings.TrimSpace(rawName)
-	if name == "" || name == "auto" {
+	if name == "" || name == "auto" || name == setting.AllPricingGroups {
 		return
 	}
 	names[name] = struct{}{}
@@ -22,9 +22,6 @@ func addPricingGroupName(names map[string]struct{}, rawName string) {
 func GetPricingGroupNames() ([]string, error) {
 	names := make(map[string]struct{})
 	for name := range ratio_setting.GetGroupRatioCopy() {
-		addPricingGroupName(names, name)
-	}
-	for name := range setting.GetUserUsableGroupsCopy() {
 		addPricingGroupName(names, name)
 	}
 

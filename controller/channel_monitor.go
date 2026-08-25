@@ -62,8 +62,10 @@ type channelMonitorResponse struct {
 	LatestError              string                         `json:"latest_error,omitempty"`
 	LastCheckedAt            *int64                         `json:"last_checked_at"`
 	NextCheckAt              *int64                         `json:"next_check_at"`
+	RawAvailability24h       *float64                       `json:"raw_availability_24h"`
 	RawAvailability7d        *float64                       `json:"raw_availability_7d"`
 	RawAvailability30d       *float64                       `json:"raw_availability_30d"`
+	Availability24h          *float64                       `json:"availability_24h"`
 	Availability7d           *float64                       `json:"availability_7d"`
 	Availability30d          *float64                       `json:"availability_30d"`
 	AvailabilityBoostPercent float64                        `json:"availability_boost_percent"`
@@ -82,6 +84,7 @@ type groupStatusResponse struct {
 	LatestLatencyMs     *int                           `json:"latest_latency_ms"`
 	LastCheckedAt       *int64                         `json:"last_checked_at"`
 	NextCheckAt         *int64                         `json:"next_check_at"`
+	Availability24h     *float64                       `json:"availability_24h"`
 	Availability7d      *float64                       `json:"availability_7d"`
 	Availability30d     *float64                       `json:"availability_30d"`
 	CanTest             bool                           `json:"can_test"`
@@ -124,8 +127,10 @@ func channelMonitorViewToResponse(view *service.ChannelMonitorView) channelMonit
 		Status:                   view.Status,
 		LastCheckedAt:            monitor.LastCheckedAt,
 		NextCheckAt:              monitor.NextCheckAt,
+		RawAvailability24h:       view.RawAvailability24h,
 		RawAvailability7d:        view.RawAvailability7d,
 		RawAvailability30d:       view.RawAvailability30d,
+		Availability24h:          view.Availability24h,
 		Availability7d:           view.Availability7d,
 		Availability30d:          view.Availability30d,
 		AvailabilityBoostPercent: monitor.AvailabilityBoostPercent,
@@ -155,6 +160,7 @@ func channelMonitorViewToGroupStatus(view *service.ChannelMonitorView) groupStat
 		Status:              view.Status,
 		LastCheckedAt:       monitor.LastCheckedAt,
 		NextCheckAt:         monitor.NextCheckAt,
+		Availability24h:     view.Availability24h,
 		Availability7d:      view.Availability7d,
 		Availability30d:     view.Availability30d,
 		CanTest:             monitor.Enabled,

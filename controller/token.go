@@ -247,7 +247,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	if (request.GroupCandidates == nil || len(*request.GroupCandidates) == 0) && strings.TrimSpace(token.Group) == "" {
-		common.ApiError(c, fmt.Errorf("至少选择一个分组"))
+		common.ApiError(c, fmt.Errorf("请选择至少一个模型计费分组"))
 		return
 	}
 	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
