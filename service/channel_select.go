@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -9,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,19 +21,32 @@ type RetryParam struct {
 	RequestPath string
 	Retry       *int
 
-	groupIndex        int
-	attempted         bool
-	attemptCounts     map[int]int
-	attemptedChannels map[int]struct{}
-	excludedChannels  map[int]struct{}
-	retryChannelID    int
-	startedAt         time.Time
-	runtimePolicy     *model.RuntimeRoutingPolicy
-	routeChannels     []model.BillingGroupChannel
-	routeConfigured   bool
-	groups            []string
-	groupsInit        bool
-	resetNextTry      bool
+	groupIndex              int
+	attempted               bool
+	attemptCounts           map[int]int
+	attemptedChannels       map[int]struct{}
+	excludedChannels        map[int]struct{}
+	retryChannelID          int
+	startedAt               time.Time
+	runtimePolicy           *model.RuntimeRoutingPolicy
+	routeChannels           []model.BillingGroupChannel
+	routeConfigured         bool
+	groups                  []string
+	groupsInit              bool
+	resetNextTry            bool
+	projectedChannelCostUSD float64
+}
+
+const profitGuardAuditContextKey = "profit_guard_audit"
+
+type ProfitGuardDecision struct {
+	Mode                    string  `json:"mode"`
+	Decision                string  `json:"decision"`
+	ChannelID               int     `json:"channel_id"`
+	MinimumProfitMargin     float64 `json:"minimum_profit_margin"`
+	ProjectedProfitMargin   float64 `json:"projected_profit_margin"`
+	EstimatedRevenueUSD     float64 `json:"estimated_revenue_usd"`
+	ProjectedChannelCostUSD float64 `json:"projected_channel_cost_usd"`
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -197,6 +212,72 @@ func (p *RetryParam) RuntimePolicy() model.RuntimeRoutingPolicy { return p.loadP
 func (p *RetryParam) RouteConfigured() bool {
 	p.loadPolicy()
 	return p.routeConfigured
+}
+
+// EvaluateProfitGuard compares estimated user revenue with the cumulative
+// estimated channel cost before an upstream attempt starts. Off and warn modes
+// never block traffic; enforce mode blocks only when the configured margin
+// would be breached.
+func (p *RetryParam) EvaluateProfitGuard(channelID int, priceData types.PriceData) ProfitGuardDecision {
+	policy := p.loadPolicy()
+	decision := ProfitGuardDecision{
+		Mode:                policy.ProfitGuardMode,
+		Decision:            "unavailable",
+		ChannelID:           channelID,
+		MinimumProfitMargin: policy.MinimumProfitMargin,
+	}
+	if policy.ProfitGuardMode == model.ProfitGuardModeOff {
+		decision.Decision = "off"
+		return decision
+	}
+	providerBaseCost := priceData.EstimatedProviderBaseCostUSD
+	groupRatio := priceData.GroupRatioInfo.GroupRatio
+	if providerBaseCost <= 0 || groupRatio <= 0 || math.IsNaN(providerBaseCost) ||
+		math.IsInf(providerBaseCost, 0) || math.IsNaN(groupRatio) || math.IsInf(groupRatio, 0) {
+		return decision
+	}
+	group, err := p.currentGroup()
+	if err != nil {
+		return decision
+	}
+	nextCost := providerBaseCost * model.ResolveChannelCostFactor(group, channelID)
+	projectedCost := p.projectedChannelCostUSD + nextCost
+	revenue := providerBaseCost * groupRatio
+	margin := (revenue - projectedCost) / revenue * 100
+	decision.EstimatedRevenueUSD = revenue
+	decision.ProjectedChannelCostUSD = projectedCost
+	decision.ProjectedProfitMargin = margin
+	if margin+1e-9 >= policy.MinimumProfitMargin {
+		decision.Decision = "allow"
+		p.projectedChannelCostUSD = projectedCost
+		return decision
+	}
+	decision.Decision = "warn"
+	if policy.ProfitGuardMode == model.ProfitGuardModeEnforce {
+		decision.Decision = "block"
+		return decision
+	}
+	p.projectedChannelCostUSD = projectedCost
+	return decision
+}
+
+func RecordProfitGuardDecision(c *gin.Context, decision ProfitGuardDecision) {
+	if c == nil || decision.Mode == model.ProfitGuardModeOff {
+		return
+	}
+	c.Set(profitGuardAuditContextKey, decision)
+}
+
+func profitGuardAudit(c *gin.Context) (ProfitGuardDecision, bool) {
+	if c == nil {
+		return ProfitGuardDecision{}, false
+	}
+	value, ok := c.Get(profitGuardAuditContextKey)
+	if !ok {
+		return ProfitGuardDecision{}, false
+	}
+	decision, ok := value.(ProfitGuardDecision)
+	return decision, ok
 }
 
 func (p *RetryParam) hasAvailableChannelInCurrentGroup() bool {

@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "No server load generator is available.",
     "Pair server agent": "Pair server agent",
     "Run the test on a shared load generator managed by the platform.": "Run the test on a shared load generator managed by the platform.",
-    "Server load test": "Server load test"
+    "Server load test": "Server load test",
+    "Current billing group ratio: {{ratio}}x": "Current billing group ratio: {{ratio}}x",
+    "Enforce": "Enforce",
+    "Minimum profit margin (%)": "Minimum profit margin (%)",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.",
+    "Off": "Off",
+    "Pricing risk detected": "Pricing risk detected",
+    "Profit protection": "Profit protection",
+    "Protection mode": "Protection mode",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "The configured attempt path falls below the minimum margin from attempt {{position}} onward."
   }
 }

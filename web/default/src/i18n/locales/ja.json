@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "利用可能なサーバー負荷生成機がありません。",
     "Pair server agent": "サーバー Agent をペアリング",
     "Run the test on a shared load generator managed by the platform.": "プラットフォーム管理の共有負荷生成機でテストを実行します。",
-    "Server load test": "サーバー負荷テスト"
+    "Server load test": "サーバー負荷テスト",
+    "Current billing group ratio: {{ratio}}x": "現在の課金グループ倍率：{{ratio}}x",
+    "Enforce": "強制",
+    "Minimum profit margin (%)": "最低利益率（%）",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "モニタリングはトラフィックを遮断せず料金リスクを記録します。強制モードは最低利益率を下回る試行を停止します。",
+    "Off": "オフ",
+    "Pricing risk detected": "料金リスクを検出",
+    "Profit protection": "利益率保護",
+    "Protection mode": "保護モード",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "設定された試行経路は {{position}} 回目以降、最低利益率を下回ります。"
   }
 }

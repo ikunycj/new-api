@@ -6,6 +6,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,4 +143,53 @@ func TestConfiguredRouteWithoutMemoryCacheHonorsRouteOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, second)
 	assert.Equal(t, channels[1].Id, second.Id)
+}
+
+func TestProfitGuardWarnsWithoutBlockingTraffic(t *testing.T) {
+	channels := setupChannelRoute(t)
+	require.NoError(t, model.DB.Model(&model.BillingGroupRoute{}).
+		Where("billing_group = ?", "claude").
+		Updates(map[string]any{
+			"profit_guard_mode":     model.ProfitGuardModeWarn,
+			"minimum_profit_margin": 0,
+		}).Error)
+	model.InitChannelRoutingCache()
+	ctx, _ := gin.CreateTestContext(nil)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+	priceData := types.PriceData{
+		EstimatedProviderBaseCostUSD: 0.01,
+		GroupRatioInfo:               types.GroupRatioInfo{GroupRatio: 0.8},
+	}
+
+	first := param.EvaluateProfitGuard(channels[0].Id, priceData)
+	second := param.EvaluateProfitGuard(channels[0].Id, priceData)
+
+	assert.Equal(t, "allow", first.Decision)
+	assert.InDelta(t, 25, first.ProjectedProfitMargin, 0.0001)
+	assert.Equal(t, "warn", second.Decision)
+	assert.InDelta(t, -50, second.ProjectedProfitMargin, 0.0001)
+}
+
+func TestProfitGuardEnforceBlocksUnprofitableAttempt(t *testing.T) {
+	channels := setupChannelRoute(t)
+	require.NoError(t, model.DB.Model(&model.BillingGroupRoute{}).
+		Where("billing_group = ?", "claude").
+		Updates(map[string]any{
+			"profit_guard_mode":     model.ProfitGuardModeEnforce,
+			"minimum_profit_margin": 10,
+		}).Error)
+	model.InitChannelRoutingCache()
+	ctx, _ := gin.CreateTestContext(nil)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+	priceData := types.PriceData{
+		EstimatedProviderBaseCostUSD: 0.01,
+		GroupRatioInfo:               types.GroupRatioInfo{GroupRatio: 0.8},
+	}
+
+	first := param.EvaluateProfitGuard(channels[0].Id, priceData)
+	second := param.EvaluateProfitGuard(channels[0].Id, priceData)
+
+	assert.Equal(t, "allow", first.Decision)
+	assert.Equal(t, "block", second.Decision)
+	assert.InDelta(t, -50, second.ProjectedProfitMargin, 0.0001)
 }

@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "暂无可用的服务器压测机。",
     "Pair server agent": "配对服务器 Agent",
     "Run the test on a shared load generator managed by the platform.": "使用平台管理的共享压测机执行测试。",
-    "Server load test": "服务器压测"
+    "Server load test": "服务器压测",
+    "Current billing group ratio: {{ratio}}x": "当前计费分组倍率：{{ratio}}x",
+    "Enforce": "强制保护",
+    "Minimum profit margin (%)": "最低利润率（%）",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "仅监控会记录定价风险但不会拦截流量。强制保护会停止低于最低利润率的尝试。",
+    "Off": "关闭",
+    "Pricing risk detected": "检测到定价风险",
+    "Profit protection": "利润率保护",
+    "Protection mode": "保护模式",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "从第 {{position}} 次尝试开始，当前尝试路径将低于最低利润率。"
   }
 }

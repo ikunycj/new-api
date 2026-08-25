@@ -97,6 +97,10 @@ var (
 		Help:    "Time spent before a successful failover or final exhaustion.",
 		Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30},
 	}, []string{"outcome", "mode"})
+	profitGuardDecisions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "alltoken", Name: "profit_guard_decisions_total",
+		Help: "Profit guard decisions by bounded mode and outcome.",
+	}, []string{"mode", "decision"})
 )
 
 // Collectors returns all relay collectors for registration in the application registry.
@@ -106,7 +110,20 @@ func Collectors() []prometheus.Collector {
 		relayRetries, relayInFlight, relayClientCancellations,
 		errorEvents, channelRequests, channelSwitches,
 		finalErrors, authFailures, channelCircuitState, failoverDuration,
+		profitGuardDecisions,
 	}
+}
+
+func RecordProfitGuardDecision(mode, decision string) {
+	if mode != "warn" && mode != "enforce" {
+		return
+	}
+	switch decision {
+	case "allow", "warn", "block", "unavailable":
+	default:
+		decision = "unavailable"
+	}
+	profitGuardDecisions.WithLabelValues(mode, decision).Inc()
 }
 
 func RecordAuthFailure(route, reason string, status int) {

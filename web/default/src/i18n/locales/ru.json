@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "Нет доступного серверного генератора нагрузки.",
     "Pair server agent": "Подключить серверный агент",
     "Run the test on a shared load generator managed by the platform.": "Запустить тест на общем генераторе нагрузки под управлением платформы.",
-    "Server load test": "Серверный нагрузочный тест"
+    "Server load test": "Серверный нагрузочный тест",
+    "Current billing group ratio: {{ratio}}x": "Текущий коэффициент группы биллинга: {{ratio}}x",
+    "Enforce": "Применять",
+    "Minimum profit margin (%)": "Минимальная рентабельность (%)",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "Мониторинг фиксирует ценовой риск без блокировки трафика. Принудительный режим останавливает попытки ниже минимальной рентабельности.",
+    "Off": "Выкл.",
+    "Pricing risk detected": "Обнаружен ценовой риск",
+    "Profit protection": "Защита рентабельности",
+    "Protection mode": "Режим защиты",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Настроенный путь опускается ниже минимальной рентабельности начиная с попытки {{position}}."
   }
 }

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -15,25 +16,30 @@ const (
 	RoutingModeStabilityFirst = "stability_first"
 	BillingGroupTypeToB       = "toB"
 	BillingGroupTypeToC       = "toC"
+	ProfitGuardModeOff        = "off"
+	ProfitGuardModeWarn       = "warn"
+	ProfitGuardModeEnforce    = "enforce"
 )
 
 // BillingGroupRoute owns the retry and circuit policy for one billing group.
 // The billing group is the existing group used by tokens, abilities, and
 // channels; no extra cluster or account-pool layer is involved.
 type BillingGroupRoute struct {
-	Id                      int    `json:"id"`
-	BillingGroup            string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
-	Name                    string `json:"name" gorm:"type:varchar(128)"`
-	Mode                    string `json:"mode" gorm:"type:varchar(32)"`
-	Enabled                 bool   `json:"enabled" gorm:"index"`
-	MaxTotalAttempts        int    `json:"max_total_attempts"`
-	TotalTimeoutMs          int    `json:"total_timeout_ms"`
-	CircuitFailureThreshold int    `json:"circuit_failure_threshold"`
-	CircuitWindowSeconds    int    `json:"circuit_window_seconds"`
-	CircuitCooldownSeconds  int    `json:"circuit_cooldown_seconds"`
-	CircuitHalfOpenRequests int    `json:"circuit_half_open_requests"`
-	CreatedTime             int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime             int64  `json:"updated_time" gorm:"bigint"`
+	Id                      int     `json:"id"`
+	BillingGroup            string  `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
+	Name                    string  `json:"name" gorm:"type:varchar(128)"`
+	Mode                    string  `json:"mode" gorm:"type:varchar(32)"`
+	Enabled                 bool    `json:"enabled" gorm:"index"`
+	MaxTotalAttempts        int     `json:"max_total_attempts"`
+	TotalTimeoutMs          int     `json:"total_timeout_ms"`
+	CircuitFailureThreshold int     `json:"circuit_failure_threshold"`
+	CircuitWindowSeconds    int     `json:"circuit_window_seconds"`
+	CircuitCooldownSeconds  int     `json:"circuit_cooldown_seconds"`
+	CircuitHalfOpenRequests int     `json:"circuit_half_open_requests"`
+	ProfitGuardMode         string  `json:"profit_guard_mode" gorm:"type:varchar(16)"`
+	MinimumProfitMargin     float64 `json:"minimum_profit_margin"`
+	CreatedTime             int64   `json:"created_time" gorm:"bigint"`
+	UpdatedTime             int64   `json:"updated_time" gorm:"bigint"`
 }
 
 // BillingGroupChannel defines the deterministic channel order inside a billing
@@ -85,6 +91,8 @@ type RuntimeRoutingPolicy struct {
 	CircuitWindowSeconds    int
 	CircuitCooldownSeconds  int
 	CircuitHalfOpenRequests int
+	ProfitGuardMode         string
+	MinimumProfitMargin     float64
 }
 
 func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
@@ -96,6 +104,7 @@ func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
 		CircuitWindowSeconds:    60,
 		CircuitCooldownSeconds:  60,
 		CircuitHalfOpenRequests: 1,
+		ProfitGuardMode:         ProfitGuardModeOff,
 	}
 	switch policy.Mode {
 	case RoutingModeCostFirst:
@@ -220,6 +229,11 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	if route.CircuitHalfOpenRequests > 0 {
 		policy.CircuitHalfOpenRequests = route.CircuitHalfOpenRequests
 	}
+	policy.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
+	if route.MinimumProfitMargin >= 0 && route.MinimumProfitMargin < 100 &&
+		!math.IsNaN(route.MinimumProfitMargin) && !math.IsInf(route.MinimumProfitMargin, 0) {
+		policy.MinimumProfitMargin = route.MinimumProfitMargin
+	}
 	channels := append([]BillingGroupChannel(nil), channelRoutingLookup.value.routeChannels[route.Id]...)
 	return policy, channels, true
 }
@@ -293,6 +307,9 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 			return nil, err
 		}
 	}
+	for i := range config.Routes {
+		config.Routes[i].ProfitGuardMode = normalizeProfitGuardMode(config.Routes[i].ProfitGuardMode)
+	}
 	return config, nil
 }
 
@@ -314,6 +331,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			route.BillingGroup = strings.TrimSpace(route.BillingGroup)
 			route.Name = strings.TrimSpace(route.Name)
 			route.Mode = normalizeRoutingMode(route.Mode)
+			route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
 			if route.BillingGroup == "" {
 				return errors.New("billing_group is required")
 			}
@@ -323,6 +341,10 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			seenGroups[route.BillingGroup] = struct{}{}
 			if route.Name == "" {
 				route.Name = route.BillingGroup
+			}
+			if route.MinimumProfitMargin < 0 || route.MinimumProfitMargin >= 100 ||
+				math.IsNaN(route.MinimumProfitMargin) || math.IsInf(route.MinimumProfitMargin, 0) {
+				return errors.New("minimum_profit_margin must be between 0 and 100")
 			}
 			applyRouteDefaults(route)
 			if err := tx.Save(route).Error; err != nil {
@@ -389,7 +411,8 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 		totalAttemptsByRoute := make(map[int]int, len(config.Routes))
 		for i := range config.RouteChannels {
 			entry := &config.RouteChannels[i]
-			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 {
+			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 ||
+				math.IsNaN(entry.CostFactor) || math.IsInf(entry.CostFactor, 0) {
 				return errors.New("route channel contains invalid values")
 			}
 			key := [2]int{entry.BillingGroupRouteId, entry.ChannelId}
@@ -523,6 +546,17 @@ func normalizeRoutingMode(mode string) string {
 		return RoutingModeStabilityFirst
 	default:
 		return RoutingModeBalanced
+	}
+}
+
+func normalizeProfitGuardMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case ProfitGuardModeWarn:
+		return ProfitGuardModeWarn
+	case ProfitGuardModeEnforce:
+		return ProfitGuardModeEnforce
+	default:
+		return ProfitGuardModeOff
 	}
 }
 

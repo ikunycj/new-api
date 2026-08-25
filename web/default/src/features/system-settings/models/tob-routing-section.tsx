@@ -22,11 +22,21 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 import type { Channel } from '@/features/channels/types'
 import { updateFailoverConfig } from '@/features/failover/api'
@@ -50,6 +60,8 @@ const defaultRouteSettings = {
   circuit_window_seconds: 60,
   circuit_cooldown_seconds: 60,
   circuit_half_open_requests: 1,
+  profit_guard_mode: 'off' as const,
+  minimum_profit_margin: 0,
 }
 
 function createRoute(): BillingGroupRoute {
@@ -69,6 +81,7 @@ type ToBRoutingSectionProps = {
   config?: FailoverConfig
   channels: Channel[]
   groupNames: string[]
+  groupRatios: ReadonlyMap<string, number>
   isLoading: boolean
 }
 
@@ -231,6 +244,26 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       {config.routes.map((route, routeIndex) => {
         if (route.id !== selectedRoute?.id) return null
         const entries = routeEntries(route)
+        const groupRatio = props.groupRatios.get(route.billing_group) ?? 1
+        let cumulativeFactor = 0
+        let firstRiskPosition = 0
+        let attemptPosition = 0
+        for (const entry of entries) {
+          for (let attempt = 0; attempt < entry.max_attempts; attempt += 1) {
+            attemptPosition += 1
+            cumulativeFactor += entry.cost_factor
+            const projectedMargin =
+              groupRatio > 0
+                ? ((groupRatio - cumulativeFactor) / groupRatio) * 100
+                : -100
+            if (
+              firstRiskPosition === 0 &&
+              projectedMargin < route.minimum_profit_margin
+            ) {
+              firstRiskPosition = attemptPosition
+            }
+          }
+        }
         const entriesByProtocol = new Map<number, BillingGroupChannel[]>()
         for (const entry of entries) {
           const channelType = channelByID.get(entry.channel_id)?.type ?? 0
@@ -305,6 +338,77 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                 <Trash2 className='size-4' />
               </Button>
             </div>
+
+            <FieldSet className='border-y py-4'>
+              <FieldLegend>{t('Profit protection')}</FieldLegend>
+              <FieldGroup className='grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]'>
+                <Field>
+                  <FieldLabel>{t('Protection mode')}</FieldLabel>
+                  <ToggleGroup
+                    value={[route.profit_guard_mode]}
+                    onValueChange={(values) => {
+                      const mode =
+                        values[0] as BillingGroupRoute['profit_guard_mode']
+                      if (mode) {
+                        updateRoute(routeIndex, { profit_guard_mode: mode })
+                      }
+                    }}
+                    variant='outline'
+                    className='grid w-full grid-cols-3'
+                  >
+                    <ToggleGroupItem value='off' className='w-full'>
+                      {t('Off')}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value='warn' className='w-full'>
+                      {t('Monitor')}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value='enforce' className='w-full'>
+                      {t('Enforce')}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  <FieldDescription>
+                    {t(
+                      'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.'
+                    )}
+                  </FieldDescription>
+                </Field>
+                <Field data-disabled={route.profit_guard_mode === 'off'}>
+                  <FieldLabel htmlFor={`minimum-profit-margin-${route.id}`}>
+                    {t('Minimum profit margin (%)')}
+                  </FieldLabel>
+                  <Input
+                    id={`minimum-profit-margin-${route.id}`}
+                    type='number'
+                    min={0}
+                    max={99.99}
+                    step={0.1}
+                    disabled={route.profit_guard_mode === 'off'}
+                    value={route.minimum_profit_margin}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        minimum_profit_margin: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <FieldDescription>
+                    {t('Current billing group ratio: {{ratio}}x', {
+                      ratio: groupRatio.toFixed(2),
+                    })}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+              {route.profit_guard_mode !== 'off' && firstRiskPosition > 0 ? (
+                <Alert variant='destructive'>
+                  <AlertTitle>{t('Pricing risk detected')}</AlertTitle>
+                  <AlertDescription>
+                    {t(
+                      'The configured attempt path falls below the minimum margin from attempt {{position}} onward.',
+                      { position: firstRiskPosition }
+                    )}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </FieldSet>
 
             {[...entriesByProtocol.entries()].map(
               ([channelType, protocolEntries]) => (

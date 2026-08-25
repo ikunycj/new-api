@@ -140,6 +140,9 @@ func BuildCostReconciliationSnapshot(c *gin.Context, info *relaycommon.RelayInfo
 		snapshot["failed_partial_usage_basis"] = "observed_usage"
 	}
 	snapshot["channel_cost_factor_source"] = "billing_group_route_or_official_price_default"
+	if guard, ok := profitGuardAudit(c); ok {
+		snapshot["profit_guard"] = guard
+	}
 	return snapshot
 }
 

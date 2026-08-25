@@ -73,18 +73,21 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [groups, toBGroupNames])
   const groupNames = useMemo(
-    () =>
-      classifiedGroups.map((group) => group.name),
+    () => classifiedGroups.map((group) => group.name),
     [classifiedGroups]
+  )
+  const groupRatios = useMemo(
+    () => new Map(groups.map((group) => [group.name, group.ratio])),
+    [groups]
   )
 
   const groupTypes = useMemo(
     () =>
       new Map(
-        classifiedGroups.map((group) => [
-          group.name,
-          toBGroupNames.has(group.name) ? 'ToB' : 'ToC',
-        ] as const)
+        classifiedGroups.map(
+          (group) =>
+            [group.name, toBGroupNames.has(group.name) ? 'ToB' : 'ToC'] as const
+        )
       ),
     [classifiedGroups, toBGroupNames]
   )
@@ -145,6 +148,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
           config={configQuery.data}
           channels={channels}
           groupNames={groupNames}
+          groupRatios={groupRatios}
           isLoading={configQuery.isLoading || channelsQuery.isLoading}
         />
       </TabsContent>

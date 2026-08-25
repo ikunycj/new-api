@@ -1,4 +1,5 @@
 export type RoutingMode = 'cost_first' | 'balanced' | 'stability_first'
+export type ProfitGuardMode = 'off' | 'warn' | 'enforce'
 export type FailureScope = 'request' | 'credential' | 'channel' | 'provider'
 export type RoutingAction =
   | 'none'
@@ -20,6 +21,8 @@ export type BillingGroupRoute = {
   circuit_window_seconds: number
   circuit_cooldown_seconds: number
   circuit_half_open_requests: number
+  profit_guard_mode: ProfitGuardMode
+  minimum_profit_margin: number
   created_time: number
   updated_time: number
 }

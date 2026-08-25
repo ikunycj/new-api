@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "Không có máy tạo tải máy chủ khả dụng.",
     "Pair server agent": "Ghép đôi Agent máy chủ",
     "Run the test on a shared load generator managed by the platform.": "Chạy kiểm thử trên máy tạo tải dùng chung do nền tảng quản lý.",
-    "Server load test": "Kiểm thử tải máy chủ"
+    "Server load test": "Kiểm thử tải máy chủ",
+    "Current billing group ratio: {{ratio}}x": "Hệ số nhóm thanh toán hiện tại: {{ratio}}x",
+    "Enforce": "Bắt buộc",
+    "Minimum profit margin (%)": "Biên lợi nhuận tối thiểu (%)",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "Chế độ giám sát ghi nhận rủi ro giá mà không chặn lưu lượng. Chế độ bắt buộc dừng các lần thử dưới biên tối thiểu.",
+    "Off": "Tắt",
+    "Pricing risk detected": "Đã phát hiện rủi ro giá",
+    "Profit protection": "Bảo vệ lợi nhuận",
+    "Protection mode": "Chế độ bảo vệ",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Lộ trình đã cấu hình thấp hơn biên tối thiểu từ lần thử thứ {{position}}."
   }
 }

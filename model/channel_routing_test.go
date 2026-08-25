@@ -35,6 +35,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	config := &ChannelRoutingConfig{
 		Routes: []BillingGroupRoute{{
 			Id: 17, BillingGroup: " claude ", Name: " Claude ", Mode: RoutingModeStabilityFirst, Enabled: true,
+			ProfitGuardMode: ProfitGuardModeWarn, MinimumProfitMargin: 12.5,
 		}},
 		RouteChannels: []BillingGroupChannel{
 			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
@@ -51,6 +52,8 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	policy, channels, ok := ResolveBillingGroupRoute("claude")
 	require.True(t, ok)
 	assert.Equal(t, RoutingModeStabilityFirst, policy.Mode)
+	assert.Equal(t, ProfitGuardModeWarn, policy.ProfitGuardMode)
+	assert.InDelta(t, 12.5, policy.MinimumProfitMargin, 0.0001)
 	assert.Equal(t, 2, policy.MaxTotalAttempts)
 	require.Len(t, channels, 2)
 	assert.Equal(t, 38, channels[0].ChannelId)
@@ -64,6 +67,30 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	var oldCount int64
 	require.NoError(t, DB.Model(&BillingGroupRoute{}).Where("id = ?", 9).Count(&oldCount).Error)
 	assert.Zero(t, oldCount)
+}
+
+func TestSaveChannelRoutingConfigRejectsInvalidMinimumProfitMargin(t *testing.T) {
+	setupChannelRoutingTables(t)
+
+	err := SaveChannelRoutingConfig(&ChannelRoutingConfig{
+		Routes: []BillingGroupRoute{{
+			Id: -10, BillingGroup: "claude", MinimumProfitMargin: 100,
+		}},
+	})
+
+	require.EqualError(t, err, "minimum_profit_margin must be between 0 and 100")
+}
+
+func TestGetChannelRoutingConfigNormalizesLegacyProfitGuardMode(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 18, BillingGroup: "legacy", ProfitGuardMode: "",
+	}).Error)
+
+	config, err := GetChannelRoutingConfig()
+	require.NoError(t, err)
+	require.Len(t, config.Routes, 1)
+	assert.Equal(t, ProfitGuardModeOff, config.Routes[0].ProfitGuardMode)
 }
 
 func TestSaveChannelRoutingConfigRemapsTemporaryIDs(t *testing.T) {

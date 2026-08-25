@@ -285,6 +285,25 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				break
 			}
 		}
+		profitGuard := retryParam.EvaluateProfitGuard(channel.Id, relayInfo.PriceData)
+		service.RecordProfitGuardDecision(c, profitGuard)
+		observability.RecordProfitGuardDecision(profitGuard.Mode, profitGuard.Decision)
+		if profitGuard.Decision == "warn" {
+			logger.LogWarn(c, fmt.Sprintf(
+				"profit guard warning: channel=%d projected_margin=%.2f minimum_margin=%.2f",
+				channel.Id, profitGuard.ProjectedProfitMargin, profitGuard.MinimumProfitMargin,
+			))
+		}
+		if profitGuard.Decision == "block" {
+			newAPIError = types.NewErrorWithStatusCode(
+				fmt.Errorf("upstream attempt blocked by profit margin protection"),
+				types.ErrorCodeUpstreamExhausted,
+				http.StatusServiceUnavailable,
+				types.ErrOptionWithSkipRetry(),
+			)
+			newAPIError.SetChannelLocation(channel.Id, channel.Name)
+			break
+		}
 
 		addUsedChannel(c, channel.Id, relayInfo.UsingGroup)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)

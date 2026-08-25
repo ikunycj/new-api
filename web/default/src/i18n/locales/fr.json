@@ -6317,6 +6317,15 @@
     "No server load generator is available.": "Aucun générateur de charge serveur n'est disponible.",
     "Pair server agent": "Associer un agent serveur",
     "Run the test on a shared load generator managed by the platform.": "Exécuter le test sur un générateur de charge partagé géré par la plateforme.",
-    "Server load test": "Test de charge serveur"
+    "Server load test": "Test de charge serveur",
+    "Current billing group ratio: {{ratio}}x": "Ratio actuel du groupe de facturation : {{ratio}}x",
+    "Enforce": "Appliquer",
+    "Minimum profit margin (%)": "Marge bénéficiaire minimale (%)",
+    "Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.": "La surveillance consigne le risque tarifaire sans bloquer le trafic. L’application arrête les tentatives sous la marge minimale.",
+    "Off": "Désactivé",
+    "Pricing risk detected": "Risque tarifaire détecté",
+    "Profit protection": "Protection de la marge",
+    "Protection mode": "Mode de protection",
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Le chemin configuré passe sous la marge minimale à partir de la tentative {{position}}."
   }
 }

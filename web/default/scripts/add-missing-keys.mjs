@@ -726,6 +726,18 @@ const newKeys = {
 
 const groupPricingWorkspaceKeys = {
   en: {
+    'Current billing group ratio: {{ratio}}x':
+      'Current billing group ratio: {{ratio}}x',
+    Enforce: 'Enforce',
+    'Minimum profit margin (%)': 'Minimum profit margin (%)',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.',
+    Off: 'Off',
+    'Pricing risk detected': 'Pricing risk detected',
+    'Profit protection': 'Profit protection',
+    'Protection mode': 'Protection mode',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      'The configured attempt path falls below the minimum margin from attempt {{position}} onward.',
     'Clear history': 'Clear history',
     'Completed at': 'Completed at',
     'Each completed test is saved with its own Run ID.':
@@ -757,6 +769,17 @@ const groupPricingWorkspaceKeys = {
       'Requests per second must be between {{min}} and {{max}}.',
   },
   zh: {
+    'Current billing group ratio: {{ratio}}x': '当前计费分组倍率：{{ratio}}x',
+    Enforce: '强制保护',
+    'Minimum profit margin (%)': '最低利润率（%）',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      '仅监控会记录定价风险但不会拦截流量。强制保护会停止低于最低利润率的尝试。',
+    Off: '关闭',
+    'Pricing risk detected': '检测到定价风险',
+    'Profit protection': '利润率保护',
+    'Protection mode': '保护模式',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      '从第 {{position}} 次尝试开始，当前尝试路径将低于最低利润率。',
     'Clear history': '清理历史记录',
     'Completed at': '完成时间',
     'Each completed test is saved with its own Run ID.':
@@ -787,6 +810,17 @@ const groupPricingWorkspaceKeys = {
       '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
   },
   'zh-TW': {
+    'Current billing group ratio: {{ratio}}x': '目前計費分組倍率：{{ratio}}x',
+    Enforce: '強制保護',
+    'Minimum profit margin (%)': '最低利潤率（%）',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      '僅監控會記錄定價風險但不攔截流量。強制保護會停止低於最低利潤率的嘗試。',
+    Off: '關閉',
+    'Pricing risk detected': '偵測到定價風險',
+    'Profit protection': '利潤率保護',
+    'Protection mode': '保護模式',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      '從第 {{position}} 次嘗試開始，目前嘗試路徑將低於最低利潤率。',
     'Clear history': '清除歷史記錄',
     'Completed at': '完成時間',
     'Each completed test is saved with its own Run ID.':
@@ -822,6 +856,18 @@ const groupPricingWorkspaceKeys = {
       '每秒請求數必須介於 {{min}} 到 {{max}} 之間。',
   },
   fr: {
+    'Current billing group ratio: {{ratio}}x':
+      'Ratio actuel du groupe de facturation : {{ratio}}x',
+    Enforce: 'Appliquer',
+    'Minimum profit margin (%)': 'Marge bénéficiaire minimale (%)',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      'La surveillance consigne le risque tarifaire sans bloquer le trafic. L’application arrête les tentatives sous la marge minimale.',
+    Off: 'Désactivé',
+    'Pricing risk detected': 'Risque tarifaire détecté',
+    'Profit protection': 'Protection de la marge',
+    'Protection mode': 'Mode de protection',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      'Le chemin configuré passe sous la marge minimale à partir de la tentative {{position}}.',
     'Clear history': 'Effacer l’historique',
     'Completed at': 'Terminé le',
     'Each completed test is saved with its own Run ID.':
@@ -858,6 +904,18 @@ const groupPricingWorkspaceKeys = {
       'Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.',
   },
   ja: {
+    'Current billing group ratio: {{ratio}}x':
+      '現在の課金グループ倍率：{{ratio}}x',
+    Enforce: '強制',
+    'Minimum profit margin (%)': '最低利益率（%）',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      'モニタリングはトラフィックを遮断せず料金リスクを記録します。強制モードは最低利益率を下回る試行を停止します。',
+    Off: 'オフ',
+    'Pricing risk detected': '料金リスクを検出',
+    'Profit protection': '利益率保護',
+    'Protection mode': '保護モード',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      '設定された試行経路は {{position}} 回目以降、最低利益率を下回ります。',
     'Clear history': '履歴を消去',
     'Completed at': '完了日時',
     'Each completed test is saved with its own Run ID.':
@@ -894,6 +952,18 @@ const groupPricingWorkspaceKeys = {
       '1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。',
   },
   ru: {
+    'Current billing group ratio: {{ratio}}x':
+      'Текущий коэффициент группы биллинга: {{ratio}}x',
+    Enforce: 'Применять',
+    'Minimum profit margin (%)': 'Минимальная рентабельность (%)',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      'Мониторинг фиксирует ценовой риск без блокировки трафика. Принудительный режим останавливает попытки ниже минимальной рентабельности.',
+    Off: 'Выкл.',
+    'Pricing risk detected': 'Обнаружен ценовой риск',
+    'Profit protection': 'Защита рентабельности',
+    'Protection mode': 'Режим защиты',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      'Настроенный путь опускается ниже минимальной рентабельности начиная с попытки {{position}}.',
     'Clear history': 'Очистить историю',
     'Completed at': 'Время завершения',
     'Each completed test is saved with its own Run ID.':
@@ -930,6 +1000,18 @@ const groupPricingWorkspaceKeys = {
       'Число запросов в секунду должно быть от {{min}} до {{max}}.',
   },
   vi: {
+    'Current billing group ratio: {{ratio}}x':
+      'Hệ số nhóm thanh toán hiện tại: {{ratio}}x',
+    Enforce: 'Bắt buộc',
+    'Minimum profit margin (%)': 'Biên lợi nhuận tối thiểu (%)',
+    'Monitor records pricing risk without blocking traffic. Enforce stops attempts that fall below the minimum margin.':
+      'Chế độ giám sát ghi nhận rủi ro giá mà không chặn lưu lượng. Chế độ bắt buộc dừng các lần thử dưới biên tối thiểu.',
+    Off: 'Tắt',
+    'Pricing risk detected': 'Đã phát hiện rủi ro giá',
+    'Profit protection': 'Bảo vệ lợi nhuận',
+    'Protection mode': 'Chế độ bảo vệ',
+    'The configured attempt path falls below the minimum margin from attempt {{position}} onward.':
+      'Lộ trình đã cấu hình thấp hơn biên tối thiểu từ lần thử thứ {{position}}.',
     'Clear history': 'Xóa lịch sử',
     'Completed at': 'Hoàn tất lúc',
     'Each completed test is saved with its own Run ID.':

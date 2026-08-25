@@ -102,6 +102,7 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 	var audioRatio float64
 	var audioCompletionRatio float64
 	var freeModel bool
+	var estimatedProviderBaseCostUSD float64
 	if !usePrice {
 		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
 		if meta.MaxTokens != 0 {
@@ -134,6 +135,7 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 			return types.PriceData{}, err
 		}
 		preConsumedQuota = quota
+		estimatedProviderBaseCostUSD = float64(preConsumedTokens) * modelRatio / common.QuotaPerUnit
 	} else {
 		if meta.ImagePriceRatio != 0 {
 			modelPrice = modelPrice * meta.ImagePriceRatio
@@ -160,21 +162,22 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 	}
 
 	priceData := types.PriceData{
-		FreeModel:            freeModel,
-		ModelPrice:           modelPrice,
-		ModelRatio:           modelRatio,
-		CompletionRatio:      completionRatio,
-		GroupRatioInfo:       groupRatioInfo,
-		UsePrice:             usePrice,
-		CacheRatio:           cacheRatio,
-		ImageRatio:           imageRatio,
-		AudioRatio:           audioRatio,
-		AudioCompletionRatio: audioCompletionRatio,
-		CacheCreationRatio:   cacheCreationRatio,
-		CacheCreation5mRatio: cacheCreationRatio5m,
-		CacheCreation1hRatio: cacheCreationRatio1h,
-		QuotaToPreConsume:    preConsumedQuota,
-		BillingUSDToCNYRate:  billingUSDToCNYRate,
+		FreeModel:                    freeModel,
+		ModelPrice:                   modelPrice,
+		ModelRatio:                   modelRatio,
+		CompletionRatio:              completionRatio,
+		GroupRatioInfo:               groupRatioInfo,
+		UsePrice:                     usePrice,
+		CacheRatio:                   cacheRatio,
+		ImageRatio:                   imageRatio,
+		AudioRatio:                   audioRatio,
+		AudioCompletionRatio:         audioCompletionRatio,
+		CacheCreationRatio:           cacheCreationRatio,
+		CacheCreation5mRatio:         cacheCreationRatio5m,
+		CacheCreation1hRatio:         cacheCreationRatio1h,
+		QuotaToPreConsume:            preConsumedQuota,
+		BillingUSDToCNYRate:          billingUSDToCNYRate,
+		EstimatedProviderBaseCostUSD: estimatedProviderBaseCostUSD,
 	}
 	if usePrice {
 		for name, ratio := range meta.BillingRatios {
@@ -186,6 +189,7 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 			return types.PriceData{}, err
 		}
 		priceData.QuotaToPreConsume = quota
+		priceData.EstimatedProviderBaseCostUSD = priceData.ApplyOtherRatiosToFloat(modelPrice)
 	}
 
 	if common.DebugEnabled {
@@ -265,6 +269,12 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 		Quota:               quota,
 		GroupRatioInfo:      groupRatioInfo,
 		BillingUSDToCNYRate: billingUSDToCNYRate,
+		EstimatedProviderBaseCostUSD: func() float64 {
+			if usePrice {
+				return modelPrice
+			}
+			return modelRatio / 2
+		}(),
 	}
 	return priceData, nil
 }
@@ -343,10 +353,11 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	info.BillingRequestInput = &requestInput
 
 	priceData := types.PriceData{
-		FreeModel:           freeModel,
-		GroupRatioInfo:      groupRatioInfo,
-		QuotaToPreConsume:   preConsumedQuota,
-		BillingUSDToCNYRate: billingUSDToCNYRate,
+		FreeModel:                    freeModel,
+		GroupRatioInfo:               groupRatioInfo,
+		QuotaToPreConsume:            preConsumedQuota,
+		BillingUSDToCNYRate:          billingUSDToCNYRate,
+		EstimatedProviderBaseCostUSD: rawCost / 1_000_000,
 	}
 
 	logger.LogDebug(c, "model_price_helper_tiered result: model=%s preConsume=%d quotaBeforeGroup=%.2f groupRatio=%.2f tier=%s", info.OriginModelName, preConsumedQuota, quotaBeforeGroup, groupRatioInfo.GroupRatio, trace.MatchedTier)
