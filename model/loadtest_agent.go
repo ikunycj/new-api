@@ -24,9 +24,14 @@ const (
 type LoadTestAgent struct {
 	ID              string  `json:"id" gorm:"type:varchar(64);primaryKey"`
 	UserID          int     `json:"user_id" gorm:"index;not null"`
+	Managed         bool    `json:"managed" gorm:"index"`
 	Name            string  `json:"name" gorm:"type:varchar(128);not null"`
 	Platform        string  `json:"platform" gorm:"type:varchar(64);not null"`
 	Version         string  `json:"version" gorm:"type:varchar(32);not null"`
+	CPUCores        int     `json:"cpu_cores"`
+	MemoryBytes     int64   `json:"memory_bytes" gorm:"bigint"`
+	MaxRPS          int     `json:"max_rps"`
+	MaxConcurrency  int     `json:"max_concurrency"`
 	SecretHash      *string `json:"-" gorm:"type:char(64);uniqueIndex"`
 	PairingCodeHash string  `json:"-" gorm:"type:char(64);index"`
 	PairingExpires  int64   `json:"-" gorm:"bigint;index"`
@@ -50,6 +55,7 @@ type LoadTestRun struct {
 	DurationSeconds   int               `json:"duration_seconds" gorm:"not null"`
 	RequestsPerSecond int               `json:"requests_per_second" gorm:"not null"`
 	Concurrency       int               `json:"concurrency" gorm:"not null"`
+	AgentManaged      bool              `json:"agent_managed" gorm:"index"`
 	Status            LoadTestRunStatus `json:"status" gorm:"type:varchar(32);index;not null"`
 	Sent              int64             `json:"sent" gorm:"bigint"`
 	Completed         int64             `json:"completed" gorm:"bigint"`
@@ -73,11 +79,29 @@ type LoadTestRun struct {
 	UpdatedAt         int64             `json:"updated_at" gorm:"bigint;index"`
 }
 
+type LoadTestAgentRuntime struct {
+	Name           string
+	Platform       string
+	Version        string
+	CPUCores       int
+	MemoryBytes    int64
+	MaxRPS         int
+	MaxConcurrency int
+}
+
 func hashLoadTestCredential(value string) string {
 	return fmt.Sprintf("%x", common.Sha256Raw([]byte(value)))
 }
 
 func NewLoadTestAgentPairing(userID int, pairingCode string, expiresAt int64) (*LoadTestAgent, error) {
+	return newLoadTestAgentPairing(userID, pairingCode, expiresAt, false)
+}
+
+func NewManagedLoadTestAgentPairing(userID int, pairingCode string, expiresAt int64) (*LoadTestAgent, error) {
+	return newLoadTestAgentPairing(userID, pairingCode, expiresAt, true)
+}
+
+func newLoadTestAgentPairing(userID int, pairingCode string, expiresAt int64, managed bool) (*LoadTestAgent, error) {
 	agentID, err := common.GenerateRandomCharsKey(24)
 	if err != nil {
 		return nil, err
@@ -86,6 +110,7 @@ func NewLoadTestAgentPairing(userID int, pairingCode string, expiresAt int64) (*
 	agent := &LoadTestAgent{
 		ID:              "agent_" + agentID,
 		UserID:          userID,
+		Managed:         managed,
 		PairingCodeHash: hashLoadTestCredential(strings.ToUpper(strings.TrimSpace(pairingCode))),
 		PairingExpires:  expiresAt,
 		CreatedAt:       now,
@@ -96,16 +121,20 @@ func NewLoadTestAgentPairing(userID int, pairingCode string, expiresAt int64) (*
 	return agent, nil
 }
 
-func PairLoadTestAgent(pairingCode, secret, name, platform, version string) (*LoadTestAgent, error) {
+func PairLoadTestAgent(pairingCode, secret string, runtime LoadTestAgentRuntime) (*LoadTestAgent, error) {
 	now := common.GetTimestamp()
 	codeHash := hashLoadTestCredential(strings.ToUpper(strings.TrimSpace(pairingCode)))
 	secretHash := hashLoadTestCredential(secret)
 	result := DB.Model(&LoadTestAgent{}).
 		Where("pairing_code_hash = ? AND pairing_expires >= ? AND secret_hash IS NULL AND revoked_at = 0", codeHash, now).
 		Updates(map[string]any{
-			"name":              name,
-			"platform":          platform,
-			"version":           version,
+			"name":              runtime.Name,
+			"platform":          runtime.Platform,
+			"version":           runtime.Version,
+			"cpu_cores":         runtime.CPUCores,
+			"memory_bytes":      runtime.MemoryBytes,
+			"max_rps":           runtime.MaxRPS,
+			"max_concurrency":   runtime.MaxConcurrency,
 			"secret_hash":       &secretHash,
 			"pairing_code_hash": "",
 			"pairing_expires":   0,
@@ -141,29 +170,48 @@ func AuthenticateLoadTestAgent(secret string) (*LoadTestAgent, error) {
 
 func ListLoadTestAgents(userID int) ([]LoadTestAgent, error) {
 	var agents []LoadTestAgent
-	err := DB.Where("user_id = ? AND secret_hash IS NOT NULL AND revoked_at = 0", userID).Order("id desc").Find(&agents).Error
+	err := DB.Where("user_id = ? AND managed = ? AND secret_hash IS NOT NULL AND revoked_at = 0", userID, false).Order("id desc").Find(&agents).Error
+	return agents, err
+}
+
+func ListManagedLoadTestAgents() ([]LoadTestAgent, error) {
+	var agents []LoadTestAgent
+	err := DB.Where("managed = ? AND secret_hash IS NOT NULL AND revoked_at = 0", true).Order("id desc").Find(&agents).Error
 	return agents, err
 }
 
 func GetLoadTestAgent(userID int, agentID string) (*LoadTestAgent, error) {
 	var agent LoadTestAgent
-	if err := DB.Where("id = ? AND user_id = ? AND secret_hash IS NOT NULL AND revoked_at = 0", agentID, userID).First(&agent).Error; err != nil {
+	if err := DB.Where("id = ? AND user_id = ? AND managed = ? AND secret_hash IS NOT NULL AND revoked_at = 0", agentID, userID, false).First(&agent).Error; err != nil {
 		return nil, err
 	}
 	return &agent, nil
 }
 
-func TouchLoadTestAgent(agentID, name, platform, version string) error {
+func GetUsableLoadTestAgent(userID int, agentID string) (*LoadTestAgent, error) {
+	var agent LoadTestAgent
+	err := DB.Where("id = ? AND secret_hash IS NOT NULL AND revoked_at = 0 AND (managed = ? OR (managed = ? AND user_id = ?))", agentID, true, false, userID).First(&agent).Error
+	if err != nil {
+		return nil, err
+	}
+	return &agent, nil
+}
+
+func TouchLoadTestAgent(agentID string, runtime LoadTestAgentRuntime) error {
 	updates := map[string]any{"last_seen_at": common.GetTimestamp()}
-	if strings.TrimSpace(name) != "" {
-		updates["name"] = name
+	if strings.TrimSpace(runtime.Name) != "" {
+		updates["name"] = runtime.Name
 	}
-	if strings.TrimSpace(platform) != "" {
-		updates["platform"] = platform
+	if strings.TrimSpace(runtime.Platform) != "" {
+		updates["platform"] = runtime.Platform
 	}
-	if strings.TrimSpace(version) != "" {
-		updates["version"] = version
+	if strings.TrimSpace(runtime.Version) != "" {
+		updates["version"] = runtime.Version
 	}
+	updates["cpu_cores"] = runtime.CPUCores
+	updates["memory_bytes"] = runtime.MemoryBytes
+	updates["max_rps"] = runtime.MaxRPS
+	updates["max_concurrency"] = runtime.MaxConcurrency
 	return DB.Model(&LoadTestAgent{}).Where("id = ? AND revoked_at = 0", agentID).Updates(updates).Error
 }
 
@@ -182,6 +230,24 @@ func RevokeLoadTestAgent(userID int, agentID string) error {
 		return tx.Model(&LoadTestRun{}).
 			Where("agent_id = ? AND user_id = ? AND status IN ?", agentID, userID, []LoadTestRunStatus{LoadTestRunQueued, LoadTestRunDispatched, LoadTestRunRunning, LoadTestRunCancelRequested}).
 			Updates(map[string]any{"status": LoadTestRunCancelled, "finished_at": now, "updated_at": now, "error_message": "agent revoked"}).Error
+	})
+}
+
+func RevokeManagedLoadTestAgent(agentID string) error {
+	now := common.GetTimestamp()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&LoadTestAgent{}).
+			Where("id = ? AND managed = ? AND revoked_at = 0", agentID, true).
+			Updates(map[string]any{"revoked_at": now, "secret_hash": nil, "pairing_code_hash": "", "pairing_expires": 0})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Model(&LoadTestRun{}).
+			Where("agent_id = ? AND status IN ?", agentID, []LoadTestRunStatus{LoadTestRunQueued, LoadTestRunDispatched, LoadTestRunRunning, LoadTestRunCancelRequested}).
+			Updates(map[string]any{"status": LoadTestRunCancelled, "finished_at": now, "updated_at": now, "error_message": "managed agent revoked"}).Error
 	})
 }
 

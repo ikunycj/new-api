@@ -6309,6 +6309,14 @@
     "dispatched": "Envoyé",
     "cancel_requested": "Arrêt en cours",
     "completed": "Terminé",
-    "cancelled": "Annulé"
+    "cancelled": "Annulé",
+    "Add server agent": "Ajouter un agent serveur",
+    "Browser test": "Test navigateur",
+    "Local Agent": "Agent local",
+    "No local agent is paired.": "Aucun agent local n'est associé.",
+    "No server load generator is available.": "Aucun générateur de charge serveur n'est disponible.",
+    "Pair server agent": "Associer un agent serveur",
+    "Run the test on a shared load generator managed by the platform.": "Exécuter le test sur un générateur de charge partagé géré par la plateforme.",
+    "Server load test": "Test de charge serveur"
   }
 }

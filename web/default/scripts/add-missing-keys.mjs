@@ -245,12 +245,12 @@ const newKeys = {
     'Local load-test agent': 'Agent de test de charge local',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'Exécutez les tests intensifs hors du navigateur et associez les résultats à ce compte.',
-    'Pair agent': "Associer l’agent",
+    'Pair agent': 'Associer l’agent',
     'Load generator': 'Générateur de charge',
     'No online agents': 'Aucun agent en ligne',
-    'Start with agent': "Démarrer avec l’agent",
+    'Start with agent': 'Démarrer avec l’agent',
     Offline: 'Hors ligne',
-    'Remove agent': "Supprimer l’agent",
+    'Remove agent': 'Supprimer l’agent',
     'Agent load test queued': 'Test de charge mis en attente',
     'Pair local agent': 'Associer un agent local',
     'Run this command on the computer that will generate load.':
@@ -359,7 +359,8 @@ const newKeys = {
     'Pair local agent': 'ローカル Agent をペアリング',
     'Run this command on the computer that will generate load.':
       '負荷を生成するコンピューターでこのコマンドを実行してください。',
-    'Pairing code expires in 5 minutes.': 'ペアリングコードは 5 分で期限切れになります。',
+    'Pairing code expires in 5 minutes.':
+      'ペアリングコードは 5 分で期限切れになります。',
     'Copy command': 'コマンドをコピー',
     'Start in browser': 'ブラウザで開始',
     queued: '待機中',
@@ -968,6 +969,95 @@ const groupPricingWorkspaceKeys = {
 for (const [locale, translations] of Object.entries(
   groupPricingWorkspaceKeys
 )) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const loadTestTabsKeys = {
+  en: {
+    'Add server agent': 'Add server agent',
+    'Browser test': 'Browser test',
+    'Local Agent': 'Local Agent',
+    'No local agent is paired.': 'No local agent is paired.',
+    'No server load generator is available.':
+      'No server load generator is available.',
+    'Pair server agent': 'Pair server agent',
+    'Run the test on a shared load generator managed by the platform.':
+      'Run the test on a shared load generator managed by the platform.',
+    'Server load test': 'Server load test',
+  },
+  zh: {
+    'Add server agent': '添加服务器 Agent',
+    'Browser test': '浏览器测试',
+    'Local Agent': '本地 Agent',
+    'No local agent is paired.': '尚未配对本地 Agent。',
+    'No server load generator is available.': '暂无可用的服务器压测机。',
+    'Pair server agent': '配对服务器 Agent',
+    'Run the test on a shared load generator managed by the platform.':
+      '使用平台管理的共享压测机执行测试。',
+    'Server load test': '服务器压测',
+  },
+  'zh-TW': {
+    'Add server agent': '新增伺服器 Agent',
+    'Browser test': '瀏覽器測試',
+    'Local Agent': '本機 Agent',
+    'No local agent is paired.': '尚未配對本機 Agent。',
+    'No server load generator is available.': '目前沒有可用的伺服器壓測機。',
+    'Pair server agent': '配對伺服器 Agent',
+    'Run the test on a shared load generator managed by the platform.':
+      '使用平台管理的共享壓測機執行測試。',
+    'Server load test': '伺服器壓測',
+  },
+  fr: {
+    'Add server agent': 'Ajouter un agent serveur',
+    'Browser test': 'Test navigateur',
+    'Local Agent': 'Agent local',
+    'No local agent is paired.': "Aucun agent local n'est associé.",
+    'No server load generator is available.':
+      "Aucun générateur de charge serveur n'est disponible.",
+    'Pair server agent': 'Associer un agent serveur',
+    'Run the test on a shared load generator managed by the platform.':
+      'Exécuter le test sur un générateur de charge partagé géré par la plateforme.',
+    'Server load test': 'Test de charge serveur',
+  },
+  ja: {
+    'Add server agent': 'サーバー Agent を追加',
+    'Browser test': 'ブラウザテスト',
+    'Local Agent': 'ローカル Agent',
+    'No local agent is paired.': 'ローカル Agent はペアリングされていません。',
+    'No server load generator is available.':
+      '利用可能なサーバー負荷生成機がありません。',
+    'Pair server agent': 'サーバー Agent をペアリング',
+    'Run the test on a shared load generator managed by the platform.':
+      'プラットフォーム管理の共有負荷生成機でテストを実行します。',
+    'Server load test': 'サーバー負荷テスト',
+  },
+  ru: {
+    'Add server agent': 'Добавить серверный агент',
+    'Browser test': 'Тест в браузере',
+    'Local Agent': 'Локальный агент',
+    'No local agent is paired.': 'Локальный агент не подключен.',
+    'No server load generator is available.':
+      'Нет доступного серверного генератора нагрузки.',
+    'Pair server agent': 'Подключить серверный агент',
+    'Run the test on a shared load generator managed by the platform.':
+      'Запустить тест на общем генераторе нагрузки под управлением платформы.',
+    'Server load test': 'Серверный нагрузочный тест',
+  },
+  vi: {
+    'Add server agent': 'Thêm Agent máy chủ',
+    'Browser test': 'Kiểm thử trên trình duyệt',
+    'Local Agent': 'Agent cục bộ',
+    'No local agent is paired.': 'Chưa ghép đôi Agent cục bộ.',
+    'No server load generator is available.':
+      'Không có máy tạo tải máy chủ khả dụng.',
+    'Pair server agent': 'Ghép đôi Agent máy chủ',
+    'Run the test on a shared load generator managed by the platform.':
+      'Chạy kiểm thử trên máy tạo tải dùng chung do nền tảng quản lý.',
+    'Server load test': 'Kiểm thử tải máy chủ',
+  },
+}
+
+for (const [locale, translations] of Object.entries(loadTestTabsKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

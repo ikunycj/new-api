@@ -6309,6 +6309,14 @@
     "dispatched": "Đã gửi",
     "cancel_requested": "Đang dừng",
     "completed": "Đã hoàn tất",
-    "cancelled": "Đã hủy"
+    "cancelled": "Đã hủy",
+    "Add server agent": "Thêm Agent máy chủ",
+    "Browser test": "Kiểm thử trên trình duyệt",
+    "Local Agent": "Agent cục bộ",
+    "No local agent is paired.": "Chưa ghép đôi Agent cục bộ.",
+    "No server load generator is available.": "Không có máy tạo tải máy chủ khả dụng.",
+    "Pair server agent": "Ghép đôi Agent máy chủ",
+    "Run the test on a shared load generator managed by the platform.": "Chạy kiểm thử trên máy tạo tải dùng chung do nền tảng quản lý.",
+    "Server load test": "Kiểm thử tải máy chủ"
   }
 }

@@ -205,15 +205,21 @@ export type LoadTestLimits = {
 
 export type LoadTestAgent = {
   id: string
+  managed: boolean
   name: string
   platform: string
   version: string
+  cpu_cores: number
+  memory_bytes: number
+  max_rps: number
+  max_concurrency: number
   last_seen_at: number
   created_at: number
 }
 
 export type LoadTestAgentList = {
-  agents: LoadTestAgent[]
+  local_agents: LoadTestAgent[]
+  managed_agents: LoadTestAgent[]
   online_before: number
 }
 
@@ -243,6 +249,7 @@ export type LoadTestAgentRun = {
   duration_seconds: number
   requests_per_second: number
   concurrency: number
+  agent_managed: boolean
   status: LoadTestAgentRunStatus
   sent: number
   completed: number
@@ -298,7 +305,7 @@ export async function getLoadTestLimits(): Promise<LoadTestLimits> {
   return response.data.data
 }
 
-export async function createLoadTestAgentPairing(): Promise<{
+export async function createLoadTestAgentPairing(managed = false): Promise<{
   agent_id: string
   code: string
   expires_at: number
@@ -307,10 +314,16 @@ export async function createLoadTestAgentPairing(): Promise<{
     success: boolean
     message?: string
     data?: { agent_id: string; code: string; expires_at: number }
-  }>('/api/loadtest/agents/pairing', undefined, {
-    skipBusinessError: true,
-    skipErrorHandler: true,
-  })
+  }>(
+    managed
+      ? '/api/loadtest/managed-agents/pairing'
+      : '/api/loadtest/agents/pairing',
+    undefined,
+    {
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Failed to create pairing code')
   }
@@ -332,9 +345,14 @@ export async function getLoadTestAgents(): Promise<LoadTestAgentList> {
   return response.data.data
 }
 
-export async function deleteLoadTestAgent(agentId: string): Promise<void> {
+export async function deleteLoadTestAgent(
+  agentId: string,
+  managed = false
+): Promise<void> {
   const response = await api.delete<{ success: boolean; message?: string }>(
-    `/api/loadtest/agents/${encodeURIComponent(agentId)}`,
+    managed
+      ? `/api/loadtest/managed-agents/${encodeURIComponent(agentId)}`
+      : `/api/loadtest/agents/${encodeURIComponent(agentId)}`,
     { skipBusinessError: true, skipErrorHandler: true }
   )
   if (!response.data.success) {
@@ -503,7 +521,8 @@ export async function getLoadTestChannelStats(
     }
   }
   return [...merged.values()].sort(
-    (left, right) => right.requests - left.requests || left.channel_id - right.channel_id
+    (left, right) =>
+      right.requests - left.requests || left.channel_id - right.channel_id
   )
 }
 

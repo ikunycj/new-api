@@ -26,14 +26,14 @@ func TestLoadTestAgentPairingIsOneTimeAndScopedToOwner(t *testing.T) {
 	agent, err := NewLoadTestAgentPairing(7, "ABCD1234", common.GetTimestamp()+300)
 	require.NoError(t, err)
 
-	paired, err := PairLoadTestAgent("abcd1234", "agent-secret", "MacBook", "darwin/arm64", "0.1.0")
+	paired, err := PairLoadTestAgent("abcd1234", "agent-secret", LoadTestAgentRuntime{Name: "MacBook", Platform: "darwin/arm64", Version: "0.1.0"})
 	require.NoError(t, err)
 	assert.Equal(t, agent.ID, paired.ID)
 	assert.Equal(t, 7, paired.UserID)
 	assert.Empty(t, paired.PairingCodeHash)
 	assert.NotNil(t, paired.SecretHash)
 
-	_, err = PairLoadTestAgent("ABCD1234", "another-secret", "Other", "linux/amd64", "0.1.0")
+	_, err = PairLoadTestAgent("ABCD1234", "another-secret", LoadTestAgentRuntime{Name: "Other", Platform: "linux/amd64", Version: "0.1.0"})
 	assert.ErrorContains(t, err, "invalid or expired")
 
 	_, err = GetLoadTestAgent(8, agent.ID)
@@ -116,7 +116,7 @@ func TestRevokingAgentTerminatesCancelRequestedRun(t *testing.T) {
 	setupLoadTestAgentDB(t)
 	agent, err := NewLoadTestAgentPairing(7, "ABCD1234", common.GetTimestamp()+300)
 	require.NoError(t, err)
-	_, err = PairLoadTestAgent("ABCD1234", "agent-secret", "MacBook", "darwin/arm64", "0.1.0")
+	_, err = PairLoadTestAgent("ABCD1234", "agent-secret", LoadTestAgentRuntime{Name: "MacBook", Platform: "darwin/arm64", Version: "0.1.0"})
 	require.NoError(t, err)
 	run := &LoadTestRun{
 		UserID: 7, AgentID: agent.ID, TokenID: 11, KeyName: "stable",
@@ -134,4 +134,53 @@ func TestRevokingAgentTerminatesCancelRequestedRun(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, LoadTestRunCancelled, stored.Status)
 	assert.Equal(t, "agent revoked", stored.ErrorMessage)
+}
+
+func TestManagedLoadTestAgentsAreSharedWithoutExposingOtherLocalAgents(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	localAgent, err := NewLoadTestAgentPairing(7, "LOCAL123", common.GetTimestamp()+300)
+	require.NoError(t, err)
+	_, err = PairLoadTestAgent("LOCAL123", "local-secret", LoadTestAgentRuntime{Name: "Local", Platform: "darwin/arm64", Version: "0.2.0"})
+	require.NoError(t, err)
+	managedAgent, err := NewManagedLoadTestAgentPairing(1, "SHARED12", common.GetTimestamp()+300)
+	require.NoError(t, err)
+	_, err = PairLoadTestAgent("SHARED12", "managed-secret", LoadTestAgentRuntime{
+		Name: "Shared", Platform: "linux/amd64", Version: "0.2.0", MaxRPS: 200, MaxConcurrency: 500,
+	})
+	require.NoError(t, err)
+
+	_, err = GetUsableLoadTestAgent(8, localAgent.ID)
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	shared, err := GetUsableLoadTestAgent(8, managedAgent.ID)
+	require.NoError(t, err)
+	assert.True(t, shared.Managed)
+	assert.Equal(t, 200, shared.MaxRPS)
+
+	localAgents, err := ListLoadTestAgents(8)
+	require.NoError(t, err)
+	assert.Empty(t, localAgents)
+	managedAgents, err := ListManagedLoadTestAgents()
+	require.NoError(t, err)
+	require.Len(t, managedAgents, 1)
+	assert.Equal(t, managedAgent.ID, managedAgents[0].ID)
+}
+
+func TestRevokingManagedAgentCancelsRunsFromAllUsers(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	agent, err := NewManagedLoadTestAgentPairing(1, "SHARED12", common.GetTimestamp()+300)
+	require.NoError(t, err)
+	_, err = PairLoadTestAgent("SHARED12", "managed-secret", LoadTestAgentRuntime{Name: "Shared", Platform: "linux/amd64", Version: "0.2.0"})
+	require.NoError(t, err)
+	run := &LoadTestRun{
+		UserID: 8, AgentID: agent.ID, AgentManaged: true, TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 20, Concurrency: 100,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+	require.NoError(t, RevokeManagedLoadTestAgent(agent.ID))
+
+	stored, err := GetLoadTestRun(8, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, LoadTestRunCancelled, stored.Status)
+	assert.Equal(t, "managed agent revoked", stored.ErrorMessage)
 }

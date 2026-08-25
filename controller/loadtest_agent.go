@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -33,10 +34,14 @@ var loadTestEndpoints = map[string]struct{}{
 }
 
 type pairLoadTestAgentRequest struct {
-	Code     string `json:"code"`
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
-	Version  string `json:"version"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Platform       string `json:"platform"`
+	Version        string `json:"version"`
+	CPUCores       int    `json:"cpu_cores"`
+	MemoryBytes    int64  `json:"memory_bytes"`
+	MaxRPS         int    `json:"max_rps"`
+	MaxConcurrency int    `json:"max_concurrency"`
 }
 
 type createLoadTestRunRequest struct {
@@ -52,10 +57,14 @@ type createLoadTestRunRequest struct {
 }
 
 type loadTestAgentPollRequest struct {
-	Name         string `json:"name"`
-	Platform     string `json:"platform"`
-	Version      string `json:"version"`
-	CurrentRunID string `json:"current_run_id"`
+	Name           string `json:"name"`
+	Platform       string `json:"platform"`
+	Version        string `json:"version"`
+	CurrentRunID   string `json:"current_run_id"`
+	CPUCores       int    `json:"cpu_cores"`
+	MemoryBytes    int64  `json:"memory_bytes"`
+	MaxRPS         int    `json:"max_rps"`
+	MaxConcurrency int    `json:"max_concurrency"`
 }
 
 type loadTestRunProgressRequest struct {
@@ -125,23 +134,49 @@ func CreateLoadTestAgentPairing(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"agent_id": agent.ID, "code": code, "expires_at": expiresAt})
 }
 
-func ListLoadTestAgents(c *gin.Context) {
-	if !requireLoadTestUser(c) {
-		return
-	}
-	agents, err := model.ListLoadTestAgents(c.GetInt("id"))
+func CreateManagedLoadTestAgentPairing(c *gin.Context) {
+	code, err := common.GenerateRandomCharsKey(8)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, gin.H{"agents": agents, "online_before": common.GetTimestamp() - loadTestAgentOnlineSeconds})
+	code = strings.ToUpper(code)
+	expiresAt := common.GetTimestamp() + loadTestPairingTTLSeconds
+	agent, err := model.NewManagedLoadTestAgentPairing(c.GetInt("id"), code, expiresAt)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"agent_id": agent.ID, "code": code, "expires_at": expiresAt})
+}
+
+func ListLoadTestAgents(c *gin.Context) {
+	if !requireLoadTestUser(c) {
+		return
+	}
+	localAgents, err := model.ListLoadTestAgents(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	managedAgents, err := model.ListManagedLoadTestAgents()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"local_agents": localAgents, "managed_agents": managedAgents, "online_before": common.GetTimestamp() - loadTestAgentOnlineSeconds})
 }
 
 func GetLoadTestState(c *gin.Context) {
 	if !requireLoadTestUser(c) {
 		return
 	}
-	agents, err := model.ListLoadTestAgents(c.GetInt("id"))
+	localAgents, err := model.ListLoadTestAgents(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	managedAgents, err := model.ListManagedLoadTestAgents()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -152,9 +187,10 @@ func GetLoadTestState(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"agents":        agents,
-		"online_before": common.GetTimestamp() - loadTestAgentOnlineSeconds,
-		"runs":          runs,
+		"local_agents":   localAgents,
+		"managed_agents": managedAgents,
+		"online_before":  common.GetTimestamp() - loadTestAgentOnlineSeconds,
+		"runs":           runs,
 	})
 }
 
@@ -173,6 +209,18 @@ func DeleteLoadTestAgent(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+func DeleteManagedLoadTestAgent(c *gin.Context) {
+	if err := model.RevokeManagedLoadTestAgent(c.Param("id")); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "managed load-test agent not found"})
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 func PairLoadTestAgent(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, loadTestAgentBodyLimit)
 	var request pairLoadTestAgentRequest
@@ -183,7 +231,7 @@ func PairLoadTestAgent(c *gin.Context) {
 	request.Name = strings.TrimSpace(request.Name)
 	request.Platform = strings.TrimSpace(request.Platform)
 	request.Version = strings.TrimSpace(request.Version)
-	if len(request.Name) < 1 || len(request.Name) > 128 || len(request.Platform) > 64 || len(request.Version) > 32 {
+	if len(request.Name) < 1 || len(request.Name) > 128 || len(request.Platform) > 64 || len(request.Version) > 32 || !validLoadTestAgentResources(request.CPUCores, request.MemoryBytes, request.MaxRPS, request.MaxConcurrency) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid agent metadata"})
 		return
 	}
@@ -192,7 +240,7 @@ func PairLoadTestAgent(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	agent, err := model.PairLoadTestAgent(request.Code, secret, request.Name, request.Platform, request.Version)
+	agent, err := model.PairLoadTestAgent(request.Code, secret, loadTestAgentRuntime(request.Name, request.Platform, request.Version, request.CPUCores, request.MemoryBytes, request.MaxRPS, request.MaxConcurrency))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": err.Error()})
 		return
@@ -228,13 +276,17 @@ func CreateLoadTestRun(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "unsupported load-test endpoint"})
 		return
 	}
-	agent, err := model.GetLoadTestAgent(c.GetInt("id"), request.AgentID)
+	agent, err := model.GetUsableLoadTestAgent(c.GetInt("id"), request.AgentID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if agent.LastSeenAt < common.GetTimestamp()-loadTestAgentOnlineSeconds {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "load-test agent is offline"})
+		return
+	}
+	if err := validateLoadTestAgentCapacity(agent, request); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	token, err := model.GetTokenByIds(request.TokenID, c.GetInt("id"))
@@ -262,7 +314,7 @@ func CreateLoadTestRun(c *gin.Context) {
 	run := &model.LoadTestRun{
 		UserID: c.GetInt("id"), AgentID: agent.ID, TokenID: token.Id,
 		KeyName: token.Name, PackageName: packageName, Model: request.Model,
-		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache,
+		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache, AgentManaged: agent.Managed,
 		TargetURL: targetURL, DurationSeconds: request.DurationSeconds,
 		RequestsPerSecond: request.RequestsPerSecond, Concurrency: request.Concurrency,
 	}
@@ -322,7 +374,11 @@ func PollLoadTestAgent(c *gin.Context) {
 			return
 		}
 	}
-	if err := model.TouchLoadTestAgent(agent.ID, request.Name, request.Platform, request.Version); err != nil {
+	if !validLoadTestAgentResources(request.CPUCores, request.MemoryBytes, request.MaxRPS, request.MaxConcurrency) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid agent resources"})
+		return
+	}
+	if err := model.TouchLoadTestAgent(agent.ID, loadTestAgentRuntime(request.Name, request.Platform, request.Version, request.CPUCores, request.MemoryBytes, request.MaxRPS, request.MaxConcurrency)); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -445,6 +501,30 @@ func authenticateLoadTestAgentRequest(c *gin.Context) (*model.LoadTestAgent, boo
 		return nil, false
 	}
 	return agent, true
+}
+
+func loadTestAgentRuntime(name, platform, version string, cpuCores int, memoryBytes int64, maxRPS, maxConcurrency int) model.LoadTestAgentRuntime {
+	return model.LoadTestAgentRuntime{
+		Name: name, Platform: platform, Version: version, CPUCores: cpuCores,
+		MemoryBytes: memoryBytes, MaxRPS: maxRPS, MaxConcurrency: maxConcurrency,
+	}
+}
+
+func validLoadTestAgentResources(cpuCores int, memoryBytes int64, maxRPS, maxConcurrency int) bool {
+	return cpuCores >= 0 && cpuCores <= 4096 && memoryBytes >= 0 && memoryBytes <= 1<<60 && maxRPS >= 0 && maxRPS <= 1_000_000 && maxConcurrency >= 0 && maxConcurrency <= 1_000_000
+}
+
+func validateLoadTestAgentCapacity(agent *model.LoadTestAgent, request createLoadTestRunRequest) error {
+	if agent.Managed && (agent.MaxRPS < 1 || agent.MaxConcurrency < 1) {
+		return errors.New("managed load-test agent has not reported capacity")
+	}
+	if agent.MaxRPS > 0 && request.RequestsPerSecond > agent.MaxRPS {
+		return fmt.Errorf("load-test agent supports at most %d RPS", agent.MaxRPS)
+	}
+	if agent.MaxConcurrency > 0 && request.Concurrency > agent.MaxConcurrency {
+		return fmt.Errorf("load-test agent supports at most %d concurrent requests", agent.MaxConcurrency)
+	}
+	return nil
 }
 
 func validLoadTestProgress(sent, completed, successes, failures, dropped int64, currentRPS, p50MS, p95MS, p99MS float64, errorCounts map[string]int64) bool {

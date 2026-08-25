@@ -6309,6 +6309,14 @@
     "dispatched": "已下发",
     "cancel_requested": "正在停止",
     "completed": "已完成",
-    "cancelled": "已取消"
+    "cancelled": "已取消",
+    "Add server agent": "添加服务器 Agent",
+    "Browser test": "浏览器测试",
+    "Local Agent": "本地 Agent",
+    "No local agent is paired.": "尚未配对本地 Agent。",
+    "No server load generator is available.": "暂无可用的服务器压测机。",
+    "Pair server agent": "配对服务器 Agent",
+    "Run the test on a shared load generator managed by the platform.": "使用平台管理的共享压测机执行测试。",
+    "Server load test": "服务器压测"
   }
 }

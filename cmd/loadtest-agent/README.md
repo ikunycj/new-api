@@ -42,6 +42,24 @@ checksum before placing it in `PATH`.
 ./alltoken-loadtest-agent run
 ```
 
+The run command advertises conservative capacity derived from CPU count. A
+managed load generator should set explicit limits that match the machine:
+
+```bash
+./alltoken-loadtest-agent run --max-rps 200 --max-concurrency 500
+```
+
+For a same-host functional test, the Agent may target the loopback gateway
+without weakening remote transport checks:
+
+```bash
+./alltoken-loadtest-agent run --target-url http://127.0.0.1:3000
+```
+
+Use a separate load-generator host for capacity measurements. Running the
+Agent and gateway on the same machine is suitable for workflow validation only
+because they compete for CPU, memory, sockets, and network bandwidth.
+
 The credential is stored in the operating system configuration directory with
 mode `0600`. The API key is written only to a temporary `0600` file while k6
 runs and is removed when the run exits.

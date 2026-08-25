@@ -6309,6 +6309,14 @@
     "dispatched": "Отправлено",
     "cancel_requested": "Останавливается",
     "completed": "Завершено",
-    "cancelled": "Отменено"
+    "cancelled": "Отменено",
+    "Add server agent": "Добавить серверный агент",
+    "Browser test": "Тест в браузере",
+    "Local Agent": "Локальный агент",
+    "No local agent is paired.": "Локальный агент не подключен.",
+    "No server load generator is available.": "Нет доступного серверного генератора нагрузки.",
+    "Pair server agent": "Подключить серверный агент",
+    "Run the test on a shared load generator managed by the platform.": "Запустить тест на общем генераторе нагрузки под управлением платформы.",
+    "Server load test": "Серверный нагрузочный тест"
   }
 }

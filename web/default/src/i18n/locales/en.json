@@ -6309,6 +6309,14 @@
     "dispatched": "Dispatched",
     "cancel_requested": "Stopping",
     "completed": "Completed",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "Add server agent": "Add server agent",
+    "Browser test": "Browser test",
+    "Local Agent": "Local Agent",
+    "No local agent is paired.": "No local agent is paired.",
+    "No server load generator is available.": "No server load generator is available.",
+    "Pair server agent": "Pair server agent",
+    "Run the test on a shared load generator managed by the platform.": "Run the test on a shared load generator managed by the platform.",
+    "Server load test": "Server load test"
   }
 }

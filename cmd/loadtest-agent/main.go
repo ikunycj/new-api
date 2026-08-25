@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,9 +21,10 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/shirou/gopsutil/mem"
 )
 
-const agentVersion = "0.1.0"
+const agentVersion = "0.2.0"
 
 var agentHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
@@ -61,6 +63,25 @@ type loadTestTask struct {
 	DurationSeconds   int    `json:"duration_seconds"`
 	RequestsPerSecond int    `json:"requests_per_second"`
 	Concurrency       int    `json:"concurrency"`
+}
+
+type agentRuntime struct {
+	TargetURL      string
+	CPUCores       int
+	MemoryBytes    int64
+	MaxRPS         int
+	MaxConcurrency int
+}
+
+type agentHeartbeat struct {
+	Name           string `json:"name"`
+	Platform       string `json:"platform"`
+	Version        string `json:"version"`
+	CurrentRunID   string `json:"current_run_id"`
+	CPUCores       int    `json:"cpu_cores"`
+	MemoryBytes    int64  `json:"memory_bytes"`
+	MaxRPS         int    `json:"max_rps"`
+	MaxConcurrency int    `json:"max_concurrency"`
 }
 
 type progressPayload struct {
@@ -111,7 +132,7 @@ func main() {
 	case "pair":
 		err = pair(os.Args[2:])
 	case "run":
-		err = runAgent()
+		err = runAgent(os.Args[2:])
 	case "status":
 		err = printStatus()
 	default:
@@ -127,7 +148,7 @@ func main() {
 func usage() {
 	fmt.Println("usage:")
 	fmt.Println("  alltoken-loadtest-agent pair --server https://alltokenapi.com CODE")
-	fmt.Println("  alltoken-loadtest-agent run")
+	fmt.Println("  alltoken-loadtest-agent run [--max-rps N] [--max-concurrency N] [--target-url URL]")
 	fmt.Println("  alltoken-loadtest-agent status")
 }
 
@@ -164,7 +185,7 @@ func pair(args []string) error {
 	return nil
 }
 
-func runAgent() error {
+func runAgent(args []string) error {
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -172,9 +193,35 @@ func runAgent() error {
 	if _, err := exec.LookPath("k6"); err != nil {
 		return errors.New("k6 is not installed or not available in PATH")
 	}
+	defaultMaxRPS := max(1, runtime.NumCPU()*50)
+	defaultMaxConcurrency := max(1, runtime.NumCPU()*100)
+	flags := flag.NewFlagSet("run", flag.ContinueOnError)
+	maxRPS := flags.Int("max-rps", defaultMaxRPS, "maximum accepted requests per second")
+	maxConcurrency := flags.Int("max-concurrency", defaultMaxConcurrency, "maximum accepted concurrent requests")
+	targetURL := flags.String("target-url", "", "override task target URL; HTTPS or loopback HTTP only")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || *maxRPS < 1 || *maxRPS > 1_000_000 || *maxConcurrency < 1 || *maxConcurrency > 1_000_000 {
+		return errors.New("agent capacity is invalid")
+	}
+	normalizedTargetURL := normalizeServerURL(*targetURL)
+	if normalizedTargetURL != "" {
+		if err := validateServerURL(normalizedTargetURL); err != nil {
+			return fmt.Errorf("invalid target URL override: %w", err)
+		}
+	}
+	memoryBytes := int64(0)
+	if memory, memoryErr := mem.VirtualMemory(); memoryErr == nil && memory.Total <= math.MaxInt64 {
+		memoryBytes = int64(memory.Total)
+	}
+	runtimeInfo := agentRuntime{
+		TargetURL: normalizedTargetURL, CPUCores: runtime.NumCPU(), MemoryBytes: memoryBytes,
+		MaxRPS: *maxRPS, MaxConcurrency: *maxConcurrency,
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	fmt.Printf("agent %s is online; waiting for tasks\n", config.Name)
+	fmt.Printf("agent %s is online; capacity %d RPS / %d concurrent\n", config.Name, runtimeInfo.MaxRPS, runtimeInfo.MaxConcurrency)
 	var activeRunID string
 	var activeCancel context.CancelFunc
 	done := make(chan string, 1)
@@ -192,7 +239,7 @@ func runAgent() error {
 			}
 		case <-time.After(2 * time.Second):
 		}
-		response, err := poll(ctx, config, activeRunID)
+		response, err := poll(ctx, config, activeRunID, runtimeInfo)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "poll failed:", err)
 			continue
@@ -209,6 +256,9 @@ func runAgent() error {
 		}
 		if response.Command != "run" || activeRunID != "" {
 			continue
+		}
+		if runtimeInfo.TargetURL != "" {
+			response.Task.TargetURL = runtimeInfo.TargetURL
 		}
 		runCtx, cancel := context.WithCancel(ctx)
 		activeRunID = response.Task.RunID
@@ -231,11 +281,12 @@ func printStatus() error {
 	return nil
 }
 
-func poll(ctx context.Context, config agentConfig, currentRunID string) (pollResponse, error) {
+func poll(ctx context.Context, config agentConfig, currentRunID string, runtimeInfo agentRuntime) (pollResponse, error) {
 	var response apiResponse[pollResponse]
-	body := map[string]string{
-		"name": config.Name, "platform": runtime.GOOS + "/" + runtime.GOARCH,
-		"version": agentVersion, "current_run_id": currentRunID,
+	body := agentHeartbeat{
+		Name: config.Name, Platform: runtime.GOOS + "/" + runtime.GOARCH,
+		Version: agentVersion, CurrentRunID: currentRunID, CPUCores: runtimeInfo.CPUCores,
+		MemoryBytes: runtimeInfo.MemoryBytes, MaxRPS: runtimeInfo.MaxRPS, MaxConcurrency: runtimeInfo.MaxConcurrency,
 	}
 	err := requestJSON(ctx, http.MethodPost, config.ServerURL+"/api/loadtest-agent/poll", config.Secret, body, &response)
 	if err != nil {

@@ -16,7 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Copy, Link2, MonitorCog, Play, Square, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  Link2,
+  MonitorCog,
+  Play,
+  Server,
+  Square,
+  Trash2,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -53,6 +61,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useIsAdmin } from '@/hooks/use-admin'
 
 import {
   cancelLoadTestAgentRun,
@@ -67,6 +76,7 @@ import {
 
 type AgentPanelProps = {
   disabled: boolean
+  mode: 'managed' | 'local'
   request: Omit<CreateLoadTestAgentRun, 'agent_id'> | null
 }
 
@@ -82,8 +92,14 @@ const ACTIVE_RUN_STATUSES = new Set([
   'cancel_requested',
 ])
 
+function formatMemory(bytes: number) {
+  if (bytes <= 0) return '-'
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
 export function AgentPanel(props: AgentPanelProps) {
   const { t } = useTranslation()
+  const isAdmin = useIsAdmin()
   const [agents, setAgents] = useState<LoadTestAgent[]>([])
   const [onlineBefore, setOnlineBefore] = useState(0)
   const [selectedAgentId, setSelectedAgentId] = useState('')
@@ -93,37 +109,48 @@ export function AgentPanel(props: AgentPanelProps) {
   const [starting, setStarting] = useState(false)
   const refreshInFlightRef = useRef(false)
 
-  const refresh = useCallback(async (showError = false) => {
-    if (refreshInFlightRef.current) return
-    refreshInFlightRef.current = true
-    try {
-      const state = await getLoadTestAgentState()
-      setAgents(state.agents)
-      setOnlineBefore(state.online_before)
-      setRuns(state.runs)
-      setSelectedAgentId((current) => {
-        const currentAgent = state.agents.find((agent) => agent.id === current)
-        if (
-          currentAgent &&
-          currentAgent.last_seen_at >= state.online_before
-        ) {
-          return current
-        }
-        return (
-          state.agents.find(
-            (agent) => agent.last_seen_at >= state.online_before
-          )?.id ?? ''
+  const refresh = useCallback(
+    async (showError = false) => {
+      if (refreshInFlightRef.current) return
+      refreshInFlightRef.current = true
+      try {
+        const state = await getLoadTestAgentState()
+        const nextAgents =
+          props.mode === 'managed' ? state.managed_agents : state.local_agents
+        setAgents(nextAgents)
+        setOnlineBefore(state.online_before)
+        setRuns(
+          state.runs.filter(
+            (run) => run.agent_managed === (props.mode === 'managed')
+          )
         )
-      })
-    } catch (error) {
-      if (showError) {
-        toast.error(error instanceof Error ? error.message : t('Request failed'))
+        setSelectedAgentId((current) => {
+          const currentAgent = nextAgents.find((agent) => agent.id === current)
+          if (
+            currentAgent &&
+            currentAgent.last_seen_at >= state.online_before
+          ) {
+            return current
+          }
+          return (
+            nextAgents.find(
+              (agent) => agent.last_seen_at >= state.online_before
+            )?.id ?? ''
+          )
+        })
+      } catch (error) {
+        if (showError) {
+          toast.error(
+            error instanceof Error ? error.message : t('Request failed')
+          )
+        }
+      } finally {
+        refreshInFlightRef.current = false
+        setLoading(false)
       }
-    } finally {
-      refreshInFlightRef.current = false
-      setLoading(false)
-    }
-  }, [t])
+    },
+    [props.mode, t]
+  )
 
   const hasActiveRun = runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))
 
@@ -140,18 +167,26 @@ export function AgentPanel(props: AgentPanelProps) {
 
   const createPairing = useCallback(async () => {
     try {
-      setPairing(await createLoadTestAgentPairing())
+      setPairing(await createLoadTestAgentPairing(props.mode === 'managed'))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('Request failed'))
     }
-  }, [t])
+  }, [props.mode, t])
 
   const copyPairCommand = useCallback(async () => {
     if (!pairing) return
-    const command = `alltoken-loadtest-agent pair --server ${window.location.origin} ${pairing.code}`
+    let serverURL = window.location.origin
+    if (
+      props.mode === 'managed' &&
+      window.location.protocol === 'http:' &&
+      !['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)
+    ) {
+      serverURL = 'http://127.0.0.1:3000'
+    }
+    const command = `alltoken-loadtest-agent pair --server ${serverURL} ${pairing.code}`
     await navigator.clipboard.writeText(command)
     toast.success(t('Copied'))
-  }, [pairing, t])
+  }, [pairing, props.mode, t])
 
   const start = useCallback(async () => {
     if (!props.request || !selectedAgentId) return
@@ -176,7 +211,9 @@ export function AgentPanel(props: AgentPanelProps) {
         await cancelLoadTestAgentRun(runId)
         await refresh()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : t('Request failed'))
+        toast.error(
+          error instanceof Error ? error.message : t('Request failed')
+        )
       }
     },
     [refresh, t]
@@ -185,13 +222,15 @@ export function AgentPanel(props: AgentPanelProps) {
   const removeAgent = useCallback(
     async (agentId: string) => {
       try {
-        await deleteLoadTestAgent(agentId)
+        await deleteLoadTestAgent(agentId, props.mode === 'managed')
         await refresh()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : t('Request failed'))
+        toast.error(
+          error instanceof Error ? error.message : t('Request failed')
+        )
       }
     },
-    [refresh, t]
+    [props.mode, refresh, t]
   )
 
   const onlineAgents = agents.filter(
@@ -205,19 +244,33 @@ export function AgentPanel(props: AgentPanelProps) {
           <div className='flex flex-wrap items-start justify-between gap-3'>
             <div>
               <CardTitle className='flex items-center gap-2'>
-                <MonitorCog className='size-5' />
-                {t('Local load-test agent')}
+                {props.mode === 'managed' ? (
+                  <Server className='size-5' />
+                ) : (
+                  <MonitorCog className='size-5' />
+                )}
+                {props.mode === 'managed'
+                  ? t('Server load test')
+                  : t('Local load-test agent')}
               </CardTitle>
               <CardDescription className='mt-1'>
-                {t(
-                  'Run high-volume tests outside the browser and keep results linked to this account.'
-                )}
+                {props.mode === 'managed'
+                  ? t(
+                      'Run the test on a shared load generator managed by the platform.'
+                    )
+                  : t(
+                      'Run high-volume tests outside the browser and keep results linked to this account.'
+                    )}
               </CardDescription>
             </div>
-            <Button onClick={() => void createPairing()} variant='outline'>
-              <Link2 className='size-4' />
-              {t('Pair agent')}
-            </Button>
+            {(props.mode === 'local' || isAdmin) && (
+              <Button onClick={() => void createPairing()} variant='outline'>
+                <Link2 className='size-4' />
+                {props.mode === 'managed'
+                  ? t('Add server agent')
+                  : t('Pair agent')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className='space-y-4'>
@@ -235,7 +288,9 @@ export function AgentPanel(props: AgentPanelProps) {
                 <SelectContent>
                   {onlineAgents.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name} · {agent.platform}
+                      {agent.name} · {agent.cpu_cores} CPU ·{' '}
+                      {formatMemory(agent.memory_bytes)} · {agent.max_rps} RPS ·
+                      C{agent.max_concurrency}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -243,10 +298,7 @@ export function AgentPanel(props: AgentPanelProps) {
             </div>
             <Button
               disabled={
-                props.disabled ||
-                !props.request ||
-                !selectedAgentId ||
-                starting
+                props.disabled || !props.request || !selectedAgentId || starting
               }
               onClick={() => void start()}
             >
@@ -254,6 +306,14 @@ export function AgentPanel(props: AgentPanelProps) {
               {t('Start with agent')}
             </Button>
           </div>
+
+          {agents.length === 0 && !loading && (
+            <p className='text-muted-foreground text-sm'>
+              {props.mode === 'managed'
+                ? t('No server load generator is available.')
+                : t('No local agent is paired.')}
+            </p>
+          )}
 
           {agents.length > 0 && (
             <div className='flex flex-wrap gap-2'>
@@ -268,14 +328,20 @@ export function AgentPanel(props: AgentPanelProps) {
                     <Badge variant={online ? 'default' : 'secondary'}>
                       {online ? t('Online') : t('Offline')}
                     </Badge>
-                    <Button
-                      aria-label={t('Remove agent')}
-                      onClick={() => void removeAgent(agent.id)}
-                      size='icon-xs'
-                      variant='ghost'
-                    >
-                      <Trash2 className='size-3' />
-                    </Button>
+                    <span className='text-muted-foreground'>
+                      {agent.cpu_cores} CPU · {formatMemory(agent.memory_bytes)}{' '}
+                      · {agent.max_rps} RPS · C{agent.max_concurrency}
+                    </span>
+                    {(props.mode === 'local' || isAdmin) && (
+                      <Button
+                        aria-label={t('Remove agent')}
+                        onClick={() => void removeAgent(agent.id)}
+                        size='icon-xs'
+                        variant='ghost'
+                      >
+                        <Trash2 className='size-3' />
+                      </Button>
+                    )}
                   </div>
                 )
               })}
@@ -346,10 +412,17 @@ export function AgentPanel(props: AgentPanelProps) {
         </CardContent>
       </Card>
 
-      <Dialog open={pairing !== null} onOpenChange={(open) => !open && setPairing(null)}>
+      <Dialog
+        open={pairing !== null}
+        onOpenChange={(open) => !open && setPairing(null)}
+      >
         <DialogContent className='sm:max-w-lg'>
           <DialogHeader>
-            <DialogTitle>{t('Pair local agent')}</DialogTitle>
+            <DialogTitle>
+              {props.mode === 'managed'
+                ? t('Pair server agent')
+                : t('Pair local agent')}
+            </DialogTitle>
             <DialogDescription>
               {t('Run this command on the computer that will generate load.')}
             </DialogDescription>
@@ -357,7 +430,13 @@ export function AgentPanel(props: AgentPanelProps) {
           {pairing && (
             <div className='space-y-3'>
               <pre className='bg-muted overflow-x-auto rounded-md border p-3 text-xs'>
-                alltoken-loadtest-agent pair --server {window.location.origin}{' '}
+                {props.mode === 'managed' &&
+                window.location.protocol === 'http:' &&
+                !['127.0.0.1', 'localhost', '::1'].includes(
+                  window.location.hostname
+                )
+                  ? 'alltoken-loadtest-agent pair --server http://127.0.0.1:3000 '
+                  : `alltoken-loadtest-agent pair --server ${window.location.origin} `}
                 {pairing.code}
               </pre>
               <p className='text-muted-foreground text-xs'>

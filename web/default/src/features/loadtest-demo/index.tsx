@@ -19,8 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   AlertTriangle,
+  Globe2,
+  Laptop,
   Play,
   RefreshCw,
+  Server,
   Square,
   Trash2,
 } from 'lucide-react'
@@ -57,12 +60,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { fetchApiKeyModels } from '@/features/keys/api'
 import { QUOTA_TYPE_VALUES } from '@/features/pricing/constants'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { AgentPanel } from './agent-panel'
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
   DEFAULT_LOAD_TEST_LIMITS,
@@ -92,7 +97,6 @@ import {
   savePersistedLoadTestRun,
   type RunStats,
 } from './storage'
-import { AgentPanel } from './agent-panel'
 
 type RunStatus = 'idle' | 'loading-keys' | 'running' | 'complete'
 
@@ -737,6 +741,19 @@ export function LoadTestDemo() {
       2
     )
   }, [prompt, promptCache, selectedModel, selectedModelMetadata])
+  const agentRequest =
+    selectedKeyMetadata && selectedModelMetadata
+      ? {
+          token_id: selectedKeyMetadata.id,
+          model: selectedModel,
+          endpoint: selectedModelMetadata.endpoint,
+          prompt,
+          prompt_cache: promptCache,
+          duration_seconds: durationValue,
+          requests_per_second: rpsValue,
+          concurrency: Number(concurrency),
+        }
+      : null
 
   const getHistoricalUserCharge = (run: (typeof persistedRuns)[number]) => {
     const runPricing = historicalPricing[run.runId]
@@ -982,370 +999,409 @@ export function LoadTestDemo() {
                 {t('Planned requests for this run')}: {maxRequests} ·{' '}
                 {t('Maximum concurrency')}: {limits.max_concurrency}
               </div>
-
-              <div className='flex flex-wrap items-center gap-2'>
-                <Button disabled={!canRun} onClick={() => void run()}>
-                  <Play className='size-4' />
-                  {t('Start in browser')}
-                </Button>
-                <Button
-                  disabled={status !== 'running'}
-                  onClick={stop}
-                  variant='outline'
-                >
-                  <Square className='size-4' />
-                  {t('Stop testing')}
-                </Button>
-              </div>
-
-              {(status === 'running' || status === 'complete') && (
-                <div className='space-y-2'>
-                  <div className='flex justify-between text-xs'>
-                    <span>{formatDuration(elapsed)}</span>
-                    <span>{durationSeconds}s</span>
-                  </div>
-                  <Progress value={progress} />
-                  <div className='text-muted-foreground text-xs'>
-                    {t('Run ID')}: <code>{runId}</code>
-                  </div>
-                  <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
-                    <span>
-                      {t('API Key')}: {runKeyName || '-'}
-                    </span>
-                    <span>
-                      {t('Package')}: {runPackageName || '-'}
-                    </span>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          <AgentPanel
-            disabled={!canRun}
-            request={
-              selectedKeyMetadata && selectedModelMetadata
-                ? {
-                    token_id: selectedKeyMetadata.id,
-                    model: selectedModel,
-                    endpoint: selectedModelMetadata.endpoint,
-                    prompt,
-                    prompt_cache: promptCache,
-                    duration_seconds: durationValue,
-                    requests_per_second: rpsValue,
-                    concurrency: Number(concurrency),
+          <Tabs defaultValue='browser'>
+            <TabsList className='grid h-auto w-full grid-cols-3 sm:w-fit'>
+              <TabsTrigger value='browser'>
+                <Globe2 />
+                {t('Browser test')}
+              </TabsTrigger>
+              <TabsTrigger value='server'>
+                <Server />
+                {t('Server load test')}
+              </TabsTrigger>
+              <TabsTrigger value='local'>
+                <Laptop />
+                {t('Local Agent')}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent className='space-y-4' value='browser'>
+              <Card>
+                <CardContent className='space-y-4 pt-6'>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <Button disabled={!canRun} onClick={() => void run()}>
+                      <Play className='size-4' />
+                      {t('Start in browser')}
+                    </Button>
+                    <Button
+                      disabled={status !== 'running'}
+                      onClick={stop}
+                      variant='outline'
+                    >
+                      <Square className='size-4' />
+                      {t('Stop testing')}
+                    </Button>
+                  </div>
+
+                  {(status === 'running' || status === 'complete') && (
+                    <div className='space-y-2'>
+                      <div className='flex justify-between text-xs'>
+                        <span>{formatDuration(elapsed)}</span>
+                        <span>{durationSeconds}s</span>
+                      </div>
+                      <Progress value={progress} />
+                      <div className='text-muted-foreground text-xs'>
+                        {t('Run ID')}: <code>{runId}</code>
+                      </div>
+                      <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
+                        <span>
+                          {t('API Key')}: {runKeyName || '-'}
+                        </span>
+                        <span>
+                          {t('Package')}: {runPackageName || '-'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className='flex flex-row items-center justify-between gap-3'>
+                  <div>
+                    <CardTitle>{t('Load test history')}</CardTitle>
+                    <CardDescription>
+                      {t('Each completed test is saved with its own Run ID.')}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    disabled={
+                      persistedRuns.length === 0 || status === 'running'
+                    }
+                    onClick={clearHistory}
+                    size='sm'
+                    variant='outline'
+                  >
+                    <Trash2 className='size-4' />
+                    {t('Clear history')}
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {persistedRuns.length === 0 ? (
+                    <p className='text-muted-foreground text-sm'>
+                      {t('No previous load tests')}
+                    </p>
+                  ) : (
+                    <div className='overflow-x-auto rounded-md border'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t('Run ID')}</TableHead>
+                            <TableHead>{t('Completed at')}</TableHead>
+                            <TableHead>{t('Test model')}</TableHead>
+                            <TableHead>{t('Prompt')}</TableHead>
+                            <TableHead>{t('API Key')}</TableHead>
+                            <TableHead>{t('Package')}</TableHead>
+                            <TableHead>{t('Duration')}</TableHead>
+                            <TableHead>{t('Requests')}</TableHead>
+                            <TableHead>{t('Success rate')}</TableHead>
+                            <TableHead>{t('Input tokens')}</TableHead>
+                            <TableHead>{t('Output tokens')}</TableHead>
+                            <TableHead>{t('Cache tokens')}</TableHead>
+                            <TableHead>{t('Total tokens')}</TableHead>
+                            <TableHead>{t('Average token price')}</TableHead>
+                            <TableHead>{t('User charge')}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {persistedRuns.map((run) => {
+                            const historicalUserCharge =
+                              getHistoricalUserCharge(run)
+                            const historicalTotalTokens =
+                              run.stats.inputTokens +
+                              run.stats.outputTokens +
+                              run.stats.cacheReadTokens +
+                              run.stats.cacheWriteTokens
+                            return (
+                              <TableRow key={run.runId}>
+                                <TableCell>
+                                  <code className='text-xs'>{run.runId}</code>
+                                </TableCell>
+                                <TableCell className='whitespace-nowrap'>
+                                  {new Date(run.completedAt).toLocaleString()}
+                                </TableCell>
+                                <TableCell>{run.model}</TableCell>
+                                <TableCell
+                                  className='max-w-56 truncate'
+                                  title={run.prompt}
+                                >
+                                  {run.prompt}
+                                </TableCell>
+                                <TableCell>{run.keyName || '-'}</TableCell>
+                                <TableCell>{run.packageName || '-'}</TableCell>
+                                <TableCell>{run.durationSeconds}s</TableCell>
+                                <TableCell>{run.stats.completed}</TableCell>
+                                <TableCell>
+                                  {run.stats.completed
+                                    ? `${((run.stats.successes / run.stats.completed) * 100).toFixed(1)}%`
+                                    : '0.0%'}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {run.stats.inputTokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {run.stats.outputTokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {run.stats.cacheReadTokens.toLocaleString()} /{' '}
+                                  {run.stats.cacheWriteTokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {(
+                                    run.stats.inputTokens +
+                                    run.stats.outputTokens +
+                                    run.stats.cacheReadTokens +
+                                    run.stats.cacheWriteTokens
+                                  ).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  {historicalTotalTokens > 0
+                                    ? `$${(historicalUserCharge / historicalTotalTokens).toFixed(8)}`
+                                    : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  ${historicalUserCharge.toFixed(6)}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className='text-muted-foreground text-sm font-medium'>
+                {t('Current run metrics')}
+              </div>
+              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
+                <Metric label={t('Requests')} value={String(stats.completed)} />
+                <Metric label={t('Failed')} value={String(stats.failures)} />
+                <Metric label={t('Success rate')} value={`${successRate}%`} />
+                <Metric
+                  label={t('Cache hit rate')}
+                  value={`${cacheHitRate}%`}
+                />
+                <Metric
+                  label={t('P50 latency')}
+                  value={p50 ? `${p50}ms` : '-'}
+                />
+                <Metric
+                  label={t('P95 latency')}
+                  value={p95 ? `${p95}ms` : '-'}
+                />
+              </div>
+
+              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+                <Metric
+                  label={t('Input tokens')}
+                  value={stats.inputTokens.toLocaleString()}
+                />
+                <Metric
+                  label={t('Output tokens')}
+                  value={stats.outputTokens.toLocaleString()}
+                />
+                <Metric
+                  label={t('Cache tokens')}
+                  value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
+                />
+                <Metric
+                  label={t('Average token price')}
+                  value={
+                    averageTokenPrice === null
+                      ? t('Unavailable')
+                      : `$${averageTokenPrice.toFixed(8)}`
                   }
-                : null
-            }
-          />
-
-          <Card>
-            <CardHeader className='flex flex-row items-center justify-between gap-3'>
-              <div>
-                <CardTitle>{t('Load test history')}</CardTitle>
-                <CardDescription>
-                  {t('Each completed test is saved with its own Run ID.')}
-                </CardDescription>
+                />
+                <Metric
+                  label={t('User charge')}
+                  value={
+                    pricing ? `$${userCharge.toFixed(6)}` : t('Unavailable')
+                  }
+                />
               </div>
-              <Button
-                disabled={persistedRuns.length === 0 || status === 'running'}
-                onClick={clearHistory}
-                size='sm'
-                variant='outline'
-              >
-                <Trash2 className='size-4' />
-                {t('Clear history')}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {persistedRuns.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {t('No previous load tests')}
-                </p>
-              ) : (
-                <div className='overflow-x-auto rounded-md border'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('Run ID')}</TableHead>
-                        <TableHead>{t('Completed at')}</TableHead>
-                        <TableHead>{t('Test model')}</TableHead>
-                        <TableHead>{t('Prompt')}</TableHead>
-                        <TableHead>{t('API Key')}</TableHead>
-                        <TableHead>{t('Package')}</TableHead>
-                        <TableHead>{t('Duration')}</TableHead>
-                        <TableHead>{t('Requests')}</TableHead>
-                        <TableHead>{t('Success rate')}</TableHead>
-                        <TableHead>{t('Input tokens')}</TableHead>
-                        <TableHead>{t('Output tokens')}</TableHead>
-                        <TableHead>{t('Cache tokens')}</TableHead>
-                        <TableHead>{t('Total tokens')}</TableHead>
-                        <TableHead>{t('Average token price')}</TableHead>
-                        <TableHead>{t('User charge')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {persistedRuns.map((run) => {
-                        const historicalUserCharge =
-                          getHistoricalUserCharge(run)
-                        const historicalTotalTokens =
-                          run.stats.inputTokens +
-                          run.stats.outputTokens +
-                          run.stats.cacheReadTokens +
-                          run.stats.cacheWriteTokens
-                        return (
-                          <TableRow key={run.runId}>
-                            <TableCell>
-                              <code className='text-xs'>{run.runId}</code>
-                            </TableCell>
-                            <TableCell className='whitespace-nowrap'>
-                              {new Date(run.completedAt).toLocaleString()}
-                            </TableCell>
-                            <TableCell>{run.model}</TableCell>
-                            <TableCell
-                              className='max-w-56 truncate'
-                              title={run.prompt}
-                            >
-                              {run.prompt}
-                            </TableCell>
-                            <TableCell>{run.keyName || '-'}</TableCell>
-                            <TableCell>{run.packageName || '-'}</TableCell>
-                            <TableCell>{run.durationSeconds}s</TableCell>
-                            <TableCell>{run.stats.completed}</TableCell>
-                            <TableCell>
-                              {run.stats.completed
-                                ? `${((run.stats.successes / run.stats.completed) * 100).toFixed(1)}%`
-                                : '0.0%'}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {run.stats.inputTokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {run.stats.outputTokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {run.stats.cacheReadTokens.toLocaleString()} /{' '}
-                              {run.stats.cacheWriteTokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {(
-                                run.stats.inputTokens +
-                                run.stats.outputTokens +
-                                run.stats.cacheReadTokens +
-                                run.stats.cacheWriteTokens
-                              ).toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {historicalTotalTokens > 0
-                                ? `$${(historicalUserCharge / historicalTotalTokens).toFixed(8)}`
-                                : '-'}
-                            </TableCell>
-                            <TableCell>
-                              ${historicalUserCharge.toFixed(6)}
-                            </TableCell>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('Channel token usage and cost')}</CardTitle>
+                  <CardDescription>
+                    {t(
+                      'User charge = official model price × billing group ratio.'
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {channelStats.length === 0 ? (
+                    <p className='text-muted-foreground text-sm'>
+                      {t('No channel usage recorded yet')}
+                    </p>
+                  ) : (
+                    <div className='overflow-x-auto rounded-md border'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t('Channel')}</TableHead>
+                            <TableHead>{t('Billing group')}</TableHead>
+                            <TableHead>{t('Requests')}</TableHead>
+                            <TableHead>{t('Prompt tokens')}</TableHead>
+                            <TableHead>{t('Input total')}</TableHead>
+                            <TableHead>{t('Output tokens')}</TableHead>
+                            <TableHead>{t('Cache tokens')}</TableHead>
+                            <TableHead>{t('Total tokens')}</TableHead>
+                            <TableHead>{t('Token share')}</TableHead>
+                            <TableHead>{t('Billing group ratio')}</TableHead>
+                            <TableHead>{t('Channel cost factor')}</TableHead>
+                            <TableHead>{t('User charge')}</TableHead>
                           </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {channelStats.map((channel) => {
+                            const inputTotalTokens =
+                              channel.input_tokens_total > 0
+                                ? channel.input_tokens_total
+                                : channel.input_tokens +
+                                  channel.cache_read_tokens +
+                                  channel.cache_write_tokens
+                            const channelTokens =
+                              inputTotalTokens + channel.output_tokens
+                            const share = totalChannelTokens
+                              ? (channelTokens / totalChannelTokens) * 100
+                              : 0
+                            return (
+                              <TableRow key={channel.channel_id}>
+                                <TableCell>
+                                  #{channel.channel_id} {channel.channel_name}
+                                  {channel.billing_group
+                                    ? ` · ${channel.billing_group}`
+                                    : ''}
+                                </TableCell>
+                                <TableCell>
+                                  {channel.billing_group || '-'}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channel.requests}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channel.input_tokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {inputTotalTokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channel.output_tokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channel.cache_read_tokens.toLocaleString()} /{' '}
+                                  {channel.cache_write_tokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channelTokens.toLocaleString()}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {share.toFixed(2)}%
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {pricing
+                                    ? pricing.groupRatio.toFixed(2)
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {channel.cost_factor.toFixed(2)}
+                                </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  $
+                                  {pricing
+                                    ? calculateUserCharge(
+                                        channel,
+                                        pricing
+                                      ).toFixed(6)
+                                    : '0.000000'}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              {channelStats.length > 0 && (
+                <div className='grid gap-4 sm:grid-cols-3'>
+                  <Metric
+                    label={t('Channel')}
+                    value={String(channelStats.length)}
+                  />
+                  <Metric
+                    label={t('Billing groups')}
+                    value={String(billingGroupsUsed.size)}
+                  />
                 </div>
               )}
-            </CardContent>
-          </Card>
+              <p className='text-muted-foreground text-xs'>
+                {pricing
+                  ? t(
+                      'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
+                    )
+                  : t('Pricing is unavailable until the test starts.')}
+              </p>
 
-          <div className='text-muted-foreground text-sm font-medium'>
-            {t('Current run metrics')}
-          </div>
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
-            <Metric label={t('Requests')} value={String(stats.completed)} />
-            <Metric label={t('Failed')} value={String(stats.failures)} />
-            <Metric label={t('Success rate')} value={`${successRate}%`} />
-            <Metric label={t('Cache hit rate')} value={`${cacheHitRate}%`} />
-            <Metric label={t('P50 latency')} value={p50 ? `${p50}ms` : '-'} />
-            <Metric label={t('P95 latency')} value={p95 ? `${p95}ms` : '-'} />
-          </div>
+              <div className='grid gap-4 lg:grid-cols-3'>
+                <Card size='sm'>
+                  <CardHeader>
+                    <CardTitle>{t('HTTP status')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CounterList
+                      counters={stats.statusCodes}
+                      emptyLabel={t('No requests sent yet')}
+                    />
+                  </CardContent>
+                </Card>
+                <Card size='sm'>
+                  <CardHeader>
+                    <CardTitle>{t('Error codes')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CounterList
+                      counters={stats.errorCodes}
+                      emptyLabel={t('No errors')}
+                    />
+                  </CardContent>
+                </Card>
+                <Card size='sm'>
+                  <CardHeader>
+                    <CardTitle>{t('Key usage')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CounterList
+                      counters={stats.keyCounts}
+                      emptyLabel={t('No requests sent yet')}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-            <Metric
-              label={t('Input tokens')}
-              value={stats.inputTokens.toLocaleString()}
-            />
-            <Metric
-              label={t('Output tokens')}
-              value={stats.outputTokens.toLocaleString()}
-            />
-            <Metric
-              label={t('Cache tokens')}
-              value={`${stats.cacheReadTokens.toLocaleString()} / ${stats.cacheWriteTokens.toLocaleString()}`}
-            />
-            <Metric
-              label={t('Average token price')}
-              value={
-                averageTokenPrice === null
-                  ? t('Unavailable')
-                  : `$${averageTokenPrice.toFixed(8)}`
-              }
-            />
-            <Metric
-              label={t('User charge')}
-              value={pricing ? `$${userCharge.toFixed(6)}` : t('Unavailable')}
-            />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('Channel token usage and cost')}</CardTitle>
-              <CardDescription>
-                {t('User charge = official model price × billing group ratio.')}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {channelStats.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {t('No channel usage recorded yet')}
-                </p>
-              ) : (
-                <div className='overflow-x-auto rounded-md border'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('Channel')}</TableHead>
-                        <TableHead>{t('Billing group')}</TableHead>
-                        <TableHead>{t('Requests')}</TableHead>
-                        <TableHead>{t('Prompt tokens')}</TableHead>
-                        <TableHead>{t('Input total')}</TableHead>
-                        <TableHead>{t('Output tokens')}</TableHead>
-                        <TableHead>{t('Cache tokens')}</TableHead>
-                        <TableHead>{t('Total tokens')}</TableHead>
-                        <TableHead>{t('Token share')}</TableHead>
-                        <TableHead>{t('Billing group ratio')}</TableHead>
-                        <TableHead>{t('Channel cost factor')}</TableHead>
-                        <TableHead>{t('User charge')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {channelStats.map((channel) => {
-                        const inputTotalTokens =
-                          channel.input_tokens_total > 0
-                            ? channel.input_tokens_total
-                            : channel.input_tokens +
-                              channel.cache_read_tokens +
-                              channel.cache_write_tokens
-                        const channelTokens =
-                          inputTotalTokens + channel.output_tokens
-                        const share = totalChannelTokens
-                          ? (channelTokens / totalChannelTokens) * 100
-                          : 0
-                        return (
-                          <TableRow key={channel.channel_id}>
-                            <TableCell>
-                              #{channel.channel_id} {channel.channel_name}
-                              {channel.billing_group
-                                ? ` · ${channel.billing_group}`
-                                : ''}
-                            </TableCell>
-                            <TableCell>
-                              {channel.billing_group || '-'}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channel.requests}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channel.input_tokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {inputTotalTokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channel.output_tokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channel.cache_read_tokens.toLocaleString()} /{' '}
-                              {channel.cache_write_tokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channelTokens.toLocaleString()}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {share.toFixed(2)}%
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {pricing ? pricing.groupRatio.toFixed(2) : '-'}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              {channel.cost_factor.toFixed(2)}
-                            </TableCell>
-                            <TableCell className='tabular-nums'>
-                              $
-                              {pricing
-                                ? calculateUserCharge(channel, pricing).toFixed(
-                                    6
-                                  )
-                                : '0.000000'}
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          {channelStats.length > 0 && (
-            <div className='grid gap-4 sm:grid-cols-3'>
-              <Metric
-                label={t('Channel')}
-                value={String(channelStats.length)}
+            <TabsContent value='server'>
+              <AgentPanel
+                disabled={!canRun}
+                mode='managed'
+                request={agentRequest}
               />
-              <Metric
-                label={t('Billing groups')}
-                value={String(billingGroupsUsed.size)}
-              />
-            </div>
-          )}
-          <p className='text-muted-foreground text-xs'>
-            {pricing
-              ? t(
-                  'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
-                )
-              : t('Pricing is unavailable until the test starts.')}
-          </p>
+            </TabsContent>
 
-          <div className='grid gap-4 lg:grid-cols-3'>
-            <Card size='sm'>
-              <CardHeader>
-                <CardTitle>{t('HTTP status')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CounterList
-                  counters={stats.statusCodes}
-                  emptyLabel={t('No requests sent yet')}
-                />
-              </CardContent>
-            </Card>
-            <Card size='sm'>
-              <CardHeader>
-                <CardTitle>{t('Error codes')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CounterList
-                  counters={stats.errorCodes}
-                  emptyLabel={t('No errors')}
-                />
-              </CardContent>
-            </Card>
-            <Card size='sm'>
-              <CardHeader>
-                <CardTitle>{t('Key usage')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CounterList
-                  counters={stats.keyCounts}
-                  emptyLabel={t('No requests sent yet')}
-                />
-              </CardContent>
-            </Card>
-          </div>
+            <TabsContent value='local'>
+              <AgentPanel
+                disabled={!canRun}
+                mode='local'
+                request={agentRequest}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
