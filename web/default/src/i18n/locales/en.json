@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID (Default)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?",
     "Please select at least one model billing group": "Please select at least one model billing group",
-    "Automatic probe": "Automatic probe"
+    "Automatic probe": "Automatic probe",
+    "Error self-check guide": "Error self-check guide",
+    "Common error directory": "Common error directory",
+    "Common errors": "Common errors",
+    "Official OpenAI errors": "Official OpenAI errors",
+    "User-side errors": "User-side errors",
+    "Relay errors": "Relay errors",
+    "Other errors": "Other errors",
+    "Error index": "Error index",
+    "The response stream was interrupted unexpectedly.": "The response stream was interrupted unexpectedly.",
+    "Default retries": "Default retries",
+    "Retries for {{group}}": "Retries for {{group}}",
+    "Number of additional attempts in this group before moving to the next one.": "Number of additional attempts in this group before moving to the next one.",
+    "Select one or more groups and set the default retry count for each group.": "Select one or more groups and set the default retry count for each group.",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group."
   }
 }

@@ -145,8 +145,6 @@ func InitOptionMap() {
 	common.OptionMap["TurnstileSiteKey"] = ""
 	common.OptionMap["TurnstileSecretKey"] = ""
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
-	common.OptionMap["QuotaForInviter"] = strconv.Itoa(common.QuotaForInviter)
-	common.OptionMap["QuotaForInvitee"] = strconv.Itoa(common.QuotaForInvitee)
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -199,51 +197,6 @@ func InitOptionMap() {
 
 	common.OptionMapRWMutex.Unlock()
 	loadOptionsFromDatabase()
-	migrateLegacyAffiliateRewardOptions()
-	migrateAffiliateCampaignPresentationOptions()
-}
-
-func migrateLegacyAffiliateRewardOptions() {
-	var options []Option
-	if err := DB.Where("key IN ?", []string{
-		"affiliate_setting.inviter_reward_quota",
-		"affiliate_setting.invitee_reward_quota",
-	}).Find(&options).Error; err != nil || len(options) == 2 {
-		return
-	}
-	values := map[string]string{
-		"QuotaForInviter": "0",
-		"QuotaForInvitee": "0",
-	}
-	found := make(map[string]bool, len(options))
-	for _, option := range options {
-		found[option.Key] = true
-	}
-	if !found["affiliate_setting.inviter_reward_quota"] {
-		values["affiliate_setting.inviter_reward_quota"] = strconv.Itoa(common.QuotaForInviter)
-	}
-	if !found["affiliate_setting.invitee_reward_quota"] {
-		values["affiliate_setting.invitee_reward_quota"] = strconv.Itoa(common.QuotaForInvitee)
-	}
-	if err := UpdateOptionsBulk(values); err != nil {
-		common.SysError("failed to migrate legacy affiliate rewards: " + err.Error())
-	}
-}
-
-func migrateAffiliateCampaignPresentationOptions() {
-	values := make(map[string]string)
-	var rewardRate Option
-	if err := DB.Where("key = ?", "affiliate_setting.reward_rate_bps").First(&rewardRate).Error; err == nil && strings.TrimSpace(rewardRate.Value) == "500" {
-		values[rewardRate.Key] = "2500"
-	}
-	var about Option
-	if err := DB.Where("key = ?", "About").First(&about).Error; err == nil &&
-		strings.Contains(about.Value, "1223288505") && !strings.Contains(about.Value, "3812160108") {
-		values[about.Key] = strings.Replace(about.Value, "1223288505", "3812160108、1223288505", 1)
-	}
-	if err := UpdateOptionsBulk(values); err != nil {
-		common.SysError("failed to migrate affiliate campaign presentation: " + err.Error())
-	}
 }
 
 func loadOptionsFromDatabase() {
@@ -563,10 +516,6 @@ func updateOptionMap(key string, value string) (err error) {
 		common.TurnstileSecretKey = value
 	case "QuotaForNewUser":
 		common.QuotaForNewUser, _ = strconv.Atoi(value)
-	case "QuotaForInviter":
-		common.QuotaForInviter, _ = strconv.Atoi(value)
-	case "QuotaForInvitee":
-		common.QuotaForInvitee, _ = strconv.Atoi(value)
 	case "QuotaRemindThreshold":
 		common.QuotaRemindThreshold, _ = strconv.Atoi(value)
 	case "PreConsumedQuota":

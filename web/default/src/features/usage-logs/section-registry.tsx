@@ -24,7 +24,12 @@ import { createSectionRegistry } from '@/features/system-settings/utils/section-
 const USAGE_LOGS_SECTIONS = [
   {
     id: 'common',
-    titleKey: 'Common Logs',
+    titleKey: 'Usage Logs',
+    build: () => null, // Content is rendered directly in the page component
+  },
+  {
+    id: 'call',
+    titleKey: '调用日志',
     build: () => null, // Content is rendered directly in the page component
   },
   {

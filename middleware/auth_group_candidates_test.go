@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,4 +59,35 @@ func TestSetupContextForTokenAddsOrderedGroupCandidates(t *testing.T) {
 	assert.Equal(t, []string{"default", "vip"}, common.GetContextKeyStringSlice(ctx, constant.ContextKeyTokenGroupCandidates))
 	assert.Equal(t, "auto", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroup))
 	assert.True(t, common.GetContextKeyBool(ctx, constant.ContextKeyTokenCrossGroupRetry))
+	retryTimes, ok := common.GetContextKeyType[map[string]int](ctx, constant.ContextKeyTokenGroupRetryTimes)
+	require.True(t, ok)
+	assert.Equal(t, map[string]int{
+		"default": service.DefaultTokenGroupRetryTimes,
+		"vip":     service.DefaultTokenGroupRetryTimes,
+	}, retryTimes)
+}
+
+func TestSetupContextForTokenUsesConfiguredGroupRetryTimes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	token := &model.Token{Id: 10, UserId: 3, Group: "auto", CrossGroupRetry: true}
+	require.NoError(t, token.SetGroupCandidates([]string{"default", "vip"}))
+	require.NoError(t, token.SetGroupRetryTimes(map[string]int{"default": 0, "vip": 5}))
+
+	require.NoError(t, SetupContextForToken(ctx, token))
+	retryTimes, ok := common.GetContextKeyType[map[string]int](ctx, constant.ContextKeyTokenGroupRetryTimes)
+	require.True(t, ok)
+	assert.Equal(t, map[string]int{"default": 0, "vip": 5}, retryTimes)
+}
+
+func TestSetupContextForTokenRejectsInvalidGroupRetryTimes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest("GET", "/v1/models", nil)
+	token := &model.Token{Id: 11, UserId: 3, Group: "default"}
+	require.NoError(t, token.SetGroupRetryTimes(map[string]int{"default": -1}))
+
+	require.Error(t, SetupContextForToken(ctx, token))
 }

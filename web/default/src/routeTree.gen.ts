@@ -22,6 +22,7 @@ import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as AuthenticatedGroupManagementRouteImport } from './routes/_authenticated/group-management'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
+import { Route as AuthenticatedAdminConsoleRouteImport } from './routes/_authenticated/admin-console'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -40,6 +41,7 @@ import { Route as DocsReferralRewardsIndexRouteImport } from './routes/docs/refe
 import { Route as DocsQuickStartIndexRouteImport } from './routes/docs/quick-start/index'
 import { Route as DocsModelPricingIndexRouteImport } from './routes/docs/model-pricing/index'
 import { Route as DocsIntegrationsIndexRouteImport } from './routes/docs/integrations/index'
+import { Route as DocsErrorSelfCheckIndexRouteImport } from './routes/docs/error-self-check/index'
 import { Route as DocsAiModelIndexRouteImport } from './routes/docs/ai-model/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
@@ -152,6 +154,12 @@ const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
   path: '/chat2link',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAdminConsoleRoute =
+  AuthenticatedAdminConsoleRouteImport.update({
+    id: '/admin-console',
+    path: '/admin-console',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const errors503Route = errors503RouteImport.update({
   id: '/(errors)/503',
   path: '/503',
@@ -242,6 +250,11 @@ const DocsModelPricingIndexRoute = DocsModelPricingIndexRouteImport.update({
 const DocsIntegrationsIndexRoute = DocsIntegrationsIndexRouteImport.update({
   id: '/docs/integrations/',
   path: '/docs/integrations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsErrorSelfCheckIndexRoute = DocsErrorSelfCheckIndexRouteImport.update({
+  id: '/docs/error-self-check/',
+  path: '/docs/error-self-check/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsAiModelIndexRoute = DocsAiModelIndexRouteImport.update({
@@ -530,6 +543,7 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/admin-console': typeof AuthenticatedAdminConsoleRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -560,6 +574,7 @@ export interface FileRoutesByFullPath {
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
   '/docs/quick-start/': typeof DocsQuickStartIndexRoute
@@ -607,6 +622,7 @@ export interface FileRoutesByTo {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/admin-console': typeof AuthenticatedAdminConsoleRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -637,6 +653,7 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersIndexRoute
   '/wallet': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model': typeof DocsAiModelIndexRoute
+  '/docs/error-self-check': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing': typeof DocsModelPricingIndexRoute
   '/docs/quick-start': typeof DocsQuickStartIndexRoute
@@ -688,6 +705,7 @@ export interface FileRoutesById {
   '/(errors)/404': typeof errors404Route
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
+  '/_authenticated/admin-console': typeof AuthenticatedAdminConsoleRoute
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/_authenticated/group-management': typeof AuthenticatedGroupManagementRoute
   '/oauth/$provider': typeof OauthProviderRoute
@@ -718,6 +736,7 @@ export interface FileRoutesById {
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
   '/docs/quick-start/': typeof DocsQuickStartIndexRoute
@@ -768,6 +787,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/admin-console'
     | '/chat2link'
     | '/group-management'
     | '/oauth/$provider'
@@ -798,6 +818,7 @@ export interface FileRouteTypes {
     | '/users/'
     | '/wallet/'
     | '/docs/ai-model/'
+    | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
     | '/docs/quick-start/'
@@ -845,6 +866,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/admin-console'
     | '/chat2link'
     | '/group-management'
     | '/oauth/$provider'
@@ -875,6 +897,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/wallet'
     | '/docs/ai-model'
+    | '/docs/error-self-check'
     | '/docs/integrations'
     | '/docs/model-pricing'
     | '/docs/quick-start'
@@ -925,6 +948,7 @@ export interface FileRouteTypes {
     | '/(errors)/404'
     | '/(errors)/500'
     | '/(errors)/503'
+    | '/_authenticated/admin-console'
     | '/_authenticated/chat2link'
     | '/_authenticated/group-management'
     | '/oauth/$provider'
@@ -955,6 +979,7 @@ export interface FileRouteTypes {
     | '/_authenticated/users/'
     | '/_authenticated/wallet/'
     | '/docs/ai-model/'
+    | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
     | '/docs/quick-start/'
@@ -1005,6 +1030,7 @@ export interface RootRouteChildren {
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   DocsAiModelIndexRoute: typeof DocsAiModelIndexRoute
+  DocsErrorSelfCheckIndexRoute: typeof DocsErrorSelfCheckIndexRoute
   DocsIntegrationsIndexRoute: typeof DocsIntegrationsIndexRoute
   DocsModelPricingIndexRoute: typeof DocsModelPricingIndexRoute
   DocsQuickStartIndexRoute: typeof DocsQuickStartIndexRoute
@@ -1114,6 +1140,13 @@ declare module '@tanstack/react-router' {
       path: '/chat2link'
       fullPath: '/chat2link'
       preLoaderRoute: typeof AuthenticatedChat2linkRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin-console': {
+      id: '/_authenticated/admin-console'
+      path: '/admin-console'
+      fullPath: '/admin-console'
+      preLoaderRoute: typeof AuthenticatedAdminConsoleRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/(errors)/503': {
@@ -1240,6 +1273,13 @@ declare module '@tanstack/react-router' {
       path: '/docs/integrations'
       fullPath: '/docs/integrations/'
       preLoaderRoute: typeof DocsIntegrationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/error-self-check/': {
+      id: '/docs/error-self-check/'
+      path: '/docs/error-self-check'
+      fullPath: '/docs/error-self-check/'
+      preLoaderRoute: typeof DocsErrorSelfCheckIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/ai-model/': {
@@ -1659,6 +1699,7 @@ const AuthenticatedSystemSettingsRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSystemSettingsRouteRoute: typeof AuthenticatedSystemSettingsRouteRouteWithChildren
+  AuthenticatedAdminConsoleRoute: typeof AuthenticatedAdminConsoleRoute
   AuthenticatedChat2linkRoute: typeof AuthenticatedChat2linkRoute
   AuthenticatedGroupManagementRoute: typeof AuthenticatedGroupManagementRoute
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
@@ -1685,6 +1726,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSystemSettingsRouteRoute:
     AuthenticatedSystemSettingsRouteRouteWithChildren,
+  AuthenticatedAdminConsoleRoute: AuthenticatedAdminConsoleRoute,
   AuthenticatedChat2linkRoute: AuthenticatedChat2linkRoute,
   AuthenticatedGroupManagementRoute: AuthenticatedGroupManagementRoute,
   AuthenticatedChatChatIdRoute: AuthenticatedChatChatIdRoute,
@@ -1731,6 +1773,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   DocsAiModelIndexRoute: DocsAiModelIndexRoute,
+  DocsErrorSelfCheckIndexRoute: DocsErrorSelfCheckIndexRoute,
   DocsIntegrationsIndexRoute: DocsIntegrationsIndexRoute,
   DocsModelPricingIndexRoute: DocsModelPricingIndexRoute,
   DocsQuickStartIndexRoute: DocsQuickStartIndexRoute,

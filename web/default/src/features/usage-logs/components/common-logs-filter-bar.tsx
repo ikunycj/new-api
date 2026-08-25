@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQueryClient, useIsFetching } from '@tanstack/react-query'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+import { getLogFilterOptions } from '../api'
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
 import { getDefaultTimeRange } from '../lib/utils'
@@ -49,9 +50,11 @@ import {
   LogsFilterInput,
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
-import { useUsageLogsContext } from './usage-logs-provider'
+import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
+const ALL_GROUPS_VALUE = '__all_groups__'
+const ALL_CHANNELS_VALUE = '__all_channels__'
 
 type LogTypeValue = (typeof LOG_TYPE_FILTERS)[number]['value']
 const logTypeValueSet = new Set<string>(
@@ -81,6 +84,7 @@ function buildSearchSourceKey(values: {
   startTime?: unknown
   endTime?: unknown
   channel?: unknown
+  group?: unknown
   keyword?: unknown
   type?: unknown
 }) {
@@ -88,6 +92,7 @@ function buildSearchSourceKey(values: {
     values.startTime,
     values.endTime,
     values.channel,
+    values.group,
     values.keyword,
     Array.isArray(values.type) ? values.type.join(',') : values.type,
   ]
@@ -106,7 +111,11 @@ export function CommonLogsFilterBar<TData>(
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const searchParams = route.useSearch()
+  const routeParams = route.useParams()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
+  const { isAdminView } = useLogsViewScope()
+  const showAdminFilters = isAdminView && routeParams.section === 'call'
+  const targetSection = routeParams.section === 'call' ? 'call' : 'common'
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
 
   const searchState = useMemo<CommonLogDraft>(() => {
@@ -115,6 +124,7 @@ export function CommonLogsFilterBar<TData>(
       startTime: searchParams.startTime,
       endTime: searchParams.endTime,
       channel: searchParams.channel,
+      group: searchParams.group,
       keyword: searchParams.keyword,
       type: searchParams.type,
     }
@@ -124,6 +134,7 @@ export function CommonLogsFilterBar<TData>(
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
       channel: searchParams.channel || undefined,
+      group: searchParams.group || undefined,
       keyword: searchParams.keyword || undefined,
     }
     return {
@@ -135,6 +146,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.startTime,
     searchParams.endTime,
     searchParams.channel,
+    searchParams.group,
     searchParams.keyword,
     searchParams.type,
   ])
@@ -143,6 +155,12 @@ export function CommonLogsFilterBar<TData>(
     draft.sourceKey === searchState.sourceKey ? draft : searchState
   const filters = activeDraft.filters
   const logType = activeDraft.logType
+  const { data: filterOptions } = useQuery({
+    queryKey: ['usage-logs-filter-options'],
+    queryFn: getLogFilterOptions,
+    enabled: showAdminFilters,
+    staleTime: 5 * 60_000,
+  })
 
   const handleChange = useCallback(
     (field: keyof CommonLogFilters, value: Date | string | undefined) => {
@@ -163,7 +181,7 @@ export function CommonLogsFilterBar<TData>(
     const filterParams = buildSearchParams(filters, 'common')
     navigate({
       to: '/usage-logs/$section',
-      params: { section: 'common' },
+      params: { section: targetSection },
       search: {
         ...filterParams,
         type: [logType],
@@ -172,7 +190,8 @@ export function CommonLogsFilterBar<TData>(
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [filters, logType, navigate, queryClient])
+    queryClient.invalidateQueries({ queryKey: ['call-logs-analytics'] })
+  }, [filters, logType, navigate, queryClient, targetSection])
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
@@ -190,7 +209,7 @@ export function CommonLogsFilterBar<TData>(
 
     navigate({
       to: '/usage-logs/$section',
-      params: { section: 'common' },
+      params: { section: targetSection },
       search: {
         page: 1,
         ...resetSearch,
@@ -198,7 +217,8 @@ export function CommonLogsFilterBar<TData>(
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [navigate, queryClient])
+    queryClient.invalidateQueries({ queryKey: ['call-logs-analytics'] })
+  }, [navigate, queryClient, targetSection])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -208,7 +228,8 @@ export function CommonLogsFilterBar<TData>(
   )
 
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
-  const hasAdditionalFilters = !!filters.keyword || hasTypeFilter
+  const hasAdditionalFilters =
+    !!filters.keyword || !!filters.group || !!filters.channel || hasTypeFilter
   const logTypeItems = useMemo(
     () =>
       LOG_TYPE_FILTERS.map((type) => ({
@@ -219,6 +240,28 @@ export function CommonLogsFilterBar<TData>(
   )
   const logTypeLabel =
     logTypeItems.find((type) => type.value === logType)?.label ?? t('All Types')
+  const groupItems = useMemo(
+    () => [
+      { value: ALL_GROUPS_VALUE, label: '全部定价分组' },
+      ...(filterOptions?.data?.groups ?? []).map((group) => ({
+        value: group,
+        label: group,
+      })),
+    ],
+    [filterOptions?.data?.groups]
+  )
+  const channelItems = useMemo(
+    () => [
+      { value: ALL_CHANNELS_VALUE, label: '全部渠道' },
+      ...(filterOptions?.data?.channels ?? []).map((channel) => ({
+        value: String(channel.id),
+        label: channel.name
+          ? `${channel.name} #${channel.id}`
+          : `#${channel.id}`,
+      })),
+    ],
+    [filterOptions?.data?.channels]
+  )
 
   const statsBar = (
     <div className='flex flex-wrap items-center gap-2'>
@@ -247,7 +290,7 @@ export function CommonLogsFilterBar<TData>(
   )
 
   const dateRangeFilter = (
-    <LogsFilterField wide>
+    <LogsFilterField wide={!showAdminFilters}>
       <CompactDateTimeRangePicker
         start={filters.startTime}
         end={filters.endTime}
@@ -258,6 +301,60 @@ export function CommonLogsFilterBar<TData>(
       />
     </LogsFilterField>
   )
+  const groupFilter = showAdminFilters ? (
+    <LogsFilterField>
+      <Select
+        items={groupItems}
+        value={filters.group || ALL_GROUPS_VALUE}
+        onValueChange={(value) =>
+          handleChange(
+            'group',
+            value === null || value === ALL_GROUPS_VALUE ? undefined : value
+          )
+        }
+      >
+        <SelectTrigger aria-label='定价分组'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {groupItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </LogsFilterField>
+  ) : null
+  const channelFilter = showAdminFilters ? (
+    <LogsFilterField>
+      <Select
+        items={channelItems}
+        value={filters.channel || ALL_CHANNELS_VALUE}
+        onValueChange={(value) =>
+          handleChange(
+            'channel',
+            value === null || value === ALL_CHANNELS_VALUE ? undefined : value
+          )
+        }
+      >
+        <SelectTrigger aria-label='渠道'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {channelItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </LogsFilterField>
+  ) : null
   const keywordFilter = (
     <LogsFilterField>
       <LogsFilterInput
@@ -310,12 +407,14 @@ export function CommonLogsFilterBar<TData>(
   return (
     <LogsFilterToolbar
       table={props.table}
-      stats={statsBar}
+      stats={showAdminFilters ? undefined : statsBar}
       actionStart={sensitiveToggle}
       primaryFilters={
         <>
           {dateRangeFilter}
           {keywordFilter}
+          {groupFilter}
+          {channelFilter}
           {typeFilter}
         </>
       }
@@ -323,11 +422,15 @@ export function CommonLogsFilterBar<TData>(
       mobileFilters={
         <>
           {keywordFilter}
+          {groupFilter}
+          {channelFilter}
           {typeFilter}
         </>
       }
       mobileFilterCount={
-        [filters.keyword, hasTypeFilter].filter(Boolean).length
+        [filters.keyword, filters.group, filters.channel, hasTypeFilter].filter(
+          Boolean
+        ).length
       }
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}

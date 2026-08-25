@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID (mặc định)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?",
     "Please select at least one model billing group": "Vui lòng chọn ít nhất một nhóm tính phí mô hình",
-    "Automatic probe": "Kiểm tra tự động"
+    "Automatic probe": "Kiểm tra tự động",
+    "Error self-check guide": "Hướng dẫn tự kiểm tra lỗi",
+    "Common error directory": "Danh mục lỗi thường gặp",
+    "Common errors": "Lỗi thường gặp",
+    "Official OpenAI errors": "Lỗi chính thức từ OpenAI",
+    "User-side errors": "Lỗi phía người dùng",
+    "Relay errors": "Lỗi chuyển tiếp",
+    "Other errors": "Lỗi khác",
+    "Error index": "Chỉ mục lỗi",
+    "The response stream was interrupted unexpectedly.": "Luồng phản hồi bị gián đoạn đột ngột.",
+    "Default retries": "Số lần thử lại mặc định",
+    "Retries for {{group}}": "Số lần thử lại cho {{group}}",
+    "Number of additional attempts in this group before moving to the next one.": "Số lần thử thêm trong nhóm này trước khi chuyển sang nhóm tiếp theo.",
+    "Select one or more groups and set the default retry count for each group.": "Chọn một hoặc nhiều nhóm và đặt số lần thử lại mặc định cho từng nhóm.",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "Yêu cầu sử dụng các nhóm đã chọn theo thứ tự; sau khi một nhóm dùng hết số lần thử lại, yêu cầu có thể chuyển sang nhóm tiếp theo."
   }
 }

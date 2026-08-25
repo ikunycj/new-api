@@ -622,7 +622,10 @@ export function OverviewDashboard() {
     [isAdmin, quickActions]
   )
 
+  const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const stepStates = useMemo<StartStepState[]>(() => {
+    if (!setupStatusReady) return startSteps.map(() => 'pending')
+
     const currentStepIndex = startSteps.findIndex(
       (step, index) => !step.completed && !skippedSteps.includes(index)
     )
@@ -632,12 +635,11 @@ export function OverviewDashboard() {
       if (index === currentStepIndex) return 'current'
       return 'pending'
     })
-  }, [skippedSteps, startSteps])
+  }, [setupStatusReady, skippedSteps, startSteps])
   const completedStepCount = stepStates.filter(
     (state) => state === 'completed'
   ).length
   const setupComplete = completedStepCount === stepStates.length
-  const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const onboardingRequired = user?.onboarding_required === true
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)

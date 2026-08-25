@@ -51,9 +51,9 @@ const CODEX_VERIFY_STEPS = [
 export function DocsCodex() {
   const baseUrl = useDocsBaseUrl()
   const codexConfig = `model = "gpt-5.6-sol"
-model_provider = "alltokenapi"
+model_provider = "OpenAI"
 
-[model_providers.alltokenapi]
+[model_providers.OpenAI]
 name = "All Token API"
 base_url = "${baseUrl}/v1"
 env_key = "ALLTOKEN_API_KEY"

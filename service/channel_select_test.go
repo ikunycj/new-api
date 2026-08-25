@@ -109,7 +109,7 @@ func TestCrossGroupRetryRequiresTokenPermission(t *testing.T) {
 	assert.False(t, param.AdvanceRetry())
 }
 
-func TestCrossGroupRetryReconsidersEarlierGroups(t *testing.T) {
+func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	channels := setupChannelRoute(t)
 	weight := uint(100)
 	cheaperChannel := model.Channel{
@@ -141,8 +141,8 @@ func TestCrossGroupRetryReconsidersEarlierGroups(t *testing.T) {
 	first, firstGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, first)
-	assert.Equal(t, cheaperChannel.Id, first.Id)
-	assert.Equal(t, "economy", firstGroup)
+	assert.Equal(t, channels[0].Id, first.Id)
+	assert.Equal(t, "claude", firstGroup)
 
 	param.MarkChannelAttempted(first.Id)
 	param.HandleChannelFailure(first.Id, "switch_channel")
@@ -151,8 +151,18 @@ func TestCrossGroupRetryReconsidersEarlierGroups(t *testing.T) {
 	second, secondGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, second)
-	assert.Equal(t, channels[0].Id, second.Id)
+	assert.Equal(t, channels[1].Id, second.Id)
 	assert.Equal(t, "claude", secondGroup)
+
+	param.MarkChannelAttempted(second.Id)
+	param.HandleChannelFailure(second.Id, "switch_channel")
+	require.True(t, param.AdvanceRetry())
+
+	third, thirdGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, third)
+	assert.Equal(t, cheaperChannel.Id, third.Id)
+	assert.Equal(t, "economy", thirdGroup)
 }
 
 func TestConfiguredRouteWithoutMemoryCacheHonorsRoutePriority(t *testing.T) {
@@ -248,6 +258,32 @@ func TestMarkChannelAttemptedInitializesDefaultBudget(t *testing.T) {
 	assert.NotPanics(t, func() { param.MarkChannelAttempted(92001) })
 	assert.Equal(t, 1, param.attemptCounts[92001])
 	assert.Equal(t, model.DefaultChannelUpstreamMaxRetries+1, param.channelLimits[92001])
+}
+
+func TestRetryParamTracksIndependentGroupRetryBudgets(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{
+		"openai": 0,
+		"claude": 2,
+	})
+	param := &RetryParam{
+		Ctx:           ctx,
+		TokenGroup:    "auto",
+		channelGroups: map[int]string{1: "openai", 2: "claude"},
+		channelLimits: map[int]int{1: 10, 2: 10},
+	}
+
+	assert.True(t, param.groupHasBudget("openai"))
+	assert.True(t, param.groupHasBudget("claude"))
+	param.MarkChannelAttempted(1)
+	assert.False(t, param.groupHasBudget("openai"))
+	assert.True(t, param.groupHasBudget("claude"))
+
+	param.MarkChannelAttempted(2)
+	param.MarkChannelAttempted(2)
+	assert.True(t, param.groupHasBudget("claude"))
+	param.MarkChannelAttempted(2)
+	assert.False(t, param.groupHasBudget("claude"))
 }
 
 func TestUnconfiguredRouteHonorsChannelRetryBudget(t *testing.T) {
@@ -348,11 +384,26 @@ func TestDynamicCandidateRanking(t *testing.T) {
 	t.Run("group-scoped force does not overtake an earlier group", func(t *testing.T) {
 		laterForced := *base
 		laterForced.Id = 2
+		laterForced.PriceMultiplier = 0.1
+		laterForced.PreviousDayProbeSuccessRate = 100
 		laterForced.ForcePriority = &force
 		laterForced.ForcePriorityScope = model.ChannelForcePriorityScopeGroup
 		assert.True(t, dynamicCandidateLess(
 			dynamicChannelCandidate{channel: base, groupIndex: 0},
 			dynamicChannelCandidate{channel: &laterForced, groupIndex: 1},
+		))
+	})
+
+	t.Run("group-scoped force wins before price within one group", func(t *testing.T) {
+		forced := *base
+		forced.Id = 2
+		forced.PriceMultiplier = 100
+		forced.PreviousDayProbeSuccessRate = 1
+		forced.ForcePriority = &force
+		forced.ForcePriorityScope = model.ChannelForcePriorityScopeGroup
+		assert.True(t, dynamicCandidateLess(
+			dynamicChannelCandidate{channel: &forced, groupIndex: 0},
+			dynamicChannelCandidate{channel: base, groupIndex: 0},
 		))
 	})
 }

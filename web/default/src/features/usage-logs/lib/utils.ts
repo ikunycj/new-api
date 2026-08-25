@@ -95,7 +95,7 @@ function timestampToSeconds(ms: number): number {
  * Build time range parameters with default values
  * Shared logic for all log types
  */
-function buildTimeRangeParams(
+export function buildTimeRangeParams(
   searchParams: Record<string, unknown>,
   useMilliseconds: boolean
 ): { start_timestamp?: number; end_timestamp?: number } {

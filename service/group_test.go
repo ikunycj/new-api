@@ -57,3 +57,23 @@ func TestAccountGroupDoesNotBecomePricingGroup(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "无权访问")
 }
+
+func TestNormalizeTokenGroupRetryTimes(t *testing.T) {
+	normalized, err := NormalizeTokenGroupRetryTimes(
+		[]string{"openai-low", "claude-low"},
+		map[string]int{"openai-low": 0, "unused": 7},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int{
+		"openai-low": 0,
+		"claude-low": DefaultTokenGroupRetryTimes,
+	}, normalized)
+
+	for _, value := range []int{-1, MaxTokenGroupRetryTimes + 1} {
+		_, err = NormalizeTokenGroupRetryTimes(
+			[]string{"openai-low"},
+			map[string]int{"openai-low": value},
+		)
+		require.Error(t, err)
+	}
+}

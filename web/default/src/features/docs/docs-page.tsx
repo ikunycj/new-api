@@ -166,6 +166,10 @@ const developmentDocsLoaders = import.meta.env.DEV
         import('./referral-rewards').then((module) => ({
           default: module.DocsReferralRewards,
         })),
+      '/docs/error-self-check': () =>
+        import('./error-self-check').then((module) => ({
+          default: module.DocsErrorSelfCheck,
+        })),
       '/docs/tools/cc-switch': () =>
         import('./cc-switch-guide').then((module) => ({
           default: module.DocsCcSwitch,

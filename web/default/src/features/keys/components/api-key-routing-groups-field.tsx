@@ -55,7 +55,11 @@ import {
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { MAX_GROUP_CANDIDATES } from '../lib'
+import {
+  DEFAULT_GROUP_RETRY_TIMES,
+  MAX_GROUP_CANDIDATES,
+  MAX_GROUP_RETRY_TIMES,
+} from '../lib'
 
 export type ApiKeyRoutingGroupOption = {
   value: string
@@ -67,8 +71,10 @@ export type ApiKeyRoutingGroupOption = {
 type ApiKeyRoutingGroupsFieldProps = {
   isLoadingModels: boolean
   modelsByGroup: Record<string, string[]>
+  onRetryTimesChange: (group: string, value: number) => void
   onValueChange: (value: string[]) => void
   options: ApiKeyRoutingGroupOption[]
+  retryTimes: Record<string, number>
   value: string[]
 }
 
@@ -90,7 +96,9 @@ type RoutingGroupRowProps = {
   onMove: (index: number, direction: -1 | 1) => void
   onMoveTo: (group: string, targetIndex: number) => void
   onRemove: (group: string) => void
+  onRetryTimesChange: (group: string, value: number) => void
   option?: ApiKeyRoutingGroupOption
+  retryTimes: Record<string, number>
   total: number
 }
 
@@ -101,6 +109,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
   const groupLabel = props.option?.label ?? props.group
   const canReorder = props.total > 1
   const orderLabel = t('Order for {{group}}', { group: groupLabel })
+  const retryLabel = t('Retries for {{group}}', { group: groupLabel })
 
   return (
     <Reorder.Item
@@ -117,7 +126,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
           '0 18px 36px rgb(0 0 0 / 0.2), 0 0 0 3px color-mix(in oklch, var(--primary) 35%, transparent)',
       }}
       className={cn(
-        'bg-muted/30 relative grid min-h-16 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 transition-[border-color,background-color,box-shadow] sm:gap-3 sm:px-3',
+        'bg-muted/30 relative grid min-h-16 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 transition-[border-color,background-color,box-shadow] sm:grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] sm:gap-3 sm:px-3',
         isDragging &&
           'border-primary bg-background ring-primary/30 cursor-grabbing shadow-xl ring-2'
       )}
@@ -200,6 +209,43 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
         </div>
       </div>
 
+      <div className='col-start-2 col-end-4 row-start-2 flex shrink-0 items-center justify-end gap-1.5 sm:col-auto sm:row-auto sm:justify-start'>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className='text-muted-foreground cursor-help text-xs' />
+            }
+          >
+            {t('Default retries')}
+          </TooltipTrigger>
+          <TooltipContent>
+            {t(
+              'Number of additional attempts in this group before moving to the next one.'
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <Input
+          type='number'
+          min={0}
+          max={MAX_GROUP_RETRY_TIMES}
+          step={1}
+          value={props.retryTimes[props.group] ?? DEFAULT_GROUP_RETRY_TIMES}
+          aria-label={retryLabel}
+          title={retryLabel}
+          className='h-9 w-16 px-1 text-center tabular-nums sm:h-8 sm:w-14'
+          onChange={(event) => {
+            const value = Number.parseInt(event.target.value, 10)
+            if (
+              Number.isInteger(value) &&
+              value >= 0 &&
+              value <= MAX_GROUP_RETRY_TIMES
+            ) {
+              props.onRetryTimesChange(props.group, value)
+            }
+          }}
+        />
+      </div>
+
       <Tooltip>
         <TooltipTrigger
           render={
@@ -207,7 +253,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
               type='button'
               variant='ghost'
               size='icon-sm'
-              className='size-10 sm:size-7'
+              className='col-start-4 row-start-1 size-10 sm:col-auto sm:row-auto sm:size-7'
               aria-label={t('Remove {{group}}', { group: groupLabel })}
               onClick={() => props.onRemove(props.group)}
             />
@@ -429,6 +475,8 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
             onMove={moveGroup}
             onMoveTo={moveGroupTo}
             onRemove={removeGroup}
+            onRetryTimesChange={props.onRetryTimesChange}
+            retryTimes={props.retryTimes}
           />
         ))}
       </Reorder.Group>

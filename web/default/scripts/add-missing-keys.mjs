@@ -5,8 +5,26 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Error self-check guide': 'Error self-check guide',
+    'Common error directory': 'Common error directory',
+    'Common errors': 'Common errors',
+    'Official OpenAI errors': 'Official OpenAI errors',
+    'User-side errors': 'User-side errors',
+    'Relay errors': 'Relay errors',
+    'Other errors': 'Other errors',
+    'Error index': 'Error index',
+    'The response stream was interrupted unexpectedly.':
+      'The response stream was interrupted unexpectedly.',
     'Please select at least one model billing group':
       'Please select at least one model billing group',
+    'Default retries': 'Default retries',
+    'Retries for {{group}}': 'Retries for {{group}}',
+    'Number of additional attempts in this group before moving to the next one.':
+      'Number of additional attempts in this group before moving to the next one.',
+    'Select one or more groups and set the default retry count for each group.':
+      'Select one or more groups and set the default retry count for each group.',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.',
     'Cost factor': 'Cost factor',
     Order: 'Order',
     '24 hours': '24 hours',
@@ -92,8 +110,25 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Error self-check guide': '错误自查指南',
+    'Common error directory': '常见错误目录',
+    'Common errors': '常见错误',
+    'Official OpenAI errors': 'OpenAI 官方错误',
+    'User-side errors': '用户自身错误',
+    'Relay errors': '中转站错误',
+    'Other errors': '其他错误',
+    'Error index': '错误索引',
+    'The response stream was interrupted unexpectedly.': '响应流意外中断。',
     'Please select at least one model billing group':
       '请选择至少一个模型计费分组',
+    'Default retries': '默认重试次数',
+    'Retries for {{group}}': '{{group}} 的重试次数',
+    'Number of additional attempts in this group before moving to the next one.':
+      '切换到下一分组前，在此分组内追加尝试的次数。',
+    'Select one or more groups and set the default retry count for each group.':
+      '选择一个或多个分组，并分别设置每个分组的默认重试次数。',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      '请求会按顺序使用所选分组；当前分组达到重试次数后，可继续尝试下一个分组。',
     'Cost factor': '成本系数',
     Order: '顺序',
     '24 hours': '24 小时',
@@ -178,8 +213,26 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Error self-check guide': 'Guide d’auto-diagnostic des erreurs',
+    'Common error directory': 'Répertoire des erreurs courantes',
+    'Common errors': 'Erreurs courantes',
+    'Official OpenAI errors': 'Erreurs officielles d’OpenAI',
+    'User-side errors': 'Erreurs côté utilisateur',
+    'Relay errors': 'Erreurs du relais',
+    'Other errors': 'Autres erreurs',
+    'Error index': 'Index des erreurs',
+    'The response stream was interrupted unexpectedly.':
+      'Le flux de réponse a été interrompu de manière inattendue.',
     'Please select at least one model billing group':
       'Veuillez sélectionner au moins un groupe de facturation de modèles',
+    'Default retries': 'Relances par défaut',
+    'Retries for {{group}}': 'Relances pour {{group}}',
+    'Number of additional attempts in this group before moving to the next one.':
+      'Nombre de tentatives supplémentaires dans ce groupe avant de passer au suivant.',
+    'Select one or more groups and set the default retry count for each group.':
+      'Sélectionnez un ou plusieurs groupes et définissez le nombre de relances par défaut pour chacun.',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      'Une requête utilise les groupes sélectionnés dans l’ordre ; lorsqu’un groupe atteint son nombre de relances, elle peut passer au suivant.',
     'Cost factor': 'Facteur de coût',
     Order: 'Ordre',
     '24 hours': '24 heures',
@@ -268,8 +321,26 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Error self-check guide': 'エラー自己診断ガイド',
+    'Common error directory': '一般的なエラー一覧',
+    'Common errors': '一般的なエラー',
+    'Official OpenAI errors': 'OpenAI公式エラー',
+    'User-side errors': 'ユーザー側のエラー',
+    'Relay errors': '中継エラー',
+    'Other errors': 'その他のエラー',
+    'Error index': 'エラー索引',
+    'The response stream was interrupted unexpectedly.':
+      'レスポンスストリームが予期せず中断されました。',
     'Please select at least one model billing group':
       'モデル課金グループを1つ以上選択してください',
+    'Default retries': 'デフォルト再試行回数',
+    'Retries for {{group}}': '{{group}} の再試行回数',
+    'Number of additional attempts in this group before moving to the next one.':
+      '次のグループに移る前に、このグループ内で追加試行する回数です。',
+    'Select one or more groups and set the default retry count for each group.':
+      '1つ以上のグループを選択し、各グループのデフォルト再試行回数を設定します。',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      'リクエストは選択したグループを順番に使用し、あるグループで再試行回数に達すると、次のグループへ進めます。',
     'Cost factor': 'コスト係数',
     Order: '順序',
     '24 hours': '24時間',
@@ -355,8 +426,27 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Error self-check guide':
+      'Руководство по самостоятельной диагностике ошибок',
+    'Common error directory': 'Каталог распространённых ошибок',
+    'Common errors': 'Распространённые ошибки',
+    'Official OpenAI errors': 'Официальные ошибки OpenAI',
+    'User-side errors': 'Ошибки на стороне пользователя',
+    'Relay errors': 'Ошибки ретрансляции',
+    'Other errors': 'Другие ошибки',
+    'Error index': 'Указатель ошибок',
+    'The response stream was interrupted unexpectedly.':
+      'Поток ответа был неожиданно прерван.',
     'Please select at least one model billing group':
       'Пожалуйста, выберите хотя бы одну группу тарификации моделей',
+    'Default retries': 'Повторы по умолчанию',
+    'Retries for {{group}}': 'Повторы для {{group}}',
+    'Number of additional attempts in this group before moving to the next one.':
+      'Число дополнительных попыток в этой группе перед переходом к следующей.',
+    'Select one or more groups and set the default retry count for each group.':
+      'Выберите одну или несколько групп и задайте для каждой число повторов по умолчанию.',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      'Запрос использует выбранные группы по порядку; после исчерпания повторов в одной группе он может перейти к следующей.',
     'Cost factor': 'Коэффициент стоимости',
     Order: 'Порядок',
     '24 hours': '24 часа',
@@ -443,8 +533,26 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Error self-check guide': 'Hướng dẫn tự kiểm tra lỗi',
+    'Common error directory': 'Danh mục lỗi thường gặp',
+    'Common errors': 'Lỗi thường gặp',
+    'Official OpenAI errors': 'Lỗi chính thức từ OpenAI',
+    'User-side errors': 'Lỗi phía người dùng',
+    'Relay errors': 'Lỗi chuyển tiếp',
+    'Other errors': 'Lỗi khác',
+    'Error index': 'Chỉ mục lỗi',
+    'The response stream was interrupted unexpectedly.':
+      'Luồng phản hồi bị gián đoạn đột ngột.',
     'Please select at least one model billing group':
       'Vui lòng chọn ít nhất một nhóm tính phí mô hình',
+    'Default retries': 'Số lần thử lại mặc định',
+    'Retries for {{group}}': 'Số lần thử lại cho {{group}}',
+    'Number of additional attempts in this group before moving to the next one.':
+      'Số lần thử thêm trong nhóm này trước khi chuyển sang nhóm tiếp theo.',
+    'Select one or more groups and set the default retry count for each group.':
+      'Chọn một hoặc nhiều nhóm và đặt số lần thử lại mặc định cho từng nhóm.',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      'Yêu cầu sử dụng các nhóm đã chọn theo thứ tự; sau khi một nhóm dùng hết số lần thử lại, yêu cầu có thể chuyển sang nhóm tiếp theo.',
     'Cost factor': 'Hệ số chi phí',
     Order: 'Thứ tự',
     '24 hours': '24 giờ',
@@ -531,8 +639,25 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'Error self-check guide': '錯誤自查指南',
+    'Common error directory': '常見錯誤目錄',
+    'Common errors': '常見錯誤',
+    'Official OpenAI errors': 'OpenAI 官方錯誤',
+    'User-side errors': '使用者端錯誤',
+    'Relay errors': '中轉站錯誤',
+    'Other errors': '其他錯誤',
+    'Error index': '錯誤索引',
+    'The response stream was interrupted unexpectedly.': '回應串流意外中斷。',
     'Please select at least one model billing group':
       '請至少選擇一個模型計費分組',
+    'Default retries': '預設重試次數',
+    'Retries for {{group}}': '{{group}} 的重試次數',
+    'Number of additional attempts in this group before moving to the next one.':
+      '切換到下一個分組前，在此分組內額外嘗試的次數。',
+    'Select one or more groups and set the default retry count for each group.':
+      '選擇一個或多個分組，並分別設定每個分組的預設重試次數。',
+    'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.':
+      '請求會依序使用所選分組；目前分組達到重試次數後，可繼續嘗試下一個分組。',
     'Cost factor': '成本係數',
     Order: '順序',
     '24 hours': '24 小時',

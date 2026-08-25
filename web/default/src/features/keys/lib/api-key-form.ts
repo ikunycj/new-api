@@ -24,6 +24,8 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import type { ApiKey, ApiKeyFormData } from '../types'
 
 export const MAX_GROUP_CANDIDATES = 8
+export const DEFAULT_GROUP_RETRY_TIMES = 3
+export const MAX_GROUP_RETRY_TIMES = 100
 
 // ============================================================================
 // Form Schema
@@ -55,6 +57,10 @@ export function getApiKeyFormSchema(t: TFunction) {
           (groups) => !groups.includes('auto'),
           t('Auto group cannot be selected directly')
         ),
+      group_retry_times: z.record(
+        z.string(),
+        z.number().int().min(0).max(MAX_GROUP_RETRY_TIMES)
+      ),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
@@ -90,12 +96,21 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   model_limits: [],
   allow_ips: '',
   group_candidates: [],
+  group_retry_times: {},
   cross_group_retry: false,
   tokenCount: 1,
 }
 
-export function getApiKeyFormDefaultValues(): ApiKeyFormValues {
-  return { ...API_KEY_FORM_DEFAULT_VALUES }
+export function getApiKeyFormDefaultValues(
+  defaultGroup = ''
+): ApiKeyFormValues {
+  if (!defaultGroup) return { ...API_KEY_FORM_DEFAULT_VALUES }
+
+  return {
+    ...API_KEY_FORM_DEFAULT_VALUES,
+    group_candidates: [defaultGroup],
+    group_retry_times: { [defaultGroup]: DEFAULT_GROUP_RETRY_TIMES },
+  }
 }
 
 // ============================================================================
@@ -115,6 +130,12 @@ export function transformFormDataToPayload(
     group = 'auto'
   }
 
+  const groupRetryTimes: Record<string, number> = {}
+  for (const group of groups) {
+    groupRetryTimes[group] =
+      data.group_retry_times[group] ?? DEFAULT_GROUP_RETRY_TIMES
+  }
+
   return {
     name: data.name,
     remain_quota: data.unlimited_quota
@@ -129,7 +150,8 @@ export function transformFormDataToPayload(
     allow_ips: data.allow_ips || '',
     group,
     group_candidates: groups,
-    cross_group_retry: usesOrderedGroups ? !!data.cross_group_retry : false,
+    group_retry_times: groupRetryTimes,
+    cross_group_retry: usesOrderedGroups,
   }
 }
 
@@ -149,6 +171,12 @@ export function transformApiKeyToFormDefaults(
     }
   }
 
+  const groupRetryTimes: Record<string, number> = {}
+  for (const group of groups) {
+    groupRetryTimes[group] =
+      apiKey.group_retry_times[group] ?? DEFAULT_GROUP_RETRY_TIMES
+  }
+
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
@@ -164,7 +192,8 @@ export function transformApiKeyToFormDefaults(
       : [],
     allow_ips: apiKey.allow_ips || '',
     group_candidates: groups,
-    cross_group_retry: !!apiKey.cross_group_retry,
+    group_retry_times: groupRetryTimes,
+    cross_group_retry: groups.length > 1,
     tokenCount: 1,
   }
 }

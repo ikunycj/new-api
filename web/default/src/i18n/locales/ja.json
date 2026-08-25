@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID（デフォルト）",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？",
     "Please select at least one model billing group": "モデル課金グループを1つ以上選択してください",
-    "Automatic probe": "自動プローブ"
+    "Automatic probe": "自動プローブ",
+    "Error self-check guide": "エラー自己診断ガイド",
+    "Common error directory": "一般的なエラー一覧",
+    "Common errors": "一般的なエラー",
+    "Official OpenAI errors": "OpenAI公式エラー",
+    "User-side errors": "ユーザー側のエラー",
+    "Relay errors": "中継エラー",
+    "Other errors": "その他のエラー",
+    "Error index": "エラー索引",
+    "The response stream was interrupted unexpectedly.": "レスポンスストリームが予期せず中断されました。",
+    "Default retries": "デフォルト再試行回数",
+    "Retries for {{group}}": "{{group}} の再試行回数",
+    "Number of additional attempts in this group before moving to the next one.": "次のグループに移る前に、このグループ内で追加試行する回数です。",
+    "Select one or more groups and set the default retry count for each group.": "1つ以上のグループを選択し、各グループのデフォルト再試行回数を設定します。",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "リクエストは選択したグループを順番に使用し、あるグループで再試行回数に達すると、次のグループへ進めます。"
   }
 }

@@ -91,6 +91,7 @@ describe('API key management', () => {
 
     assert.ok(apiKey)
     assert.deepEqual(apiKey.group_candidates, [])
+    assert.deepEqual(apiKey.group_retry_times, {})
     assert.equal(apiKey.group, 'default')
     assert.equal(apiKey.cross_group_retry, false)
   })

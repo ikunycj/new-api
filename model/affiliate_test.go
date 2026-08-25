@@ -183,23 +183,6 @@ func TestAffiliateCampaignCashReleaseAndTransfer(t *testing.T) {
 	assert.Equal(t, int64(2500), account.TransferredCents)
 }
 
-func TestAffiliateCampaignPresentationMigrationIsIdempotent(t *testing.T) {
-	truncateTables(t)
-	common.OptionMap = map[string]string{}
-	require.NoError(t, DB.Create(&Option{Key: "affiliate_setting.reward_rate_bps", Value: "500"}).Error)
-	require.NoError(t, DB.Create(&Option{Key: "About", Value: "Support QQ: 1223288505"}).Error)
-
-	migrateAffiliateCampaignPresentationOptions()
-	migrateAffiliateCampaignPresentationOptions()
-
-	var rate Option
-	require.NoError(t, DB.First(&rate, "key = ?", "affiliate_setting.reward_rate_bps").Error)
-	assert.Equal(t, "2500", rate.Value)
-	var about Option
-	require.NoError(t, DB.First(&about, "key = ?", "About").Error)
-	assert.Equal(t, "Support QQ: 3812160108、1223288505", about.Value)
-}
-
 func TestAffiliateEveryTopUpUsesCumulativeFirstRewardThenCurrentPayment(t *testing.T) {
 	truncateTables(t)
 	unit := configureAffiliateTest(t, nil)

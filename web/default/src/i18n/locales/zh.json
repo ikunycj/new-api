@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID（默认）",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？",
     "Please select at least one model billing group": "请选择至少一个模型计费分组",
-    "Automatic probe": "自动探测"
+    "Automatic probe": "自动探测",
+    "Error self-check guide": "错误自查指南",
+    "Common error directory": "常见错误目录",
+    "Common errors": "常见错误",
+    "Official OpenAI errors": "OpenAI 官方错误",
+    "User-side errors": "用户自身错误",
+    "Relay errors": "中转站错误",
+    "Other errors": "其他错误",
+    "Error index": "错误索引",
+    "The response stream was interrupted unexpectedly.": "响应流意外中断。",
+    "Default retries": "默认重试次数",
+    "Retries for {{group}}": "{{group}} 的重试次数",
+    "Number of additional attempts in this group before moving to the next one.": "切换到下一分组前，在此分组内追加尝试的次数。",
+    "Select one or more groups and set the default retry count for each group.": "选择一个或多个分组，并分别设置每个分组的默认重试次数。",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "请求会按顺序使用所选分组；当前分组达到重试次数后，可继续尝试下一个分组。"
   }
 }

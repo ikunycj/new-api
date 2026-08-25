@@ -16,6 +16,7 @@ const (
 	ContextKeyTokenId                ContextKey = "token_id"
 	ContextKeyTokenGroup             ContextKey = "token_group"
 	ContextKeyTokenGroupCandidates   ContextKey = "token_group_candidates"
+	ContextKeyTokenGroupRetryTimes   ContextKey = "token_group_retry_times"
 	ContextKeyTokenSpecificChannelId ContextKey = "specific_channel_id"
 	ContextKeyTokenModelLimitEnabled ContextKey = "token_model_limit_enabled"
 	ContextKeyTokenModelLimit        ContextKey = "token_model_limit"

@@ -32,6 +32,7 @@ type RetryParam struct {
 	attemptedChannels  map[int]struct{}
 	channelGroups      map[int]string
 	channelLimits      map[int]int
+	groupAttemptCounts map[string]int
 	excludedChannels   map[int]struct{}
 	currentChannelID   int
 	startedAt          time.Time
@@ -148,6 +149,26 @@ func (p *RetryParam) MarkChannelAttempted(channelID int) {
 	p.attemptCounts[channelID]++
 	p.attemptedChannels[channelID] = struct{}{}
 	p.currentChannelID = channelID
+	if p.channelGroups == nil {
+		p.channelGroups = make(map[int]string)
+	}
+	group := p.channelGroups[channelID]
+	if group == "" {
+		if p.TokenGroup != "auto" {
+			group = strings.TrimSpace(p.TokenGroup)
+		} else if p.Ctx != nil {
+			group = common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup)
+		}
+		if group != "" {
+			p.channelGroups[channelID] = group
+		}
+	}
+	if group != "" {
+		if p.groupAttemptCounts == nil {
+			p.groupAttemptCounts = make(map[string]int)
+		}
+		p.groupAttemptCounts[group]++
+	}
 	if p.attemptCounts[channelID] >= p.channelLimits[channelID] {
 		p.ExcludeChannel(channelID)
 	}
@@ -175,13 +196,47 @@ func (p *RetryParam) HasChannelRetry(channelID int) bool {
 	if limit <= 0 {
 		limit = model.DefaultChannelUpstreamMaxRetries + 1
 	}
-	return p.attemptCounts[channelID] < limit && p.withinRoutingBudget()
+	return p.attemptCounts[channelID] < limit && p.channelGroupHasBudget(channelID) && p.withinRoutingBudget()
 }
 
 func (p *RetryParam) IsAutoRouting() bool { return p != nil && p.TokenGroup == "auto" }
 
 func (p *RetryParam) canCrossGroups() bool {
 	return p != nil && p.IsAutoRouting() && common.GetContextKeyBool(p.Ctx, constant.ContextKeyTokenCrossGroupRetry)
+}
+
+func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
+	if p == nil || p.Ctx == nil {
+		return 0, false
+	}
+	values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes)
+	if !ok {
+		return 0, false
+	}
+	retryTimes, ok := values[group]
+	if !ok {
+		return 0, false
+	}
+	if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
+		return 0, true
+	}
+	return retryTimes + 1, true
+}
+
+func (p *RetryParam) groupHasBudget(group string) bool {
+	limit, configured := p.groupRetryLimit(group)
+	return !configured || p.groupAttemptCounts[group] < limit
+}
+
+func (p *RetryParam) channelGroupHasBudget(channelID int) bool {
+	if p == nil {
+		return false
+	}
+	group := p.channelGroups[channelID]
+	if group == "" && p.TokenGroup != "auto" {
+		group = strings.TrimSpace(p.TokenGroup)
+	}
+	return p.groupHasBudget(group)
 }
 
 func (p *RetryParam) HasNextRetry() bool {
@@ -196,7 +251,9 @@ func (p *RetryParam) AdvanceRetry() bool {
 		return false
 	}
 	// Keep the current channel contiguous until its configured budget is used.
-	if p.currentChannelID > 0 && !p.isExcluded(p.currentChannelID) && p.attemptCounts[p.currentChannelID] < p.channelLimits[p.currentChannelID] {
+	if p.currentChannelID > 0 && !p.isExcluded(p.currentChannelID) &&
+		p.attemptCounts[p.currentChannelID] < p.channelLimits[p.currentChannelID] &&
+		p.channelGroupHasBudget(p.currentChannelID) {
 		p.IncreaseRetry()
 		return true
 	}
@@ -449,6 +506,9 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int) ([]d
 	}
 	all := make([]dynamicChannelCandidate, 0)
 	for index, group := range groups {
+		if !p.groupHasBudget(group) {
+			continue
+		}
 		groupIndex := groupIndices[index]
 		policy, entries, configured := p.loadGroupPolicy(group)
 		total := 0
@@ -586,14 +646,6 @@ func dynamicCandidateLess(left, right dynamicChannelCandidate) bool {
 	if leftCrossForce != rightCrossForce {
 		return leftCrossForce
 	}
-	leftCost := channelComparableCost(left)
-	rightCost := channelComparableCost(right)
-	if leftCost != rightCost {
-		return leftCost < rightCost
-	}
-	if left.channel.PreviousDayProbeSuccessRate != right.channel.PreviousDayProbeSuccessRate {
-		return left.channel.PreviousDayProbeSuccessRate > right.channel.PreviousDayProbeSuccessRate
-	}
 	if left.groupIndex != right.groupIndex {
 		return left.groupIndex < right.groupIndex
 	}
@@ -601,6 +653,14 @@ func dynamicCandidateLess(left, right dynamicChannelCandidate) bool {
 	rightForce := right.channel.IsForcePriority()
 	if leftForce != rightForce {
 		return leftForce
+	}
+	leftCost := channelComparableCost(left)
+	rightCost := channelComparableCost(right)
+	if leftCost != rightCost {
+		return leftCost < rightCost
+	}
+	if left.channel.PreviousDayProbeSuccessRate != right.channel.PreviousDayProbeSuccessRate {
+		return left.channel.PreviousDayProbeSuccessRate > right.channel.PreviousDayProbeSuccessRate
 	}
 	if left.routeOrder != right.routeOrder {
 		return left.routeOrder < right.routeOrder
@@ -612,10 +672,10 @@ func dynamicCandidatesHaveEqualRank(left, right dynamicChannelCandidate) bool {
 	leftCrossForce := left.channel.IsForcePriority() && left.channel.GetForcePriorityScope() == model.ChannelForcePriorityScopeCrossGroup
 	rightCrossForce := right.channel.IsForcePriority() && right.channel.GetForcePriorityScope() == model.ChannelForcePriorityScopeCrossGroup
 	return leftCrossForce == rightCrossForce &&
-		channelComparableCost(left) == channelComparableCost(right) &&
-		left.channel.PreviousDayProbeSuccessRate == right.channel.PreviousDayProbeSuccessRate &&
 		left.groupIndex == right.groupIndex &&
-		left.channel.IsForcePriority() == right.channel.IsForcePriority()
+		left.channel.IsForcePriority() == right.channel.IsForcePriority() &&
+		channelComparableCost(left) == channelComparableCost(right) &&
+		left.channel.PreviousDayProbeSuccessRate == right.channel.PreviousDayProbeSuccessRate
 }
 
 func dynamicCandidateSelectionWeight(candidate dynamicChannelCandidate) int {

@@ -17,11 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
+import { getRouteApi } from '@tanstack/react-router'
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
 import { useIsAdmin } from '@/hooks/use-admin'
 
 import type { ChannelAffinityInfo } from '../types'
+
+const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 export type LogsViewScope = 'all' | 'self'
 
@@ -94,11 +97,12 @@ export function useUsageLogsContext() {
 export function useLogsViewScope() {
   const canManageScope = useIsAdmin()
   const { viewScope, setViewScope } = useUsageLogsContext()
+  const section = route.useParams().section
 
   return {
     canManageScope,
     viewScope,
     setViewScope,
-    isAdminView: canManageScope && viewScope === 'all',
+    isAdminView: canManageScope && (section === 'call' || viewScope === 'all'),
   }
 }

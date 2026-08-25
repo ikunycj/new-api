@@ -47,6 +47,7 @@ export function DataTableColumnHeader<TData, TValue>({
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   const { t } = useTranslation()
+  const meta = column.columnDef.meta
   const sortDirection = column.getIsSorted()
   let sortIcon = <CaretSortIcon className='ms-2 h-4 w-4' />
   if (sortDirection === 'desc') {
@@ -74,14 +75,22 @@ export function DataTableColumnHeader<TData, TValue>({
           {sortIcon}
         </DropdownMenuTrigger>
         <DropdownMenuContent align='start'>
+          {meta?.sortDescendingFirst && (
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDownIcon className='text-muted-foreground/70 size-3.5' />
+              {meta.sortDescendingLabel ?? t('Desc')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
             <ArrowUpIcon className='text-muted-foreground/70 size-3.5' />
-            {t('Asc')}
+            {meta?.sortAscendingLabel ?? t('Asc')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
-            <ArrowDownIcon className='text-muted-foreground/70 size-3.5' />
-            {t('Desc')}
-          </DropdownMenuItem>
+          {!meta?.sortDescendingFirst && (
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDownIcon className='text-muted-foreground/70 size-3.5' />
+              {meta?.sortDescendingLabel ?? t('Desc')}
+            </DropdownMenuItem>
+          )}
           {column.getCanHide() && (
             <>
               <DropdownMenuSeparator />

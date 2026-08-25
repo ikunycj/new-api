@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	MaxTokenGroupCandidates = 8
-	MaxTokenGroupNameLength = 64
+	MaxTokenGroupCandidates     = 8
+	MaxTokenGroupNameLength     = 64
+	DefaultTokenGroupRetryTimes = 3
+	MaxTokenGroupRetryTimes     = 100
 )
 
 func GetUserUsableGroups(userGroup string) map[string]string {
@@ -96,6 +98,26 @@ func ValidateTokenGroupCandidates(userGroup string, groups []string) error {
 		}
 	}
 	return nil
+}
+
+// NormalizeTokenGroupRetryTimes keeps retry counts only for concrete groups
+// selected by the token. Missing counts receive the product default.
+func NormalizeTokenGroupRetryTimes(groups []string, values map[string]int) (map[string]int, error) {
+	result := make(map[string]int, len(groups))
+	for _, group := range groups {
+		if strings.TrimSpace(group) == "" || group == "auto" {
+			continue
+		}
+		retryTimes := DefaultTokenGroupRetryTimes
+		if configured, ok := values[group]; ok {
+			retryTimes = configured
+		}
+		if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
+			return nil, fmt.Errorf("分组 %s 的重试次数必须在 0 到 %d 之间", group, MaxTokenGroupRetryTimes)
+		}
+		result[group] = retryTimes
+	}
+	return result, nil
 }
 
 func validateConcreteTokenGroup(userGroup, group string) error {

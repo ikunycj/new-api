@@ -528,16 +528,16 @@ func TokenAuth() func(c *gin.Context) {
 		userCache.WriteContext(c)
 
 		userGroup := userCache.Group
-		tokenGroup := token.Group
 		if err := validateTokenGroupAccess(userGroup, token); err != nil {
 			recordTokenAuthFailure(c, "group_forbidden", http.StatusForbidden)
 			abortWithOpenAiMessage(c, http.StatusForbidden, err.Error())
 			return
 		}
-		if tokenGroup != "" {
-			userGroup = tokenGroup
+		usingGroup := token.Group
+		if usingGroup == "" {
+			usingGroup = userGroup
 		}
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {
@@ -573,6 +573,23 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		return err
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroupCandidates, groupCandidates)
+	groupRetryTimes, err := token.GetGroupRetryTimes()
+	if err != nil {
+		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
+		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
+		return err
+	}
+	concreteGroups := groupCandidates
+	if len(concreteGroups) == 0 && token.Group != "" && token.Group != "auto" {
+		concreteGroups = []string{token.Group}
+	}
+	groupRetryTimes, err = service.NormalizeTokenGroupRetryTimes(concreteGroups, groupRetryTimes)
+	if err != nil {
+		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
+		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
+		return err
+	}
+	common.SetContextKey(c, constant.ContextKeyTokenGroupRetryTimes, groupRetryTimes)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
 	if len(parts) > 1 {
 		if model.IsAdmin(token.UserId) {

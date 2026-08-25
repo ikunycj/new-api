@@ -553,6 +553,64 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </button>
           )
         },
+      },
+      {
+        accessorKey: 'remark',
+        header: t('Remark'),
+        cell: function RemarkCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const remark = row.original.remark
+          if (!remark) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[140px] truncate text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? remark : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && remark.length > 16 && (
+                  <TooltipContent className='max-w-xs break-words'>
+                    {remark}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 150,
+      },
+      {
+        accessorKey: 'email',
+        header: t('Email'),
+        cell: function EmailCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const email = row.original.email
+          if (!email) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[180px] truncate text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? email : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && email.length > 20 && (
+                  <TooltipContent>{email}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 190,
       }
     )
   }
@@ -662,7 +720,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           />
         )
       },
-      meta: { label: t('Stream') },
+      meta: {
+        label: t('Stream'),
+        sortAscendingLabel: t('Non-stream'),
+        sortDescendingLabel: t('Stream'),
+        sortDescendingFirst: true,
+      },
     },
     {
       accessorKey: 'prompt_tokens',

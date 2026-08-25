@@ -67,7 +67,6 @@ export const OPERATIONS_SECTION_IDS: readonly string[] = [
   'worker',
   'logs',
   'performance',
-  'update-checker',
 ]
 export const OPERATIONS_DEFAULT_SECTION = 'behavior'
 

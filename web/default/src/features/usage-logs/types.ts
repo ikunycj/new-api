@@ -48,6 +48,7 @@ export interface CommonFilters {
  */
 export interface CommonLogFilters extends CommonFilters {
   keyword?: string
+  group?: string
 }
 
 /**
@@ -244,6 +245,81 @@ export interface LogStatistics {
   cache_hit_requests: number
   cache_eligible_requests: number
   cache_hit_rate: number
+}
+
+export type LogAnalyticsGranularity = 'hour' | 'day'
+export type LogAnalyticsUserLimit = 10 | 20
+
+export interface LogAnalyticsSummary {
+  total_requests: number
+  success_requests: number
+  failed_requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  total_tokens: number
+  total_quota: number
+  average_use_time: number
+  p90_use_time: number
+  p99_use_time: number
+}
+
+export interface LogTokenTrendPoint {
+  timestamp: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  cache_hit_rate: number
+}
+
+export interface LogUserTrendPoint {
+  timestamp: number
+  user_id: number
+  username: string
+  email: string
+  remark: string
+  tokens: number
+}
+
+export interface LogDistributionItem {
+  name: string
+  requests: number
+  tokens: number
+  quota: number
+}
+
+export interface LogAnalytics {
+  summary: LogAnalyticsSummary
+  token_trend: LogTokenTrendPoint[]
+  user_trend: LogUserTrendPoint[]
+  group_distribution: LogDistributionItem[]
+  model_distribution: LogDistributionItem[]
+}
+
+export interface GetLogAnalyticsParams extends GetLogStatsParams {
+  granularity: LogAnalyticsGranularity
+  timezone_offset: number
+  user_keyword?: string
+  user_limit: LogAnalyticsUserLimit
+}
+
+export interface GetLogAnalyticsResponse {
+  success: boolean
+  message?: string
+  data?: LogAnalytics
+}
+
+export interface LogFilterOptions {
+  groups: string[]
+  channels: Array<{ id: number; name: string }>
+}
+
+export interface GetLogFilterOptionsResponse {
+  success: boolean
+  message?: string
+  data?: LogFilterOptions
 }
 
 // ============================================================================

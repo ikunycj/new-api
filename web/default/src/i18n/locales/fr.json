@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID (par défaut)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?",
     "Please select at least one model billing group": "Veuillez sélectionner au moins un groupe de facturation de modèles",
-    "Automatic probe": "Sonde automatique"
+    "Automatic probe": "Sonde automatique",
+    "Error self-check guide": "Guide d’auto-diagnostic des erreurs",
+    "Common error directory": "Répertoire des erreurs courantes",
+    "Common errors": "Erreurs courantes",
+    "Official OpenAI errors": "Erreurs officielles d’OpenAI",
+    "User-side errors": "Erreurs côté utilisateur",
+    "Relay errors": "Erreurs du relais",
+    "Other errors": "Autres erreurs",
+    "Error index": "Index des erreurs",
+    "The response stream was interrupted unexpectedly.": "Le flux de réponse a été interrompu de manière inattendue.",
+    "Default retries": "Relances par défaut",
+    "Retries for {{group}}": "Relances pour {{group}}",
+    "Number of additional attempts in this group before moving to the next one.": "Nombre de tentatives supplémentaires dans ce groupe avant de passer au suivant.",
+    "Select one or more groups and set the default retry count for each group.": "Sélectionnez un ou plusieurs groupes et définissez le nombre de relances par défaut pour chacun.",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "Une requête utilise les groupes sélectionnés dans l’ordre ; lorsqu’un groupe atteint son nombre de relances, elle peut passer au suivant."
   }
 }

@@ -24,6 +24,8 @@ import {
   isUsageLogsSectionId,
   USAGE_LOGS_DEFAULT_SECTION,
 } from '@/features/usage-logs/section-registry'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 const logTypeValues = ['0', '1', '2', '3', '4', '5', '6', '7'] as const
 const logTypeSearchSchema = z
@@ -58,11 +60,19 @@ export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
         params: { section: USAGE_LOGS_DEFAULT_SECTION },
       })
     }
-    // type 仅 common 使用，非 common 时清掉 URL 里的 type
+    const user = useAuthStore.getState().auth.user
+    if (params.section === 'call' && (user?.role ?? ROLE.GUEST) < ROLE.ADMIN) {
+      throw redirect({ to: '/403' })
+    }
+    // type 仅普通调用日志使用，任务日志路由需清理该参数
     const hasTypeSearch = Array.isArray(search?.type)
       ? search.type.length > 0
       : search?.type != null && search.type !== ''
-    if (params.section !== 'common' && hasTypeSearch) {
+    if (
+      params.section !== 'common' &&
+      params.section !== 'call' &&
+      hasTypeSearch
+    ) {
       throw redirect({
         to: '/usage-logs/$section',
         params: { section: params.section },

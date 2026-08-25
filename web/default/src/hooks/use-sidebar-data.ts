@@ -133,6 +133,12 @@ export function useSidebarData(): SidebarData {
             icon: Radio,
           },
           {
+            title: '管理控制台',
+            url: '/admin-console',
+            icon: LayoutDashboard,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Channel Monitors'),
             url: '/channel-monitors',
             icon: HeartPulse,
@@ -146,6 +152,12 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: '调用日志',
+            url: '/usage-logs/call',
+            icon: FileText,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Group Management'),

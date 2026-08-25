@@ -6121,6 +6121,20 @@
     "ID (Default)": "ID (по умолчанию)",
     "This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?": "Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?",
     "Please select at least one model billing group": "Пожалуйста, выберите хотя бы одну группу тарификации моделей",
-    "Automatic probe": "Автоматическая проверка"
+    "Automatic probe": "Автоматическая проверка",
+    "Error self-check guide": "Руководство по самостоятельной диагностике ошибок",
+    "Common error directory": "Каталог распространённых ошибок",
+    "Common errors": "Распространённые ошибки",
+    "Official OpenAI errors": "Официальные ошибки OpenAI",
+    "User-side errors": "Ошибки на стороне пользователя",
+    "Relay errors": "Ошибки ретрансляции",
+    "Other errors": "Другие ошибки",
+    "Error index": "Указатель ошибок",
+    "The response stream was interrupted unexpectedly.": "Поток ответа был неожиданно прерван.",
+    "Default retries": "Повторы по умолчанию",
+    "Retries for {{group}}": "Повторы для {{group}}",
+    "Number of additional attempts in this group before moving to the next one.": "Число дополнительных попыток в этой группе перед переходом к следующей.",
+    "Select one or more groups and set the default retry count for each group.": "Выберите одну или несколько групп и задайте для каждой число повторов по умолчанию.",
+    "A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.": "Запрос использует выбранные группы по порядку; после исчерпания повторов в одной группе он может перейти к следующей."
   }
 }
