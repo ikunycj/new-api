@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { memo, useCallback, useState } from 'react'
-import type { UseFormReturn } from 'react-hook-form'
+import { useFormState, useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -47,6 +47,11 @@ export const GroupRatioForm = memo(function GroupRatioForm({
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [isEditorValid, setIsEditorValid] = useState(true)
+  const [groupRatio, pricingGroupOrder, pricingGroupRetryPolicy] = useWatch({
+    control: form.control,
+    name: ['GroupRatio', 'PricingGroupOrder', 'PricingGroupRetryPolicy'],
+  })
+  const { isValid } = useFormState({ control: form.control })
 
   const handleFieldChange = useCallback(
     (field: keyof GroupFormValues, value: string) => {
@@ -65,15 +70,15 @@ export const GroupRatioForm = memo(function GroupRatioForm({
           type='button'
           size='sm'
           onClick={form.handleSubmit(onSave)}
-          disabled={isSaving || !isEditorValid || !form.formState.isValid}
+          disabled={isSaving || !isEditorValid || !isValid}
         >
           {isSaving ? t('Saving...') : t('Save group ratios')}
         </Button>
       </SettingsPageActionsPortal>
       <GroupRatioVisualEditor
-        groupRatio={form.watch('GroupRatio')}
-        pricingGroupOrder={form.watch('PricingGroupOrder')}
-        pricingGroupRetryPolicy={form.watch('PricingGroupRetryPolicy')}
+        groupRatio={groupRatio}
+        pricingGroupOrder={pricingGroupOrder}
+        pricingGroupRetryPolicy={pricingGroupRetryPolicy}
         savedGroupRatio={savedGroupRatio}
         onValidationChange={setIsEditorValid}
         onChange={(field, value) =>

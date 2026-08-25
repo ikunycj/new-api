@@ -16,12 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Add01Icon,
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  Delete02Icon,
-} from '@hugeicons/core-free-icons'
+import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useMemo, useCallback, useEffect, memo } from 'react'
@@ -503,14 +498,15 @@ function GroupPricingTable({
     [currentRows, emitRows]
   )
 
-  const moveRow = useCallback(
-    (id: string, direction: -1 | 1) => {
+  const moveRowToPosition = useCallback(
+    (id: string, position: number) => {
       const sourceIndex = currentRows.findIndex((row) => row._id === id)
-      const targetIndex = sourceIndex + direction
+      const targetIndex = position - 1
       if (
         sourceIndex < 0 ||
         targetIndex < 0 ||
-        targetIndex >= currentRows.length
+        targetIndex >= currentRows.length ||
+        sourceIndex === targetIndex
       ) {
         return
       }
@@ -564,40 +560,42 @@ function GroupPricingTable({
                 {
                   id: 'order',
                   header: '顺序',
-                  className: 'w-20',
-                  cellClassName: 'w-20',
-                  cell: (row, index) => (
-                    <div className='flex items-center gap-0.5'>
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='icon-sm'
-                        disabled={index === 0}
-                        aria-label={`上移 ${row.name || '未命名分组'}`}
-                        title='上移'
-                        onClick={() => moveRow(row._id, -1)}
-                      >
-                        <HugeiconsIcon icon={ArrowUp01Icon} />
-                      </Button>
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='icon-sm'
-                        disabled={index === currentRows.length - 1}
-                        aria-label={`下移 ${row.name || '未命名分组'}`}
-                        title='下移'
-                        onClick={() => moveRow(row._id, 1)}
-                      >
-                        <HugeiconsIcon icon={ArrowDown01Icon} />
-                      </Button>
-                    </div>
-                  ),
+                  className: 'w-15',
+                  cellClassName: 'w-15',
+                  cell: (row, index) => {
+                    const orderLabel = `调整 ${row.name || '未命名分组'} 顺序`
+                    return (
+                      <Input
+                        type='number'
+                        min={1}
+                        max={currentRows.length}
+                        step={1}
+                        inputMode='numeric'
+                        value={index + 1}
+                        disabled={currentRows.length <= 1}
+                        aria-label={orderLabel}
+                        title={orderLabel}
+                        className='w-16 px-1 text-center font-semibold tabular-nums'
+                        onChange={(event) => {
+                          const position = Number(event.target.value)
+                          if (
+                            !Number.isInteger(position) ||
+                            position < 1 ||
+                            position > currentRows.length
+                          ) {
+                            return
+                          }
+                          moveRowToPosition(row._id, position)
+                        }}
+                      />
+                    )
+                  },
                 },
                 {
                   id: 'group',
                   header: t('Group name'),
-                  className: 'w-44',
-                  cellClassName: 'w-44',
+                  className: 'w-30',
+                  cellClassName: 'w-30',
                   cell: (row) => {
                     return (
                       <Input
@@ -634,8 +632,8 @@ function GroupPricingTable({
                 {
                   id: 'usage',
                   header: '用量',
-                  className: 'w-52',
-                  cellClassName: 'w-52',
+                  className: 'w-35',
+                  cellClassName: 'w-35',
                   cell: (row) => (
                     <GroupUsageCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -646,8 +644,8 @@ function GroupPricingTable({
                 {
                   id: 'channels',
                   header: '渠道数',
-                  className: 'w-36',
-                  cellClassName: 'w-36',
+                  className: 'w-25',
+                  cellClassName: 'w-25',
                   cell: (row) => (
                     <GroupChannelCountCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -658,8 +656,8 @@ function GroupPricingTable({
                 {
                   id: 'activity',
                   header: '活跃',
-                  className: 'w-52',
-                  cellClassName: 'w-52',
+                  className: 'w-15',
+                  cellClassName: 'w-15',
                   cell: (row) => (
                     <GroupActivityCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -670,8 +668,8 @@ function GroupPricingTable({
                 {
                   id: 'retries',
                   header: '重试次数',
-                  className: 'w-72',
-                  cellClassName: 'w-72',
+                  className: 'w-35',
+                  cellClassName: 'w-35',
                   cell: (row) => (
                     <RetryPolicyControl
                       mode={row.retryMode}
@@ -692,8 +690,8 @@ function GroupPricingTable({
                 {
                   id: 'monitor',
                   header: '分组监控',
-                  className: 'w-[22rem]',
-                  cellClassName: 'w-[22rem]',
+                  className: 'w-[12rem]',
+                  cellClassName: 'w-[12rem]',
                   cell: (row) => {
                     const groupName = row.name.trim()
                     const monitor = findPricingGroupMonitor(row, monitorByName)
@@ -733,8 +731,8 @@ function GroupPricingTable({
                 {
                   id: 'actions',
                   header: t('Actions'),
-                  className: 'w-40 text-right',
-                  cellClassName: 'w-40 text-right',
+                  className: 'w-30 text-right',
+                  cellClassName: 'w-30 text-right',
                   cell: (row) => {
                     const monitor = findPricingGroupMonitor(row, monitorByName)
                     const isRunning =
@@ -972,7 +970,8 @@ function GroupActivityCell(props: GroupMetricCellProps) {
       className='text-xs leading-5 font-medium'
       title='连接数按当前正在处理的请求统计'
     >
-      {`活跃用户${props.metrics.activity.users}/活跃连接${props.metrics.activity.connections}`}
+      <div>{`活跃用户${props.metrics.activity.users}`}</div>
+      <div>{`活跃连接${props.metrics.activity.connections}`}</div>
     </div>
   )
 }
