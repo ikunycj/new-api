@@ -32,10 +32,12 @@ export const LOAD_TEST_MAX_DURATION_SECONDS = 600
 export const LOAD_TEST_DEFAULT_RPS = 2
 export const LOAD_TEST_MIN_RPS = 1
 export const LOAD_TEST_MAX_RPS = 20
+export const LOAD_TEST_DEFAULT_CONCURRENCY = 10
+export const LOAD_TEST_MIN_CONCURRENCY = 1
+export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
 export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
 export const LOAD_TEST_MAX_REQUESTS = 10_000
-export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_TIMEOUT_MS = 120_000
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
@@ -191,6 +193,38 @@ export type LoadTestPricing = {
   model: PricingModel
   groupRatio: number
   group: string
+}
+
+export type LoadTestLimits = {
+  min_duration_seconds: number
+  max_duration_seconds: number
+  min_rps: number
+  max_rps: number
+  min_concurrency: number
+  max_concurrency: number
+  max_requests: number
+}
+
+export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
+  min_duration_seconds: LOAD_TEST_MIN_DURATION_SECONDS,
+  max_duration_seconds: LOAD_TEST_MAX_DURATION_SECONDS,
+  min_rps: LOAD_TEST_MIN_RPS,
+  max_rps: LOAD_TEST_MAX_RPS,
+  min_concurrency: LOAD_TEST_MIN_CONCURRENCY,
+  max_concurrency: LOAD_TEST_MAX_CONCURRENCY,
+  max_requests: LOAD_TEST_MAX_REQUESTS,
+}
+
+export async function getLoadTestLimits(): Promise<LoadTestLimits> {
+  const response = await api.get<{
+    success: boolean
+    message?: string
+    data?: LoadTestLimits
+  }>('/api/loadtest/config')
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to load load-test limits')
+  }
+  return response.data.data
 }
 
 export type LoadTestChannelStats = {

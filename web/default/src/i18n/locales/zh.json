@@ -6277,6 +6277,16 @@
     "Current run metrics": "当前运行指标",
     "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "实际渠道成本 = 模型官方价格 × 渠道成本系数；用户收费 = 模型官方价格 × 分组倍率。",
     "Average token price": "平均每个 token 单价",
-    "User charge = official model price × billing group ratio.": "用户扣费 = 模型官方价格 × 计费分组倍率。"
+    "User charge = official model price × billing group ratio.": "用户扣费 = 模型官方价格 × 计费分组倍率。",
+    "Failed to load load-test limits": "加载压测限制失败",
+    "Maximum concurrency must be between {{min}} and {{max}}.": "最大并发数必须在 {{min}} 到 {{max}} 之间。",
+    "Allowed range: {{min}}-{{max}} concurrent requests": "允许范围：{{min}}-{{max}} 个并发请求",
+    "Load Test Limits": "压测限制",
+    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "这些限制适用于所有压测 Demo；单次请求总数上限固定为 10,000。",
+    "Maximum duration (seconds)": "最大时长（秒）",
+    "Maximum requests per second": "最大每秒请求数",
+    "Allowed range: 5-3600 seconds": "允许范围：5-3600 秒",
+    "Allowed range: 1-100 RPS": "允许范围：1-100 RPS",
+    "Allowed range: 1-100 concurrent requests": "允许范围：1-100 个并发请求"
   }
 }

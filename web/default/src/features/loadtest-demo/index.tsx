@@ -65,15 +65,12 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import {
   LOAD_TEST_DEFAULT_DURATION_SECONDS,
+  DEFAULT_LOAD_TEST_LIMITS,
+  LOAD_TEST_DEFAULT_CONCURRENCY,
   LOAD_TEST_DEFAULT_PROMPT,
   LOAD_TEST_DEFAULT_RPS,
-  LOAD_TEST_MAX_CONCURRENCY,
-  LOAD_TEST_MAX_DURATION_SECONDS,
   LOAD_TEST_MAX_PROMPT_CHARS,
-  LOAD_TEST_MAX_REQUESTS,
-  LOAD_TEST_MAX_RPS,
-  LOAD_TEST_MIN_DURATION_SECONDS,
-  LOAD_TEST_MIN_RPS,
+  getLoadTestLimits,
   buildLoadTestRequestBody,
   getLoadTestApiBaseUrl,
   getLoadTestChannelStats,
@@ -84,6 +81,7 @@ import {
   sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
+  type LoadTestLimits,
   type LoadTestModel,
   type LoadTestPricing,
   type LoadTestRequestResult,
@@ -104,6 +102,7 @@ type RunSnapshot = {
   packageName: string
   durationSeconds: number
   requestsPerSecond: number
+  concurrency: number
 }
 
 const EMPTY_STATS: RunStats = {
@@ -264,6 +263,11 @@ export function LoadTestDemo() {
   const [requestsPerSecond, setRequestsPerSecond] = useState(
     String(persistedRun?.requestsPerSecond || LOAD_TEST_DEFAULT_RPS)
   )
+  const [concurrency, setConcurrency] = useState(
+    String(persistedRun?.concurrency || LOAD_TEST_DEFAULT_CONCURRENCY)
+  )
+  const [limits, setLimits] = useState<LoadTestLimits>(DEFAULT_LOAD_TEST_LIMITS)
+  const [limitsLoading, setLimitsLoading] = useState(true)
   const [prompt, setPrompt] = useState(
     persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
   )
@@ -312,6 +316,43 @@ export function LoadTestDemo() {
     void loadKeys()
     return () => runAbortRef.current?.abort()
   }, [loadKeys])
+
+  useEffect(() => {
+    let active = true
+    void getLoadTestLimits()
+      .then((nextLimits) => {
+        if (!active) return
+        setLimits(nextLimits)
+        setDurationSeconds((current) => {
+          const value = Number(current)
+          return Number.isFinite(value) &&
+            value <= nextLimits.max_duration_seconds
+            ? current
+            : String(nextLimits.max_duration_seconds)
+        })
+        setRequestsPerSecond((current) => {
+          const value = Number(current)
+          return Number.isFinite(value) && value <= nextLimits.max_rps
+            ? current
+            : String(nextLimits.max_rps)
+        })
+        setConcurrency((current) => {
+          const value = Number(current)
+          return Number.isFinite(value) && value <= nextLimits.max_concurrency
+            ? current
+            : String(nextLimits.max_concurrency)
+        })
+      })
+      .catch(() => {
+        if (active) toast.error(t('Failed to load load-test limits'))
+      })
+      .finally(() => {
+        if (active) setLimitsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [t])
 
   useEffect(() => {
     let active = true
@@ -403,32 +444,47 @@ export function LoadTestDemo() {
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
       requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
+    const concurrencyValue =
+      concurrency.trim() === '' ? Number.NaN : Number(concurrency)
     if (!prompt.trim()) {
       toast.error(`${t('Prompt')}: ${t('Required')}`)
       return
     }
     if (
       !Number.isFinite(durationValue) ||
-      durationValue < LOAD_TEST_MIN_DURATION_SECONDS ||
-      durationValue > LOAD_TEST_MAX_DURATION_SECONDS
+      durationValue < limits.min_duration_seconds ||
+      durationValue > limits.max_duration_seconds
     ) {
       toast.error(
         t('Duration must be between {{min}} and {{max}} seconds.', {
-          min: LOAD_TEST_MIN_DURATION_SECONDS,
-          max: LOAD_TEST_MAX_DURATION_SECONDS,
+          min: limits.min_duration_seconds,
+          max: limits.max_duration_seconds,
         })
       )
       return
     }
     if (
       !Number.isFinite(rpsValue) ||
-      rpsValue < LOAD_TEST_MIN_RPS ||
-      rpsValue > LOAD_TEST_MAX_RPS
+      rpsValue < limits.min_rps ||
+      rpsValue > limits.max_rps
     ) {
       toast.error(
         t('Requests per second must be between {{min}} and {{max}}.', {
-          min: LOAD_TEST_MIN_RPS,
-          max: LOAD_TEST_MAX_RPS,
+          min: limits.min_rps,
+          max: limits.max_rps,
+        })
+      )
+      return
+    }
+    if (
+      !Number.isInteger(concurrencyValue) ||
+      concurrencyValue < limits.min_concurrency ||
+      concurrencyValue > limits.max_concurrency
+    ) {
+      toast.error(
+        t('Maximum concurrency must be between {{min}} and {{max}}.', {
+          min: limits.min_concurrency,
+          max: limits.max_concurrency,
         })
       )
       return
@@ -446,6 +502,7 @@ export function LoadTestDemo() {
         selectedKey.group?.trim() || selectedKey.group_candidates[0] || '',
       durationSeconds: durationValue,
       requestsPerSecond: rpsValue,
+      concurrency: concurrencyValue,
     }
     setRunId(currentRunId)
     setRunKeyName(selectedKey.name)
@@ -474,7 +531,7 @@ export function LoadTestDemo() {
     const durationMs = durationValue * 1000
     const requestIntervalMs = 1000 / rpsValue
     const requestLimit = Math.min(
-      LOAD_TEST_MAX_REQUESTS,
+      limits.max_requests,
       Math.ceil(durationValue * rpsValue)
     )
     const deadline = Date.now() + durationMs
@@ -484,7 +541,7 @@ export function LoadTestDemo() {
       sentRequests < requestLimit &&
       !controller.signal.aborted
     ) {
-      if (inFlight.size >= LOAD_TEST_MAX_CONCURRENCY) {
+      if (inFlight.size >= concurrencyValue) {
         await Promise.race(inFlight)
       }
 
@@ -533,8 +590,10 @@ export function LoadTestDemo() {
     setElapsed(Math.min(durationMs, Date.now() - runStartedAtRef.current))
     setStatus('complete')
   }, [
+    concurrency,
     durationSeconds,
     keys,
+    limits,
     models,
     prompt,
     promptCache,
@@ -642,6 +701,7 @@ export function LoadTestDemo() {
       packageName: runSnapshot.packageName,
       durationSeconds: runSnapshot.durationSeconds,
       requestsPerSecond: runSnapshot.requestsPerSecond,
+      concurrency: runSnapshot.concurrency,
       userCharge,
       stats,
       channelStats,
@@ -653,14 +713,15 @@ export function LoadTestDemo() {
 
   const maxRequests =
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
-      ? Math.min(LOAD_TEST_MAX_REQUESTS, Math.ceil(durationValue * rpsValue))
+      ? Math.min(limits.max_requests, Math.ceil(durationValue * rpsValue))
       : 0
   const canRun =
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
     selectedModel !== '' &&
     prompt.trim() !== '' &&
-    !modelsLoading
+    !modelsLoading &&
+    !limitsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
   const selectedModelMetadata = models.find(
     (model) => model.id === selectedModel
@@ -697,11 +758,13 @@ export function LoadTestDemo() {
   }, [t, userId])
 
   const statusLabel = useMemo(() => {
-    if (status === 'loading-keys' || modelsLoading) return t('Loading')
+    if (status === 'loading-keys' || modelsLoading || limitsLoading) {
+      return t('Loading')
+    }
     if (status === 'running') return t('Testing...')
     if (status === 'complete') return t('Completed')
     return t('Ready')
-  }, [modelsLoading, status, t])
+  }, [limitsLoading, modelsLoading, status, t])
 
   return (
     <SectionPageLayout>
@@ -709,7 +772,10 @@ export function LoadTestDemo() {
       <SectionPageLayout.Actions>
         <Button
           disabled={
-            status === 'loading-keys' || status === 'running' || modelsLoading
+            status === 'loading-keys' ||
+            status === 'running' ||
+            modelsLoading ||
+            limitsLoading
           }
           onClick={() => void loadKeys()}
           size='sm'
@@ -741,7 +807,7 @@ export function LoadTestDemo() {
               </div>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-5'>
                 <div className='space-y-1.5'>
                   <Label>{t('API Key')}</Label>
                   <Select
@@ -787,14 +853,16 @@ export function LoadTestDemo() {
                   <Input
                     id='load-test-duration'
                     type='number'
+                    min={limits.min_duration_seconds}
+                    max={limits.max_duration_seconds}
                     step={1}
                     value={durationSeconds}
                     onChange={(event) => setDurationSeconds(event.target.value)}
                   />
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} seconds', {
-                      min: LOAD_TEST_MIN_DURATION_SECONDS,
-                      max: LOAD_TEST_MAX_DURATION_SECONDS,
+                      min: limits.min_duration_seconds,
+                      max: limits.max_duration_seconds,
                     })}
                   </p>
                 </div>
@@ -805,6 +873,8 @@ export function LoadTestDemo() {
                   <Input
                     id='load-test-rps'
                     type='number'
+                    min={limits.min_rps}
+                    max={limits.max_rps}
                     step={1}
                     value={requestsPerSecond}
                     onChange={(event) =>
@@ -813,8 +883,28 @@ export function LoadTestDemo() {
                   />
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} RPS', {
-                      min: LOAD_TEST_MIN_RPS,
-                      max: LOAD_TEST_MAX_RPS,
+                      min: limits.min_rps,
+                      max: limits.max_rps,
+                    })}
+                  </p>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label htmlFor='load-test-concurrency'>
+                    {t('Maximum concurrency')}
+                  </Label>
+                  <Input
+                    id='load-test-concurrency'
+                    type='number'
+                    min={limits.min_concurrency}
+                    max={limits.max_concurrency}
+                    step={1}
+                    value={concurrency}
+                    onChange={(event) => setConcurrency(event.target.value)}
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Allowed range: {{min}}-{{max}} concurrent requests', {
+                      min: limits.min_concurrency,
+                      max: limits.max_concurrency,
                     })}
                   </p>
                 </div>
@@ -892,7 +982,7 @@ export function LoadTestDemo() {
               </div>
               <div className='text-muted-foreground text-xs'>
                 {t('Maximum requests for this run')}: {maxRequests} ·{' '}
-                {t('Maximum concurrency')}: {LOAD_TEST_MAX_CONCURRENCY}
+                {t('Maximum concurrency')}: {limits.max_concurrency}
               </div>
 
               <div className='flex flex-wrap items-center gap-2'>

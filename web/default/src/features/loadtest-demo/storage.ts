@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-import { LOAD_TEST_DEFAULT_PROMPT } from './api'
+import { LOAD_TEST_DEFAULT_CONCURRENCY, LOAD_TEST_DEFAULT_PROMPT } from './api'
 
 const LOAD_TEST_RESULTS_VERSION = 2
 const LOAD_TEST_RESULTS_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -62,6 +62,11 @@ const persistedRunSchema = z.object({
   packageName: z.string().default(''),
   durationSeconds: z.number().nonnegative(),
   requestsPerSecond: z.number().nonnegative(),
+  concurrency: z
+    .number()
+    .int()
+    .positive()
+    .default(LOAD_TEST_DEFAULT_CONCURRENCY),
   prompt: z.string().default(LOAD_TEST_DEFAULT_PROMPT),
   userCharge: z.number().nonnegative().default(0),
   stats: runStatsSchema,
@@ -120,6 +125,7 @@ export function loadPersistedLoadTestRuns(
           completedAt: legacyRun.data.savedAt,
           durationSeconds: 0,
           requestsPerSecond: 0,
+          concurrency: LOAD_TEST_DEFAULT_CONCURRENCY,
           prompt: LOAD_TEST_DEFAULT_PROMPT,
           userCharge: 0,
         },

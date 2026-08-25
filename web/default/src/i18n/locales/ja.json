@@ -6277,6 +6277,16 @@
     "Current run metrics": "現在の実行指標",
     "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "実際のチャネルコスト = モデル公式価格 × チャネルコスト係数、ユーザー請求額 = モデル公式価格 × 課金グループ倍率。",
     "Average token price": "トークン平均単価",
-    "User charge = official model price × billing group ratio.": "ユーザー請求額 = モデル公式価格 × 課金グループ倍率。"
+    "User charge = official model price × billing group ratio.": "ユーザー請求額 = モデル公式価格 × 課金グループ倍率。",
+    "Failed to load load-test limits": "負荷テスト制限の読み込みに失敗しました",
+    "Maximum concurrency must be between {{min}} and {{max}}.": "最大同時実行数は {{min}} から {{max}} の間で指定してください。",
+    "Allowed range: {{min}}-{{max}} concurrent requests": "許可範囲: {{min}}-{{max}} 件の同時リクエスト",
+    "Load Test Limits": "負荷テスト制限",
+    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "これらの制限はすべての負荷テストに適用されます。リクエスト上限は 10,000 件です。",
+    "Maximum duration (seconds)": "最大実行時間（秒）",
+    "Maximum requests per second": "最大リクエスト毎秒数",
+    "Allowed range: 5-3600 seconds": "許可範囲: 5-3600 秒",
+    "Allowed range: 1-100 RPS": "許可範囲: 1-100 RPS",
+    "Allowed range: 1-100 concurrent requests": "許可範囲: 1-100 件の同時リクエスト"
   }
 }

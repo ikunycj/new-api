@@ -6277,6 +6277,16 @@
     "Current run metrics": "Chỉ số lượt chạy hiện tại",
     "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Chi phí thực tế của kênh = giá chính thức của mô hình × hệ số chi phí kênh; phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.",
     "Average token price": "Giá trung bình mỗi token",
-    "User charge = official model price × billing group ratio.": "Phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán."
+    "User charge = official model price × billing group ratio.": "Phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.",
+    "Failed to load load-test limits": "Không thể tải giới hạn kiểm thử tải",
+    "Maximum concurrency must be between {{min}} and {{max}}.": "Mức đồng thời tối đa phải từ {{min}} đến {{max}}.",
+    "Allowed range: {{min}}-{{max}} concurrent requests": "Phạm vi cho phép: {{min}}-{{max}} yêu cầu đồng thời",
+    "Load Test Limits": "Giới hạn kiểm thử tải",
+    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "Các giới hạn này áp dụng cho mọi lần chạy kiểm thử tải. Giới hạn yêu cầu cố định là 10.000.",
+    "Maximum duration (seconds)": "Thời lượng tối đa (giây)",
+    "Maximum requests per second": "Số yêu cầu tối đa mỗi giây",
+    "Allowed range: 5-3600 seconds": "Phạm vi cho phép: 5-3600 giây",
+    "Allowed range: 1-100 RPS": "Phạm vi cho phép: 1-100 RPS",
+    "Allowed range: 1-100 concurrent requests": "Phạm vi cho phép: 1-100 yêu cầu đồng thời"
   }
 }

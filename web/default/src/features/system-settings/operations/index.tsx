@@ -56,6 +56,9 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'loadtest_setting.max_duration_seconds': 600,
+  'loadtest_setting.max_rps': 20,
+  'loadtest_setting.max_concurrency': 10,
 }
 
 export function OperationsSettings() {

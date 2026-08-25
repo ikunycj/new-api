@@ -51,6 +51,7 @@ const result: LoadTestRunResult = {
   packageName: '通用套餐',
   durationSeconds: 60,
   requestsPerSecond: 2,
+  concurrency: 10,
   prompt: 'Return one concise sentence.',
   userCharge: 0.2,
   requestIds: ['request-1'],

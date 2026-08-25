@@ -6277,6 +6277,16 @@
     "Current run metrics": "目前執行指標",
     "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "實際渠道成本 = 模型官方價格 × 渠道成本係數；使用者收費 = 模型官方價格 × 分組倍率。",
     "Average token price": "平均每個 token 單價",
-    "User charge = official model price × billing group ratio.": "使用者扣費 = 模型官方價格 × 計費分組倍率。"
+    "User charge = official model price × billing group ratio.": "使用者扣費 = 模型官方價格 × 計費分組倍率。",
+    "Failed to load load-test limits": "Failed to load load-test limits",
+    "Maximum concurrency must be between {{min}} and {{max}}.": "Maximum concurrency must be between {{min}} and {{max}}.",
+    "Allowed range: {{min}}-{{max}} concurrent requests": "Allowed range: {{min}}-{{max}} concurrent requests",
+    "Load Test Limits": "Load Test Limits",
+    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.",
+    "Maximum duration (seconds)": "Maximum duration (seconds)",
+    "Maximum requests per second": "Maximum requests per second",
+    "Allowed range: 5-3600 seconds": "Allowed range: 5-3600 seconds",
+    "Allowed range: 1-100 RPS": "Allowed range: 1-100 RPS",
+    "Allowed range: 1-100 concurrent requests": "Allowed range: 1-100 concurrent requests"
   }
 }

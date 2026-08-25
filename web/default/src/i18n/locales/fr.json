@@ -6277,6 +6277,16 @@
     "Current run metrics": "Métriques du test en cours",
     "Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.": "Coût réel du canal = prix officiel du modèle × facteur de coût du canal ; facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation.",
     "Average token price": "Prix moyen par token",
-    "User charge = official model price × billing group ratio.": "Facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation."
+    "User charge = official model price × billing group ratio.": "Facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation.",
+    "Failed to load load-test limits": "Échec du chargement des limites de test de charge",
+    "Maximum concurrency must be between {{min}} and {{max}}.": "La concurrence maximale doit être comprise entre {{min}} et {{max}}.",
+    "Allowed range: {{min}}-{{max}} concurrent requests": "Plage autorisée : {{min}}-{{max}} requêtes simultanées",
+    "Load Test Limits": "Limites du test de charge",
+    "These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.": "Ces limites s’appliquent à chaque test de charge. Le plafond est fixé à 10 000 requêtes.",
+    "Maximum duration (seconds)": "Durée maximale (secondes)",
+    "Maximum requests per second": "Nombre maximal de requêtes par seconde",
+    "Allowed range: 5-3600 seconds": "Plage autorisée : 5-3600 secondes",
+    "Allowed range: 1-100 RPS": "Plage autorisée : 1-100 RPS",
+    "Allowed range: 1-100 concurrent requests": "Plage autorisée : 1-100 requêtes simultanées"
   }
 }

@@ -25,6 +25,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { LoadTestSettingsSection } from './loadtest-settings-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -123,6 +124,22 @@ const OPERATIONS_SECTIONS = [
             settings['performance_setting.monitor_memory_threshold'] ?? 90,
           'performance_setting.monitor_disk_threshold':
             settings['performance_setting.monitor_disk_threshold'] ?? 95,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'loadtest',
+    titleKey: 'Load Test Limits',
+    build: (settings: OperationsSettings) => (
+      <LoadTestSettingsSection
+        defaultValues={{
+          'loadtest_setting.max_duration_seconds':
+            settings['loadtest_setting.max_duration_seconds'] ?? 600,
+          'loadtest_setting.max_rps':
+            settings['loadtest_setting.max_rps'] ?? 20,
+          'loadtest_setting.max_concurrency':
+            settings['loadtest_setting.max_concurrency'] ?? 10,
         }}
       />
     ),

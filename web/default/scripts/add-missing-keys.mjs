@@ -21,6 +21,20 @@ const newKeys = {
       'Actual channel cost = official model price × channel cost factor; user charge = official model price × billing group ratio.',
     'Requests per second must be between {{min}} and {{max}}.':
       'Requests per second must be between {{min}} and {{max}}.',
+    'Failed to load load-test limits': 'Failed to load load-test limits',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      'Maximum concurrency must be between {{min}} and {{max}}.',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      'Allowed range: {{min}}-{{max}} concurrent requests',
+    'Load Test Limits': 'Load Test Limits',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.',
+    'Maximum duration (seconds)': 'Maximum duration (seconds)',
+    'Maximum requests per second': 'Maximum requests per second',
+    'Allowed range: 5-3600 seconds': 'Allowed range: 5-3600 seconds',
+    'Allowed range: 1-100 RPS': 'Allowed range: 1-100 RPS',
+    'Allowed range: 1-100 concurrent requests':
+      'Allowed range: 1-100 concurrent requests',
     'User Type': 'User Type',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -104,6 +118,19 @@ const newKeys = {
       '实际渠道成本 = 模型官方价格 × 渠道成本系数；用户收费 = 模型官方价格 × 分组倍率。',
     'Requests per second must be between {{min}} and {{max}}.':
       '每秒请求数必须在 {{min}} 到 {{max}} 之间。',
+    'Failed to load load-test limits': '加载压测限制失败',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      '最大并发数必须在 {{min}} 到 {{max}} 之间。',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      '允许范围：{{min}}-{{max}} 个并发请求',
+    'Load Test Limits': '压测限制',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      '这些限制适用于所有压测 Demo；单次请求总数上限固定为 10,000。',
+    'Maximum duration (seconds)': '最大时长（秒）',
+    'Maximum requests per second': '最大每秒请求数',
+    'Allowed range: 5-3600 seconds': '允许范围：5-3600 秒',
+    'Allowed range: 1-100 RPS': '允许范围：1-100 RPS',
+    'Allowed range: 1-100 concurrent requests': '允许范围：1-100 个并发请求',
     'User Type': '用户类型',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -212,6 +239,21 @@ const newKeys = {
     'Average token price': 'Prix moyen par token',
     'User charge = official model price × billing group ratio.':
       'Facturation utilisateur = prix officiel du modèle × ratio du groupe de facturation.',
+    'Failed to load load-test limits':
+      'Échec du chargement des limites de test de charge',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      'La concurrence maximale doit être comprise entre {{min}} et {{max}}.',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      'Plage autorisée : {{min}}-{{max}} requêtes simultanées',
+    'Load Test Limits': 'Limites du test de charge',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      'Ces limites s’appliquent à chaque test de charge. Le plafond est fixé à 10 000 requêtes.',
+    'Maximum duration (seconds)': 'Durée maximale (secondes)',
+    'Maximum requests per second': 'Nombre maximal de requêtes par seconde',
+    'Allowed range: 5-3600 seconds': 'Plage autorisée : 5-3600 secondes',
+    'Allowed range: 1-100 RPS': 'Plage autorisée : 1-100 RPS',
+    'Allowed range: 1-100 concurrent requests':
+      'Plage autorisée : 1-100 requêtes simultanées',
     'Channel Reconciliation': 'Rapprochement du canal',
     'Cost entries': 'Périodes de coût',
     'Cost entry saved': 'Coût enregistré',
@@ -279,6 +321,20 @@ const newKeys = {
     'Average token price': 'トークン平均単価',
     'User charge = official model price × billing group ratio.':
       'ユーザー請求額 = モデル公式価格 × 課金グループ倍率。',
+    'Failed to load load-test limits': '負荷テスト制限の読み込みに失敗しました',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      '最大同時実行数は {{min}} から {{max}} の間で指定してください。',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      '許可範囲: {{min}}-{{max}} 件の同時リクエスト',
+    'Load Test Limits': '負荷テスト制限',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      'これらの制限はすべての負荷テストに適用されます。リクエスト上限は 10,000 件です。',
+    'Maximum duration (seconds)': '最大実行時間（秒）',
+    'Maximum requests per second': '最大リクエスト毎秒数',
+    'Allowed range: 5-3600 seconds': '許可範囲: 5-3600 秒',
+    'Allowed range: 1-100 RPS': '許可範囲: 1-100 RPS',
+    'Allowed range: 1-100 concurrent requests':
+      '許可範囲: 1-100 件の同時リクエスト',
     'Channel Reconciliation': 'チャネル照合',
     'Cost entries': 'コスト期間',
     'Cost entry saved': 'コストを保存しました',
@@ -346,6 +402,21 @@ const newKeys = {
     'Average token price': 'Средняя цена токена',
     'User charge = official model price × billing group ratio.':
       'Списание с пользователя = официальная цена модели × коэффициент группы биллинга.',
+    'Failed to load load-test limits':
+      'Не удалось загрузить ограничения нагрузочного теста',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      'Максимальная параллельность должна быть от {{min}} до {{max}}.',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      'Допустимый диапазон: {{min}}-{{max}} параллельных запросов',
+    'Load Test Limits': 'Ограничения нагрузочного теста',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      'Эти ограничения применяются к каждому нагрузочному тесту. Лимит запросов — 10 000.',
+    'Maximum duration (seconds)': 'Максимальная длительность (секунды)',
+    'Maximum requests per second': 'Максимальное число запросов в секунду',
+    'Allowed range: 5-3600 seconds': 'Допустимый диапазон: 5-3600 секунд',
+    'Allowed range: 1-100 RPS': 'Допустимый диапазон: 1-100 RPS',
+    'Allowed range: 1-100 concurrent requests':
+      'Допустимый диапазон: 1-100 параллельных запросов',
     'Channel Reconciliation': 'Сверка канала',
     'Cost entries': 'Периоды затрат',
     'Cost entry saved': 'Затраты сохранены',
@@ -413,6 +484,20 @@ const newKeys = {
     'Average token price': 'Giá trung bình mỗi token',
     'User charge = official model price × billing group ratio.':
       'Phí người dùng = giá chính thức của mô hình × hệ số nhóm thanh toán.',
+    'Failed to load load-test limits': 'Không thể tải giới hạn kiểm thử tải',
+    'Maximum concurrency must be between {{min}} and {{max}}.':
+      'Mức đồng thời tối đa phải từ {{min}} đến {{max}}.',
+    'Allowed range: {{min}}-{{max}} concurrent requests':
+      'Phạm vi cho phép: {{min}}-{{max}} yêu cầu đồng thời',
+    'Load Test Limits': 'Giới hạn kiểm thử tải',
+    'These limits apply to every load-test demo run. The request cap is fixed at 10,000 requests.':
+      'Các giới hạn này áp dụng cho mọi lần chạy kiểm thử tải. Giới hạn yêu cầu cố định là 10.000.',
+    'Maximum duration (seconds)': 'Thời lượng tối đa (giây)',
+    'Maximum requests per second': 'Số yêu cầu tối đa mỗi giây',
+    'Allowed range: 5-3600 seconds': 'Phạm vi cho phép: 5-3600 giây',
+    'Allowed range: 1-100 RPS': 'Phạm vi cho phép: 1-100 RPS',
+    'Allowed range: 1-100 concurrent requests':
+      'Phạm vi cho phép: 1-100 yêu cầu đồng thời',
     'Channel Reconciliation': 'Đối soát kênh',
     'Cost entries': 'Kỳ chi phí',
     'Cost entry saved': 'Đã lưu chi phí',
