@@ -28,6 +28,7 @@ interface NumericSpinnerInputProps {
   min?: number
   max?: number
   step?: number
+  precision?: number
   disabled?: boolean
   className?: string
   label?: string
@@ -39,41 +40,47 @@ export function NumericSpinnerInput({
   min = 0,
   max,
   step = 1,
+  precision,
   disabled = false,
   className,
   label,
 }: NumericSpinnerInputProps) {
-  const [localValue, setLocalValue] = useState(String(value ?? 0))
+  const decimalPlaces = precision ?? getDecimalPlaces(step)
+  const [localValue, setLocalValue] = useState(
+    formatNumericValue(Number(value ?? 0), decimalPlaces)
+  )
   const [editing, setEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!editing) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocalValue(String(value ?? 0))
+      setLocalValue(formatNumericValue(Number(value ?? 0), decimalPlaces))
     }
-  }, [value, editing])
+  }, [value, editing, decimalPlaces])
 
   const clamp = (v: number) => {
     let result = v
     if (min !== undefined) result = Math.max(min, result)
     if (max !== undefined) result = Math.min(max, result)
-    return result
+    return normalizeValue(result, decimalPlaces)
   }
 
   const handleIncrement = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (disabled) return
-    const next = clamp((Number(localValue) || 0) + step)
-    setLocalValue(String(next))
+    const current = Number(localValue)
+    const next = clamp((Number.isFinite(current) ? current : 0) + step)
+    setLocalValue(formatNumericValue(next, decimalPlaces))
     onChange(next)
   }
 
   const handleDecrement = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (disabled) return
-    const next = clamp((Number(localValue) || 0) - step)
-    setLocalValue(String(next))
+    const current = Number(localValue)
+    const next = clamp((Number.isFinite(current) ? current : 0) - step)
+    setLocalValue(formatNumericValue(next, decimalPlaces))
     onChange(next)
   }
 
@@ -89,19 +96,26 @@ export function NumericSpinnerInput({
       setLocalValue(raw)
       return
     }
-    if (!/^-?\d+$/.test(raw)) return
+    const pattern = decimalPlaces > 0 ? /^-?\d*(?:\.\d*)?$/ : /^-?\d+$/
+    if (!pattern.test(raw)) return
     setLocalValue(raw)
   }
 
   const commitValue = () => {
     setEditing(false)
     const num = Number(localValue)
-    if (isNaN(num) || localValue === '' || localValue === '-') {
-      setLocalValue(String(value ?? 0))
+    if (
+      !Number.isFinite(num) ||
+      localValue === '' ||
+      localValue === '-' ||
+      localValue === '.' ||
+      localValue === '-.'
+    ) {
+      setLocalValue(formatNumericValue(Number(value ?? 0), decimalPlaces))
       return
     }
     const clamped = clamp(num)
-    setLocalValue(String(clamped))
+    setLocalValue(formatNumericValue(clamped, decimalPlaces))
     if (clamped !== (value ?? 0)) {
       onChange(clamped)
     }
@@ -113,12 +127,15 @@ export function NumericSpinnerInput({
       commitValue()
     } else if (e.key === 'Escape') {
       setEditing(false)
-      setLocalValue(String(value ?? 0))
+      setLocalValue(formatNumericValue(Number(value ?? 0), decimalPlaces))
     }
   }
 
-  const atMin = min !== undefined && Number(localValue) <= min
-  const atMax = max !== undefined && Number(localValue) >= max
+  const parsedLocalValue = Number(localValue)
+  const hasNumericValue = Number.isFinite(parsedLocalValue)
+  const atMin = hasNumericValue && min !== undefined && parsedLocalValue <= min
+  const atMax = hasNumericValue && max !== undefined && parsedLocalValue >= max
+  const valueWidthClass = decimalPlaces > 0 ? 'w-14' : 'w-10'
 
   return (
     <div className={cn('inline-flex items-center', className)}>
@@ -153,11 +170,15 @@ export function NumericSpinnerInput({
           <input
             ref={inputRef}
             type='text'
+            inputMode={decimalPlaces > 0 ? 'decimal' : 'numeric'}
             value={localValue}
             onChange={handleInputChange}
             onBlur={commitValue}
             onKeyDown={handleKeyDown}
-            className='h-7 w-10 bg-transparent text-center font-mono text-sm outline-none'
+            className={cn(
+              'h-7 bg-transparent text-center font-mono text-sm outline-none',
+              valueWidthClass
+            )}
             autoFocus
           />
         ) : (
@@ -194,4 +215,26 @@ export function NumericSpinnerInput({
       </div>
     </div>
   )
+}
+
+function getDecimalPlaces(value: number): number {
+  const text = String(value)
+  const decimalIndex = text.indexOf('.')
+  return decimalIndex === -1 ? 0 : text.length - decimalIndex - 1
+}
+
+function formatNumericValue(value: number, decimalPlaces: number): string {
+  const normalizedValue = normalizeValue(value, decimalPlaces)
+  if (decimalPlaces === 0) {
+    return String(normalizedValue)
+  }
+  return normalizedValue.toFixed(decimalPlaces).replace(/\.?0+$/, '')
+}
+
+function normalizeValue(value: number, decimalPlaces: number): number {
+  if (decimalPlaces === 0) {
+    return Math.round(value)
+  }
+  const factor = 10 ** decimalPlaces
+  return Math.round((value + Number.EPSILON) * factor) / factor
 }

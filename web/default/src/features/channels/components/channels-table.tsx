@@ -431,8 +431,9 @@ export function ChannelsTable() {
       renderCard={(row, { isSelected }) => (
         <ChannelCard row={row} isSelected={isSelected} />
       )}
-      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+      cardGridClassName='grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-3'
       applyHeaderSize
+      getColumnClassName={(_, part) => (part === 'cell' ? 'py-1.5' : undefined)}
       toolbarProps={{
         searchPlaceholder: t('Filter by name, ID, or key...'),
         searchDebounceMs: 500,

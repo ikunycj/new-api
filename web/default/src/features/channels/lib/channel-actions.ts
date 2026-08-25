@@ -204,7 +204,7 @@ export async function handleDeleteChannel(
  */
 export async function handleUpdateChannelField(
   id: number,
-  fieldName: 'weight',
+  fieldName: 'weight' | 'price_multiplier',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void
@@ -214,7 +214,9 @@ export async function handleUpdateChannelField(
     if (response.success) {
       // Show success toast with field name
       const fieldLabel =
-        fieldName.charAt(0).toUpperCase() + fieldName.slice(1).toLowerCase()
+        fieldName === 'price_multiplier'
+          ? i18next.t('Channel price multiplier')
+          : i18next.t('Weight')
       toast.success(
         i18next.t('{{field}} updated to {{value}}', {
           field: fieldLabel,

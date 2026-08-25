@@ -243,6 +243,39 @@ function WeightCell({ channel }: { channel: Channel }) {
 }
 
 /**
+ * Inline price multiplier editor. The effective default is 1 when a channel
+ * has no positive multiplier, matching the backend's pricing behavior.
+ */
+function PriceMultiplierCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+
+  return (
+    <div className='flex items-center gap-1'>
+      <span className='text-muted-foreground text-xs'>×</span>
+      <NumericSpinnerInput
+        value={getDisplayPriceMultiplier(channel)}
+        min={0}
+        max={1000}
+        step={0.01}
+        precision={2}
+        onChange={(value) => {
+          handleUpdateChannelField(
+            channel.id,
+            'price_multiplier',
+            value,
+            queryClient
+          )
+        }}
+      />
+    </div>
+  )
+}
+
+/**
  * Inline balance/used values longer than this switch to locale-aware compact
  * notation (e.g. "$28万"); the precise value stays available in the tooltip.
  */
@@ -1011,96 +1044,34 @@ export function useChannelsColumns(
         accessorKey: 'price_multiplier',
         header: t('Channel price multiplier'),
         meta: { mobileHidden: true },
+        cell: ({ row }) => <PriceMultiplierCell channel={row.original} />,
+        size: 118,
+        enableSorting: false,
+      },
+
+      // Previous-day probe success rate
+      {
+        accessorKey: 'previous_day_probe_success_rate',
+        header: t('Previous-day probe success rate'),
         cell: ({ row }) => {
-          if (isTagAggregateRow(row.original)) {
-            return <span className='text-muted-foreground text-xs'>-</span>
-          }
+          const rawRate = row.getValue(
+            'previous_day_probe_success_rate'
+          ) as number
+          const rate = Number.isFinite(rawRate)
+            ? Math.min(100, Math.max(0, rawRate))
+            : 100
           return (
             <StatusBadge
-              label={`×${getDisplayPriceMultiplier(row.original).toFixed(2)}`}
-              variant='neutral'
+              label={`${rate.toFixed(1)}%`}
+              variant={getProbeSuccessRateVariant(rate)}
               size='sm'
               copyable={false}
               className='-ml-1.5 shrink-0'
             />
-          )
-        },
-        size: 130,
-        enableSorting: false,
-      },
-
-      // Test model column
-      {
-        accessorKey: 'test_model',
-        header: t('Test Model'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          if (isTagAggregateRow(row.original)) {
-            return <span className='text-muted-foreground text-xs'>-</span>
-          }
-          const testModel = row.original.test_model?.trim()
-          return testModel ? (
-            <TruncatedText
-              text={testModel}
-              className='font-mono text-xs'
-              maxWidth='max-w-[180px]'
-            />
-          ) : (
-            <span className='text-muted-foreground text-xs'>-</span>
-          )
-        },
-        size: 180,
-        enableSorting: false,
-      },
-
-      // Upstream retry limit column
-      {
-        accessorKey: 'upstream_max_retries',
-        header: t('Upstream max retries'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          if (isTagAggregateRow(row.original)) {
-            return <span className='text-muted-foreground text-xs'>-</span>
-          }
-          const retries = row.original.upstream_max_retries ?? 3
-          return (
-            <span className='text-sm tabular-nums'>
-              {retries}
-            </span>
           )
         },
         size: 145,
         enableSorting: false,
-      },
-
-      // Balance column (Used/Remaining)
-      {
-        accessorKey: 'balance',
-        header: t('Used / Remaining'),
-        cell: ({ row }) => <BalanceCell channel={row.original} />,
-        size: 180,
-      },
-
-      // Response Time column
-      {
-        accessorKey: 'response_time',
-        header: t('Response'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          const responseTime = row.getValue('response_time') as number
-          const config = getResponseTimeConfig(responseTime)
-
-          return (
-            <StatusBadge
-              label={formatResponseTime(responseTime, t)}
-              variant={config.variant}
-              size='sm'
-              copyable={false}
-              className='-ml-1.5 shrink-0'
-            />
-          )
-        },
-        size: 110,
       },
 
       // Test Time column
@@ -1149,32 +1120,78 @@ export function useChannelsColumns(
             </TooltipProvider>
           )
         },
-        size: 140,
+        size: 128,
         enableSorting: false,
       },
 
-      // Previous-day probe success rate
+      // Balance column (Used/Remaining)
       {
-        accessorKey: 'previous_day_probe_success_rate',
-        header: t('Previous-day probe success rate'),
+        accessorKey: 'balance',
+        header: t('Used / Remaining'),
+        cell: ({ row }) => <BalanceCell channel={row.original} />,
+        size: 165,
+      },
+
+      // Test model column
+      {
+        accessorKey: 'test_model',
+        header: t('Test Model'),
+        meta: { mobileHidden: true },
         cell: ({ row }) => {
-          const rawRate = row.getValue(
-            'previous_day_probe_success_rate'
-          ) as number
-          const rate = Number.isFinite(rawRate)
-            ? Math.min(100, Math.max(0, rawRate))
-            : 100
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          const testModel = row.original.test_model?.trim()
+          return testModel ? (
+            <TruncatedText
+              text={testModel}
+              className='font-mono text-xs'
+              maxWidth='max-w-[160px]'
+            />
+          ) : (
+            <span className='text-muted-foreground text-xs'>-</span>
+          )
+        },
+        size: 160,
+        enableSorting: false,
+      },
+
+      // Upstream retry limit column
+      {
+        accessorKey: 'upstream_max_retries',
+        header: t('Upstream max retries'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          const retries = row.original.upstream_max_retries ?? 3
+          return <span className='text-sm tabular-nums'>{retries}</span>
+        },
+        size: 125,
+        enableSorting: false,
+      },
+
+      // Response Time column
+      {
+        accessorKey: 'response_time',
+        header: t('Response'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const responseTime = row.getValue('response_time') as number
+          const config = getResponseTimeConfig(responseTime)
+
           return (
             <StatusBadge
-              label={`${rate.toFixed(1)}%`}
-              variant={getProbeSuccessRateVariant(rate)}
+              label={formatResponseTime(responseTime, t)}
+              variant={config.variant}
               size='sm'
               copyable={false}
               className='-ml-1.5 shrink-0'
             />
           )
         },
-        size: 165,
+        size: 100,
         enableSorting: false,
       },
 

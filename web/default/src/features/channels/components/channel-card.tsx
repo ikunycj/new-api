@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { flexRender, type Row } from '@tanstack/react-table'
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GroupBadge } from '@/components/group-badge'
@@ -31,13 +31,42 @@ import { useChannels } from './channels-provider'
 
 const SENSITIVE_MASK = '••••'
 
+function ChannelMetric({
+  label,
+  children,
+  valueClassName,
+}: {
+  label: string
+  children: ReactNode
+  valueClassName?: string
+}) {
+  return (
+    <div className='flex min-w-0 items-center justify-between gap-2'>
+      <span
+        className='text-muted-foreground min-w-0 truncate text-[11px] font-medium select-none'
+        title={label}
+      >
+        {label}
+      </span>
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 justify-end overflow-hidden text-right text-sm',
+          valueClassName
+        )}
+      >
+        {children ?? <span className='text-muted-foreground'>-</span>}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Bespoke channel card for the card view. Reuses every column's existing cell
  * renderer via `flexRender`, so the table's information and interactions are
  * preserved: row selection, provider/multi-key/IO.NET type badge, id,
- * name/remark + warning icons, status (with tooltips), groups, inline
- * inline weight spinner, balance refresh, response/test times, previous-day
- * probe rate, tag
+ * name/remark + warning icons, status (with tooltips), groups, inline weight
+ * and price multiplier spinners, balance refresh, response/test
+ * times, previous-day probe rate, tag
  * expand-collapse, and the per-row (or per-tag) actions menu.
  */
 function ChannelCardComponent({
@@ -88,8 +117,6 @@ function ChannelCardComponent({
     'previous_day_probe_success_rate'
   )
 
-  const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
-
   // In card view the enable/disable state is already conveyed by the inline
   // power toggle, so the plain "Enabled"/"Disabled" badge is redundant. Keep
   // only the informative states (e.g. auto-disabled, unknown) and tag rows.
@@ -102,7 +129,7 @@ function ChannelCardComponent({
     <ChannelRowActionsLayoutContext.Provider value='card'>
       <div
         data-state={isSelected ? 'selected' : undefined}
-        className='flex flex-col gap-3'
+        className='flex flex-col gap-2'
       >
         {/* Row 1: selection + type, with status badge + actions menu */}
         <div className='flex items-center justify-between gap-2'>
@@ -118,85 +145,45 @@ function ChannelCardComponent({
           </div>
         </div>
 
-        {/* Body: left column (id/name + balance) paired with a right-aligned
-          column (weight + response/test time). */}
-        <div className='flex items-start justify-between gap-3'>
-          {/* Left column */}
-          <div className='flex min-w-0 flex-1 flex-col gap-3 overflow-hidden'>
-            <div className='min-w-0 text-sm'>
-              {!isTagRow && (
-                <div className={labelClass}>
-                  #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
-                </div>
-              )}
-              {nameCell}
-            </div>
-            <div className='min-w-0'>
-              <div className={cn('mb-1', labelClass)}>
-                {fieldLabels.balance}
+        {/* Name and compact label/value metrics share the same reading order. */}
+        <div className='flex min-w-0 flex-col gap-2 overflow-hidden'>
+          <div className='min-w-0 text-sm leading-tight'>
+            {!isTagRow && (
+              <div className='text-muted-foreground text-[11px] font-medium select-none'>
+                #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
               </div>
-              <div className='min-w-0 overflow-hidden text-sm'>
-                {balanceCell ?? (
-                  <span className='text-muted-foreground'>-</span>
-                )}
-              </div>
-            </div>
-            <div className='min-w-0'>
-              <div className={cn('mb-1', labelClass)}>
-                {fieldLabels.test_model}
-              </div>
-              <div className='min-w-0 overflow-hidden text-sm'>
-                {testModelCell ?? (
-                  <span className='text-muted-foreground'>-</span>
-                )}
-              </div>
-            </div>
-            <div className='min-w-0'>
-              <div
-                className={cn('mb-1', labelClass)}
-                title={t('Previous-day probe success rate')}
-              >
-                {fieldLabels.previous_day_probe_success_rate}
-              </div>
-              <div className='min-w-0 text-sm whitespace-nowrap'>
-                {previousDayProbeSuccessRateCell ?? (
-                  <span className='text-muted-foreground'>-</span>
-                )}
-              </div>
-            </div>
+            )}
+            {nameCell}
           </div>
 
-          {/* Right column (sits on the right, content left-aligned). */}
-          <div className='grid shrink-0 grid-cols-[max-content_max-content] items-baseline gap-x-3 gap-y-2'>
-            <span className={labelClass}>{t('Weight')}</span>
-            <span className={labelClass}>{fieldLabels.response_time}</span>
-            <span className={labelClass}>{fieldLabels.price_multiplier}</span>
-            <span className={labelClass}>
-              {fieldLabels.upstream_max_retries}
-            </span>
-            <div className='text-sm whitespace-nowrap'>{weightCell}</div>
-            <div className='text-sm whitespace-nowrap'>
-              {responseCell ?? <span className='text-muted-foreground'>-</span>}
-            </div>
-            <div className='text-sm whitespace-nowrap'>
-              {priceMultiplierCell ?? (
-                <span className='text-muted-foreground'>-</span>
-              )}
-            </div>
-            <div className='text-sm whitespace-nowrap'>
-              {upstreamMaxRetriesCell ?? (
-                <span className='text-muted-foreground'>-</span>
-              )}
-            </div>
-            <span className={labelClass}>{fieldLabels.test_time}</span>
-            <div className='text-sm whitespace-nowrap'>
-              {testCell ?? <span className='text-muted-foreground'>-</span>}
-            </div>
+          <div className='grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2'>
+            <ChannelMetric label={fieldLabels.previous_day_probe_success_rate}>
+              {previousDayProbeSuccessRateCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.test_time}>
+              {testCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.balance}>
+              {balanceCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.test_model}>
+              {testModelCell}
+            </ChannelMetric>
+            <ChannelMetric label={t('Weight')}>{weightCell}</ChannelMetric>
+            <ChannelMetric label={fieldLabels.response_time}>
+              {responseCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.price_multiplier}>
+              {priceMultiplierCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.upstream_max_retries}>
+              {upstreamMaxRetriesCell}
+            </ChannelMetric>
           </div>
         </div>
 
         {/* Last row: groups span the full width, showing every group (no label) */}
-        <div className='min-w-0'>
+        <div className='-mt-0.5 min-w-0'>
           {groups.length > 0 ? (
             <div className='-ml-1.5 flex flex-wrap gap-1'>
               {groups.map((g) => (
