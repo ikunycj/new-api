@@ -618,6 +618,8 @@ export function LoadTestDemo() {
     durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
   const rpsValue =
     requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
+  const concurrencyValue =
+    concurrency.trim() === '' ? Number.NaN : Number(concurrency)
   const durationMs = Number.isFinite(durationValue) ? durationValue * 1000 : 0
   const progress =
     durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
@@ -717,11 +719,22 @@ export function LoadTestDemo() {
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
       ? Math.ceil(durationValue * rpsValue)
       : 0
+  const hasValidLoadSettings =
+    Number.isFinite(durationValue) &&
+    durationValue >= limits.min_duration_seconds &&
+    durationValue <= limits.max_duration_seconds &&
+    Number.isFinite(rpsValue) &&
+    rpsValue >= limits.min_rps &&
+    rpsValue <= limits.max_rps &&
+    Number.isInteger(concurrencyValue) &&
+    concurrencyValue >= limits.min_concurrency &&
+    concurrencyValue <= limits.max_concurrency
   const canRun =
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
     selectedModel !== '' &&
     prompt.trim() !== '' &&
+    hasValidLoadSettings &&
     !modelsLoading &&
     !limitsLoading
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
@@ -751,7 +764,7 @@ export function LoadTestDemo() {
           prompt_cache: promptCache,
           duration_seconds: durationValue,
           requests_per_second: rpsValue,
-          concurrency: Number(concurrency),
+          concurrency: concurrencyValue,
         }
       : null
 

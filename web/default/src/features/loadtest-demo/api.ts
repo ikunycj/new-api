@@ -1,3 +1,5 @@
+import { isAxiosError } from 'axios'
+
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -363,14 +365,24 @@ export async function deleteLoadTestAgent(
 export async function createLoadTestAgentRun(
   request: CreateLoadTestAgentRun
 ): Promise<LoadTestAgentRun> {
-  const response = await api.post<{
-    success: boolean
-    message?: string
-    data?: LoadTestAgentRun
-  }>('/api/loadtest/runs', request, {
-    skipBusinessError: true,
-    skipErrorHandler: true,
-  })
+  let response
+  try {
+    response = await api.post<{
+      success: boolean
+      message?: string
+      data?: LoadTestAgentRun
+    }>('/api/loadtest/runs', request, {
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    })
+  } catch (error) {
+    if (isAxiosError<{ message?: string }>(error)) {
+      throw new Error(
+        error.response?.data.message || 'Failed to create agent run'
+      )
+    }
+    throw error
+  }
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Failed to create agent run')
   }
