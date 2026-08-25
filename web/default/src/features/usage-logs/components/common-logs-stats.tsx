@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatLogQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { getLogStats, getUserLogStats } from '../api'
+import { getCostReconciliation, getLogStats, getUserLogStats } from '../api'
 import { DEFAULT_LOG_STATS } from '../constants'
 import { buildApiParams } from '../lib/utils'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
@@ -52,6 +52,28 @@ export function CommonLogsStats() {
   const { isAdminView: isAdmin } = useLogsViewScope()
   const searchParams = route.useSearch()
   const { sensitiveVisible } = useUsageLogsContext()
+
+  const costQuery = useQuery({
+    queryKey: ['usage-logs-cost-reconciliation', searchParams],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const toSeconds = (value: unknown) => {
+        const timestamp = Number(value)
+        return Number.isFinite(timestamp) && timestamp > 0
+          ? Math.floor(timestamp / 1000)
+          : undefined
+      }
+      const params: Record<string, unknown> = {
+        start_timestamp: toSeconds(searchParams.startTime),
+        end_timestamp: toSeconds(searchParams.endTime),
+        keyword: searchParams.username || searchParams.keyword || undefined,
+        token_name: searchParams.token || undefined,
+        channel_id: searchParams.channel || undefined,
+        group: searchParams.group || undefined,
+      }
+      return getCostReconciliation(params)
+    },
+  })
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['usage-logs-stats', isAdmin, searchParams],
@@ -90,6 +112,9 @@ export function CommonLogsStats() {
   const cacheHitRate = hasCacheStats
     ? `${(stats?.cache_hit_rate || 0).toFixed(1)}%`
     : '-'
+  const costTotals = costQuery.data?.data?.totals
+  const formatUSD = (micros: number | undefined) =>
+    microssafe(micros) ? `$${((micros ?? 0) / 1_000_000).toFixed(4)}` : '-'
 
   return (
     <div className='flex flex-wrap items-center gap-2'>
@@ -113,6 +138,44 @@ export function CommonLogsStats() {
         value={cacheHitRate}
         accent='bg-emerald-500/70'
       />
+      {isAdmin && (
+        <>
+          <StatBadge
+            label={t('Estimated cost')}
+            value={formatUSD(costTotals?.estimated_cost_usd_micros)}
+            accent='bg-amber-500/70'
+          />
+          <StatBadge
+            label={t('User charge')}
+            value={formatUSD(costTotals?.user_charge_usd_micros)}
+            accent='bg-cyan-500/70'
+          />
+          <StatBadge
+            label={t('Retry')}
+            value={formatUSD(costTotals?.retry_cost_usd_micros)}
+            accent='bg-violet-500/70'
+          />
+          <StatBadge
+            label={t('Estimate variance')}
+            value={formatUSD(costTotals?.diff_usd_micros)}
+            accent='bg-fuchsia-500/70'
+          />
+          <StatBadge
+            label={t('Failed')}
+            value={formatUSD(costTotals?.failed_partial_cost_usd_micros)}
+            accent='bg-rose-500/70'
+          />
+          <StatBadge
+            label={t('Unavailable')}
+            value={costTotals?.unavailable_count || 0}
+            accent='bg-slate-500/70'
+          />
+        </>
+      )}
     </div>
   )
+}
+
+function microssafe(value: number | undefined): boolean {
+  return typeof value === 'number' && Number.isFinite(value)
 }

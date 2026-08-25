@@ -286,7 +286,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 		}
 
-		addUsedChannel(c, channel.Id)
+		addUsedChannel(c, channel.Id, relayInfo.UsingGroup)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
@@ -317,6 +317,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 		}()
 		attemptDuration := time.Since(attemptStartedAt)
+		if newAPIError != nil && relayInfo.ClaudeConvertInfo != nil {
+			service.RecordFailedAttemptUsage(c, relayInfo.UsingGroup, channel.Id, relayInfo.ClaudeConvertInfo.Usage)
+		}
 
 		contextErr := c.Request.Context().Err()
 		attemptClass := observability.ErrorClass(newAPIError, contextErr)
@@ -436,10 +439,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func addUsedChannel(c *gin.Context, channelId int) {
+func addUsedChannel(c *gin.Context, channelId int, group string) {
 	useChannel := c.GetStringSlice("use_channel")
 	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
 	c.Set("use_channel", useChannel)
+	useGroups := c.GetStringSlice("use_channel_groups")
+	useGroups = append(useGroups, group)
+	c.Set("use_channel_groups", useGroups)
 }
 
 func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
@@ -870,7 +876,7 @@ func RelayTask(c *gin.Context) {
 			}
 		}
 
-		addUsedChannel(c, channel.Id)
+		addUsedChannel(c, channel.Id, relayInfo.UsingGroup)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {

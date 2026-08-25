@@ -505,6 +505,16 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if tieredBillingApplied {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
+	other["cost_reconciliation"] = BuildCostReconciliationSnapshot(
+		ctx,
+		relayInfo,
+		summary.PromptTokens,
+		summary.CompletionTokens,
+		summary.Quota,
+		summary.ModelPrice,
+		summary.GroupRatio,
+		summary.BillingUSDToCNYRate,
+	)
 
 	attachQuotaSaturation(ctx, relayInfo, other)
 

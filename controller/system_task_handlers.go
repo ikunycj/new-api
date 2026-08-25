@@ -22,6 +22,42 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(costReconciliationHandler{})
+}
+
+type costReconciliationHandler struct{}
+
+func (costReconciliationHandler) Type() string { return model.SystemTaskTypeCostReconciliation }
+func (costReconciliationHandler) Enabled() bool {
+	return common.GetEnvOrDefaultBool("COST_RECONCILIATION_ENABLED", true)
+}
+func (costReconciliationHandler) Interval() time.Duration { return time.Minute }
+func (costReconciliationHandler) NewPayload() any {
+	now := common.GetTimestamp()
+	return costReconciliationPayload{StartTimestamp: now - int64((15 * time.Minute).Seconds()), EndTimestamp: now}
+}
+
+type costReconciliationPayload struct {
+	StartTimestamp int64 `json:"start_timestamp"`
+	EndTimestamp   int64 `json:"end_timestamp"`
+}
+
+func (costReconciliationHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	payload := costReconciliationPayload{}
+	if err := task.DecodePayload(&payload); err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	if payload.EndTimestamp <= payload.StartTimestamp {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, fmt.Errorf("invalid cost reconciliation task window"))
+		return
+	}
+	count, err := model.RebuildCostReconciliationRollup(payload.StartTimestamp, payload.EndTimestamp)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, map[string]interface{}{"rollup_count": count}, nil)
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and

@@ -27,6 +27,7 @@ import type {
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
   UserInfo,
+  CostReconciliationResponse,
 } from './types'
 
 // ============================================================================
@@ -83,6 +84,14 @@ export const getLogStats = (params: GetLogStatsParams = {}) =>
 export const getUserLogStats = (
   params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
 ) => fetchLogStats('/api/log', params, false)
+
+export async function getCostReconciliation(
+  params: Record<string, unknown>
+): Promise<CostReconciliationResponse> {
+  const queryParams = buildQueryParams(params)
+  const res = await api.get(`/api/log/cost-reconciliation?${queryParams}`)
+  return res.data
+}
 
 export async function getUserInfo(
   userId: number

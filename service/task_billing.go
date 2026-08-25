@@ -52,6 +52,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
+	other["cost_reconciliation"] = BuildCostReconciliationSnapshot(c, info, 0, 0, info.PriceData.Quota, info.PriceData.ModelPrice, info.PriceData.GroupRatioInfo.GroupRatio, info.PriceData.EffectiveBillingUSDToCNYRate())
 	attachQuotaSaturation(c, info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,

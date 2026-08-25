@@ -229,6 +229,18 @@ export interface LogOtherData {
   subscription_consumed?: number
   subscription_remain?: number
   subscription_total?: number
+  cost_reconciliation?: {
+    version?: number
+    status?: 'estimated' | 'unavailable' | string
+    user_charge_usd_micros?: number
+    estimated_cost_usd_micros?: number
+    successful_cost_usd_micros?: number
+    retry_cost_usd_micros?: number
+    failed_partial_usage_cost_usd_micros?: number
+    channel_cost_factor_source?: string
+    retry_cost_basis?: string
+    failed_partial_usage_basis?: string
+  }
 }
 
 /**
@@ -244,6 +256,26 @@ export interface LogStatistics {
   cache_hit_requests: number
   cache_eligible_requests: number
   cache_hit_rate: number
+}
+
+export interface CostReconciliationTotals {
+  request_count: number
+  user_charge_usd_micros: number
+  estimated_cost_usd_micros: number
+  successful_cost_usd_micros: number
+  retry_cost_usd_micros: number
+  failed_partial_cost_usd_micros: number
+  diff_usd_micros: number
+  estimated_count: number
+  unavailable_count: number
+}
+
+export interface CostReconciliationResponse {
+  success: boolean
+  message?: string
+  data?: {
+    totals: CostReconciliationTotals
+  }
 }
 
 // ============================================================================
