@@ -198,6 +198,10 @@ func GetUsableLoadTestAgent(userID int, agentID string) (*LoadTestAgent, error) 
 }
 
 func TouchLoadTestAgent(agentID string, runtime LoadTestAgentRuntime) error {
+	var agent LoadTestAgent
+	if err := DB.Select("managed").Where("id = ? AND revoked_at = 0", agentID).First(&agent).Error; err != nil {
+		return err
+	}
 	updates := map[string]any{"last_seen_at": common.GetTimestamp()}
 	if strings.TrimSpace(runtime.Name) != "" {
 		updates["name"] = runtime.Name
@@ -210,9 +214,28 @@ func TouchLoadTestAgent(agentID string, runtime LoadTestAgentRuntime) error {
 	}
 	updates["cpu_cores"] = runtime.CPUCores
 	updates["memory_bytes"] = runtime.MemoryBytes
-	updates["max_rps"] = runtime.MaxRPS
-	updates["max_concurrency"] = runtime.MaxConcurrency
+	if !agent.Managed {
+		updates["max_rps"] = runtime.MaxRPS
+		updates["max_concurrency"] = runtime.MaxConcurrency
+	}
 	return DB.Model(&LoadTestAgent{}).Where("id = ? AND revoked_at = 0", agentID).Updates(updates).Error
+}
+
+func UpdateManagedLoadTestAgentCapacity(agentID string, maxRPS, maxConcurrency int) (*LoadTestAgent, error) {
+	result := DB.Model(&LoadTestAgent{}).
+		Where("id = ? AND managed = ? AND secret_hash IS NOT NULL AND revoked_at = 0", agentID, true).
+		Updates(map[string]any{"max_rps": maxRPS, "max_concurrency": maxConcurrency})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var agent LoadTestAgent
+	if err := DB.Where("id = ?", agentID).First(&agent).Error; err != nil {
+		return nil, err
+	}
+	return &agent, nil
 }
 
 func RevokeLoadTestAgent(userID int, agentID string) error {

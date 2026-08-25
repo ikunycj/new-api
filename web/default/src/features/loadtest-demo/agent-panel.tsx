@@ -24,6 +24,7 @@ import {
   Server,
   Square,
   Trash2,
+  Pencil,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -62,6 +63,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useIsAdmin } from '@/hooks/use-admin'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 import {
   cancelLoadTestAgentRun,
@@ -70,6 +73,7 @@ import {
   deleteLoadTestAgent,
   getLoadTestAgentState,
   loadLoadTestPricing,
+  updateManagedLoadTestAgentCapacity,
   type CreateLoadTestAgentRun,
   type LoadTestAgent,
   type LoadTestAgentRun,
@@ -115,6 +119,10 @@ export function AgentPanel(props: AgentPanelProps) {
     Record<string, LoadTestPricing | null>
   >({})
   const [pairing, setPairing] = useState<Pairing | null>(null)
+  const [capacityAgent, setCapacityAgent] = useState<LoadTestAgent | null>(null)
+  const [capacityRPS, setCapacityRPS] = useState('')
+  const [capacityConcurrency, setCapacityConcurrency] = useState('')
+  const [savingCapacity, setSavingCapacity] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const refreshInFlightRef = useRef(false)
@@ -279,6 +287,41 @@ export function AgentPanel(props: AgentPanelProps) {
     [props.mode, refresh, t]
   )
 
+  const editCapacity = useCallback((agent: LoadTestAgent) => {
+    setCapacityAgent(agent)
+    setCapacityRPS(String(agent.max_rps))
+    setCapacityConcurrency(String(agent.max_concurrency))
+  }, [])
+
+  const saveCapacity = useCallback(async () => {
+    if (!capacityAgent) return
+    const maxRPS = Number(capacityRPS)
+    const maxConcurrency = Number(capacityConcurrency)
+    if (
+      !Number.isInteger(maxRPS) ||
+      maxRPS < 1 ||
+      !Number.isInteger(maxConcurrency) ||
+      maxConcurrency < 1
+    ) {
+      toast.error(t('Agent capacity must be a positive integer'))
+      return
+    }
+    setSavingCapacity(true)
+    try {
+      await updateManagedLoadTestAgentCapacity(capacityAgent.id, {
+        max_rps: maxRPS,
+        max_concurrency: maxConcurrency,
+      })
+      setCapacityAgent(null)
+      await refresh()
+      toast.success(t('Agent capacity updated'))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('Request failed'))
+    } finally {
+      setSavingCapacity(false)
+    }
+  }, [capacityAgent, capacityConcurrency, capacityRPS, refresh, t])
+
   const onlineAgents = agents.filter(
     (agent) => agent.last_seen_at >= onlineBefore
   )
@@ -393,6 +436,16 @@ export function AgentPanel(props: AgentPanelProps) {
                         variant='ghost'
                       >
                         <Trash2 className='size-3' />
+                      </Button>
+                    )}
+                    {props.mode === 'managed' && isAdmin && (
+                      <Button
+                        aria-label={t('Edit')}
+                        onClick={() => editCapacity(agent)}
+                        size='icon-xs'
+                        variant='ghost'
+                      >
+                        <Pencil className='size-3' />
                       </Button>
                     )}
                   </div>
@@ -549,6 +602,56 @@ export function AgentPanel(props: AgentPanelProps) {
             <Button onClick={() => void copyPairCommand()}>
               <Copy className='size-4' />
               {t('Copy command')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={capacityAgent !== null}
+        onOpenChange={(open) => !open && setCapacityAgent(null)}
+      >
+        <DialogContent className='sm:max-w-lg'>
+          <DialogHeader>
+            <DialogTitle>{t('Edit server agent capacity')}</DialogTitle>
+            <DialogDescription>
+              {t('These limits apply to tasks submitted to this server agent.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className='grid gap-4 py-2'>
+            <div className='grid gap-2'>
+              <Label htmlFor='managed-agent-max-rps'>
+                {t('Maximum requests per second')}
+              </Label>
+              <Input
+                id='managed-agent-max-rps'
+                min={1}
+                max={10000}
+                onChange={(event) => setCapacityRPS(event.target.value)}
+                type='number'
+                value={capacityRPS}
+              />
+            </div>
+            <div className='grid gap-2'>
+              <Label htmlFor='managed-agent-max-concurrency'>
+                {t('Maximum concurrency')}
+              </Label>
+              <Input
+                id='managed-agent-max-concurrency'
+                min={1}
+                max={10000}
+                onChange={(event) => setCapacityConcurrency(event.target.value)}
+                type='number'
+                value={capacityConcurrency}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={savingCapacity}
+              onClick={() => void saveCapacity()}
+            >
+              {t('Save')}
             </Button>
           </DialogFooter>
         </DialogContent>

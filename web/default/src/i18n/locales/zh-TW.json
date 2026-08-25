@@ -6326,6 +6326,10 @@
     "Pricing risk detected": "偵測到定價風險",
     "Profit protection": "利潤率保護",
     "Protection mode": "保護模式",
-    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "從第 {{position}} 次嘗試開始，目前嘗試路徑將低於最低利潤率。"
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "從第 {{position}} 次嘗試開始，目前嘗試路徑將低於最低利潤率。",
+    "Edit server agent capacity": "編輯伺服器 Agent 容量",
+    "These limits apply to tasks submitted to this server agent.": "這些限制套用於提交至此伺服器 Agent 的工作。",
+    "Agent capacity must be a positive integer": "Agent 容量必須是正整數",
+    "Agent capacity updated": "Agent 容量已更新"
   }
 }

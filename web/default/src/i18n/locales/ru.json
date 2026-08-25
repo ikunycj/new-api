@@ -6326,6 +6326,10 @@
     "Pricing risk detected": "Обнаружен ценовой риск",
     "Profit protection": "Защита рентабельности",
     "Protection mode": "Режим защиты",
-    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Настроенный путь опускается ниже минимальной рентабельности начиная с попытки {{position}}."
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Настроенный путь опускается ниже минимальной рентабельности начиная с попытки {{position}}.",
+    "Edit server agent capacity": "Изменить емкость серверного агента",
+    "These limits apply to tasks submitted to this server agent.": "Эти ограничения применяются к задачам, отправленным этому серверному агенту.",
+    "Agent capacity must be a positive integer": "Емкость агента должна быть положительным целым числом",
+    "Agent capacity updated": "Емкость агента обновлена"
   }
 }

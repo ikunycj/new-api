@@ -1066,6 +1066,12 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       'Run the test on a shared load generator managed by the platform.',
     'Server load test': 'Server load test',
+    'Edit server agent capacity': 'Edit server agent capacity',
+    'These limits apply to tasks submitted to this server agent.':
+      'These limits apply to tasks submitted to this server agent.',
+    'Agent capacity must be a positive integer':
+      'Agent capacity must be a positive integer',
+    'Agent capacity updated': 'Agent capacity updated',
   },
   zh: {
     'Add server agent': '添加服务器 Agent',
@@ -1077,6 +1083,11 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       '使用平台管理的共享压测机执行测试。',
     'Server load test': '服务器压测',
+    'Edit server agent capacity': '编辑服务器 Agent 容量',
+    'These limits apply to tasks submitted to this server agent.':
+      '这些限制适用于提交到此服务器 Agent 的任务。',
+    'Agent capacity must be a positive integer': 'Agent 容量必须是正整数',
+    'Agent capacity updated': 'Agent 容量已更新',
   },
   'zh-TW': {
     'Add server agent': '新增伺服器 Agent',
@@ -1088,6 +1099,11 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       '使用平台管理的共享壓測機執行測試。',
     'Server load test': '伺服器壓測',
+    'Edit server agent capacity': '編輯伺服器 Agent 容量',
+    'These limits apply to tasks submitted to this server agent.':
+      '這些限制套用於提交至此伺服器 Agent 的工作。',
+    'Agent capacity must be a positive integer': 'Agent 容量必須是正整數',
+    'Agent capacity updated': 'Agent 容量已更新',
   },
   fr: {
     'Add server agent': 'Ajouter un agent serveur',
@@ -1100,6 +1116,12 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       'Exécuter le test sur un générateur de charge partagé géré par la plateforme.',
     'Server load test': 'Test de charge serveur',
+    'Edit server agent capacity': 'Modifier la capacité de l’agent serveur',
+    'These limits apply to tasks submitted to this server agent.':
+      'Ces limites s’appliquent aux tâches envoyées à cet agent serveur.',
+    'Agent capacity must be a positive integer':
+      'La capacité de l’agent doit être un entier positif',
+    'Agent capacity updated': 'Capacité de l’agent mise à jour',
   },
   ja: {
     'Add server agent': 'サーバー Agent を追加',
@@ -1112,6 +1134,11 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       'プラットフォーム管理の共有負荷生成機でテストを実行します。',
     'Server load test': 'サーバー負荷テスト',
+    'Edit server agent capacity': 'サーバー Agent 容量を編集',
+    'These limits apply to tasks submitted to this server agent.':
+      'これらの制限は、このサーバー Agent に送信されるタスクに適用されます。',
+    'Agent capacity must be a positive integer': 'Agent 容量は正の整数で入力してください',
+    'Agent capacity updated': 'Agent 容量を更新しました',
   },
   ru: {
     'Add server agent': 'Добавить серверный агент',
@@ -1124,6 +1151,12 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       'Запустить тест на общем генераторе нагрузки под управлением платформы.',
     'Server load test': 'Серверный нагрузочный тест',
+    'Edit server agent capacity': 'Изменить емкость серверного агента',
+    'These limits apply to tasks submitted to this server agent.':
+      'Эти ограничения применяются к задачам, отправленным этому серверному агенту.',
+    'Agent capacity must be a positive integer':
+      'Емкость агента должна быть положительным целым числом',
+    'Agent capacity updated': 'Емкость агента обновлена',
   },
   vi: {
     'Add server agent': 'Thêm Agent máy chủ',
@@ -1136,6 +1169,12 @@ const loadTestTabsKeys = {
     'Run the test on a shared load generator managed by the platform.':
       'Chạy kiểm thử trên máy tạo tải dùng chung do nền tảng quản lý.',
     'Server load test': 'Kiểm thử tải máy chủ',
+    'Edit server agent capacity': 'Chỉnh sửa dung lượng Agent máy chủ',
+    'These limits apply to tasks submitted to this server agent.':
+      'Các giới hạn này áp dụng cho tác vụ gửi đến Agent máy chủ này.',
+    'Agent capacity must be a positive integer':
+      'Dung lượng Agent phải là số nguyên dương',
+    'Agent capacity updated': 'Đã cập nhật dung lượng Agent',
   },
 }
 

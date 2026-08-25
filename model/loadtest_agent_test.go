@@ -165,6 +165,30 @@ func TestManagedLoadTestAgentsAreSharedWithoutExposingOtherLocalAgents(t *testin
 	assert.Equal(t, managedAgent.ID, managedAgents[0].ID)
 }
 
+func TestManagedAgentCapacitySurvivesHeartbeatAndCanBeUpdated(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	agent, err := NewManagedLoadTestAgentPairing(1, "SHARED12", common.GetTimestamp()+300)
+	require.NoError(t, err)
+	_, err = PairLoadTestAgent("SHARED12", "managed-secret", LoadTestAgentRuntime{
+		Name: "Shared", Platform: "linux/amd64", Version: "0.2.0", MaxRPS: 50, MaxConcurrency: 100,
+	})
+	require.NoError(t, err)
+
+	updated, err := UpdateManagedLoadTestAgentCapacity(agent.ID, 200, 500)
+	require.NoError(t, err)
+	assert.Equal(t, 200, updated.MaxRPS)
+	assert.Equal(t, 500, updated.MaxConcurrency)
+
+	require.NoError(t, TouchLoadTestAgent(agent.ID, LoadTestAgentRuntime{
+		Name: "Shared", Platform: "linux/amd64", Version: "0.2.1", CPUCores: 2,
+		MemoryBytes: 1 << 30, MaxRPS: 50, MaxConcurrency: 100,
+	}))
+	refreshed, err := GetUsableLoadTestAgent(8, agent.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 200, refreshed.MaxRPS)
+	assert.Equal(t, 500, refreshed.MaxConcurrency)
+}
+
 func TestRevokingManagedAgentCancelsRunsFromAllUsers(t *testing.T) {
 	setupLoadTestAgentDB(t)
 	agent, err := NewManagedLoadTestAgentPairing(1, "SHARED12", common.GetTimestamp()+300)

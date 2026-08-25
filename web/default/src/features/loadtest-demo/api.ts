@@ -362,6 +362,25 @@ export async function deleteLoadTestAgent(
   }
 }
 
+export async function updateManagedLoadTestAgentCapacity(
+  agentId: string,
+  capacity: { max_rps: number; max_concurrency: number }
+): Promise<LoadTestAgent> {
+  const response = await api.put<{
+    success: boolean
+    message?: string
+    data?: LoadTestAgent
+  }>(
+    `/api/loadtest/managed-agents/${encodeURIComponent(agentId)}/capacity`,
+    capacity,
+    { skipBusinessError: true, skipErrorHandler: true }
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Failed to update agent capacity')
+  }
+  return response.data.data
+}
+
 export async function createLoadTestAgentRun(
   request: CreateLoadTestAgentRun
 ): Promise<LoadTestAgentRun> {

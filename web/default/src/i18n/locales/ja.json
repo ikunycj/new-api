@@ -6326,6 +6326,10 @@
     "Pricing risk detected": "料金リスクを検出",
     "Profit protection": "利益率保護",
     "Protection mode": "保護モード",
-    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "設定された試行経路は {{position}} 回目以降、最低利益率を下回ります。"
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "設定された試行経路は {{position}} 回目以降、最低利益率を下回ります。",
+    "Edit server agent capacity": "サーバー Agent 容量を編集",
+    "These limits apply to tasks submitted to this server agent.": "これらの制限は、このサーバー Agent に送信されるタスクに適用されます。",
+    "Agent capacity must be a positive integer": "Agent 容量は正の整数で入力してください",
+    "Agent capacity updated": "Agent 容量を更新しました"
   }
 }

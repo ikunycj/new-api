@@ -6326,6 +6326,10 @@
     "Pricing risk detected": "Đã phát hiện rủi ro giá",
     "Profit protection": "Bảo vệ lợi nhuận",
     "Protection mode": "Chế độ bảo vệ",
-    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Lộ trình đã cấu hình thấp hơn biên tối thiểu từ lần thử thứ {{position}}."
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Lộ trình đã cấu hình thấp hơn biên tối thiểu từ lần thử thứ {{position}}.",
+    "Edit server agent capacity": "Chỉnh sửa dung lượng Agent máy chủ",
+    "These limits apply to tasks submitted to this server agent.": "Các giới hạn này áp dụng cho tác vụ gửi đến Agent máy chủ này.",
+    "Agent capacity must be a positive integer": "Dung lượng Agent phải là số nguyên dương",
+    "Agent capacity updated": "Đã cập nhật dung lượng Agent"
   }
 }

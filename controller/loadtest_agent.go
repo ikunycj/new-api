@@ -67,6 +67,11 @@ type loadTestAgentPollRequest struct {
 	MaxConcurrency int    `json:"max_concurrency"`
 }
 
+type updateManagedLoadTestAgentCapacityRequest struct {
+	MaxRPS         int `json:"max_rps"`
+	MaxConcurrency int `json:"max_concurrency"`
+}
+
 type loadTestRunProgressRequest struct {
 	Sent        int64            `json:"sent"`
 	Completed   int64            `json:"completed"`
@@ -219,6 +224,30 @@ func DeleteManagedLoadTestAgent(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+func UpdateManagedLoadTestAgentCapacity(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, loadTestAgentBodyLimit)
+	var request updateManagedLoadTestAgentCapacityRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid agent capacity"})
+		return
+	}
+	settings := operation_setting.GetLoadTestSetting()
+	if request.MaxRPS < 1 || request.MaxRPS > settings.MaxRPS || request.MaxConcurrency < 1 || request.MaxConcurrency > settings.MaxConcurrency {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "agent capacity exceeds load-test limits"})
+		return
+	}
+	agent, err := model.UpdateManagedLoadTestAgentCapacity(c.Param("id"), request.MaxRPS, request.MaxConcurrency)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "managed load-test agent not found"})
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, agent)
 }
 
 func PairLoadTestAgent(c *gin.Context) {

@@ -6326,6 +6326,10 @@
     "Pricing risk detected": "Risque tarifaire détecté",
     "Profit protection": "Protection de la marge",
     "Protection mode": "Mode de protection",
-    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Le chemin configuré passe sous la marge minimale à partir de la tentative {{position}}."
+    "The configured attempt path falls below the minimum margin from attempt {{position}} onward.": "Le chemin configuré passe sous la marge minimale à partir de la tentative {{position}}.",
+    "Edit server agent capacity": "Modifier la capacité de l’agent serveur",
+    "These limits apply to tasks submitted to this server agent.": "Ces limites s’appliquent aux tâches envoyées à cet agent serveur.",
+    "Agent capacity must be a positive integer": "La capacité de l’agent doit être un entier positif",
+    "Agent capacity updated": "Capacité de l’agent mise à jour"
   }
 }

@@ -40,6 +40,7 @@ func SetApiRouter(router *gin.Engine) {
 			loadTestRoute.GET("/agents", controller.ListLoadTestAgents)
 			loadTestRoute.DELETE("/agents/:id", controller.DeleteLoadTestAgent)
 			loadTestRoute.DELETE("/managed-agents/:id", middleware.AdminAuth(), controller.DeleteManagedLoadTestAgent)
+			loadTestRoute.PUT("/managed-agents/:id/capacity", middleware.AdminAuth(), controller.UpdateManagedLoadTestAgentCapacity)
 			loadTestRoute.POST("/runs", controller.CreateLoadTestRun)
 			loadTestRoute.GET("/runs", controller.ListLoadTestRuns)
 			loadTestRoute.GET("/runs/:id", controller.GetLoadTestRun)
