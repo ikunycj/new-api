@@ -91,12 +91,9 @@ export function GroupManagementSettings({
         className='min-h-0 gap-4'
       >
         <TabsList className='grid w-full max-w-md grid-cols-2'>
-          <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
           <TabsTrigger value='pricing-groups'>定价分组</TabsTrigger>
+          <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
         </TabsList>
-        <TabsContent value='user-groups' className='min-h-0'>
-          <UserGroupManagementSection />
-        </TabsContent>
         <TabsContent value='pricing-groups' className='min-h-0'>
           <RatioSettingsCard
             titleKey='定价分组'
@@ -105,6 +102,9 @@ export function GroupManagementSettings({
             toolPricesDefault={settings['tool_price_setting.prices']}
             visibleTabs={['groups']}
           />
+        </TabsContent>
+        <TabsContent value='user-groups' className='min-h-0'>
+          <UserGroupManagementSection />
         </TabsContent>
       </Tabs>
     </SettingsPageFrame>

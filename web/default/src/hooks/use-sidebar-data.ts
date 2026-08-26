@@ -121,20 +121,21 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
-            title: t('Channels'),
-            url: '/channels',
-            icon: Radio,
-          },
-          {
             title: '管理控制台',
             url: '/admin-console',
             icon: LayoutDashboard,
             requiredRole: ROLE.ADMIN,
           },
           {
-            title: t('Models'),
-            url: '/models/metadata',
-            icon: Box,
+            title: t('Channels'),
+            url: '/channels',
+            icon: Radio,
+          },
+          {
+            title: t('Group Management'),
+            url: '/group-management',
+            icon: Tags,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('Users'),
@@ -148,10 +149,9 @@ export function useSidebarData(): SidebarData {
             requiredRole: ROLE.ADMIN,
           },
           {
-            title: t('Group Management'),
-            url: '/group-management',
-            icon: Tags,
-            requiredRole: ROLE.SUPER_ADMIN,
+            title: t('Models'),
+            url: '/models/metadata',
+            icon: Box,
           },
           {
             title: t('Redemption Codes'),

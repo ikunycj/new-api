@@ -26,7 +26,7 @@ import {
 import { ROLE } from '@/lib/roles'
 
 const groupManagementSearchSchema = z.object({
-  tab: z.enum(['user-groups', 'pricing-groups']).catch('user-groups'),
+  tab: z.enum(['pricing-groups', 'user-groups']).catch('pricing-groups'),
 })
 
 export const Route = createFileRoute('/_authenticated/group-management')({
