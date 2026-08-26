@@ -167,11 +167,13 @@ function ApiKeysMobileList({
               )}
             </div>
 
-            <div className='flex min-w-0 items-center justify-between gap-2'>
-              <div className='min-w-0 flex-1 [&_button:first-child]:max-w-full [&_button:first-child]:truncate [&_button:first-child]:px-0'>
+            <div className='min-w-0 space-y-1.5'>
+              <div className='min-w-0 [&_button:first-child]:max-w-full [&_button:first-child]:truncate [&_button:first-child]:px-0'>
                 <ApiKeyCell apiKey={apiKey} />
               </div>
-              <DataTableRowActions row={row} />
+              <div className='flex justify-end'>
+                <DataTableRowActions row={row} />
+              </div>
             </div>
 
             <div className='flex items-center justify-between gap-2 text-xs'>
@@ -303,6 +305,11 @@ export function ApiKeysTable() {
     columns,
     enableRowSelection: true,
     columnFilters,
+    initialColumnVisibility: {
+      quota: false,
+      model_limits: false,
+      allow_ips: false,
+    },
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,
     pagination,
