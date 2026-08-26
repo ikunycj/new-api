@@ -116,17 +116,24 @@ export function PricingGroupMonitorControl(
         onCheckedChange={props.onToggleEnabled}
       />
 
-      <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1.5'>
-        <MonitorStatusBadge status={props.monitor.status} />
-        <code
-          className='text-muted-foreground min-w-0 flex-1 truncate text-xs'
-          title={props.monitor.test_model}
-        >
-          {props.monitor.test_model}
-        </code>
-        <Badge variant='outline' className='hidden xl:inline-flex'>
-          {props.monitor.visible ? '用户可见' : '对用户隐藏'}
-        </Badge>
+      <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+        <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+          <MonitorStatusBadge status={props.monitor.status} />
+          <code
+            className='text-muted-foreground min-w-0 flex-1 truncate text-xs'
+            title={props.monitor.test_model}
+          >
+            {props.monitor.test_model}
+          </code>
+        </div>
+        <div className='text-muted-foreground text-xs'>
+          最近延迟{' '}
+          <strong className='text-foreground font-medium tabular-nums'>
+            {props.monitor.latest_latency_ms == null
+              ? '--'
+              : `${props.monitor.latest_latency_ms} ms`}
+          </strong>
+        </div>
       </div>
     </div>
   )

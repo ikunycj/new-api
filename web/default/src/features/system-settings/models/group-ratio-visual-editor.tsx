@@ -72,7 +72,6 @@ import {
   ChannelMonitorSheet,
 } from '@/features/channel-monitors/components/monitor-sheet'
 import { PricingGroupMonitorControl } from '@/features/channel-monitors/components/pricing-group-monitor-control'
-import { formatMonitorAvailability } from '@/features/channel-monitors/lib/format'
 import type {
   ChannelMonitor,
   ChannelMonitorSettingsPayload,
@@ -941,7 +940,7 @@ function GroupPricingTable({
           <div className='space-y-3'>
             <StaticDataTable
               className='w-full'
-              tableClassName='w-max min-w-[109rem] table-fixed'
+              tableClassName='w-max min-w-[98rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
@@ -1079,8 +1078,8 @@ function GroupPricingTable({
                 {
                   id: 'retries',
                   header: '重试次数',
-                  className: 'w-64',
-                  cellClassName: 'w-64',
+                  className: 'w-50',
+                  cellClassName: 'w-50',
                   cell: (row) => (
                     <RetryPolicyControl
                       mode={row.retryMode}
@@ -1101,8 +1100,8 @@ function GroupPricingTable({
                 {
                   id: 'monitor',
                   header: '分组监控',
-                  className: 'w-72',
-                  cellClassName: 'w-72',
+                  className: 'w-50',
+                  cellClassName: 'w-50',
                   cell: (row) => {
                     const groupName = row.name.trim()
                     const monitor = findPricingGroupMonitor(row, monitorByName)
@@ -1142,8 +1141,8 @@ function GroupPricingTable({
                 {
                   id: 'strategy',
                   header: '策略',
-                  className: 'w-36',
-                  cellClassName: 'w-36',
+                  className: 'w-18',
+                  cellClassName: 'w-18',
                   cell: (row) => (
                     <Select
                       items={strategySelectItems}
@@ -1168,23 +1167,10 @@ function GroupPricingTable({
                   ),
                 },
                 {
-                  id: 'availability',
-                  header: '可用性',
-                  className: 'w-60',
-                  cellClassName: 'w-60',
-                  cell: (row) => (
-                    <PricingGroupAvailabilityCell
-                      monitor={findPricingGroupMonitor(row, monitorByName)}
-                      isLoading={monitorsQuery.isLoading}
-                      hasError={monitorsQuery.isError}
-                    />
-                  ),
-                },
-                {
                   id: 'actions',
                   header: t('Actions'),
-                  className: 'w-36 text-right',
-                  cellClassName: 'w-36 text-right',
+                  className: 'w-30 text-right',
+                  cellClassName: 'w-30 text-right',
                   cell: (row) => {
                     const monitor = findPricingGroupMonitor(row, monitorByName)
                     const isRunning =
@@ -1446,47 +1432,6 @@ function formatMetricTokens(tokens: number): string {
 type GroupMetricCellProps = {
   metrics?: PricingGroupMetrics
   isLoading: boolean
-}
-
-type PricingGroupAvailabilityCellProps = {
-  monitor: ChannelMonitor | null
-  isLoading: boolean
-  hasError: boolean
-}
-
-function PricingGroupAvailabilityCell(
-  props: PricingGroupAvailabilityCellProps
-) {
-  if (props.isLoading) {
-    return <span className='text-muted-foreground text-xs'>加载中...</span>
-  }
-  if (props.hasError || !props.monitor) {
-    return <span className='text-muted-foreground text-xs'>-</span>
-  }
-  return (
-    <div className='space-y-0.5 text-xs leading-5'>
-      <div>
-        <span className='text-muted-foreground'>7日：</span>
-        <span className='font-medium tabular-nums'>
-          {formatMonitorAvailability(props.monitor.availability_7d)}
-        </span>
-      </div>
-      <div>
-        <span className='text-muted-foreground'>30日：</span>
-        <span className='font-medium tabular-nums'>
-          {formatMonitorAvailability(props.monitor.availability_30d)}
-        </span>
-      </div>
-      <div>
-        <span className='text-muted-foreground'>最近延迟：</span>
-        <span className='font-medium tabular-nums'>
-          {props.monitor.latest_latency_ms == null
-            ? '--'
-            : `${props.monitor.latest_latency_ms} ms`}
-        </span>
-      </div>
-    </div>
-  )
 }
 
 function GroupUsageCell(props: GroupMetricCellProps) {
