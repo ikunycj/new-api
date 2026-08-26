@@ -6104,6 +6104,12 @@
     "Select the start and end time for the dashboard.": "Выберите время начала и окончания для панели.",
     "Apply": "Применить",
     "QPS": "QPS",
-    "TPS (thousands)": "TPS (тыс.)"
+    "TPS (thousands)": "TPS (тыс.)",
+    "Daily Cost": "Дневная стоимость",
+    "Monthly Cost": "Месячная стоимость",
+    "Daily Cost / Monthly Cost": "Дневная / месячная стоимость",
+    "Daily Usage": "Дневное потребление",
+    "Monthly Usage": "Месячное потребление",
+    "Daily Usage / Monthly Usage": "Дневное / месячное потребление"
   }
 }

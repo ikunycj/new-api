@@ -6104,6 +6104,12 @@
     "Select the start and end time for the dashboard.": "ダッシュボードの開始時刻と終了時刻を選択します。",
     "Apply": "適用",
     "QPS": "QPS",
-    "TPS (thousands)": "TPS（千単位）"
+    "TPS (thousands)": "TPS（千単位）",
+    "Daily Cost": "日次コスト",
+    "Monthly Cost": "月次コスト",
+    "Daily Cost / Monthly Cost": "日次コスト / 月次コスト",
+    "Daily Usage": "日次使用量",
+    "Monthly Usage": "月次使用量",
+    "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量"
   }
 }

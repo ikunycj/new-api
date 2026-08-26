@@ -28,6 +28,15 @@ func TestChannelSelectionFieldDefaults(t *testing.T) {
 	assert.Equal(t, ChannelForcePriorityScopeCrossGroup, channel.GetForcePriorityScope())
 }
 
+func TestChannelCalculateTokenCostUSDUsesMultiplierCurrency(t *testing.T) {
+	usdChannel := &Channel{PriceMultiplier: 2, PriceMultiplierMode: ChannelPriceMultiplierModeUSD}
+	assert.InDelta(t, 3, usdChannel.CalculateTokenCostUSD(1_500_000, 7.5), 0.000001)
+
+	cnyChannel := &Channel{PriceMultiplier: 15, PriceMultiplierMode: ChannelPriceMultiplierModeCNY}
+	assert.InDelta(t, 3, cnyChannel.CalculateTokenCostUSD(1_500_000, 7.5), 0.000001)
+	assert.Zero(t, cnyChannel.CalculateTokenCostUSD(0, 7.5))
+}
+
 func TestChannelGetTestModel(t *testing.T) {
 	testModel := "  gpt-4o-mini  "
 	channel := &Channel{TestModel: &testModel}

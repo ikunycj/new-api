@@ -6104,6 +6104,12 @@
     "Select the start and end time for the dashboard.": "Select the start and end time for the dashboard.",
     "Apply": "Apply",
     "QPS": "QPS",
-    "TPS (thousands)": "TPS (thousands)"
+    "TPS (thousands)": "TPS (thousands)",
+    "Daily Cost": "Daily Cost",
+    "Monthly Cost": "Monthly Cost",
+    "Daily Cost / Monthly Cost": "Daily Cost / Monthly Cost",
+    "Daily Usage": "Daily Usage",
+    "Monthly Usage": "Monthly Usage",
+    "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage"
   }
 }

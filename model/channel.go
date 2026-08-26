@@ -55,6 +55,10 @@ type Channel struct {
 	CurrentConcurrency               int     `json:"current_concurrency" gorm:"-"`
 	PriceMultiplier                  float64 `json:"price_multiplier"`
 	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	DailyTokens                      int64   `json:"daily_tokens" gorm:"-"`
+	MonthlyTokens                    int64   `json:"monthly_tokens" gorm:"-"`
+	DailyCostUSD                     float64 `json:"daily_cost_usd" gorm:"-"`
+	MonthlyCostUSD                   float64 `json:"monthly_cost_usd" gorm:"-"`
 	ForcePriority                    *bool   `json:"force_priority"`
 	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
 	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
@@ -493,6 +497,18 @@ func (channel *Channel) GetPriceMultiplierMode() string {
 	default:
 		return ChannelPriceMultiplierModeUSD
 	}
+}
+
+func (channel *Channel) CalculateTokenCostUSD(tokens int64, billingUSDToCNYRate float64) float64 {
+	if channel == nil || tokens <= 0 {
+		return 0
+	}
+	multiplier := channel.GetPriceMultiplier()
+	if channel.GetPriceMultiplierMode() == ChannelPriceMultiplierModeCNY &&
+		billingUSDToCNYRate > 0 && !math.IsNaN(billingUSDToCNYRate) && !math.IsInf(billingUSDToCNYRate, 0) {
+		multiplier /= billingUSDToCNYRate
+	}
+	return float64(tokens) / 1_000_000 * multiplier
 }
 
 func (channel *Channel) IsForcePriority() bool {

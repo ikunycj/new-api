@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -127,6 +128,32 @@ func enrichCurrentChannelConcurrency(channels []*model.Channel) {
 	}
 }
 
+func enrichChannelUsage(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	usageByChannel, err := model.GetChannelTokenUsageAt(ids, time.Now())
+	if err != nil {
+		common.SysLog("failed to load channel token usage: " + err.Error())
+		return
+	}
+
+	billingRate := operation_setting.GetBillingUSDToCNYRate()
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		usage := usageByChannel[channel.Id]
+		channel.DailyTokens = usage.DailyTokens
+		channel.MonthlyTokens = usage.MonthlyTokens
+		channel.DailyCostUSD = channel.CalculateTokenCostUSD(usage.DailyTokens, billingRate)
+		channel.MonthlyCostUSD = channel.CalculateTokenCostUSD(usage.MonthlyTokens, billingRate)
+	}
+}
+
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
 	if statusFilter == common.ChannelStatusEnabled {
 		return query.Where("status = ?", common.ChannelStatusEnabled)
@@ -221,6 +248,7 @@ func GetAllChannels(c *gin.Context) {
 	enrichLastChannelTestTimes(channelData)
 	enrichPreviousDayProbeRates(channelData)
 	enrichCurrentChannelConcurrency(channelData)
+	enrichChannelUsage(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -430,6 +458,7 @@ func SearchChannels(c *gin.Context) {
 	enrichLastChannelTestTimes(pagedData)
 	enrichPreviousDayProbeRates(pagedData)
 	enrichCurrentChannelConcurrency(pagedData)
+	enrichChannelUsage(pagedData)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -459,6 +488,7 @@ func GetChannel(c *gin.Context) {
 		enrichLastChannelTestTimes([]*model.Channel{channel})
 		enrichPreviousDayProbeRates([]*model.Channel{channel})
 		enrichCurrentChannelConcurrency([]*model.Channel{channel})
+		enrichChannelUsage([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

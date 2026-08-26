@@ -70,6 +70,10 @@ export const channelSchema = z.object({
     .enum(['usd', 'cny'])
     .or(z.literal(''))
     .default('usd'),
+  daily_tokens: z.number().default(0),
+  monthly_tokens: z.number().default(0),
+  daily_cost_usd: z.number().default(0),
+  monthly_cost_usd: z.number().default(0),
   force_priority: z.boolean().nullish(),
   force_priority_scope: z
     .enum(['group', 'cross_group'])

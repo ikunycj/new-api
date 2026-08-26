@@ -6104,6 +6104,12 @@
     "Select the start and end time for the dashboard.": "选择数据看板的开始和结束时间。",
     "Apply": "应用",
     "QPS": "QPS",
-    "TPS (thousands)": "TPS（千）"
+    "TPS (thousands)": "TPS（千）",
+    "Daily Cost": "日成本",
+    "Monthly Cost": "月成本",
+    "Daily Cost / Monthly Cost": "日成本 / 月成本",
+    "Daily Usage": "日用量",
+    "Monthly Usage": "月用量",
+    "Daily Usage / Monthly Usage": "日用量 / 月用量"
   }
 }

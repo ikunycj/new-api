@@ -6104,6 +6104,12 @@
     "Select the start and end time for the dashboard.": "Chọn thời gian bắt đầu và kết thúc cho bảng điều khiển.",
     "Apply": "Áp dụng",
     "QPS": "QPS",
-    "TPS (thousands)": "TPS (nghìn)"
+    "TPS (thousands)": "TPS (nghìn)",
+    "Daily Cost": "Chi phí ngày",
+    "Monthly Cost": "Chi phí tháng",
+    "Daily Cost / Monthly Cost": "Chi phí ngày / Chi phí tháng",
+    "Daily Usage": "Mức sử dụng ngày",
+    "Monthly Usage": "Mức sử dụng tháng",
+    "Daily Usage / Monthly Usage": "Mức sử dụng ngày / Mức sử dụng tháng"
   }
 }

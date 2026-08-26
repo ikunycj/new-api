@@ -626,6 +626,10 @@ export function aggregateChannelsByTag(
         status: undefined as unknown as number,
         group: '',
         used_quota: 0,
+        daily_tokens: 0,
+        monthly_tokens: 0,
+        daily_cost_usd: 0,
+        monthly_cost_usd: 0,
         response_time: 0,
         weight: -1 as unknown as number | null,
         balance: 0,
@@ -653,6 +657,10 @@ export function aggregateChannelsByTag(
 
     // Aggregate used_quota (sum)
     tagRow.used_quota += channel.used_quota
+    tagRow.daily_tokens += channel.daily_tokens
+    tagRow.monthly_tokens += channel.monthly_tokens
+    tagRow.daily_cost_usd += channel.daily_cost_usd
+    tagRow.monthly_cost_usd += channel.monthly_cost_usd
 
     // Aggregate response_time (average)
     tagRow.response_time =

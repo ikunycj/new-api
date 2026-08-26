@@ -172,6 +172,10 @@ var channelReadOnlyFields = map[string]struct{}{
 	"balance":                         {},
 	"balance_updated_time":            {},
 	"used_quota":                      {},
+	"daily_tokens":                    {},
+	"monthly_tokens":                  {},
+	"daily_cost_usd":                  {},
+	"monthly_cost_usd":                {},
 	"previous_day_probe_success_rate": {},
 	"current_concurrency":             {},
 }
@@ -200,6 +204,18 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	}
 	if _, ok := requestData["used_quota"]; ok {
 		channel.UsedQuota = 0
+	}
+	if _, ok := requestData["daily_tokens"]; ok {
+		channel.DailyTokens = 0
+	}
+	if _, ok := requestData["monthly_tokens"]; ok {
+		channel.MonthlyTokens = 0
+	}
+	if _, ok := requestData["daily_cost_usd"]; ok {
+		channel.DailyCostUSD = 0
+	}
+	if _, ok := requestData["monthly_cost_usd"]; ok {
+		channel.MonthlyCostUSD = 0
 	}
 	if _, ok := requestData["current_concurrency"]; ok {
 		channel.CurrentConcurrency = 0

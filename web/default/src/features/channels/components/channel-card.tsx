@@ -65,7 +65,7 @@ function ChannelMetric({
  * renderer via `flexRender`, so the table's information and interactions are
  * preserved: row selection, provider/multi-key/IO.NET type badge, id,
  * name/remark + warning icons, status (with tooltips), groups, inline weight
- * and price multiplier spinners, balance refresh, response/test
+ * and price multiplier spinners, channel cost/usage, response/test
  * times, previous-day probe rate, tag
  * expand-collapse, and the per-row (or per-tag) actions menu.
  */
@@ -90,7 +90,8 @@ function ChannelCardComponent({
   }
 
   const fieldLabels: Record<string, string> = {
-    balance: t('Used / Remaining'),
+    daily_cost_usd: t('Daily Cost / Monthly Cost'),
+    daily_tokens: t('Daily Usage / Monthly Usage'),
     response_time: t('Response'),
     test_time: t('Last Tested'),
     price_multiplier: t('Channel price multiplier'),
@@ -108,7 +109,8 @@ function ChannelCardComponent({
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
   const weightCell = renderCell('weight')
-  const balanceCell = renderCell('balance')
+  const costCell = renderCell('daily_cost_usd')
+  const tokenUsageCell = renderCell('daily_tokens')
   const responseCell = renderCell('response_time')
   const priceMultiplierCell = renderCell('price_multiplier')
   const testModelCell = renderCell('test_model')
@@ -165,8 +167,11 @@ function ChannelCardComponent({
             <ChannelMetric label={fieldLabels.test_time}>
               {testCell}
             </ChannelMetric>
-            <ChannelMetric label={fieldLabels.balance}>
-              {balanceCell}
+            <ChannelMetric label={fieldLabels.daily_cost_usd}>
+              {costCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.daily_tokens}>
+              {tokenUsageCell}
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.test_model}>
               {testModelCell}
