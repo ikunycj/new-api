@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-contrib/sessions"
@@ -331,7 +332,22 @@ func validateTokenGroupAccess(userGroup string, token *model.Token) error {
 	if token.Group != "auto" {
 		return errors.New("令牌候选分组配置无效")
 	}
-	return service.ValidateTokenGroupCandidates(userGroup, groupCandidates)
+	routableCandidates := routableTokenGroupCandidates(groupCandidates)
+	if len(routableCandidates) == 0 {
+		return errors.New("令牌没有已启用的模型计费分组")
+	}
+	return service.ValidateTokenGroupCandidates(userGroup, routableCandidates)
+}
+
+func routableTokenGroupCandidates(groupCandidates []string) []string {
+	result := make([]string, 0, len(groupCandidates))
+	for _, group := range groupCandidates {
+		if ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
+			continue
+		}
+		result = append(result, group)
+	}
+	return result
 }
 
 // TokenAuthReadOnly 宽松版本的令牌认证中间件，用于只读查询接口。
@@ -572,6 +588,7 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌候选分组配置无效")
 		return err
 	}
+	groupCandidates = routableTokenGroupCandidates(groupCandidates)
 	common.SetContextKey(c, constant.ContextKeyTokenGroupCandidates, groupCandidates)
 	groupRetryTimes, err := token.GetGroupRetryTimes()
 	if err != nil {

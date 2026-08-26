@@ -21,7 +21,7 @@ func GetUserGroupPricingGroups(userGroup string) map[string]string {
 	// and must never be implicitly promoted into this catalog.
 	groups := make(map[string]string)
 	for group := range ratio_setting.GetGroupRatioCopy() {
-		if group == "auto" {
+		if group == "auto" || !ratio_setting.IsPricingGroupEnabled(group) {
 			continue
 		}
 		groups[group] = group
@@ -116,6 +116,9 @@ func NormalizeTokenGroupRetryTimes(groups []string, values map[string]int) (map[
 }
 
 func validateConcreteTokenGroup(userGroup, group string) error {
+	if ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
+		return fmt.Errorf("分组 %s 已关闭", group)
+	}
 	if !UserGroupCanUsePricingGroup(userGroup, group) {
 		return fmt.Errorf("无权访问 %s 分组", group)
 	}

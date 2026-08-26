@@ -55,6 +55,7 @@ func TestPricingGroupRetryPolicyValidationAndNormalization(t *testing.T) {
 func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	configuration, err := ParsePricingGroupConfiguration(
 		`{"alpha":1,"beta":2}`,
+		`{"alpha":true,"beta":false}`,
 		`["beta","alpha"]`,
 		`{
 			"alpha":{"mode":"fixed","retry_times":4},
@@ -64,6 +65,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"beta", "alpha"}, configuration.GroupOrder)
+	assert.Equal(t, map[string]bool{"alpha": true, "beta": false}, configuration.GroupEnabled)
 	assert.Equal(t, PricingGroupRetryPolicy{
 		Mode:       PricingGroupRetryModeActiveChannels,
 		RetryTimes: 0,
@@ -72,6 +74,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		ratios     string
+		enabled    string
 		order      string
 		policies   string
 		strategies string
@@ -79,6 +82,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 		{
 			name:       "empty group name",
 			ratios:     `{"":1}`,
+			enabled:    `{"":true}`,
 			order:      `[""]`,
 			policies:   `{"":{"mode":"fixed","retry_times":1}}`,
 			strategies: `{}`,
@@ -86,6 +90,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 		{
 			name:       "missing order entry",
 			ratios:     `{"alpha":1,"beta":1}`,
+			enabled:    `{"alpha":true,"beta":true}`,
 			order:      `["alpha"]`,
 			policies:   `{"alpha":{"mode":"fixed","retry_times":1},"beta":{"mode":"fixed","retry_times":1}}`,
 			strategies: `{}`,
@@ -93,6 +98,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 		{
 			name:       "missing retry policy",
 			ratios:     `{"alpha":1,"beta":1}`,
+			enabled:    `{"alpha":true,"beta":true}`,
 			order:      `["alpha","beta"]`,
 			policies:   `{"alpha":{"mode":"fixed","retry_times":1}}`,
 			strategies: `{}`,
@@ -100,13 +106,30 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 		{
 			name:       "unknown retry policy group",
 			ratios:     `{"alpha":1}`,
+			enabled:    `{"alpha":true}`,
 			order:      `["alpha"]`,
 			policies:   `{"unknown":{"mode":"fixed","retry_times":1}}`,
 			strategies: `{}`,
 		},
+		{
+			name:       "missing enabled entry",
+			ratios:     `{"alpha":1,"beta":1}`,
+			enabled:    `{"alpha":true}`,
+			order:      `["alpha","beta"]`,
+			policies:   `{"alpha":{"mode":"fixed","retry_times":1},"beta":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
+		},
+		{
+			name:       "unknown enabled group",
+			ratios:     `{"alpha":1}`,
+			enabled:    `{"unknown":true}`,
+			order:      `["alpha"]`,
+			policies:   `{"alpha":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := ParsePricingGroupConfiguration(testCase.ratios, testCase.order, testCase.policies, testCase.strategies)
+			_, err := ParsePricingGroupConfiguration(testCase.ratios, testCase.enabled, testCase.order, testCase.policies, testCase.strategies)
 			require.Error(t, err)
 		})
 	}
@@ -115,6 +138,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 func TestParsePersistedPricingGroupConfigurationBuildsCompleteSnapshot(t *testing.T) {
 	configuration, err := ParsePersistedPricingGroupConfiguration(
 		`{"alpha":1,"beta":2}`,
+		"",
 		`["retired","beta"]`,
 		`{"alpha":{"mode":"fixed","retry_times":4},"beta":{"mode":"active_channels"}}`,
 		`{
@@ -125,10 +149,22 @@ func TestParsePersistedPricingGroupConfigurationBuildsCompleteSnapshot(t *testin
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"beta", "alpha"}, configuration.GroupOrder)
+	assert.Equal(t, map[string]bool{"alpha": true, "beta": true}, configuration.GroupEnabled)
 	assert.Equal(t, map[string]PricingGroupRetryPolicy{
 		"alpha": {Mode: PricingGroupRetryModeFixed, RetryTimes: 4},
 		"beta":  {Mode: PricingGroupRetryModeActiveChannels},
 	}, configuration.RetryPolicies)
+}
+
+func TestParsePersistedPricingGroupConfigurationRejectsInvalidStoredEnabledMap(t *testing.T) {
+	_, err := ParsePersistedPricingGroupConfiguration(
+		`{"alpha":1,"beta":2}`,
+		`{"alpha":true}`,
+		`["alpha","beta"]`,
+		`{"alpha":{"mode":"fixed","retry_times":1},"beta":{"mode":"fixed","retry_times":1}}`,
+		`{}`,
+	)
+	require.ErrorContains(t, err, "启用状态必须覆盖全部定价分组")
 }
 
 func TestPricingGroupRetryPolicyDefaultsToActiveChannels(t *testing.T) {

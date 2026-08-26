@@ -45,6 +45,7 @@ export const defaultBillingSettings: BillingSettings = {
   'billing_setting.billing_expr': '{}',
   'tool_price_setting.prices': '{}',
   GroupRatio: '',
+  PricingGroupEnabled: '{}',
   PricingGroupOrder: '[]',
   PricingGroupRetryPolicy: '{}',
   PricingGroupRoutingStrategy: '{}',
@@ -127,6 +128,7 @@ export const getModelDefaults = (settings: BillingSettings) => ({
 
 export const getGroupDefaults = (settings: BillingSettings) => ({
   GroupRatio: settings.GroupRatio,
+  PricingGroupEnabled: settings.PricingGroupEnabled,
   PricingGroupOrder: settings.PricingGroupOrder,
   PricingGroupRetryPolicy: settings.PricingGroupRetryPolicy,
   PricingGroupRoutingStrategy: settings.PricingGroupRoutingStrategy,

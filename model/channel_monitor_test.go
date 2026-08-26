@@ -131,11 +131,13 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 	truncateTables(t)
 
 	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
+	originalGroupEnabled := ratio_setting.PricingGroupEnabled2JSONString()
 	originalGroupOrder := ratio_setting.PricingGroupOrder2JSONString()
 	originalRetryPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	originalStrategies := ratio_setting.PricingGroupRoutingStrategy2JSONString()
 	t.Cleanup(func() {
 		assert.NoError(t, updateOptionMap("GroupRatio", originalGroupRatios))
+		assert.NoError(t, updateOptionMap("PricingGroupEnabled", originalGroupEnabled))
 		assert.NoError(t, updateOptionMap("PricingGroupOrder", originalGroupOrder))
 		assert.NoError(t, updateOptionMap("PricingGroupRetryPolicy", originalRetryPolicies))
 		assert.NoError(t, updateOptionMap("PricingGroupRoutingStrategy", originalStrategies))
@@ -144,6 +146,7 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 	initialGroupRatios := `{"kept-pricing":1,"removed-pricing":1}`
 	require.NoError(t, UpdatePricingGroupConfiguration(
 		initialGroupRatios,
+		`{"kept-pricing":true,"removed-pricing":true}`,
 		`["kept-pricing","removed-pricing"]`,
 		`{
 			"kept-pricing":{"mode":"fixed","retry_times":3},
@@ -164,6 +167,7 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 	updatedGroupRatios := `{"kept-pricing":1}`
 	require.NoError(t, UpdatePricingGroupConfiguration(
 		updatedGroupRatios,
+		`{"kept-pricing":false}`,
 		`["kept-pricing"]`,
 		`{"kept-pricing":{"mode":"fixed","retry_times":3}}`,
 		`{}`,
@@ -173,6 +177,7 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 	require.NoError(t, DB.Where(commonKeyCol+" = ?", "GroupRatio").First(&stored).Error)
 	assert.JSONEq(t, updatedGroupRatios, stored.Value)
 	assert.True(t, ratio_setting.ContainsGroupRatio("kept-pricing"))
+	assert.False(t, ratio_setting.IsPricingGroupEnabled("kept-pricing"))
 	assert.False(t, ratio_setting.ContainsGroupRatio("removed-pricing"))
 
 	_, err := GetChannelMonitorByID(kept.Id)

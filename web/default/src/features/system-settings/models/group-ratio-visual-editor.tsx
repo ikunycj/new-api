@@ -55,6 +55,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
   TooltipContent,
@@ -83,6 +84,7 @@ import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
+  pricingGroupEnabled: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
   pricingGroupRoutingStrategy: string
@@ -94,6 +96,7 @@ type GroupRatioVisualEditorProps = {
 type GroupPricingRow = {
   _id: string
   name: string
+  enabled: boolean
   ratio: string
   retryMode: PricingGroupRetryMode
   retryTimes: string
@@ -177,6 +180,22 @@ function parseRatioMap(value: string): Record<string, number> {
     fallback: {},
     silent: true,
   })
+}
+
+function parsePricingGroupEnabled(
+  value: string,
+  groupNames: string[]
+): Record<string, boolean> {
+  const parsed = safeJsonParse<Record<string, unknown>>(value, {
+    fallback: {},
+    silent: true,
+  })
+  return Object.fromEntries(
+    groupNames.map((name) => [
+      name,
+      typeof parsed[name] === 'boolean' ? parsed[name] : true,
+    ])
+  )
 }
 
 function parsePricingGroupOrder(value: string): string[] {
@@ -386,12 +405,17 @@ function getOrderedGroupNames(
 
 function buildGroupPricingRows(
   groupRatio: string,
+  pricingGroupEnabled: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
   configuration: PricingGroupRoutingConfiguration
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const orderedNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+  const enabledByName = parsePricingGroupEnabled(
+    pricingGroupEnabled,
+    orderedNames
+  )
   const retryPolicies = parsePricingGroupRetryPolicy(pricingGroupRetryPolicy)
 
   return orderedNames.map((name) => {
@@ -402,6 +426,7 @@ function buildGroupPricingRows(
     return {
       _id: createGroupPricingId(),
       name,
+      enabled: enabledByName[name],
       ratio: String(normalizeRatio(ratioMap[name])),
       retryMode: retryPolicy.mode,
       retryTimes: String(retryPolicy.retry_times),
@@ -415,6 +440,7 @@ function serializeGroupPricingState(
   strategies: StrategyDraft[]
 ) {
   const groupRatio: Record<string, number> = {}
+  const pricingGroupEnabled: Record<string, boolean> = {}
   const pricingGroupOrder: string[] = []
   const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
   const pricingGroupRoutingStrategies: Record<
@@ -437,6 +463,7 @@ function serializeGroupPricingState(
     if (!name) continue
     if (!(name in groupRatio)) pricingGroupOrder.push(name)
     groupRatio[name] = normalizeRatio(row.ratio)
+    pricingGroupEnabled[name] = row.enabled
     pricingGroupRetryPolicy[name] = {
       mode: row.retryMode,
       retry_times:
@@ -447,6 +474,7 @@ function serializeGroupPricingState(
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
+    PricingGroupEnabled: JSON.stringify(pricingGroupEnabled, null, 2),
     PricingGroupOrder: JSON.stringify(pricingGroupOrder),
     PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
     PricingGroupRoutingStrategy: JSON.stringify(
@@ -471,6 +499,10 @@ function groupPricingSignature(
   )
   return JSON.stringify({
     ratios: parseRatioMap(serialized.GroupRatio),
+    enabled: parsePricingGroupEnabled(
+      serialized.PricingGroupEnabled,
+      rows.map((row) => row.name.trim()).filter(Boolean)
+    ),
     order: parsePricingGroupOrder(serialized.PricingGroupOrder),
     retryPolicies: parsePricingGroupRetryPolicy(
       serialized.PricingGroupRetryPolicy
@@ -481,6 +513,7 @@ function groupPricingSignature(
 
 function sourceGroupPricingSignature(
   groupRatio: string,
+  pricingGroupEnabled: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
   pricingGroupRoutingStrategy: string
@@ -502,6 +535,7 @@ function sourceGroupPricingSignature(
   }
   return JSON.stringify({
     ratios: parseRatioMap(groupRatio),
+    enabled: parsePricingGroupEnabled(pricingGroupEnabled, names),
     order: names,
     retryPolicies,
     routing,
@@ -517,6 +551,7 @@ function findPricingGroupMonitor(
 
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
+  pricingGroupEnabled,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
   pricingGroupRoutingStrategy,
@@ -527,6 +562,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   return (
     <GroupPricingTable
       groupRatio={groupRatio}
+      pricingGroupEnabled={pricingGroupEnabled}
       pricingGroupOrder={pricingGroupOrder}
       pricingGroupRetryPolicy={pricingGroupRetryPolicy}
       pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
@@ -539,6 +575,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 
 type GroupPricingTableProps = {
   groupRatio: string
+  pricingGroupEnabled: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
   pricingGroupRoutingStrategy: string
@@ -549,6 +586,7 @@ type GroupPricingTableProps = {
 
 function GroupPricingTable({
   groupRatio,
+  pricingGroupEnabled,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
   pricingGroupRoutingStrategy,
@@ -568,6 +606,7 @@ function GroupPricingTable({
       return {
         rows: buildGroupPricingRows(
           groupRatio,
+          pricingGroupEnabled,
           pricingGroupOrder,
           pricingGroupRetryPolicy,
           routingConfiguration
@@ -587,6 +626,7 @@ function GroupPricingTable({
   )
   const incomingSignature = sourceGroupPricingSignature(
     groupRatio,
+    pricingGroupEnabled,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy
@@ -600,6 +640,7 @@ function GroupPricingTable({
     return {
       rows: buildGroupPricingRows(
         groupRatio,
+        pricingGroupEnabled,
         pricingGroupOrder,
         pricingGroupRetryPolicy,
         routingConfiguration
@@ -608,6 +649,7 @@ function GroupPricingTable({
     }
   }, [
     groupRatio,
+    pricingGroupEnabled,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy,
@@ -703,6 +745,7 @@ function GroupPricingTable({
       setPositionDrafts({})
       const serialized = serializeGroupPricingState(nextRows, nextStrategies)
       onChange('GroupRatio', serialized.GroupRatio)
+      onChange('PricingGroupEnabled', serialized.PricingGroupEnabled)
       onChange('PricingGroupOrder', serialized.PricingGroupOrder)
       onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
       onChange(
@@ -716,8 +759,14 @@ function GroupPricingTable({
   const updateRow = useCallback(
     (
       id: string,
-      field: 'name' | 'ratio' | 'retryMode' | 'retryTimes' | 'strategyId',
-      value: string
+      field:
+        | 'name'
+        | 'enabled'
+        | 'ratio'
+        | 'retryMode'
+        | 'retryTimes'
+        | 'strategyId',
+      value: string | boolean
     ) => {
       emitState(
         currentRows.map((row) =>
@@ -743,6 +792,7 @@ function GroupPricingTable({
         {
           _id: createGroupPricingId(),
           name,
+          enabled: true,
           ratio: '1',
           retryMode: 'active_channels',
           retryTimes: '0',
@@ -1516,8 +1566,8 @@ type GroupDetailSheetProps = {
   monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
   onChange: (
-    field: 'name' | 'ratio' | 'retryMode' | 'retryTimes',
-    value: string
+    field: 'name' | 'enabled' | 'ratio' | 'retryMode' | 'retryTimes',
+    value: string | boolean
   ) => void
   isPersisted: boolean
   nameInvalid: boolean
@@ -1536,12 +1586,28 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>编辑{name ? `：${name.trim()}` : ''}</SheetTitle>
           <SheetDescription>
-            修改分组倍率、重试策略和监控功能。
+            修改分组状态、倍率、重试策略和监控功能。
           </SheetDescription>
         </SheetHeader>
 
         {props.row && (
           <div className={sideDrawerFormClassName('gap-5')}>
+            <div className='flex items-center justify-between gap-4 rounded-md border px-3 py-3'>
+              <div className='min-w-0 space-y-0.5'>
+                <Label htmlFor='group-detail-enabled'>启用分组</Label>
+                <p className='text-muted-foreground text-xs'>
+                  关闭后，该分组不会提供给用户，也不会参与 API
+                  请求调度；现有配置和监控数据会保留。
+                </p>
+              </div>
+              <Switch
+                id='group-detail-enabled'
+                checked={props.row.enabled}
+                onCheckedChange={(checked) =>
+                  props.onChange('enabled', checked)
+                }
+              />
+            </div>
             <div className='space-y-2'>
               <Label htmlFor='group-detail-name'>{t('Group name')}</Label>
               <Input

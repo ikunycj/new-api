@@ -32,6 +32,9 @@ type RetryParam struct {
 	// provider-specific suffix while the Gin route pattern remains stable.
 	CircuitRoute string
 	Retry        *int
+	// AllowDisabledPricingGroups is reserved for administrator diagnostics
+	// that must probe a configured group without reopening it to user traffic.
+	AllowDisabledPricingGroups bool
 
 	groupIndex         int
 	attempted          bool
@@ -614,6 +617,9 @@ func (p *RetryParam) candidateGroups() ([]string, error) {
 		if group == "" {
 			return nil, errors.New("no usable groups for token")
 		}
+		if !p.AllowDisabledPricingGroups && ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
+			return nil, errors.New("pricing group is disabled: " + group)
+		}
 		p.groups = []string{group}
 		return p.groups, nil
 	}
@@ -627,6 +633,9 @@ func (p *RetryParam) candidateGroups() ([]string, error) {
 	for _, raw := range groups {
 		group := strings.TrimSpace(raw)
 		if group == "" {
+			continue
+		}
+		if !p.AllowDisabledPricingGroups && ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
 			continue
 		}
 		if _, exists := seen[group]; exists {
@@ -888,6 +897,9 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 	}
 	groupCandidates := make([][]dynamicChannelCandidate, len(groups))
 	for index, group := range groups {
+		if !p.AllowDisabledPricingGroups && ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
+			continue
+		}
 		if !p.groupHasBudget(group) {
 			continue
 		}

@@ -29,6 +29,7 @@ var pricingGroupConfigurationUpdateMutex sync.Mutex
 
 var pricingGroupOptionKeys = []string{
 	"GroupRatio",
+	"PricingGroupEnabled",
 	"PricingGroupOrder",
 	"PricingGroupRetryPolicy",
 	"PricingGroupRoutingStrategy",
@@ -45,6 +46,10 @@ func isPricingGroupOptionKey(key string) bool {
 
 func pricingGroupOptionValues(configuration *ratio_setting.PricingGroupConfiguration) (map[string]string, error) {
 	ratioData, err := common.Marshal(configuration.GroupRatios)
+	if err != nil {
+		return nil, err
+	}
+	enabledData, err := common.Marshal(configuration.GroupEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +70,7 @@ func pricingGroupOptionValues(configuration *ratio_setting.PricingGroupConfigura
 	}
 	return map[string]string{
 		"GroupRatio":                  string(ratioData),
+		"PricingGroupEnabled":         string(enabledData),
 		"PricingGroupOrder":           string(orderData),
 		"PricingGroupRetryPolicy":     string(retryPolicyData),
 		"PricingGroupRoutingStrategy": string(routingStrategyData),
@@ -224,6 +230,7 @@ func InitOptionMap() {
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
 	common.OptionMap["CreateCacheRatio"] = ratio_setting.CreateCacheRatio2JSONString()
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
+	common.OptionMap["PricingGroupEnabled"] = ratio_setting.PricingGroupEnabled2JSONString()
 	common.OptionMap["PricingGroupOrder"] = ratio_setting.PricingGroupOrder2JSONString()
 	common.OptionMap["PricingGroupRetryPolicy"] = ratio_setting.PricingGroupRetryPolicy2JSONString()
 	common.OptionMap["PricingGroupRoutingStrategy"] = ratio_setting.PricingGroupRoutingStrategy2JSONString()
@@ -280,8 +287,9 @@ func loadOptionsFromDatabase() {
 		return
 	}
 	pricingGroupValues := map[string]string{
-		"GroupRatio":        ratio_setting.GroupRatio2JSONString(),
-		"PricingGroupOrder": ratio_setting.PricingGroupOrder2JSONString(),
+		"GroupRatio":          ratio_setting.GroupRatio2JSONString(),
+		"PricingGroupEnabled": "",
+		"PricingGroupOrder":   ratio_setting.PricingGroupOrder2JSONString(),
 		// These settings were introduced with the unified pricing-group editor.
 		// An absent option is a fresh initialization, not a reason to reuse a
 		// possibly stale in-memory snapshot.
@@ -303,6 +311,7 @@ func loadOptionsFromDatabase() {
 
 	configuration, err := ratio_setting.ParsePersistedPricingGroupConfiguration(
 		pricingGroupValues["GroupRatio"],
+		pricingGroupValues["PricingGroupEnabled"],
 		pricingGroupValues["PricingGroupOrder"],
 		pricingGroupValues["PricingGroupRetryPolicy"],
 		pricingGroupValues["PricingGroupRoutingStrategy"],
@@ -363,9 +372,10 @@ func UpdateOption(key string, value string) error {
 	return updateOptionMap(key, value)
 }
 
-func UpdatePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) error {
+func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) error {
 	configuration, err := ratio_setting.ParsePricingGroupConfiguration(
 		groupRatioJSON,
+		groupEnabledJSON,
 		groupOrderJSON,
 		retryPolicyJSON,
 		routingStrategyJSON,
@@ -726,6 +736,8 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":
 		err = ratio_setting.UpdateGroupRatioByJSONString(value)
+	case "PricingGroupEnabled":
+		err = ratio_setting.UpdatePricingGroupEnabledByJSONString(value)
 	case "PricingGroupOrder":
 		err = ratio_setting.UpdatePricingGroupOrderByJSONString(value)
 	case "PricingGroupRetryPolicy":

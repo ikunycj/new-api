@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,6 +46,29 @@ func TestValidateTokenGroupAccessRejectsInvalidCandidateStorage(t *testing.T) {
 			require.Error(t, validateTokenGroupAccess("default", tt.token))
 		})
 	}
+}
+
+func TestValidateTokenGroupAccessSkipsDisabledCandidates(t *testing.T) {
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousEnabled))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"default":true,"vip":false}`))
+
+	token := &model.Token{Group: "auto"}
+	require.NoError(t, token.SetGroupCandidates([]string{"default", "vip"}))
+	require.NoError(t, validateTokenGroupAccess("default", token))
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	require.NoError(t, SetupContextForToken(ctx, token))
+	assert.Equal(t, []string{"default"}, common.GetContextKeyStringSlice(ctx, constant.ContextKeyTokenGroupCandidates))
+
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"default":false,"vip":false}`))
+	err := validateTokenGroupAccess("default", token)
+	require.ErrorContains(t, err, "没有已启用")
 }
 
 func TestSetupContextForTokenAddsOrderedGroupCandidates(t *testing.T) {

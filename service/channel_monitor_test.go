@@ -20,6 +20,7 @@ func setupChannelMonitorServiceTest(t *testing.T) {
 	t.Helper()
 
 	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
+	previousGroupEnabled := ratio_setting.PricingGroupEnabled2JSONString()
 	previousRetryPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	previousMemoryCacheEnabled := common.MemoryCacheEnabled
 	t.Cleanup(func() {
@@ -34,6 +35,7 @@ func setupChannelMonitorServiceTest(t *testing.T) {
 			assert.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
 		}
 		assert.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+		assert.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousGroupEnabled))
 		assert.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousRetryPolicies))
 		common.MemoryCacheEnabled = previousMemoryCacheEnabled
 		model.InitChannelRoutingCache()
@@ -238,6 +240,21 @@ func TestRunUserChannelMonitorTestPersistsProbeResultAndEnforcesCooldown(t *test
 	require.True(t, errors.As(err, &cooldownErr))
 	assert.Equal(t, result.NextTestAt, cooldownErr.NextTestAt)
 	assert.Equal(t, 1, probeCalls)
+}
+
+func TestChannelMonitorCanProbeDisabledPricingGroup(t *testing.T) {
+	setupChannelMonitorServiceTest(t)
+	channel := seedChannelMonitorCandidate(t)
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"monitor-pricing":false}`))
+	monitor, err := CreateChannelMonitor(validChannelMonitorInput())
+	require.NoError(t, err)
+
+	result, err := RunChannelMonitorCheck(context.Background(), monitor.Id, func(_ context.Context, selected *model.Channel, _ *model.ChannelMonitor) (int, int, error) {
+		assert.Equal(t, channel.Id, selected.Id)
+		return 200, 5, nil
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
 }
 
 func TestRunChannelMonitorCheckPersistsFailureWhenNoChannelIsAvailable(t *testing.T) {

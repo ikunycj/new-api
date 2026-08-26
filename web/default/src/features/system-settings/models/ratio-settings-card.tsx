@@ -121,6 +121,13 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
+    PricingGroupEnabled: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every((enabled) => typeof enabled === 'boolean'),
+    }),
     PricingGroupOrder: createJsonStringField(t, {
       predicate: (value) =>
         Array.isArray(value) && value.every((item) => typeof item === 'string'),
@@ -218,6 +225,7 @@ export function RatioSettingsCard({
 
   const initialGroupValues = {
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+    PricingGroupEnabled: normalizeJsonString(groupDefaults.PricingGroupEnabled),
     PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
     PricingGroupRetryPolicy: normalizeJsonString(
       groupDefaults.PricingGroupRetryPolicy
@@ -256,6 +264,9 @@ export function RatioSettingsCard({
     mode: 'onChange',
     defaultValues: {
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      PricingGroupEnabled: formatJsonForTextarea(
+        groupDefaults.PricingGroupEnabled
+      ),
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
         groupDefaults.PricingGroupRetryPolicy
@@ -304,6 +315,9 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+      PricingGroupEnabled: normalizeJsonString(
+        groupDefaults.PricingGroupEnabled
+      ),
       PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: normalizeJsonString(
         groupDefaults.PricingGroupRetryPolicy
@@ -316,6 +330,9 @@ export function RatioSettingsCard({
 
     groupForm.reset({
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      PricingGroupEnabled: formatJsonForTextarea(
+        groupDefaults.PricingGroupEnabled
+      ),
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
         groupDefaults.PricingGroupRetryPolicy
@@ -373,6 +390,7 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
+        PricingGroupEnabled: normalizeJsonString(values.PricingGroupEnabled),
         PricingGroupOrder: normalizeJsonString(values.PricingGroupOrder),
         PricingGroupRetryPolicy: normalizeJsonString(
           values.PricingGroupRetryPolicy
@@ -392,6 +410,7 @@ export function RatioSettingsCard({
 
       const result = await savePricingGroupConfiguration({
         group_ratio: normalized.GroupRatio,
+        pricing_group_enabled: normalized.PricingGroupEnabled,
         pricing_group_order: normalized.PricingGroupOrder,
         pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
         pricing_group_routing_strategy: normalized.PricingGroupRoutingStrategy,

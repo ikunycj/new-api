@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,6 +57,24 @@ func TestAccountGroupDoesNotBecomePricingGroup(t *testing.T) {
 	err := ValidateTokenGroup(accountGroup, accountGroup)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "无权访问")
+}
+
+func TestDisabledPricingGroupIsHiddenAndRejectedForTokens(t *testing.T) {
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousEnabled))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"default":true,"vip":false}`))
+
+	groups := GetUserGroupPricingGroups("default")
+	assert.Contains(t, groups, "default")
+	assert.NotContains(t, groups, "vip")
+
+	err := ValidateTokenGroupCandidates("default", []string{"vip"})
+	require.ErrorContains(t, err, "已关闭")
 }
 
 func TestNormalizeTokenGroupRetryTimes(t *testing.T) {

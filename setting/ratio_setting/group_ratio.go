@@ -102,6 +102,7 @@ func DefaultPricingGroupRoutingStrategies() map[string]PricingGroupRoutingStrate
 
 type PricingGroupConfiguration struct {
 	GroupRatios             map[string]float64
+	GroupEnabled            map[string]bool
 	GroupOrder              []string
 	RetryPolicies           map[string]PricingGroupRetryPolicy
 	RoutingStrategies       map[string]PricingGroupRoutingStrategy
@@ -110,6 +111,7 @@ type PricingGroupConfiguration struct {
 
 type pricingGroupSnapshot struct {
 	groupRatios             map[string]float64
+	groupEnabled            map[string]bool
 	groupOrder              []string
 	retryPolicies           map[string]PricingGroupRetryPolicy
 	routingStrategies       map[string]PricingGroupRoutingStrategy
@@ -134,6 +136,7 @@ var groupRatioSetting GroupRatioSetting
 func init() {
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		defaultGroupRatio,
+		defaultPricingGroupEnabled(defaultGroupRatio),
 		[]string{"default", "vip", "svip"},
 		nil,
 		defaultPricingGroupRoutingStrategies(),
@@ -154,6 +157,7 @@ func init() {
 
 func newPricingGroupSnapshot(
 	ratios map[string]float64,
+	enabled map[string]bool,
 	order []string,
 	retryPolicies map[string]PricingGroupRetryPolicy,
 	routingStrategies map[string]PricingGroupRoutingStrategy,
@@ -162,6 +166,10 @@ func newPricingGroupSnapshot(
 	ratioCopy := make(map[string]float64, len(ratios))
 	for group, ratio := range ratios {
 		ratioCopy[group] = ratio
+	}
+	enabledCopy := make(map[string]bool, len(enabled))
+	for group, groupEnabled := range enabled {
+		enabledCopy[group] = groupEnabled
 	}
 	policyCopy := make(map[string]PricingGroupRetryPolicy, len(retryPolicies))
 	for group, policy := range retryPolicies {
@@ -203,6 +211,7 @@ func newPricingGroupSnapshot(
 
 	return &pricingGroupSnapshot{
 		groupRatios:             ratioCopy,
+		groupEnabled:            enabledCopy,
 		groupOrder:              ordered,
 		retryPolicies:           policyCopy,
 		routingStrategies:       strategyCopy,
@@ -256,6 +265,46 @@ func ContainsGroupRatio(name string) bool {
 	return ok
 }
 
+func GetPricingGroupEnabledCopy() map[string]bool {
+	snapshot := currentPricingGroupSnapshot()
+	result := make(map[string]bool, len(snapshot.groupEnabled))
+	for group, enabled := range snapshot.groupEnabled {
+		result[group] = enabled
+	}
+	return result
+}
+
+func IsPricingGroupEnabled(name string) bool {
+	return currentPricingGroupSnapshot().groupEnabled[strings.TrimSpace(name)]
+}
+
+func PricingGroupEnabled2JSONString() string {
+	data, err := common.Marshal(currentPricingGroupSnapshot().groupEnabled)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+func UpdatePricingGroupEnabledByJSONString(jsonStr string) error {
+	pricingGroupSnapshotUpdateMutex.Lock()
+	defer pricingGroupSnapshotUpdateMutex.Unlock()
+	snapshot := currentPricingGroupSnapshot()
+	enabled, err := parsePricingGroupEnabled(jsonStr, snapshot.groupRatios)
+	if err != nil {
+		return err
+	}
+	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
+		snapshot.groupRatios,
+		enabled,
+		snapshot.groupOrder,
+		snapshot.retryPolicies,
+		snapshot.routingStrategies,
+		snapshot.routingStrategyBindings,
+	))
+	return nil
+}
+
 func GroupRatio2JSONString() string {
 	data, err := common.Marshal(currentPricingGroupSnapshot().groupRatios)
 	if err != nil {
@@ -272,8 +321,17 @@ func UpdateGroupRatioByJSONString(jsonStr string) error {
 	pricingGroupSnapshotUpdateMutex.Lock()
 	defer pricingGroupSnapshotUpdateMutex.Unlock()
 	snapshot := currentPricingGroupSnapshot()
+	enabled := make(map[string]bool, len(ratios))
+	for group := range ratios {
+		groupEnabled, exists := snapshot.groupEnabled[group]
+		if !exists {
+			groupEnabled = true
+		}
+		enabled[group] = groupEnabled
+	}
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		ratios,
+		enabled,
 		snapshot.groupOrder,
 		snapshot.retryPolicies,
 		snapshot.routingStrategies,
@@ -389,6 +447,7 @@ func UpdatePricingGroupRoutingStrategyByJSONString(jsonStr string) error {
 	snapshot := currentPricingGroupSnapshot()
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		snapshot.groupRatios,
+		snapshot.groupEnabled,
 		snapshot.groupOrder,
 		snapshot.retryPolicies,
 		configuration.Strategies,
@@ -415,6 +474,7 @@ func UpdatePricingGroupRetryPolicyByJSONString(jsonStr string) error {
 	snapshot := currentPricingGroupSnapshot()
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		snapshot.groupRatios,
+		snapshot.groupEnabled,
 		snapshot.groupOrder,
 		policies,
 		snapshot.routingStrategies,
@@ -431,6 +491,7 @@ func ApplyPricingGroupConfiguration(configuration *PricingGroupConfiguration) {
 	defer pricingGroupSnapshotUpdateMutex.Unlock()
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		configuration.GroupRatios,
+		configuration.GroupEnabled,
 		configuration.GroupOrder,
 		configuration.RetryPolicies,
 		configuration.RoutingStrategies,
@@ -438,8 +499,12 @@ func ApplyPricingGroupConfiguration(configuration *PricingGroupConfiguration) {
 	))
 }
 
-func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
+func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
+	if err != nil {
+		return nil, err
+	}
+	enabledMap, err := parsePricingGroupEnabled(groupEnabledJSON, ratioMap)
 	if err != nil {
 		return nil, err
 	}
@@ -476,6 +541,7 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJ
 
 	return &PricingGroupConfiguration{
 		GroupRatios:             ratioMap,
+		GroupEnabled:            enabledMap,
 		GroupOrder:              order,
 		RetryPolicies:           retryPolicies,
 		RoutingStrategies:       routingConfiguration.Strategies,
@@ -484,13 +550,23 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJ
 }
 
 // ParsePersistedPricingGroupConfiguration loads independently stored
-// pricing-group options. An absent routing configuration is initialized to the
+// pricing-group options. An absent enabled map initializes every configured
+// group to enabled. An absent routing configuration is initialized to the
 // built-in catalog; a non-empty value must use the current catalog/bindings
 // shape and is never interpreted as the retired per-group strategy map.
-func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
+func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
 	if err != nil {
 		return nil, err
+	}
+	var enabledMap map[string]bool
+	if strings.TrimSpace(groupEnabledJSON) == "" {
+		enabledMap = defaultPricingGroupEnabled(ratioMap)
+	} else {
+		enabledMap, err = parsePricingGroupEnabled(groupEnabledJSON, ratioMap)
+		if err != nil {
+			return nil, err
+		}
 	}
 	order, err := parsePricingGroupOrder(groupOrderJSON)
 	if err != nil {
@@ -519,6 +595,7 @@ func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, ret
 
 	snapshot := newPricingGroupSnapshot(
 		ratioMap,
+		enabledMap,
 		order,
 		retryPolicies,
 		routingConfiguration.Strategies,
@@ -527,11 +604,34 @@ func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, ret
 
 	return &PricingGroupConfiguration{
 		GroupRatios:             snapshot.groupRatios,
+		GroupEnabled:            snapshot.groupEnabled,
 		GroupOrder:              snapshot.groupOrder,
 		RetryPolicies:           snapshot.retryPolicies,
 		RoutingStrategies:       snapshot.routingStrategies,
 		RoutingStrategyBindings: snapshot.routingStrategyBindings,
 	}, nil
+}
+
+func defaultPricingGroupEnabled(ratios map[string]float64) map[string]bool {
+	result := make(map[string]bool, len(ratios))
+	for group := range ratios {
+		result[group] = true
+	}
+	return result
+}
+
+func parsePricingGroupEnabled(jsonStr string, ratios map[string]float64) (map[string]bool, error) {
+	var enabled map[string]bool
+	if err := common.UnmarshalJsonStr(jsonStr, &enabled); err != nil {
+		return nil, err
+	}
+	if enabled == nil {
+		return nil, errors.New("定价分组启用状态必须是 JSON 对象")
+	}
+	if err := validatePricingGroupMapCoverage("启用状态", ratios, enabled); err != nil {
+		return nil, err
+	}
+	return enabled, nil
 }
 
 func defaultPricingGroupRetryPolicies(ratios map[string]float64) map[string]PricingGroupRetryPolicy {
@@ -710,6 +810,7 @@ func UpdatePricingGroupOrderByJSONString(jsonStr string) error {
 	snapshot := currentPricingGroupSnapshot()
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		snapshot.groupRatios,
+		snapshot.groupEnabled,
 		groups,
 		snapshot.retryPolicies,
 		snapshot.routingStrategies,

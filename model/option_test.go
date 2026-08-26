@@ -13,6 +13,7 @@ func preservePricingGroupConfiguration(t *testing.T) {
 	t.Helper()
 	var configuration ratio_setting.PricingGroupConfiguration
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.GroupRatio2JSONString(), &configuration.GroupRatios))
+	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupEnabled2JSONString(), &configuration.GroupEnabled))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupOrder2JSONString(), &configuration.GroupOrder))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRetryPolicy2JSONString(), &configuration.RetryPolicies))
 	var routingConfiguration ratio_setting.PricingGroupRoutingConfiguration
@@ -87,6 +88,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 
 	require.NoError(t, UpdatePricingGroupConfiguration(
 		`{"alpha":1,"beta":2}`,
+		`{"alpha":true,"beta":false}`,
 		`["beta","alpha"]`,
 		`{
 			"alpha":{"mode":"fixed","retry_times":2},
@@ -101,16 +103,22 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 	assert.True(t, betaExists)
 	assert.Equal(t, []string{"beta", "alpha"}, ratio_setting.GetPricingGroupOrder())
 	assert.Equal(t, float64(2), ratio_setting.GetGroupRatio("beta"))
+	assert.False(t, ratio_setting.IsPricingGroupEnabled("beta"))
 
 	var stored []Option
 	require.NoError(t, DB.Where(commonKeyCol+" IN ?", pricingGroupOptionKeys).Find(&stored).Error)
-	require.Len(t, stored, 4)
+	require.Len(t, stored, 5)
 	var retryPolicyValue string
+	var enabledValue string
 	for _, option := range stored {
 		if option.Key == "PricingGroupRetryPolicy" {
 			retryPolicyValue = option.Value
 		}
+		if option.Key == "PricingGroupEnabled" {
+			enabledValue = option.Value
+		}
 	}
+	assert.JSONEq(t, `{"alpha":true,"beta":false}`, enabledValue)
 	var persisted map[string]ratio_setting.PricingGroupRetryPolicy
 	require.NoError(t, common.UnmarshalJsonStr(retryPolicyValue, &persisted))
 	assert.Equal(t, ratio_setting.PricingGroupRetryPolicy{
@@ -128,6 +136,7 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 
 	require.NoError(t, UpdatePricingGroupConfiguration(
 		`{"alpha":1}`,
+		`{"alpha":true}`,
 		`["alpha"]`,
 		`{"alpha":{"mode":"active_channels","retry_times":0}}`,
 		`{
@@ -168,8 +177,12 @@ func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {
 
 	common.OptionMapRWMutex.RLock()
 	storedPolicies := common.OptionMap["PricingGroupRetryPolicy"]
+	storedEnabled := common.OptionMap["PricingGroupEnabled"]
 	common.OptionMapRWMutex.RUnlock()
 	var policies map[string]ratio_setting.PricingGroupRetryPolicy
 	require.NoError(t, common.UnmarshalJsonStr(storedPolicies, &policies))
 	assert.Equal(t, policy, policies["beta"])
+	assert.JSONEq(t, `{"alpha":true,"beta":true}`, storedEnabled)
+	assert.True(t, ratio_setting.IsPricingGroupEnabled("alpha"))
+	assert.True(t, ratio_setting.IsPricingGroupEnabled("beta"))
 }

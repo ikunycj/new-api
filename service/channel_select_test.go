@@ -121,6 +121,49 @@ func TestCrossGroupRetryRequiresTokenPermission(t *testing.T) {
 	assert.False(t, param.AdvanceRetry())
 }
 
+func TestRuntimeRoutingRejectsDisabledPricingGroup(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousEnabled))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"claude":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"claude":false}`))
+
+	param := &RetryParam{TokenGroup: "claude", ModelName: "claude-test"}
+	channel, _, err := CacheGetRandomSatisfiedChannel(param)
+	assert.Nil(t, channel)
+	require.ErrorContains(t, err, "pricing group is disabled")
+
+	adminParam := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", AllowDisabledPricingGroups: true}
+	channel, group, err := CacheGetRandomSatisfiedChannel(adminParam)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, "claude", group)
+
+	weight := uint(100)
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     "active",
+		Model:     "claude-test",
+		ChannelId: channels[0].Id,
+		Enabled:   true,
+		Weight:    weight,
+	}).Error)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"claude":1,"active":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"claude":false,"active":true}`))
+	model.InitChannelCache()
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "active"})
+	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+	autoParam := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+	channel, group, err = CacheGetRandomSatisfiedChannel(autoParam)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, "active", group)
+}
+
 func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	channels := setupChannelRoute(t)
 	weight := uint(100)

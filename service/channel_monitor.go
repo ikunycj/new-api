@@ -320,10 +320,11 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 		}
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		retryParam := &RetryParam{
-			Ctx:         c,
-			TokenGroup:  monitor.PricingGroup,
-			ModelName:   monitor.TestModel,
-			RequestPath: requestPath,
+			Ctx:                        c,
+			TokenGroup:                 monitor.PricingGroup,
+			ModelName:                  monitor.TestModel,
+			RequestPath:                requestPath,
+			AllowDisabledPricingGroups: true,
 		}
 		defer retryParam.CancelRoutingSelection()
 		ctx, cancel := context.WithTimeout(parent, time.Duration(monitor.TimeoutSeconds)*time.Second)
