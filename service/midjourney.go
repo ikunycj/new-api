@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -169,13 +168,14 @@ func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestU
 	// channel reservation for each direct upstream request.
 	if channelID := c.GetInt("channel_id"); channelID > 0 {
 		channel, err := model.CacheGetChannel(channelID)
-		if err == nil && channel != nil {
-			if !TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
-				return MidjourneyErrorWithStatusCodeWrapper(30, "channel_concurrency_limit", http.StatusTooManyRequests), nullBytes, nil
-			}
-			commitPendingRoutingSelection(c, channel.Id)
-			defer ReleaseChannelConcurrency(channel.Id)
+		if err != nil || channel == nil {
+			logger.LogError(c, "selected Midjourney channel is no longer available")
+			return MidjourneyErrorWithStatusCodeWrapper(constant.MjErrorUnknown, "channel_unavailable", http.StatusServiceUnavailable), nullBytes, nil
 		}
+		if !TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+			return MidjourneyErrorWithStatusCodeWrapper(30, "channel_concurrency_limit", http.StatusTooManyRequests), nullBytes, nil
+		}
+		defer ReleaseChannelConcurrency(channel.Id)
 	}
 	//var requestBody io.Reader
 	//requestBody = c.Request.Body
@@ -183,7 +183,7 @@ func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestU
 	var mapResult map[string]interface{}
 	// if get request, no need to read request body
 	if c.Request.Method != "GET" {
-		err := json.NewDecoder(c.Request.Body).Decode(&mapResult)
+		err := common.DecodeJson(c.Request.Body, &mapResult)
 		if err != nil {
 			return MidjourneyErrorWithStatusCodeWrapper(constant.MjErrorUnknown, "read_request_body_failed", http.StatusInternalServerError), nullBytes, err
 		}
@@ -205,7 +205,7 @@ func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestU
 			mapResult["prompt"] = prompt
 		}
 	}
-	reqBody, err := json.Marshal(mapResult)
+	reqBody, err := common.Marshal(mapResult)
 	if err != nil {
 		return MidjourneyErrorWithStatusCodeWrapper(constant.MjErrorUnknown, "marshal_request_body_failed", http.StatusInternalServerError), nullBytes, err
 	}
@@ -224,6 +224,7 @@ func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestU
 		req.Header.Set("mj-api-secret", auth)
 	}
 	defer cancel()
+	commitPendingRoutingSelection(c, c.GetInt("channel_id"))
 	resp, err := GetHttpClient().Do(req)
 	if err != nil {
 		common.SysLog("do request failed: " + err.Error())
@@ -252,9 +253,9 @@ func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestU
 	if len(responseBody) == 0 {
 		return MidjourneyErrorWithStatusCodeWrapper(constant.MjErrorUnknown, "empty_response_body", statusCode), responseBody, nil
 	} else {
-		err = json.Unmarshal(responseBody, &midjResponse)
+		err = common.Unmarshal(responseBody, &midjResponse)
 		if err != nil {
-			err2 := json.Unmarshal(responseBody, &midjourneyUploadsResponse)
+			err2 := common.Unmarshal(responseBody, &midjourneyUploadsResponse)
 			if err2 != nil {
 				return MidjourneyErrorWithStatusCodeWrapper(constant.MjErrorUnknown, "unmarshal_response_body_failed", statusCode), responseBody, err
 			}

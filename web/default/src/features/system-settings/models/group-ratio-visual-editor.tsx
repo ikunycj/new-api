@@ -894,9 +894,22 @@ function GroupPricingTable({
     (row) =>
       row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
   )
-  const hasInvalidStrategyWeights = currentStrategies.some(
+  const hasInvalidStrategyDefinition = currentStrategies.some(
     (strategy) => !isValidStrategyDraft(strategy)
   )
+  const duplicateStrategyNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const strategy of currentStrategies) {
+      const name = strategy.name.trim()
+      if (!name) continue
+      counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return new Set(
+      [...counts.entries()]
+        .filter(([, count]) => count > 1)
+        .map(([name]) => name)
+    )
+  }, [currentStrategies])
   const strategyIds = useMemo(
     () => new Set(currentStrategies.map((strategy) => strategy.id)),
     [currentStrategies]
@@ -1127,19 +1140,6 @@ function GroupPricingTable({
                   },
                 },
                 {
-                  id: 'availability',
-                  header: '可用性',
-                  className: 'w-60',
-                  cellClassName: 'w-60',
-                  cell: (row) => (
-                    <PricingGroupAvailabilityCell
-                      monitor={findPricingGroupMonitor(row, monitorByName)}
-                      isLoading={monitorsQuery.isLoading}
-                      hasError={monitorsQuery.isError}
-                    />
-                  ),
-                },
-                {
                   id: 'strategy',
                   header: '策略',
                   className: 'w-36',
@@ -1165,6 +1165,19 @@ function GroupPricingTable({
                         </SelectGroup>
                       </SelectContent>
                     </Select>
+                  ),
+                },
+                {
+                  id: 'availability',
+                  header: '可用性',
+                  className: 'w-60',
+                  cellClassName: 'w-60',
+                  cell: (row) => (
+                    <PricingGroupAvailabilityCell
+                      monitor={findPricingGroupMonitor(row, monitorByName)}
+                      isLoading={monitorsQuery.isLoading}
+                      hasError={monitorsQuery.isError}
+                    />
                   ),
                 },
                 {
@@ -1246,7 +1259,10 @@ function GroupPricingTable({
                       <Label className='text-xs'>名称</Label>
                       <Input
                         value={strategy.name}
-                        aria-invalid={!isValidStrategyDraft(strategy)}
+                        aria-invalid={
+                          strategy.name.trim() === '' ||
+                          duplicateStrategyNames.has(strategy.name.trim())
+                        }
                         onChange={(event) =>
                           updateStrategy(
                             strategy._id,
@@ -1333,7 +1349,8 @@ function GroupPricingTable({
                 固定重试次数必须是 0 到 100 之间的整数
               </p>
             )}
-            {hasInvalidStrategyWeights && (
+            {(hasInvalidStrategyDefinition ||
+              duplicateStrategyNames.size > 0) && (
               <p className='text-destructive text-sm'>
                 策略名称不能为空或重复；各项权重必须大于等于 0，且总和为 100
               </p>

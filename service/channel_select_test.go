@@ -13,8 +13,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func resetDynamicScheduleStates() {
+	dynamicGroupScheduleState.Lock()
+	dynamicGroupScheduleState.current = make(map[string]float64)
+	dynamicGroupScheduleState.Unlock()
+	dynamicScheduleState.Lock()
+	dynamicScheduleState.current = make(map[string]float64)
+	dynamicScheduleState.Unlock()
+}
+
 func setupChannelRoute(t *testing.T) []model.Channel {
 	t.Helper()
+	resetDynamicScheduleStates()
 	require.NoError(t, model.DB.AutoMigrate(&model.Ability{}, &model.BillingGroupRoute{}, &model.BillingGroupChannel{}))
 	for _, table := range []string{"billing_group_channels", "billing_group_routes", "abilities", "channels"} {
 		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
@@ -38,6 +48,7 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 	common.MemoryCacheEnabled = true
 	model.InitChannelCache()
 	t.Cleanup(func() {
+		resetDynamicScheduleStates()
 		common.MemoryCacheEnabled = originalMemoryCacheEnabled
 		for _, table := range []string{"billing_group_channels", "billing_group_routes", "abilities", "channels"} {
 			_ = model.DB.Exec("DELETE FROM " + table).Error
@@ -859,6 +870,8 @@ func TestSelectorFiltersOpenCircuitCandidate(t *testing.T) {
 }
 
 func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {
+	resetDynamicScheduleStates()
+	t.Cleanup(resetDynamicScheduleStates)
 	grouped := [][]dynamicChannelCandidate{
 		{{channel: &model.Channel{Id: 94011, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}, group: "fair-a"}},
 		{{channel: &model.Channel{Id: 94012, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}, group: "fair-b"}},
@@ -869,20 +882,8 @@ func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {
 }
 
 func TestRoutingSelectionRollbackRestoresSmoothSchedulerCredit(t *testing.T) {
-	dynamicGroupScheduleState.Lock()
-	dynamicGroupScheduleState.current = make(map[string]float64)
-	dynamicGroupScheduleState.Unlock()
-	dynamicScheduleState.Lock()
-	dynamicScheduleState.current = make(map[string]float64)
-	dynamicScheduleState.Unlock()
-	t.Cleanup(func() {
-		dynamicGroupScheduleState.Lock()
-		dynamicGroupScheduleState.current = make(map[string]float64)
-		dynamicGroupScheduleState.Unlock()
-		dynamicScheduleState.Lock()
-		dynamicScheduleState.current = make(map[string]float64)
-		dynamicScheduleState.Unlock()
-	})
+	resetDynamicScheduleStates()
+	t.Cleanup(resetDynamicScheduleStates)
 
 	newCandidate := func(id int, group string) dynamicChannelCandidate {
 		return dynamicChannelCandidate{
