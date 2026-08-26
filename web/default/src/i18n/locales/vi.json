@@ -6089,6 +6089,10 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Tự động chuyển sang gpt-image-2 và tạo ảnh một chú mèo con.",
     "让 AI 帮你生成图片（多模态）": "Tạo ảnh bằng AI (đa phương thức)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
+    "Current balance": "Số dư hiện tại",
+    "Today's balance usage": "Mức tiêu hao số dư hôm nay",
+    "Today's usage": "Mức sử dụng hôm nay",
+    "Historical total consumed": "Tổng đã tiêu thụ trong lịch sử"
   }
 }

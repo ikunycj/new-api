@@ -105,14 +105,14 @@ export function useSummaryCardsConfig(totals: {
   return [
     {
       key: 'todayUsage',
-      title: t('Last 24h usage'),
+      title: t("Today's balance usage"),
       value: totals.usageDisplay,
       description: totals.usageDescription,
       icon: Flame,
     },
     {
       key: 'tokens',
-      title: t('Token Usage'),
+      title: t("Today's usage"),
       value: totals.tokenDisplay,
       description: totals.tokenDescription,
       icon: Layers,

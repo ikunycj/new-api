@@ -6089,6 +6089,10 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "自动切换到 gpt-image-2，并生成一只小猫。",
     "让 AI 帮你生成图片（多模态）": "让 AI 帮你生成图片（多模态）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "让你自己的程序调用 AI，适合开发者和企业使用。"
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "让你自己的程序调用 AI，适合开发者和企业使用。",
+    "Current balance": "当前余额",
+    "Today's balance usage": "今日余额消耗",
+    "Today's usage": "今日用量",
+    "Historical total consumed": "历史总计消耗"
   }
 }

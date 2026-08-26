@@ -29,7 +29,7 @@ import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-
 import type { QuotaDataItem } from '@/features/dashboard/types';
 import { getApiKeys } from '@/features/keys/api';
 import { API_KEY_STATUS } from '@/features/keys/constants';
-import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format';
+import { formatNumber, formatQuota } from '@/lib/format';
 import { computeTimeRange } from '@/lib/time';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -38,6 +38,19 @@ import { StatCard } from '../ui/stat-card';
 const SUMMARY_SPARKLINE_BUCKETS = 12;
 
 type SummarySparklineKey = 'balance' | 'usage' | 'requests';
+
+function formatTokenAmount(value: number): string {
+  const absolute = Math.abs(value);
+  const divisor = absolute >= 1_000_000_000
+    ? 1_000_000_000
+    : absolute >= 1_000_000
+      ? 1_000_000
+      : 1;
+  const suffix = divisor === 1_000_000_000 ? 'B' : divisor === 1_000_000 ? 'M' : '';
+  if (!suffix) return formatNumber(value);
+  const scaled = value / divisor;
+  return `${Number(scaled.toFixed(1))}${suffix}`;
+}
 
 function getBucketIndex(
   timestamp: number,
@@ -218,10 +231,10 @@ export function SummaryCards() {
     const enabledKeys = apiKeysQuery.data?.enabled ?? 0;
     const totalKeys = apiKeysQuery.data?.total ?? 0;
     return {
-      usageDisplay: `${t('Used')} ${formatQuota(recentUsage)} / ${t('Remaining')} ${formatQuota(remainQuota)}`,
-      usageDescription: `${t('Total')}: ${formatQuota(Number(user?.used_quota ?? 0))}`,
-      tokenDisplay: `${t('Today')} ${formatCompactNumber(recentTokens)}`,
-      tokenDescription: `${t('Total')}: ${formatCompactNumber(totalTokens)}`,
+      usageDisplay: formatQuota(recentUsage),
+      usageDescription: `${t('Current balance')}: ${formatQuota(remainQuota)} · ${t('Historical total consumed')}: ${formatQuota(Number(user?.used_quota ?? 0))}`,
+      tokenDisplay: formatTokenAmount(recentTokens),
+      tokenDescription: `${t('Total')}: ${formatTokenAmount(totalTokens)}`,
       requestDisplay: `${t('Today')} ${formatNumber(recentRequests)}`,
       requestDescription: `${t('Total')}: ${formatNumber(totalRequests)}`,
       apiKeysDisplay: `${enabledKeys} ${t('enabled')} / ${totalKeys} ${t('total')}`,

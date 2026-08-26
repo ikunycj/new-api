@@ -6,6 +6,10 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 const newKeys = {
   en: {
     'Current concurrency': 'Current concurrency',
+    'Current balance': 'Current balance',
+    "Today's balance usage": "Today's balance usage",
+    "Today's usage": "Today's usage",
+    'Historical total consumed': 'Historical total consumed',
     'Token Usage': 'Token Usage',
     enabled: 'enabled',
     total: 'total',
@@ -111,6 +115,10 @@ const newKeys = {
   },
   zh: {
     'Current concurrency': '当前并发',
+    'Current balance': '当前余额',
+    "Today's balance usage": '今日余额消耗',
+    "Today's usage": '今日用量',
+    'Historical total consumed': '历史总计消耗',
     'Token Usage': 'Token 使用情况',
     enabled: '启用',
     total: '总计',
@@ -212,8 +220,18 @@ const newKeys = {
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
+  'zh-TW': {
+    'Current balance': '目前餘額',
+    "Today's balance usage": '今日餘額消耗',
+    "Today's usage": '今日用量',
+    'Historical total consumed': '歷史總計消耗',
+  },
   fr: {
     'Current concurrency': 'Concurrence actuelle',
+    'Current balance': 'Solde actuel',
+    "Today's balance usage": 'Consommation du solde du jour',
+    "Today's usage": 'Utilisation du jour',
+    'Historical total consumed': 'Total historique consommé',
     'Token Usage': 'Utilisation des tokens',
     enabled: 'actives',
     total: 'total',
@@ -322,6 +340,10 @@ const newKeys = {
   },
   ja: {
     'Current concurrency': '現在の同時実行数',
+    'Current balance': '現在の残高',
+    "Today's balance usage": '本日の残高消費',
+    "Today's usage": '本日の使用量',
+    'Historical total consumed': '過去の累計消費',
     'Token Usage': 'トークン使用状況',
     enabled: '有効',
     total: '合計',
@@ -427,6 +449,10 @@ const newKeys = {
   },
   ru: {
     'Current concurrency': 'Текущая параллельность',
+    'Current balance': 'Текущий баланс',
+    "Today's balance usage": 'Расход баланса за сегодня',
+    "Today's usage": 'Использование за сегодня',
+    'Historical total consumed': 'Всего израсходовано за историю',
     'Token Usage': 'Использование токенов',
     enabled: 'активных',
     total: 'всего',
@@ -534,6 +560,10 @@ const newKeys = {
   },
   vi: {
     'Current concurrency': 'Số tác vụ đồng thời hiện tại',
+    'Current balance': 'Số dư hiện tại',
+    "Today's balance usage": 'Mức tiêu hao số dư hôm nay',
+    "Today's usage": 'Mức sử dụng hôm nay',
+    'Historical total consumed': 'Tổng đã tiêu thụ trong lịch sử',
     'Token Usage': 'Mức sử dụng token',
     enabled: 'đang bật',
     total: 'tổng',
