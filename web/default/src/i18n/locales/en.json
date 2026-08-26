@@ -6330,6 +6330,7 @@
     "Edit server agent capacity": "Edit server agent capacity",
     "These limits apply to tasks submitted to this server agent.": "These limits apply to tasks submitted to this server agent.",
     "Agent capacity must be a positive integer": "Agent capacity must be a positive integer",
-    "Agent capacity updated": "Agent capacity updated"
+    "Agent capacity updated": "Agent capacity updated",
+    "Agent capacity must not exceed the load-test limits": "Agent capacity must not exceed the load-test limits"
   }
 }

@@ -1071,6 +1071,8 @@ const loadTestTabsKeys = {
       'These limits apply to tasks submitted to this server agent.',
     'Agent capacity must be a positive integer':
       'Agent capacity must be a positive integer',
+    'Agent capacity must not exceed the load-test limits':
+      'Agent capacity must not exceed the load-test limits',
     'Agent capacity updated': 'Agent capacity updated',
   },
   zh: {
@@ -1087,6 +1089,8 @@ const loadTestTabsKeys = {
     'These limits apply to tasks submitted to this server agent.':
       '这些限制适用于提交到此服务器 Agent 的任务。',
     'Agent capacity must be a positive integer': 'Agent 容量必须是正整数',
+    'Agent capacity must not exceed the load-test limits':
+      'Agent 容量不能超过压测限制',
     'Agent capacity updated': 'Agent 容量已更新',
   },
   'zh-TW': {
@@ -1103,6 +1107,8 @@ const loadTestTabsKeys = {
     'These limits apply to tasks submitted to this server agent.':
       '這些限制套用於提交至此伺服器 Agent 的工作。',
     'Agent capacity must be a positive integer': 'Agent 容量必須是正整數',
+    'Agent capacity must not exceed the load-test limits':
+      'Agent 容量不得超過壓測限制',
     'Agent capacity updated': 'Agent 容量已更新',
   },
   fr: {
@@ -1121,6 +1127,8 @@ const loadTestTabsKeys = {
       'Ces limites s’appliquent aux tâches envoyées à cet agent serveur.',
     'Agent capacity must be a positive integer':
       'La capacité de l’agent doit être un entier positif',
+    'Agent capacity must not exceed the load-test limits':
+      'La capacité de l’agent ne doit pas dépasser les limites du test de charge',
     'Agent capacity updated': 'Capacité de l’agent mise à jour',
   },
   ja: {
@@ -1138,6 +1146,8 @@ const loadTestTabsKeys = {
     'These limits apply to tasks submitted to this server agent.':
       'これらの制限は、このサーバー Agent に送信されるタスクに適用されます。',
     'Agent capacity must be a positive integer': 'Agent 容量は正の整数で入力してください',
+    'Agent capacity must not exceed the load-test limits':
+      'Agent 容量は負荷テストの上限を超えられません',
     'Agent capacity updated': 'Agent 容量を更新しました',
   },
   ru: {
@@ -1156,6 +1166,8 @@ const loadTestTabsKeys = {
       'Эти ограничения применяются к задачам, отправленным этому серверному агенту.',
     'Agent capacity must be a positive integer':
       'Емкость агента должна быть положительным целым числом',
+    'Agent capacity must not exceed the load-test limits':
+      'Емкость агента не может превышать ограничения нагрузочного теста',
     'Agent capacity updated': 'Емкость агента обновлена',
   },
   vi: {
@@ -1174,6 +1186,8 @@ const loadTestTabsKeys = {
       'Các giới hạn này áp dụng cho tác vụ gửi đến Agent máy chủ này.',
     'Agent capacity must be a positive integer':
       'Dung lượng Agent phải là số nguyên dương',
+    'Agent capacity must not exceed the load-test limits':
+      'Dung lượng Agent không được vượt quá giới hạn kiểm thử tải',
     'Agent capacity updated': 'Đã cập nhật dung lượng Agent',
   },
 }

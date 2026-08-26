@@ -6330,6 +6330,7 @@
     "Edit server agent capacity": "Изменить емкость серверного агента",
     "These limits apply to tasks submitted to this server agent.": "Эти ограничения применяются к задачам, отправленным этому серверному агенту.",
     "Agent capacity must be a positive integer": "Емкость агента должна быть положительным целым числом",
-    "Agent capacity updated": "Емкость агента обновлена"
+    "Agent capacity updated": "Емкость агента обновлена",
+    "Agent capacity must not exceed the load-test limits": "Емкость агента не может превышать ограничения нагрузочного теста"
   }
 }

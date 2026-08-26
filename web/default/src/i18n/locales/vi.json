@@ -6330,6 +6330,7 @@
     "Edit server agent capacity": "Chỉnh sửa dung lượng Agent máy chủ",
     "These limits apply to tasks submitted to this server agent.": "Các giới hạn này áp dụng cho tác vụ gửi đến Agent máy chủ này.",
     "Agent capacity must be a positive integer": "Dung lượng Agent phải là số nguyên dương",
-    "Agent capacity updated": "Đã cập nhật dung lượng Agent"
+    "Agent capacity updated": "Đã cập nhật dung lượng Agent",
+    "Agent capacity must not exceed the load-test limits": "Dung lượng Agent không được vượt quá giới hạn kiểm thử tải"
   }
 }

@@ -20,11 +20,11 @@ import {
   Copy,
   Link2,
   MonitorCog,
+  Pencil,
   Play,
   Server,
   Square,
   Trash2,
-  Pencil,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +32,8 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -63,20 +65,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useIsAdmin } from '@/hooks/use-admin'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 import {
   cancelLoadTestAgentRun,
   createLoadTestAgentPairing,
   createLoadTestAgentRun,
   deleteLoadTestAgent,
+  getLoadTestLimits,
   getLoadTestAgentState,
   loadLoadTestPricing,
   updateManagedLoadTestAgentCapacity,
   type CreateLoadTestAgentRun,
   type LoadTestAgent,
   type LoadTestAgentRun,
+  type LoadTestLimits,
   type LoadTestPricing,
 } from './api'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
@@ -118,6 +120,9 @@ export function AgentPanel(props: AgentPanelProps) {
   const [pricingByKey, setPricingByKey] = useState<
     Record<string, LoadTestPricing | null>
   >({})
+  const [loadTestLimits, setLoadTestLimits] = useState<LoadTestLimits | null>(
+    null
+  )
   const [pairing, setPairing] = useState<Pairing | null>(null)
   const [capacityAgent, setCapacityAgent] = useState<LoadTestAgent | null>(null)
   const [capacityRPS, setCapacityRPS] = useState('')
@@ -133,7 +138,11 @@ export function AgentPanel(props: AgentPanelProps) {
       if (refreshInFlightRef.current) return
       refreshInFlightRef.current = true
       try {
-        const state = await getLoadTestAgentState()
+        const [state, nextLimits] = await Promise.all([
+          getLoadTestAgentState(),
+          getLoadTestLimits(),
+        ])
+        setLoadTestLimits(nextLimits)
         const nextAgents =
           props.mode === 'managed' ? state.managed_agents : state.local_agents
         setAgents(nextAgents)
@@ -209,14 +218,17 @@ export function AgentPanel(props: AgentPanelProps) {
   const hasActiveRun = runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))
 
   useEffect(() => {
-    void refresh(true)
+    const initialRefresh = window.setTimeout(() => void refresh(true), 0)
     const timer = window.setInterval(
       () => {
         if (!document.hidden) void refresh()
       },
       hasActiveRun ? 2000 : 10000
     )
-    return () => window.clearInterval(timer)
+    return () => {
+      window.clearTimeout(initialRefresh)
+      window.clearInterval(timer)
+    }
   }, [hasActiveRun, refresh])
 
   const createPairing = useCallback(async () => {
@@ -306,6 +318,19 @@ export function AgentPanel(props: AgentPanelProps) {
       toast.error(t('Agent capacity must be a positive integer'))
       return
     }
+    if (
+      loadTestLimits &&
+      (maxRPS > loadTestLimits.max_rps ||
+        maxConcurrency > loadTestLimits.max_concurrency)
+    ) {
+      toast.error(
+        t('Agent capacity must not exceed the load-test limits', {
+          maxRps: loadTestLimits.max_rps,
+          maxConcurrency: loadTestLimits.max_concurrency,
+        })
+      )
+      return
+    }
     setSavingCapacity(true)
     try {
       await updateManagedLoadTestAgentCapacity(capacityAgent.id, {
@@ -320,7 +345,14 @@ export function AgentPanel(props: AgentPanelProps) {
     } finally {
       setSavingCapacity(false)
     }
-  }, [capacityAgent, capacityConcurrency, capacityRPS, refresh, t])
+  }, [
+    capacityAgent,
+    capacityConcurrency,
+    capacityRPS,
+    loadTestLimits,
+    refresh,
+    t,
+  ])
 
   const onlineAgents = agents.filter(
     (agent) => agent.last_seen_at >= onlineBefore
@@ -440,9 +472,11 @@ export function AgentPanel(props: AgentPanelProps) {
                     )}
                     {props.mode === 'managed' && isAdmin && (
                       <Button
-                        aria-label={t('Edit')}
+                        aria-label={t('Edit server agent capacity')}
+                        className='ml-auto shrink-0'
                         onClick={() => editCapacity(agent)}
                         size='icon-xs'
+                        title={t('Edit server agent capacity')}
                         variant='ghost'
                       >
                         <Pencil className='size-3' />
@@ -625,8 +659,8 @@ export function AgentPanel(props: AgentPanelProps) {
               </Label>
               <Input
                 id='managed-agent-max-rps'
-                min={1}
-                max={10000}
+                max={loadTestLimits?.max_rps}
+                min={loadTestLimits?.min_rps ?? 1}
                 onChange={(event) => setCapacityRPS(event.target.value)}
                 type='number'
                 value={capacityRPS}
@@ -638,13 +672,26 @@ export function AgentPanel(props: AgentPanelProps) {
               </Label>
               <Input
                 id='managed-agent-max-concurrency'
-                min={1}
-                max={10000}
+                max={loadTestLimits?.max_concurrency}
+                min={loadTestLimits?.min_concurrency ?? 1}
                 onChange={(event) => setCapacityConcurrency(event.target.value)}
                 type='number'
                 value={capacityConcurrency}
               />
             </div>
+            {loadTestLimits && (
+              <p className='text-muted-foreground text-xs'>
+                {t('Allowed range: {{min}}-{{max}} RPS', {
+                  min: loadTestLimits.min_rps,
+                  max: loadTestLimits.max_rps,
+                })}{' '}
+                ·{' '}
+                {t('Allowed range: {{min}}-{{max}} concurrent requests', {
+                  min: loadTestLimits.min_concurrency,
+                  max: loadTestLimits.max_concurrency,
+                })}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button
