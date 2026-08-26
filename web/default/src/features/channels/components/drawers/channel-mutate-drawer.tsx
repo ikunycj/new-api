@@ -331,12 +331,16 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.tag?.trim() ||
     values.remark?.trim() ||
     values.weight ||
-    values.probe_interval_seconds !== 600 ||
-    values.auto_disabled_probe_interval_seconds !== 600 ||
+    (values.auto_ban ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
+      CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    values.probe_interval_seconds !==
+      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
+    values.auto_disabled_probe_interval_seconds !==
+      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
     values.probe_failure_auto_ban === false ||
     values.probe_success_auto_enable === false ||
     values.upstream_max_retries !== 1 ||
-    values.max_concurrency !== 100 ||
+    values.max_concurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     values.price_multiplier !== 1 ||
     values.price_multiplier_mode !== 'usd' ||
     values.force_priority ||
@@ -747,6 +751,7 @@ export function ChannelMutateDrawer({
   const currentProbeFailureAutoBan = form.watch('probe_failure_auto_ban')
   const currentProbeSuccessAutoEnable = form.watch('probe_success_auto_enable')
   const currentUpstreamMaxRetries = form.watch('upstream_max_retries')
+  const currentMaxConcurrency = form.watch('max_concurrency')
   const currentPriceMultiplier = form.watch('price_multiplier')
   const currentPriceMultiplierMode = form.watch('price_multiplier_mode')
   const currentForcePriority = form.watch('force_priority')
@@ -1013,12 +1018,16 @@ export function ChannelMutateDrawer({
   const routingStrategyConfigured = Boolean(
     currentWeight ||
     currentTestModel?.trim() ||
-    (currentAutoBan ?? 1) !== 1 ||
-    currentProbeIntervalSeconds !== 600 ||
-    currentAutoDisabledProbeIntervalSeconds !== 600 ||
+    (currentAutoBan ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
+      CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    currentProbeIntervalSeconds !==
+      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
+    currentAutoDisabledProbeIntervalSeconds !==
+      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
     currentProbeFailureAutoBan === false ||
     currentProbeSuccessAutoEnable === false ||
     currentUpstreamMaxRetries !== 1 ||
+    currentMaxConcurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     currentPriceMultiplier !== 1 ||
     currentPriceMultiplierMode !== 'usd' ||
     currentForcePriority ||

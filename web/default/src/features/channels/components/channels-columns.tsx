@@ -74,6 +74,7 @@ import {
   isTagAggregateRow,
   type TagRow,
 } from '../lib'
+import { CHANNEL_FORM_DEFAULT_VALUES } from '../lib/channel-form'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
@@ -312,7 +313,7 @@ function ConcurrencyCell({ channel }: { channel: Channel }) {
   const maximum =
     channel.max_concurrency && channel.max_concurrency > 0
       ? channel.max_concurrency
-      : 100
+      : CHANNEL_FORM_DEFAULT_VALUES.max_concurrency
   return (
     <div className='flex min-w-[118px] items-center gap-2'>
       <NumericSpinnerInput

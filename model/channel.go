@@ -45,7 +45,7 @@ type Channel struct {
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping                *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	AutoBan                          *int    `json:"auto_ban" gorm:"default:1"`
+	AutoBan                          *int    `json:"auto_ban" gorm:"default:0"`
 	ProbeIntervalSeconds             int     `json:"probe_interval_seconds"`
 	AutoDisabledProbeIntervalSeconds int     `json:"auto_disabled_probe_interval_seconds"`
 	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
@@ -75,10 +75,10 @@ type Channel struct {
 }
 
 const (
-	DefaultChannelProbeIntervalSeconds      = 600
-	DefaultAutoDisabledProbeIntervalSeconds = 600
+	DefaultChannelProbeIntervalSeconds      = 120
+	DefaultAutoDisabledProbeIntervalSeconds = 10
 	DefaultChannelUpstreamMaxRetries        = 1
-	DefaultChannelMaxConcurrency            = 100
+	DefaultChannelMaxConcurrency            = 1000
 	MaxChannelMaxConcurrency                = 10000
 	MaxChannelProbeIntervalSeconds          = 7 * 24 * 60 * 60
 	MaxChannelUpstreamRetries               = 100
@@ -468,7 +468,7 @@ func (channel *Channel) GetUpstreamMaxRetries() int {
 
 // GetMaxConcurrency returns the maximum number of requests that may be
 // active on this channel. A missing or non-positive value uses the product
-// default of 100.
+// default of 1000.
 func (channel *Channel) GetMaxConcurrency() int {
 	if channel == nil || channel.MaxConcurrency == nil || *channel.MaxConcurrency <= 0 {
 		return DefaultChannelMaxConcurrency

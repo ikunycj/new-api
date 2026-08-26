@@ -152,15 +152,15 @@ func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T)
 	channel.ProbeIntervalSeconds = 0
 	channel.AutoDisabledProbeIntervalSeconds = 0
 	channel.UpstreamMaxRetries = nil
-	assert.Equal(t, DefaultChannelProbeIntervalSeconds, channel.GetProbeIntervalSeconds())
-	assert.Equal(t, DefaultAutoDisabledProbeIntervalSeconds, channel.GetAutoDisabledProbeIntervalSeconds())
-	assert.Equal(t, DefaultChannelUpstreamMaxRetries, channel.GetUpstreamMaxRetries())
-	assert.Equal(t, DefaultChannelMaxConcurrency, channel.GetMaxConcurrency())
+	assert.Equal(t, 120, channel.GetProbeIntervalSeconds())
+	assert.Equal(t, 10, channel.GetAutoDisabledProbeIntervalSeconds())
+	assert.Equal(t, 1, channel.GetUpstreamMaxRetries())
+	assert.Equal(t, 1000, channel.GetMaxConcurrency())
 	maxConcurrency := 7
 	channel.MaxConcurrency = &maxConcurrency
 	assert.Equal(t, maxConcurrency, channel.GetMaxConcurrency())
 	maxConcurrency = 0
-	assert.Equal(t, DefaultChannelMaxConcurrency, channel.GetMaxConcurrency())
+	assert.Equal(t, 1000, channel.GetMaxConcurrency())
 
 	falseValue := false
 	trueValue := true

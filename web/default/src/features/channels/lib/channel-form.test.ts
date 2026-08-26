@@ -21,6 +21,7 @@ import { describe, test } from 'node:test'
 
 import { channelSchema, type Channel } from '../types'
 import {
+  CHANNEL_FORM_DEFAULT_VALUES,
   channelFormSchema,
   transformChannelToFormDefaults,
   transformFormDataToUpdatePayload,
@@ -70,18 +71,61 @@ describe('channel form API mapping', () => {
   })
 
   test('uses the default channel concurrency when it is not configured', () => {
-    const defaults = transformChannelToFormDefaults(channel({ max_concurrency: null }))
+    const defaults = transformChannelToFormDefaults(
+      channel({ max_concurrency: null })
+    )
 
-    assert.equal(defaults.max_concurrency, 100)
+    assert.equal(defaults.max_concurrency, 1000)
     const parsed = channelFormSchema.parse(defaults)
     const payload = transformFormDataToUpdatePayload(parsed, 42)
-    assert.equal(payload.max_concurrency, 100)
+    assert.equal(payload.max_concurrency, 1000)
   })
 
   test('normalizes an invalid zero channel concurrency to the default', () => {
-    const defaults = transformChannelToFormDefaults(channel({ max_concurrency: 0 }))
+    const defaults = transformChannelToFormDefaults(
+      channel({ max_concurrency: 0 })
+    )
 
-    assert.equal(defaults.max_concurrency, 100)
+    assert.equal(defaults.max_concurrency, 1000)
+  })
+
+  test('uses the updated routing strategy defaults for new channels', () => {
+    assert.deepEqual(
+      {
+        auto_ban: CHANNEL_FORM_DEFAULT_VALUES.auto_ban,
+        probe_interval_seconds:
+          CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
+        auto_disabled_probe_interval_seconds:
+          CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
+        upstream_max_retries: CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries,
+        max_concurrency: CHANNEL_FORM_DEFAULT_VALUES.max_concurrency,
+        price_multiplier: CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
+      },
+      {
+        auto_ban: 0,
+        probe_interval_seconds: 120,
+        auto_disabled_probe_interval_seconds: 10,
+        upstream_max_retries: 1,
+        max_concurrency: 1000,
+        price_multiplier: 1,
+      }
+    )
+
+    const defaults = transformChannelToFormDefaults(
+      channel({
+        auto_ban: null,
+        probe_interval_seconds: undefined,
+        auto_disabled_probe_interval_seconds: undefined,
+        max_concurrency: null,
+      })
+    )
+
+    assert.equal(defaults.auto_ban, 0)
+    assert.equal(defaults.probe_interval_seconds, 120)
+    assert.equal(defaults.auto_disabled_probe_interval_seconds, 10)
+    assert.equal(defaults.upstream_max_retries, 1)
+    assert.equal(defaults.max_concurrency, 1000)
+    assert.equal(defaults.price_multiplier, 1)
   })
 
   test('accepts channel responses that omit credentials', () => {
@@ -95,6 +139,9 @@ describe('channel form API mapping', () => {
     const defaults = transformChannelToFormDefaults(channel())
     defaults.test_model = ''
 
-    assert.throws(() => channelFormSchema.parse(defaults), /Test model is required/)
+    assert.throws(
+      () => channelFormSchema.parse(defaults),
+      /Test model is required/
+    )
   })
 })

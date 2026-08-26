@@ -318,13 +318,13 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   model_mapping: '',
   weight: 0,
   test_model: '',
-  auto_ban: 1,
-  probe_interval_seconds: 600,
-  auto_disabled_probe_interval_seconds: 600,
+  auto_ban: 0,
+  probe_interval_seconds: 120,
+  auto_disabled_probe_interval_seconds: 10,
   probe_failure_auto_ban: true,
   probe_success_auto_enable: true,
   upstream_max_retries: 1,
-  max_concurrency: 100,
+  max_concurrency: 1000,
   price_multiplier: 1,
   price_multiplier_mode: 'usd',
   force_priority: false,
@@ -468,7 +468,7 @@ export function transformChannelToFormDefaults(
     model_mapping: channel.model_mapping || '',
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
-    auto_ban: channel.auto_ban ?? 1,
+    auto_ban: channel.auto_ban ?? 0,
     probe_interval_seconds:
       channel.probe_interval_seconds ??
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
@@ -476,7 +476,7 @@ export function transformChannelToFormDefaults(
       channel.auto_disabled_probe_interval_seconds ??
       CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
     probe_failure_auto_ban:
-      channel.probe_failure_auto_ban ?? (channel.auto_ban ?? 1) === 1,
+      channel.probe_failure_auto_ban ?? (channel.auto_ban ?? 0) === 1,
     probe_success_auto_enable: channel.probe_success_auto_enable ?? true,
     upstream_max_retries:
       channel.upstream_max_retries === undefined
@@ -697,7 +697,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     model_mapping: formData.model_mapping || null,
     weight: formData.weight || null,
     test_model: formData.test_model.trim(),
-    auto_ban: formData.auto_ban ?? 1,
+    auto_ban: formData.auto_ban ?? 0,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,
@@ -756,7 +756,7 @@ export function transformFormDataToUpdatePayload(
     model_mapping: formData.model_mapping || null,
     weight: formData.weight ?? 0,
     test_model: formData.test_model.trim(),
-    auto_ban: formData.auto_ban ?? 1,
+    auto_ban: formData.auto_ban ?? 0,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,
