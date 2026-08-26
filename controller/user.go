@@ -306,6 +306,9 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.FillUsersLastUsedAt(users); err != nil {
+		common.SysLog("failed to fill users last_used_at: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -334,6 +337,9 @@ func SearchUsers(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if err := model.FillUsersLastUsedAt(users); err != nil {
+		common.SysLog("failed to fill users last_used_at: " + err.Error())
 	}
 
 	pageInfo.SetTotal(int(total))

@@ -180,6 +180,43 @@ func createLog(log *Log) error {
 	return LOG_DB.Create(log).Error
 }
 
+// FillUsersLastUsedAt supplies historical values for users created before the
+// persistent last-used timestamp was introduced.
+func FillUsersLastUsedAt(users []*User) error {
+	userIDs := make([]int, 0, len(users))
+	for _, user := range users {
+		if user != nil && user.LastUsedAt == 0 {
+			userIDs = append(userIDs, user.Id)
+		}
+	}
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	var lastUsedRows []struct {
+		UserId     int   `gorm:"column:user_id"`
+		LastUsedAt int64 `gorm:"column:last_used_at"`
+	}
+	if err := LOG_DB.Model(&Log{}).
+		Select("user_id, MAX(created_at) AS last_used_at").
+		Where("type = ? AND user_id IN ?", LogTypeConsume, userIDs).
+		Group("user_id").
+		Scan(&lastUsedRows).Error; err != nil {
+		return err
+	}
+
+	lastUsedByUserID := make(map[int]int64, len(lastUsedRows))
+	for _, row := range lastUsedRows {
+		lastUsedByUserID[row.UserId] = row.LastUsedAt
+	}
+	for _, user := range users {
+		if user != nil && user.LastUsedAt == 0 {
+			user.LastUsedAt = lastUsedByUserID[user.Id]
+		}
+	}
+	return nil
+}
+
 func clickHouseLogOrder(prefix string) string {
 	return prefix + "created_at desc, " + prefix + "request_id desc"
 }

@@ -72,6 +72,7 @@ type User struct {
 	StripeCustomer    string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt         int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt       int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	LastUsedAt        int64                      `json:"last_used_at" gorm:"default:0;column:last_used_at"`
 	OnboardingVersion *int                       `json:"-" gorm:"column:onboarding_version;type:int"`
 	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
@@ -675,7 +676,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if newUser.Username == "" {
 		return ErrUsernameEmpty
 	}
-	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count").Updates(newUser).Error; err != nil {
+	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count", "last_used_at").Updates(newUser).Error; err != nil {
 		return err
 	}
 	return tx.First(user, user.Id).Error
@@ -1205,6 +1206,7 @@ func updateUserUsedQuotaAndRequestCount(id int, quota int, count int) {
 		map[string]interface{}{
 			"used_quota":    gorm.Expr("used_quota + ?", quota),
 			"request_count": gorm.Expr("request_count + ?", count),
+			"last_used_at":  common.GetTimestamp(),
 		},
 	).Error
 	if err != nil {
@@ -1223,13 +1225,16 @@ func updateUserQuotaUsedQuotaAndRequestCount(id int, quota int, usedQuota int, r
 		return
 	}
 
-	err := DB.Model(&User{}).Where("id = ?", id).Updates(
-		map[string]interface{}{
-			"quota":         gorm.Expr("quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
-			"request_count": gorm.Expr("request_count + ?", requestCount),
-		},
-	).Error
+	updates := map[string]interface{}{
+		"quota":         gorm.Expr("quota + ?", quota),
+		"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
+		"request_count": gorm.Expr("request_count + ?", requestCount),
+	}
+	if requestCount != 0 {
+		updates["last_used_at"] = common.GetTimestamp()
+	}
+
+	err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 	if err != nil {
 		common.SysLog("failed to batch update user quota, used quota and request count: " + err.Error())
 	}

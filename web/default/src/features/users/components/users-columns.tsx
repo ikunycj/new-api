@@ -328,6 +328,20 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileHidden: true },
     },
     {
+      accessorKey: 'last_used_at',
+      header: '最后使用',
+      cell: ({ row }) => {
+        const ts = row.getValue('last_used_at') as number | undefined
+        return (
+          <span className='text-muted-foreground text-sm'>
+            {ts ? formatTimestamp(ts) : '-'}
+          </span>
+        )
+      },
+      size: 180,
+      meta: { mobileHidden: true },
+    },
+    {
       id: 'actions',
       header: () => t('Actions'),
       cell: ({ row }) => <DataTableRowActions row={row} />,
