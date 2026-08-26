@@ -52,6 +52,14 @@ export interface AdminConsolePerformanceStats {
   rpm: number
   tpm: number
   average_response_seconds: number
+  p90_response_seconds: number
+  p99_response_seconds: number
+}
+
+export interface AdminConsoleSystemLoad {
+  cpu_usage_percent: number
+  memory_usage_percent: number
+  storage_usage_percent: number
 }
 
 export interface AdminConsoleStats {
@@ -63,10 +71,17 @@ export interface AdminConsoleStats {
   quota: AdminConsolePeriodStats
   revenue: AdminConsoleRevenueStats
   performance: AdminConsolePerformanceStats
+  system_load: AdminConsoleSystemLoad
 }
 
 export interface AdminConsoleResponse {
   success: boolean
   message?: string
   data?: AdminConsoleStats
+}
+
+export interface AdminConsoleSystemLoadResponse {
+  success: boolean
+  message?: string
+  data?: AdminConsoleSystemLoad
 }

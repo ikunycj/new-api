@@ -40,16 +40,8 @@ const SUMMARY_SPARKLINE_BUCKETS = 12;
 type SummarySparklineKey = 'balance' | 'usage' | 'requests';
 
 function formatTokenAmount(value: number): string {
-  const absolute = Math.abs(value);
-  const divisor = absolute >= 1_000_000_000
-    ? 1_000_000_000
-    : absolute >= 1_000_000
-      ? 1_000_000
-      : 1;
-  const suffix = divisor === 1_000_000_000 ? 'B' : divisor === 1_000_000 ? 'M' : '';
-  if (!suffix) return formatNumber(value);
-  const scaled = value / divisor;
-  return `${Number(scaled.toFixed(1))}${suffix}`;
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return `${Number((safeValue / 1_000_000).toFixed(2))}M`;
 }
 
 function getBucketIndex(

@@ -79,3 +79,10 @@ func updateSystemStatus() {
 func GetSystemStatus() SystemStatus {
 	return latestSystemStatus.Load().(SystemStatus)
 }
+
+// RefreshSystemStatus updates the cached CPU, memory, and disk readings for
+// callers that need a current snapshot while the overload monitor is disabled.
+func RefreshSystemStatus() SystemStatus {
+	updateSystemStatus()
+	return GetSystemStatus()
+}

@@ -14,3 +14,7 @@ func GetAdminConsole(c *gin.Context) {
 	}
 	common.ApiSuccess(c, stats)
 }
+
+func GetAdminConsoleSystemLoad(c *gin.Context) {
+	common.ApiSuccess(c, model.GetAdminConsoleSystemLoad())
+}

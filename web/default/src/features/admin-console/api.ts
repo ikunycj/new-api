@@ -18,12 +18,27 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
-import type { AdminConsoleResponse, AdminConsoleStats } from './types'
+import type {
+  AdminConsoleResponse,
+  AdminConsoleStats,
+  AdminConsoleSystemLoad,
+  AdminConsoleSystemLoadResponse,
+} from './types'
 
 export async function getAdminConsoleStats(): Promise<AdminConsoleStats> {
   const response = await api.get<AdminConsoleResponse>('/api/admin/console')
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '管理控制台数据加载失败')
+  }
+  return response.data.data
+}
+
+export async function getAdminConsoleSystemLoad(): Promise<AdminConsoleSystemLoad> {
+  const response = await api.get<AdminConsoleSystemLoadResponse>(
+    '/api/admin/system-load'
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || '系统负载数据加载失败')
   }
   return response.data.data
 }

@@ -114,6 +114,8 @@ func TestGetAdminConsoleStatsAggregatesPostgresData(t *testing.T) {
 	assert.Equal(t, int64(1), stats.Performance.RPM)
 	assert.Equal(t, int64(5), stats.Performance.TPM)
 	assert.InDelta(t, 18.5, stats.Performance.AverageResponseSeconds, 0.001)
+	assert.InDelta(t, 34.0, stats.Performance.P90ResponseSeconds, 0.001)
+	assert.InDelta(t, 39.4, stats.Performance.P99ResponseSeconds, 0.001)
 }
 
 func TestGetLogAnalyticsUsesPostgresPercentilesAndUserSearch(t *testing.T) {

@@ -20,7 +20,7 @@ import {
   Alert02Icon,
   ChartUpIcon,
   Clock01Icon,
-  CubeIcon,
+  DashboardSpeed01Icon,
   FlashIcon,
   Key01Icon,
   MoneyReceive01Icon,
@@ -33,17 +33,18 @@ import { lazy, Suspense, useState, type ReactNode } from 'react'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 
 import type { AdminAnalyticsSection } from './admin-analytics'
-import { getAdminConsoleStats } from './api'
+import { getAdminConsoleStats, getAdminConsoleSystemLoad } from './api'
 import {
   AdminConsoleStatCard,
   type AdminConsoleStatTone,
 } from './components/admin-console-stat-card'
-import type { AdminConsoleStats } from './types'
+import type { AdminConsoleStats, AdminConsoleSystemLoad } from './types'
 
 const LazyAdminAnalytics = lazy(() =>
   import('./admin-analytics').then((module) => ({
@@ -65,6 +66,38 @@ function formatDuration(seconds: number): string {
   return `${seconds.toFixed(seconds >= 10 ? 0 : 2)} 秒`
 }
 
+function normalizePercentage(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
+
+function formatPercentage(value: number): string {
+  return `${new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: 1,
+  }).format(normalizePercentage(value))}%`
+}
+
+function SystemLoadMetric(props: { label: string; value: number }) {
+  const percentage = normalizePercentage(props.value)
+
+  return (
+    <Progress
+      value={percentage}
+      className='gap-1'
+      aria-label={`${props.label}使用率 ${formatPercentage(percentage)}`}
+    >
+      <div className='flex w-full min-w-0 items-baseline justify-between gap-1'>
+        <span className='text-muted-foreground truncate font-sans text-[10px] font-medium'>
+          {props.label}
+        </span>
+        <span className='font-mono text-xs font-semibold tabular-nums'>
+          {formatPercentage(percentage)}
+        </span>
+      </div>
+    </Progress>
+  )
+}
+
 interface ConsoleStatItem {
   title: string
   value: ReactNode
@@ -75,9 +108,21 @@ interface ConsoleStatItem {
 
 function ConsoleCardGrid(props: {
   stats?: AdminConsoleStats
+  systemLoad?: AdminConsoleSystemLoad
+  systemLoadLoading: boolean
+  systemLoadError: boolean
   loading: boolean
 }) {
   const stats = props.stats
+  const systemLoad = props.systemLoad ?? stats?.system_load
+  let systemLoadDetail = props.systemLoadLoading
+    ? '正在读取实时负载…'
+    : '实时采样 · 每 5 秒更新'
+  if (props.systemLoadError) {
+    systemLoadDetail = props.systemLoad
+      ? '实时负载刷新失败，当前为最近一次数据'
+      : '实时负载加载失败'
+  }
   const items: ConsoleStatItem[] = [
     {
       title: 'API 密钥',
@@ -120,15 +165,40 @@ function ConsoleCardGrid(props: {
     {
       title: '今日新增用户',
       value: `+${formatCompactNumber(stats?.users.today ?? 0)}`,
-      detail: `用户总数 ${formatCompactNumber(stats?.users.total ?? 0)}`,
+      detail: (
+        <div
+          className='truncate'
+          title={`用户总数 ${formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`}
+        >
+          用户总数 {formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今{' '}
+          {formatCompactNumber(stats?.users.active_today ?? 0)} / 7天{' '}
+          {formatCompactNumber(stats?.users.active_week ?? 0)} / 30天{' '}
+          {formatCompactNumber(stats?.users.active_month ?? 0)}
+        </div>
+      ),
       icon: UserAdd01Icon,
       tone: 'chart-4',
     },
     {
-      title: '今日 Token 用量',
-      value: formatCompactNumber(stats?.tokens.today ?? 0),
-      detail: `累计 ${formatCompactNumber(stats?.tokens.total ?? 0)}`,
-      icon: CubeIcon,
+      title: '系统负载',
+      value: (
+        <div className='grid grid-cols-3 gap-2 font-sans'>
+          <SystemLoadMetric
+            label='CPU'
+            value={systemLoad?.cpu_usage_percent ?? 0}
+          />
+          <SystemLoadMetric
+            label='内存'
+            value={systemLoad?.memory_usage_percent ?? 0}
+          />
+          <SystemLoadMetric
+            label='存储'
+            value={systemLoad?.storage_usage_percent ?? 0}
+          />
+        </div>
+      ),
+      detail: systemLoadDetail,
+      icon: DashboardSpeed01Icon,
       tone: 'chart-5',
     },
     {
@@ -155,7 +225,7 @@ function ConsoleCardGrid(props: {
     {
       title: '今日平均响应',
       value: formatDuration(stats?.performance.average_response_seconds ?? 0),
-      detail: `活跃用户：今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`,
+      detail: `P90 ${formatDuration(stats?.performance.p90_response_seconds ?? 0)} / P99 ${formatDuration(stats?.performance.p99_response_seconds ?? 0)}`,
       icon: Clock01Icon,
       tone: 'chart-4',
     },
@@ -189,6 +259,14 @@ export function AdminConsole() {
     refetchInterval: 60_000,
     placeholderData: (previous) => previous,
   })
+  const systemLoadQuery = useQuery({
+    queryKey: ['admin-console-system-load'],
+    queryFn: getAdminConsoleSystemLoad,
+    enabled: activeView === 'overview',
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    placeholderData: (previous) => previous,
+  })
 
   return (
     <SectionPageLayout>
@@ -209,6 +287,11 @@ export function AdminConsole() {
             <div className='flex flex-col gap-4'>
               <ConsoleCardGrid
                 stats={statsQuery.data}
+                systemLoad={systemLoadQuery.data}
+                systemLoadLoading={
+                  systemLoadQuery.isLoading && !systemLoadQuery.data
+                }
+                systemLoadError={systemLoadQuery.isError}
                 loading={statsQuery.isLoading && !statsQuery.data}
               />
               <Suspense

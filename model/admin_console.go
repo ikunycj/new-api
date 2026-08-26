@@ -41,6 +41,14 @@ type AdminConsolePerformanceStats struct {
 	RPM                    int64   `json:"rpm"`
 	TPM                    int64   `json:"tpm"`
 	AverageResponseSeconds float64 `json:"average_response_seconds"`
+	P90ResponseSeconds     float64 `json:"p90_response_seconds"`
+	P99ResponseSeconds     float64 `json:"p99_response_seconds"`
+}
+
+type AdminConsoleSystemLoad struct {
+	CPUUsagePercent     float64 `json:"cpu_usage_percent"`
+	MemoryUsagePercent  float64 `json:"memory_usage_percent"`
+	StorageUsagePercent float64 `json:"storage_usage_percent"`
 }
 
 type AdminConsoleStats struct {
@@ -52,6 +60,7 @@ type AdminConsoleStats struct {
 	Quota       AdminConsolePeriodStats      `json:"quota"`
 	Revenue     AdminConsoleRevenueStats     `json:"revenue"`
 	Performance AdminConsolePerformanceStats `json:"performance"`
+	SystemLoad  AdminConsoleSystemLoad       `json:"system_load"`
 }
 
 type adminConsoleMainRow struct {
@@ -81,6 +90,8 @@ type adminConsoleLogRow struct {
 	RPM                    int64   `gorm:"column:rpm"`
 	TPM                    int64   `gorm:"column:tpm"`
 	AverageResponseSeconds float64 `gorm:"column:average_response_seconds"`
+	P90ResponseSeconds     float64 `gorm:"column:p90_response_seconds"`
+	P99ResponseSeconds     float64 `gorm:"column:p99_response_seconds"`
 }
 
 func adminConsoleTimeBounds(now time.Time) (todayStart, tomorrowStart, weekStart, rollingMonthStart, monthStart int64) {
@@ -151,7 +162,9 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			COUNT(DISTINCT user_id) FILTER (WHERE type = ? AND user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_month,
 			COUNT(*) FILTER (WHERE type = ? AND created_at >= ? AND created_at <= ?) AS rpm,
 			COALESCE(SUM(prompt_tokens + completion_tokens) FILTER (WHERE type = ? AND created_at >= ? AND created_at <= ?), 0) AS tpm,
-			COALESCE(AVG(use_time) FILTER (WHERE type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS average_response_seconds
+			COALESCE(AVG(use_time) FILTER (WHERE type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS average_response_seconds,
+			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS p90_response_seconds,
+			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS p99_response_seconds
 		FROM logs`
 	nowTimestamp := now.Unix()
 	if err := LOG_DB.Raw(
@@ -169,6 +182,8 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		LogTypeConsume, nowTimestamp-60, nowTimestamp,
 		LogTypeConsume, nowTimestamp-60, nowTimestamp,
 		LogTypeConsume, todayStart, tomorrowStart,
+		LogTypeConsume, todayStart, tomorrowStart,
+		LogTypeConsume, todayStart, tomorrowStart,
 	).Scan(&logRow).Error; err != nil {
 		return stats, err
 	}
@@ -183,10 +198,33 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 	stats.Tokens = AdminConsolePeriodStats{Today: logRow.TokensToday, Total: logRow.TokensTotal}
 	stats.Quota = AdminConsolePeriodStats{Today: logRow.QuotaToday, Total: logRow.QuotaTotal}
 	stats.Revenue = AdminConsoleRevenueStats{Today: mainRow.RevenueToday, Month: mainRow.RevenueMonth, Total: mainRow.RevenueTotal}
-	stats.Performance = AdminConsolePerformanceStats{RPM: logRow.RPM, TPM: logRow.TPM, AverageResponseSeconds: logRow.AverageResponseSeconds}
+	stats.Performance = AdminConsolePerformanceStats{
+		RPM:                    logRow.RPM,
+		TPM:                    logRow.TPM,
+		AverageResponseSeconds: logRow.AverageResponseSeconds,
+		P90ResponseSeconds:     logRow.P90ResponseSeconds,
+		P99ResponseSeconds:     logRow.P99ResponseSeconds,
+	}
+	stats.SystemLoad = getAdminConsoleSystemLoad(false)
 	return stats, nil
 }
 
 func GetAdminConsoleStats() (AdminConsoleStats, error) {
 	return getAdminConsoleStatsAt(time.Now())
+}
+
+func GetAdminConsoleSystemLoad() AdminConsoleSystemLoad {
+	return getAdminConsoleSystemLoad(true)
+}
+
+func getAdminConsoleSystemLoad(refresh bool) AdminConsoleSystemLoad {
+	systemStatus := common.GetSystemStatus()
+	if refresh {
+		systemStatus = common.RefreshSystemStatus()
+	}
+	return AdminConsoleSystemLoad{
+		CPUUsagePercent:     systemStatus.CPUUsage,
+		MemoryUsagePercent:  systemStatus.MemoryUsage,
+		StorageUsagePercent: systemStatus.DiskUsage,
+	}
 }
