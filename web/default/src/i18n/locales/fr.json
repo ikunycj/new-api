@@ -6093,6 +6093,17 @@
     "Current balance": "Solde actuel",
     "Today's balance usage": "Consommation du solde du jour",
     "Today's usage": "Utilisation du jour",
-    "Historical total consumed": "Total historique consommé"
+    "Historical total consumed": "Total historique consommé",
+    "Range": "Période",
+    "Yesterday": "Hier",
+    "This Week": "Cette semaine",
+    "This Month": "Ce mois-ci",
+    "Granularity": "Granularité",
+    "By Token": "Par token",
+    "By Cost": "Par coût",
+    "Select the start and end time for the dashboard.": "Sélectionnez les heures de début et de fin du tableau de bord.",
+    "Apply": "Appliquer",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS (milliers)"
   }
 }

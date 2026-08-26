@@ -6093,6 +6093,17 @@
     "Current balance": "Текущий баланс",
     "Today's balance usage": "Расход баланса за сегодня",
     "Today's usage": "Использование за сегодня",
-    "Historical total consumed": "Всего израсходовано за историю"
+    "Historical total consumed": "Всего израсходовано за историю",
+    "Range": "Период",
+    "Yesterday": "Вчера",
+    "This Week": "Эта неделя",
+    "This Month": "Этот месяц",
+    "Granularity": "Детализация",
+    "By Token": "По токенам",
+    "By Cost": "По стоимости",
+    "Select the start and end time for the dashboard.": "Выберите время начала и окончания для панели.",
+    "Apply": "Применить",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS (тыс.)"
   }
 }

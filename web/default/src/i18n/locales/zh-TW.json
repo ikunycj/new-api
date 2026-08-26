@@ -5363,7 +5363,7 @@
     "Throughput": "吞吐量",
     "Throughput by group": "各分組吞吐量",
     "Throughput short": "吞吐",
-    "Throughput trend": "吞吐量趨勢",
+    "Throughput trend": "吞吐趨勢",
     "Tier": "檔位",
     "Tier conditions": "階梯條件",
     "Tier name": "檔位名稱",
@@ -6090,9 +6090,20 @@
     "让 AI 帮你生成图片（多模态）": "讓 AI 幫你生成圖片（多模態）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "讓 Codex 或 Claude Code 讀取專案檔案、編寫程式碼並完成任務。",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "讓你自己的程式呼叫 AI，適合開發者和企業使用。",
-    "Current balance": "Current balance",
-    "Today's balance usage": "Today's balance usage",
-    "Today's usage": "Today's usage",
-    "Historical total consumed": "Historical total consumed"
+    "Current balance": "目前餘額",
+    "Today's balance usage": "今日餘額消耗",
+    "Today's usage": "今日用量",
+    "Historical total consumed": "歷史總計消耗",
+    "Range": "範圍",
+    "Yesterday": "昨天",
+    "This Week": "本週",
+    "This Month": "本月",
+    "Granularity": "粒度",
+    "By Token": "按 Token",
+    "By Cost": "按費用",
+    "Select the start and end time for the dashboard.": "選擇資料看板的開始和結束時間。",
+    "Apply": "套用",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS（千）"
   }
 }

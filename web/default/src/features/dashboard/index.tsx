@@ -33,25 +33,16 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { ModelsChartPreferences } from './components/models/models-chart-preferences'
-import { ModelsFilter } from './components/models/models-filter-dialog'
+import { DashboardChartControls } from './components/dashboard-chart-controls'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
-import {
-  buildDefaultDashboardFilters,
-  getSavedChartPreferences,
-  saveChartPreferences,
-} from './lib'
+import { buildDefaultDashboardFilters } from './lib'
 import {
   type DashboardSectionId,
   DASHBOARD_DEFAULT_SECTION,
   DASHBOARD_SECTION_IDS,
 } from './section-registry'
-import type {
-  DashboardChartPreferences,
-  DashboardFilters,
-  QuotaDataItem,
-} from './types'
+import type { DashboardFilters, QuotaDataItem } from './types'
 
 const route = getRouteApi('/_authenticated/dashboard/$section')
 
@@ -131,7 +122,7 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
     titleKey: 'Overview',
   },
   models: {
-    titleKey: 'Model Call Analytics',
+    titleKey: 'Throughput trend',
   },
   flow: {
     titleKey: 'Flow',
@@ -147,10 +138,8 @@ export function Dashboard() {
 
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [chartPreferences, setChartPreferences] =
-    useState<DashboardChartPreferences>(() => getSavedChartPreferences())
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters(getSavedChartPreferences())
+    buildDefaultDashboardFilters()
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
 
@@ -158,23 +147,10 @@ export function Dashboard() {
     setModelFilters(filters)
   }, [])
 
-  const handleResetFilters = useCallback(() => {
-    setModelFilters(buildDefaultDashboardFilters(chartPreferences))
-  }, [chartPreferences])
-
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
       setModelData(data)
       setDataLoading(loading)
-    },
-    []
-  )
-
-  const handleChartPreferencesChange = useCallback(
-    (preferences: DashboardChartPreferences) => {
-      setChartPreferences(preferences)
-      setModelFilters(buildDefaultDashboardFilters(preferences))
-      saveChartPreferences(preferences)
     },
     []
   )
@@ -197,19 +173,10 @@ export function Dashboard() {
     activeSection !== 'overview' && visibleSections.length > 1
   const modelActions =
     activeSection === 'models' ? (
-      <>
-        <ModelsChartPreferences
-          preferences={chartPreferences}
-          onPreferencesChange={handleChartPreferencesChange}
-        />
-        <ModelsFilter
-          preferences={chartPreferences}
-          currentFilters={modelFilters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-          includeAdminData={false}
-        />
-      </>
+      <DashboardChartControls
+        filters={modelFilters}
+        onChange={handleFilterChange}
+      />
     ) : null
   const flowActions =
     activeSection === 'flow' ? (
@@ -238,14 +205,9 @@ export function Dashboard() {
               : t('Show sensitive data')}
           </TooltipContent>
         </Tooltip>
-        <ModelsFilter
-          preferences={chartPreferences}
-          currentFilters={modelFilters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-          titleKey='Flow Filters'
-          descriptionKey='Filter the traffic flow view by time range and user.'
-          includeAdminData={false}
+        <DashboardChartControls
+          filters={modelFilters}
+          onChange={handleFilterChange}
         />
       </>
     ) : null
@@ -295,12 +257,10 @@ export function Dashboard() {
                   <LazyConsumptionDistributionChart
                     data={modelData}
                     loading={dataLoading}
-                    defaultChartType={
-                      chartPreferences.consumptionDistributionChart
-                    }
                     timeGranularity={
                       modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
                     }
+                    metric={modelFilters.metric}
                   />
                 </Suspense>
               </FadeIn>
@@ -309,7 +269,6 @@ export function Dashboard() {
                   <LazyModelCharts
                     data={modelData}
                     loading={dataLoading}
-                    defaultChartTab={chartPreferences.modelAnalyticsChart}
                     timeGranularity={
                       modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
                     }

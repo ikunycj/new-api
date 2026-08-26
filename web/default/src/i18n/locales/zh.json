@@ -5363,7 +5363,7 @@
     "Throughput": "吞吐量",
     "Throughput by group": "各分组吞吐量",
     "Throughput short": "吞吐",
-    "Throughput trend": "吞吐量趋势",
+    "Throughput trend": "吞吐趋势",
     "Tier": "档位",
     "Tier conditions": "阶梯条件",
     "Tier name": "档位名称",
@@ -6093,6 +6093,17 @@
     "Current balance": "当前余额",
     "Today's balance usage": "今日余额消耗",
     "Today's usage": "今日用量",
-    "Historical total consumed": "历史总计消耗"
+    "Historical total consumed": "历史总计消耗",
+    "Range": "范围",
+    "Yesterday": "昨天",
+    "This Week": "本周",
+    "This Month": "本月",
+    "Granularity": "粒度",
+    "By Token": "按 Token",
+    "By Cost": "按费用",
+    "Select the start and end time for the dashboard.": "选择数据看板的开始和结束时间。",
+    "Apply": "应用",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS（千）"
   }
 }

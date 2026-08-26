@@ -24,27 +24,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { DimensionUsageChart } from '@/features/admin-console/components/dimension-usage-chart'
+import { DashboardChartControls } from '@/features/dashboard/components/dashboard-chart-controls'
 import { FlowCharts } from '@/features/dashboard/components/flow/flow-charts'
 import { ConsumptionDistributionChart } from '@/features/dashboard/components/models/consumption-distribution-chart'
 import { LogStatCards } from '@/features/dashboard/components/models/log-stat-cards'
 import { ModelCharts } from '@/features/dashboard/components/models/model-charts'
-import { ModelsChartPreferences } from '@/features/dashboard/components/models/models-chart-preferences'
-import { ModelsFilter } from '@/features/dashboard/components/models/models-filter-dialog'
-import { PerformanceOverview } from '@/features/dashboard/components/models/performance-overview'
 import { UserCharts } from '@/features/dashboard/components/users/user-charts'
 import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
-import {
-  buildDefaultDashboardFilters,
-  getDefaultDays,
-  getSavedChartPreferences,
-  getSavedGranularity,
-  saveChartPreferences,
-} from '@/features/dashboard/lib'
+import { buildDefaultDashboardFilters } from '@/features/dashboard/lib'
 import type {
-  DashboardChartPreferences,
   DashboardFilters,
   QuotaDataItem,
-  UserChartsFilters,
 } from '@/features/dashboard/types'
 
 export type AdminAnalyticsSection = 'overview' | 'flow'
@@ -57,31 +48,10 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
   const { t } = useTranslation()
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [chartPreferences, setChartPreferences] =
-    useState<DashboardChartPreferences>(() => getSavedChartPreferences())
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters(getSavedChartPreferences())
-  )
-  const [userChartsFilters, setUserChartsFilters] = useState<UserChartsFilters>(
-    () => {
-      const granularity = getSavedGranularity()
-      return {
-        timeGranularity: granularity,
-        selectedRange: getDefaultDays(granularity),
-        topUserLimit: 10,
-      }
-    }
+    buildDefaultDashboardFilters()
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
-
-  const handleChartPreferencesChange = useCallback(
-    (preferences: DashboardChartPreferences) => {
-      setChartPreferences(preferences)
-      setModelFilters(buildDefaultDashboardFilters(preferences))
-      saveChartPreferences(preferences)
-    },
-    []
-  )
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
@@ -92,21 +62,7 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
   )
 
   const modelActions = (
-    <>
-      <ModelsChartPreferences
-        preferences={chartPreferences}
-        onPreferencesChange={handleChartPreferencesChange}
-      />
-      <ModelsFilter
-        preferences={chartPreferences}
-        currentFilters={modelFilters}
-        onFilterChange={setModelFilters}
-        onReset={() =>
-          setModelFilters(buildDefaultDashboardFilters(chartPreferences))
-        }
-        includeAdminData
-      />
-    </>
+    <DashboardChartControls filters={modelFilters} onChange={setModelFilters} />
   )
 
   const flowActions = (
@@ -135,22 +91,23 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             : t('Show sensitive data')}
         </TooltipContent>
       </Tooltip>
-      <ModelsFilter
-        preferences={chartPreferences}
-        currentFilters={modelFilters}
-        onFilterChange={setModelFilters}
-        onReset={() =>
-          setModelFilters(buildDefaultDashboardFilters(chartPreferences))
-        }
-        titleKey='Flow Filters'
-        descriptionKey='Filter the traffic flow view by time range and user.'
-        includeAdminData
+      <DashboardChartControls
+        filters={modelFilters}
+        onChange={setModelFilters}
       />
     </>
   )
 
   return (
     <div className='space-y-3 sm:space-y-4'>
+      {props.section === 'overview' && (
+        <LogStatCards
+          filters={modelFilters}
+          onDataUpdate={handleDataUpdate}
+          includeAdminData
+        />
+      )}
+
       <div className='flex flex-wrap items-center justify-end gap-2'>
         {props.section === 'overview' && (
           <div className='flex shrink-0 flex-wrap items-center gap-2'>
@@ -165,34 +122,46 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
       </div>
 
       {props.section === 'overview' && (
-        <>
-          <LogStatCards
-            filters={modelFilters}
-            onDataUpdate={handleDataUpdate}
-            includeAdminData
-          />
-          <PerformanceOverview />
+        <div className='grid gap-3 md:grid-cols-2'>
           <ConsumptionDistributionChart
             data={modelData}
             loading={dataLoading}
-            defaultChartType={chartPreferences.consumptionDistributionChart}
             timeGranularity={
               modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
+            metric={modelFilters.metric}
+            compact
           />
           <ModelCharts
             data={modelData}
             loading={dataLoading}
-            defaultChartTab={chartPreferences.modelAnalyticsChart}
             timeGranularity={
               modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
+            compact
           />
-          <UserCharts
-            filters={userChartsFilters}
-            onFiltersChange={setUserChartsFilters}
+          <DimensionUsageChart
+            title='分组用量'
+            dimension='group'
+            data={modelData}
+            loading={dataLoading}
+            timeGranularity={
+              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+            }
+            metric={modelFilters.metric}
           />
-        </>
+          <DimensionUsageChart
+            title='渠道用量'
+            dimension='channel'
+            data={modelData}
+            loading={dataLoading}
+            timeGranularity={
+              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+            }
+            metric={modelFilters.metric}
+          />
+          <UserCharts filters={modelFilters} dataOverride={modelData} compact />
+        </div>
       )}
 
       {props.section === 'flow' && (

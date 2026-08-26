@@ -167,3 +167,42 @@ func TestGetLogAnalyticsUsesPostgresPercentilesAndUserSearch(t *testing.T) {
 	assert.Equal(t, time.Date(2026, time.August, 21, 16, 0, 0, 0, time.UTC).Unix(), localDay.TokenTrend[0].Timestamp)
 	assert.Equal(t, time.Date(2026, time.August, 22, 16, 0, 0, 0, time.UTC).Unix(), localDay.TokenTrend[1].Timestamp)
 }
+
+func TestGetAllQuotaDatesPreservesGroupAndChannelTrendDimensions(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &QuotaData{}, &Channel{})
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 1, Name: "east"},
+		{Id: 2, Name: "west"},
+	}).Error)
+	require.NoError(t, DB.Create(&[]QuotaData{
+		{Username: "alice", ModelName: "gpt-a", UseGroup: "vip", ChannelID: 1, CreatedAt: 1000, TokenUsed: 40, Quota: 100, Count: 2},
+		{Username: "alice", ModelName: "gpt-a", UseGroup: "vip", ChannelID: 1, CreatedAt: 1000, TokenUsed: 20, Quota: 50, Count: 1},
+		{Username: "alice", ModelName: "gpt-a", UseGroup: "vip", ChannelID: 2, CreatedAt: 1000, TokenUsed: 10, Quota: 25, Count: 1},
+		{Username: "bob", ModelName: "gpt-b", UseGroup: "default", ChannelID: 1, CreatedAt: 2000, TokenUsed: 30, Quota: 70, Count: 3},
+	}).Error)
+
+	rows, err := GetAllQuotaDates(900, 2100, "")
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+
+	byDimension := make(map[string]*QuotaData, len(rows))
+	for _, row := range rows {
+		key := fmt.Sprintf("%s/%d/%d", row.UseGroup, row.ChannelID, row.CreatedAt)
+		byDimension[key] = row
+	}
+	require.Contains(t, byDimension, "vip/1/1000")
+	assert.Equal(t, "east", byDimension["vip/1/1000"].ChannelName)
+	assert.Equal(t, 60, byDimension["vip/1/1000"].TokenUsed)
+	assert.Equal(t, 150, byDimension["vip/1/1000"].Quota)
+	assert.Equal(t, "west", byDimension["vip/2/1000"].ChannelName)
+	assert.Equal(t, "default", byDimension["default/1/2000"].UseGroup)
+
+	filtered, err := GetAllQuotaDates(900, 2100, "alice")
+	require.NoError(t, err)
+	require.Len(t, filtered, 2)
+	for _, row := range filtered {
+		assert.Equal(t, "alice", row.Username)
+		assert.Equal(t, "vip", row.UseGroup)
+		assert.NotEmpty(t, row.ChannelName)
+	}
+}

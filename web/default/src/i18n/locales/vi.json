@@ -6093,6 +6093,17 @@
     "Current balance": "Số dư hiện tại",
     "Today's balance usage": "Mức tiêu hao số dư hôm nay",
     "Today's usage": "Mức sử dụng hôm nay",
-    "Historical total consumed": "Tổng đã tiêu thụ trong lịch sử"
+    "Historical total consumed": "Tổng đã tiêu thụ trong lịch sử",
+    "Range": "Phạm vi",
+    "Yesterday": "Hôm qua",
+    "This Week": "Tuần này",
+    "This Month": "Tháng này",
+    "Granularity": "Độ chi tiết",
+    "By Token": "Theo token",
+    "By Cost": "Theo chi phí",
+    "Select the start and end time for the dashboard.": "Chọn thời gian bắt đầu và kết thúc cho bảng điều khiển.",
+    "Apply": "Áp dụng",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS (nghìn)"
   }
 }

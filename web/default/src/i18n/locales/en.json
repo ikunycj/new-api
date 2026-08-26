@@ -6093,6 +6093,17 @@
     "Current balance": "Current balance",
     "Today's balance usage": "Today's balance usage",
     "Today's usage": "Today's usage",
-    "Historical total consumed": "Historical total consumed"
+    "Historical total consumed": "Historical total consumed",
+    "Range": "Range",
+    "Yesterday": "Yesterday",
+    "This Week": "This Week",
+    "This Month": "This Month",
+    "Granularity": "Granularity",
+    "By Token": "By Token",
+    "By Cost": "By Cost",
+    "Select the start and end time for the dashboard.": "Select the start and end time for the dashboard.",
+    "Apply": "Apply",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS (thousands)"
   }
 }

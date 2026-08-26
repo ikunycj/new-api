@@ -22,8 +22,6 @@ import { buildQueryParams } from './lib/query-params'
 import type {
   GetLogsParams,
   GetLogsResponse,
-  GetLogAnalyticsParams,
-  GetLogAnalyticsResponse,
   GetLogFilterOptionsResponse,
   GetLogStatsParams,
   GetLogStatsResponse,
@@ -86,18 +84,6 @@ export const getLogStats = (params: GetLogStatsParams = {}) =>
 export const getUserLogStats = (
   params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
 ) => fetchLogStats('/api/log', params, false)
-
-export async function getLogAnalytics(
-  params: GetLogAnalyticsParams
-): Promise<GetLogAnalyticsResponse> {
-  const queryParams = buildQueryParams(
-    params as unknown as Record<string, unknown>
-  )
-  const response = await api.get<GetLogAnalyticsResponse>(
-    `/api/log/analytics?${queryParams}`
-  )
-  return response.data
-}
 
 export async function getLogFilterOptions(): Promise<GetLogFilterOptionsResponse> {
   const response =

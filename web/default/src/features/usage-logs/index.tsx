@@ -17,12 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { lazy, Suspense, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import type { NavGroup } from '@/components/layout/types'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CacheStatsDialog } from '@/features/system-settings/general/channel-affinity/cache-stats-dialog'
 import { useSidebarConfig } from '@/hooks/use-sidebar-config'
@@ -40,10 +39,6 @@ import {
   USAGE_LOGS_DEFAULT_SECTION,
   type UsageLogsSectionId,
 } from './section-registry'
-
-const LazyCallLogsDashboard = lazy(
-  () => import('./components/call-logs-dashboard')
-)
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
@@ -79,8 +74,7 @@ function UsageLogsContent() {
     affinityDialogOpen,
     setAffinityDialogOpen,
   } = useUsageLogsContext()
-  const { canManageScope, isAdminView, viewScope, setViewScope } =
-    useLogsViewScope()
+  const { canManageScope, viewScope, setViewScope } = useLogsViewScope()
   const logCategory = activeCategory === 'call' ? 'common' : activeCategory
   const tabNavGroups = useMemo<NavGroup[]>(
     () => [
@@ -133,8 +127,6 @@ function UsageLogsContent() {
   const showTaskSwitcher =
     (activeCategory === 'drawing' || activeCategory === 'task') &&
     visibleSections.length > 1
-  const showCallAnalytics = activeCategory === 'call' && isAdminView
-
   return (
     <>
       <SectionPageLayout fixedContent>
@@ -162,22 +154,9 @@ function UsageLogsContent() {
                 </TabsList>
               </Tabs>
             )}
-            {showCallAnalytics ? (
-              <div className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'>
-                <Suspense
-                  fallback={<Skeleton className='h-96 w-full shrink-0' />}
-                >
-                  <LazyCallLogsDashboard />
-                </Suspense>
-                <div className='min-h-[34rem] shrink-0'>
-                  <UsageLogsTable logCategory={logCategory} />
-                </div>
-              </div>
-            ) : (
-              <div className='min-h-0 flex-1'>
-                <UsageLogsTable logCategory={logCategory} />
-              </div>
-            )}
+            <div className='min-h-0 flex-1'>
+              <UsageLogsTable logCategory={logCategory} />
+            </div>
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

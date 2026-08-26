@@ -27,6 +27,9 @@ export interface QuotaDataItem {
   user_id?: number
   username?: string
   model_name?: string
+  use_group?: string
+  channel_id?: number
+  channel_name?: string
   created_at: number
   token_used?: number
   count?: number
@@ -189,18 +192,17 @@ export interface DashboardFilters {
   end_timestamp?: Date
   time_granularity?: TimeGranularity
   username?: string
+  metric?: DashboardMetric
+  range_preset?: DashboardRangePreset
 }
 
-export type ConsumptionDistributionChartType = 'bar' | 'area'
-
-export type ModelAnalyticsChartTab = 'trend' | 'proportion' | 'top'
-
-export interface DashboardChartPreferences {
-  consumptionDistributionChart: ConsumptionDistributionChartType
-  modelAnalyticsChart: ModelAnalyticsChartTab
-  defaultTimeRangeDays: number
-  defaultTimeGranularity: TimeGranularity
-}
+export type DashboardMetric = 'tokens' | 'quota'
+export type DashboardRangePreset =
+  | 'today'
+  | 'yesterday'
+  | 'week'
+  | 'month'
+  | 'custom'
 
 // User analytics selections are held by the dashboard parent so they survive
 // switching between dashboard sub-sections, matching the model/flow filters.
@@ -208,6 +210,7 @@ export interface UserChartsFilters {
   timeGranularity: TimeGranularity
   selectedRange: number
   topUserLimit: number
+  metric?: DashboardMetric
 }
 
 // ============================================================================

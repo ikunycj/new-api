@@ -6093,6 +6093,17 @@
     "Current balance": "現在の残高",
     "Today's balance usage": "本日の残高消費",
     "Today's usage": "本日の使用量",
-    "Historical total consumed": "過去の累計消費"
+    "Historical total consumed": "過去の累計消費",
+    "Range": "期間",
+    "Yesterday": "昨日",
+    "This Week": "今週",
+    "This Month": "今月",
+    "Granularity": "粒度",
+    "By Token": "Token 別",
+    "By Cost": "費用別",
+    "Select the start and end time for the dashboard.": "ダッシュボードの開始時刻と終了時刻を選択します。",
+    "Apply": "適用",
+    "QPS": "QPS",
+    "TPS (thousands)": "TPS（千単位）"
   }
 }

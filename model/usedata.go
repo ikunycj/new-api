@@ -11,18 +11,19 @@ import (
 
 // QuotaData 柱状图数据
 type QuotaData struct {
-	Id        int    `json:"id"`
-	UserID    int    `json:"user_id" gorm:"index"`
-	Username  string `json:"username" gorm:"index:idx_qdt_model_user_name,priority:2;size:64;default:''"`
-	ModelName string `json:"model_name" gorm:"index:idx_qdt_model_user_name,priority:1;size:64;default:''"`
-	CreatedAt int64  `json:"created_at" gorm:"bigint;index:idx_qdt_created_at,priority:2"`
-	UseGroup  string `json:"use_group" gorm:"index;size:64;default:''"`
-	TokenID   int    `json:"token_id" gorm:"index;default:0"`
-	ChannelID int    `json:"channel_id" gorm:"index;default:0"`
-	NodeName  string `json:"node_name" gorm:"index;size:64;default:''"`
-	TokenUsed int    `json:"token_used" gorm:"default:0"`
-	Count     int    `json:"count" gorm:"default:0"`
-	Quota     int    `json:"quota" gorm:"default:0"`
+	Id          int    `json:"id"`
+	UserID      int    `json:"user_id" gorm:"index"`
+	Username    string `json:"username" gorm:"index:idx_qdt_model_user_name,priority:2;size:64;default:''"`
+	ModelName   string `json:"model_name" gorm:"index:idx_qdt_model_user_name,priority:1;size:64;default:''"`
+	CreatedAt   int64  `json:"created_at" gorm:"bigint;index:idx_qdt_created_at,priority:2"`
+	UseGroup    string `json:"use_group" gorm:"index;size:64;default:''"`
+	TokenID     int    `json:"token_id" gorm:"index;default:0"`
+	ChannelID   int    `json:"channel_id" gorm:"index;default:0"`
+	ChannelName string `json:"channel_name,omitempty" gorm:"-"`
+	NodeName    string `json:"node_name" gorm:"index;size:64;default:''"`
+	TokenUsed   int    `json:"token_used" gorm:"default:0"`
+	Count       int    `json:"count" gorm:"default:0"`
+	Quota       int    `json:"quota" gorm:"default:0"`
 }
 
 type QuotaDataLogParams struct {
@@ -145,13 +146,15 @@ func increaseQuotaData(quotaData *QuotaData) {
 
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
 	err = DB.Table("quota_data").
-		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Select("user_id, username, model_name, use_group, channel_id, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
 		Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).
-		Group("user_id, username, model_name, created_at").
+		Group("user_id, username, model_name, use_group, channel_id, created_at").
 		Find(&quotaDatas).Error
-	return quotaDatas, err
+	if err != nil {
+		return nil, err
+	}
+	return quotaDatas, fillQuotaDataChannelNames(quotaDatas)
 }
 
 func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
@@ -188,9 +191,61 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 		return GetQuotaDataByUsername(username, startTime, endTime)
 	}
 	var quotaDatas []*QuotaData
-	// 从quota_data表中查询数据
-	// only select model_name, sum(count) as count, sum(quota) as quota, model_name, created_at from quota_data group by model_name, created_at;
-	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
-	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
-	return quotaDatas, err
+	err = DB.Table("quota_data").
+		Select("model_name, use_group, channel_id, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Where("created_at >= ? and created_at <= ?", startTime, endTime).
+		Group("model_name, use_group, channel_id, created_at").
+		Find(&quotaDatas).Error
+	if err != nil {
+		return nil, err
+	}
+	return quotaDatas, fillQuotaDataChannelNames(quotaDatas)
+}
+
+func fillQuotaDataChannelNames(rows []*QuotaData) error {
+	channelIDSet := make(map[int]struct{})
+	channelIDs := make([]int, 0)
+	for _, row := range rows {
+		if row.ChannelID <= 0 {
+			continue
+		}
+		if _, ok := channelIDSet[row.ChannelID]; ok {
+			continue
+		}
+		channelIDSet[row.ChannelID] = struct{}{}
+		channelIDs = append(channelIDs, row.ChannelID)
+	}
+	if len(channelIDs) == 0 {
+		return nil
+	}
+
+	channelNameByID := make(map[int]string, len(channelIDs))
+	if common.MemoryCacheEnabled {
+		for _, channelID := range channelIDs {
+			if channel, err := CacheGetChannel(channelID); err == nil {
+				channelNameByID[channelID] = channel.Name
+			}
+		}
+	} else {
+		var channels []struct {
+			Id   int    `gorm:"column:id"`
+			Name string `gorm:"column:name"`
+		}
+		if err := DB.Table("channels").Select("id, name").Where("id IN ?", channelIDs).Find(&channels).Error; err != nil {
+			return err
+		}
+		for _, channel := range channels {
+			channelNameByID[channel.Id] = channel.Name
+		}
+	}
+	for _, row := range rows {
+		if name := channelNameByID[row.ChannelID]; name != "" {
+			row.ChannelName = name
+			continue
+		}
+		if row.ChannelID > 0 {
+			row.ChannelName = fmt.Sprintf("channel-%d", row.ChannelID)
+		}
+	}
+	return nil
 }
