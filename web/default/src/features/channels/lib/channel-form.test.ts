@@ -69,6 +69,21 @@ describe('channel form API mapping', () => {
     assert.equal(payload.upstream_max_retries, null)
   })
 
+  test('uses the default channel concurrency when it is not configured', () => {
+    const defaults = transformChannelToFormDefaults(channel({ max_concurrency: null }))
+
+    assert.equal(defaults.max_concurrency, 100)
+    const parsed = channelFormSchema.parse(defaults)
+    const payload = transformFormDataToUpdatePayload(parsed, 42)
+    assert.equal(payload.max_concurrency, 100)
+  })
+
+  test('normalizes an invalid zero channel concurrency to the default', () => {
+    const defaults = transformChannelToFormDefaults(channel({ max_concurrency: 0 }))
+
+    assert.equal(defaults.max_concurrency, 100)
+  })
+
   test('accepts channel responses that omit credentials', () => {
     const parsed = channel()
 

@@ -98,6 +98,7 @@ interface FlowChartsProps {
   filters?: DashboardFilters
   // When false, sensitive node labels are masked in the rendered Sankey.
   sensitiveVisible?: boolean
+  includeAdminData?: boolean
 }
 
 const FLOW_METRIC_OPTIONS = [
@@ -259,10 +260,11 @@ export function FlowCharts(props: FlowChartsProps) {
   const user = useAuthStore((state) => state.auth.user)
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const includeAdminData = props.includeAdminData ?? isAdmin
   let flowRole: FlowRole = 'user'
-  if (isRoot) {
+  if (includeAdminData && isRoot) {
     flowRole = 'root'
-  } else if (isAdmin) {
+  } else if (includeAdminData && isAdmin) {
     flowRole = 'admin'
   }
   const [metric, setMetric] = useState<FlowMetric>('quota')
@@ -335,8 +337,15 @@ export function FlowCharts(props: FlowChartsProps) {
     isError,
     isLoading,
   } = useQuery({
-    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole],
-    queryFn: () => getFlowQuotaDates(flowQueryParams, isAdmin),
+    queryKey: [
+      'dashboard',
+      'flow',
+      flowQueryParams,
+      flowRole,
+      includeAdminData,
+      user?.id,
+    ],
+    queryFn: () => getFlowQuotaDates(flowQueryParams, includeAdminData),
     select: (res) =>
       requireSuccessfulFlowRows(res, t('Please try again later.')),
     staleTime: 60_000,
@@ -643,7 +652,7 @@ export function FlowCharts(props: FlowChartsProps) {
         </div>
 
         <div className='flex min-w-0 items-center gap-2 xl:justify-end'>
-          {isAdmin && (
+          {includeAdminData && (
             <div className='flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[min(24rem,34vw)]'>
               <MultiSelect
                 options={userFilterOptions}

@@ -29,18 +29,27 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { lazy, Suspense, useState, type ReactNode } from 'react'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 
+import type { AdminAnalyticsSection } from './admin-analytics'
 import { getAdminConsoleStats } from './api'
 import {
   AdminConsoleStatCard,
   type AdminConsoleStatTone,
 } from './components/admin-console-stat-card'
 import type { AdminConsoleStats } from './types'
+
+const LazyAdminAnalytics = lazy(() =>
+  import('./admin-analytics').then((module) => ({
+    default: module.AdminAnalytics,
+  }))
+)
 
 function formatCompactNumber(value: number): string {
   if (!Number.isFinite(value)) return '0'
@@ -170,6 +179,9 @@ function ConsoleCardGrid(props: {
 }
 
 export function AdminConsole() {
+  const [activeView, setActiveView] = useState<
+    'overview' | AdminAnalyticsSection
+  >('overview')
   const statsQuery = useQuery({
     queryKey: ['admin-console-stats'],
     queryFn: getAdminConsoleStats,
@@ -183,10 +195,46 @@ export function AdminConsole() {
       <SectionPageLayout.Title>管理控制台</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-4'>
-          <ConsoleCardGrid
-            stats={statsQuery.data}
-            loading={statsQuery.isLoading && !statsQuery.data}
-          />
+          <Tabs
+            value={activeView}
+            onValueChange={(value) => setActiveView(value as typeof activeView)}
+          >
+            <TabsList>
+              <TabsTrigger value='overview'>总览</TabsTrigger>
+              <TabsTrigger value='flow'>流量</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {activeView === 'overview' ? (
+            <div className='flex flex-col gap-4'>
+              <ConsoleCardGrid
+                stats={statsQuery.data}
+                loading={statsQuery.isLoading && !statsQuery.data}
+              />
+              <Suspense
+                fallback={
+                  <div className='space-y-3'>
+                    <Skeleton className='h-9 w-72' />
+                    <Skeleton className='h-96 w-full' />
+                  </div>
+                }
+              >
+                <LazyAdminAnalytics section='overview' />
+              </Suspense>
+            </div>
+          ) : (
+            <Suspense
+              fallback={
+                <div className='space-y-3'>
+                  <Skeleton className='h-9 w-72' />
+                  <Skeleton className='h-96 w-full' />
+                </div>
+              }
+            >
+              <LazyAdminAnalytics section={activeView} />
+            </Suspense>
+          )}
+
           {statsQuery.isError && (
             <Alert variant='destructive'>
               <HugeiconsIcon icon={Alert02Icon} aria-hidden='true' />

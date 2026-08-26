@@ -49,10 +49,11 @@ func InitChannelCache() {
 			}
 		}
 	}
-	if rates, err := GetPreviousDayChannelProbeSuccessRates(channelIDs, time.Now()); err == nil {
+	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, time.Now()); err == nil {
 		for _, channel := range channels {
 			if channel != nil {
 				channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+				channel.PreviousDayProbeSampleCount = samples[channel.Id]
 			}
 		}
 	} else {
@@ -223,9 +224,10 @@ func getEligibleChannelsFromDB(group string, modelName string, requestPath strin
 	for _, channel := range result {
 		rateIDs = append(rateIDs, channel.Id)
 	}
-	if rates, err := GetPreviousDayChannelProbeSuccessRates(rateIDs, time.Now()); err == nil {
+	if rates, samples, err := GetPreviousDayChannelProbeStats(rateIDs, time.Now()); err == nil {
 		for _, channel := range result {
 			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+			channel.PreviousDayProbeSampleCount = samples[channel.Id]
 		}
 	}
 	sort.SliceStable(result, func(i, j int) bool { return result[i].Id < result[j].Id })
@@ -271,8 +273,9 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 }
 
 // GetConfiguredRouteChannel selects only from the channels configured for a
-// billing group. Route priority remains a pricing-group route property;
-// weights apply among entries at the same route priority.
+// billing group. This legacy helper keeps the configured lower-is-earlier
+// route ordering; the request selector applies the dynamic strategy before
+// using route order as a tie-breaker.
 func GetConfiguredRouteChannel(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}) (*Channel, error) {
 	if len(entries) == 0 {
 		return nil, nil
@@ -329,7 +332,7 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		candidates := make([]BillingGroupChannel, 0, len(channels))
 		for channelID := range channelByID {
 			entry := entryByChannel[channelID]
-			if !hasPriority || entry.Priority > bestPriority {
+			if !hasPriority || entry.Priority < bestPriority {
 				bestPriority = entry.Priority
 				hasPriority = true
 				candidates = candidates[:0]
@@ -392,7 +395,7 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		if channel == nil || channel.Status != common.ChannelStatusEnabled {
 			continue
 		}
-		if !hasPriority || entry.Priority > bestPriority {
+		if !hasPriority || entry.Priority < bestPriority {
 			bestPriority = entry.Priority
 			hasPriority = true
 			candidates = candidates[:0]
@@ -571,6 +574,7 @@ func SyncChannelCacheEntry(channel *Channel) {
 		// Preserve it across status-only updates so replacing the cached model
 		// does not temporarily make a channel look like it has a 0% success rate.
 		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		channel.Keys = channel.GetKeys()

@@ -33,6 +33,7 @@ const ADVANCED_SETTINGS_FIELDS = new Set<FieldPath<ChannelFormValues>>([
   'probe_failure_auto_ban',
   'probe_success_auto_enable',
   'upstream_max_retries',
+  'max_concurrency',
   'price_multiplier',
   'price_multiplier_mode',
   'force_priority',

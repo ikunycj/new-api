@@ -155,6 +155,12 @@ func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T)
 	assert.Equal(t, DefaultChannelProbeIntervalSeconds, channel.GetProbeIntervalSeconds())
 	assert.Equal(t, DefaultAutoDisabledProbeIntervalSeconds, channel.GetAutoDisabledProbeIntervalSeconds())
 	assert.Equal(t, DefaultChannelUpstreamMaxRetries, channel.GetUpstreamMaxRetries())
+	assert.Equal(t, DefaultChannelMaxConcurrency, channel.GetMaxConcurrency())
+	maxConcurrency := 7
+	channel.MaxConcurrency = &maxConcurrency
+	assert.Equal(t, maxConcurrency, channel.GetMaxConcurrency())
+	maxConcurrency = 0
+	assert.Equal(t, DefaultChannelMaxConcurrency, channel.GetMaxConcurrency())
 
 	falseValue := false
 	trueValue := true
@@ -162,6 +168,21 @@ func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T)
 	channel.ProbeSuccessAutoEnable = &trueValue
 	assert.False(t, channel.ShouldProbeFailureAutoBan())
 	assert.True(t, channel.ShouldProbeSuccessAutoEnable())
+}
+
+func TestHasEnabledKeyTreatsMissingMultiKeyStatusAsEnabled(t *testing.T) {
+	channel := &Channel{
+		Key: "first\nsecond",
+		ChannelInfo: ChannelInfo{
+			IsMultiKey:         true,
+			MultiKeyStatusList: map[int]int{1: common.ChannelStatusAutoDisabled},
+		},
+	}
+
+	assert.True(t, channel.HasEnabledKey())
+
+	channel.ChannelInfo.MultiKeyStatusList[0] = common.ChannelStatusAutoDisabled
+	assert.False(t, channel.HasEnabledKey())
 }
 
 func TestPreviousNaturalDaySuccessRateUsesPreviousLocalDayAndDefaultsTo100(t *testing.T) {

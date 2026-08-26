@@ -63,6 +63,8 @@ export const channelSchema = z.object({
   probe_failure_auto_ban: z.boolean().nullish(),
   probe_success_auto_enable: z.boolean().nullish(),
   upstream_max_retries: z.number().nullish(),
+  max_concurrency: z.number().nullish(),
+  current_concurrency: z.number().default(0),
   price_multiplier: z.number().default(1),
   price_multiplier_mode: z
     .enum(['usd', 'cny'])
@@ -416,6 +418,7 @@ export interface ChannelFormData {
   probe_failure_auto_ban?: boolean
   probe_success_auto_enable?: boolean
   upstream_max_retries?: number | null
+  max_concurrency?: number | null
   price_multiplier?: number
   price_multiplier_mode?: 'usd' | 'cny'
   force_priority?: boolean

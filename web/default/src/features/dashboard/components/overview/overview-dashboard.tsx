@@ -643,9 +643,8 @@ export function OverviewDashboard() {
   const onboardingRequired = user?.onboarding_required === true
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
-  const showLeftContentPanels =
-    isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
-  const showContentPanels = showLeftContentPanels || showUptimePanel
+  const showLeftContentPanels = true
+  const showContentPanels = true
 
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
@@ -941,11 +940,9 @@ export function OverviewDashboard() {
                   'lg:grid-cols-2'
               )}
             >
-              {isAdmin && (
-                <CardStaggerItem className='lg:col-span-2'>
-                  <PerformanceHealthPanel />
-                </CardStaggerItem>
-              )}
+              <CardStaggerItem className='lg:col-span-2'>
+                <PerformanceHealthPanel />
+              </CardStaggerItem>
               {showApiInfoPanel && (
                 <CardStaggerItem>
                   <ApiInfoPanel />

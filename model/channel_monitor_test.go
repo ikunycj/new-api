@@ -133,10 +133,12 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
 	originalGroupOrder := ratio_setting.PricingGroupOrder2JSONString()
 	originalRetryPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	originalStrategies := ratio_setting.PricingGroupRoutingStrategy2JSONString()
 	t.Cleanup(func() {
 		assert.NoError(t, updateOptionMap("GroupRatio", originalGroupRatios))
 		assert.NoError(t, updateOptionMap("PricingGroupOrder", originalGroupOrder))
 		assert.NoError(t, updateOptionMap("PricingGroupRetryPolicy", originalRetryPolicies))
+		assert.NoError(t, updateOptionMap("PricingGroupRoutingStrategy", originalStrategies))
 	})
 
 	initialGroupRatios := `{"kept-pricing":1,"removed-pricing":1}`
@@ -146,7 +148,8 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 		`{
 			"kept-pricing":{"mode":"fixed","retry_times":3},
 			"removed-pricing":{"mode":"fixed","retry_times":3}
-		}`,
+			}`,
+		`{}`,
 	))
 
 	kept := newTestChannelMonitor("kept-pricing")
@@ -163,6 +166,7 @@ func TestUpdatePricingGroupConfigurationRemovesDeletedMonitorAndHistory(t *testi
 		updatedGroupRatios,
 		`["kept-pricing"]`,
 		`{"kept-pricing":{"mode":"fixed","retry_times":3}}`,
+		`{}`,
 	))
 
 	var stored Option

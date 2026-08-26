@@ -109,10 +109,16 @@ type OptionUpdateRequest struct {
 }
 
 type pricingGroupConfigurationUpdateRequest struct {
-	GroupRatio              string `json:"group_ratio"`
-	PricingGroupOrder       string `json:"pricing_group_order"`
-	PricingGroupRetryPolicy string `json:"pricing_group_retry_policy"`
+	GroupRatio                  string `json:"group_ratio"`
+	PricingGroupOrder           string `json:"pricing_group_order"`
+	PricingGroupRetryPolicy     string `json:"pricing_group_retry_policy"`
+	PricingGroupRoutingStrategy string `json:"pricing_group_routing_strategy"`
 }
+
+// PricingGroupRoutingStrategy CRUD is intentionally represented by the same
+// atomic pricing-group payload as ratios, order and retry policies. The
+// controller accepts the catalog/binding JSON as one field so a strategy edit
+// and the corresponding group assignment cannot partially commit.
 
 func UpdatePricingGroupConfiguration(c *gin.Context) {
 	var request pricingGroupConfigurationUpdateRequest
@@ -124,6 +130,7 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 		request.GroupRatio,
 		request.PricingGroupOrder,
 		request.PricingGroupRetryPolicy,
+		request.PricingGroupRoutingStrategy,
 	); err != nil {
 		common.ApiError(c, err)
 		return
@@ -158,7 +165,7 @@ func UpdateOption(c *gin.Context) {
 		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
 		return
 	}
-	if option.Key == "GroupRatio" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" {
+	if option.Key == "GroupRatio" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" {
 		common.ApiErrorMsg(c, "定价分组配置必须统一保存")
 		return
 	}

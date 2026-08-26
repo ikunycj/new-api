@@ -31,8 +31,8 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1}
 	require.NoError(t, model.DB.Create(&route).Error)
 	require.NoError(t, model.DB.Create(&[]model.BillingGroupChannel{
-		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 100, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
-		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 90, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 1, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 2, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
 	}).Error)
 	originalMemoryCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = true
@@ -49,7 +49,7 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 	channels := setupChannelRoute(t)
 	ctx, _ := gin.CreateTestContext(nil)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
 
 	first, group, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 func TestConfiguredRouteSwitchActionSkipsRemainingChannelAttempts(t *testing.T) {
 	channels := setupChannelRoute(t)
 	ctx, _ := gin.CreateTestContext(nil)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
 
 	first, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestCrossGroupRetryRequiresTokenPermission(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(nil)
 	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "missing"})
 	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, false)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
 	channel, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, channel)
@@ -137,13 +137,13 @@ func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(nil)
 	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "economy"})
 	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
 
 	first, firstGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, first)
-	assert.Equal(t, channels[0].Id, first.Id)
-	assert.Equal(t, "claude", firstGroup)
+	assert.Equal(t, cheaperChannel.Id, first.Id)
+	assert.Equal(t, "economy", firstGroup)
 
 	param.MarkChannelAttempted(first.Id)
 	param.HandleChannelFailure(first.Id, "switch_channel")
@@ -152,7 +152,7 @@ func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	second, secondGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, second)
-	assert.Equal(t, channels[1].Id, second.Id)
+	assert.Equal(t, channels[0].Id, second.Id)
 	assert.Equal(t, "claude", secondGroup)
 
 	param.MarkChannelAttempted(second.Id)
@@ -162,8 +162,8 @@ func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	third, thirdGroup, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, third)
-	assert.Equal(t, cheaperChannel.Id, third.Id)
-	assert.Equal(t, "economy", thirdGroup)
+	assert.Equal(t, channels[1].Id, third.Id)
+	assert.Equal(t, "claude", thirdGroup)
 }
 
 func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
@@ -216,7 +216,7 @@ func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(nil)
 	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "economy"})
 	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
 
 	for _, expectedChannelID := range []int{channels[0].Id, channels[1].Id} {
 		channel, group, err := CacheGetRandomSatisfiedChannel(param)
@@ -239,7 +239,7 @@ func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
 	assert.Zero(t, param.groupAttemptCounts["economy"])
 }
 
-func TestConfiguredRouteWithoutMemoryCacheHonorsRoutePriority(t *testing.T) {
+func TestConfiguredRouteWithoutMemoryCacheUsesDynamicScoreBeforeRouteOrder(t *testing.T) {
 	channels := setupChannelRoute(t)
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("price_multiplier", 100).Error)
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("price_multiplier", 0.1).Error)
@@ -250,16 +250,16 @@ func TestConfiguredRouteWithoutMemoryCacheHonorsRoutePriority(t *testing.T) {
 	first, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, first)
-	assert.Equal(t, channels[0].Id, first.Id)
+	assert.Equal(t, channels[1].Id, first.Id)
 
 	param.ExcludeChannel(first.Id)
 	second, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, second)
-	assert.Equal(t, channels[1].Id, second.Id)
+	assert.Equal(t, channels[0].Id, second.Id)
 }
 
-func TestConfiguredRoutePriorityWinsOverDynamicChannelSignals(t *testing.T) {
+func TestConfiguredRouteDynamicSignalsWinOverRoutePriority(t *testing.T) {
 	channels := setupChannelRoute(t)
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("price_multiplier", 100).Error)
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("price_multiplier", 0.1).Error)
@@ -271,7 +271,7 @@ func TestConfiguredRoutePriorityWinsOverDynamicChannelSignals(t *testing.T) {
 	selected, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
-	assert.Equal(t, channels[0].Id, selected.Id)
+	assert.Equal(t, channels[1].Id, selected.Id)
 }
 
 func TestConfiguredRouteUsesWeightWithinEqualPriority(t *testing.T) {
@@ -290,8 +290,8 @@ func TestConfiguredRouteUsesWeightWithinEqualPriority(t *testing.T) {
 		TokenGroup: "claude",
 		ModelName:  "claude-test",
 		randomIntn: func(total int) int {
-			assert.Equal(t, 150, total)
-			return 100
+			assert.Equal(t, 50, total)
+			return 0
 		},
 	}
 
@@ -315,15 +315,15 @@ func TestUnconfiguredRouteUsesChannelWeightWithinEqualRank(t *testing.T) {
 		TokenGroup: "claude",
 		ModelName:  "claude-test",
 		randomIntn: func(total int) int {
-			assert.Equal(t, 110, total)
-			return 10
+			assert.Equal(t, 2, total)
+			return 0
 		},
 	}
 
 	selected, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
-	assert.Equal(t, channels[1].Id, selected.Id)
+	assert.Equal(t, channels[0].Id, selected.Id)
 }
 
 func TestMarkChannelAttemptedInitializesDefaultBudget(t *testing.T) {
@@ -488,7 +488,7 @@ func TestConfiguredRouteTotalBudgetCapsChannelRetryBudget(t *testing.T) {
 func TestDynamicCandidateRanking(t *testing.T) {
 	force := true
 	notForced := false
-	base := &model.Channel{Id: 1, PriceMultiplier: 1, PriceMultiplierMode: model.ChannelPriceMultiplierModeUSD, PreviousDayProbeSuccessRate: 90, ForcePriority: &notForced}
+	base := &model.Channel{Id: 1, PriceMultiplier: 1, PriceMultiplierMode: model.ChannelPriceMultiplierModeUSD, PreviousDayProbeSuccessRate: 90, PreviousDayProbeSampleCount: 100, ForcePriority: &notForced}
 
 	t.Run("cross-group force wins before price", func(t *testing.T) {
 		forced := *base
@@ -554,6 +554,397 @@ func TestDynamicCandidateRanking(t *testing.T) {
 	})
 }
 
+func TestForcePriorityLayerWinsOverHigherDynamicScore(t *testing.T) {
+	forced := true
+	normal := false
+	forcedChannel := &model.Channel{
+		Id:                          93901,
+		PriceMultiplier:             10,
+		PreviousDayProbeSuccessRate: 10,
+		PreviousDayProbeSampleCount: 100,
+		ForcePriority:               &forced,
+	}
+	normalChannel := &model.Channel{
+		Id:                          93902,
+		PriceMultiplier:             0.1,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+		ForcePriority:               &normal,
+	}
+	candidates := []dynamicChannelCandidate{
+		{channel: forcedChannel, group: "forced", groupIndex: 0},
+		{channel: normalChannel, group: "forced", groupIndex: 0},
+	}
+	annotateDynamicCandidateScores(candidates)
+	assert.Less(t, candidates[0].score, candidates[1].score)
+	ranked := rankDynamicCandidateOrder(candidates)
+	require.Len(t, ranked, 1)
+	assert.Equal(t, forcedChannel.Id, ranked[0].channel.Id)
+}
+
+func TestDynamicGroupScoreIgnoresNormalChannelsWhenForceLayerIsActive(t *testing.T) {
+	forced := true
+	normal := false
+	forcedGroup := &model.Channel{
+		Id:                          93911,
+		PriceMultiplier:             10,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+		ForcePriority:               &forced,
+		ForcePriorityScope:          model.ChannelForcePriorityScopeCrossGroup,
+	}
+	otherForcedGroup := &model.Channel{
+		Id:                          93912,
+		PriceMultiplier:             20,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+		ForcePriority:               &forced,
+		ForcePriorityScope:          model.ChannelForcePriorityScopeCrossGroup,
+	}
+	normalChannel := &model.Channel{
+		Id:                          93913,
+		PriceMultiplier:             1,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+		ForcePriority:               &normal,
+	}
+	grouped := [][]dynamicChannelCandidate{
+		{
+			{channel: forcedGroup, group: "forced", groupIndex: 0},
+			{channel: normalChannel, group: "forced", groupIndex: 0},
+		},
+		{{channel: otherForcedGroup, group: "other", groupIndex: 1}},
+	}
+
+	selected := selectDynamicGroupIndex(nil, grouped, []int{0, 1}, false)
+	assert.Equal(t, 0, selected)
+}
+
+func TestDynamicCandidateScoreUsesAvailabilityPriorAndLoad(t *testing.T) {
+	maxConcurrency := 10
+	lowLoad := &model.Channel{
+		Id:                          93001,
+		PriceMultiplier:             1,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+		MaxConcurrency:              &maxConcurrency,
+	}
+	highLoad := *lowLoad
+	highLoad.Id = 93002
+	highLoad.PreviousDayProbeSuccessRate = 50
+	highLoad.PreviousDayProbeSampleCount = 1
+	for range 9 {
+		require.True(t, TryAcquireChannelConcurrency(highLoad.Id, highLoad.GetMaxConcurrency()))
+	}
+	t.Cleanup(func() {
+		for range 9 {
+			ReleaseChannelConcurrency(highLoad.Id)
+		}
+	})
+	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
+
+	lowScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: lowLoad},
+		1,
+		strategy,
+	)
+	highScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: &highLoad},
+		1,
+		strategy,
+	)
+	assert.Greater(t, lowScore, highScore)
+	assert.InDelta(t, 79.82, highScore, 0.01)
+}
+
+func TestDynamicGroupScoreUsesAggregateCapacity(t *testing.T) {
+	smallLimit, largeLimit := 10, 100
+	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
+	for range 10 {
+		require.True(t, TryAcquireChannelConcurrency(94101, smallLimit))
+	}
+	t.Cleanup(func() {
+		for range 10 {
+			ReleaseChannelConcurrency(94101)
+		}
+	})
+	score := dynamicGroupScore([]dynamicChannelCandidate{
+		{
+			channel:         &model.Channel{Id: 94101, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100, MaxConcurrency: &smallLimit},
+			routeConfigured: true,
+			routeWeight:     100,
+		},
+		{
+			channel:         &model.Channel{Id: 94102, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100, MaxConcurrency: &largeLimit},
+			routeConfigured: true,
+			routeWeight:     1,
+		},
+	}, 1, strategy)
+
+	// Group load is based on total capacity (10/110 in use), not the route
+	// weights. The expected score is 40% price + 40% availability + 20% load.
+	assert.InDelta(t, 96.18, score, 0.02)
+}
+
+func TestDynamicRoutingStrategiesChangeCandidatePreference(t *testing.T) {
+	cheapUnstable := &model.Channel{
+		Id:                          94111,
+		PriceMultiplier:             1,
+		PreviousDayProbeSuccessRate: 50,
+		PreviousDayProbeSampleCount: 100,
+	}
+	expensiveStable := &model.Channel{
+		Id:                          94112,
+		PriceMultiplier:             1.2,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+	}
+	priceFirst := ratio_setting.PricingGroupRoutingStrategyPreset(ratio_setting.PricingGroupRoutingStrategyPriceFirst)
+	stable := ratio_setting.PricingGroupRoutingStrategyPreset(ratio_setting.PricingGroupRoutingStrategyStable)
+
+	cheapPriceFirst := dynamicCandidateScore(dynamicChannelCandidate{channel: cheapUnstable}, 1, priceFirst)
+	stablePriceFirst := dynamicCandidateScore(dynamicChannelCandidate{channel: expensiveStable}, 1, priceFirst)
+	cheapStable := dynamicCandidateScore(dynamicChannelCandidate{channel: cheapUnstable}, 1, stable)
+	stableStable := dynamicCandidateScore(dynamicChannelCandidate{channel: expensiveStable}, 1, stable)
+
+	assert.Greater(t, cheapPriceFirst, stablePriceFirst)
+	assert.Greater(t, stableStable, cheapStable)
+}
+
+func TestDynamicRoutingUsesConfiguredStrategyWeights(t *testing.T) {
+	cheapUnstable := &model.Channel{
+		Id:                          94113,
+		PriceMultiplier:             1,
+		PreviousDayProbeSuccessRate: 50,
+		PreviousDayProbeSampleCount: 100,
+	}
+	expensiveStable := &model.Channel{
+		Id:                          94114,
+		PriceMultiplier:             1.1,
+		PreviousDayProbeSuccessRate: 100,
+		PreviousDayProbeSampleCount: 100,
+	}
+
+	priceHeavy := ratio_setting.PricingGroupRoutingStrategy{
+		Strategy:           "custom_price_heavy",
+		PriceWeight:        100,
+		AvailabilityWeight: 0,
+		LoadWeight:         0,
+	}
+	availabilityHeavy := ratio_setting.PricingGroupRoutingStrategy{
+		Strategy:           "custom_availability_heavy",
+		PriceWeight:        0,
+		AvailabilityWeight: 100,
+		LoadWeight:         0,
+	}
+
+	cheapPriceScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: cheapUnstable},
+		1,
+		priceHeavy,
+	)
+	expensivePriceScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: expensiveStable},
+		1,
+		priceHeavy,
+	)
+	cheapAvailabilityScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: cheapUnstable},
+		1,
+		availabilityHeavy,
+	)
+	expensiveAvailabilityScore := dynamicCandidateScore(
+		dynamicChannelCandidate{channel: expensiveStable},
+		1,
+		availabilityHeavy,
+	)
+
+	assert.Greater(t, cheapPriceScore, expensivePriceScore)
+	assert.Greater(t, expensiveAvailabilityScore, cheapAvailabilityScore)
+}
+
+func TestDynamicRoutingUsesRouteCostFactor(t *testing.T) {
+	cheap := &model.Channel{Id: 94001, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}
+	expensive := &model.Channel{Id: 94002, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}
+	cheapCandidate := dynamicChannelCandidate{channel: cheap, routeConfigured: true, routeCostFactor: 0.5}
+	expensiveCandidate := dynamicChannelCandidate{channel: expensive, routeConfigured: true, routeCostFactor: 2}
+	assert.True(t, dynamicCandidateLess(cheapCandidate, expensiveCandidate))
+	assert.Less(t, channelComparableCost(cheapCandidate), channelComparableCost(expensiveCandidate))
+}
+
+func TestMappedRoutingModelNameFollowsChannelMappingChain(t *testing.T) {
+	mapping := `{"requested":"provider-model","provider-model":"provider-model-v2"}`
+	channel := &model.Channel{ModelMapping: &mapping}
+
+	assert.Equal(t, "provider-model-v2", mappedRoutingModelName(channel, "requested"))
+	assert.Equal(t, "unmapped", mappedRoutingModelName(channel, "unmapped"))
+}
+
+func TestDynamicRoutingUsesRequestedModelPriceBeforeMappedModel(t *testing.T) {
+	savedPrices := ratio_setting.ModelPrice2JSONString()
+	savedRatios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(savedPrices))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"requested-routing-model":2,"mapped-routing-model":0.1}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{}`))
+
+	mapping := `{"requested-routing-model":"mapped-routing-model"}`
+	candidate := dynamicChannelCandidate{
+		channel:         &model.Channel{Id: 94031, PriceMultiplier: 1},
+		modelName:       "requested-routing-model",
+		routeCostFactor: 1,
+	}
+	candidate.channel.ModelMapping = &mapping
+
+	assert.InDelta(t, 2, channelComparableCost(candidate), 0.0001)
+}
+
+func TestDynamicRoutingTreatsExplicitZeroModelPriceAsFree(t *testing.T) {
+	savedPrices := ratio_setting.ModelPrice2JSONString()
+	savedRatios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(savedPrices))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"free-routing-model":0,"paid-routing-model":1}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{}`))
+
+	free := dynamicChannelCandidate{
+		channel:   &model.Channel{Id: 94032, PriceMultiplier: 1},
+		modelName: "free-routing-model",
+	}
+	paid := dynamicChannelCandidate{
+		channel:   &model.Channel{Id: 94033, PriceMultiplier: 1},
+		modelName: "paid-routing-model",
+	}
+	minPrice := channelComparableCost(free)
+	freePriceScore, _, _ := dynamicCandidateFeatures(free, minPrice)
+	paidPriceScore, _, _ := dynamicCandidateFeatures(paid, minPrice)
+
+	assert.Equal(t, float64(0), minPrice)
+	assert.Equal(t, float64(1), freePriceScore)
+	assert.Equal(t, float64(0), paidPriceScore)
+}
+
+func TestDynamicRoutingSkipsOpenCircuitBeforeScoring(t *testing.T) {
+	channelID := 94003
+	policy := model.DefaultRuntimeRoutingPolicy()
+	route := "/test/dynamic-routing"
+	RecordChannelCircuitSuccess(channelID, route)
+	policy.CircuitFailureThreshold = 1
+	RecordChannelCircuitFailure(channelID, route, policy)
+	assert.True(t, ChannelCircuitIsOpen(channelID, route))
+	t.Cleanup(func() { RecordChannelCircuitSuccess(channelID, route) })
+
+	assert.True(t, ChannelCircuitIsOpen(channelID, route))
+}
+
+func TestSelectorFiltersOpenCircuitCandidate(t *testing.T) {
+	channels := setupChannelRoute(t)
+	policy := model.DefaultRuntimeRoutingPolicy()
+	policy.CircuitFailureThreshold = 1
+	route := "/v1/dynamic-circuit"
+	RecordChannelCircuitSuccess(channels[0].Id, route)
+	RecordChannelCircuitFailure(channels[0].Id, route, policy)
+	t.Cleanup(func() { RecordChannelCircuitSuccess(channels[0].Id, route) })
+
+	ctx, _ := gin.CreateTestContext(nil)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test", RequestPath: route}
+	selected, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, channels[1].Id, selected.Id)
+}
+
+func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {
+	grouped := [][]dynamicChannelCandidate{
+		{{channel: &model.Channel{Id: 94011, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}, group: "fair-a"}},
+		{{channel: &model.Channel{Id: 94012, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}, group: "fair-b"}},
+	}
+	first := selectDynamicGroupIndex(nil, grouped, []int{0, 1})
+	second := selectDynamicGroupIndex(nil, grouped, []int{0, 1})
+	assert.NotEqual(t, first, second)
+}
+
+func TestRoutingSelectionRollbackRestoresSmoothSchedulerCredit(t *testing.T) {
+	dynamicGroupScheduleState.Lock()
+	dynamicGroupScheduleState.current = make(map[string]float64)
+	dynamicGroupScheduleState.Unlock()
+	dynamicScheduleState.Lock()
+	dynamicScheduleState.current = make(map[string]float64)
+	dynamicScheduleState.Unlock()
+	t.Cleanup(func() {
+		dynamicGroupScheduleState.Lock()
+		dynamicGroupScheduleState.current = make(map[string]float64)
+		dynamicGroupScheduleState.Unlock()
+		dynamicScheduleState.Lock()
+		dynamicScheduleState.current = make(map[string]float64)
+		dynamicScheduleState.Unlock()
+	})
+
+	newCandidate := func(id int, group string) dynamicChannelCandidate {
+		return dynamicChannelCandidate{
+			channel: &model.Channel{
+				Id:                          id,
+				PriceMultiplier:             1,
+				PreviousDayProbeSuccessRate: 95,
+				PreviousDayProbeSampleCount: 100,
+			},
+			group:           group,
+			groupIndex:      id / 10,
+			routeCostFactor: 1,
+		}
+	}
+	grouped := [][]dynamicChannelCandidate{
+		{newCandidate(95101, "rollback-a"), newCandidate(95102, "rollback-a")},
+		{newCandidate(95201, "rollback-b"), newCandidate(95202, "rollback-b")},
+	}
+	ctx, _ := gin.CreateTestContext(nil)
+	selectorParam := &RetryParam{Ctx: ctx}
+	selectorParam.beginRoutingSelection()
+	selectedGroup := selectDynamicGroupIndex(selectorParam, grouped, []int{0, 1})
+	require.GreaterOrEqual(t, selectedGroup, 0)
+	ranked := selectorParam.rankDynamicCandidates(grouped[selectedGroup])
+	require.NotEmpty(t, ranked)
+	selectorParam.finishRoutingSelection(ranked[0].channel.Id)
+
+	dynamicGroupScheduleState.Lock()
+	assert.NotEmpty(t, dynamicGroupScheduleState.current)
+	dynamicGroupScheduleState.Unlock()
+	dynamicScheduleState.Lock()
+	assert.NotEmpty(t, dynamicScheduleState.current)
+	dynamicScheduleState.Unlock()
+
+	// The controller owns a different RetryParam than the distributor. The Gin
+	// context ticket must still let a failed concurrency acquisition roll back
+	// both scheduler reservations.
+	controllerParam := &RetryParam{Ctx: ctx}
+	controllerParam.CancelRoutingSelection()
+
+	dynamicGroupScheduleState.Lock()
+	assert.Empty(t, dynamicGroupScheduleState.current)
+	dynamicGroupScheduleState.Unlock()
+	dynamicScheduleState.Lock()
+	assert.Empty(t, dynamicScheduleState.current)
+	dynamicScheduleState.Unlock()
+}
+
+func TestForcedZeroWeightRemainsEmergencyCandidate(t *testing.T) {
+	forced := true
+	candidate := dynamicChannelCandidate{
+		channel:         &model.Channel{Id: 94021, ForcePriority: &forced, PriceMultiplier: 1},
+		group:           "emergency",
+		groupIndex:      0,
+		routeConfigured: true,
+		routeWeight:     0,
+	}
+	ranked := (&RetryParam{}).rankDynamicCandidates([]dynamicChannelCandidate{candidate})
+	require.Len(t, ranked, 1)
+	assert.Equal(t, candidate.channel.Id, ranked[0].channel.Id)
+}
+
 func TestWeightedDynamicCandidateIndexBoundaries(t *testing.T) {
 	zeroWeight := uint(0)
 	ninetyWeight := uint(90)
@@ -567,39 +958,39 @@ func TestWeightedDynamicCandidateIndexBoundaries(t *testing.T) {
 		want       int
 	}{
 		{
-			name: "configured zero weight uses one hundred default",
+			name: "configured zero weight excludes candidate",
 			candidates: []dynamicChannelCandidate{
 				{channel: channelOne, routeConfigured: true, routeWeight: 0},
 				{channel: channelTwo, routeConfigured: true, routeWeight: 50},
 			},
-			draw: 99,
-			want: 0,
+			draw: 0,
+			want: 1,
 		},
 		{
-			name: "configured second interval starts at default boundary",
+			name: "negative configured weight uses one baseline",
 			candidates: []dynamicChannelCandidate{
 				{channel: channelOne, routeConfigured: true, routeWeight: -1},
 				{channel: channelTwo, routeConfigured: true, routeWeight: 50},
 			},
-			draw: 100,
-			want: 1,
-		},
-		{
-			name: "unconfigured zero channel weight retains plus ten baseline",
-			candidates: []dynamicChannelCandidate{
-				{channel: channelOne},
-				{channel: channelTwo},
-			},
-			draw: 9,
+			draw: 0,
 			want: 0,
 		},
 		{
-			name: "unconfigured second interval starts after plus ten baseline",
+			name: "unconfigured routes default to one",
 			candidates: []dynamicChannelCandidate{
 				{channel: channelOne},
 				{channel: channelTwo},
 			},
-			draw: 10,
+			draw: 0,
+			want: 0,
+		},
+		{
+			name: "unconfigured second interval",
+			candidates: []dynamicChannelCandidate{
+				{channel: channelOne},
+				{channel: channelTwo},
+			},
+			draw: 1,
 			want: 1,
 		},
 	}
@@ -621,7 +1012,7 @@ func TestRankDynamicCandidatesWeightsOnlyBestEquivalentSet(t *testing.T) {
 	draws := 0
 	param := &RetryParam{randomIntn: func(total int) int {
 		draws++
-		assert.Equal(t, 110, total)
+		assert.Equal(t, 2, total)
 		return 10
 	}}
 

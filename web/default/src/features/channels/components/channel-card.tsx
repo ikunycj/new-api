@@ -96,6 +96,7 @@ function ChannelCardComponent({
     price_multiplier: t('Channel price multiplier'),
     test_model: t('Test Model'),
     upstream_max_retries: t('Retry Times'),
+    max_concurrency: '并发',
     previous_day_probe_success_rate: t('Previous-day probe success rate'),
   }
 
@@ -112,6 +113,7 @@ function ChannelCardComponent({
   const priceMultiplierCell = renderCell('price_multiplier')
   const testModelCell = renderCell('test_model')
   const upstreamMaxRetriesCell = renderCell('upstream_max_retries')
+  const concurrencyCell = renderCell('max_concurrency')
   const testCell = renderCell('test_time')
   const previousDayProbeSuccessRateCell = renderCell(
     'previous_day_probe_success_rate'
@@ -178,6 +180,9 @@ function ChannelCardComponent({
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.upstream_max_retries}>
               {upstreamMaxRetriesCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.max_concurrency}>
+              {concurrencyCell}
             </ChannelMetric>
           </div>
         </div>

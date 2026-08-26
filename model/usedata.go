@@ -38,6 +38,11 @@ type QuotaDataLogParams struct {
 	NodeName  string
 }
 
+type UserQuotaSummary struct {
+	TotalRequests int64 `json:"total_requests"`
+	TotalTokens   int64 `json:"total_tokens"`
+}
+
 func UpdateQuotaData() {
 	for {
 		if common.DataExportEnabled {
@@ -158,6 +163,14 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData
 		Group("user_id, username, model_name, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
+}
+
+func GetUserQuotaSummary(userId int) (summary UserQuotaSummary, err error) {
+	err = DB.Table("quota_data").
+		Select("COALESCE(SUM(count), 0) AS total_requests, COALESCE(SUM(token_used), 0) AS total_tokens").
+		Where("user_id = ?", userId).
+		Scan(&summary).Error
+	return summary, err
 }
 
 func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {

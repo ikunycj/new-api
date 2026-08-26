@@ -15,6 +15,10 @@ func preservePricingGroupConfiguration(t *testing.T) {
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.GroupRatio2JSONString(), &configuration.GroupRatios))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupOrder2JSONString(), &configuration.GroupOrder))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRetryPolicy2JSONString(), &configuration.RetryPolicies))
+	var routingConfiguration ratio_setting.PricingGroupRoutingConfiguration
+	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRoutingStrategy2JSONString(), &routingConfiguration))
+	configuration.RoutingStrategies = routingConfiguration.Strategies
+	configuration.RoutingStrategyBindings = routingConfiguration.GroupBindings
 
 	optionValues := make(map[string]string, len(pricingGroupOptionKeys))
 	optionExists := make(map[string]bool, len(pricingGroupOptionKeys))
@@ -45,9 +49,14 @@ func TestRetiredOptionsAreRemovedAndCannotBeRestored(t *testing.T) {
 	truncateTables(t)
 
 	retiredKeys := []string{
+		"AutomaticEnableChannelEnabled",
+		"RetryTimes",
 		"UserUsableGroups",
 		"group_ratio_setting.group_ratio",
 		"group_ratio_setting.pricing_group_retry_policy",
+		"monitor_setting.auto_test_channel_enabled",
+		"monitor_setting.auto_test_channel_minutes",
+		"monitor_setting.channel_test_mode",
 	}
 	activeOption := Option{Key: "WaffoReturnUrl", Value: "/wallet/return"}
 	require.NoError(t, DB.Create(&activeOption).Error)
@@ -82,7 +91,8 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 		`{
 			"alpha":{"mode":"fixed","retry_times":2},
 			"beta":{"mode":"active_channels","retry_times":99}
-		}`,
+			}`,
+		`{}`,
 	))
 
 	_, alphaExists := ratio_setting.GetPricingGroupRetryPolicy("alpha")
@@ -94,7 +104,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 
 	var stored []Option
 	require.NoError(t, DB.Where(commonKeyCol+" IN ?", pricingGroupOptionKeys).Find(&stored).Error)
-	require.Len(t, stored, 3)
+	require.Len(t, stored, 4)
 	var retryPolicyValue string
 	for _, option := range stored {
 		if option.Key == "PricingGroupRetryPolicy" {
@@ -109,6 +119,33 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 	}, persisted["beta"])
 }
 
+func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) {
+	truncateTables(t)
+	previous := ratio_setting.PricingGroupRoutingStrategy2JSONString()
+	t.Cleanup(func() {
+		_ = ratio_setting.UpdatePricingGroupRoutingStrategyByJSONString(previous)
+	})
+
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		`{"alpha":1}`,
+		`["alpha"]`,
+		`{"alpha":{"mode":"active_channels","retry_times":0}}`,
+		`{
+			"strategies":{"enterprise":{"name":"企业策略","price_weight":65,"availability_weight":20,"load_weight":15}},
+			"group_bindings":{"alpha":"enterprise"}
+		}`,
+	))
+	strategy, exists := ratio_setting.GetPricingGroupRoutingStrategy("alpha")
+	require.True(t, exists)
+	assert.Equal(t, "enterprise", strategy.Strategy)
+	assert.Equal(t, float64(65), strategy.PriceWeight)
+
+	var stored Option
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", "PricingGroupRoutingStrategy").First(&stored).Error)
+	assert.Contains(t, stored.Value, "enterprise")
+	assert.Contains(t, stored.Value, "group_bindings")
+}
+
 func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {
 	truncateTables(t)
 	preservePricingGroupConfiguration(t)
@@ -116,7 +153,7 @@ func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {
 	require.NoError(t, DB.Create(&[]Option{
 		{Key: "GroupRatio", Value: `{"alpha":1,"beta":2}`},
 		{Key: "PricingGroupOrder", Value: `["beta","alpha"]`},
-		{Key: "PricingGroupRetryPolicy", Value: `{"alpha":{"mode":"fixed","retry_times":4}}`},
+		{Key: "PricingGroupRetryPolicy", Value: `{"alpha":{"mode":"fixed","retry_times":4},"beta":{"mode":"active_channels"}}`},
 	}).Error)
 
 	loadOptionsFromDatabase()

@@ -6,6 +6,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -53,4 +54,9 @@ func TestChannelProbeIntervalUsesResultingStatus(t *testing.T) {
 
 	assert.Equal(t, 11, channelProbeIntervalSeconds(channel, common.ChannelStatusEnabled))
 	assert.Equal(t, 29, channelProbeIntervalSeconds(channel, common.ChannelStatusAutoDisabled))
+}
+
+func TestChannelTestHandlerIsOnDemandOnly(t *testing.T) {
+	_, scheduled := any(channelTestHandler{}).(service.ScheduledSystemTaskHandler)
+	assert.False(t, scheduled)
 }

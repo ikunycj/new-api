@@ -59,6 +59,7 @@ interface ModelsFilterProps {
   onReset: () => void
   titleKey?: string
   descriptionKey?: string
+  includeAdminData?: boolean
 }
 
 // Quick-range presets imply a sensible granularity (matching the app's
@@ -100,7 +101,8 @@ export function ModelsFilter(props: ModelsFilterProps) {
   const { t } = useTranslation()
   // 使用已缓存的用户数据，避免重复调用 API
   const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = user?.role && user.role >= 10
+  const isAdmin =
+    props.includeAdminData ?? Boolean(user?.role && user.role >= 10)
 
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<DashboardFilters>(
@@ -150,8 +152,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
     value: Date | string | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
-    if (field === 'start_timestamp' || field === 'end_timestamp')
-      {setSelectedRange(null)}
+    if (field === 'start_timestamp' || field === 'end_timestamp') {
+      setSelectedRange(null)
+    }
   }
 
   const handleQuickRange = (days: number) => {
@@ -258,9 +261,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
             <Label htmlFor='time_granularity'>{t('Time Granularity')}</Label>
             <Select
               items={TIME_GRANULARITY_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(option.label),
-                }))}
+                value: option.value,
+                label: t(option.label),
+              }))}
               value={filters.time_granularity}
               onValueChange={(value) =>
                 handleChange('time_granularity', value as TimeGranularity)

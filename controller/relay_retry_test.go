@@ -87,17 +87,22 @@ func TestRelayRetryCommittedStopsOnClientCancellation(t *testing.T) {
 	assert.True(t, relayRetryCommitted(ctx, &relaycommon.RelayInfo{}))
 }
 
-func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
+func TestShouldRetryUpstreamSourcesUseConfiguredStatusCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
+	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
+	operation_setting.AutomaticRetryStatusCodeRanges = []operation_setting.StatusCodeRange{{Start: http.StatusBadGateway, End: http.StatusBadGateway}}
 
 	tests := []struct {
 		name       string
 		source     types.ErrorSource
 		statusCode int
+		want       bool
 	}{
-		{name: "openai bad request", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadRequest},
-		{name: "openai unauthorized", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized},
-		{name: "channel server error", source: types.ErrorSourceChannel, statusCode: http.StatusBadGateway},
+		{name: "configured OpenAI error", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadGateway, want: true},
+		{name: "configured channel error", source: types.ErrorSourceChannel, statusCode: http.StatusBadGateway, want: true},
+		{name: "unconfigured OpenAI error", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized, want: false},
+		{name: "unconfigured channel error", source: types.ErrorSourceChannel, statusCode: http.StatusInternalServerError, want: false},
 	}
 
 	for _, tt := range tests {
@@ -108,7 +113,8 @@ func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
 				Code:    "upstream_code",
 				Source:  tt.source,
 			}, tt.statusCode)
-			require.True(t, shouldRetry(ctx, err, 1))
+			assert.Equal(t, tt.want, shouldRetry(ctx, err, 1))
+			assert.Equal(t, tt.want, isFailoverEligible(ctx, err))
 		})
 	}
 }
@@ -125,6 +131,36 @@ func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
 
 	assert.False(t, shouldRetry(ctx, err, 1))
 	assert.False(t, isFailoverEligible(ctx, err))
+}
+
+func TestShouldRetryExplicitMappingOverridesStatusCodeFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
+	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
+	operation_setting.AutomaticRetryStatusCodeRanges = nil
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "vendor requests a retry",
+		Code:    "vendor_retryable_error",
+		Source:  types.ErrorSourceChannel,
+	}, http.StatusBadRequest)
+	err.SetClassification(207002, "upstream", "provider", "switch_channel", true)
+
+	assert.True(t, shouldRetry(ctx, err, 1))
+	assert.True(t, isFailoverEligible(ctx, err))
+}
+
+func TestShouldRetryTaskRelayUsesConfiguredStatusCodes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
+	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
+	operation_setting.AutomaticRetryStatusCodeRanges = []operation_setting.StatusCodeRange{{Start: http.StatusTooManyRequests, End: http.StatusTooManyRequests}}
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	assert.True(t, shouldRetryTaskRelay(ctx, &dto.TaskError{StatusCode: http.StatusTooManyRequests}, 1))
+	assert.False(t, shouldRetryTaskRelay(ctx, &dto.TaskError{StatusCode: http.StatusBadGateway}, 1))
+	assert.False(t, shouldRetryTaskRelay(ctx, &dto.TaskError{StatusCode: http.StatusTooManyRequests, LocalError: true}, 1))
 }
 
 func TestShouldRetryDoesNotFailoverLocalClientErrors(t *testing.T) {

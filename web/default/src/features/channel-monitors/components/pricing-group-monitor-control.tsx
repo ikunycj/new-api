@@ -29,7 +29,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import { formatMonitorAvailability } from '../lib/format'
 import type { ChannelMonitor } from '../types'
 import { MonitorStatusBadge } from './monitor-status'
 
@@ -50,7 +49,7 @@ export function PricingGroupMonitorControl(
 ) {
   if (props.isLoading) {
     return (
-      <div className='flex w-full max-w-[21rem] items-center gap-2 py-0.5'>
+      <div className='flex w-full items-center gap-2 py-0.5'>
         <Skeleton className='h-5 w-8 shrink-0 rounded-full' />
         <div className='flex min-w-0 flex-1 flex-col gap-2'>
           <Skeleton className='h-5 w-32' />
@@ -108,7 +107,7 @@ export function PricingGroupMonitorControl(
   }
 
   return (
-    <div className='flex w-full max-w-[21rem] items-center gap-2 py-0.5'>
+    <div className='flex w-full items-center gap-2 py-0.5'>
       <Switch
         size='sm'
         checked={props.monitor.enabled}
@@ -117,42 +116,17 @@ export function PricingGroupMonitorControl(
         onCheckedChange={props.onToggleEnabled}
       />
 
-      <div className='flex min-w-0 flex-1 flex-col gap-1'>
-        <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
-          <MonitorStatusBadge status={props.monitor.status} />
-          <code
-            className='text-muted-foreground max-w-48 truncate text-xs'
-            title={props.monitor.test_model}
-          >
-            {props.monitor.test_model}
-          </code>
-          <Badge variant='outline' className='hidden xl:inline-flex'>
-            {props.monitor.visible ? '用户可见' : '对用户隐藏'}
-          </Badge>
-        </div>
-
-        <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs'>
-          <span>
-            7日可用率{' '}
-            <strong className='text-foreground font-medium tabular-nums'>
-              {formatMonitorAvailability(props.monitor.availability_7d)}
-            </strong>
-          </span>
-          <span className='hidden 2xl:inline'>
-            30日可用率{' '}
-            <strong className='text-foreground font-medium tabular-nums'>
-              {formatMonitorAvailability(props.monitor.availability_30d)}
-            </strong>
-          </span>
-          <span className='whitespace-nowrap'>
-            最近延迟{' '}
-            <strong className='text-foreground font-medium tabular-nums'>
-              {props.monitor.latest_latency_ms == null
-                ? '--'
-                : `${props.monitor.latest_latency_ms} ms`}
-            </strong>
-          </span>
-        </div>
+      <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1.5'>
+        <MonitorStatusBadge status={props.monitor.status} />
+        <code
+          className='text-muted-foreground min-w-0 flex-1 truncate text-xs'
+          title={props.monitor.test_model}
+        >
+          {props.monitor.test_model}
+        </code>
+        <Badge variant='outline' className='hidden xl:inline-flex'>
+          {props.monitor.visible ? '用户可见' : '对用户隐藏'}
+        </Badge>
       </div>
     </div>
   )

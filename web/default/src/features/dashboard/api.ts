@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api } from '@/lib/api';
 
 import type {
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
-} from './types'
+} from './types';
 
 // ============================================================================
 // Dashboard APIs
@@ -36,19 +36,27 @@ import type {
 // Admin users get all users' data by default.
 export async function getUserQuotaDates(
   params: {
-    start_timestamp: number
-    end_timestamp: number
-    default_time?: string
-    username?: string
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
+    username?: string;
   },
-  isAdmin = false
+  isAdmin = false,
 ) {
-  const endpoint = isAdmin ? '/api/data' : '/api/data/self'
+  const endpoint = isAdmin ? '/api/data' : '/api/data/self';
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     endpoint,
-    { params }
-  )
-  return res.data
+    { params, skipErrorHandler: true },
+  );
+  return res.data;
+}
+
+export async function getUserQuotaSummary() {
+  const res = await api.get<{
+    success: boolean;
+    data?: { total_requests: number; total_tokens: number };
+  }>('/api/data/self/summary', { skipErrorHandler: true });
+  return res.data;
 }
 
 // ----------------------------------------------------------------------------
@@ -56,38 +64,38 @@ export async function getUserQuotaDates(
 // ----------------------------------------------------------------------------
 
 export async function getUserQuotaDataByUsers(params: {
-  start_timestamp: number
-  end_timestamp: number
+  start_timestamp: number;
+  end_timestamp: number;
 }) {
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     '/api/data/users',
-    { params }
-  )
-  return res.data
+    { params },
+  );
+  return res.data;
 }
 
 export async function getFlowQuotaDates(
   params: {
-    start_timestamp: number
-    end_timestamp: number
-    default_time?: string
-    username?: string
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
+    username?: string;
   },
-  isAdmin = false
+  isAdmin = false,
 ) {
-  const endpoint = isAdmin ? '/api/data/flow' : '/api/data/flow/self'
+  const endpoint = isAdmin ? '/api/data/flow' : '/api/data/flow/self';
   const res = await api.get<{
-    success: boolean
-    data?: FlowQuotaDataItem[]
-    message?: string
-  }>(endpoint, { params })
-  return res.data
+    success: boolean;
+    data?: FlowQuotaDataItem[];
+    message?: string;
+  }>(endpoint, { params });
+  return res.data;
 }
 
 // Get uptime monitoring status for all services
 export async function getUptimeStatus() {
   const res = await api.get<{ success: boolean; data: UptimeGroupResult[] }>(
-    '/api/uptime/status'
-  )
-  return res.data
+    '/api/uptime/status',
+  );
+  return res.data;
 }

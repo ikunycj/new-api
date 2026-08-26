@@ -204,7 +204,11 @@ export async function handleDeleteChannel(
  */
 export async function handleUpdateChannelField(
   id: number,
-  fieldName: 'weight' | 'price_multiplier' | 'upstream_max_retries',
+  fieldName:
+    | 'weight'
+    | 'price_multiplier'
+    | 'upstream_max_retries'
+    | 'max_concurrency',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void
@@ -218,6 +222,8 @@ export async function handleUpdateChannelField(
         fieldLabel = i18next.t('Channel price multiplier')
       } else if (fieldName === 'upstream_max_retries') {
         fieldLabel = i18next.t('Retry Times')
+      } else if (fieldName === 'max_concurrency') {
+        fieldLabel = '并发'
       }
       toast.success(
         i18next.t('{{field}} updated to {{value}}', {

@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
+import {
+  Add01Icon,
+  Delete02Icon,
+  InformationCircleIcon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useMemo, useCallback, useEffect, memo } from 'react'
@@ -52,6 +56,12 @@ import {
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   getChannelMonitors,
   getPricingGroupMetrics,
   runChannelMonitor,
@@ -62,6 +72,7 @@ import {
   ChannelMonitorSheet,
 } from '@/features/channel-monitors/components/monitor-sheet'
 import { PricingGroupMonitorControl } from '@/features/channel-monitors/components/pricing-group-monitor-control'
+import { formatMonitorAvailability } from '@/features/channel-monitors/lib/format'
 import type {
   ChannelMonitor,
   ChannelMonitorSettingsPayload,
@@ -69,12 +80,13 @@ import type {
 } from '@/features/channel-monitors/types'
 import { formatQuota } from '@/lib/format'
 
-import { safeJsonParse } from '../utils/json-parser'
+import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
+  pricingGroupRoutingStrategy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
   onValidationChange: (isValid: boolean) => void
@@ -86,6 +98,7 @@ type GroupPricingRow = {
   ratio: string
   retryMode: PricingGroupRetryMode
   retryTimes: string
+  strategyId: string
 }
 
 type PricingGroupRetryMode = 'fixed' | 'active_channels'
@@ -93,6 +106,32 @@ type PricingGroupRetryMode = 'fixed' | 'active_channels'
 type PricingGroupRetryPolicy = {
   mode: PricingGroupRetryMode
   retry_times: number
+}
+
+type PricingGroupRoutingStrategy = {
+  name: string
+  price_weight: number
+  availability_weight: number
+  load_weight: number
+}
+
+type PricingGroupRoutingConfiguration = {
+  strategies: Record<string, PricingGroupRoutingStrategy>
+  group_bindings: Record<string, string>
+}
+
+type StrategyDraft = {
+  _id: string
+  id: string
+  name: string
+  priceWeight: string
+  availabilityWeight: string
+  loadWeight: string
+}
+
+type GroupPricingEditorState = {
+  rows: GroupPricingRow[]
+  strategies: StrategyDraft[]
 }
 
 const sectionCardClassName =
@@ -104,13 +143,29 @@ const DEFAULT_GROUP_RETRY_TIMES = 3
 const MAX_GROUP_RETRY_TIMES = 100
 const RETRY_MODE_ITEMS = [
   { value: 'fixed', label: '固定次数' },
-  { value: 'active_channels', label: '当前活跃渠道数' },
+  { value: 'active_channels', label: '活跃渠道数' },
 ] as const
+const DEFAULT_ROUTING_STRATEGY_DEFINITIONS: Array<{
+  id: string
+  name: string
+  weights: [number, number, number]
+}> = [
+  { id: 'price_first', name: '价格优先', weights: [65, 20, 15] },
+  { id: 'balanced', name: '均衡', weights: [40, 40, 20] },
+  { id: 'stable', name: '稳定', weights: [20, 60, 20] },
+]
+const STRATEGY_WEIGHT_EPSILON = 0.0001
 
 let groupPricingIdCounter = 0
 function createGroupPricingId() {
   groupPricingIdCounter += 1
   return `gpr_${groupPricingIdCounter}`
+}
+
+let strategyDraftIdCounter = 0
+function createStrategyDraftId() {
+  strategyDraftIdCounter += 1
+  return `strategy_draft_${strategyDraftIdCounter}`
 }
 
 function normalizeRatio(value: unknown): number {
@@ -157,6 +212,80 @@ function parsePricingGroupRetryPolicy(
   return result
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {}
+  }
+  return value as Record<string, unknown>
+}
+
+function parsePricingGroupRoutingConfiguration(
+  value: string,
+  groupNames: string[] = []
+): PricingGroupRoutingConfiguration {
+  const trimmedValue = value.trim()
+  const useDefaults =
+    trimmedValue === '' || trimmedValue === '{}' || trimmedValue === 'null'
+  const parsed = tryJsonParse<unknown>(value)
+  const raw = useDefaults
+    ? {
+        strategies: Object.fromEntries(
+          DEFAULT_ROUTING_STRATEGY_DEFINITIONS.map((definition) => [
+            definition.id,
+            {
+              name: definition.name,
+              price_weight: definition.weights[0],
+              availability_weight: definition.weights[1],
+              load_weight: definition.weights[2],
+            },
+          ])
+        ),
+        group_bindings: Object.fromEntries(
+          groupNames.map((groupName) => [groupName, 'balanced'])
+        ),
+      }
+    : asRecord(parsed.success ? parsed.data : {})
+  const rawStrategies = asRecord(raw.strategies)
+
+  const strategies: Record<string, PricingGroupRoutingStrategy> = {}
+  for (const [strategyId, rawDefinition] of Object.entries(rawStrategies)) {
+    const definition = asRecord(rawDefinition)
+    const name = typeof definition.name === 'string' ? definition.name : ''
+    const readWeight = (key: string) => {
+      const weight = definition[key]
+      return typeof weight === 'number' ? weight : Number.NaN
+    }
+    strategies[strategyId] = {
+      name,
+      price_weight: readWeight('price_weight'),
+      availability_weight: readWeight('availability_weight'),
+      load_weight: readWeight('load_weight'),
+    }
+  }
+
+  const rawBindings = asRecord(raw.group_bindings)
+  const groupBindings: Record<string, string> = {}
+  for (const groupName of groupNames) {
+    const configured = rawBindings[groupName]
+    groupBindings[groupName] = typeof configured === 'string' ? configured : ''
+  }
+
+  return { strategies, group_bindings: groupBindings }
+}
+
+function strategyDraftsFromConfiguration(
+  configuration: PricingGroupRoutingConfiguration
+): StrategyDraft[] {
+  return Object.entries(configuration.strategies).map(([id, strategy]) => ({
+    _id: createStrategyDraftId(),
+    id,
+    name: strategy.name,
+    priceWeight: String(strategy.price_weight),
+    availabilityWeight: String(strategy.availability_weight),
+    loadWeight: String(strategy.load_weight),
+  }))
+}
+
 function normalizeRetryTimes(value: string): number {
   if (value.trim() === '') return DEFAULT_GROUP_RETRY_TIMES
   const parsed = Number(value)
@@ -180,16 +309,62 @@ function isValidGroupRatio(value: string): boolean {
   return Number.isFinite(ratio) && ratio >= 0
 }
 
-function isValidGroupPricingRow(row: GroupPricingRow): boolean {
-  if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
-  if (row.retryMode === 'active_channels') return true
-  return isValidFixedRetryTimes(row.retryTimes)
+function isValidStrategyWeight(value: string): boolean {
+  if (value.trim() === '') return false
+  const weight = Number(value)
+  return Number.isFinite(weight) && weight >= 0
 }
 
-function groupPricingRowsAreValid(rows: GroupPricingRow[]): boolean {
+function isValidStrategyDraft(strategy: StrategyDraft): boolean {
+  if (
+    strategy.id.trim() === '' ||
+    strategy.id.trim() !== strategy.id ||
+    strategy.name.trim() === '' ||
+    !isValidStrategyWeight(strategy.priceWeight) ||
+    !isValidStrategyWeight(strategy.availabilityWeight) ||
+    !isValidStrategyWeight(strategy.loadWeight)
+  ) {
+    return false
+  }
+  const total =
+    Number(strategy.priceWeight) +
+    Number(strategy.availabilityWeight) +
+    Number(strategy.loadWeight)
+  return Math.abs(total - 100) <= STRATEGY_WEIGHT_EPSILON
+}
+
+function isValidGroupPricingRow(
+  row: GroupPricingRow,
+  strategyIds: ReadonlySet<string>
+): boolean {
+  if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
+  if (!strategyIds.has(row.strategyId)) return false
+  if (
+    row.retryMode !== 'active_channels' &&
+    !isValidFixedRetryTimes(row.retryTimes)
+  ) {
+    return false
+  }
+  return true
+}
+
+function groupPricingRowsAreValid(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+): boolean {
   const names = new Set<string>()
+  const strategyIds = new Set<string>()
+  const strategyNames = new Set<string>()
+  for (const strategy of strategies) {
+    if (!isValidStrategyDraft(strategy)) return false
+    if (strategyIds.has(strategy.id)) return false
+    if (strategyNames.has(strategy.name.trim())) return false
+    strategyIds.add(strategy.id)
+    strategyNames.add(strategy.name.trim())
+  }
+  if (strategies.length === 0) return false
   for (const row of rows) {
-    if (!isValidGroupPricingRow(row)) return false
+    if (!isValidGroupPricingRow(row, strategyIds)) return false
     const name = row.name.trim()
     if (names.has(name)) return false
     names.add(name)
@@ -213,7 +388,8 @@ function getOrderedGroupNames(
 function buildGroupPricingRows(
   groupRatio: string,
   pricingGroupOrder: string,
-  pricingGroupRetryPolicy: string
+  pricingGroupRetryPolicy: string,
+  configuration: PricingGroupRoutingConfiguration
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const orderedNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
@@ -230,14 +406,32 @@ function buildGroupPricingRows(
       ratio: String(normalizeRatio(ratioMap[name])),
       retryMode: retryPolicy.mode,
       retryTimes: String(retryPolicy.retry_times),
+      strategyId: configuration.group_bindings[name] ?? '',
     }
   })
 }
 
-function serializeGroupPricingRows(rows: GroupPricingRow[]) {
+function serializeGroupPricingState(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+) {
   const groupRatio: Record<string, number> = {}
   const pricingGroupOrder: string[] = []
   const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
+  const pricingGroupRoutingStrategies: Record<
+    string,
+    PricingGroupRoutingStrategy
+  > = {}
+  const groupBindings: Record<string, string> = {}
+
+  for (const strategy of strategies) {
+    pricingGroupRoutingStrategies[strategy.id] = {
+      name: strategy.name,
+      price_weight: Number(strategy.priceWeight),
+      availability_weight: Number(strategy.availabilityWeight),
+      load_weight: Number(strategy.loadWeight),
+    }
+  }
 
   for (const row of rows) {
     const name = row.name.trim()
@@ -249,34 +443,56 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
       retry_times:
         row.retryMode === 'fixed' ? normalizeRetryTimes(row.retryTimes) : 0,
     }
+    groupBindings[name] = row.strategyId
   }
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
     PricingGroupOrder: JSON.stringify(pricingGroupOrder),
     PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
+    PricingGroupRoutingStrategy: JSON.stringify(
+      {
+        strategies: pricingGroupRoutingStrategies,
+        group_bindings: groupBindings,
+      },
+      null,
+      2
+    ),
   }
 }
 
-function groupPricingSignature(rows: GroupPricingRow[]): string {
-  const serialized = serializeGroupPricingRows(rows)
+function groupPricingSignature(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+): string {
+  const serialized = serializeGroupPricingState(rows, strategies)
+  const routing = parsePricingGroupRoutingConfiguration(
+    serialized.PricingGroupRoutingStrategy,
+    rows.map((row) => row.name.trim()).filter(Boolean)
+  )
   return JSON.stringify({
     ratios: parseRatioMap(serialized.GroupRatio),
     order: parsePricingGroupOrder(serialized.PricingGroupOrder),
     retryPolicies: parsePricingGroupRetryPolicy(
       serialized.PricingGroupRetryPolicy
     ),
+    routing,
   })
 }
 
 function sourceGroupPricingSignature(
   groupRatio: string,
   pricingGroupOrder: string,
-  pricingGroupRetryPolicy: string
+  pricingGroupRetryPolicy: string,
+  pricingGroupRoutingStrategy: string
 ): string {
   const names = getOrderedGroupNames(groupRatio, pricingGroupOrder)
   const configuredPolicies = parsePricingGroupRetryPolicy(
     pricingGroupRetryPolicy
+  )
+  const routing = parsePricingGroupRoutingConfiguration(
+    pricingGroupRoutingStrategy,
+    names
   )
   const retryPolicies: Record<string, PricingGroupRetryPolicy> = {}
   for (const name of names) {
@@ -289,6 +505,7 @@ function sourceGroupPricingSignature(
     ratios: parseRatioMap(groupRatio),
     order: names,
     retryPolicies,
+    routing,
   })
 }
 
@@ -303,6 +520,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
+  pricingGroupRoutingStrategy,
   savedGroupRatio,
   onChange,
   onValidationChange,
@@ -312,6 +530,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       groupRatio={groupRatio}
       pricingGroupOrder={pricingGroupOrder}
       pricingGroupRetryPolicy={pricingGroupRetryPolicy}
+      pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
       savedGroupRatio={savedGroupRatio}
       onChange={onChange}
       onValidationChange={onValidationChange}
@@ -323,6 +542,7 @@ type GroupPricingTableProps = {
   groupRatio: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
+  pricingGroupRoutingStrategy: string
   savedGroupRatio: string
   onChange: (field: string, value: string) => void
   onValidationChange: (isValid: boolean) => void
@@ -332,18 +552,30 @@ function GroupPricingTable({
   groupRatio,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
+  pricingGroupRoutingStrategy,
   savedGroupRatio,
   onChange,
   onValidationChange,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(
-      groupRatio,
-      pricingGroupOrder,
-      pricingGroupRetryPolicy
-    )
+  const [editorState, setEditorState] = useState<GroupPricingEditorState>(
+    () => {
+      const groupNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+      const routingConfiguration = parsePricingGroupRoutingConfiguration(
+        pricingGroupRoutingStrategy,
+        groupNames
+      )
+      return {
+        rows: buildGroupPricingRows(
+          groupRatio,
+          pricingGroupOrder,
+          pricingGroupRetryPolicy,
+          routingConfiguration
+        ),
+        strategies: strategyDraftsFromConfiguration(routingConfiguration),
+      }
+    }
   )
   const [monitorEditor, setMonitorEditor] = useState<{
     monitor: ChannelMonitor | null
@@ -351,29 +583,50 @@ function GroupPricingTable({
   } | null>(null)
   const [detailRowId, setDetailRowId] = useState<string | null>(null)
   const [deleteRowId, setDeleteRowId] = useState<string | null>(null)
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>(
+    {}
+  )
   const incomingSignature = sourceGroupPricingSignature(
     groupRatio,
     pricingGroupOrder,
-    pricingGroupRetryPolicy
+    pricingGroupRetryPolicy,
+    pricingGroupRoutingStrategy
   )
-  const parsedRows = useMemo(
-    () =>
-      buildGroupPricingRows(
+  const parsedEditorState = useMemo(() => {
+    const groupNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+    const routingConfiguration = parsePricingGroupRoutingConfiguration(
+      pricingGroupRoutingStrategy,
+      groupNames
+    )
+    return {
+      rows: buildGroupPricingRows(
         groupRatio,
         pricingGroupOrder,
-        pricingGroupRetryPolicy
+        pricingGroupRetryPolicy,
+        routingConfiguration
       ),
-    [groupRatio, pricingGroupOrder, pricingGroupRetryPolicy]
-  )
-  const currentRows =
-    groupPricingSignature(rows) === incomingSignature ? rows : parsedRows
-  const currentRowsAreValid = useMemo(
-    () => groupPricingRowsAreValid(currentRows),
-    [currentRows]
+      strategies: strategyDraftsFromConfiguration(routingConfiguration),
+    }
+  }, [
+    groupRatio,
+    pricingGroupOrder,
+    pricingGroupRetryPolicy,
+    pricingGroupRoutingStrategy,
+  ])
+  const currentEditorState =
+    groupPricingSignature(editorState.rows, editorState.strategies) ===
+    incomingSignature
+      ? editorState
+      : parsedEditorState
+  const currentRows = currentEditorState.rows
+  const currentStrategies = currentEditorState.strategies
+  const currentEditorIsValid = useMemo(
+    () => groupPricingRowsAreValid(currentRows, currentStrategies),
+    [currentRows, currentStrategies]
   )
   useEffect(() => {
-    onValidationChange(currentRowsAreValid)
-  }, [currentRowsAreValid, onValidationChange])
+    onValidationChange(currentEditorIsValid)
+  }, [currentEditorIsValid, onValidationChange])
   const persistedGroupNames = useMemo(
     () => new Set(Object.keys(parseRatioMap(savedGroupRatio))),
     [savedGroupRatio]
@@ -445,13 +698,18 @@ function GroupPricingTable({
     onError: (error) => toast.error(error.message || '可用性测试失败'),
   })
 
-  const emitRows = useCallback(
-    (nextRows: GroupPricingRow[]) => {
-      setRows(nextRows)
-      const serialized = serializeGroupPricingRows(nextRows)
+  const emitState = useCallback(
+    (nextRows: GroupPricingRow[], nextStrategies: StrategyDraft[]) => {
+      setEditorState({ rows: nextRows, strategies: nextStrategies })
+      setPositionDrafts({})
+      const serialized = serializeGroupPricingState(nextRows, nextStrategies)
       onChange('GroupRatio', serialized.GroupRatio)
       onChange('PricingGroupOrder', serialized.PricingGroupOrder)
       onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
+      onChange(
+        'PricingGroupRoutingStrategy',
+        serialized.PricingGroupRoutingStrategy
+      )
     },
     [onChange]
   )
@@ -459,16 +717,17 @@ function GroupPricingTable({
   const updateRow = useCallback(
     (
       id: string,
-      field: 'name' | 'ratio' | 'retryMode' | 'retryTimes',
+      field: 'name' | 'ratio' | 'retryMode' | 'retryTimes' | 'strategyId',
       value: string
     ) => {
-      emitRows(
+      emitState(
         currentRows.map((row) =>
           row._id === id ? { ...row, [field]: value } : row
-        )
+        ),
+        currentStrategies
       )
     },
-    [currentRows, emitRows]
+    [currentRows, currentStrategies, emitState]
   )
 
   const addRow = useCallback(() => {
@@ -479,23 +738,96 @@ function GroupPricingTable({
       index += 1
       name = `group_${index}`
     }
-    emitRows([
-      ...currentRows,
+    emitState(
+      [
+        ...currentRows,
+        {
+          _id: createGroupPricingId(),
+          name,
+          ratio: '1',
+          retryMode: 'active_channels',
+          retryTimes: '0',
+          strategyId: currentStrategies[0]?.id ?? '',
+        },
+      ],
+      currentStrategies
+    )
+  }, [currentRows, currentStrategies, emitState])
+
+  const updateStrategy = useCallback(
+    (
+      draftId: string,
+      field: 'name' | 'priceWeight' | 'availabilityWeight' | 'loadWeight',
+      value: string
+    ) => {
+      const nextStrategies = currentStrategies.map((strategy) =>
+        strategy._id === draftId ? { ...strategy, [field]: value } : strategy
+      )
+      emitState(currentRows, nextStrategies)
+    },
+    [currentRows, currentStrategies, emitState]
+  )
+
+  const addStrategy = useCallback(() => {
+    const existingIds = new Set(
+      currentStrategies.map((strategy) => strategy.id)
+    )
+    const existingNames = new Set(
+      currentStrategies.map((strategy) => strategy.name.trim())
+    )
+    let index = 1
+    let id = `strategy_${index}`
+    while (existingIds.has(id)) {
+      index += 1
+      id = `strategy_${index}`
+    }
+    let name = '新策略'
+    let nameIndex = 2
+    while (existingNames.has(name)) {
+      name = `新策略 ${nameIndex}`
+      nameIndex += 1
+    }
+    emitState(currentRows, [
+      ...currentStrategies,
       {
-        _id: createGroupPricingId(),
+        _id: createStrategyDraftId(),
+        id,
         name,
-        ratio: '1',
-        retryMode: 'active_channels',
-        retryTimes: '0',
+        priceWeight: '40',
+        availabilityWeight: '40',
+        loadWeight: '20',
       },
     ])
-  }, [currentRows, emitRows])
+  }, [currentRows, currentStrategies, emitState])
+
+  const removeStrategy = useCallback(
+    (draftId: string) => {
+      const strategy = currentStrategies.find((item) => item._id === draftId)
+      if (!strategy) return
+      if (currentRows.some((row) => row.strategyId === strategy.id)) {
+        toast.error('该策略仍被定价分组使用，请先修改分组策略')
+        return
+      }
+      if (currentStrategies.length <= 1) {
+        toast.error('至少需要保留一个策略')
+        return
+      }
+      emitState(
+        currentRows,
+        currentStrategies.filter((item) => item._id !== draftId)
+      )
+    },
+    [currentRows, currentStrategies, emitState]
+  )
 
   const removeRow = useCallback(
     (id: string) => {
-      emitRows(currentRows.filter((row) => row._id !== id))
+      emitState(
+        currentRows.filter((row) => row._id !== id),
+        currentStrategies
+      )
     },
-    [currentRows, emitRows]
+    [currentRows, currentStrategies, emitState]
   )
 
   const moveRowToPosition = useCallback(
@@ -513,9 +845,34 @@ function GroupPricingTable({
       const nextRows = [...currentRows]
       const [moved] = nextRows.splice(sourceIndex, 1)
       nextRows.splice(targetIndex, 0, moved)
-      emitRows(nextRows)
+      emitState(nextRows, currentStrategies)
     },
-    [currentRows, emitRows]
+    [currentRows, currentStrategies, emitState]
+  )
+
+  const commitRowPosition = useCallback(
+    (rowId: string, fallbackPosition: number) => {
+      const draft = positionDrafts[rowId]
+      setPositionDrafts((current) => {
+        if (!(rowId in current)) return current
+        const next = { ...current }
+        delete next[rowId]
+        return next
+      })
+      if (draft === undefined || draft.trim() === '') return
+      const position = Number(draft)
+      if (
+        !Number.isInteger(position) ||
+        position < 1 ||
+        position > currentRows.length
+      ) {
+        return
+      }
+      if (position !== fallbackPosition) {
+        moveRowToPosition(rowId, position)
+      }
+    },
+    [currentRows.length, moveRowToPosition, positionDrafts]
   )
 
   const duplicateNames = useMemo(() => {
@@ -537,21 +894,41 @@ function GroupPricingTable({
     (row) =>
       row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
   )
+  const hasInvalidStrategyWeights = currentStrategies.some(
+    (strategy) => !isValidStrategyDraft(strategy)
+  )
+  const strategyIds = useMemo(
+    () => new Set(currentStrategies.map((strategy) => strategy.id)),
+    [currentStrategies]
+  )
+  const hasInvalidStrategyBinding = currentRows.some(
+    (row) => !strategyIds.has(row.strategyId)
+  )
+  const strategySelectItems = useMemo(
+    () =>
+      currentStrategies.map((strategy) => ({
+        value: strategy.id,
+        label: strategy.name.trim() || '未命名策略',
+      })),
+    [currentStrategies]
+  )
 
   return (
     <>
       <Card className={sectionCardClassName}>
         <CardHeader className={sectionHeaderClassName}>
-          <Button onClick={addRow} size='sm' className='justify-self-end'>
-            <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
-            {t('Add group')}
-          </Button>
+          <div className='flex flex-wrap items-center justify-end gap-3'>
+            <Button onClick={addRow} size='sm'>
+              <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
+              {t('Add group')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className='space-y-3'>
             <StaticDataTable
               className='w-full'
-              tableClassName='w-full min-w-[106rem] table-fixed'
+              tableClassName='w-max min-w-[109rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
@@ -560,8 +937,8 @@ function GroupPricingTable({
                 {
                   id: 'order',
                   header: '顺序',
-                  className: 'w-15',
-                  cellClassName: 'w-15',
+                  className: 'w-20',
+                  cellClassName: 'w-20',
                   cell: (row, index) => {
                     const orderLabel = `调整 ${row.name || '未命名分组'} 顺序`
                     return (
@@ -571,21 +948,22 @@ function GroupPricingTable({
                         max={currentRows.length}
                         step={1}
                         inputMode='numeric'
-                        value={index + 1}
+                        value={positionDrafts[row._id] ?? String(index + 1)}
                         disabled={currentRows.length <= 1}
                         aria-label={orderLabel}
                         title={orderLabel}
                         className='w-16 px-1 text-center font-semibold tabular-nums'
                         onChange={(event) => {
-                          const position = Number(event.target.value)
-                          if (
-                            !Number.isInteger(position) ||
-                            position < 1 ||
-                            position > currentRows.length
-                          ) {
-                            return
+                          setPositionDrafts((current) => ({
+                            ...current,
+                            [row._id]: event.target.value,
+                          }))
+                        }}
+                        onBlur={() => commitRowPosition(row._id, index + 1)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
                           }
-                          moveRowToPosition(row._id, position)
                         }}
                       />
                     )
@@ -594,8 +972,8 @@ function GroupPricingTable({
                 {
                   id: 'group',
                   header: t('Group name'),
-                  className: 'w-30',
-                  cellClassName: 'w-30',
+                  className: 'w-36',
+                  cellClassName: 'w-36',
                   cell: (row) => {
                     return (
                       <Input
@@ -632,8 +1010,8 @@ function GroupPricingTable({
                 {
                   id: 'usage',
                   header: '用量',
-                  className: 'w-35',
-                  cellClassName: 'w-35',
+                  className: 'w-36',
+                  cellClassName: 'w-36',
                   cell: (row) => (
                     <GroupUsageCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -644,8 +1022,8 @@ function GroupPricingTable({
                 {
                   id: 'channels',
                   header: '渠道数',
-                  className: 'w-25',
-                  cellClassName: 'w-25',
+                  className: 'w-32',
+                  cellClassName: 'w-32',
                   cell: (row) => (
                     <GroupChannelCountCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -655,9 +1033,29 @@ function GroupPricingTable({
                 },
                 {
                   id: 'activity',
-                  header: '活跃',
-                  className: 'w-15',
-                  cellClassName: 'w-15',
+                  header: (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className='inline-flex cursor-help items-center gap-1' />
+                          }
+                        >
+                          活跃
+                          <HugeiconsIcon
+                            icon={InformationCircleIcon}
+                            aria-hidden='true'
+                            className='size-3.5'
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent className='max-w-xs whitespace-normal'>
+                          活跃用户：当前正在处理请求的去重用户数；活跃连接：当前正在处理的请求数。请求完成或超时后会移除。
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ),
+                  className: 'w-24',
+                  cellClassName: 'w-24',
                   cell: (row) => (
                     <GroupActivityCell
                       metrics={metricsByName.get(row.name.trim())}
@@ -668,8 +1066,8 @@ function GroupPricingTable({
                 {
                   id: 'retries',
                   header: '重试次数',
-                  className: 'w-35',
-                  cellClassName: 'w-35',
+                  className: 'w-64',
+                  cellClassName: 'w-64',
                   cell: (row) => (
                     <RetryPolicyControl
                       mode={row.retryMode}
@@ -690,8 +1088,8 @@ function GroupPricingTable({
                 {
                   id: 'monitor',
                   header: '分组监控',
-                  className: 'w-[12rem]',
-                  cellClassName: 'w-[12rem]',
+                  className: 'w-72',
+                  cellClassName: 'w-72',
                   cell: (row) => {
                     const groupName = row.name.trim()
                     const monitor = findPricingGroupMonitor(row, monitorByName)
@@ -729,10 +1127,51 @@ function GroupPricingTable({
                   },
                 },
                 {
+                  id: 'availability',
+                  header: '可用性',
+                  className: 'w-60',
+                  cellClassName: 'w-60',
+                  cell: (row) => (
+                    <PricingGroupAvailabilityCell
+                      monitor={findPricingGroupMonitor(row, monitorByName)}
+                      isLoading={monitorsQuery.isLoading}
+                      hasError={monitorsQuery.isError}
+                    />
+                  ),
+                },
+                {
+                  id: 'strategy',
+                  header: '策略',
+                  className: 'w-36',
+                  cellClassName: 'w-36',
+                  cell: (row) => (
+                    <Select
+                      items={strategySelectItems}
+                      value={row.strategyId}
+                      onValueChange={(value) => {
+                        if (value) updateRow(row._id, 'strategyId', value)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder='选择策略' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {currentStrategies.map((strategy) => (
+                            <SelectItem key={strategy.id} value={strategy.id}>
+                              {strategy.name.trim() || '未命名策略'}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ),
+                },
+                {
                   id: 'actions',
                   header: t('Actions'),
-                  className: 'w-30 text-right',
-                  cellClassName: 'w-30 text-right',
+                  className: 'w-36 text-right',
+                  cellClassName: 'w-36 text-right',
                   cell: (row) => {
                     const monitor = findPricingGroupMonitor(row, monitorByName)
                     const isRunning =
@@ -779,6 +1218,89 @@ function GroupPricingTable({
               ]}
             />
 
+            <div className='rounded-md border border-dashed'>
+              <div className='bg-muted/10 flex items-center justify-between border-b px-4 py-3'>
+                <div>
+                  <div className='text-sm font-semibold'>策略设置</div>
+                  <div className='text-muted-foreground text-xs'>
+                    策略独立于定价分组维护，三项权重总和必须为 100。
+                  </div>
+                </div>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  onClick={addStrategy}
+                >
+                  <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
+                  添加策略
+                </Button>
+              </div>
+              <div className='space-y-3 p-4'>
+                {currentStrategies.map((strategy) => (
+                  <div
+                    key={strategy._id}
+                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(3,7rem)_2.5rem] md:items-end'
+                  >
+                    <div className='space-y-1'>
+                      <Label className='text-xs'>名称</Label>
+                      <Input
+                        value={strategy.name}
+                        aria-invalid={!isValidStrategyDraft(strategy)}
+                        onChange={(event) =>
+                          updateStrategy(
+                            strategy._id,
+                            'name',
+                            event.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    {(
+                      [
+                        ['价格', 'priceWeight'],
+                        ['可用性', 'availabilityWeight'],
+                        ['负载', 'loadWeight'],
+                      ] as const
+                    ).map(([label, field]) => (
+                      <div key={field} className='space-y-1'>
+                        <Label className='text-xs'>{label}权重</Label>
+                        <Input
+                          type='number'
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={strategy[field]}
+                          aria-label={`${strategy.name} ${label}权重`}
+                          onChange={(event) =>
+                            updateStrategy(
+                              strategy._id,
+                              field,
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      aria-label='删除策略'
+                      title='删除策略'
+                      onClick={() => removeStrategy(strategy._id)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} />
+                    </Button>
+                    <div className='text-muted-foreground text-xs md:col-span-5'>
+                      当前比例：{strategy.priceWeight}% /{' '}
+                      {strategy.availabilityWeight}% / {strategy.loadWeight}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {monitorsQuery.isError && (
               <p className='text-destructive text-sm'>
                 分组监控加载失败：{monitorsQuery.error.message}
@@ -809,6 +1331,16 @@ function GroupPricingTable({
             {hasInvalidRetryTimes && (
               <p className='text-destructive text-sm'>
                 固定重试次数必须是 0 到 100 之间的整数
+              </p>
+            )}
+            {hasInvalidStrategyWeights && (
+              <p className='text-destructive text-sm'>
+                策略名称不能为空或重复；各项权重必须大于等于 0，且总和为 100
+              </p>
+            )}
+            {hasInvalidStrategyBinding && (
+              <p className='text-destructive text-sm'>
+                每个定价分组都必须选择一个有效策略
               </p>
             )}
           </div>
@@ -897,6 +1429,47 @@ function formatMetricTokens(tokens: number): string {
 type GroupMetricCellProps = {
   metrics?: PricingGroupMetrics
   isLoading: boolean
+}
+
+type PricingGroupAvailabilityCellProps = {
+  monitor: ChannelMonitor | null
+  isLoading: boolean
+  hasError: boolean
+}
+
+function PricingGroupAvailabilityCell(
+  props: PricingGroupAvailabilityCellProps
+) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (props.hasError || !props.monitor) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div className='space-y-0.5 text-xs leading-5'>
+      <div>
+        <span className='text-muted-foreground'>7日：</span>
+        <span className='font-medium tabular-nums'>
+          {formatMonitorAvailability(props.monitor.availability_7d)}
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>30日：</span>
+        <span className='font-medium tabular-nums'>
+          {formatMonitorAvailability(props.monitor.availability_30d)}
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>最近延迟：</span>
+        <span className='font-medium tabular-nums'>
+          {props.monitor.latest_latency_ms == null
+            ? '--'
+            : `${props.monitor.latest_latency_ms} ms`}
+        </span>
+      </div>
+    </div>
+  )
 }
 
 function GroupUsageCell(props: GroupMetricCellProps) {
@@ -1095,7 +1668,7 @@ function RetryPolicyControl(props: RetryPolicyControlProps) {
         <SelectContent alignItemWithTrigger={false}>
           <SelectGroup>
             <SelectItem value='fixed'>固定次数</SelectItem>
-            <SelectItem value='active_channels'>当前活跃渠道数</SelectItem>
+            <SelectItem value='active_channels'>活跃渠道数</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

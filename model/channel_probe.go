@@ -166,21 +166,30 @@ func PreviousNaturalDayBounds(now time.Time) (int64, int64) {
 // local calendar day. Channels without records default to 100 percent so new
 // channels are not penalized before their first complete day.
 func GetPreviousDayChannelProbeSuccessRates(channelIDs []int, now time.Time) (map[int]float64, error) {
+	rates, _, err := GetPreviousDayChannelProbeStats(channelIDs, now)
+	return rates, err
+}
+
+// GetPreviousDayChannelProbeStats returns the previous-day success percentage
+// and sample count. Missing channels retain the neutral 100% compatibility
+// value but have zero confidence for dynamic routing.
+func GetPreviousDayChannelProbeStats(channelIDs []int, now time.Time) (map[int]float64, map[int]int, error) {
 	rates := make(map[int]float64, len(channelIDs))
+	samples := make(map[int]int, len(channelIDs))
 	for _, channelID := range channelIDs {
 		if channelID > 0 {
 			rates[channelID] = 100
 		}
 	}
 	if len(rates) == 0 || DB == nil || !DB.Migrator().HasTable(&ChannelProbeHistory{}) {
-		return rates, nil
+		return rates, samples, nil
 	}
 
 	start, end := PreviousNaturalDayBounds(now)
 	var history []ChannelProbeHistory
 	if err := DB.Where("channel_id IN ? AND checked_at >= ? AND checked_at < ?", channelIDs, start, end).
 		Find(&history).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	total := make(map[int]int)
 	successes := make(map[int]int)
@@ -191,11 +200,12 @@ func GetPreviousDayChannelProbeSuccessRates(channelIDs []int, now time.Time) (ma
 		}
 	}
 	for channelID, count := range total {
+		samples[channelID] = count
 		if count > 0 {
 			rates[channelID] = float64(successes[channelID]) / float64(count) * 100
 		}
 	}
-	return rates, nil
+	return rates, samples, nil
 }
 
 func GetPreviousDayChannelProbeSuccessRate(channelID int, now time.Time) (float64, error) {

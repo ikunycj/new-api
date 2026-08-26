@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   AffiliateSettings,
@@ -128,8 +128,8 @@ export async function adjustAffiliateReward(
   return res.data
 }
 
-export async function getSystemOptions() {
-  const res = await api.get<SystemOptionsResponse>('/api/option/')
+export async function getSystemOptions(config?: ApiRequestConfig) {
+  const res = await api.get<SystemOptionsResponse>('/api/option/', config)
   return res.data
 }
 

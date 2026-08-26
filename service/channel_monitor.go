@@ -325,6 +325,7 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 			ModelName:   monitor.TestModel,
 			RequestPath: requestPath,
 		}
+		defer retryParam.CancelRoutingSelection()
 		ctx, cancel := context.WithTimeout(parent, time.Duration(monitor.TimeoutSeconds)*time.Second)
 		var lastErr error
 		attemptLimit, configured := retryParam.groupRetryLimit(monitor.PricingGroup)
@@ -345,11 +346,30 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 				lastErr = fmt.Errorf("no enabled channel for pricing group %q and model %q", monitor.PricingGroup, monitor.TestModel)
 				break
 			}
-			result.StatusCode, result.LatencyMs, lastErr = probe(ctx, channel, monitor)
+			policy := retryParam.RuntimePolicy()
+			route := retryParam.circuitRoute()
+			if route != "" && !ChannelCircuitAllows(channel.Id, route, policy) {
+				retryParam.ExcludeChannel(channel.Id)
+				continue
+			}
+			if !TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+				retryParam.ExcludeChannel(channel.Id)
+				continue
+			}
+			result.StatusCode, result.LatencyMs, lastErr = func() (int, int, error) {
+				defer ReleaseChannelConcurrency(channel.Id)
+				return probe(ctx, channel, monitor)
+			}()
 			retryParam.MarkChannelAttempted(channel.Id)
 			if lastErr == nil {
+				if route != "" {
+					RecordChannelCircuitSuccess(channel.Id, route)
+				}
 				result.Success = true
 				break
+			}
+			if route != "" {
+				RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			retryParam.ExcludeChannel(channel.Id)
 		}

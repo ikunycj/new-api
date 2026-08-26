@@ -152,6 +152,7 @@ export const channelFormSchema = z
     probe_failure_auto_ban: z.boolean(),
     probe_success_auto_enable: z.boolean(),
     upstream_max_retries: z.number().int().min(0).max(100).nullable(),
+    max_concurrency: z.number().int().min(1).max(10000).nullable(),
     price_multiplier: z.number().finite().min(0).max(1000),
     price_multiplier_mode: z.enum(['usd', 'cny']),
     force_priority: z.boolean(),
@@ -322,7 +323,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   auto_disabled_probe_interval_seconds: 600,
   probe_failure_auto_ban: true,
   probe_success_auto_enable: true,
-  upstream_max_retries: 3,
+  upstream_max_retries: 1,
+  max_concurrency: 100,
   price_multiplier: 1,
   price_multiplier_mode: 'usd',
   force_priority: false,
@@ -480,6 +482,10 @@ export function transformChannelToFormDefaults(
       channel.upstream_max_retries === undefined
         ? CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries
         : channel.upstream_max_retries,
+    max_concurrency:
+      channel.max_concurrency == null || channel.max_concurrency <= 0
+        ? CHANNEL_FORM_DEFAULT_VALUES.max_concurrency
+        : channel.max_concurrency,
     price_multiplier:
       channel.price_multiplier ?? CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
     price_multiplier_mode:
@@ -698,6 +704,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     probe_failure_auto_ban: formData.probe_failure_auto_ban,
     probe_success_auto_enable: formData.probe_success_auto_enable,
     upstream_max_retries: formData.upstream_max_retries,
+    max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
     force_priority: formData.force_priority,
@@ -756,6 +763,7 @@ export function transformFormDataToUpdatePayload(
     probe_failure_auto_ban: formData.probe_failure_auto_ban,
     probe_success_auto_enable: formData.probe_success_auto_enable,
     upstream_max_retries: formData.upstream_max_retries,
+    max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
     force_priority: formData.force_priority,

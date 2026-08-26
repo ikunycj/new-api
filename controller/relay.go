@@ -236,12 +236,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
+		Ctx:          c,
+		TokenGroup:   relayInfo.TokenGroup,
+		ModelName:    relayInfo.OriginModelName,
+		RequestPath:  c.Request.URL.Path,
+		CircuitRoute: c.FullPath(),
+		Retry:        common.GetPointer(0),
 	}
+	defer retryParam.CancelRoutingSelection()
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 
@@ -264,6 +266,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.InitChannelMeta(c)
 		policy := retryParam.RuntimePolicy()
 		route := c.FullPath()
+		if route == "" && c.Request != nil {
+			route = c.Request.URL.Path
+		}
 		if !service.ChannelCircuitAllows(channel.Id, route, policy) {
 			retryParam.ExcludeChannel(channel.Id)
 			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
@@ -300,12 +305,22 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
+		if !service.TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+			retryParam.ExcludeChannel(channel.Id)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			newAPIError = types.NewErrorWithStatusCode(errors.New("channel concurrency limit reached"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
+			newAPIError.SetChannelLocation(channel.Id, channel.Name)
+			break
+		}
 
 		attemptStartedAt := time.Now()
 		finishInFlight := observability.IncInFlight(provider, channel.Id)
 		attemptedUpstream = true
 		retryParam.MarkChannelAttempted(channel.Id)
 		func() {
+			defer service.ReleaseChannelConcurrency(channel.Id)
 			defer finishInFlight()
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
@@ -332,8 +347,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			observability.RecordErrorEvent("upstream_attempt", newAPIError)
 			observability.RecordChannelRequest(channel.Id, "error")
-			if newAPIError.FailureScope() == "channel" || newAPIError.FailureScope() == "provider" {
+			switch newAPIError.FailureScope() {
+			case "credential", "channel":
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
+				service.RecordChannelCircuitFailure(channel.Id, route, policy)
+			case "provider":
+				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
+				retryParam.ExcludeProvider(channel.Type)
 				service.RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			attemptClass = observability.ErrorClass(newAPIError, contextErr)
@@ -528,6 +548,28 @@ func errorAction(err *types.NewAPIError) string {
 	return err.ErrorAction()
 }
 
+func isRelayErrorRetryable(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	// A matched upstream error mapping is authoritative; status-code rules are
+	// only the fallback for errors without an explicit classification.
+	if err.HasRetryable() {
+		return err.IsRetryable()
+	}
+	if action := err.ErrorAction(); action == "none" || action == "abort" {
+		return false
+	}
+	if operation_setting.IsAlwaysSkipRetryCode(err.GetErrorCode()) {
+		return false
+	}
+	if err.StatusCode < 100 || err.StatusCode > 599 {
+		source := err.GetErrorSource()
+		return types.IsChannelError(err) || source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel
+	}
+	return operation_setting.ShouldRetryByStatusCode(err.StatusCode)
+}
+
 // isFailoverEligible answers whether a different upstream candidate could
 // plausibly handle the request. It deliberately ignores retry budget; callers
 // use RetryParam to decide whether another candidate exists.
@@ -538,20 +580,7 @@ func isFailoverEligible(c *gin.Context, err *types.NewAPIError) bool {
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
-	if err.HasRetryable() {
-		return err.IsRetryable()
-	}
-	if action := err.ErrorAction(); action == "none" || action == "abort" {
-		return false
-	}
-	if types.IsChannelError(err) {
-		return true
-	}
-	if err.StatusCode >= 200 && err.StatusCode < 300 {
-		return false
-	}
-	source := err.GetErrorSource()
-	return source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel || operation_setting.ShouldRetryByStatusCode(err.StatusCode)
+	return isRelayErrorRetryable(err)
 }
 
 // reserveRelayGroupBilling refreshes pricing after an ordered candidate
@@ -669,13 +698,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
-	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
-		return false
-	}
-	if types.IsChannelError(openaiErr) {
-		return true
-	}
-	if types.IsSkipRetryError(openaiErr) {
+	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) || types.IsSkipRetryError(openaiErr) {
 		return false
 	}
 	if retryTimes <= 0 {
@@ -684,23 +707,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
-	if openaiErr.HasRetryable() {
-		return openaiErr.IsRetryable()
-	}
-	if source := openaiErr.GetErrorSource(); source == types.ErrorSourceOpenAI || source == types.ErrorSourceChannel {
-		return openaiErr.StatusCode < 200 || openaiErr.StatusCode >= 300
-	}
-	code := openaiErr.StatusCode
-	if code >= 200 && code < 300 {
-		return false
-	}
-	if code < 100 || code > 599 {
-		return true
-	}
-	if operation_setting.IsAlwaysSkipRetryCode(openaiErr.GetErrorCode()) {
-		return false
-	}
-	return operation_setting.ShouldRetryByStatusCode(code)
+	return isRelayErrorRetryable(openaiErr)
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
@@ -861,12 +868,14 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
+		Ctx:          c,
+		TokenGroup:   relayInfo.TokenGroup,
+		ModelName:    relayInfo.OriginModelName,
+		RequestPath:  c.Request.URL.Path,
+		CircuitRoute: c.FullPath(),
+		Retry:        common.GetPointer(0),
 	}
+	defer retryParam.CancelRoutingSelection()
 	lockedChannel, hasLockedChannel := relayInfo.LockedChannel.(*model.Channel)
 	hasLockedChannel = hasLockedChannel && lockedChannel != nil
 
@@ -895,6 +904,21 @@ func RelayTask(c *gin.Context) {
 				break
 			}
 		}
+		if hasLockedChannel {
+			relayInfo.InitChannelMeta(c)
+			policy := retryParam.RuntimePolicy()
+			route := retryParam.CircuitRoute
+			if route == "" {
+				route = c.FullPath()
+				if route == "" && c.Request != nil {
+					route = c.Request.URL.Path
+				}
+			}
+			if !service.ChannelCircuitAllows(channel.Id, route, policy) {
+				taskErr = service.TaskErrorWrapperLocal(fmt.Errorf("channel circuit is open"), "channel_circuit_open", http.StatusServiceUnavailable)
+				break
+			}
+		}
 
 		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
@@ -908,8 +932,24 @@ func RelayTask(c *gin.Context) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		if !service.TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+			if hasLockedChannel {
+				taskErr = service.TaskErrorWrapperLocal(fmt.Errorf("channel concurrency limit reached"), "channel_concurrency_limit", http.StatusServiceUnavailable)
+				break
+			}
+			retryParam.ExcludeChannel(channel.Id)
+			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
+				continue
+			}
+			taskErr = service.TaskErrorWrapperLocal(fmt.Errorf("channel concurrency limit reached"), "channel_concurrency_limit", http.StatusServiceUnavailable)
+			break
+		}
+
 		retryParam.MarkChannelAttempted(channel.Id)
-		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+		func() {
+			defer service.ReleaseChannelConcurrency(channel.Id)
+			result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+		}()
 		if taskErr == nil {
 			break
 		}
@@ -925,7 +965,7 @@ func RelayTask(c *gin.Context) {
 		if hasLockedChannel {
 			hasNextRetry = retryParam.HasChannelRetry(channel.Id)
 		}
-		if !shouldRetryTaskRelay(c, channel.Id, taskErr, boolToRetryCount(hasNextRetry)) {
+		if !shouldRetryTaskRelay(c, taskErr, boolToRetryCount(hasNextRetry)) {
 			break
 		}
 		if hasLockedChannel {
@@ -984,7 +1024,7 @@ func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
 	c.JSON(taskErr.StatusCode, taskErr)
 }
 
-func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError, retryTimes int) bool {
+func shouldRetryTaskRelay(c *gin.Context, taskErr *dto.TaskError, retryTimes int) bool {
 	if taskErr == nil {
 		return false
 	}
@@ -997,31 +1037,11 @@ func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError,
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
-	if taskErr.StatusCode == http.StatusTooManyRequests {
-		return true
-	}
-	if taskErr.StatusCode == 307 {
-		return true
-	}
-	if taskErr.StatusCode/100 == 5 {
-		// 超时不重试
-		if operation_setting.IsAlwaysSkipRetryStatusCode(taskErr.StatusCode) {
-			return false
-		}
-		return true
-	}
-	if taskErr.StatusCode == http.StatusBadRequest {
-		return false
-	}
-	if taskErr.StatusCode == 408 {
-		// azure处理超时不重试
-		return false
-	}
 	if taskErr.LocalError {
 		return false
 	}
-	if taskErr.StatusCode/100 == 2 {
-		return false
+	if taskErr.StatusCode < 100 || taskErr.StatusCode > 599 {
+		return true
 	}
-	return true
+	return operation_setting.ShouldRetryByStatusCode(taskErr.StatusCode)
 }

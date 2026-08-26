@@ -5,6 +5,10 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Current concurrency': 'Current concurrency',
+    'Token Usage': 'Token Usage',
+    enabled: 'enabled',
+    total: 'total',
     'Error self-check guide': 'Error self-check guide',
     'Common error directory': 'Common error directory',
     'Common errors': 'Common errors',
@@ -106,6 +110,10 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Current concurrency': '当前并发',
+    'Token Usage': 'Token 使用情况',
+    enabled: '启用',
+    total: '总计',
     'Error self-check guide': '错误自查指南',
     'Common error directory': '常见错误目录',
     'Common errors': '常见错误',
@@ -205,6 +213,10 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Current concurrency': 'Concurrence actuelle',
+    'Token Usage': 'Utilisation des tokens',
+    enabled: 'actives',
+    total: 'total',
     'Error self-check guide': 'Guide d’auto-diagnostic des erreurs',
     'Common error directory': 'Répertoire des erreurs courantes',
     'Common errors': 'Erreurs courantes',
@@ -309,6 +321,10 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Current concurrency': '現在の同時実行数',
+    'Token Usage': 'トークン使用状況',
+    enabled: '有効',
+    total: '合計',
     'Error self-check guide': 'エラー自己診断ガイド',
     'Common error directory': '一般的なエラー一覧',
     'Common errors': '一般的なエラー',
@@ -410,6 +426,10 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Current concurrency': 'Текущая параллельность',
+    'Token Usage': 'Использование токенов',
+    enabled: 'активных',
+    total: 'всего',
     'Error self-check guide':
       'Руководство по самостоятельной диагностике ошибок',
     'Common error directory': 'Каталог распространённых ошибок',
@@ -513,6 +533,10 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Current concurrency': 'Số tác vụ đồng thời hiện tại',
+    'Token Usage': 'Mức sử dụng token',
+    enabled: 'đang bật',
+    total: 'tổng',
     'Error self-check guide': 'Hướng dẫn tự kiểm tra lỗi',
     'Common error directory': 'Danh mục lỗi thường gặp',
     'Common errors': 'Lỗi thường gặp',

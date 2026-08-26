@@ -18,12 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
+import type { ApiRequestConfig } from '@/lib/api'
+
 import { getSystemOptions } from '../api'
 
-export function useSystemOptions() {
+export function useSystemOptions(config?: ApiRequestConfig) {
   return useQuery({
     queryKey: ['system-options'],
-    queryFn: getSystemOptions,
+    queryFn: () => getSystemOptions(config),
     staleTime: 5 * 60 * 1000,
   })
 }

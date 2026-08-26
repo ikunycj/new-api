@@ -31,6 +31,7 @@ var pricingGroupOptionKeys = []string{
 	"GroupRatio",
 	"PricingGroupOrder",
 	"PricingGroupRetryPolicy",
+	"PricingGroupRoutingStrategy",
 }
 
 func isPricingGroupOptionKey(key string) bool {
@@ -55,21 +56,34 @@ func pricingGroupOptionValues(configuration *ratio_setting.PricingGroupConfigura
 	if err != nil {
 		return nil, err
 	}
+	routingStrategyData, err := common.Marshal(ratio_setting.PricingGroupRoutingConfiguration{
+		Strategies:    configuration.RoutingStrategies,
+		GroupBindings: configuration.RoutingStrategyBindings,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return map[string]string{
-		"GroupRatio":              string(ratioData),
-		"PricingGroupOrder":       string(orderData),
-		"PricingGroupRetryPolicy": string(retryPolicyData),
+		"GroupRatio":                  string(ratioData),
+		"PricingGroupOrder":           string(orderData),
+		"PricingGroupRetryPolicy":     string(retryPolicyData),
+		"PricingGroupRoutingStrategy": string(routingStrategyData),
 	}, nil
 }
 
 var retiredOptionKeys = []string{
 	"AutoGroups",
+	"AutomaticEnableChannelEnabled",
 	"DefaultUseAutoGroup",
 	"GroupGroupRatio",
+	"RetryTimes",
 	"group_ratio_setting.group_ratio",
 	"group_ratio_setting.group_group_ratio",
 	"group_ratio_setting.pricing_group_retry_policy",
 	"group_ratio_setting.group_special_usable_group",
+	"monitor_setting.auto_test_channel_enabled",
+	"monitor_setting.auto_test_channel_minutes",
+	"monitor_setting.channel_test_mode",
 	"UserUsableGroups",
 }
 
@@ -115,7 +129,6 @@ func InitOptionMap() {
 	common.OptionMap["TurnstileCheckEnabled"] = strconv.FormatBool(common.TurnstileCheckEnabled)
 	common.OptionMap["RegisterEnabled"] = strconv.FormatBool(common.RegisterEnabled)
 	common.OptionMap["AutomaticDisableChannelEnabled"] = strconv.FormatBool(common.AutomaticDisableChannelEnabled)
-	common.OptionMap["AutomaticEnableChannelEnabled"] = strconv.FormatBool(common.AutomaticEnableChannelEnabled)
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -213,6 +226,7 @@ func InitOptionMap() {
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
 	common.OptionMap["PricingGroupOrder"] = ratio_setting.PricingGroupOrder2JSONString()
 	common.OptionMap["PricingGroupRetryPolicy"] = ratio_setting.PricingGroupRetryPolicy2JSONString()
+	common.OptionMap["PricingGroupRoutingStrategy"] = ratio_setting.PricingGroupRoutingStrategy2JSONString()
 	common.OptionMap["UserGroupPricingGroups"] = setting.UserGroupPricingGroups2JSONString()
 	common.OptionMap["CompletionRatio"] = ratio_setting.CompletionRatio2JSONString()
 	common.OptionMap["ImageRatio"] = ratio_setting.ImageRatio2JSONString()
@@ -222,7 +236,6 @@ func InitOptionMap() {
 	//common.OptionMap["ChatLink"] = common.ChatLink
 	//common.OptionMap["ChatLink2"] = common.ChatLink2
 	common.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(common.QuotaPerUnit, 'f', -1, 64)
-	common.OptionMap["RetryTimes"] = strconv.Itoa(common.RetryTimes)
 	common.OptionMap["DataExportInterval"] = strconv.Itoa(common.DataExportInterval)
 	common.OptionMap["DataExportDefaultTime"] = common.DataExportDefaultTime
 	common.OptionMap["DefaultCollapseSidebar"] = strconv.FormatBool(common.DefaultCollapseSidebar)
@@ -267,9 +280,13 @@ func loadOptionsFromDatabase() {
 		return
 	}
 	pricingGroupValues := map[string]string{
-		"GroupRatio":              ratio_setting.GroupRatio2JSONString(),
-		"PricingGroupOrder":       ratio_setting.PricingGroupOrder2JSONString(),
-		"PricingGroupRetryPolicy": ratio_setting.PricingGroupRetryPolicy2JSONString(),
+		"GroupRatio":        ratio_setting.GroupRatio2JSONString(),
+		"PricingGroupOrder": ratio_setting.PricingGroupOrder2JSONString(),
+		// These settings were introduced with the unified pricing-group editor.
+		// An absent option is a fresh initialization, not a reason to reuse a
+		// possibly stale in-memory snapshot.
+		"PricingGroupRetryPolicy":     "{}",
+		"PricingGroupRoutingStrategy": "",
 	}
 	for _, option := range options {
 		if isRetiredOptionKey(option.Key) {
@@ -288,6 +305,7 @@ func loadOptionsFromDatabase() {
 		pricingGroupValues["GroupRatio"],
 		pricingGroupValues["PricingGroupOrder"],
 		pricingGroupValues["PricingGroupRetryPolicy"],
+		pricingGroupValues["PricingGroupRoutingStrategy"],
 	)
 	if err != nil {
 		common.SysLog("failed to load pricing group configuration: " + err.Error())
@@ -345,11 +363,12 @@ func UpdateOption(key string, value string) error {
 	return updateOptionMap(key, value)
 }
 
-func UpdatePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON string) error {
+func UpdatePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) error {
 	configuration, err := ratio_setting.ParsePricingGroupConfiguration(
 		groupRatioJSON,
 		groupOrderJSON,
 		retryPolicyJSON,
+		routingStrategyJSON,
 	)
 	if err != nil {
 		return err
@@ -493,8 +512,6 @@ func updateOptionMap(key string, value string) (err error) {
 			common.EmailAliasRestrictionEnabled = boolValue
 		case "AutomaticDisableChannelEnabled":
 			common.AutomaticDisableChannelEnabled = boolValue
-		case "AutomaticEnableChannelEnabled":
-			common.AutomaticEnableChannelEnabled = boolValue
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
@@ -701,8 +718,6 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.ModelRequestRateLimitSuccessCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
-	case "RetryTimes":
-		common.RetryTimes, _ = strconv.Atoi(value)
 	case "DataExportInterval":
 		common.DataExportInterval, _ = strconv.Atoi(value)
 	case "DataExportDefaultTime":
@@ -715,6 +730,8 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdatePricingGroupOrderByJSONString(value)
 	case "PricingGroupRetryPolicy":
 		err = ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(value)
+	case "PricingGroupRoutingStrategy":
+		err = ratio_setting.UpdatePricingGroupRoutingStrategyByJSONString(value)
 	case "UserGroupPricingGroups":
 		err = setting.UpdateUserGroupPricingGroupsByJSONString(value)
 	case "CompletionRatio":

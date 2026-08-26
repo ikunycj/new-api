@@ -30,6 +30,7 @@ var channelPersistedUpdateFields = []struct {
 	{jsonName: "probe_failure_auto_ban", column: "probe_failure_auto_ban"},
 	{jsonName: "probe_success_auto_enable", column: "probe_success_auto_enable"},
 	{jsonName: "upstream_max_retries", column: "upstream_max_retries"},
+	{jsonName: "max_concurrency", column: "max_concurrency"},
 	{jsonName: "price_multiplier", column: "price_multiplier"},
 	{jsonName: "price_multiplier_mode", column: "price_multiplier_mode"},
 	{jsonName: "force_priority", column: "force_priority"},
@@ -172,6 +173,7 @@ var channelReadOnlyFields = map[string]struct{}{
 	"balance_updated_time":            {},
 	"used_quota":                      {},
 	"previous_day_probe_success_rate": {},
+	"current_concurrency":             {},
 }
 
 func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]any) {
@@ -199,6 +201,9 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	if _, ok := requestData["used_quota"]; ok {
 		channel.UsedQuota = 0
 	}
+	if _, ok := requestData["current_concurrency"]; ok {
+		channel.CurrentConcurrency = 0
+	}
 }
 
 // channelNonSensitiveFields lists routing / server-managed channel
@@ -215,6 +220,7 @@ var channelNonSensitiveFields = map[string]struct{}{
 	"probe_failure_auto_ban":               {},
 	"probe_success_auto_enable":            {},
 	"upstream_max_retries":                 {},
+	"max_concurrency":                      {},
 	"price_multiplier":                     {},
 	"price_multiplier_mode":                {},
 	"force_priority":                       {},

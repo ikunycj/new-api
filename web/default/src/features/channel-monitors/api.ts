@@ -46,14 +46,16 @@ function requireData<T>(response: ApiResponse<T>): T {
 
 export async function getChannelMonitors(): Promise<ChannelMonitor[]> {
   const response = await api.get<ApiResponse<{ items: ChannelMonitor[] }>>(
-    '/api/monitor/channel/'
+    '/api/monitor/channel/',
+    { skipErrorHandler: true }
   )
   return requireData(response.data).items
 }
 
 export async function getPricingGroupMetrics(): Promise<PricingGroupMetrics[]> {
   const response = await api.get<ApiResponse<{ items: PricingGroupMetrics[] }>>(
-    '/api/monitor/channel/metrics'
+    '/api/monitor/channel/metrics',
+    { skipErrorHandler: true }
   )
   return requireData(response.data).items
 }

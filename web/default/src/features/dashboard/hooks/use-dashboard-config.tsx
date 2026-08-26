@@ -23,26 +23,26 @@ import {
   Gauge,
   Zap,
   Flame,
-  TrendingUp,
   Activity,
+  KeyRound,
   type LucideIcon,
-} from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-import type { IconBadgeTone } from '@/components/ui/icon-badge'
-import { safeDivide } from '@/features/dashboard/lib'
+import type { IconBadgeTone } from '@/components/ui/icon-badge';
+import { safeDivide } from '@/features/dashboard/lib';
 
 interface StatCardConfig {
-  key: string
-  title: string
-  description: string
-  icon: LucideIcon
-  iconTone: IconBadgeTone
-  getValue: (stat: Record<string, number>, days?: number) => number
+  key: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  iconTone: IconBadgeTone;
+  getValue: (stat: Record<string, number>, days?: number) => number;
 }
 
 export function useModelStatCardsConfig(): StatCardConfig[] {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   return [
     {
@@ -87,43 +87,49 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
       getValue: (stat, timeRangeMinutes = 1) =>
         safeDivide(stat?.tpm ?? 0, timeRangeMinutes),
     },
-  ]
+  ];
 }
 
 export function useSummaryCardsConfig(totals: {
-  todayUsageDisplay: string
-  usedDisplay: string
-  requestCountDisplay: string
-  currencyLabel: string
-  currencyEnabled: boolean
+  usageDisplay: string;
+  usageDescription: string;
+  tokenDisplay: string;
+  tokenDescription: string;
+  requestDisplay: string;
+  requestDescription: string;
+  apiKeysDisplay: string;
+  apiKeysDescription: string;
 }) {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   return [
     {
       key: 'todayUsage',
       title: t('Last 24h usage'),
-      value: totals.todayUsageDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Consumed in the last 24 hours')} (${totals.currencyLabel})`
-        : t('Consumed in the last 24 hours'),
+      value: totals.usageDisplay,
+      description: totals.usageDescription,
       icon: Flame,
     },
     {
-      key: 'usage',
-      title: t('Historical Usage'),
-      value: totals.usedDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Total consumed')} (${totals.currencyLabel})`
-        : t('Total consumed quota'),
-      icon: TrendingUp,
+      key: 'tokens',
+      title: t('Token Usage'),
+      value: totals.tokenDisplay,
+      description: totals.tokenDescription,
+      icon: Layers,
     },
     {
       key: 'requests',
       title: t('Request Count'),
-      value: totals.requestCountDisplay,
-      description: t('Total requests made'),
+      value: totals.requestDisplay,
+      description: totals.requestDescription,
       icon: Activity,
     },
-  ]
+    {
+      key: 'apiKeys',
+      title: t('API Keys'),
+      value: totals.apiKeysDisplay,
+      description: totals.apiKeysDescription,
+      icon: KeyRound,
+    },
+  ];
 }

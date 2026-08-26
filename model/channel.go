@@ -51,11 +51,14 @@ type Channel struct {
 	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
 	ProbeSuccessAutoEnable           *bool   `json:"probe_success_auto_enable"`
 	UpstreamMaxRetries               *int    `json:"upstream_max_retries"`
+	MaxConcurrency                   *int    `json:"max_concurrency"`
+	CurrentConcurrency               int     `json:"current_concurrency" gorm:"-"`
 	PriceMultiplier                  float64 `json:"price_multiplier"`
 	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
 	ForcePriority                    *bool   `json:"force_priority"`
 	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
 	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
+	PreviousDayProbeSampleCount      int     `json:"-" gorm:"-"`
 	OtherInfo                        string  `json:"other_info"`
 	Tag                              *string `json:"tag" gorm:"index"`
 	Setting                          *string `json:"setting" gorm:"type:text"` // 渠道额外设置
@@ -74,7 +77,9 @@ type Channel struct {
 const (
 	DefaultChannelProbeIntervalSeconds      = 600
 	DefaultAutoDisabledProbeIntervalSeconds = 600
-	DefaultChannelUpstreamMaxRetries        = 3
+	DefaultChannelUpstreamMaxRetries        = 1
+	DefaultChannelMaxConcurrency            = 100
+	MaxChannelMaxConcurrency                = 10000
 	MaxChannelProbeIntervalSeconds          = 7 * 24 * 60 * 60
 	MaxChannelUpstreamRetries               = 100
 	MaxChannelPriceMultiplier               = 1000
@@ -303,6 +308,32 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 	}
 }
 
+// HasEnabledKey is a read-only availability check used by routing before a
+// candidate is scored. It avoids consuming polling state or returning a
+// channel that cannot provide credentials for this request.
+func (channel *Channel) HasEnabledKey() bool {
+	if channel == nil {
+		return false
+	}
+	if !channel.ChannelInfo.IsMultiKey {
+		return strings.TrimSpace(channel.Key) != ""
+	}
+	keys := channel.GetKeys()
+	if len(keys) == 0 {
+		return false
+	}
+	for index := range keys {
+		status, exists := channel.ChannelInfo.MultiKeyStatusList[index]
+		// MultiKeyStatusList stores only explicit disabled states. A missing
+		// entry therefore has the same enabled-by-default meaning as
+		// GetNextEnabledKey's status lookup.
+		if !exists || status == common.ChannelStatusEnabled {
+			return true
+		}
+	}
+	return false
+}
+
 func (channel *Channel) SaveChannelInfo() error {
 	return DB.Model(channel).Update("channel_info", channel.ChannelInfo).Error
 }
@@ -433,6 +464,16 @@ func (channel *Channel) GetUpstreamMaxRetries() int {
 		return 0
 	}
 	return *channel.UpstreamMaxRetries
+}
+
+// GetMaxConcurrency returns the maximum number of requests that may be
+// active on this channel. A missing or non-positive value uses the product
+// default of 100.
+func (channel *Channel) GetMaxConcurrency() int {
+	if channel == nil || channel.MaxConcurrency == nil || *channel.MaxConcurrency <= 0 {
+		return DefaultChannelMaxConcurrency
+	}
+	return *channel.MaxConcurrency
 }
 
 func (channel *Channel) GetPriceMultiplier() float64 {

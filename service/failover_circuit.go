@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/observability"
+	"github.com/go-redis/redis/v8"
 )
 
 const channelCircuitAllowScript = `
@@ -96,6 +97,33 @@ func ChannelCircuitAllows(channelID int, route string, policy model.RuntimeRouti
 		common.SysError(fmt.Sprintf("failover circuit Redis allow failed: %v", err))
 	}
 	return localChannelCircuitAllows(channelID, route, policy)
+}
+
+// ChannelCircuitIsOpen is a read-only circuit check for candidate building.
+// Unlike ChannelCircuitAllows it does not consume a half-open probe slot; the
+// selected request reserves that slot immediately before it is sent.
+func ChannelCircuitIsOpen(channelID int, route string) bool {
+	if channelID <= 0 || route == "" {
+		return false
+	}
+	now := time.Now()
+	if common.RedisEnabled && common.RDB != nil {
+		openUntil, err := common.RDB.HGet(context.Background(), channelCircuitRedisKey(channelID, route), "open_until_ms").Int64()
+		if err == nil {
+			return openUntil > now.UnixMilli()
+		}
+		// A missing key is the normal closed-circuit state. Other Redis errors
+		// fall through to the local mirror rather than making routing fail open
+		// with a stale local value.
+		if err != redis.Nil {
+			common.SysError(fmt.Sprintf("failover circuit Redis read failed: %v", err))
+		}
+	}
+	key := channelCircuitKey(channelID, route)
+	channelCircuits.Lock()
+	defer channelCircuits.Unlock()
+	state := channelCircuits.values[key]
+	return state != nil && state.openUntil.After(now)
 }
 
 func localChannelCircuitAllows(channelID int, route string, policy model.RuntimeRoutingPolicy) bool {

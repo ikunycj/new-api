@@ -129,6 +129,10 @@ const createGroupSchema = (t: Translate) =>
       predicate: (value) =>
         typeof value === 'object' && value !== null && !Array.isArray(value),
     }),
+    PricingGroupRoutingStrategy: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' && value !== null && !Array.isArray(value),
+    }),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -218,6 +222,9 @@ export function RatioSettingsCard({
     PricingGroupRetryPolicy: normalizeJsonString(
       groupDefaults.PricingGroupRetryPolicy
     ),
+    PricingGroupRoutingStrategy: normalizeJsonString(
+      groupDefaults.PricingGroupRoutingStrategy
+    ),
   }
   const groupNormalizedDefaults = useRef(initialGroupValues)
   const [savedGroupValues, setSavedGroupValues] = useState(initialGroupValues)
@@ -252,6 +259,9 @@ export function RatioSettingsCard({
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
         groupDefaults.PricingGroupRetryPolicy
+      ),
+      PricingGroupRoutingStrategy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRoutingStrategy
       ),
     },
   })
@@ -298,6 +308,9 @@ export function RatioSettingsCard({
       PricingGroupRetryPolicy: normalizeJsonString(
         groupDefaults.PricingGroupRetryPolicy
       ),
+      PricingGroupRoutingStrategy: normalizeJsonString(
+        groupDefaults.PricingGroupRoutingStrategy
+      ),
     }
     setSavedGroupValues(groupNormalizedDefaults.current)
 
@@ -306,6 +319,9 @@ export function RatioSettingsCard({
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
         groupDefaults.PricingGroupRetryPolicy
+      ),
+      PricingGroupRoutingStrategy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRoutingStrategy
       ),
     })
   }, [groupDefaults, groupForm])
@@ -361,6 +377,9 @@ export function RatioSettingsCard({
         PricingGroupRetryPolicy: normalizeJsonString(
           values.PricingGroupRetryPolicy
         ),
+        PricingGroupRoutingStrategy: normalizeJsonString(
+          values.PricingGroupRoutingStrategy
+        ),
       }
 
       const updates = (
@@ -375,6 +394,7 @@ export function RatioSettingsCard({
         group_ratio: normalized.GroupRatio,
         pricing_group_order: normalized.PricingGroupOrder,
         pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
+        pricing_group_routing_strategy: normalized.PricingGroupRoutingStrategy,
       })
       if (!result.success) return
 

@@ -63,16 +63,3 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
 	return search
 }
-
-func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {
-	if !common.AutomaticEnableChannelEnabled {
-		return false
-	}
-	if newAPIError != nil {
-		return false
-	}
-	if status != common.ChannelStatusAutoDisabled {
-		return false
-	}
-	return true
-}

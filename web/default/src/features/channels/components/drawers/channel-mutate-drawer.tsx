@@ -335,7 +335,8 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.auto_disabled_probe_interval_seconds !== 600 ||
     values.probe_failure_auto_ban === false ||
     values.probe_success_auto_enable === false ||
-    values.upstream_max_retries !== 3 ||
+    values.upstream_max_retries !== 1 ||
+    values.max_concurrency !== 100 ||
     values.price_multiplier !== 1 ||
     values.price_multiplier_mode !== 'usd' ||
     values.force_priority ||
@@ -1017,7 +1018,7 @@ export function ChannelMutateDrawer({
     currentAutoDisabledProbeIntervalSeconds !== 600 ||
     currentProbeFailureAutoBan === false ||
     currentProbeSuccessAutoEnable === false ||
-    currentUpstreamMaxRetries !== 3 ||
+    currentUpstreamMaxRetries !== 1 ||
     currentPriceMultiplier !== 1 ||
     currentPriceMultiplierMode !== 'usd' ||
     currentForcePriority ||
@@ -3797,6 +3798,36 @@ export function ChannelMutateDrawer({
                                       {t(
                                         FIELD_DESCRIPTIONS.UPSTREAM_MAX_RETRIES
                                       )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name='max_concurrency'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>并发</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type='number'
+                                        min={1}
+                                        max={10000}
+                                        step={1}
+                                        {...field}
+                                        value={field.value ?? ''}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            event.target.value === ''
+                                              ? null
+                                              : Number(event.target.value)
+                                          )
+                                        }
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.MAX_CONCURRENCY)}
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>

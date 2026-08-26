@@ -273,7 +273,7 @@ function PriceMultiplierCell({ channel }: { channel: Channel }) {
 }
 
 /**
- * Inline upstream retry count editor. The effective default is 3 when a
+ * Inline upstream retry count editor. The effective default is 1 when a
  * channel has no explicit value, matching the backend's retry behavior.
  */
 function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
@@ -285,7 +285,7 @@ function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
 
   return (
     <NumericSpinnerInput
-      value={channel.upstream_max_retries ?? 3}
+      value={channel.upstream_max_retries ?? 1}
       min={0}
       max={100}
       step={1}
@@ -298,6 +298,41 @@ function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
         )
       }}
     />
+  )
+}
+
+function ConcurrencyCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+
+  const current = channel.current_concurrency ?? 0
+  const maximum =
+    channel.max_concurrency && channel.max_concurrency > 0
+      ? channel.max_concurrency
+      : 100
+  return (
+    <div className='flex min-w-[118px] items-center gap-2'>
+      <NumericSpinnerInput
+        value={maximum}
+        min={1}
+        max={10000}
+        step={1}
+        onChange={(value) => {
+          handleUpdateChannelField(
+            channel.id,
+            'max_concurrency',
+            value,
+            queryClient
+          )
+        }}
+      />
+      <span className='text-muted-foreground text-xs tabular-nums'>
+        {current}/{maximum}
+      </span>
+    </div>
   )
 }
 
@@ -1189,6 +1224,15 @@ export function useChannelsColumns(
         meta: { mobileHidden: true },
         cell: ({ row }) => <UpstreamMaxRetriesCell channel={row.original} />,
         size: 125,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'max_concurrency',
+        header: '并发',
+        meta: { mobileHidden: true },
+        cell: ({ row }) => <ConcurrencyCell channel={row.original} />,
+        size: 170,
         enableSorting: false,
       },
 

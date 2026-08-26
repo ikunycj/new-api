@@ -58,6 +58,8 @@ export const Route = createFileRoute('/_authenticated')({
         })
       }
     }
+
+    return { user: useAuthStore.getState().auth.user }
   },
   component: AuthenticatedLayout,
 })

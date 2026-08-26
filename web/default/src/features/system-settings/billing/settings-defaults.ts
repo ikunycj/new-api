@@ -47,6 +47,7 @@ export const defaultBillingSettings: BillingSettings = {
   GroupRatio: '',
   PricingGroupOrder: '[]',
   PricingGroupRetryPolicy: '{}',
+  PricingGroupRoutingStrategy: '{}',
   PayAddress: '',
   EpayId: '',
   EpayKey: '',
@@ -128,4 +129,5 @@ export const getGroupDefaults = (settings: BillingSettings) => ({
   GroupRatio: settings.GroupRatio,
   PricingGroupOrder: settings.PricingGroupOrder,
   PricingGroupRetryPolicy: settings.PricingGroupRetryPolicy,
+  PricingGroupRoutingStrategy: settings.PricingGroupRoutingStrategy,
 })

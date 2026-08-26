@@ -119,6 +119,14 @@ func enrichLastChannelTestTimes(channels []*model.Channel) {
 	}
 }
 
+func enrichCurrentChannelConcurrency(channels []*model.Channel) {
+	for _, channel := range channels {
+		if channel != nil {
+			channel.CurrentConcurrency = service.CurrentChannelConcurrency(channel.Id)
+		}
+	}
+}
+
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
 	if statusFilter == common.ChannelStatusEnabled {
 		return query.Where("status = ?", common.ChannelStatusEnabled)
@@ -212,6 +220,7 @@ func GetAllChannels(c *gin.Context) {
 	}
 	enrichLastChannelTestTimes(channelData)
 	enrichPreviousDayProbeRates(channelData)
+	enrichCurrentChannelConcurrency(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -420,6 +429,7 @@ func SearchChannels(c *gin.Context) {
 	}
 	enrichLastChannelTestTimes(pagedData)
 	enrichPreviousDayProbeRates(pagedData)
+	enrichCurrentChannelConcurrency(pagedData)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -448,6 +458,7 @@ func GetChannel(c *gin.Context) {
 		clearChannelInfo(channel)
 		enrichLastChannelTestTimes([]*model.Channel{channel})
 		enrichPreviousDayProbeRates([]*model.Channel{channel})
+		enrichCurrentChannelConcurrency([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -543,6 +554,9 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	}
 	if channel.UpstreamMaxRetries != nil && (*channel.UpstreamMaxRetries < 0 || *channel.UpstreamMaxRetries > model.MaxChannelUpstreamRetries) {
 		return fmt.Errorf("upstream max retries must be between 0 and %d", model.MaxChannelUpstreamRetries)
+	}
+	if channel.MaxConcurrency != nil && (*channel.MaxConcurrency < 1 || *channel.MaxConcurrency > model.MaxChannelMaxConcurrency) {
+		return fmt.Errorf("max concurrency must be between 1 and %d", model.MaxChannelMaxConcurrency)
 	}
 	if channel.PriceMultiplier < 0 || math.IsNaN(channel.PriceMultiplier) || math.IsInf(channel.PriceMultiplier, 0) || channel.PriceMultiplier > model.MaxChannelPriceMultiplier {
 		return fmt.Errorf("price multiplier must be between 0 and %d", model.MaxChannelPriceMultiplier)
@@ -1190,6 +1204,7 @@ func UpdateChannel(c *gin.Context) {
 	})
 	channel.Key = ""
 	clearChannelInfo(&channel.Channel)
+	enrichCurrentChannelConcurrency([]*model.Channel{&channel.Channel})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

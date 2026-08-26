@@ -2,10 +2,12 @@ package model
 
 import (
 	"errors"
+	"math"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"gorm.io/gorm"
 )
 
@@ -27,9 +29,9 @@ type BillingGroupRoute struct {
 	UpdatedTime             int64  `json:"updated_time" gorm:"bigint"`
 }
 
-// BillingGroupChannel defines the deterministic channel order inside a billing
-// group. Equal priorities are weighted; a lower priority is only considered
-// after every eligible channel at the preceding priority is exhausted.
+// BillingGroupChannel stores the stable route order and the long-term weight
+// used when dynamic scores are equivalent. Priority is a lower-is-earlier
+// tie-breaker; dynamic pricing-group strategies decide the normal score tier.
 type BillingGroupChannel struct {
 	Id                  int     `json:"id"`
 	BillingGroupRouteId int     `json:"billing_group_route_id" gorm:"index;uniqueIndex:idx_billing_route_channel"`
@@ -75,6 +77,7 @@ type RuntimeRoutingPolicy struct {
 	CircuitWindowSeconds    int
 	CircuitCooldownSeconds  int
 	CircuitHalfOpenRequests int
+	RoutingStrategy         ratio_setting.PricingGroupRoutingStrategy
 }
 
 func DefaultRuntimeRoutingPolicy() RuntimeRoutingPolicy {
@@ -85,6 +88,7 @@ func DefaultRuntimeRoutingPolicy() RuntimeRoutingPolicy {
 		CircuitWindowSeconds:    60,
 		CircuitCooldownSeconds:  60,
 		CircuitHalfOpenRequests: 1,
+		RoutingStrategy:         ratio_setting.DefaultPricingGroupRoutingStrategy(),
 	}
 }
 
@@ -117,7 +121,7 @@ func InitChannelRoutingCache() {
 	}
 	if DB != nil && DB.Migrator().HasTable(&BillingGroupChannel{}) {
 		var channels []BillingGroupChannel
-		if err := DB.Where("enabled = ?", true).Order("priority DESC, id ASC").Find(&channels).Error; err == nil {
+		if err := DB.Where("enabled = ?", true).Order("priority ASC, id ASC").Find(&channels).Error; err == nil {
 			for _, channel := range channels {
 				cache.routeChannels[channel.BillingGroupRouteId] = append(cache.routeChannels[channel.BillingGroupRouteId], channel)
 			}
@@ -136,7 +140,11 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	defer channelRoutingLookup.RUnlock()
 	route, ok := channelRoutingLookup.value.routes[strings.TrimSpace(billingGroup)]
 	if !ok {
-		return DefaultRuntimeRoutingPolicy(), nil, false
+		policy := DefaultRuntimeRoutingPolicy()
+		if strategy, exists := ratio_setting.GetPricingGroupRoutingStrategy(billingGroup); exists {
+			policy.RoutingStrategy = strategy
+		}
+		return policy, nil, false
 	}
 	policy := DefaultRuntimeRoutingPolicy()
 	if route.MaxTotalAttempts > 0 {
@@ -156,6 +164,9 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	}
 	if route.CircuitHalfOpenRequests > 0 {
 		policy.CircuitHalfOpenRequests = route.CircuitHalfOpenRequests
+	}
+	if strategy, exists := ratio_setting.GetPricingGroupRoutingStrategy(billingGroup); exists {
+		policy.RoutingStrategy = strategy
 	}
 	channels := append([]BillingGroupChannel(nil), channelRoutingLookup.value.routeChannels[route.Id]...)
 	return policy, channels, true
@@ -209,7 +220,7 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 		value any
 	}{
 		{"billing_group ASC", &config.Routes},
-		{"billing_group_route_id ASC, priority DESC, id ASC", &config.RouteChannels},
+		{"billing_group_route_id ASC, priority ASC, id ASC", &config.RouteChannels},
 		{"channel_id DESC, channel_type DESC, raw_code ASC, status_code ASC", &config.ErrorMappings},
 	}
 	for _, query := range queries {
@@ -224,7 +235,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 	if config == nil {
 		return errors.New("channel routing config is required")
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	if err := DB.Transaction(func(tx *gorm.DB) error {
 		routeIDs := make([]int, 0, len(config.Routes))
 		routeIDMap := make(map[int]int, len(config.Routes))
 		routeGroupByID := make(map[int]string, len(config.Routes))
@@ -267,7 +278,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if persistedRouteID, ok := routeIDMap[entry.BillingGroupRouteId]; ok {
 				entry.BillingGroupRouteId = persistedRouteID
 			}
-			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.Weight < 0 || entry.CostFactor <= 0 {
+			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.Weight < 0 || entry.CostFactor <= 0 || math.IsNaN(entry.CostFactor) || math.IsInf(entry.CostFactor, 0) {
 				return errors.New("route channel contains invalid values")
 			}
 			key := [2]int{entry.BillingGroupRouteId, entry.ChannelId}
@@ -349,7 +360,14 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			return err
 		}
 		return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
-	})
+	}); err != nil {
+		return err
+	}
+	// Routing is read from the process-local lookup cache on every request.
+	// Publish the committed rows immediately so a successful admin update takes
+	// effect without waiting for a process restart or unrelated cache rebuild.
+	InitChannelRoutingCache()
+	return nil
 }
 
 func deleteMissingRows(tx *gorm.DB, value any, column string, ids []int) error {
@@ -389,6 +407,6 @@ func SortRouteChannels(channels []BillingGroupChannel) {
 		if channels[i].Priority == channels[j].Priority {
 			return channels[i].Id < channels[j].Id
 		}
-		return channels[i].Priority > channels[j].Priority
+		return channels[i].Priority < channels[j].Priority
 	})
 }

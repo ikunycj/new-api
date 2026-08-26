@@ -30,6 +30,7 @@ type GroupFormValues = {
   GroupRatio: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
+  PricingGroupRoutingStrategy: string
 }
 
 type GroupRatioFormProps = {
@@ -47,9 +48,19 @@ export const GroupRatioForm = memo(function GroupRatioForm({
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [isEditorValid, setIsEditorValid] = useState(true)
-  const [groupRatio, pricingGroupOrder, pricingGroupRetryPolicy] = useWatch({
+  const [
+    groupRatio,
+    pricingGroupOrder,
+    pricingGroupRetryPolicy,
+    pricingGroupRoutingStrategy,
+  ] = useWatch({
     control: form.control,
-    name: ['GroupRatio', 'PricingGroupOrder', 'PricingGroupRetryPolicy'],
+    name: [
+      'GroupRatio',
+      'PricingGroupOrder',
+      'PricingGroupRetryPolicy',
+      'PricingGroupRoutingStrategy',
+    ],
   })
   const { isValid } = useFormState({ control: form.control })
 
@@ -79,6 +90,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         groupRatio={groupRatio}
         pricingGroupOrder={pricingGroupOrder}
         pricingGroupRetryPolicy={pricingGroupRetryPolicy}
+        pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
         savedGroupRatio={savedGroupRatio}
         onValidationChange={setIsEditorValid}
         onChange={(field, value) =>

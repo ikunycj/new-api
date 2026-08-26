@@ -33,8 +33,22 @@ func isPlaygroundRequest(path string) bool {
 	return strings.HasPrefix(path, "/pg/")
 }
 
+func affinityRouteEntryAllows(entries []model.BillingGroupChannel, channel *model.Channel) bool {
+	if channel == nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.ChannelId != channel.Id || !entry.Enabled {
+			continue
+		}
+		return entry.Weight > 0 || channel.IsForcePriority()
+	}
+	return false
+}
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
+		defer service.CancelPendingRoutingSelection(c)
 		var channel *model.Channel
 		channelId, ok := common.GetContextKey(c, constant.ContextKeyTokenSpecificChannelId)
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
@@ -106,11 +120,12 @@ func Distribute() func(c *gin.Context) {
 				}
 
 				channel, selectGroup, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
-					Ctx:         c,
-					ModelName:   modelRequest.Model,
-					TokenGroup:  usingGroup,
-					RequestPath: c.Request.URL.Path,
-					Retry:       common.GetPointer(0),
+					Ctx:          c,
+					ModelName:    modelRequest.Model,
+					TokenGroup:   usingGroup,
+					RequestPath:  c.Request.URL.Path,
+					CircuitRoute: c.FullPath(),
+					Retry:        common.GetPointer(0),
 				})
 				if err != nil {
 					showGroup := usingGroup
@@ -135,9 +150,28 @@ func Distribute() func(c *gin.Context) {
 					if preferredErr == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
 						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) &&
 						model.IsChannelEnabledForGroupModel(selectGroup, modelRequest.Model, preferred.Id) {
-						channel = preferred
-						affinityUsable = true
-						service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
+						// Affinity is a stability hint, not a hard routing rule. It
+						// must not bypass a selected force layer, an exhausted
+						// channel, a circuit, or a zero-weight route entry.
+						if (!channel.IsForcePriority() || preferred.Id == channel.Id) &&
+							preferred.HasEnabledKey() &&
+							service.CurrentChannelConcurrency(preferred.Id) < preferred.GetMaxConcurrency() {
+							route := c.FullPath()
+							if route == "" {
+								route = c.Request.URL.Path
+							}
+							if !service.ChannelCircuitIsOpen(preferred.Id, route) {
+								_, entries, configured := model.ResolveBillingGroupRoute(selectGroup)
+								if !configured || affinityRouteEntryAllows(entries, preferred) {
+									if preferred.Id != channel.Id {
+										service.CancelPendingRoutingSelection(c)
+									}
+									channel = preferred
+									affinityUsable = true
+									service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
+								}
+							}
+						}
 					}
 					if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
 						service.ClearCurrentChannelAffinityCache(c)

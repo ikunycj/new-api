@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { SettingsPageFrame } from '../components/settings-page'
@@ -44,42 +45,68 @@ export function GroupManagementSettings({
   onTabChange,
 }: GroupManagementSettingsProps) {
   const { t } = useTranslation()
-  const { data, isLoading } = useSystemOptions()
+  const { data, isLoading, isError, error, refetch } = useSystemOptions({
+    skipErrorHandler: true,
+  })
   const settings = useMemo(
     () => getOptionValue(data?.data, defaultBillingSettings) as BillingSettings,
     [data?.data]
   )
 
-  return (
-    <SettingsPageFrame title={t('Group Management')}>
-      {isLoading ? (
+  if (isLoading) {
+    return (
+      <SettingsPageFrame title={t('Group Management')}>
         <div className='text-muted-foreground flex min-h-40 items-center justify-center text-sm'>
           {t('Loading settings...')}
         </div>
-      ) : (
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => onTabChange(value as GroupManagementTab)}
-          className='min-h-0 gap-4'
-        >
-          <TabsList className='grid w-full max-w-md grid-cols-2'>
-            <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
-            <TabsTrigger value='pricing-groups'>定价分组</TabsTrigger>
-          </TabsList>
-          <TabsContent value='user-groups' className='min-h-0'>
-            <UserGroupManagementSection />
-          </TabsContent>
-          <TabsContent value='pricing-groups' className='min-h-0'>
-            <RatioSettingsCard
-              titleKey='定价分组'
-              modelDefaults={getModelDefaults(settings)}
-              groupDefaults={getGroupDefaults(settings)}
-              toolPricesDefault={settings['tool_price_setting.prices']}
-              visibleTabs={['groups']}
-            />
-          </TabsContent>
-        </Tabs>
-      )}
+      </SettingsPageFrame>
+    )
+  }
+
+  if (isError) {
+    return (
+      <SettingsPageFrame title={t('Group Management')}>
+        <div className='flex min-h-40 flex-col items-center justify-center gap-3 text-center'>
+          <p className='text-destructive text-sm'>
+            分组设置加载失败：{error.message}
+          </p>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => void refetch()}
+          >
+            重试
+          </Button>
+        </div>
+      </SettingsPageFrame>
+    )
+  }
+
+  return (
+    <SettingsPageFrame title={t('Group Management')}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => onTabChange(value as GroupManagementTab)}
+        className='min-h-0 gap-4'
+      >
+        <TabsList className='grid w-full max-w-md grid-cols-2'>
+          <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
+          <TabsTrigger value='pricing-groups'>定价分组</TabsTrigger>
+        </TabsList>
+        <TabsContent value='user-groups' className='min-h-0'>
+          <UserGroupManagementSection />
+        </TabsContent>
+        <TabsContent value='pricing-groups' className='min-h-0'>
+          <RatioSettingsCard
+            titleKey='定价分组'
+            modelDefaults={getModelDefaults(settings)}
+            groupDefaults={getGroupDefaults(settings)}
+            toolPricesDefault={settings['tool_price_setting.prices']}
+            visibleTabs={['groups']}
+          />
+        </TabsContent>
+      </Tabs>
     </SettingsPageFrame>
   )
 }

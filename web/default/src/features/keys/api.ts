@@ -545,6 +545,7 @@ export async function getApiKeys(
   // never share the global in-flight GET deduplication entry.
   const res = await api.get(`/api/token/?p=${p}&size=${size}`, {
     disableDuplicate: true,
+    skipErrorHandler: true,
   })
   return normalizeApiKeysResponse(res.data)
 }

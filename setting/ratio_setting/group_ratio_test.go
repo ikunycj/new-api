@@ -59,7 +59,8 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 		`{
 			"alpha":{"mode":"fixed","retry_times":4},
 			"beta":{"mode":"active_channels","retry_times":99}
-		}`,
+			}`,
+		`{}`,
 	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"beta", "alpha"}, configuration.GroupOrder)
@@ -69,38 +70,43 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	}, configuration.RetryPolicies["beta"])
 
 	for _, testCase := range []struct {
-		name     string
-		ratios   string
-		order    string
-		policies string
+		name       string
+		ratios     string
+		order      string
+		policies   string
+		strategies string
 	}{
 		{
-			name:     "empty group name",
-			ratios:   `{"":1}`,
-			order:    `[""]`,
-			policies: `{"":{"mode":"fixed","retry_times":1}}`,
+			name:       "empty group name",
+			ratios:     `{"":1}`,
+			order:      `[""]`,
+			policies:   `{"":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
 		},
 		{
-			name:     "missing order entry",
-			ratios:   `{"alpha":1,"beta":1}`,
-			order:    `["alpha"]`,
-			policies: `{"alpha":{"mode":"fixed","retry_times":1},"beta":{"mode":"fixed","retry_times":1}}`,
+			name:       "missing order entry",
+			ratios:     `{"alpha":1,"beta":1}`,
+			order:      `["alpha"]`,
+			policies:   `{"alpha":{"mode":"fixed","retry_times":1},"beta":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
 		},
 		{
-			name:     "missing retry policy",
-			ratios:   `{"alpha":1,"beta":1}`,
-			order:    `["alpha","beta"]`,
-			policies: `{"alpha":{"mode":"fixed","retry_times":1}}`,
+			name:       "missing retry policy",
+			ratios:     `{"alpha":1,"beta":1}`,
+			order:      `["alpha","beta"]`,
+			policies:   `{"alpha":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
 		},
 		{
-			name:     "unknown retry policy group",
-			ratios:   `{"alpha":1}`,
-			order:    `["alpha"]`,
-			policies: `{"unknown":{"mode":"fixed","retry_times":1}}`,
+			name:       "unknown retry policy group",
+			ratios:     `{"alpha":1}`,
+			order:      `["alpha"]`,
+			policies:   `{"unknown":{"mode":"fixed","retry_times":1}}`,
+			strategies: `{}`,
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := ParsePricingGroupConfiguration(testCase.ratios, testCase.order, testCase.policies)
+			_, err := ParsePricingGroupConfiguration(testCase.ratios, testCase.order, testCase.policies, testCase.strategies)
 			require.Error(t, err)
 		})
 	}
@@ -110,9 +116,10 @@ func TestParsePersistedPricingGroupConfigurationBuildsCompleteSnapshot(t *testin
 	configuration, err := ParsePersistedPricingGroupConfiguration(
 		`{"alpha":1,"beta":2}`,
 		`["retired","beta"]`,
+		`{"alpha":{"mode":"fixed","retry_times":4},"beta":{"mode":"active_channels"}}`,
 		`{
-			"alpha":{"mode":"fixed","retry_times":4},
-			"retired":{"mode":"fixed","retry_times":9}
+			"strategies":{"cheap":{"name":"低价","price_weight":65,"availability_weight":20,"load_weight":15}},
+			"group_bindings":{"alpha":"cheap","beta":"cheap"}
 		}`,
 	)
 	require.NoError(t, err)
@@ -142,4 +149,85 @@ func TestPricingGroupRetryPolicyDefaultsToActiveChannels(t *testing.T) {
 
 	_, exists = GetPricingGroupRetryPolicy("unknown")
 	assert.False(t, exists)
+}
+
+func TestPricingGroupRoutingStrategyPresetsAndDefaults(t *testing.T) {
+	assert.Equal(t, PricingGroupRoutingStrategy{
+		Strategy:           PricingGroupRoutingStrategyPriceFirst,
+		PriceWeight:        65,
+		AvailabilityWeight: 20,
+		LoadWeight:         15,
+	}, PricingGroupRoutingStrategyPreset(PricingGroupRoutingStrategyPriceFirst))
+	assert.Equal(t, DefaultPricingGroupRoutingStrategy(), PricingGroupRoutingStrategyPreset("unknown"))
+
+	previousRatios := GroupRatio2JSONString()
+	previousOrder := PricingGroupOrder2JSONString()
+	previousPolicies := PricingGroupRetryPolicy2JSONString()
+	previousStrategies := PricingGroupRoutingStrategy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, UpdatePricingGroupOrderByJSONString(previousOrder))
+		require.NoError(t, UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+		require.NoError(t, UpdatePricingGroupRoutingStrategyByJSONString(previousStrategies))
+	})
+
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"alpha":1}`))
+	require.NoError(t, UpdatePricingGroupRoutingStrategyByJSONString(`{}`))
+	strategy, exists := GetPricingGroupRoutingStrategy("alpha")
+	require.True(t, exists)
+	assert.Equal(t, DefaultPricingGroupRoutingStrategy(), strategy)
+}
+
+func TestPricingGroupRoutingConfigurationCRUDValidation(t *testing.T) {
+	valid := `{
+		"strategies":{
+			"balanced":{"name":"均衡","price_weight":40,"availability_weight":40,"load_weight":20},
+			"custom":{"name":"企业稳定","price_weight":20,"availability_weight":65,"load_weight":15}
+		},
+		"group_bindings":{"alpha":"custom","beta":"balanced"}
+	}`
+	configuration, err := ParsePricingGroupRoutingConfiguration(valid, map[string]float64{"alpha": 1, "beta": 1})
+	require.NoError(t, err)
+	assert.Equal(t, "custom", configuration.GroupBindings["alpha"])
+	assert.Equal(t, "企业稳定", configuration.Strategies["custom"].Name)
+
+	for _, value := range []string{
+		`{"strategies":{"bad":{"name":"错误","price_weight":50,"availability_weight":20,"load_weight":20}},"group_bindings":{"alpha":"bad","beta":"bad"}}`,
+		`{"strategies":{"one":{"name":"重复","price_weight":40,"availability_weight":40,"load_weight":20},"two":{"name":"重复","price_weight":20,"availability_weight":60,"load_weight":20}},"group_bindings":{"alpha":"one","beta":"two"}}`,
+		`{"strategies":{"one":{"name":"存在","price_weight":40,"availability_weight":40,"load_weight":20}},"group_bindings":{"alpha":"missing","beta":"one"}}`,
+		`{"strategies":{"one":{"name":"存在","price_weight":40,"availability_weight":40,"load_weight":20}},"group_bindings":{"alpha":"one"}}`,
+		`{"alpha":{"strategy":"balanced","price_weight":40,"availability_weight":40,"load_weight":20}}`,
+	} {
+		_, err := ParsePricingGroupRoutingConfiguration(value, map[string]float64{"alpha": 1, "beta": 1})
+		require.Error(t, err, value)
+	}
+}
+
+func TestPricingGroupRoutingConfigurationRejectsDeletingReferencedStrategy(t *testing.T) {
+	_, err := ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"remaining":{"name":"保留","price_weight":40,"availability_weight":40,"load_weight":20}},
+		"group_bindings":{"alpha":"deleted"}
+	}`, map[string]float64{"alpha": 1})
+	require.ErrorContains(t, err, "引用了不存在的策略")
+}
+
+func TestGetPricingGroupRoutingStrategyResolvesGroupBinding(t *testing.T) {
+	previousRatios := GroupRatio2JSONString()
+	previousStrategies := PricingGroupRoutingStrategy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, UpdatePricingGroupRoutingStrategyByJSONString(previousStrategies))
+	})
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"alpha":1,"beta":1}`))
+	require.NoError(t, UpdatePricingGroupRoutingStrategyByJSONString(`{
+		"strategies":{"shared":{"name":"共享策略","price_weight":55,"availability_weight":30,"load_weight":15}},
+		"group_bindings":{"alpha":"shared","beta":"shared"}
+	}`))
+
+	alpha, alphaExists := GetPricingGroupRoutingStrategy("alpha")
+	beta, betaExists := GetPricingGroupRoutingStrategy("beta")
+	require.True(t, alphaExists)
+	require.True(t, betaExists)
+	assert.Equal(t, "shared", alpha.Strategy)
+	assert.Equal(t, alpha, beta)
 }

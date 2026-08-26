@@ -9,14 +9,11 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 )
 
-// RegisterScheduledSystemTasks wires the periodic channel test, upstream model
-// update, and async task polling (Midjourney / Suno / video) jobs into the
-// system task framework so a DB lease dedups execution across multiple master
-// instances and each run is recorded as one task row. Call this before
+// RegisterScheduledSystemTasks wires background jobs and the on-demand channel
+// test handler into the system task framework. Call this before
 // service.StartSystemTaskRunner.
 func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(channelTestHandler{})
@@ -125,12 +122,20 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 		started := time.Now()
 		result := testResult{}
 		cancelled := false
+		skippedForConcurrency := false
 		for attempt := 0; attempt <= channel.GetUpstreamMaxRetries(); attempt++ {
 			if ctx != nil && ctx.Err() != nil {
 				cancelled = true
 				break
 			}
-			result = testChannelWithTokenName(ctx, channel, testUserID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName, "")
+			if !service.TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+				skippedForConcurrency = true
+				break
+			}
+			result = func() testResult {
+				defer service.ReleaseChannelConcurrency(channel.Id)
+				return testChannelWithTokenName(ctx, channel, testUserID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName, "")
+			}()
 			if result.localErr == nil && result.newAPIError == nil {
 				break
 			}
@@ -138,6 +143,12 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 		if cancelled || (ctx != nil && ctx.Err() != nil) {
 			releaseLease()
 			break
+		}
+		if skippedForConcurrency {
+			// Saturated capacity is not a probe failure. Leave the channel status
+			// and probe history unchanged so a busy channel is not auto-disabled.
+			releaseLease()
+			continue
 		}
 
 		latencyMs := time.Since(started).Milliseconds()
@@ -155,7 +166,7 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 		}
 
 		resultingStatus := channel.Status
-		if !success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusEnabled && channel.ShouldProbeFailureAutoBan() && common.AutomaticDisableChannelEnabled {
+		if !success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusEnabled && channel.ShouldProbeFailureAutoBan() {
 			usingKey := ""
 			if result.context != nil {
 				usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
@@ -171,7 +182,7 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 			resultingStatus = common.ChannelStatusAutoDisabled
 			summary.Disabled++
 		}
-		if success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusAutoDisabled && channel.ShouldProbeSuccessAutoEnable() && common.AutomaticEnableChannelEnabled {
+		if success && !channel.ChannelInfo.IsMultiKey && channel.Status == common.ChannelStatusAutoDisabled && channel.ShouldProbeSuccessAutoEnable() {
 			usingKey := ""
 			if result.context != nil {
 				usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
@@ -207,35 +218,13 @@ func runChannelProbeTask(ctx context.Context, report func(processed, total int))
 	return summary, nil
 }
 
-// channelTestHandler runs the scheduled "test all channels" job. Enablement and
-// cadence still come from the monitor settings; only the execution path moved
-// into the system task runner.
+// channelTestHandler runs an on-demand "test all channels" task.
 type channelTestHandler struct{}
 
 func (channelTestHandler) Type() string { return model.SystemTaskTypeChannelTest }
 
-func (channelTestHandler) Enabled() bool {
-	return operation_setting.GetMonitorSetting().AutoTestChannelEnabled
-}
-
-func (channelTestHandler) Interval() time.Duration {
-	minutes := operation_setting.GetMonitorSetting().AutoTestChannelMinutes
-	if minutes <= 0 {
-		minutes = 10
-	}
-	return time.Duration(minutes * float64(time.Minute))
-}
-
-func (channelTestHandler) NewPayload() any { return nil }
-
-// channelTestTaskPayload controls one channel_test run. A nil/empty payload is a
-// scheduled run, which uses the configured monitor ChannelTestMode and does not
-// notify. A manual "test all channels" trigger sets Mode=scheduled_all and
-// Notify=true to reproduce the legacy manual behavior (test every channel and
-// notify root on completion).
 type channelTestTaskPayload struct {
-	Mode   string `json:"mode,omitempty"`
-	Notify bool   `json:"notify,omitempty"`
+	Manual bool `json:"manual"`
 }
 
 func (channelTestHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
@@ -244,7 +233,11 @@ func (channelTestHandler) Run(ctx context.Context, task *model.SystemTask, runne
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
 	}
-	summary, err := runChannelTestTask(ctx, payload.Mode, payload.Notify, service.NewSystemTaskProgressReporter(task, runnerID))
+	if !payload.Manual {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, fmt.Errorf("scheduled channel tests have been retired"))
+		return
+	}
+	summary, err := runChannelTestTask(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return

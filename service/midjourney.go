@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/setting"
 
@@ -164,6 +165,18 @@ func ConvertSimpleChangeParams(content string) *dto.MidjourneyRequest {
 
 func DoMidjourneyHttpRequest(c *gin.Context, timeout time.Duration, fullRequestURL string) (*dto.MidjourneyResponseWithStatusCode, []byte, error) {
 	var nullBytes []byte
+	// Midjourney routes bypass the generic Relay loop, so this helper owns the
+	// channel reservation for each direct upstream request.
+	if channelID := c.GetInt("channel_id"); channelID > 0 {
+		channel, err := model.CacheGetChannel(channelID)
+		if err == nil && channel != nil {
+			if !TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
+				return MidjourneyErrorWithStatusCodeWrapper(30, "channel_concurrency_limit", http.StatusTooManyRequests), nullBytes, nil
+			}
+			commitPendingRoutingSelection(c, channel.Id)
+			defer ReleaseChannelConcurrency(channel.Id)
+		}
+	}
 	//var requestBody io.Reader
 	//requestBody = c.Request.Body
 	// read request body to json, delete accountFilter and notifyHook

@@ -52,8 +52,12 @@ function requireData<T>(response: ApiResponse<T>): T {
 }
 
 export async function getUserGroupSummaries(): Promise<UserGroupSummary[]> {
-  const response =
-    await api.get<ApiResponse<UserGroupSummary[]>>('/api/group/manage')
+  const response = await api.get<ApiResponse<UserGroupSummary[]>>(
+    '/api/group/manage',
+    {
+      skipErrorHandler: true,
+    }
+  )
   return requireData(response.data)
 }
 
@@ -87,7 +91,8 @@ export async function updateUserGroup(
 
 export async function getPricingGroupNames(): Promise<string[]> {
   const response = await api.get<ApiResponse<string[]>>(
-    '/api/group/pricing-groups'
+    '/api/group/pricing-groups',
+    { skipErrorHandler: true }
   )
   return requireData(response.data)
 }

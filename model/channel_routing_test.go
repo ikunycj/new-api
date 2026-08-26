@@ -33,8 +33,8 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 			Id: 17, BillingGroup: " claude ", Name: " Claude ", Enabled: true,
 		}},
 		RouteChannels: []BillingGroupChannel{
-			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
-			{Id: 2, BillingGroupRouteId: 17, ChannelId: 40, Priority: 90, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 1, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
+			{Id: 2, BillingGroupRouteId: 17, ChannelId: 40, Priority: 2, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
 		},
 		ErrorMappings: []UpstreamErrorMapping{{
 			Id: 1, ChannelId: 38, RawCode: " RATE_LIMIT_ERROR ", StatusCode: 429,

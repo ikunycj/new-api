@@ -41,6 +41,7 @@ import { useAuthStore } from '@/stores/auth-store'
 interface LogStatCardsProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
+  includeAdminData?: boolean
 }
 
 const MAX_INLINE_STAT_CHARS = 9
@@ -62,7 +63,7 @@ export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
   const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = !!(user?.role && user.role >= 10)
+  const isAdmin = props.includeAdminData ?? !!(user?.role && user.role >= 10)
   const [stats, setStats] = useState<{
     totalQuota: number
     totalCount: number

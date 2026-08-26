@@ -43,6 +43,7 @@ export type PricingGroupConfigurationRequest = {
   group_ratio: string
   pricing_group_order: string
   pricing_group_retry_policy: string
+  pricing_group_routing_strategy: string
 }
 
 export type ConfirmPaymentComplianceResponse = {
@@ -227,16 +228,12 @@ export type ModelSettings = {
   GroupRatio: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
-  RetryTimes: number
+  PricingGroupRoutingStrategy: string
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
-  AutomaticEnableChannelEnabled: boolean
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
-  'monitor_setting.auto_test_channel_enabled': boolean
-  'monitor_setting.auto_test_channel_minutes': number
-  'monitor_setting.channel_test_mode': 'scheduled_all' | 'passive_recovery'
   'channel_affinity_setting.enabled': boolean
   'channel_affinity_setting.switch_on_success': boolean
   'channel_affinity_setting.keep_on_channel_disabled': boolean
@@ -276,6 +273,7 @@ export type BillingSettings = {
   GroupRatio: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
+  PricingGroupRoutingStrategy: string
   PayAddress: string
   EpayId: string
   EpayKey: string

@@ -368,6 +368,7 @@ export const FIELD_DESCRIPTIONS = {
     'Automatically enable the channel after a successful probe',
   UPSTREAM_MAX_RETRIES:
     'Maximum retries for this channel after the first upstream attempt',
+  MAX_CONCURRENCY: '最大并发数，未设置时默认为100。',
   PRICE_MULTIPLIER:
     'Relative upstream cost used for channel ranking. 1 means unchanged.',
   PRICE_MULTIPLIER_MODE:

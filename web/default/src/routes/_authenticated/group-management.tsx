@@ -24,17 +24,14 @@ import {
   type GroupManagementTab,
 } from '@/features/system-settings/billing/group-management-settings'
 import { ROLE } from '@/lib/roles'
-import { useAuthStore } from '@/stores/auth-store'
 
 const groupManagementSearchSchema = z.object({
   tab: z.enum(['user-groups', 'pricing-groups']).catch('user-groups'),
 })
 
 export const Route = createFileRoute('/_authenticated/group-management')({
-  beforeLoad: () => {
-    const { auth } = useAuthStore.getState()
-
-    if (auth.user?.role !== ROLE.SUPER_ADMIN) {
+  beforeLoad: ({ context }) => {
+    if (context.user?.role !== ROLE.SUPER_ADMIN) {
       throw redirect({
         to: '/403',
       })

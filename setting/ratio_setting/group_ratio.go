@@ -22,6 +22,11 @@ const (
 	PricingGroupRetryModeFixed          = "fixed"
 	PricingGroupRetryModeActiveChannels = "active_channels"
 	MaxPricingGroupRetryTimes           = 100
+	// The values below are the initial strategy IDs. They are not an enum:
+	// administrators may create arbitrary strategy IDs and names.
+	PricingGroupRoutingStrategyPriceFirst = "price_first"
+	PricingGroupRoutingStrategyBalanced   = "balanced"
+	PricingGroupRoutingStrategyStable     = "stable"
 )
 
 type PricingGroupRetryPolicy struct {
@@ -29,16 +34,86 @@ type PricingGroupRetryPolicy struct {
 	RetryTimes int    `json:"retry_times"`
 }
 
+// PricingGroupRoutingStrategy is an independent strategy definition. Strategy
+// contains the stable catalog ID for runtime use and is intentionally omitted
+// from JSON; the ID is the key in PricingGroupRoutingConfiguration.Strategies.
+// Weights are percentages and must add up to 100.
+type PricingGroupRoutingStrategy struct {
+	Strategy           string  `json:"-"`
+	Name               string  `json:"name"`
+	PriceWeight        float64 `json:"price_weight"`
+	AvailabilityWeight float64 `json:"availability_weight"`
+	LoadWeight         float64 `json:"load_weight"`
+}
+
+// PricingGroupRoutingConfiguration stores the strategy catalog separately
+// from per-group references. A strategy can therefore be reused by many
+// pricing groups and can exist without being assigned to a group.
+type PricingGroupRoutingConfiguration struct {
+	Strategies    map[string]PricingGroupRoutingStrategy `json:"strategies"`
+	GroupBindings map[string]string                      `json:"group_bindings"`
+}
+
+func DefaultPricingGroupRoutingStrategy() PricingGroupRoutingStrategy {
+	return PricingGroupRoutingStrategy{
+		Strategy:           PricingGroupRoutingStrategyBalanced,
+		PriceWeight:        40,
+		AvailabilityWeight: 40,
+		LoadWeight:         20,
+	}
+}
+
+func PricingGroupRoutingStrategyPreset(strategy string) PricingGroupRoutingStrategy {
+	result := DefaultPricingGroupRoutingStrategy()
+	switch strings.TrimSpace(strategy) {
+	case PricingGroupRoutingStrategyPriceFirst:
+		result.Strategy = PricingGroupRoutingStrategyPriceFirst
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight = 65, 20, 15
+	case PricingGroupRoutingStrategyStable:
+		result.Strategy = PricingGroupRoutingStrategyStable
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight = 20, 60, 20
+	}
+	return result
+}
+
+// DefaultPricingGroupRoutingStrategies returns the initial catalog. These are
+// ordinary CRUD records; the IDs are merely stable defaults and are not
+// restricted during validation.
+func DefaultPricingGroupRoutingStrategies() map[string]PricingGroupRoutingStrategy {
+	result := make(map[string]PricingGroupRoutingStrategy, 3)
+	for _, id := range []string{
+		PricingGroupRoutingStrategyPriceFirst,
+		PricingGroupRoutingStrategyBalanced,
+		PricingGroupRoutingStrategyStable,
+	} {
+		strategy := PricingGroupRoutingStrategyPreset(id)
+		switch id {
+		case PricingGroupRoutingStrategyPriceFirst:
+			strategy.Name = "价格优先"
+		case PricingGroupRoutingStrategyBalanced:
+			strategy.Name = "均衡"
+		case PricingGroupRoutingStrategyStable:
+			strategy.Name = "稳定"
+		}
+		result[id] = strategy
+	}
+	return result
+}
+
 type PricingGroupConfiguration struct {
-	GroupRatios   map[string]float64
-	GroupOrder    []string
-	RetryPolicies map[string]PricingGroupRetryPolicy
+	GroupRatios             map[string]float64
+	GroupOrder              []string
+	RetryPolicies           map[string]PricingGroupRetryPolicy
+	RoutingStrategies       map[string]PricingGroupRoutingStrategy
+	RoutingStrategyBindings map[string]string
 }
 
 type pricingGroupSnapshot struct {
-	groupRatios   map[string]float64
-	groupOrder    []string
-	retryPolicies map[string]PricingGroupRetryPolicy
+	groupRatios             map[string]float64
+	groupOrder              []string
+	retryPolicies           map[string]PricingGroupRetryPolicy
+	routingStrategies       map[string]PricingGroupRoutingStrategy
+	routingStrategyBindings map[string]string
 }
 
 var pricingGroupSnapshotValue atomic.Pointer[pricingGroupSnapshot]
@@ -46,10 +121,12 @@ var pricingGroupSnapshotUpdateMutex sync.Mutex
 
 type groupRatioConfigValue struct{}
 type pricingGroupRetryPolicyConfigValue struct{}
+type pricingGroupRoutingStrategyConfigValue struct{}
 
 type GroupRatioSetting struct {
-	GroupRatio              *groupRatioConfigValue              `json:"group_ratio"`
-	PricingGroupRetryPolicy *pricingGroupRetryPolicyConfigValue `json:"pricing_group_retry_policy"`
+	GroupRatio                  *groupRatioConfigValue                  `json:"group_ratio"`
+	PricingGroupRetryPolicy     *pricingGroupRetryPolicyConfigValue     `json:"pricing_group_retry_policy"`
+	PricingGroupRoutingStrategy *pricingGroupRoutingStrategyConfigValue `json:"pricing_group_routing_strategy"`
 }
 
 var groupRatioSetting GroupRatioSetting
@@ -59,10 +136,17 @@ func init() {
 		defaultGroupRatio,
 		[]string{"default", "vip", "svip"},
 		nil,
+		defaultPricingGroupRoutingStrategies(),
+		map[string]string{
+			"default": PricingGroupRoutingStrategyBalanced,
+			"vip":     PricingGroupRoutingStrategyBalanced,
+			"svip":    PricingGroupRoutingStrategyBalanced,
+		},
 	))
 	groupRatioSetting = GroupRatioSetting{
-		GroupRatio:              &groupRatioConfigValue{},
-		PricingGroupRetryPolicy: &pricingGroupRetryPolicyConfigValue{},
+		GroupRatio:                  &groupRatioConfigValue{},
+		PricingGroupRetryPolicy:     &pricingGroupRetryPolicyConfigValue{},
+		PricingGroupRoutingStrategy: &pricingGroupRoutingStrategyConfigValue{},
 	}
 
 	config.GlobalConfig.Register("group_ratio_setting", &groupRatioSetting)
@@ -72,6 +156,8 @@ func newPricingGroupSnapshot(
 	ratios map[string]float64,
 	order []string,
 	retryPolicies map[string]PricingGroupRetryPolicy,
+	routingStrategies map[string]PricingGroupRoutingStrategy,
+	routingStrategyBindings map[string]string,
 ) *pricingGroupSnapshot {
 	ratioCopy := make(map[string]float64, len(ratios))
 	for group, ratio := range ratios {
@@ -80,6 +166,17 @@ func newPricingGroupSnapshot(
 	policyCopy := make(map[string]PricingGroupRetryPolicy, len(retryPolicies))
 	for group, policy := range retryPolicies {
 		policyCopy[group] = policy
+	}
+	strategyCopy := make(map[string]PricingGroupRoutingStrategy, len(routingStrategies))
+	for group, strategy := range routingStrategies {
+		// The map key is the only persisted identity. Ignore any stale value
+		// supplied in the in-memory struct and keep runtime IDs coherent.
+		strategy.Strategy = group
+		strategyCopy[group] = strategy
+	}
+	bindingCopy := make(map[string]string)
+	for group, strategyID := range routingStrategyBindings {
+		bindingCopy[group] = strategyID
 	}
 
 	configuredOrder := append([]string(nil), order...)
@@ -105,9 +202,11 @@ func newPricingGroupSnapshot(
 	ordered = append(ordered, remaining...)
 
 	return &pricingGroupSnapshot{
-		groupRatios:   ratioCopy,
-		groupOrder:    ordered,
-		retryPolicies: policyCopy,
+		groupRatios:             ratioCopy,
+		groupOrder:              ordered,
+		retryPolicies:           policyCopy,
+		routingStrategies:       strategyCopy,
+		routingStrategyBindings: bindingCopy,
 	}
 }
 
@@ -129,6 +228,18 @@ func (pricingGroupRetryPolicyConfigValue) MarshalJSON() ([]byte, error) {
 
 func (*pricingGroupRetryPolicyConfigValue) UnmarshalJSON(data []byte) error {
 	return UpdatePricingGroupRetryPolicyByJSONString(string(data))
+}
+
+func (pricingGroupRoutingStrategyConfigValue) MarshalJSON() ([]byte, error) {
+	snapshot := currentPricingGroupSnapshot()
+	return common.Marshal(PricingGroupRoutingConfiguration{
+		Strategies:    snapshot.routingStrategies,
+		GroupBindings: snapshot.routingStrategyBindings,
+	})
+}
+
+func (*pricingGroupRoutingStrategyConfigValue) UnmarshalJSON(data []byte) error {
+	return UpdatePricingGroupRoutingStrategyByJSONString(string(data))
 }
 
 func GetGroupRatioCopy() map[string]float64 {
@@ -165,6 +276,8 @@ func UpdateGroupRatioByJSONString(jsonStr string) error {
 		ratios,
 		snapshot.groupOrder,
 		snapshot.retryPolicies,
+		snapshot.routingStrategies,
+		snapshot.routingStrategyBindings,
 	))
 	return nil
 }
@@ -190,6 +303,100 @@ func GetPricingGroupRetryPolicyCopy() map[string]PricingGroupRetryPolicy {
 	return result
 }
 
+func GetPricingGroupRoutingStrategy(group string) (PricingGroupRoutingStrategy, bool) {
+	group = strings.TrimSpace(group)
+	snapshot := currentPricingGroupSnapshot()
+	if strategyID, bound := snapshot.routingStrategyBindings[group]; bound {
+		if strategy, exists := snapshot.routingStrategies[strategyID]; exists {
+			if strategy.Strategy == "" {
+				strategy.Strategy = strategyID
+			}
+			// Name is catalog metadata for the admin UI. Runtime scoring only
+			// consumes the ID and weights.
+			strategy.Name = ""
+			return strategy, true
+		}
+	}
+	if _, exists := snapshot.groupRatios[group]; !exists {
+		return PricingGroupRoutingStrategy{}, false
+	}
+	// A malformed or partially loaded configuration must not take routing
+	// down. The persisted configuration validator rejects this state; runtime
+	// callers still receive the documented balanced default while it is being
+	// repaired.
+	return DefaultPricingGroupRoutingStrategy(), true
+}
+
+func GetPricingGroupRoutingStrategyCopy() map[string]PricingGroupRoutingStrategy {
+	snapshot := currentPricingGroupSnapshot()
+	result := make(map[string]PricingGroupRoutingStrategy, len(snapshot.routingStrategies))
+	for strategyID, strategy := range snapshot.routingStrategies {
+		if strategy.Strategy == "" {
+			strategy.Strategy = strategyID
+		}
+		result[strategyID] = strategy
+	}
+	return result
+}
+
+// GetPricingGroupRoutingStrategyBindingsCopy returns the independent
+// pricing-group -> strategy ID references.
+func GetPricingGroupRoutingStrategyBindingsCopy() map[string]string {
+	snapshot := currentPricingGroupSnapshot()
+	result := make(map[string]string, len(snapshot.routingStrategyBindings))
+	for group, strategyID := range snapshot.routingStrategyBindings {
+		result[group] = strategyID
+	}
+	return result
+}
+
+// GetPricingGroupRoutingConfiguration returns a deep copy suitable for an
+// admin editor or API response.
+func GetPricingGroupRoutingConfiguration() PricingGroupRoutingConfiguration {
+	snapshot := currentPricingGroupSnapshot()
+	strategies := make(map[string]PricingGroupRoutingStrategy, len(snapshot.routingStrategies))
+	for strategyID, strategy := range snapshot.routingStrategies {
+		if strategy.Strategy == "" {
+			strategy.Strategy = strategyID
+		}
+		strategies[strategyID] = strategy
+	}
+	bindings := make(map[string]string, len(snapshot.routingStrategyBindings))
+	for group, strategyID := range snapshot.routingStrategyBindings {
+		bindings[group] = strategyID
+	}
+	return PricingGroupRoutingConfiguration{Strategies: strategies, GroupBindings: bindings}
+}
+
+func PricingGroupRoutingStrategy2JSONString() string {
+	data, err := common.Marshal(GetPricingGroupRoutingConfiguration())
+	if err != nil {
+		return `{"strategies":{},"group_bindings":{}}`
+	}
+	return string(data)
+}
+
+func UpdatePricingGroupRoutingStrategyByJSONString(jsonStr string) error {
+	configuration, err := ParsePricingGroupRoutingConfiguration(
+		jsonStr,
+		currentPricingGroupSnapshot().groupRatios,
+	)
+	if err != nil {
+		return err
+	}
+	pricingGroupSnapshotUpdateMutex.Lock()
+	defer pricingGroupSnapshotUpdateMutex.Unlock()
+	snapshot := currentPricingGroupSnapshot()
+	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
+		snapshot.groupRatios,
+		snapshot.groupOrder,
+		snapshot.retryPolicies,
+		configuration.Strategies,
+		configuration.GroupBindings,
+	))
+	return nil
+}
+
 func PricingGroupRetryPolicy2JSONString() string {
 	data, err := common.Marshal(currentPricingGroupSnapshot().retryPolicies)
 	if err != nil {
@@ -210,6 +417,8 @@ func UpdatePricingGroupRetryPolicyByJSONString(jsonStr string) error {
 		snapshot.groupRatios,
 		snapshot.groupOrder,
 		policies,
+		snapshot.routingStrategies,
+		snapshot.routingStrategyBindings,
 	))
 	return nil
 }
@@ -224,10 +433,12 @@ func ApplyPricingGroupConfiguration(configuration *PricingGroupConfiguration) {
 		configuration.GroupRatios,
 		configuration.GroupOrder,
 		configuration.RetryPolicies,
+		configuration.RoutingStrategies,
+		configuration.RoutingStrategyBindings,
 	))
 }
 
-func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON string) (*PricingGroupConfiguration, error) {
+func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
 	if err != nil {
 		return nil, err
@@ -258,16 +469,25 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJ
 		}
 	}
 
+	routingConfiguration, err := ParsePricingGroupRoutingConfiguration(routingStrategyJSON, ratioMap)
+	if err != nil {
+		return nil, err
+	}
+
 	return &PricingGroupConfiguration{
-		GroupRatios:   ratioMap,
-		GroupOrder:    order,
-		RetryPolicies: retryPolicies,
+		GroupRatios:             ratioMap,
+		GroupOrder:              order,
+		RetryPolicies:           retryPolicies,
+		RoutingStrategies:       routingConfiguration.Strategies,
+		RoutingStrategyBindings: routingConfiguration.GroupBindings,
 	}, nil
 }
 
-// ParsePersistedPricingGroupConfiguration normalizes independently stored
-// pricing-group options into one complete runtime configuration.
-func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON string) (*PricingGroupConfiguration, error) {
+// ParsePersistedPricingGroupConfiguration loads independently stored
+// pricing-group options. An absent routing configuration is initialized to the
+// built-in catalog; a non-empty value must use the current catalog/bindings
+// shape and is never interpreted as the retired per-group strategy map.
+func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
 	if err != nil {
 		return nil, err
@@ -280,22 +500,58 @@ func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupOrderJSON, ret
 	if err != nil {
 		return nil, err
 	}
-
-	snapshot := newPricingGroupSnapshot(ratioMap, order, retryPolicies)
-	normalizedPolicies := make(map[string]PricingGroupRetryPolicy, len(snapshot.groupRatios))
-	for group := range snapshot.groupRatios {
-		policy, exists := snapshot.retryPolicies[group]
-		if !exists {
-			policy = PricingGroupRetryPolicy{Mode: PricingGroupRetryModeActiveChannels}
-		}
-		normalizedPolicies[group] = policy
+	if len(retryPolicies) == 0 {
+		retryPolicies = defaultPricingGroupRetryPolicies(ratioMap)
+	} else if err := validatePricingGroupMapCoverage("重试策略", ratioMap, retryPolicies); err != nil {
+		return nil, err
 	}
 
+	var routingConfiguration PricingGroupRoutingConfiguration
+	trimmedRoutingJSON := strings.TrimSpace(routingStrategyJSON)
+	if trimmedRoutingJSON == "" || trimmedRoutingJSON == "{}" || trimmedRoutingJSON == "null" {
+		routingConfiguration = defaultPricingGroupRoutingConfiguration(ratioMap)
+	} else {
+		routingConfiguration, err = ParsePricingGroupRoutingConfiguration(routingStrategyJSON, ratioMap)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	snapshot := newPricingGroupSnapshot(
+		ratioMap,
+		order,
+		retryPolicies,
+		routingConfiguration.Strategies,
+		routingConfiguration.GroupBindings,
+	)
+
 	return &PricingGroupConfiguration{
-		GroupRatios:   snapshot.groupRatios,
-		GroupOrder:    snapshot.groupOrder,
-		RetryPolicies: normalizedPolicies,
+		GroupRatios:             snapshot.groupRatios,
+		GroupOrder:              snapshot.groupOrder,
+		RetryPolicies:           snapshot.retryPolicies,
+		RoutingStrategies:       snapshot.routingStrategies,
+		RoutingStrategyBindings: snapshot.routingStrategyBindings,
 	}, nil
+}
+
+func defaultPricingGroupRetryPolicies(ratios map[string]float64) map[string]PricingGroupRetryPolicy {
+	result := make(map[string]PricingGroupRetryPolicy, len(ratios))
+	for group := range ratios {
+		result[group] = PricingGroupRetryPolicy{Mode: PricingGroupRetryModeActiveChannels}
+	}
+	return result
+}
+
+func validatePricingGroupMapCoverage[T any](label string, ratios map[string]float64, values map[string]T) error {
+	if len(values) != len(ratios) {
+		return errors.New(label + "必须覆盖全部定价分组")
+	}
+	for group := range values {
+		if _, exists := ratios[group]; !exists {
+			return errors.New(label + "包含不存在的定价分组: " + group)
+		}
+	}
+	return nil
 }
 
 func parsePricingGroupRetryPolicies(jsonStr string) (map[string]PricingGroupRetryPolicy, error) {
@@ -325,6 +581,113 @@ func parsePricingGroupRetryPolicies(jsonStr string) (map[string]PricingGroupRetr
 	return policies, nil
 }
 
+// ParsePricingGroupRoutingConfiguration validates the independently managed
+// strategy catalog and its group references. Passing nil groupRatios validates
+// only the catalog shape; otherwise every pricing group must have exactly one
+// binding and every binding must reference an existing strategy.
+func ParsePricingGroupRoutingConfiguration(
+	jsonStr string,
+	groupRatios map[string]float64,
+) (PricingGroupRoutingConfiguration, error) {
+	type rawRoutingStrategy struct {
+		Name               *string  `json:"name"`
+		PriceWeight        *float64 `json:"price_weight"`
+		AvailabilityWeight *float64 `json:"availability_weight"`
+		LoadWeight         *float64 `json:"load_weight"`
+	}
+	type rawConfiguration struct {
+		Strategies    map[string]rawRoutingStrategy `json:"strategies"`
+		GroupBindings map[string]string             `json:"group_bindings"`
+	}
+
+	var raw rawConfiguration
+	trimmedJSON := strings.TrimSpace(jsonStr)
+	if trimmedJSON == "" || trimmedJSON == "{}" || trimmedJSON == "null" {
+		if groupRatios != nil {
+			return defaultPricingGroupRoutingConfiguration(groupRatios), nil
+		}
+		return PricingGroupRoutingConfiguration{}, errors.New("调度策略配置不能为空")
+	}
+	if err := common.UnmarshalJsonStr(jsonStr, &raw); err != nil {
+		return PricingGroupRoutingConfiguration{}, err
+	}
+	if raw.Strategies == nil || raw.GroupBindings == nil {
+		return PricingGroupRoutingConfiguration{}, errors.New("调度策略配置必须包含 strategies 和 group_bindings")
+	}
+	if len(raw.Strategies) == 0 {
+		return PricingGroupRoutingConfiguration{}, errors.New("至少需要一个调度策略")
+	}
+
+	strategies := make(map[string]PricingGroupRoutingStrategy, len(raw.Strategies))
+	strategyNames := make(map[string]string, len(raw.Strategies))
+	for strategyID, definition := range raw.Strategies {
+		if strategyID == "" || strategyID != strings.TrimSpace(strategyID) {
+			return PricingGroupRoutingConfiguration{}, errors.New("调度策略包含无效的策略 ID")
+		}
+		if definition.Name == nil || strings.TrimSpace(*definition.Name) == "" {
+			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 的名称不能为空")
+		}
+		name := strings.TrimSpace(*definition.Name)
+		if existingID, exists := strategyNames[name]; exists {
+			return PricingGroupRoutingConfiguration{}, errors.New("策略名称不能重复: " + existingID + " 和 " + strategyID)
+		}
+		strategyNames[name] = strategyID
+		if definition.PriceWeight == nil || definition.AvailabilityWeight == nil || definition.LoadWeight == nil {
+			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 必须同时设置价格、可用性和负载权重")
+		}
+		strategy := PricingGroupRoutingStrategy{
+			Strategy:           strategyID,
+			Name:               name,
+			PriceWeight:        *definition.PriceWeight,
+			AvailabilityWeight: *definition.AvailabilityWeight,
+			LoadWeight:         *definition.LoadWeight,
+		}
+		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 ||
+			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) ||
+			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) ||
+			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight-100) > 0.0001 {
+			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 的调度权重总和必须为 100")
+		}
+		strategies[strategyID] = strategy
+	}
+
+	bindings := make(map[string]string, len(raw.GroupBindings))
+	for group, strategyID := range raw.GroupBindings {
+		if group == "" || group != strings.TrimSpace(group) {
+			return PricingGroupRoutingConfiguration{}, errors.New("调度策略绑定包含无效的定价分组名")
+		}
+		strategyID = strings.TrimSpace(strategyID)
+		if _, exists := strategies[strategyID]; !exists {
+			return PricingGroupRoutingConfiguration{}, errors.New("定价分组 " + group + " 引用了不存在的策略: " + strategyID)
+		}
+		if groupRatios != nil {
+			if _, exists := groupRatios[group]; !exists {
+				return PricingGroupRoutingConfiguration{}, errors.New("调度策略绑定包含不存在的定价分组: " + group)
+			}
+		}
+		bindings[group] = strategyID
+	}
+	if groupRatios != nil && len(bindings) != len(groupRatios) {
+		return PricingGroupRoutingConfiguration{}, errors.New("调度策略绑定必须覆盖全部定价分组")
+	}
+	return PricingGroupRoutingConfiguration{Strategies: strategies, GroupBindings: bindings}, nil
+}
+
+func defaultPricingGroupRoutingStrategies() map[string]PricingGroupRoutingStrategy {
+	return DefaultPricingGroupRoutingStrategies()
+}
+
+func defaultPricingGroupRoutingConfiguration(ratios map[string]float64) PricingGroupRoutingConfiguration {
+	bindings := make(map[string]string, len(ratios))
+	for group := range ratios {
+		bindings[group] = PricingGroupRoutingStrategyBalanced
+	}
+	return PricingGroupRoutingConfiguration{
+		Strategies:    defaultPricingGroupRoutingStrategies(),
+		GroupBindings: bindings,
+	}
+}
+
 func GetPricingGroupOrder() []string {
 	return append([]string(nil), currentPricingGroupSnapshot().groupOrder...)
 }
@@ -349,6 +712,8 @@ func UpdatePricingGroupOrderByJSONString(jsonStr string) error {
 		snapshot.groupRatios,
 		groups,
 		snapshot.retryPolicies,
+		snapshot.routingStrategies,
+		snapshot.routingStrategyBindings,
 	))
 	return nil
 }
