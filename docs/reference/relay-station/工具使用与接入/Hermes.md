@@ -36,30 +36,9 @@ hermes model
 
 `hermes model` 是完整的服务商配置向导；会话内的 `/model` 只能切换已经配置好的服务商，不能新增端点或录入密钥。
 
-## 3. 手动配置
+## 3. 在 config.yaml 中直接保存密钥
 
-### 3.1 保存密钥
-
-Hermes 的密钥文件为：
-
-| 系统 | 密钥文件 |
-| --- | --- |
-| Windows | `%USERPROFILE%\.hermes\.env` |
-| macOS / Linux | `~/.hermes/.env` |
-
-添加：
-
-```dotenv
-ALLTOKEN_API_KEY=此处替换为 API Key
-```
-
-也可以使用命令写入 Hermes 的 `.env`：
-
-```bash
-hermes config set ALLTOKEN_API_KEY "此处替换为 API Key"
-```
-
-### 3.2 编辑 config.yaml
+将 API Key 直接写入用户级 `~/.hermes/config.yaml`（Windows 对应 `%USERPROFILE%\.hermes\config.yaml`）。关闭终端后，Hermes 仍会从该配置文件读取密钥。该文件包含明文密钥，请限制访问权限，不要提交到 Git。
 
 以下示例按 Chat Completions 编写。Responses 模型请把 `transport` 改为 `codex_responses`；Anthropic Messages 模型还要把 `api` 改为不带 `/v1` 的服务根地址。
 
@@ -67,7 +46,7 @@ hermes config set ALLTOKEN_API_KEY "此处替换为 API Key"
 providers:
   alltokenapi:
     api: https://alltokenapi.com/v1
-    key_env: ALLTOKEN_API_KEY
+    api_key: "此处替换为 API Key"
     transport: chat_completions
     default_model: 此处替换为准确的模型 ID
 
@@ -86,23 +65,12 @@ providers:
     discover_models: false
 ```
 
-如果希望在配置中直接引用环境变量，也支持：
-
-```yaml
-providers:
-  alltokenapi:
-    api_key: ${ALLTOKEN_API_KEY}
-```
-
-不过 `key_env: ALLTOKEN_API_KEY` 更适合当前 `providers` 格式。`${VAR}` 和 `${env:VAR}` 都能解析；变量缺失时 Hermes 会保留占位符并记录警告，而不是静默使用空值。
-
 ## 4. 验证配置
 
-先确认当前配置和密钥文件路径：
+先确认当前配置文件路径：
 
 ```bash
 hermes config path
-hermes config env-path
 ```
 
 再检查配置与最终模型路由：
@@ -148,9 +116,8 @@ hermes gateway restart
 
 ### 认证失败
 
-- 运行 `hermes config env-path`，确认密钥写入当前 Profile 的 `.env`。
-- 检查 `key_env` 拼写与 `.env` 中的变量名一致。
-- 如果 Hermes 以服务方式运行，重启 Gateway 以重新载入密钥环境。
+- 检查 `providers.alltokenapi.api_key` 是否已填写有效密钥。
+- 如果 Hermes 以服务方式运行，重启 Gateway 以重新载入配置文件。
 
 ### 普通对话成功但 Agent 工具调用失败
 

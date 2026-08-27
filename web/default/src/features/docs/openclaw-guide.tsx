@@ -30,7 +30,7 @@ import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const OPENCLAW_TOC: DocsTocItem[] = [
   { id: 'prepare', label: '1. 准备 API Key 和模型' },
-  { id: 'save-key', label: '2. 保存 API Key' },
+  { id: 'save-key', label: '2. 在 openclaw.json 中直接保存 API Key' },
   { id: 'config', label: '3. 编辑 openclaw.json' },
   { id: 'verify', label: '4. 验证配置' },
   { id: 'reload', label: '5. 配置何时生效' },
@@ -53,16 +53,13 @@ const DOCS_LINK_CLASS =
 
 export function DocsOpenClaw() {
   const baseUrl = useDocsBaseUrl()
-  const dotenvConfig = 'ALLTOKEN_API_KEY=此处替换为 API Key'
-  const shellApiKey = 'export ALLTOKEN_API_KEY="此处替换为 API Key"'
-  const powershellApiKey = '$env:ALLTOKEN_API_KEY = "此处替换为 API Key"'
   const openClawConfig = `{
   models: {
     mode: "merge",
     providers: {
       alltokenapi: {
         baseUrl: "${baseUrl}/v1",
-        apiKey: "\${ALLTOKEN_API_KEY}",
+        apiKey: "此处替换为 API Key",
         api: "openai-responses",
         models: [
           {
@@ -165,31 +162,15 @@ export function DocsOpenClaw() {
       </section>
 
       <section id='save-key' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>2. 保存 API Key</h2>
+        <h2 className='text-2xl font-semibold'>
+          2. 在 openclaw.json 中直接保存 API Key
+        </h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          OpenClaw 会读取父进程环境变量、当前目录的 .env，以及
-          ~/.openclaw/.env。Gateway 以服务方式运行时，使用全局 .env 最稳定。
+          OpenClaw 的主配置文件为 ~/.openclaw/openclaw.json（Windows 对应
+          %USERPROFILE%\.openclaw\openclaw.json），格式为 JSON5。将 API Key
+          直接写入该用户级配置文件，关闭终端后仍然有效。不要把含有明文密钥的项目配置提交到
+          Git。
         </p>
-        <p className='text-muted-foreground mt-5 leading-7'>
-          macOS / Linux 先创建配置目录：
-        </p>
-        <div className='mt-4'>
-          <CodeBlock code='mkdir -p ~/.openclaw' label='macOS / Linux' />
-        </div>
-        <div className='mt-5 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code='~/.openclaw/.env' label='macOS / Linux' />
-          <CodeBlock code='%USERPROFILE%\.openclaw\.env' label='Windows' />
-        </div>
-        <div className='mt-4'>
-          <CodeBlock code={dotenvConfig} label='.env' />
-        </div>
-        <p className='text-muted-foreground mt-8 leading-7'>
-          也可以临时设置环境变量：
-        </p>
-        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code={shellApiKey} label='macOS / Linux' />
-          <CodeBlock code={powershellApiKey} label='PowerShell' />
-        </div>
       </section>
 
       <section id='config' className='scroll-mt-28'>
@@ -211,11 +192,10 @@ export function DocsOpenClaw() {
         </p>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>JSON5 与环境变量</AlertTitle>
+          <AlertTitle>JSON5 与密钥</AlertTitle>
           <AlertDescription>
-            OpenClaw
-            允许注释、未加引号的键和尾随逗号。$&#123;ALLTOKEN_API_KEY&#125;
-            会在加载配置时解析；变量缺失或为空会直接导致配置加载失败。
+            OpenClaw 允许注释、未加引号的键和尾随逗号。请确认 apiKey
+            已替换为真实密钥，并限制配置文件的访问权限。
           </AlertDescription>
         </Alert>
       </section>
@@ -286,7 +266,9 @@ openclaw doctor`}
             </div>
             <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
               <li>检查 JSON5 层级和逗号。</li>
-              <li>检查 ALLTOKEN_API_KEY 是否可被 Gateway 进程读取。</li>
+              <li>
+                检查 models.providers.alltokenapi.apiKey 是否已填写有效密钥。
+              </li>
               <li>不要添加文档中不存在的字段；OpenClaw 会拒绝未知字段。</li>
             </ul>
           </div>

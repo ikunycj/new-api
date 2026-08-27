@@ -916,6 +916,40 @@ const newKeys = {
 }
 
 const retiredKeys = new Set([
+  // Superseded API-key setup guidance now stores credentials in each
+  // tool's persistent configuration file instead of a shell environment.
+  'Claude Code environment variables',
+  'Claude Code reads Anthropic-compatible settings from environment variables.',
+  'Confirm provider is custom, base_url ends in /v1, and api_key still contains an environment-variable reference.',
+  'Connect Claude Code through CC Switch or Anthropic-compatible environment variables.',
+  'Connect Claude Code with Anthropic-compatible environment variables.',
+  'Connect Gemini CLI through CC Switch or Gemini API key environment variables.',
+  'Custom endpoint support can vary by tool version, so check the current provider options if these environment variables are unavailable.',
+  'For authentication errors, confirm ANTHROPIC_AUTH_TOKEN is visible in the same terminal.',
+  'Hermes expands ${VAR} and ${env:VAR} references when it loads config.yaml. LLM_MODEL is no longer used for custom endpoints.',
+  'Hermes stores its main configuration at ~/.hermes/config.yaml. Store the API key in an environment variable, then merge the model block into the existing file.',
+  'If authentication fails, confirm ALLTOKEN_API_KEY is available to the process that starts Hermes.',
+  'If authentication fails, start OpenCode from a terminal that contains ALLTOKEN_API_KEY.',
+  'If startup fails, confirm the environment variable, model name, and base URL before retrying.',
+  'If the API key is empty, ensure the gateway service inherits ALLTOKEN_API_KEY.',
+  'If OpenClaw runs as a service, add the same variable to the service environment so the gateway process can read it.',
+  'On Windows, open a new terminal after setting the persistent user variable. On macOS and Linux, export applies only to the current shell unless you add it to your shell profile.',
+  'Open a new terminal after saving persistent variables; keep using the current terminal when you used export.',
+  'Restart the terminal after saving persistent environment variables.',
+  'Restart the terminal so persistent variables are available.',
+  'Set ALLTOKEN_API_KEY before starting OpenCode.',
+  'Set ALLTOKEN_API_KEY in the environment used to start the OpenClaw gateway.',
+  'Set the Anthropic authentication token, service root, and exact model ID in the terminal that starts Claude Code.',
+  'Set the API key environment variable',
+  'Set the API key, service root, and exact Gemini model ID before starting Gemini CLI.',
+  'Store the API key in a dedicated environment variable instead of writing the secret into config.toml.',
+  'Save config.toml, then restart the terminal and any running Codex app or IDE extension.',
+  // Retired Codex locale strings from the previous config.toml-only guide.
+  '2. Configure config.toml manually',
+  'Choose CC Switch one-click import or edit config.toml manually to connect Codex.',
+  'Codex reads user settings from ~/.codex/config.toml. On Windows, this is usually %USERPROFILE%\\.codex\\config.toml.',
+  'Edit config.toml',
+
   // Removed package comparison dashboard.
   'Channel hit rate',
   'Package',

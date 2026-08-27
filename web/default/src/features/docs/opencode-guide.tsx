@@ -31,12 +31,10 @@ import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 const OPENCODE_TOC: DocsTocItem[] = [
   { id: 'scope', label: '1. 选择配置范围' },
   { id: 'prepare', label: '2. 准备模型和接口类型' },
-  { id: 'connect', label: '3. 推荐：使用 /connect 保存密钥' },
-  { id: 'config', label: '4. 编辑 opencode.json' },
-  { id: 'environment', label: '5. 备选：使用环境变量，不保存到 auth.json' },
-  { id: 'verify', label: '6. 选择并验证模型' },
-  { id: 'troubleshooting', label: '7. 常见问题' },
-  { id: 'references', label: '8. 官方参考' },
+  { id: 'config', label: '3. 在 opencode.json 中直接保存密钥' },
+  { id: 'verify', label: '4. 选择并验证模型' },
+  { id: 'troubleshooting', label: '5. 常见问题' },
+  { id: 'references', label: '6. 官方参考' },
 ]
 
 const OPENCODE_REFERENCES = [
@@ -59,7 +57,8 @@ export function DocsOpenCode() {
       "npm": "@ai-sdk/openai-compatible",
       "name": "All Token API",
       "options": {
-        "baseURL": "${baseUrl}/v1"
+        "baseURL": "${baseUrl}/v1",
+        "apiKey": "此处替换为 API Key"
       },
       "models": {
         "此处替换为准确的模型 ID": {
@@ -81,9 +80,9 @@ export function DocsOpenCode() {
         <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
         <AlertTitle>配置核验</AlertTitle>
         <AlertDescription>
-          OpenCode 官方推荐用 /connect 保存凭据，再用 opencode.json
-          定义自定义服务商。凭据默认存放在
-          ~/.local/share/opencode/auth.json，无需把 API Key 写入项目配置。
+          本文主流程将 API Key 直接写入用户级
+          opencode.json，因此关闭终端后仍然有效。也可以使用 OpenCode 的 /connect
+          保存凭据，但不要同时依赖两种来源。
         </AlertDescription>
       </Alert>
 
@@ -191,33 +190,14 @@ export function DocsOpenCode() {
         </p>
       </section>
 
-      <section id='connect' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          3. 推荐：使用 /connect 保存密钥
-        </h2>
-        <GuideSteps
-          items={[
-            { content: '启动 OpenCode。' },
-            { content: '输入 /connect。' },
-            { content: '滚动到并选择 Other。' },
-            { content: 'Provider ID 输入 alltokenapi。' },
-            { content: '粘贴 API Key 并保存。' },
-          ]}
-        />
-        <Alert className='mt-6'>
-          <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>Provider ID 必须一致</AlertTitle>
-          <AlertDescription>
-            /connect 中输入的 alltokenapi，必须与后续配置中的
-            provider.alltokenapi 完全一致。
-          </AlertDescription>
-        </Alert>
-      </section>
-
       <section id='config' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>4. 编辑 opencode.json</h2>
+        <h2 className='text-2xl font-semibold'>
+          3. 在 opencode.json 中直接保存密钥
+        </h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          将以下配置合并到全局或项目配置文件：
+          在全局配置文件 ~/.config/opencode/opencode.json（Windows
+          对应用户配置目录）中合并以下内容。不要把含有明文密钥的项目级
+          opencode.json 提交到 Git。
         </p>
         <div className='mt-5'>
           <CodeBlock code={providerConfig} label='opencode.json' />
@@ -236,52 +216,11 @@ export function DocsOpenCode() {
         </div>
       </section>
 
-      <section id='environment' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>
-          5. 备选：使用环境变量，不保存到 auth.json
-        </h2>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          如果不希望将凭据保存到 auth.json，可以先在启动 OpenCode
-          的终端中设置密钥：
-        </p>
-        <div className='mt-5 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock
-            code='export ALLTOKEN_API_KEY="此处替换为 API Key"'
-            label='macOS / Linux'
-          />
-          <CodeBlock
-            code='$env:ALLTOKEN_API_KEY = "此处替换为 API Key"'
-            label='PowerShell'
-          />
-        </div>
-        <p className='text-muted-foreground mt-5 leading-7'>
-          然后在 provider 的 options 中增加 apiKey：
-        </p>
-        <div className='mt-4'>
-          <CodeBlock
-            code={`{
-  "baseURL": "${baseUrl}/v1",
-  "apiKey": "{env:ALLTOKEN_API_KEY}"
-}`}
-            label='options'
-          />
-        </div>
-        <p className='text-muted-foreground mt-4 leading-7'>
-          此方式不需要 /connect。OpenCode 在环境变量缺失时会把
-          &#123;env:ALLTOKEN_API_KEY&#125;
-          替换为空字符串，因此认证失败时应先检查启动进程的环境。
-        </p>
-      </section>
-
       <section id='verify' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>6. 选择并验证模型</h2>
+        <h2 className='text-2xl font-semibold'>4. 选择并验证模型</h2>
         <GuideSteps
           items={[
             { content: '启动 opencode。' },
-            {
-              content:
-                '如果使用 /connect，运行 opencode auth list，确认凭据已保存。',
-            },
             { content: '在 TUI 中输入 /models，选择 alltokenapi/模型ID。' },
             { content: '发送一个简短提示，或执行一次非交互测试。' },
             {
@@ -297,14 +236,13 @@ export function DocsOpenCode() {
             },
           ]}
         />
-        <div className='mt-5 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code='opencode auth list' label='检查凭据' />
+        <div className='mt-5'>
           <CodeBlock code='opencode run "只回复 OK"' label='非交互测试' />
         </div>
       </section>
 
       <section id='troubleshooting' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>7. 常见问题</h2>
+        <h2 className='text-2xl font-semibold'>5. 常见问题</h2>
         <div className='mt-5 space-y-7'>
           <div>
             <h3 className='text-lg font-semibold'>
@@ -313,7 +251,7 @@ export function DocsOpenCode() {
             <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
               <li>检查 opencode.json 的生效范围和 JSON/JSONC 语法。</li>
               <li>
-                Provider ID 必须在 /connect 和 provider 配置中都写成
+                Provider ID 必须在 model、small_model 和 provider 配置中都写成
                 alltokenapi。
               </li>
               <li>模型必须定义在 provider.alltokenapi.models 中。</li>
@@ -322,13 +260,12 @@ export function DocsOpenCode() {
           <div>
             <h3 className='text-lg font-semibold'>认证失败</h3>
             <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
-              <li>/connect 方式：运行 opencode auth list 检查凭据。</li>
               <li>
-                环境变量方式：确认从包含 ALLTOKEN_API_KEY 的终端启动 OpenCode。
+                确认 provider.alltokenapi.options.apiKey 已替换为有效密钥。
               </li>
               <li>
-                不要同时保留错误的 auth.json
-                凭据和正确的环境变量而不确认实际优先级；排障时只保留一种来源。
+                如果曾使用 /connect，不要同时保留错误的 auth.json
+                凭据；排障时只保留一种来源。
               </li>
             </ul>
           </div>
@@ -367,7 +304,7 @@ export function DocsOpenCode() {
       </section>
 
       <section id='references' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>8. 官方参考</h2>
+        <h2 className='text-2xl font-semibold'>6. 官方参考</h2>
         <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
           {OPENCODE_REFERENCES.map(([label, href]) => (
             <li key={href}>

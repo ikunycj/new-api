@@ -29,6 +29,7 @@ import { GuideSteps } from './components/guide-steps'
 import { useDocsBaseUrl } from './hooks/use-docs-base-url'
 
 const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
+const CODEX_AUTH_REFERENCE_URL = 'https://developers.openai.com/codex/auth'
 const CODEX_CONFIG_REFERENCE_URL =
   'https://developers.openai.com/codex/config-reference'
 const CODEX_LINK_CLASS =
@@ -36,41 +37,46 @@ const CODEX_LINK_CLASS =
 
 const CODEX_TOC: DocsTocItem[] = [
   { id: 'cc-switch-import', label: '1. 使用 CC Switch 一键导入' },
-  { id: 'manual-config', label: '2. 手动配置 config.toml' },
+  { id: 'manual-config', label: '2. 编辑 auth.json 和 config.toml' },
 ]
 
 const CODEX_VERIFY_STEPS = [
   {
     content:
-      '保存 config.toml，然后重启终端以及正在运行的 Codex 应用或 IDE 扩展。',
+      '保存 auth.json 和 config.toml，然后重启正在运行的 Codex 应用或 IDE 扩展。',
   },
-  { content: '在新的终端中运行 codex，发起一个测试任务。' },
-  { content: '如启动失败，请检查环境变量、模型名称和 Base URL 后重试。' },
+  {
+    content:
+      '在任意终端中运行 codex，发起一个测试任务；认证信息由 auth.json 提供。',
+  },
+  {
+    content:
+      '如启动失败，运行 codex doctor 检查认证文件是否被读取，再检查模型名称和 Base URL。',
+  },
 ]
 
 export function DocsCodex() {
   const baseUrl = useDocsBaseUrl()
-  const codexConfig = `model = "gpt-5.6-sol"
+  const authJson = `{
+  "OPENAI_API_KEY": "sk-your-api-key"
+}`
+  const codexConfig = `cli_auth_credentials_store = "file"
+model = "gpt-5.6-sol"
 model_provider = "OpenAI"
 
 [model_providers.OpenAI]
 name = "All Token API"
 base_url = "${baseUrl}/v1"
-env_key = "ALLTOKEN_API_KEY"
+requires_openai_auth = true
 wire_api = "responses"`
-  const powershellApiKey = `[Environment]::SetEnvironmentVariable(
-  "ALLTOKEN_API_KEY",
-  "sk-your-api-key",
-  "User"
-)`
-  const shellApiKey = `export ALLTOKEN_API_KEY="sk-your-api-key"`
+  const windowsAuthPath = '%USERPROFILE%\\.codex\\auth.json'
   const windowsConfigPath = '%USERPROFILE%\\.codex\\config.toml'
 
   return (
     <DocsShell
       pageId='codex'
       title='Codex'
-      description='可选择 CC Switch 一键导入，或手动修改 config.toml 接入 Codex。'
+      description='可选择 CC Switch 一键导入，或手动编辑 auth.json 和 config.toml 接入 Codex。'
       toc={CODEX_TOC}
     >
       <section id='cc-switch-import' className='scroll-mt-28'>
@@ -143,33 +149,76 @@ wire_api = "responses"`
       </section>
 
       <section id='manual-config' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>2. 手动配置 config.toml</h2>
+        <h2 className='text-2xl font-semibold'>
+          2. 编辑 auth.json 和 config.toml
+        </h2>
         <p className='text-muted-foreground mt-3 leading-7'>
-          Codex 从用户目录中的配置文件读取设置。不同系统的配置文件路径如下：
+          本流程将 Codex 的认证凭据保存到用户目录中的 auth.json，并从
+          config.toml 读取服务商、模型和接口设置。不同系统的文件路径如下：
         </p>
         <div className='mt-4 grid gap-4 lg:grid-cols-2'>
+          <CodeBlock code={windowsAuthPath} label='Windows auth.json' />
           <CodeBlock code={windowsConfigPath} label='Windows' />
+          <CodeBlock
+            code='~/.codex/auth.json'
+            label='macOS / Linux auth.json'
+          />
           <CodeBlock code='~/.codex/config.toml' label='macOS / Linux' />
         </div>
 
-        <h3 className='mt-8 text-lg font-semibold'>设置 API Key 环境变量</h3>
+        <h3 className='mt-8 text-lg font-semibold'>编辑 auth.json</h3>
         <p className='text-muted-foreground mt-2 leading-7'>
-          将 API Key 保存到独立的环境变量中，不要把密钥直接写入 config.toml。
+          在用户级 auth.json 中写入 API Key。默认路径为
+          ~/.codex/auth.json；Windows 使用
+          %USERPROFILE%\.codex\auth.json。如果文件中已有其他认证字段，只更新
+          OPENAI_API_KEY，不要覆盖整个文件。
         </p>
-        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code={powershellApiKey} label='PowerShell' />
-          <CodeBlock code={shellApiKey} label='macOS / Linux' />
+        <div className='mt-4'>
+          <CodeBlock code={authJson} label='auth.json' />
         </div>
+        <p className='text-muted-foreground mt-2 leading-7'>
+          保存后，关闭终端也不会清除该配置。文件模式下的 auth.json
+          包含明文密钥，请仅保存在自己的设备上，不要提交到 Git
+          或发送给他人。密钥只保存在 auth.json；config.toml 仅用于服务商、模型和
+          接口设置，不要依赖当前终端的临时设置。
+        </p>
 
         <h3 className='mt-8 text-lg font-semibold'>编辑 config.toml</h3>
         <p className='text-muted-foreground mt-2 leading-7'>
-          保留现有 Codex
-          配置，并合并下面的服务商配置块。需要时，将示例模型替换为当前 API Key
+          保留现有 Codex 配置，并合并下面的服务商配置块；已有
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            cli_auth_credentials_store
+          </code>
+          时，将其改为
+          <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+            file
+          </code>
+          ，不要重复添加。需要时，将示例模型替换为 auth.json 中 API Key
           可用的模型。
         </p>
         <div className='mt-4'>
           <CodeBlock code={codexConfig} label='config.toml' />
         </div>
+
+        <Alert className='mt-6'>
+          <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
+          <AlertTitle>为什么对话历史丢失</AlertTitle>
+          <AlertDescription>
+            如果当前 config.toml 中的
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              model_provider
+            </code>
+            与创建对话时使用的值不一致，原有对话历史可能不会显示。这通常不代表记录已被删除；将
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              model_provider
+            </code>
+            改回创建对话时的值（包括大小写），重启 Codex 后使用
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              codex resume
+            </code>
+            查找历史。
+          </AlertDescription>
+        </Alert>
 
         <h3 className='mt-8 text-lg font-semibold'>重启并验证</h3>
         <GuideSteps items={CODEX_VERIFY_STEPS} />
@@ -189,7 +238,16 @@ wire_api = "responses"`
             <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
               /v1
             </code>
-            结尾。配置字段的完整说明请参考{' '}
+            结尾。{' '}
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              cli_auth_credentials_store = &quot;file&quot;
+            </code>{' '}
+            会让 Codex 使用 auth.json 保存和读取凭据；{' '}
+            <code className='bg-muted mx-1 rounded px-1.5 py-0.5 text-sm'>
+              requires_openai_auth = true
+            </code>{' '}
+            会让自定义服务商使用该凭据；config.toml
+            只保留服务商、模型和接口设置。 配置字段的完整说明请参考{' '}
             <a
               href={CODEX_CONFIG_REFERENCE_URL}
               target='_blank'
@@ -197,6 +255,15 @@ wire_api = "responses"`
               className={CODEX_LINK_CLASS}
             >
               Codex 配置参考
+            </a>
+            ，认证文件说明请参考{' '}
+            <a
+              href={CODEX_AUTH_REFERENCE_URL}
+              target='_blank'
+              rel='noopener noreferrer'
+              className={CODEX_LINK_CLASS}
+            >
+              Codex 认证参考
             </a>
             。
           </AlertDescription>

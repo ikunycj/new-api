@@ -1,6 +1,6 @@
 # Claude Code
 
-可通过 CC Switch 一键导入，或使用 Claude Code 官方支持的 LLM Gateway 环境变量手动接入。
+可通过 CC Switch 一键导入，或使用 Claude Code 用户级 `settings.json` 手动接入。
 
 > [!info] 配置核验
 > 本文根据 Claude Code 官方的 LLM Gateway 与模型配置文档核验。All Token API 使用 Bearer Token，因此手动配置使用 `ANTHROPIC_AUTH_TOKEN`。
@@ -27,7 +27,7 @@ claude update
 
 ## 3. 手动配置
 
-### 3.1 推荐：写入用户 settings.json
+### 3.1 在用户 settings.json 中直接保存密钥
 
 用户配置对所有项目生效，也能被 Claude Code 的后台 Agent 读取。
 
@@ -48,45 +48,27 @@ claude update
 }
 ```
 
+这里的 `env` 是 Claude Code 配置文件中的字段；保存后由 Claude Code 在新会话中加载，不需要再在终端里手动设置这些配置项。
+
 > [!warning] 不要提交密钥
 > 不要把密钥写入项目共享的 `.claude/settings.json`。如需项目级配置，应使用已加入 `.gitignore` 的 `.claude/settings.local.json`。
 
-### 3.2 临时测试：设置当前终端环境变量
-
-macOS / Linux：
-
-```bash
-export ANTHROPIC_AUTH_TOKEN="此处替换为 API Key"
-export ANTHROPIC_BASE_URL="https://alltokenapi.com"
-export ANTHROPIC_MODEL="此处替换为准确的模型 ID"
-```
-
-PowerShell：
-
-```powershell
-$env:ANTHROPIC_AUTH_TOKEN = "此处替换为 API Key"
-$env:ANTHROPIC_BASE_URL = "https://alltokenapi.com"
-$env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"
-```
-
-这些变量只对当前终端及其启动的进程生效，适合先验证再写入配置文件。
-
-### 3.3 为什么 Base URL 不带 /v1
+### 3.2 为什么 Base URL 不带 /v1
 
 Claude Code 会在 `ANTHROPIC_BASE_URL` 后请求 `/v1/messages`。如果配置为 `https://alltokenapi.com/v1`，最终可能形成重复路径并返回 404。
 
-Claude Code 的凭据变量与请求头对应关系如下：
+Claude Code 配置文件中的凭据字段与请求头对应关系如下：
 
-| 变量 | 请求头 | 适用场景 |
+| 配置字段 | 请求头 | 适用场景 |
 | --- | --- | --- |
 | `ANTHROPIC_AUTH_TOKEN` | `Authorization: Bearer ...` | All Token API、Bearer Token 网关 |
 | `ANTHROPIC_API_KEY` | `x-api-key: ...` | 明确要求 Anthropic `x-api-key` 的网关 |
 
-不要同时设置两个变量，以免出现认证来源冲突。
+不要同时配置两个凭据字段，以免出现认证来源冲突。
 
 ## 4. 启动并验证
 
-1. 使用与配置相同的终端启动 `claude`。
+1. 启动 `claude`；用户级配置会对新会话生效，不依赖特定终端。
 2. 如果出现登录页，说明网关凭据没有被读取；不要选择 Claude 订阅登录，先检查配置文件路径和 JSON 格式。
 3. 进入会话后运行 `/status`，确认：
    - `Anthropic base URL` 为 `https://alltokenapi.com`；
@@ -106,7 +88,6 @@ claude --model "此处替换为准确的模型 ID"
 
 - 确认配置写在 `~/.claude/settings.json`，而不是其他同名文件。
 - 确认 `env` 位于 JSON 顶层。
-- 如果只使用了 Shell 环境变量，请从同一个终端启动 Claude Code。
 - 运行 `/logout` 可清除与网关凭据冲突的历史登录状态。
 
 ### 401、Unauthorized 或 Incorrect API key

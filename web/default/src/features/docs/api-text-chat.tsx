@@ -72,8 +72,12 @@ export function DocsApiTextChat() {
   -H "Authorization: Bearer sk-your-api-key" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"your-model-id","prompt":"Once upon a time","max_tokens":64}'`
-  const claudeCodeConfig = `ANTHROPIC_BASE_URL=${baseUrl}
-ANTHROPIC_AUTH_TOKEN=sk-your-api-key`
+  const claudeCodeConfig = `{
+  "env": {
+    "ANTHROPIC_BASE_URL": "${baseUrl}",
+    "ANTHROPIC_AUTH_TOKEN": "sk-your-api-key"
+  }
+}`
 
   return (
     <DocsShell
@@ -168,12 +172,17 @@ ANTHROPIC_AUTH_TOKEN=sk-your-api-key`
           <CodeBlock code={claudeRequest} label='cURL' />
         </div>
         <div className='mt-5'>
-          <CodeBlock code={claudeCodeConfig} label='Claude Code 环境变量' />
+          <CodeBlock
+            code={claudeCodeConfig}
+            label='Claude Code settings.json'
+          />
         </div>
         <p className='text-muted-foreground mt-4 leading-7'>
-          Claude Code 使用服务根地址，不要把 <code>/v1</code> 拼到{' '}
-          <code>ANTHROPIC_BASE_URL</code> 后面；All Token API 的 Claude Code
-          配置使用 <code>ANTHROPIC_AUTH_TOKEN</code>，对应 Bearer Token。
+          将该片段合并到用户级 <code>~/.claude/settings.json</code>
+          （Windows 对应用户配置目录）。Claude Code 使用服务根地址，不要把{' '}
+          <code>/v1</code> 拼到 <code>ANTHROPIC_BASE_URL</code> 后面；All Token
+          API 的 Claude Code 配置使用 <code>ANTHROPIC_AUTH_TOKEN</code>，对应
+          Bearer Token。
         </p>
       </section>
 
