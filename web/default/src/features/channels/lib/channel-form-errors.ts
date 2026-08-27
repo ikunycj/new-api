@@ -28,6 +28,7 @@ const ADVANCED_SETTINGS_FIELDS = new Set<FieldPath<ChannelFormValues>>([
   'weight',
   'test_model',
   'auto_ban',
+  'auto_probe_enabled',
   'probe_interval_seconds',
   'auto_disabled_probe_interval_seconds',
   'probe_failure_auto_ban',

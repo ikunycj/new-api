@@ -49,12 +49,15 @@ func TestChannelUpdateSelectedFieldsPersistsExplicitZeroValues(t *testing.T) {
 
 	channel.ProbeIntervalSeconds = 0
 	channel.AutoDisabledProbeIntervalSeconds = 0
+	autoProbeEnabled := false
+	channel.AutoProbeEnabled = &autoProbeEnabled
 	channel.PriceMultiplier = 0
 	channel.PriceMultiplierMode = ""
 	channel.UpstreamMaxRetries = nil
 	require.NoError(t, channel.Update(
 		"probe_interval_seconds",
 		"auto_disabled_probe_interval_seconds",
+		"auto_probe_enabled",
 		"price_multiplier",
 		"price_multiplier_mode",
 		"upstream_max_retries",
@@ -64,6 +67,8 @@ func TestChannelUpdateSelectedFieldsPersistsExplicitZeroValues(t *testing.T) {
 	require.NoError(t, DB.First(&stored, channel.Id).Error)
 	assert.Zero(t, stored.ProbeIntervalSeconds)
 	assert.Zero(t, stored.AutoDisabledProbeIntervalSeconds)
+	require.NotNil(t, stored.AutoProbeEnabled)
+	assert.False(t, *stored.AutoProbeEnabled)
 	assert.Zero(t, stored.PriceMultiplier)
 	assert.Empty(t, stored.PriceMultiplierMode)
 	assert.Nil(t, stored.UpstreamMaxRetries)

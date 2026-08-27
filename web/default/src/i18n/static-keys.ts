@@ -226,6 +226,9 @@ export const STATIC_I18N_KEYS = [
   // Channel Affinity section
   'Channel Affinity',
 
+  // Channel routing form descriptions
+  'Automatically probe this channel in the background',
+
   // Models constants
   'Exact Match',
   'Prefix Match',

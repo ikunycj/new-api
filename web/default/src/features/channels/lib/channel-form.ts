@@ -147,6 +147,7 @@ export const channelFormSchema = z
     weight: z.number().optional(),
     test_model: z.string().trim().min(1, ERROR_MESSAGES.REQUIRED_TEST_MODEL),
     auto_ban: z.number().optional(),
+    auto_probe_enabled: z.boolean(),
     probe_interval_seconds: z.number().int().min(0).max(604800),
     auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
     probe_failure_auto_ban: z.boolean(),
@@ -319,6 +320,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   weight: 0,
   test_model: '',
   auto_ban: 0,
+  auto_probe_enabled: false,
   probe_interval_seconds: 120,
   auto_disabled_probe_interval_seconds: 10,
   probe_failure_auto_ban: true,
@@ -469,6 +471,7 @@ export function transformChannelToFormDefaults(
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 0,
+    auto_probe_enabled: channel.auto_probe_enabled ?? false,
     probe_interval_seconds:
       channel.probe_interval_seconds ??
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
@@ -698,6 +701,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     weight: formData.weight || null,
     test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 0,
+    auto_probe_enabled: formData.auto_probe_enabled,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,
@@ -757,6 +761,7 @@ export function transformFormDataToUpdatePayload(
     weight: formData.weight ?? 0,
     test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 0,
+    auto_probe_enabled: formData.auto_probe_enabled,
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,

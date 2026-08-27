@@ -58,6 +58,7 @@ export const channelSchema = z.object({
   model_mapping: z.string().nullish(),
   status_code_mapping: z.string().nullish(),
   auto_ban: z.number().nullish(),
+  auto_probe_enabled: z.boolean().nullish(),
   probe_interval_seconds: z.number().default(120),
   auto_disabled_probe_interval_seconds: z.number().default(10),
   probe_failure_auto_ban: z.boolean().nullish(),
@@ -417,6 +418,7 @@ export interface ChannelFormData {
   weight?: number
   test_model?: string
   auto_ban?: number
+  auto_probe_enabled?: boolean
   probe_interval_seconds?: number
   auto_disabled_probe_interval_seconds?: number
   probe_failure_auto_ban?: boolean

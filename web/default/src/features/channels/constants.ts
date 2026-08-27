@@ -359,6 +359,7 @@ export const FIELD_DESCRIPTIONS = {
   WEIGHT: 'Used for load balancing. Higher weight = more requests',
   TEST_MODEL: 'Model to use when testing channel connectivity',
   AUTO_BAN: 'Automatically disable channel on repeated failures',
+  AUTO_PROBE_ENABLED: 'Automatically probe this channel in the background',
   PROBE_INTERVAL: 'Interval for probing enabled channels, in seconds',
   AUTO_DISABLED_PROBE_INTERVAL:
     'Interval for probing auto-disabled channels, in seconds',

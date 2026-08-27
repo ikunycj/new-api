@@ -98,6 +98,8 @@ const newKeys = {
     'Across selected groups': 'Across selected groups',
     'Previous-day probe success rate': 'Previous-day probe success rate',
     'Automatic probe': 'Automatic probe',
+    'Automatically probe this channel in the background':
+      'Automatically probe this channel in the background',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.',
     'Pricing groups that can access channels with this tag':
@@ -225,6 +227,8 @@ const newKeys = {
     'Across selected groups': '跨所选分组',
     'Previous-day probe success rate': '昨日成功率',
     'Automatic probe': '自动探测',
+    'Automatically probe this channel in the background':
+      '在后台自动探测此渠道',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       '仍可编辑模型、分组、权重和路由设置等非敏感操作字段。',
     'Pricing groups that can access channels with this tag':
@@ -356,6 +360,8 @@ const newKeys = {
     'Previous-day probe success rate':
       'Taux de réussite des sondes du jour précédent',
     'Automatic probe': 'Sonde automatique',
+    'Automatically probe this channel in the background':
+      'Sonder automatiquement ce canal en arrière-plan',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       'Vous pouvez toujours modifier les modèles, groupes, poids et paramètres de routage.',
     'Pricing groups that can access channels with this tag':
@@ -484,6 +490,8 @@ const newKeys = {
     'Across selected groups': '選択したグループ全体',
     'Previous-day probe success rate': '前日のプローブ成功率',
     'Automatic probe': '自動プローブ',
+    'Automatically probe this channel in the background':
+      'このチャネルをバックグラウンドで自動的にプローブする',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       'モデル、グループ、重み、ルーティング設定などの非機密項目は編集できます。',
     'Pricing groups that can access channels with this tag':
@@ -614,6 +622,8 @@ const newKeys = {
     'Across selected groups': 'Во всех выбранных группах',
     'Previous-day probe success rate': 'Успешность проверок за предыдущий день',
     'Automatic probe': 'Автоматическая проверка',
+    'Automatically probe this channel in the background':
+      'Автоматически проверять этот канал в фоновом режиме',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       'Можно редактировать модели, группы, веса и параметры маршрутизации.',
     'Pricing groups that can access channels with this tag':
@@ -743,6 +753,8 @@ const newKeys = {
     'Across selected groups': 'Trên các nhóm đã chọn',
     'Previous-day probe success rate': 'Tỷ lệ kiểm tra thành công ngày trước',
     'Automatic probe': 'Kiểm tra tự động',
+    'Automatically probe this channel in the background':
+      'Tự động dò kênh này trong nền',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       'Bạn vẫn có thể sửa mô hình, nhóm, trọng số và cài đặt định tuyến.',
     'Pricing groups that can access channels with this tag':
@@ -866,6 +878,8 @@ const newKeys = {
     'Across selected groups': '跨所選分組',
     'Previous-day probe success rate': '前一自然日探測成功率',
     'Automatic probe': '自動探測',
+    'Automatically probe this channel in the background':
+      '在背景自動探測此渠道',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
       '仍可編輯模型、分組、權重與路由設定等非敏感操作欄位。',
     'Pricing groups that can access channels with this tag':

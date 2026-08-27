@@ -333,6 +333,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.weight ||
     (values.auto_ban ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    values.auto_probe_enabled === true ||
     values.probe_interval_seconds !==
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
     values.auto_disabled_probe_interval_seconds !==
@@ -744,6 +745,7 @@ export function ChannelMutateDrawer({
   const currentWeight = form.watch('weight')
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
+  const currentAutoProbeEnabled = form.watch('auto_probe_enabled')
   const currentProbeIntervalSeconds = form.watch('probe_interval_seconds')
   const currentAutoDisabledProbeIntervalSeconds = form.watch(
     'auto_disabled_probe_interval_seconds'
@@ -1020,6 +1022,7 @@ export function ChannelMutateDrawer({
     currentTestModel?.trim() ||
     (currentAutoBan ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    currentAutoProbeEnabled === true ||
     currentProbeIntervalSeconds !==
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
     currentAutoDisabledProbeIntervalSeconds !==
@@ -3678,6 +3681,30 @@ export function ChannelMutateDrawer({
 
                             <FormField
                               control={form.control}
+                              name='auto_probe_enabled'
+                              render={({ field }) => (
+                                <FormItem className='flex items-start justify-between gap-4'>
+                                  <div className='space-y-0.5'>
+                                    <FormLabel>
+                                      {t('Automatic probe')}
+                                    </FormLabel>
+                                    <FormDescription>
+                                      {t(FIELD_DESCRIPTIONS.AUTO_PROBE_ENABLED)}
+                                    </FormDescription>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      className='shrink-0'
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
                               name='test_model'
                               render={({ field }) => (
                                 <FormItem>
@@ -3735,6 +3762,7 @@ export function ChannelMutateDrawer({
                                         max={604800}
                                         step={1}
                                         {...field}
+                                        disabled={!currentAutoProbeEnabled}
                                         onChange={(event) =>
                                           field.onChange(
                                             Number(event.target.value)
@@ -3764,6 +3792,7 @@ export function ChannelMutateDrawer({
                                         max={604800}
                                         step={1}
                                         {...field}
+                                        disabled={!currentAutoProbeEnabled}
                                         onChange={(event) =>
                                           field.onChange(
                                             Number(event.target.value)
@@ -3941,6 +3970,7 @@ export function ChannelMutateDrawer({
                                     <FormControl>
                                       <Switch
                                         className='shrink-0'
+                                        disabled={!currentAutoProbeEnabled}
                                         checked={field.value}
                                         onCheckedChange={field.onChange}
                                       />
@@ -3966,6 +3996,7 @@ export function ChannelMutateDrawer({
                                     <FormControl>
                                       <Switch
                                         className='shrink-0'
+                                        disabled={!currentAutoProbeEnabled}
                                         checked={field.value}
                                         onCheckedChange={field.onChange}
                                       />

@@ -93,6 +93,7 @@ describe('channel form API mapping', () => {
     assert.deepEqual(
       {
         auto_ban: CHANNEL_FORM_DEFAULT_VALUES.auto_ban,
+        auto_probe_enabled: CHANNEL_FORM_DEFAULT_VALUES.auto_probe_enabled,
         probe_interval_seconds:
           CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
         auto_disabled_probe_interval_seconds:
@@ -103,6 +104,7 @@ describe('channel form API mapping', () => {
       },
       {
         auto_ban: 0,
+        auto_probe_enabled: false,
         probe_interval_seconds: 120,
         auto_disabled_probe_interval_seconds: 10,
         upstream_max_retries: 1,
@@ -121,6 +123,7 @@ describe('channel form API mapping', () => {
     )
 
     assert.equal(defaults.auto_ban, 0)
+    assert.equal(defaults.auto_probe_enabled, false)
     assert.equal(defaults.probe_interval_seconds, 120)
     assert.equal(defaults.auto_disabled_probe_interval_seconds, 10)
     assert.equal(defaults.upstream_max_retries, 1)
@@ -133,6 +136,17 @@ describe('channel form API mapping', () => {
 
     assert.equal(parsed.key, undefined)
     assert.equal(transformChannelToFormDefaults(parsed).key, '')
+  })
+
+  test('preserves an explicitly enabled automatic probe setting', () => {
+    const defaults = transformChannelToFormDefaults(
+      channel({ auto_probe_enabled: true })
+    )
+    const parsed = channelFormSchema.parse(defaults)
+    const payload = transformFormDataToUpdatePayload(parsed, 42)
+
+    assert.equal(defaults.auto_probe_enabled, true)
+    assert.equal(payload.auto_probe_enabled, true)
   })
 
   test('requires a configured test model', () => {

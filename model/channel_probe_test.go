@@ -164,8 +164,13 @@ func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T)
 
 	falseValue := false
 	trueValue := true
+	assert.False(t, channel.ShouldAutoProbe())
+	channel.AutoProbeEnabled = &trueValue
+	assert.True(t, channel.ShouldAutoProbe())
+	channel.AutoProbeEnabled = &falseValue
 	channel.ProbeFailureAutoBan = &falseValue
 	channel.ProbeSuccessAutoEnable = &trueValue
+	assert.False(t, channel.ShouldAutoProbe())
 	assert.False(t, channel.ShouldProbeFailureAutoBan())
 	assert.True(t, channel.ShouldProbeSuccessAutoEnable())
 }

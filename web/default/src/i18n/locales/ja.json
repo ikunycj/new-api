@@ -6110,6 +6110,7 @@
     "Daily Cost / Monthly Cost": "日次コスト / 月次コスト",
     "Daily Usage": "日次使用量",
     "Monthly Usage": "月次使用量",
-    "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量"
+    "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量",
+    "Automatically probe this channel in the background": "このチャネルをバックグラウンドで自動的にプローブする"
   }
 }

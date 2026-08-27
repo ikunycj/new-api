@@ -137,6 +137,7 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 
 func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 	columns := channelUpdateColumns(map[string]any{
+		"auto_probe_enabled":     false,
 		"probe_interval_seconds": 0,
 		"price_multiplier":       0,
 		"price_multiplier_mode":  "",
@@ -147,6 +148,7 @@ func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 	})
 
 	assert.ElementsMatch(t, []string{
+		"auto_probe_enabled",
 		"probe_interval_seconds",
 		"price_multiplier",
 		"price_multiplier_mode",

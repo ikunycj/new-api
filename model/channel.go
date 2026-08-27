@@ -46,6 +46,7 @@ type Channel struct {
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping                *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	AutoBan                          *int    `json:"auto_ban" gorm:"default:0"`
+	AutoProbeEnabled                 *bool   `json:"auto_probe_enabled"`
 	ProbeIntervalSeconds             int     `json:"probe_interval_seconds"`
 	AutoDisabledProbeIntervalSeconds int     `json:"auto_disabled_probe_interval_seconds"`
 	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
@@ -419,6 +420,13 @@ func (channel *Channel) GetProbeIntervalSeconds() int {
 		return DefaultChannelProbeIntervalSeconds
 	}
 	return channel.ProbeIntervalSeconds
+}
+
+func (channel *Channel) ShouldAutoProbe() bool {
+	if channel == nil {
+		return false
+	}
+	return channel.AutoProbeEnabled != nil && *channel.AutoProbeEnabled
 }
 
 func (channel *Channel) GetAutoDisabledProbeIntervalSeconds() int {

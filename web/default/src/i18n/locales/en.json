@@ -6110,6 +6110,7 @@
     "Daily Cost / Monthly Cost": "Daily Cost / Monthly Cost",
     "Daily Usage": "Daily Usage",
     "Monthly Usage": "Monthly Usage",
-    "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage"
+    "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage",
+    "Automatically probe this channel in the background": "Automatically probe this channel in the background"
   }
 }

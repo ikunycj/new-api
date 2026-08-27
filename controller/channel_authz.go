@@ -25,6 +25,7 @@ var channelPersistedUpdateFields = []struct {
 	{jsonName: "model_mapping", column: "model_mapping"},
 	{jsonName: "status_code_mapping", column: "status_code_mapping"},
 	{jsonName: "auto_ban", column: "auto_ban"},
+	{jsonName: "auto_probe_enabled", column: "auto_probe_enabled"},
 	{jsonName: "probe_interval_seconds", column: "probe_interval_seconds"},
 	{jsonName: "auto_disabled_probe_interval_seconds", column: "auto_disabled_probe_interval_seconds"},
 	{jsonName: "probe_failure_auto_ban", column: "probe_failure_auto_ban"},
@@ -231,6 +232,7 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 var channelNonSensitiveFields = map[string]struct{}{
 	"id":                                   {},
 	"test_model":                           {},
+	"auto_probe_enabled":                   {},
 	"probe_interval_seconds":               {},
 	"auto_disabled_probe_interval_seconds": {},
 	"probe_failure_auto_ban":               {},

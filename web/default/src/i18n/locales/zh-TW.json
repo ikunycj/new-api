@@ -6110,6 +6110,7 @@
     "Daily Cost / Monthly Cost": "日成本 / 月成本",
     "Daily Usage": "日用量",
     "Monthly Usage": "月用量",
-    "Daily Usage / Monthly Usage": "日用量 / 月用量"
+    "Daily Usage / Monthly Usage": "日用量 / 月用量",
+    "Automatically probe this channel in the background": "在背景自動探測此渠道"
   }
 }

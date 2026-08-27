@@ -6110,6 +6110,7 @@
     "Daily Cost / Monthly Cost": "Дневная / месячная стоимость",
     "Daily Usage": "Дневное потребление",
     "Monthly Usage": "Месячное потребление",
-    "Daily Usage / Monthly Usage": "Дневное / месячное потребление"
+    "Daily Usage / Monthly Usage": "Дневное / месячное потребление",
+    "Automatically probe this channel in the background": "Автоматически проверять этот канал в фоновом режиме"
   }
 }
