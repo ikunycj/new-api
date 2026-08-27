@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import { PREFERRED_MODEL_ORDER } from '../../lib/model-preferences'
-
 import type { TokenUnit } from './types'
 
 // ----------------------------------------------------------------------------
@@ -188,5 +187,8 @@ export const VIEW_MODES = {
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
 
-/** Default page size for pricing table */
+/** Number of model cards revealed in each infinite-scroll batch. */
+export const PRICING_CARD_BATCH_SIZE = 9
+
+/** Default page size for the pricing table view. */
 export const DEFAULT_PRICING_PAGE_SIZE = 20
