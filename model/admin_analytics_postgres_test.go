@@ -199,6 +199,16 @@ func TestGetAllQuotaDatesPreservesGroupAndChannelTrendDimensions(t *testing.T) {
 	assert.Equal(t, "west", byDimension["vip/2/1000"].ChannelName)
 	assert.Equal(t, "default", byDimension["default/1/2000"].UseGroup)
 
+	userRows, err := GetQuotaDataGroupByUser(900, 2100)
+	require.NoError(t, err)
+	require.Len(t, userRows, 2)
+	userQuotaByName := make(map[string]int, len(userRows))
+	for _, row := range userRows {
+		userQuotaByName[row.Username] = row.Quota
+	}
+	assert.Equal(t, 175, userQuotaByName["alice"])
+	assert.Equal(t, 70, userQuotaByName["bob"])
+
 	filtered, err := GetAllQuotaDates(900, 2100, "alice")
 	require.NoError(t, err)
 	require.Len(t, filtered, 2)

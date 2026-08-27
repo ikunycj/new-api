@@ -32,10 +32,15 @@ import { LogStatCards } from '@/features/dashboard/components/models/log-stat-ca
 import { ModelCharts } from '@/features/dashboard/components/models/model-charts'
 import { UserCharts } from '@/features/dashboard/components/users/user-charts'
 import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
-import { buildDefaultDashboardFilters } from '@/features/dashboard/lib'
+import {
+  buildDefaultDashboardFilters,
+  getDefaultDays,
+  getSavedGranularity,
+} from '@/features/dashboard/lib'
 import type {
   DashboardFilters,
   QuotaDataItem,
+  UserChartsFilters,
 } from '@/features/dashboard/types'
 
 export type AdminAnalyticsSection = 'overview' | 'flow'
@@ -50,6 +55,16 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
   const [dataLoading, setDataLoading] = useState(false)
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
     buildDefaultDashboardFilters()
+  )
+  const [userChartsFilters, setUserChartsFilters] = useState<UserChartsFilters>(
+    () => {
+      const timeGranularity = getSavedGranularity()
+      return {
+        timeGranularity,
+        selectedRange: getDefaultDays(timeGranularity),
+        topUserLimit: 10,
+      }
+    }
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
 
@@ -160,7 +175,11 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             }
             metric={modelFilters.metric}
           />
-          <UserCharts filters={modelFilters} dataOverride={modelData} compact />
+          <UserCharts
+            filters={userChartsFilters}
+            onFiltersChange={setUserChartsFilters}
+            compact
+          />
         </div>
       )}
 
