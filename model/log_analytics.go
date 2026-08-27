@@ -362,10 +362,11 @@ func populateLogUserDetails(logs []*Log) error {
 
 func GetLogFilterOptions() (LogFilterOptions, error) {
 	options := LogFilterOptions{Groups: []string{}, Channels: []LogFilterChannel{}}
-	if err := LOG_DB.Table("logs").Distinct(logGroupCol).Where(logGroupCol+" <> ''").Pluck(logGroupCol, &options.Groups).Error; err != nil {
+	var err error
+	options.Groups, err = GetPricingGroupNames()
+	if err != nil {
 		return options, err
 	}
-	sort.Strings(options.Groups)
 
 	var channelIDs []int
 	if err := LOG_DB.Table("logs").Distinct("channel_id").Where("channel_id <> 0").Pluck("channel_id", &channelIDs).Error; err != nil {

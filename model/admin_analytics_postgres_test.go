@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -226,6 +227,35 @@ func TestGetLogAnalyticsUsesPostgresPercentilesAndUserSearch(t *testing.T) {
 	require.Len(t, localDay.TokenTrend, 2)
 	assert.Equal(t, time.Date(2026, time.August, 21, 16, 0, 0, 0, time.UTC).Unix(), localDay.TokenTrend[0].Timestamp)
 	assert.Equal(t, time.Date(2026, time.August, 22, 16, 0, 0, 0, time.UTC).Unix(), localDay.TokenTrend[1].Timestamp)
+}
+
+func TestGetLogFilterOptionsUsesConfiguredPricingGroups(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Log{})
+
+	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
+	previousGroupEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	previousGroupOrder := ratio_setting.PricingGroupOrder2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousGroupEnabled))
+		require.NoError(t, ratio_setting.UpdatePricingGroupOrderByJSONString(previousGroupOrder))
+	})
+
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"configured":0.5,"disabled":1,"auto":0.8}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"configured":true,"disabled":false,"auto":true}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupOrderByJSONString(`["configured","auto","disabled"]`))
+
+	require.NoError(t, DB.Create(&Channel{Id: 7, Name: "configured-channel"}).Error)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{Type: LogTypeConsume, Group: "configured", ChannelId: 7},
+		{Type: LogTypeConsume, Group: "auto", ChannelId: 7},
+		{Type: LogTypeConsume, Group: "legacy", ChannelId: 7},
+	}).Error)
+
+	options, err := GetLogFilterOptions()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"configured", "disabled"}, options.Groups)
+	assert.Equal(t, []LogFilterChannel{{ID: 7, Name: "configured-channel"}}, options.Channels)
 }
 
 func TestGetAllQuotaDatesPreservesGroupAndChannelTrendDimensions(t *testing.T) {
