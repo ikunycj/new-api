@@ -20,6 +20,8 @@ import { api } from '@/lib/api'
 
 import type {
   AdminConsoleResponse,
+  AdminConsoleRealtimeResponse,
+  AdminConsoleRealtimeStats,
   AdminConsoleStats,
   AdminConsoleSystemLoad,
   AdminConsoleSystemLoadResponse,
@@ -39,6 +41,16 @@ export async function getAdminConsoleSystemLoad(): Promise<AdminConsoleSystemLoa
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '系统负载数据加载失败')
+  }
+  return response.data.data
+}
+
+export async function getAdminConsoleRealtimeStats(): Promise<AdminConsoleRealtimeStats> {
+  const response = await api.get<AdminConsoleRealtimeResponse>(
+    '/api/admin/realtime'
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || '实时统计数据加载失败')
   }
   return response.data.data
 }

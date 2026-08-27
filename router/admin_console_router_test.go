@@ -19,4 +19,5 @@ func TestAdminConsoleSystemLoadRoute(t *testing.T) {
 	}
 
 	assert.Contains(t, routes, http.MethodGet+" /api/admin/system-load")
+	assert.Contains(t, routes, http.MethodGet+" /api/admin/realtime")
 }

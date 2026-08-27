@@ -36,6 +36,7 @@ func TestPricingGroupActivityTracksConnectionsAndUniqueUsers(t *testing.T) {
 	require.Contains(t, activity, "paid")
 	assert.Equal(t, PricingGroupActivity{Users: 2, Connections: 3}, activity["paid"])
 	assert.Equal(t, PricingGroupActivity{}, activity["idle"])
+	assert.Equal(t, 3, GetTotalPricingGroupConnections([]string{"paid", "idle"}))
 
 	finishFirst()
 	activity = GetPricingGroupActivity([]string{"paid"})

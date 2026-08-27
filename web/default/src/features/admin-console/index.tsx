@@ -159,30 +159,6 @@ function ConsoleCardGrid(props: {
       tone: 'chart-2',
     },
     {
-      title: '今日请求',
-      value: formatCompactNumber(stats?.requests.today ?? 0),
-      detail: `请求总数 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
-      icon: ChartUpIcon,
-      tone: 'chart-3',
-    },
-    {
-      title: '今日新增用户',
-      value: `+${formatCompactNumber(stats?.users.today ?? 0)}`,
-      detail: (
-        <div
-          className='truncate'
-          title={`用户总数 ${formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`}
-        >
-          用户总数 {formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今{' '}
-          {formatCompactNumber(stats?.users.active_today ?? 0)} / 7天{' '}
-          {formatCompactNumber(stats?.users.active_week ?? 0)} / 30天{' '}
-          {formatCompactNumber(stats?.users.active_month ?? 0)}
-        </div>
-      ),
-      icon: UserAdd01Icon,
-      tone: 'chart-4',
-    },
-    {
       title: '系统负载',
       value: (
         <div className='grid grid-cols-3 gap-2 font-sans'>
@@ -205,6 +181,30 @@ function ConsoleCardGrid(props: {
       tone: 'chart-5',
     },
     {
+      title: '今日新增用户',
+      value: `+${formatCompactNumber(stats?.users.today ?? 0)}`,
+      detail: (
+        <div
+          className='truncate'
+          title={`用户总数 ${formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`}
+        >
+          用户总数 {formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今{' '}
+          {formatCompactNumber(stats?.users.active_today ?? 0)} / 7天{' '}
+          {formatCompactNumber(stats?.users.active_week ?? 0)} / 30天{' '}
+          {formatCompactNumber(stats?.users.active_month ?? 0)}
+        </div>
+      ),
+      icon: UserAdd01Icon,
+      tone: 'chart-4',
+    },
+    {
+      title: '今日请求',
+      value: formatCompactNumber(stats?.requests.today ?? 0),
+      detail: `本月 ${formatCompactNumber(stats?.requests.month ?? 0)} / 累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
+      icon: ChartUpIcon,
+      tone: 'chart-3',
+    },
+    {
       title: '今日收入',
       value: formatLocalCurrencyAmount(stats?.revenue.today ?? 0),
       detail: `本月 ${formatLocalCurrencyAmount(stats?.revenue.month ?? 0, { compact: true })} / 累计 ${formatLocalCurrencyAmount(stats?.revenue.total ?? 0, { compact: true })}`,
@@ -212,16 +212,16 @@ function ConsoleCardGrid(props: {
       tone: 'chart-3',
     },
     {
-      title: '总扣费额度',
-      value: formatQuota(stats?.quota.total ?? 0),
-      detail: `今日 ${formatQuota(stats?.quota.today ?? 0)}`,
+      title: '扣费额度',
+      value: formatQuota(stats?.quota.today ?? 0),
+      detail: `本月 ${formatQuota(stats?.quota.month ?? 0)} / 累计 ${formatQuota(stats?.quota.total ?? 0)}`,
       icon: Coins01Icon,
       tone: 'chart-2',
     },
     {
-      title: '总 Token 数',
-      value: formatTokenAmount(stats?.tokens.total ?? 0),
-      detail: `今日 ${formatTokenAmount(stats?.tokens.today ?? 0)}`,
+      title: 'Token 数',
+      value: formatTokenAmount(stats?.tokens.today ?? 0),
+      detail: `本月 ${formatTokenAmount(stats?.tokens.month ?? 0)} / 累计 ${formatTokenAmount(stats?.tokens.total ?? 0)}`,
       icon: Layers01Icon,
       tone: 'chart-4',
     },

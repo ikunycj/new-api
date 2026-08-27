@@ -16,14 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  Activity01Icon,
+  ChartUpIcon,
+  Clock01Icon,
+  Layers01Icon,
+} from '@hugeicons/core-free-icons'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Clock, Hash } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getAdminConsoleStats } from '@/features/admin-console/api'
+import {
+  getAdminConsoleRealtimeStats,
+  getAdminConsoleStats,
+} from '@/features/admin-console/api'
+import {
+  AdminConsoleStatCard,
+  type AdminConsoleStatTone,
+} from '@/features/admin-console/components/admin-console-stat-card'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
@@ -45,6 +57,15 @@ interface LogStatCardsProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
   includeAdminData?: boolean
+}
+
+interface AdminLogStatItem {
+  title: string
+  value: string
+  detail: string
+  icon: typeof Activity01Icon
+  tone: AdminConsoleStatTone
+  loading: boolean
 }
 
 const MAX_INLINE_STAT_CHARS = 9
@@ -80,6 +101,14 @@ export function LogStatCards(props: LogStatCardsProps) {
     enabled: includeAdminData,
     staleTime: 30_000,
     refetchInterval: 60_000,
+    placeholderData: (previous) => previous,
+  })
+  const realtimeStatsQuery = useQuery({
+    queryKey: ['admin-console-realtime'],
+    queryFn: getAdminConsoleRealtimeStats,
+    enabled: includeAdminData,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
     placeholderData: (previous) => previous,
   })
   const [stats, setStats] = useState<{
@@ -144,11 +173,7 @@ export function LogStatCards(props: LogStatCardsProps) {
   }
 
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const modelConfigs = includeAdminData
-    ? statCardsConfig.filter(
-        (config) => config.key === 'avgRpm' || config.key === 'avgTpm'
-      )
-    : statCardsConfig
+  const modelConfigs = includeAdminData ? [] : statCardsConfig
   const modelItems = modelConfigs.map((config) => {
     const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
     const formatted =
@@ -171,60 +196,84 @@ export function LogStatCards(props: LogStatCardsProps) {
     }
   })
 
-  let items = modelItems
   if (includeAdminData) {
     const adminStats = adminStatsQuery.data
-    const requestTotal = formatStatNumber(
-      adminStats?.requests.total ?? 0,
+    const realtimeStats = realtimeStatsQuery.data
+    const rpm = formatStatNumber(realtimeStats?.rpm ?? 0, locale)
+    const tpm = formatStatNumber(realtimeStats?.tpm ?? 0, locale)
+    const concurrency = formatStatNumber(
+      realtimeStats?.current_concurrency ?? 0,
       locale
     )
-    const requestsToday = formatStatNumber(
-      adminStats?.requests.today ?? 0,
-      locale
-    )
-    const rpm = formatStatNumber(adminStats?.performance.rpm ?? 0, locale)
-    const tpm = formatStatNumber(adminStats?.performance.tpm ?? 0, locale)
-    const averageResponse = formatDuration(
-      adminStats?.performance.average_response_seconds ?? 0
-    )
-    const responsePercentiles = `P90 ${formatDuration(adminStats?.performance.p90_response_seconds ?? 0)} / P99 ${formatDuration(adminStats?.performance.p99_response_seconds ?? 0)}`
     const adminLoading = adminStatsQuery.isLoading && !adminStats
-    const adminError = adminStatsQuery.isError && !adminStats
-
-    items = [
+    const adminError = adminStatsQuery.isError
+    const realtimeLoading =
+      realtimeStatsQuery.isLoading && !realtimeStatsQuery.data
+    const realtimeError = realtimeStatsQuery.isError
+    const cardLoading = adminLoading || realtimeLoading
+    const adminItems: AdminLogStatItem[] = [
       {
-        title: '请求总数',
-        value: requestTotal.displayValue,
-        fullValue: requestTotal.fullValue,
-        desc: `今日请求 ${requestsToday.fullValue}`,
-        icon: Hash,
-        iconTone: 'info',
-        loading: adminLoading,
-        error: adminError,
+        title: '实时并发',
+        value: realtimeError ? '--' : concurrency.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `本月 P50 ${formatCompactNumber(adminStats?.performance.month_concurrency_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.month_concurrency_p90 ?? 0, locale)} / P95 ${formatCompactNumber(adminStats?.performance.month_concurrency_p95 ?? 0, locale)}`,
+        icon: Activity01Icon,
+        tone: 'chart-2',
+        loading: cardLoading,
       },
       {
-        title: '实时性能',
-        value: `${rpm.displayValue} RPM`,
-        fullValue: `${rpm.fullValue} RPM`,
-        desc: `${tpm.displayValue} TPM`,
-        icon: Activity,
-        iconTone: 'success',
-        loading: adminLoading,
-        error: adminError,
+        title: '今日响应',
+        value: realtimeError
+          ? '--'
+          : formatDuration(realtimeStats?.response_seconds ?? 0),
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatDuration(adminStats?.performance.today_response_p50_seconds ?? 0)} / P90 ${formatDuration(adminStats?.performance.today_response_p90_seconds ?? 0)} / P99 ${formatDuration(adminStats?.performance.today_response_p99_seconds ?? 0)}`,
+        icon: Clock01Icon,
+        tone: 'chart-4',
+        loading: cardLoading,
       },
       {
-        title: '今日平均响应',
-        value: averageResponse,
-        fullValue: averageResponse,
-        desc: responsePercentiles,
-        icon: Clock,
-        iconTone: 'chart-4',
-        loading: adminLoading,
-        error: adminError,
+        title: '今日 RPM',
+        value: realtimeError ? '--' : rpm.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatCompactNumber(adminStats?.performance.today_rpm_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.today_rpm_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.today_rpm_p99 ?? 0, locale)}`,
+        icon: ChartUpIcon,
+        tone: 'chart-2',
+        loading: cardLoading,
       },
-      ...modelItems,
+      {
+        title: '今日 TPM',
+        value: realtimeError ? '--' : tpm.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatCompactNumber(adminStats?.performance.today_tpm_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.today_tpm_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.today_tpm_p99 ?? 0, locale)}`,
+        icon: Layers01Icon,
+        tone: 'chart-5',
+        loading: cardLoading,
+      },
     ]
+
+    return (
+      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+        {adminItems.map((item) => (
+          <AdminConsoleStatCard
+            key={item.title}
+            title={item.title}
+            value={item.value}
+            detail={item.detail}
+            icon={item.icon}
+            tone={item.tone}
+            loading={item.loading}
+          />
+        ))}
+      </div>
+    )
   }
+
+  const items = modelItems
 
   return (
     <div className='overflow-hidden rounded-lg border'>

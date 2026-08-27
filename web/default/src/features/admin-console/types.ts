@@ -31,6 +31,7 @@ export interface AdminConsoleChannelStats {
 
 export interface AdminConsolePeriodStats {
   today: number
+  month: number
   total: number
 }
 
@@ -49,11 +50,25 @@ export interface AdminConsoleRevenueStats {
 }
 
 export interface AdminConsolePerformanceStats {
+  today_response_p50_seconds: number
+  today_response_p90_seconds: number
+  today_response_p99_seconds: number
+  today_rpm_p50: number
+  today_rpm_p90: number
+  today_rpm_p99: number
+  today_tpm_p50: number
+  today_tpm_p90: number
+  today_tpm_p99: number
+  month_concurrency_p50: number
+  month_concurrency_p90: number
+  month_concurrency_p95: number
+}
+
+export interface AdminConsoleRealtimeStats {
+  current_concurrency: number
+  response_seconds: number
   rpm: number
   tpm: number
-  average_response_seconds: number
-  p90_response_seconds: number
-  p99_response_seconds: number
 }
 
 export interface AdminConsoleSystemLoad {
@@ -84,4 +99,10 @@ export interface AdminConsoleSystemLoadResponse {
   success: boolean
   message?: string
   data?: AdminConsoleSystemLoad
+}
+
+export interface AdminConsoleRealtimeResponse {
+  success: boolean
+  message?: string
+  data?: AdminConsoleRealtimeStats
 }

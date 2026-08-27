@@ -104,18 +104,76 @@ func TestGetAdminConsoleStatsAggregatesPostgresData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, AdminConsoleKeyStats{Total: 3, Active: 2, Enabled: 2}, stats.APIKeys)
 	assert.Equal(t, AdminConsoleChannelStats{Total: 4, Enabled: 2, AutoDisabled: 1}, stats.Channels)
-	assert.Equal(t, AdminConsolePeriodStats{Today: 4, Total: 8}, stats.Requests)
+	assert.Equal(t, AdminConsolePeriodStats{Today: 4, Month: 6, Total: 8}, stats.Requests)
 	assert.Equal(t, AdminConsoleUserStats{Today: 2, Total: 6, ActiveToday: 2, ActiveWeek: 4, ActiveMonth: 5}, stats.Users)
-	assert.Equal(t, AdminConsolePeriodStats{Today: 665, Total: 995}, stats.Tokens)
-	assert.Equal(t, AdminConsolePeriodStats{Today: 8010, Total: 12510}, stats.Quota)
+	assert.Equal(t, AdminConsolePeriodStats{Today: 665, Month: 930, Total: 995}, stats.Tokens)
+	assert.Equal(t, AdminConsolePeriodStats{Today: 8010, Month: 11410, Total: 12510}, stats.Quota)
 	assert.InDelta(t, 153.25, stats.Revenue.Today, 0.001)
 	assert.InDelta(t, 183, stats.Revenue.Month, 0.001)
 	assert.InDelta(t, 193, stats.Revenue.Total, 0.001)
-	assert.Equal(t, int64(1), stats.Performance.RPM)
-	assert.Equal(t, int64(5), stats.Performance.TPM)
-	assert.InDelta(t, 18.5, stats.Performance.AverageResponseSeconds, 0.001)
-	assert.InDelta(t, 34.0, stats.Performance.P90ResponseSeconds, 0.001)
-	assert.InDelta(t, 39.4, stats.Performance.P99ResponseSeconds, 0.001)
+	assert.InDelta(t, 15, stats.Performance.TodayResponseP50Seconds, 0.001)
+	assert.InDelta(t, 34, stats.Performance.TodayResponseP90Seconds, 0.001)
+	assert.InDelta(t, 39.4, stats.Performance.TodayResponseP99Seconds, 0.001)
+	assert.Zero(t, stats.Performance.TodayRPMP50)
+	assert.Zero(t, stats.Performance.TodayRPMP90)
+	assert.Zero(t, stats.Performance.TodayRPMP99)
+	assert.Zero(t, stats.Performance.TodayTPMP50)
+	assert.Zero(t, stats.Performance.TodayTPMP90)
+	assert.Zero(t, stats.Performance.TodayTPMP99)
+	assert.Zero(t, stats.Performance.MonthConcurrencyP50)
+	assert.Zero(t, stats.Performance.MonthConcurrencyP90)
+	assert.Zero(t, stats.Performance.MonthConcurrencyP95)
+
+	realtime, err := getAdminConsoleRealtimeStatsAt(now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), realtime.RPM)
+	assert.Equal(t, int64(5), realtime.TPM)
+	assert.InDelta(t, 4, realtime.ResponseSeconds, 0.001)
+}
+
+func TestGetAdminConsoleStatsCalculatesThroughputAndConcurrencyPercentiles(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Token{}, &Channel{}, &User{}, &Log{}, &TopUp{})
+
+	now := time.Date(2026, time.August, 1, 0, 2, 59, 0, time.Local)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{Type: LogTypeConsume, CreatedAt: startOfDay + 100, CompletionTokens: 100, UseTime: 100},
+		{Type: LogTypeConsume, CreatedAt: startOfDay + 100, CompletionTokens: 200, UseTime: 50},
+		{Type: LogTypeConsume, CreatedAt: startOfDay + 130, CompletionTokens: 50, UseTime: 10},
+	}).Error)
+
+	stats, err := getAdminConsoleStatsAt(now)
+	require.NoError(t, err)
+	assert.InDelta(t, 50, stats.Performance.TodayResponseP50Seconds, 0.001)
+	assert.InDelta(t, 90, stats.Performance.TodayResponseP90Seconds, 0.001)
+	assert.InDelta(t, 99, stats.Performance.TodayResponseP99Seconds, 0.001)
+	assert.InDelta(t, 1, stats.Performance.TodayRPMP50, 0.001)
+	assert.InDelta(t, 1.8, stats.Performance.TodayRPMP90, 0.001)
+	assert.InDelta(t, 1.98, stats.Performance.TodayRPMP99, 0.001)
+	assert.InDelta(t, 50, stats.Performance.TodayTPMP50, 0.001)
+	assert.InDelta(t, 250, stats.Performance.TodayTPMP90, 0.001)
+	assert.InDelta(t, 295, stats.Performance.TodayTPMP99, 0.001)
+	assert.Equal(t, int64(1), stats.Performance.MonthConcurrencyP50)
+	assert.Equal(t, int64(2), stats.Performance.MonthConcurrencyP90)
+	assert.Equal(t, int64(2), stats.Performance.MonthConcurrencyP95)
+}
+
+func TestGetAdminConsoleRealtimeStatsUsesSixtySecondWindow(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Log{})
+
+	now := time.Date(2026, time.August, 22, 12, 0, 0, 0, time.Local)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{Type: LogTypeConsume, CreatedAt: now.Unix() - 60, CompletionTokens: 100, UseTime: 1},
+		{Type: LogTypeConsume, CreatedAt: now.Unix() - 59, CompletionTokens: 20, UseTime: 2},
+		{Type: LogTypeConsume, CreatedAt: now.Unix(), CompletionTokens: 30, UseTime: 4},
+		{Type: LogTypeConsume, CreatedAt: now.Unix() + 1, CompletionTokens: 200, UseTime: 8},
+	}).Error)
+
+	stats, err := getAdminConsoleRealtimeStatsAt(now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), stats.RPM)
+	assert.Equal(t, int64(50), stats.TPM)
+	assert.InDelta(t, 3, stats.ResponseSeconds, 0.001)
 }
 
 func TestGetLogAnalyticsUsesPostgresPercentilesAndUserSearch(t *testing.T) {

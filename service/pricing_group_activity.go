@@ -318,3 +318,11 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 	}
 	return activityByGroup
 }
+
+func GetTotalPricingGroupConnections(groups []string) int {
+	total := 0
+	for _, activity := range GetPricingGroupActivity(groups) {
+		total += activity.Connections
+	}
+	return total
+}
