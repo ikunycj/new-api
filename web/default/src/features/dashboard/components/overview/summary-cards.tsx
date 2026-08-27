@@ -26,11 +26,12 @@ import {
   getUserQuotaSummary,
 } from '@/features/dashboard/api';
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config';
+import { getDashboardPresetRange } from '@/features/dashboard/lib';
 import type { QuotaDataItem } from '@/features/dashboard/types';
 import { getApiKeys } from '@/features/keys/api';
 import { API_KEY_STATUS } from '@/features/keys/constants';
 import { formatNumber, formatQuota } from '@/lib/format';
-import { computeTimeRange } from '@/lib/time';
+import { dateToUnixTimestamp } from '@/lib/time';
 import { useAuthStore } from '@/stores/auth-store';
 
 import { StatCard } from '../ui/stat-card';
@@ -110,7 +111,13 @@ export function SummaryCards() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.auth.user);
 
-  const summaryTimeRange = useMemo(() => computeTimeRange(1), []);
+  const summaryTimeRange = useMemo(() => {
+    const { start, end } = getDashboardPresetRange('today');
+    return {
+      start_timestamp: dateToUnixTimestamp(start),
+      end_timestamp: dateToUnixTimestamp(end),
+    };
+  }, []);
   const remainQuota = Number(user?.quota ?? 0);
 
   const usageTrendQuery = useQuery({
