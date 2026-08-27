@@ -26,7 +26,7 @@ import {
   applyMessageStateUpdate,
   getInitialParameterEnabled,
   getInitialPlaygroundConfig,
-  loadMessages,
+  loadMessagesWithImages,
   type MessageStateUpdater,
 } from '../lib'
 import type {
@@ -60,46 +60,107 @@ export function usePlaygroundState(
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoadingMessages, setIsLoadingMessages] = useState(true)
   const messagesSaveTimerRef = useRef<number | null>(null)
+  const messagesLoadTimerRef = useRef<number | null>(null)
   const latestMessagesRef = useRef<Message[]>(messages)
   const hasLoadedMessagesRef = useRef(false)
+  const pendingMessagesRef = useRef<Message[]>([])
+  const hasPendingMessagesRef = useRef(false)
 
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
 
   const persistMessages = useCallback((messagesToSave: Message[]) => {
+    const previousMessages = latestMessagesRef.current
     latestMessagesRef.current = messagesToSave
 
     if (!hasLoadedMessagesRef.current) {
+      pendingMessagesRef.current = messagesToSave
+      hasPendingMessagesRef.current = true
       return
     }
+
+    const nextMessageKeys = new Set(
+      messagesToSave.map((message) => message.key)
+    )
+    const removedMessage = previousMessages.some(
+      (message) => !nextMessageKeys.has(message.key)
+    )
+    const previousMessagesByKey = new Map(
+      previousMessages.map((message) => [message.key, message])
+    )
+    const imagesChanged = messagesToSave.some(
+      (message) =>
+        message.images !== previousMessagesByKey.get(message.key)?.images
+    )
 
     if (messagesSaveTimerRef.current !== null) {
       window.clearTimeout(messagesSaveTimerRef.current)
     }
 
+    if (removedMessage || imagesChanged) {
+      messagesSaveTimerRef.current = null
+      void saveMessages(messagesToSave)
+      return
+    }
+
     messagesSaveTimerRef.current = window.setTimeout(() => {
       messagesSaveTimerRef.current = null
-      saveMessages(latestMessagesRef.current)
+      void saveMessages(latestMessagesRef.current)
     }, MESSAGE_SAVE_DEBOUNCE_MS)
   }, [])
 
   useEffect(() => {
     let cancelled = false
 
-    window.setTimeout(() => {
-      const loadedMessages = loadMessages() ?? []
-      if (cancelled) {
-        return
-      }
+    messagesLoadTimerRef.current = window.setTimeout(() => {
+      messagesLoadTimerRef.current = null
+      void loadMessagesWithImages()
+        .then((storedMessages) => {
+          if (cancelled) return
 
-      latestMessagesRef.current = loadedMessages
-      hasLoadedMessagesRef.current = true
-      setMessages(loadedMessages)
-      setIsLoadingMessages(false)
+          const hasPendingMessages = hasPendingMessagesRef.current
+          const loadedMessages = hasPendingMessages
+            ? pendingMessagesRef.current
+            : (storedMessages ?? [])
+          latestMessagesRef.current = loadedMessages
+          hasLoadedMessagesRef.current = true
+          hasPendingMessagesRef.current = false
+          setMessages(loadedMessages)
+          setIsLoadingMessages(false)
+
+          if (hasPendingMessages) {
+            void saveMessages(loadedMessages)
+          }
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return
+
+          // eslint-disable-next-line no-console
+          console.error('Failed to initialize playground messages:', error)
+          const hasPendingMessages = hasPendingMessagesRef.current
+          const pendingMessages = hasPendingMessages
+            ? pendingMessagesRef.current
+            : []
+          latestMessagesRef.current = pendingMessages
+          hasLoadedMessagesRef.current = true
+          hasPendingMessagesRef.current = false
+          setMessages(pendingMessages)
+          setIsLoadingMessages(false)
+          if (hasPendingMessages) {
+            void saveMessages(pendingMessages)
+          }
+        })
     }, 0)
 
     return () => {
       cancelled = true
+      if (messagesLoadTimerRef.current !== null) {
+        window.clearTimeout(messagesLoadTimerRef.current)
+        messagesLoadTimerRef.current = null
+      }
+      if (!hasLoadedMessagesRef.current && hasPendingMessagesRef.current) {
+        void saveMessages(pendingMessagesRef.current)
+      }
     }
   }, [])
 
@@ -107,7 +168,7 @@ export function usePlaygroundState(
     () => () => {
       if (messagesSaveTimerRef.current !== null) {
         window.clearTimeout(messagesSaveTimerRef.current)
-        saveMessages(latestMessagesRef.current)
+        void saveMessages(latestMessagesRef.current)
       }
     },
     []

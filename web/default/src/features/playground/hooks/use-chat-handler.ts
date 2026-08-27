@@ -351,7 +351,9 @@ export function useChatHandler({
             url:
               image.url ||
               (image.b64_json ? `data:image/png;base64,${image.b64_json}` : ''),
-            revisedPrompt: image.revised_prompt,
+            ...(typeof image.revised_prompt === 'string'
+              ? { revisedPrompt: image.revised_prompt }
+              : {}),
           }))
           .filter((image) => image.url)
 
