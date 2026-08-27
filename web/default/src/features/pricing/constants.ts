@@ -188,7 +188,7 @@ export const VIEW_MODES = {
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
 
 /** Number of model cards revealed in each infinite-scroll batch. */
-export const PRICING_CARD_BATCH_SIZE = 9
+export const PRICING_CARD_BATCH_SIZE = 18
 
 /** Default page size for the pricing table view. */
-export const DEFAULT_PRICING_PAGE_SIZE = 20
+export const DEFAULT_PRICING_PAGE_SIZE = 18
