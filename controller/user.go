@@ -494,6 +494,19 @@ func GetSelf(c *gin.Context) {
 	return
 }
 
+// GetUserInFlight returns the authenticated user's active relay requests.
+// The user ID is always taken from the auth context; callers cannot query
+// another user's activity by supplying an ID.
+func GetUserInFlight(c *gin.Context) {
+	count, degraded := service.GetUserInFlightRequests(
+		common.GetContextKeyInt(c, constant.ContextKeyUserId),
+	)
+	common.ApiSuccess(c, gin.H{
+		"in_flight": count,
+		"degraded":  degraded,
+	})
+}
+
 func CompleteOnboarding(c *gin.Context) {
 	user, err := model.CompleteUserOnboarding(c.GetInt("id"))
 	if err != nil {

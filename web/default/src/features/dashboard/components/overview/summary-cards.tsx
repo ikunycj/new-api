@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { StaggerContainer, StaggerItem } from '@/components/page-transition';
 import {
+  getUserInFlight,
   getUserQuotaDates,
   getUserQuotaSummary,
 } from '@/features/dashboard/api';
@@ -170,10 +171,19 @@ export function SummaryCards() {
     staleTime: 60 * 1000,
   });
 
+  const inFlightQuery = useQuery({
+    queryKey: ['dashboard', 'overview', 'user-in-flight', user?.id],
+    queryFn: getUserInFlight,
+    enabled: Boolean(user?.id),
+    refetchInterval: 5_000,
+    staleTime: 2_000,
+  });
+
   const loading =
     usageTrendQuery.isLoading ||
     historicalSummaryQuery.isLoading ||
-    apiKeysQuery.isLoading;
+    apiKeysQuery.isLoading ||
+    inFlightQuery.isLoading;
 
   const sparklineData = useMemo(
     () =>
@@ -229,6 +239,12 @@ export function SummaryCards() {
     );
     const enabledKeys = apiKeysQuery.data?.enabled ?? 0;
     const totalKeys = apiKeysQuery.data?.total ?? 0;
+    const inFlight = Number(inFlightQuery.data?.data?.in_flight ?? 0);
+    const concurrencyAvailable =
+      inFlightQuery.data?.success === true &&
+      !inFlightQuery.isError &&
+      !inFlightQuery.data?.data?.degraded &&
+      Number.isFinite(inFlight);
     return {
       usageDisplay: formatQuota(recentUsage),
       usageDescription: `${t('Current balance')}: ${formatQuota(remainQuota)} · ${t('Historical total consumed')}: ${formatQuota(Number(user?.used_quota ?? 0))}`,
@@ -237,11 +253,13 @@ export function SummaryCards() {
       requestDisplay: `${t('Today')} ${formatNumber(recentRequests)}`,
       requestDescription: `${t('Total')}: ${formatNumber(totalRequests)}`,
       apiKeysDisplay: `${enabledKeys} ${t('enabled')} / ${totalKeys} ${t('total')}`,
-      apiKeysDescription: `${t('Current concurrency')}: ${enabledKeys}`,
+      apiKeysDescription: `${t('Current concurrency')}: ${concurrencyAvailable ? formatNumber(inFlight) : '-'}`,
     };
   }, [
     apiKeysQuery.data,
     historicalSummaryQuery.data,
+    inFlightQuery.data,
+    inFlightQuery.isError,
     recentRequests,
     recentTokens,
     recentUsage,

@@ -19,6 +19,7 @@ const (
 	pricingGroupActivityHeartbeat    = 10 * time.Second
 	pricingGroupActivityRedisTimeout = 500 * time.Millisecond
 	pricingGroupActivityKeyPrefix    = "routing:pricing-group:activity:"
+	pricingUserActivityKeyPrefix     = "routing:pricing-user:activity:"
 	pricingGroupActivityContextKey   = "pricing_group_activity_session"
 )
 
@@ -33,10 +34,12 @@ type pricingGroupActivityEntry struct {
 }
 
 type pricingGroupActivityRedisOperation struct {
-	group     string
-	member    string
-	expiresAt int64
-	remove    bool
+	group      string
+	member     string
+	userID     int
+	expiresAt  int64
+	remove     bool
+	removeUser bool
 }
 
 type pricingGroupActivitySession struct {
@@ -53,7 +56,11 @@ type pricingGroupActivitySession struct {
 var localPricingGroupActivity = struct {
 	sync.Mutex
 	groups map[string]map[string]pricingGroupActivityEntry
-}{groups: make(map[string]map[string]pricingGroupActivityEntry)}
+	users  map[int]map[string]pricingGroupActivityEntry
+}{
+	groups: make(map[string]map[string]pricingGroupActivityEntry),
+	users:  make(map[int]map[string]pricingGroupActivityEntry),
+}
 
 var (
 	pricingGroupActivityRedisOnce       sync.Once
@@ -65,6 +72,10 @@ func pricingGroupActivityRedisKey(group string) string {
 	return pricingGroupActivityKeyPrefix + encoded
 }
 
+func pricingUserActivityRedisKey(userID int) string {
+	return pricingUserActivityKeyPrefix + strconv.Itoa(userID)
+}
+
 func refreshLocalPricingGroupActivity(group, member string, userID int, expiresAt int64) {
 	localPricingGroupActivity.Lock()
 	defer localPricingGroupActivity.Unlock()
@@ -74,6 +85,14 @@ func refreshLocalPricingGroupActivity(group, member string, userID int, expiresA
 		localPricingGroupActivity.groups[group] = entries
 	}
 	entries[member] = pricingGroupActivityEntry{userID: userID, expiresAt: expiresAt}
+	if userID > 0 {
+		userEntries := localPricingGroupActivity.users[userID]
+		if userEntries == nil {
+			userEntries = make(map[string]pricingGroupActivityEntry)
+			localPricingGroupActivity.users[userID] = userEntries
+		}
+		userEntries[member] = pricingGroupActivityEntry{userID: userID, expiresAt: expiresAt}
+	}
 }
 
 func removeLocalPricingGroupActivity(group, member string) {
@@ -83,6 +102,19 @@ func removeLocalPricingGroupActivity(group, member string) {
 	delete(entries, member)
 	if len(entries) == 0 {
 		delete(localPricingGroupActivity.groups, group)
+	}
+}
+
+func removeLocalPricingUserActivity(userID int, member string) {
+	if userID <= 0 {
+		return
+	}
+	localPricingGroupActivity.Lock()
+	defer localPricingGroupActivity.Unlock()
+	entries := localPricingGroupActivity.users[userID]
+	delete(entries, member)
+	if len(entries) == 0 {
+		delete(localPricingGroupActivity.users, userID)
 	}
 }
 
@@ -100,34 +132,54 @@ func enqueuePricingGroupActivityRedisOperation(operation pricingGroupActivityRed
 
 func runPricingGroupActivityRedisWriter() {
 	for first := range pricingGroupActivityRedisOperations {
-		pending := map[string]pricingGroupActivityRedisOperation{
-			first.group + "\x00" + first.member: first,
-		}
-		for len(pending) < 512 {
+		pendingGroups := make(map[string]pricingGroupActivityRedisOperation)
+		pendingUsers := make(map[string]pricingGroupActivityRedisOperation)
+		queue := []pricingGroupActivityRedisOperation{first}
+		for len(queue) < 512 {
 			select {
 			case operation := <-pricingGroupActivityRedisOperations:
-				pending[operation.group+"\x00"+operation.member] = operation
+				queue = append(queue, operation)
 			default:
 				goto flush
 			}
 		}
 	flush:
+		for _, operation := range queue {
+			if operation.group != "" {
+				pendingGroups[operation.group+"\x00"+operation.member] = operation
+			}
+			if operation.userID > 0 && (!operation.remove || operation.removeUser) {
+				pendingUsers[strconv.Itoa(operation.userID)+"\x00"+operation.member] = operation
+			}
+		}
 		if !common.RedisEnabled || common.RDB == nil {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
 		pipeline := common.RDB.TxPipeline()
-		for _, operation := range pending {
+		for _, operation := range pendingGroups {
 			key := pricingGroupActivityRedisKey(operation.group)
 			if operation.remove {
 				pipeline.ZRem(ctx, key, operation.member)
-				continue
+			} else {
+				pipeline.ZAdd(ctx, key, &redis.Z{
+					Score:  float64(operation.expiresAt),
+					Member: operation.member,
+				})
+				pipeline.Expire(ctx, key, 2*pricingGroupActivityLease)
 			}
-			pipeline.ZAdd(ctx, key, &redis.Z{
-				Score:  float64(operation.expiresAt),
-				Member: operation.member,
-			})
-			pipeline.Expire(ctx, key, 2*pricingGroupActivityLease)
+		}
+		for _, operation := range pendingUsers {
+			key := pricingUserActivityRedisKey(operation.userID)
+			if operation.removeUser {
+				pipeline.ZRem(ctx, key, operation.member)
+			} else {
+				pipeline.ZAdd(ctx, key, &redis.Z{
+					Score:  float64(operation.expiresAt),
+					Member: operation.member,
+				})
+				pipeline.Expire(ctx, key, 2*pricingGroupActivityLease)
+			}
 		}
 		_, _ = pipeline.Exec(ctx)
 		cancel()
@@ -135,13 +187,24 @@ func runPricingGroupActivityRedisWriter() {
 }
 
 func (session *pricingGroupActivitySession) refreshLocked() {
-	if session.group == "" || session.finished {
+	if session.finished {
 		return
 	}
 	expiresAt := time.Now().Add(pricingGroupActivityLease).UnixMilli()
-	refreshLocalPricingGroupActivity(session.group, session.member, session.userID, expiresAt)
+	if session.group != "" {
+		refreshLocalPricingGroupActivity(session.group, session.member, session.userID, expiresAt)
+	} else if session.userID > 0 {
+		localPricingGroupActivity.Lock()
+		entries := localPricingGroupActivity.users[session.userID]
+		if entries == nil {
+			entries = make(map[string]pricingGroupActivityEntry)
+			localPricingGroupActivity.users[session.userID] = entries
+		}
+		entries[session.member] = pricingGroupActivityEntry{userID: session.userID, expiresAt: expiresAt}
+		localPricingGroupActivity.Unlock()
+	}
 	enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-		group: session.group, member: session.member, expiresAt: expiresAt,
+		group: session.group, member: session.member, userID: session.userID, expiresAt: expiresAt,
 	})
 }
 
@@ -161,7 +224,7 @@ func (session *pricingGroupActivitySession) move(group string) {
 	if session.group != "" {
 		removeLocalPricingGroupActivity(session.group, session.member)
 		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-			group: session.group, member: session.member, remove: true,
+			group: session.group, member: session.member, userID: session.userID, remove: true,
 		})
 	}
 	session.group = group
@@ -176,11 +239,16 @@ func (session *pricingGroupActivitySession) finish() {
 		defer session.Unlock()
 		session.finished = true
 		if session.group == "" {
+			removeLocalPricingUserActivity(session.userID, session.member)
+			enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
+				member: session.member, userID: session.userID, remove: true, removeUser: true,
+			})
 			return
 		}
 		removeLocalPricingGroupActivity(session.group, session.member)
+		removeLocalPricingUserActivity(session.userID, session.member)
 		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-			group: session.group, member: session.member, remove: true,
+			group: session.group, member: session.member, userID: session.userID, remove: true, removeUser: true,
 		})
 	})
 }
@@ -191,7 +259,7 @@ func (session *pricingGroupActivitySession) finish() {
 // by a crashed node.
 func BeginPricingGroupActivity(ctx *gin.Context, group string, userID int, requestID string) func() {
 	group = strings.TrimSpace(group)
-	if group == "" {
+	if group == "" && userID <= 0 {
 		return func() {}
 	}
 	requestID = strings.TrimSpace(requestID)
@@ -242,7 +310,10 @@ func UpdatePricingGroupActivity(ctx *gin.Context, group string) {
 	}
 }
 
-func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
+// collectPricingGroupActivity returns the active request members grouped by
+// pricing group. The boolean reports whether a configured Redis lookup failed
+// and the result may therefore only contain this process's local activity.
+func collectPricingGroupActivity(groups []string) (map[string]map[string]int, bool) {
 	now := time.Now().UnixMilli()
 	membersByGroup := make(map[string]map[string]int, len(groups))
 	uniqueGroups := make([]string, 0, len(groups))
@@ -274,6 +345,7 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 	}
 	localPricingGroupActivity.Unlock()
 
+	redisDegraded := common.RedisEnabled && common.RDB == nil && len(uniqueGroups) > 0
 	if common.RedisEnabled && common.RDB != nil && len(uniqueGroups) > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
 		pipeline := common.RDB.Pipeline()
@@ -292,6 +364,7 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 			for group, command := range commands {
 				members, commandErr := command.Result()
 				if commandErr != nil {
+					redisDegraded = true
 					continue
 				}
 				for _, member := range members {
@@ -300,13 +373,20 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 					membersByGroup[group][member] = userID
 				}
 			}
+		} else {
+			redisDegraded = true
 		}
 	}
+	return membersByGroup, redisDegraded
+}
 
-	activityByGroup := make(map[string]PricingGroupActivity, len(uniqueGroups))
-	for _, group := range uniqueGroups {
+func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
+	membersByGroup, _ := collectPricingGroupActivity(groups)
+
+	activityByGroup := make(map[string]PricingGroupActivity, len(membersByGroup))
+	for group, members := range membersByGroup {
 		users := make(map[int]struct{})
-		for _, userID := range membersByGroup[group] {
+		for _, userID := range members {
 			if userID > 0 {
 				users[userID] = struct{}{}
 			}
@@ -317,6 +397,65 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 		}
 	}
 	return activityByGroup
+}
+
+// collectPricingUserActivity reads one user's active request members from the
+// local index and its dedicated Redis sorted set. The local index is always
+// included so a request started on this process is visible immediately, while
+// Redis provides the cross-node view when it is available.
+func collectPricingUserActivity(userID int) (map[string]struct{}, bool) {
+	activeMembers := make(map[string]struct{})
+	if userID <= 0 {
+		return activeMembers, false
+	}
+	now := time.Now().UnixMilli()
+	localPricingGroupActivity.Lock()
+	entries := localPricingGroupActivity.users[userID]
+	for member, entry := range entries {
+		if entry.expiresAt <= now {
+			delete(entries, member)
+			continue
+		}
+		activeMembers[member] = struct{}{}
+	}
+	if len(entries) == 0 {
+		delete(localPricingGroupActivity.users, userID)
+	}
+	localPricingGroupActivity.Unlock()
+
+	redisDegraded := common.RedisEnabled && common.RDB == nil
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
+		pipeline := common.RDB.Pipeline()
+		key := pricingUserActivityRedisKey(userID)
+		pipeline.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10))
+		membersCommand := pipeline.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+			Min: strconv.FormatInt(now+1, 10),
+			Max: "+inf",
+		})
+		_, err := pipeline.Exec(ctx)
+		cancel()
+		if err != nil {
+			redisDegraded = true
+		} else if members, commandErr := membersCommand.Result(); commandErr != nil {
+			redisDegraded = true
+		} else {
+			for _, member := range members {
+				activeMembers[member] = struct{}{}
+			}
+		}
+	}
+	return activeMembers, redisDegraded
+}
+
+// GetUserInFlightRequests returns the number of active relay requests owned
+// by one user. It uses the dedicated user index and does not scan groups.
+func GetUserInFlightRequests(userID int) (count int, degraded bool) {
+	if userID <= 0 {
+		return 0, false
+	}
+	activeMembers, degraded := collectPricingUserActivity(userID)
+	return len(activeMembers), degraded
 }
 
 func GetTotalPricingGroupConnections(groups []string) int {

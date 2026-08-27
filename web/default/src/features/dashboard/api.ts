@@ -59,6 +59,14 @@ export async function getUserQuotaSummary() {
   return res.data;
 }
 
+export async function getUserInFlight() {
+  const res = await api.get<{
+    success: boolean;
+    data?: { in_flight: number; degraded: boolean };
+  }>('/api/user/self/in-flight', { skipErrorHandler: true });
+  return res.data;
+}
+
 // ----------------------------------------------------------------------------
 // System Monitoring
 // ----------------------------------------------------------------------------

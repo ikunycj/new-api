@@ -86,6 +86,7 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
+				selfRoute.GET("/self/in-flight", controller.GetUserInFlight)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), controller.UpdateSelf)
 				selfRoute.PUT("/self/onboarding", controller.CompleteOnboarding)
