@@ -89,7 +89,9 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
     return () => window.clearInterval(timer)
   }, [])
 
-  const monitors = statusQuery.data ?? []
+  const monitors = (statusQuery.data ?? []).filter(
+    (monitor) => monitor.can_test
+  )
   const operational = monitors.filter(
     (monitor) => monitor.status === 'success'
   ).length
