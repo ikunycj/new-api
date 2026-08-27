@@ -16,11 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
+import { Activity, Clock, Hash } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getAdminConsoleStats } from '@/features/admin-console/api'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
@@ -59,11 +62,26 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
   }
 }
 
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0 秒'
+  if (seconds < 1) return `${Math.round(seconds * 1000)} 毫秒`
+  return `${seconds.toFixed(seconds >= 10 ? 0 : 2)} 秒`
+}
+
 export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
   const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = props.includeAdminData ?? !!(user?.role && user.role >= 10)
+  const includeAdminData =
+    props.includeAdminData ?? !!(user?.role && user.role >= 10)
+  const adminStatsQuery = useQuery({
+    queryKey: ['admin-console-stats'],
+    queryFn: getAdminConsoleStats,
+    enabled: includeAdminData,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    placeholderData: (previous) => previous,
+  })
   const [stats, setStats] = useState<{
     totalQuota: number
     totalCount: number
@@ -92,7 +110,10 @@ export function LogStatCards(props: LogStatCardsProps) {
     const timeDiff = (timeRange.end_timestamp - timeRange.start_timestamp) / 60
     setTimeRangeMinutes(timeDiff)
 
-    void getUserQuotaDates(buildQueryParams(timeRange, filters), isAdmin)
+    void getUserQuotaDates(
+      buildQueryParams(timeRange, filters),
+      includeAdminData
+    )
       .then((res) => {
         if (abortController.signal.aborted) return
         const data = res?.data || []
@@ -114,7 +135,7 @@ export function LogStatCards(props: LogStatCardsProps) {
     return () => {
       abortController.abort()
     }
-  }, [filters, isAdmin, onDataUpdate])
+  }, [filters, includeAdminData, onDataUpdate])
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,
@@ -122,9 +143,14 @@ export function LogStatCards(props: LogStatCardsProps) {
     tpm: stats?.totalTokens ?? 0,
   }
 
-  const items = statCardsConfig.map((config) => {
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const modelConfigs = includeAdminData
+    ? statCardsConfig.filter(
+        (config) => config.key === 'avgRpm' || config.key === 'avgTpm'
+      )
+    : statCardsConfig
+  const modelItems = modelConfigs.map((config) => {
     const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
-    const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
     const formatted =
       config.key === 'quota'
         ? {
@@ -140,8 +166,65 @@ export function LogStatCards(props: LogStatCardsProps) {
       desc: config.description,
       icon: config.icon,
       iconTone: config.iconTone,
+      loading,
+      error,
     }
   })
+
+  let items = modelItems
+  if (includeAdminData) {
+    const adminStats = adminStatsQuery.data
+    const requestTotal = formatStatNumber(
+      adminStats?.requests.total ?? 0,
+      locale
+    )
+    const requestsToday = formatStatNumber(
+      adminStats?.requests.today ?? 0,
+      locale
+    )
+    const rpm = formatStatNumber(adminStats?.performance.rpm ?? 0, locale)
+    const tpm = formatStatNumber(adminStats?.performance.tpm ?? 0, locale)
+    const averageResponse = formatDuration(
+      adminStats?.performance.average_response_seconds ?? 0
+    )
+    const responsePercentiles = `P90 ${formatDuration(adminStats?.performance.p90_response_seconds ?? 0)} / P99 ${formatDuration(adminStats?.performance.p99_response_seconds ?? 0)}`
+    const adminLoading = adminStatsQuery.isLoading && !adminStats
+    const adminError = adminStatsQuery.isError && !adminStats
+
+    items = [
+      {
+        title: '请求总数',
+        value: requestTotal.displayValue,
+        fullValue: requestTotal.fullValue,
+        desc: `今日请求 ${requestsToday.fullValue}`,
+        icon: Hash,
+        iconTone: 'info',
+        loading: adminLoading,
+        error: adminError,
+      },
+      {
+        title: '实时性能',
+        value: `${rpm.displayValue} RPM`,
+        fullValue: `${rpm.fullValue} RPM`,
+        desc: `${tpm.displayValue} TPM`,
+        icon: Activity,
+        iconTone: 'success',
+        loading: adminLoading,
+        error: adminError,
+      },
+      {
+        title: '今日平均响应',
+        value: averageResponse,
+        fullValue: averageResponse,
+        desc: responsePercentiles,
+        icon: Clock,
+        iconTone: 'chart-4',
+        loading: adminLoading,
+        error: adminError,
+      },
+      ...modelItems,
+    ]
+  }
 
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -149,14 +232,14 @@ export function LogStatCards(props: LogStatCardsProps) {
         {items.map((it, idx) => {
           const Icon = it.icon
           let valueContent
-          if (loading) {
+          if (it.loading) {
             valueContent = (
               <div className='mt-1 flex flex-col gap-1 sm:mt-2 sm:gap-1.5'>
                 <Skeleton className='h-5 w-16 sm:h-7 sm:w-20' />
                 <Skeleton className='hidden h-3.5 w-28 md:block' />
               </div>
             )
-          } else if (error) {
+          } else if (it.error) {
             valueContent = (
               <>
                 <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>

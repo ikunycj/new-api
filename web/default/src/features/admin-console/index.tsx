@@ -19,10 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Alert02Icon,
   ChartUpIcon,
-  Clock01Icon,
+  Coins01Icon,
   DashboardSpeed01Icon,
-  FlashIcon,
   Key01Icon,
+  Layers01Icon,
   MoneyReceive01Icon,
   ServerStack01Icon,
   UserAdd01Icon,
@@ -37,6 +37,7 @@ import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
+import { formatQuota } from '@/lib/format'
 
 import type { AdminAnalyticsSection } from './admin-analytics'
 import { getAdminConsoleStats, getAdminConsoleSystemLoad } from './api'
@@ -60,10 +61,12 @@ function formatCompactNumber(value: number): string {
   }).format(value)
 }
 
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0 秒'
-  if (seconds < 1) return `${Math.round(seconds * 1000)} 毫秒`
-  return `${seconds.toFixed(seconds >= 10 ? 0 : 2)} 秒`
+function formatTokenAmount(value: number): string {
+  if (!Number.isFinite(value)) return '0.00M'
+  const absolute = Math.abs(value)
+  const divisor = absolute >= 1_000_000_000 ? 1_000_000_000 : 1_000_000
+  const suffix = divisor === 1_000_000_000 ? 'B' : 'M'
+  return `${(value / divisor).toFixed(2)}${suffix}`
 }
 
 function normalizePercentage(value: number): number {
@@ -158,7 +161,7 @@ function ConsoleCardGrid(props: {
     {
       title: '今日请求',
       value: formatCompactNumber(stats?.requests.today ?? 0),
-      detail: `累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
+      detail: `请求总数 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
       icon: ChartUpIcon,
       tone: 'chart-3',
     },
@@ -209,24 +212,17 @@ function ConsoleCardGrid(props: {
       tone: 'chart-3',
     },
     {
-      title: '实时性能',
-      value: (
-        <>
-          {formatCompactNumber(stats?.performance.rpm ?? 0)}
-          <span className='text-muted-foreground ml-1 text-xs font-medium'>
-            RPM
-          </span>
-        </>
-      ),
-      detail: `${formatCompactNumber(stats?.performance.tpm ?? 0)} TPM`,
-      icon: FlashIcon,
+      title: '总扣费额度',
+      value: formatQuota(stats?.quota.total ?? 0),
+      detail: `今日 ${formatQuota(stats?.quota.today ?? 0)}`,
+      icon: Coins01Icon,
       tone: 'chart-2',
     },
     {
-      title: '今日平均响应',
-      value: formatDuration(stats?.performance.average_response_seconds ?? 0),
-      detail: `P90 ${formatDuration(stats?.performance.p90_response_seconds ?? 0)} / P99 ${formatDuration(stats?.performance.p99_response_seconds ?? 0)}`,
-      icon: Clock01Icon,
+      title: '总 Token 数',
+      value: formatTokenAmount(stats?.tokens.total ?? 0),
+      detail: `今日 ${formatTokenAmount(stats?.tokens.today ?? 0)}`,
+      icon: Layers01Icon,
       tone: 'chart-4',
     },
   ]
