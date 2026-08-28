@@ -6331,6 +6331,16 @@
     "These limits apply to tasks submitted to this server agent.": "Các giới hạn này áp dụng cho tác vụ gửi đến Agent máy chủ này.",
     "Agent capacity must be a positive integer": "Dung lượng Agent phải là số nguyên dương",
     "Agent capacity updated": "Đã cập nhật dung lượng Agent",
-    "Agent capacity must not exceed the load-test limits": "Dung lượng Agent không được vượt quá giới hạn kiểm thử tải"
+    "Agent capacity must not exceed the load-test limits": "Dung lượng Agent không được vượt quá giới hạn kiểm thử tải",
+    "Test mode": "Chế độ kiểm thử",
+    "Real channels": "Kênh thật",
+    "Mock channels": "Kênh Mock",
+    "Mock mode uses dedicated channels and does not consume the real account pool.": "Chế độ Mock dùng các kênh riêng và không tiêu tốn pool tài khoản thật.",
+    "Real mode uses the API key configured account pool.": "Chế độ thật dùng pool được cấu hình cho API key.",
+    "Random failure rate": "Tỷ lệ lỗi ngẫu nhiên",
+    "Failure status": "Trạng thái lỗi",
+    "Additional latency (ms)": "Độ trễ bổ sung (ms)",
+    "Mock": "Mock",
+    "Real": "Thật"
   }
 }

@@ -6331,6 +6331,16 @@
     "These limits apply to tasks submitted to this server agent.": "These limits apply to tasks submitted to this server agent.",
     "Agent capacity must be a positive integer": "Agent capacity must be a positive integer",
     "Agent capacity updated": "Agent capacity updated",
-    "Agent capacity must not exceed the load-test limits": "Agent capacity must not exceed the load-test limits"
+    "Agent capacity must not exceed the load-test limits": "Agent capacity must not exceed the load-test limits",
+    "Test mode": "Test mode",
+    "Real channels": "Real channels",
+    "Mock channels": "Mock channels",
+    "Mock mode uses dedicated channels and does not consume the real account pool.": "Mock mode uses dedicated channels and does not consume the real account pool.",
+    "Real mode uses the API key configured account pool.": "Real mode uses the API key configured account pool.",
+    "Random failure rate": "Random failure rate",
+    "Failure status": "Failure status",
+    "Additional latency (ms)": "Additional latency (ms)",
+    "Mock": "Mock",
+    "Real": "Real"
   }
 }

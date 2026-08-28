@@ -91,3 +91,21 @@ func TestValidateServerURLRequiresHTTPSOutsideLoopback(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTaskRejectsInvalidMockSettings(t *testing.T) {
+	valid := loadTestTask{
+		RunID: "run-1", TargetURL: "https://alltokenapi.com", APIKey: "sk-test",
+		Model: "gpt-test", Endpoint: "openai", Prompt: "OK", DurationSeconds: 5,
+		RequestsPerSecond: 1, Concurrency: 1, MockEnabled: true,
+		MockFailureRate: 0.25, MockFailureStatus: 503, MockLatencyMS: 100,
+	}
+	require.NoError(t, validateTask(valid))
+
+	invalidRate := valid
+	invalidRate.MockFailureRate = 1.1
+	assert.ErrorContains(t, validateTask(invalidRate), "mock settings")
+
+	invalidStatus := valid
+	invalidStatus.MockFailureStatus = 418
+	assert.ErrorContains(t, validateTask(invalidStatus), "failure status")
+}

@@ -25,6 +25,7 @@ import {
   Server,
   Square,
   Trash2,
+  FlaskConical,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,8 +33,6 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -49,6 +48,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
 import {
   Table,
   TableBody,
@@ -64,6 +66,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useIsAdmin } from '@/hooks/use-admin'
 
 import {
@@ -101,6 +104,8 @@ const ACTIVE_RUN_STATUSES = new Set([
   'cancel_requested',
 ])
 
+const MOCK_FAILURE_STATUSES = [429, 500, 502, 503, 504]
+
 function formatMemory(bytes: number) {
   if (bytes <= 0) return '-'
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`
@@ -130,6 +135,10 @@ export function AgentPanel(props: AgentPanelProps) {
   const [savingCapacity, setSavingCapacity] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [testMode, setTestMode] = useState<'real' | 'mock'>('real')
+  const [mockFailurePercent, setMockFailurePercent] = useState(20)
+  const [mockFailureStatus, setMockFailureStatus] = useState('503')
+  const [mockLatencyMS, setMockLatencyMS] = useState('0')
   const refreshInFlightRef = useRef(false)
   const pricingByKeyRef = useRef<Record<string, LoadTestPricing | null>>({})
 
@@ -261,6 +270,19 @@ export function AgentPanel(props: AgentPanelProps) {
       await createLoadTestAgentRun({
         ...props.request,
         agent_id: selectedAgentId,
+        mock_enabled: props.mode === 'managed' && testMode === 'mock',
+        mock_failure_rate:
+          props.mode === 'managed' && testMode === 'mock'
+            ? mockFailurePercent / 100
+            : 0,
+        mock_failure_status:
+          props.mode === 'managed' && testMode === 'mock'
+            ? Number(mockFailureStatus)
+            : 0,
+        mock_latency_ms:
+          props.mode === 'managed' && testMode === 'mock'
+            ? Number(mockLatencyMS)
+            : 0,
       })
       toast.success(t('Agent load test queued'))
       await refresh()
@@ -269,7 +291,17 @@ export function AgentPanel(props: AgentPanelProps) {
     } finally {
       setStarting(false)
     }
-  }, [props.request, refresh, selectedAgentId, t])
+  }, [
+    mockFailurePercent,
+    mockFailureStatus,
+    mockLatencyMS,
+    props.mode,
+    props.request,
+    refresh,
+    selectedAgentId,
+    t,
+    testMode,
+  ])
 
   const stop = useCallback(
     async (runId: string) => {
@@ -398,6 +430,107 @@ export function AgentPanel(props: AgentPanelProps) {
           </div>
         </CardHeader>
         <CardContent className='space-y-4'>
+          {props.mode === 'managed' && (
+            <div className='space-y-4 border-b pb-4'>
+              <div className='flex flex-wrap items-center justify-between gap-3'>
+                <div>
+                  <Label>{t('Test mode')}</Label>
+                  <p className='text-muted-foreground mt-1 text-xs'>
+                    {testMode === 'mock'
+                      ? t(
+                          'Mock mode uses dedicated channels and does not consume the real account pool.'
+                        )
+                      : t(
+                          'Real mode uses the API key configured account pool.'
+                        )}
+                  </p>
+                </div>
+                <ToggleGroup
+                  aria-label={t('Test mode')}
+                  onValueChange={(values) => {
+                    const value = values[0] as 'real' | 'mock' | undefined
+                    if (value) setTestMode(value)
+                  }}
+                  size='sm'
+                  value={[testMode]}
+                  variant='outline'
+                >
+                  <ToggleGroupItem value='real'>
+                    <Server className='size-4' />
+                    {t('Real channels')}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value='mock'>
+                    <FlaskConical className='size-4' />
+                    {t('Mock channels')}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              {testMode === 'mock' && (
+                <div className='grid gap-4 md:grid-cols-[minmax(16rem,1fr)_10rem_10rem]'>
+                  <div className='space-y-2'>
+                    <div className='flex items-center justify-between gap-3'>
+                      <Label htmlFor='mock-failure-rate'>
+                        {t('Random failure rate')}
+                      </Label>
+                      <span className='text-sm tabular-nums'>
+                        {mockFailurePercent}%
+                      </span>
+                    </div>
+                    <Slider
+                      id='mock-failure-rate'
+                      max={100}
+                      min={0}
+                      onValueChange={(value) => {
+                        const next = Array.isArray(value) ? value[0] : value
+                        setMockFailurePercent(Number(next))
+                      }}
+                      step={1}
+                      value={[mockFailurePercent]}
+                    />
+                  </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='mock-failure-status'>
+                      {t('Failure status')}
+                    </Label>
+                    <Select
+                      onValueChange={(value) =>
+                        value && setMockFailureStatus(value)
+                      }
+                      value={mockFailureStatus}
+                    >
+                      <SelectTrigger
+                        id='mock-failure-status'
+                        className='w-full'
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MOCK_FAILURE_STATUSES.map((status) => (
+                          <SelectItem key={status} value={String(status)}>
+                            HTTP {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='space-y-2'>
+                    <Label htmlFor='mock-latency-ms'>
+                      {t('Additional latency (ms)')}
+                    </Label>
+                    <Input
+                      id='mock-latency-ms'
+                      max={120000}
+                      min={0}
+                      onChange={(event) => setMockLatencyMS(event.target.value)}
+                      type='number'
+                      value={mockLatencyMS}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className='flex flex-wrap items-end gap-3'>
             <div className='min-w-64 flex-1 space-y-1.5'>
               <span className='text-sm font-medium'>{t('Load generator')}</span>
@@ -495,6 +628,7 @@ export function AgentPanel(props: AgentPanelProps) {
                   <TableRow>
                     <TableHead>{t('Run ID')}</TableHead>
                     <TableHead>{t('Status')}</TableHead>
+                    <TableHead>{t('Test mode')}</TableHead>
                     <TableHead>{t('API Key')}</TableHead>
                     <TableHead>{t('Test model')}</TableHead>
                     <TableHead>{t('Duration')}</TableHead>
@@ -541,6 +675,20 @@ export function AgentPanel(props: AgentPanelProps) {
                           <Badge variant={active ? 'default' : 'secondary'}>
                             {t(run.status)}
                           </Badge>
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap'>
+                          {run.mock_enabled ? (
+                            <div className='space-y-1'>
+                              <Badge variant='outline'>{t('Mock')}</Badge>
+                              <p className='text-muted-foreground text-xs tabular-nums'>
+                                {Math.round(run.mock_failure_rate * 100)}% ·
+                                HTTP {run.mock_failure_status} ·{' '}
+                                {run.mock_latency_ms}ms
+                              </p>
+                            </div>
+                          ) : (
+                            <Badge variant='secondary'>{t('Real')}</Badge>
+                          )}
                         </TableCell>
                         <TableCell>{run.key_name}</TableCell>
                         <TableCell>{run.model}</TableCell>

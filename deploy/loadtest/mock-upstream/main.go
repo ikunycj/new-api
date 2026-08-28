@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -21,6 +22,19 @@ type config struct {
 	streamInterval time.Duration
 	errorRate      float64
 }
+
+type requestConfig struct {
+	errorRate   float64
+	errorStatus int
+	latency     time.Duration
+}
+
+const (
+	mockFailureRateHeader   = "X-Alltoken-Mock-Failure-Rate"
+	mockFailureStatusHeader = "X-Alltoken-Mock-Failure-Status"
+	mockLatencyMSHeader     = "X-Alltoken-Mock-Latency-Ms"
+	maxMockLatencyMS        = 120000
+)
 
 type request struct {
 	Model  string `json:"model"`
@@ -59,7 +73,7 @@ func main() {
 	if cfg.streamChunks < 1 {
 		cfg.streamChunks = 1
 	}
-	if cfg.errorRate < 0 || cfg.errorRate > 1 {
+	if math.IsNaN(cfg.errorRate) || math.IsInf(cfg.errorRate, 0) || cfg.errorRate < 0 || cfg.errorRate > 1 {
 		log.Fatal("ERROR_RATE must be between 0 and 1")
 	}
 
@@ -106,16 +120,25 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	requestCfg, err := loadRequestConfig(r.Header, cfg)
+	if err != nil {
+		errorsTotal.Add(1)
+		writeChannelError(w, state, err.Error(), "invalid_mock_config", http.StatusBadRequest)
+		return
+	}
 	var input request
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil {
 		errorsTotal.Add(1)
 		http.Error(w, `{"error":{"message":"invalid request"}}`, http.StatusBadRequest)
 		return
 	}
-	if cfg.errorRate > 0 && rand.Float64() < cfg.errorRate {
+	if requestCfg.latency > 0 {
+		time.Sleep(requestCfg.latency)
+	}
+	if shouldInjectFailure(requestCfg.errorRate, rand.Float64()) {
 		errorsTotal.Add(1)
 		time.Sleep(cfg.ttft)
-		writeChannelError(w, state, "injected load-test failure", "mock_error", http.StatusServiceUnavailable)
+		writeChannelError(w, state, "injected load-test failure", "mock_error", requestCfg.errorStatus)
 		return
 	}
 	if !state.consume(30) {
@@ -131,6 +154,45 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 	time.Sleep(cfg.response)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = fmt.Fprintf(w, `{"id":"chatcmpl-loadtest","object":"chat.completion","created":%d,"model":"gpt-3.5-turbo","choices":[{"index":0,"message":{"role":"assistant","content":"deterministic load-test response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`, time.Now().Unix())
+}
+
+func loadRequestConfig(header http.Header, cfg config) (requestConfig, error) {
+	requestCfg := requestConfig{errorRate: cfg.errorRate, errorStatus: http.StatusServiceUnavailable}
+	if value := strings.TrimSpace(header.Get(mockFailureRateHeader)); value != "" {
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) || parsed < 0 || parsed > 1 {
+			return requestConfig{}, fmt.Errorf("%s must be between 0 and 1", mockFailureRateHeader)
+		}
+		requestCfg.errorRate = parsed
+	}
+	if value := strings.TrimSpace(header.Get(mockFailureStatusHeader)); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || !allowedFailureStatus(parsed) {
+			return requestConfig{}, fmt.Errorf("%s is unsupported", mockFailureStatusHeader)
+		}
+		requestCfg.errorStatus = parsed
+	}
+	if value := strings.TrimSpace(header.Get(mockLatencyMSHeader)); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 || parsed > maxMockLatencyMS {
+			return requestConfig{}, fmt.Errorf("%s must be between 0 and %d", mockLatencyMSHeader, maxMockLatencyMS)
+		}
+		requestCfg.latency = time.Duration(parsed) * time.Millisecond
+	}
+	return requestCfg, nil
+}
+
+func allowedFailureStatus(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldInjectFailure(rate, randomValue float64) bool {
+	return rate > 0 && randomValue < rate
 }
 
 func writeChannelError(w http.ResponseWriter, state *channelState, message, code string, status int) {

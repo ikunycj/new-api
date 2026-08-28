@@ -248,6 +248,10 @@ export type LoadTestAgentRun = {
   endpoint: LoadTestEndpoint
   prompt: string
   prompt_cache: boolean
+  mock_enabled: boolean
+  mock_failure_rate: number
+  mock_failure_status: number
+  mock_latency_ms: number
   duration_seconds: number
   requests_per_second: number
   concurrency: number
@@ -281,6 +285,10 @@ export type CreateLoadTestAgentRun = {
   endpoint: LoadTestEndpoint
   prompt: string
   prompt_cache: boolean
+  mock_enabled?: boolean
+  mock_failure_rate?: number
+  mock_failure_status?: number
+  mock_latency_ms?: number
   duration_seconds: number
   requests_per_second: number
   concurrency: number

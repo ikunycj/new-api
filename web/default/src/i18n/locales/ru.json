@@ -6331,6 +6331,16 @@
     "These limits apply to tasks submitted to this server agent.": "Эти ограничения применяются к задачам, отправленным этому серверному агенту.",
     "Agent capacity must be a positive integer": "Емкость агента должна быть положительным целым числом",
     "Agent capacity updated": "Емкость агента обновлена",
-    "Agent capacity must not exceed the load-test limits": "Емкость агента не может превышать ограничения нагрузочного теста"
+    "Agent capacity must not exceed the load-test limits": "Емкость агента не может превышать ограничения нагрузочного теста",
+    "Test mode": "Режим тестирования",
+    "Real channels": "Реальные каналы",
+    "Mock channels": "Mock-каналы",
+    "Mock mode uses dedicated channels and does not consume the real account pool.": "В Mock-режиме используются выделенные каналы, реальный пул аккаунтов не расходуется.",
+    "Real mode uses the API key configured account pool.": "Реальный режим использует пул, настроенный для API-ключа.",
+    "Random failure rate": "Случайная доля ошибок",
+    "Failure status": "Статус ошибки",
+    "Additional latency (ms)": "Дополнительная задержка (мс)",
+    "Mock": "Mock",
+    "Real": "Реальный"
   }
 }

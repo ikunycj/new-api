@@ -59,6 +59,8 @@ func SetupApiRequestHeader(info *common.RelayInfo, c *gin.Context, req *http.Hea
 
 const clientHeaderPlaceholderPrefix = "{client_header:"
 
+const mockLoadTestHeaderPrefix = "x-alltoken-mock-"
+
 const (
 	headerPassthroughAllKey        = "*"
 	headerPassthroughRegexPrefix   = "re:"
@@ -238,6 +240,9 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 			if shouldSkipPassthroughHeader(name) {
 				continue
 			}
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(name)), mockLoadTestHeaderPrefix) && !info.ChannelSetting.MockLoadTest {
+				continue
+			}
 			if !passAll {
 				matched := false
 				for _, re := range passthroughRegex {
@@ -264,6 +269,9 @@ func processHeaderOverride(info *common.RelayInfo, c *gin.Context) (map[string]s
 		}
 		key := strings.TrimSpace(strings.ToLower(k))
 		if key == "" {
+			continue
+		}
+		if strings.HasPrefix(key, mockLoadTestHeaderPrefix) && !info.ChannelSetting.MockLoadTest {
 			continue
 		}
 

@@ -83,8 +83,8 @@ SELECT
   '',
   '{}',
   '',
-  '{"error_source":"channel"}',
-  '',
+  '{"error_source":"channel","mock_load_test":true}',
+  '{"X-Alltoken-Mock-Failure-Rate":"{client_header:X-Alltoken-Mock-Failure-Rate}","X-Alltoken-Mock-Failure-Status":"{client_header:X-Alltoken-Mock-Failure-Status}","X-Alltoken-Mock-Latency-Ms":"{client_header:X-Alltoken-Mock-Latency-Ms}"}',
   seed.priority
 FROM (VALUES
   ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080', 600),
@@ -149,7 +149,11 @@ INSERT INTO channel_error_mappings (
 )
 VALUES
   (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true)
+  (0, 0, 'mock_error', 429, 205002, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_error', 500, 205002, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_error', 502, 205002, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_error', 504, 205002, 'upstream', 'channel', 'switch_channel', true, true)
 ON CONFLICT (channel_id, channel_type, raw_code, status_code) DO UPDATE SET
   alltoken_code = EXCLUDED.alltoken_code,
   category = EXCLUDED.category,

@@ -1145,7 +1145,8 @@ const loadTestTabsKeys = {
     'Edit server agent capacity': 'サーバー Agent 容量を編集',
     'These limits apply to tasks submitted to this server agent.':
       'これらの制限は、このサーバー Agent に送信されるタスクに適用されます。',
-    'Agent capacity must be a positive integer': 'Agent 容量は正の整数で入力してください',
+    'Agent capacity must be a positive integer':
+      'Agent 容量は正の整数で入力してください',
     'Agent capacity must not exceed the load-test limits':
       'Agent 容量は負荷テストの上限を超えられません',
     'Agent capacity updated': 'Agent 容量を更新しました',
@@ -1193,6 +1194,111 @@ const loadTestTabsKeys = {
 }
 
 for (const [locale, translations] of Object.entries(loadTestTabsKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const mockLoadTestKeys = {
+  en: {
+    'Test mode': 'Test mode',
+    'Real channels': 'Real channels',
+    'Mock channels': 'Mock channels',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Mock mode uses dedicated channels and does not consume the real account pool.',
+    'Real mode uses the API key configured account pool.':
+      'Real mode uses the API key configured account pool.',
+    'Random failure rate': 'Random failure rate',
+    'Failure status': 'Failure status',
+    'Additional latency (ms)': 'Additional latency (ms)',
+    Mock: 'Mock',
+    Real: 'Real',
+  },
+  zh: {
+    'Test mode': '测试模式',
+    'Real channels': '真实渠道',
+    'Mock channels': 'Mock 渠道',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Mock 模式使用专用渠道，不消耗真实号池。',
+    'Real mode uses the API key configured account pool.':
+      '真实模式使用 API Key 配置的号池。',
+    'Random failure rate': '随机失败率',
+    'Failure status': '失败状态',
+    'Additional latency (ms)': '额外延迟（毫秒）',
+    Mock: 'Mock',
+    Real: '真实',
+  },
+  'zh-TW': {
+    'Test mode': '測試模式',
+    'Real channels': '真實渠道',
+    'Mock channels': 'Mock 渠道',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Mock 模式使用專用渠道，不消耗真實號池。',
+    'Real mode uses the API key configured account pool.':
+      '真實模式使用 API Key 設定的號池。',
+    'Random failure rate': '隨機失敗率',
+    'Failure status': '失敗狀態',
+    'Additional latency (ms)': '額外延遲（毫秒）',
+    Mock: 'Mock',
+    Real: '真實',
+  },
+  fr: {
+    'Test mode': 'Mode de test',
+    'Real channels': 'Canaux réels',
+    'Mock channels': 'Canaux simulés',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Le mode simulé utilise des canaux dédiés et ne consomme pas le pool réel.',
+    'Real mode uses the API key configured account pool.':
+      'Le mode réel utilise le pool configuré par la clé API.',
+    'Random failure rate': 'Taux d’échec aléatoire',
+    'Failure status': 'Statut d’échec',
+    'Additional latency (ms)': 'Latence supplémentaire (ms)',
+    Mock: 'Simulé',
+    Real: 'Réel',
+  },
+  ja: {
+    'Test mode': 'テストモード',
+    'Real channels': '実チャネル',
+    'Mock channels': 'Mock チャネル',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Mock モードは専用チャネルを使用し、実際のアカウントプールを消費しません。',
+    'Real mode uses the API key configured account pool.':
+      '実モードは API キーで設定されたアカウントプールを使用します。',
+    'Random failure rate': 'ランダム失敗率',
+    'Failure status': '失敗ステータス',
+    'Additional latency (ms)': '追加レイテンシ（ms）',
+    Mock: 'Mock',
+    Real: '実',
+  },
+  ru: {
+    'Test mode': 'Режим тестирования',
+    'Real channels': 'Реальные каналы',
+    'Mock channels': 'Mock-каналы',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'В Mock-режиме используются выделенные каналы, реальный пул аккаунтов не расходуется.',
+    'Real mode uses the API key configured account pool.':
+      'Реальный режим использует пул, настроенный для API-ключа.',
+    'Random failure rate': 'Случайная доля ошибок',
+    'Failure status': 'Статус ошибки',
+    'Additional latency (ms)': 'Дополнительная задержка (мс)',
+    Mock: 'Mock',
+    Real: 'Реальный',
+  },
+  vi: {
+    'Test mode': 'Chế độ kiểm thử',
+    'Real channels': 'Kênh thật',
+    'Mock channels': 'Kênh Mock',
+    'Mock mode uses dedicated channels and does not consume the real account pool.':
+      'Chế độ Mock dùng các kênh riêng và không tiêu tốn pool tài khoản thật.',
+    'Real mode uses the API key configured account pool.':
+      'Chế độ thật dùng pool được cấu hình cho API key.',
+    'Random failure rate': 'Tỷ lệ lỗi ngẫu nhiên',
+    'Failure status': 'Trạng thái lỗi',
+    'Additional latency (ms)': 'Độ trễ bổ sung (ms)',
+    Mock: 'Mock',
+    Real: 'Thật',
+  },
+}
+
+for (const [locale, translations] of Object.entries(mockLoadTestKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

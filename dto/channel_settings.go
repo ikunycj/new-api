@@ -16,6 +16,7 @@ type ChannelSettings struct {
 	// OpenAI-compatible upstreams. IKUN-compatible clusters may also send an
 	// X-Error-Source header to override the inference per response.
 	ErrorSource            string `json:"error_source,omitempty"`
+	MockLoadTest           bool   `json:"mock_load_test,omitempty"`
 	ForceFormat            bool   `json:"force_format,omitempty"`
 	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
 	Proxy                  string `json:"proxy"`

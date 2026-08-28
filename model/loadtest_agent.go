@@ -51,6 +51,10 @@ type LoadTestRun struct {
 	Endpoint          string            `json:"endpoint" gorm:"type:varchar(32);not null"`
 	Prompt            string            `json:"prompt" gorm:"type:text;not null"`
 	PromptCache       bool              `json:"prompt_cache"`
+	MockEnabled       bool              `json:"mock_enabled"`
+	MockFailureRate   float64           `json:"mock_failure_rate"`
+	MockFailureStatus int               `json:"mock_failure_status"`
+	MockLatencyMS     int               `json:"mock_latency_ms"`
 	TargetURL         string            `json:"-" gorm:"type:varchar(512);not null"`
 	DurationSeconds   int               `json:"duration_seconds" gorm:"not null"`
 	RequestsPerSecond int               `json:"requests_per_second" gorm:"not null"`

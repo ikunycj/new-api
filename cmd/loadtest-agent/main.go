@@ -53,16 +53,20 @@ type pollResponse struct {
 }
 
 type loadTestTask struct {
-	RunID             string `json:"run_id"`
-	TargetURL         string `json:"target_url"`
-	APIKey            string `json:"api_key"`
-	Model             string `json:"model"`
-	Endpoint          string `json:"endpoint"`
-	Prompt            string `json:"prompt"`
-	PromptCache       bool   `json:"prompt_cache"`
-	DurationSeconds   int    `json:"duration_seconds"`
-	RequestsPerSecond int    `json:"requests_per_second"`
-	Concurrency       int    `json:"concurrency"`
+	RunID             string  `json:"run_id"`
+	TargetURL         string  `json:"target_url"`
+	APIKey            string  `json:"api_key"`
+	Model             string  `json:"model"`
+	Endpoint          string  `json:"endpoint"`
+	Prompt            string  `json:"prompt"`
+	PromptCache       bool    `json:"prompt_cache"`
+	MockEnabled       bool    `json:"mock_enabled"`
+	MockFailureRate   float64 `json:"mock_failure_rate"`
+	MockFailureStatus int     `json:"mock_failure_status"`
+	MockLatencyMS     int     `json:"mock_latency_ms"`
+	DurationSeconds   int     `json:"duration_seconds"`
+	RequestsPerSecond int     `json:"requests_per_second"`
+	Concurrency       int     `json:"concurrency"`
 }
 
 type agentRuntime struct {
@@ -398,6 +402,10 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 		"ALLTOKEN_ENDPOINT="+task.Endpoint,
 		"ALLTOKEN_PROMPT="+task.Prompt,
 		"ALLTOKEN_PROMPT_CACHE="+strconv.FormatBool(task.PromptCache),
+		"ALLTOKEN_MOCK_ENABLED="+strconv.FormatBool(task.MockEnabled),
+		"ALLTOKEN_MOCK_FAILURE_RATE="+strconv.FormatFloat(task.MockFailureRate, 'f', -1, 64),
+		"ALLTOKEN_MOCK_FAILURE_STATUS="+strconv.Itoa(task.MockFailureStatus),
+		"ALLTOKEN_MOCK_LATENCY_MS="+strconv.Itoa(task.MockLatencyMS),
 		"ALLTOKEN_DURATION_SECONDS="+strconv.Itoa(task.DurationSeconds),
 		"ALLTOKEN_RPS="+strconv.Itoa(task.RequestsPerSecond),
 		"ALLTOKEN_CONCURRENCY="+strconv.Itoa(task.Concurrency),
@@ -627,6 +635,16 @@ func validateTask(task loadTestTask) error {
 	if task.DurationSeconds < 1 || task.RequestsPerSecond < 1 || task.Concurrency < 1 {
 		return errors.New("task load settings are invalid")
 	}
+	if task.MockEnabled {
+		if math.IsNaN(task.MockFailureRate) || math.IsInf(task.MockFailureRate, 0) || task.MockFailureRate < 0 || task.MockFailureRate > 1 || task.MockLatencyMS < 0 || task.MockLatencyMS > 120000 {
+			return errors.New("task mock settings are invalid")
+		}
+		switch task.MockFailureStatus {
+		case 429, 500, 502, 503, 504:
+		default:
+			return errors.New("task mock failure status is invalid")
+		}
+	}
 	return nil
 }
 
@@ -643,6 +661,7 @@ const durationSeconds = Number(__ENV.ALLTOKEN_DURATION_SECONDS);
 const targetRPS = Number(__ENV.ALLTOKEN_RPS);
 const concurrency = Number(__ENV.ALLTOKEN_CONCURRENCY);
 const promptCache = __ENV.ALLTOKEN_PROMPT_CACHE === 'true';
+const mockEnabled = __ENV.ALLTOKEN_MOCK_ENABLED === 'true';
 const cachePrefix = Array.from(
   { length: 48 },
   (_, index) => 'Stable load-test context section ' + (index + 1) + ': keep this deterministic prefix unchanged so provider prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.'
@@ -685,6 +704,11 @@ export default function () {
     'Content-Type': 'application/json',
     'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,
   };
+  if (mockEnabled) {
+    headers['X-Alltoken-Mock-Failure-Rate'] = __ENV.ALLTOKEN_MOCK_FAILURE_RATE;
+    headers['X-Alltoken-Mock-Failure-Status'] = __ENV.ALLTOKEN_MOCK_FAILURE_STATUS;
+    headers['X-Alltoken-Mock-Latency-Ms'] = __ENV.ALLTOKEN_MOCK_LATENCY_MS;
+  }
   if (endpoint === 'anthropic') {
     headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = '2023-06-01';

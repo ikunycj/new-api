@@ -4,9 +4,12 @@ import (
 	"math"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestValidLoadTestProgress(t *testing.T) {
@@ -35,6 +38,60 @@ func TestValidLoadTestProgress(t *testing.T) {
 			assert.Equal(t, test.want, got)
 		})
 	}
+}
+
+func TestValidateLoadTestMockSettings(t *testing.T) {
+	managed := &model.LoadTestAgent{Managed: true}
+	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockFailureRate: 0.25, MockFailureStatus: 503, MockLatencyMS: 500,
+	}))
+	assert.ErrorContains(t, validateLoadTestMockSettings(&model.LoadTestAgent{}, createLoadTestRunRequest{
+		MockEnabled: true, MockFailureStatus: 503,
+	}), "only available on server")
+	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockFailureRate: 1.1, MockFailureStatus: 503,
+	}), "between 0 and 1")
+	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockFailureStatus: 418,
+	}), "unsupported")
+	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockFailureStatus: 503,
+	}), "require mock mode")
+}
+
+func TestValidateLoadTestMockTokenRejectsMixedRealChannels(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.BillingGroupRoute{}, &model.BillingGroupChannel{}))
+	previousDB := model.DB
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = previousDB
+		model.InitChannelRoutingCache()
+	})
+
+	mockSetting := `{"mock_load_test":true}`
+	realSetting := `{}`
+	channels := []model.Channel{
+		{Id: 101, Name: "mock", Status: common.ChannelStatusEnabled, Setting: &mockSetting},
+		{Id: 102, Name: "real", Status: common.ChannelStatusEnabled, Setting: &realSetting},
+	}
+	require.NoError(t, db.Create(&channels).Error)
+	route := model.BillingGroupRoute{BillingGroup: "mock-only", Enabled: true}
+	require.NoError(t, db.Create(&route).Error)
+	require.NoError(t, db.Create(&[]model.BillingGroupChannel{
+		{BillingGroupRouteId: route.Id, ChannelId: 101, Priority: 100, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 102, Priority: 90, Enabled: true},
+	}).Error)
+	model.InitChannelRoutingCache()
+
+	token := &model.Token{Group: "mock-only"}
+	assert.ErrorContains(t, validateLoadTestMockToken(token, "gpt-test", "openai"), "contains a non-mock channel")
+
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 102).Update("setting", mockSetting).Error)
+	require.NoError(t, db.Create(&model.Ability{Group: "mock-only", Model: "gpt-test", ChannelId: 101, Enabled: true}).Error)
+	model.InitChannelRoutingCache()
+	require.NoError(t, validateLoadTestMockToken(token, "gpt-test", "openai"))
 }
 
 func TestValidateLoadTestAgentCapacity(t *testing.T) {

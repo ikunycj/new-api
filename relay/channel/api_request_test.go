@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	common2 "github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -79,6 +80,51 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
 	require.Equal(t, "trace-123", headers["x-upstream-trace"])
+}
+
+func TestProcessHeaderOverride_MockHeadersRequireMockChannel(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Request.Header.Set("X-Alltoken-Mock-Failure-Rate", "0.5")
+	override := map[string]any{
+		"X-Alltoken-Mock-Failure-Rate": "{client_header:X-Alltoken-Mock-Failure-Rate}",
+	}
+
+	realChannel := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{HeadersOverride: override}}
+	headers, err := processHeaderOverride(realChannel, ctx)
+	require.NoError(t, err)
+	require.Empty(t, headers)
+
+	mockChannel := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelSetting:  dto.ChannelSettings{MockLoadTest: true},
+			HeadersOverride: override,
+		},
+	}
+	headers, err = processHeaderOverride(mockChannel, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "0.5", headers["x-alltoken-mock-failure-rate"])
+}
+
+func TestProcessHeaderOverride_WildcardCannotLeakMockHeadersToRealChannel(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Request.Header.Set("X-Alltoken-Mock-Failure-Rate", "1")
+	ctx.Request.Header.Set("X-Trace-Id", "trace-123")
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{HeadersOverride: map[string]any{"*": ""}},
+	}
+
+	headers, err := processHeaderOverride(info, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "trace-123", headers["x-trace-id"])
+	require.NotContains(t, headers, "x-alltoken-mock-failure-rate")
 }
 
 func TestProcessHeaderOverride_RuntimeOverrideIsFinalHeaderMap(t *testing.T) {
