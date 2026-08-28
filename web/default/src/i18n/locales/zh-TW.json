@@ -6345,6 +6345,8 @@
     "Mock mode uses dedicated channels and does not consume the real account pool.": "Mock 模式使用專用渠道，不消耗真實號池。",
     "Real mode uses the API key configured account pool.": "真實模式使用 API Key 設定的號池。",
     "Mock": "Mock",
-    "Real": "真實"
+    "Real": "真實",
+    "Allow account-pool-free load tests": "允許不消耗號池壓測",
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "允許「不消耗號池」的伺服器壓測選擇此渠道。"
   }
 }

@@ -6345,6 +6345,8 @@
     "Mock mode uses dedicated channels and does not consume the real account pool.": "Chế độ Mock dùng các kênh riêng và không tiêu tốn pool tài khoản thật.",
     "Real mode uses the API key configured account pool.": "Chế độ thật dùng pool được cấu hình cho API key.",
     "Mock": "Mock",
-    "Real": "Thật"
+    "Real": "Thật",
+    "Allow account-pool-free load tests": "Cho phép kiểm thử tải không tiêu tốn pool tài khoản",
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Cho phép các bài kiểm thử tải trên máy chủ không tiêu tốn pool tài khoản chọn kênh này."
   }
 }

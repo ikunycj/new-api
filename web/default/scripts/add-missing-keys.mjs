@@ -1344,6 +1344,52 @@ for (const [locale, translations] of Object.entries(mockLoadTestKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const mockChannelSettingKeys = {
+  en: {
+    'Allow account-pool-free load tests': 'Allow account-pool-free load tests',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      'Allow this channel to be selected by managed load tests that do not consume the account pool.',
+  },
+  zh: {
+    'Allow account-pool-free load tests': '允许不消费号池压测',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      '允许“不消费号池”的服务器压测选择此渠道。',
+  },
+  'zh-TW': {
+    'Allow account-pool-free load tests': '允許不消耗號池壓測',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      '允許「不消耗號池」的伺服器壓測選擇此渠道。',
+  },
+  fr: {
+    'Allow account-pool-free load tests':
+      'Autoriser les tests de charge sans utiliser le pool de comptes',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      'Autorise les tests de charge gérés qui ne consomment pas le pool de comptes à sélectionner ce canal.',
+  },
+  ja: {
+    'Allow account-pool-free load tests':
+      'アカウントプールを消費しない負荷テストを許可',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      'アカウントプールを消費しないサーバー負荷テストで、このチャネルを選択できるようにします。',
+  },
+  ru: {
+    'Allow account-pool-free load tests':
+      'Разрешить нагрузочные тесты без расходования пула аккаунтов',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      'Разрешает серверным нагрузочным тестам, не расходующим пул аккаунтов, выбирать этот канал.',
+  },
+  vi: {
+    'Allow account-pool-free load tests':
+      'Cho phép kiểm thử tải không tiêu tốn pool tài khoản',
+    'Allow this channel to be selected by managed load tests that do not consume the account pool.':
+      'Cho phép các bài kiểm thử tải trên máy chủ không tiêu tốn pool tài khoản chọn kênh này.',
+  },
+}
+
+for (const [locale, translations] of Object.entries(mockChannelSettingKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

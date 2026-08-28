@@ -6345,6 +6345,8 @@
     "Mock mode uses dedicated channels and does not consume the real account pool.": "Mock モードは専用チャネルを使用し、実際のアカウントプールを消費しません。",
     "Real mode uses the API key configured account pool.": "実モードは API キーで設定されたアカウントプールを使用します。",
     "Mock": "Mock",
-    "Real": "実"
+    "Real": "実",
+    "Allow account-pool-free load tests": "アカウントプールを消費しない負荷テストを許可",
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "アカウントプールを消費しないサーバー負荷テストで、このチャネルを選択できるようにします。"
   }
 }

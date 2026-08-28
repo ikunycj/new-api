@@ -286,6 +286,7 @@ const SENSITIVE_FORM_FIELDS = [
   'pass_through_body_enabled',
   'system_prompt',
   'system_prompt_override',
+  'mock_load_test',
   'allow_service_tier',
   'disable_store',
   'allow_safety_identifier',
@@ -338,6 +339,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.thinking_to_content ||
     values.pass_through_body_enabled ||
     values.system_prompt_override ||
+    values.mock_load_test ||
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
     values.upstream_model_update_auto_sync_enabled ||
@@ -746,6 +748,7 @@ export function ChannelMutateDrawer({
   const currentProxy = form.watch('proxy')
   const currentSystemPrompt = form.watch('system_prompt')
   const currentSystemPromptOverride = form.watch('system_prompt_override')
+  const currentMockLoadTest = form.watch('mock_load_test')
   const currentAllowServiceTier = form.watch('allow_service_tier')
   const currentDisableStore = form.watch('disable_store')
   const currentAllowSafetyIdentifier = form.watch('allow_safety_identifier')
@@ -1010,7 +1013,8 @@ export function ChannelMutateDrawer({
     currentDisableTaskPollingSleep ||
     currentProxy?.trim() ||
     currentSystemPrompt?.trim() ||
-    currentSystemPromptOverride
+    currentSystemPromptOverride ||
+    currentMockLoadTest
   )
   let fieldPassthroughConfigured = false
   if (currentType === 1 || currentType === 57) {
@@ -4055,6 +4059,33 @@ export function ChannelMutateDrawer({
                             className='space-y-4 disabled:opacity-60'
                           >
                             <div className='divide-border space-y-0 divide-y border-y'>
+                              <FormField
+                                control={form.control}
+                                name='mock_load_test'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-center justify-between gap-4 px-4 py-3'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>
+                                        {t(
+                                          'Allow account-pool-free load tests'
+                                        )}
+                                      </FormLabel>
+                                      <FormDescription>
+                                        {t(
+                                          'Allow this channel to be selected by managed load tests that do not consume the account pool.'
+                                        )}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
                               {currentType === 1 && (
                                 <FormField
                                   control={form.control}
