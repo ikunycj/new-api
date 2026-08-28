@@ -97,6 +97,24 @@ func TestMockLoadTestRouteSkipsRealChannels(t *testing.T) {
 	assert.Equal(t, channels[0].Id, selected.Id)
 }
 
+func TestRealRouteSkipsMockLoadTestChannels(t *testing.T) {
+	channels := setupChannelRoute(t)
+	mockSetting := `{"mock_load_test":true}`
+	realSetting := `{}`
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("setting", mockSetting).Error)
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("setting", realSetting).Error)
+	model.InitChannelCache()
+
+	ctx, _ := gin.CreateTestContext(nil)
+	ctx.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+
+	selected, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, channels[1].Id, selected.Id)
+}
+
 func TestConfiguredRouteIgnoresWeightsAtEqualPriority(t *testing.T) {
 	channels := setupChannelRoute(t)
 	for _, memoryCacheEnabled := range []bool{true, false} {

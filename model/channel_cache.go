@@ -322,9 +322,19 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 }
 
 // FilterMockLoadTestRouteChannels keeps only channels explicitly marked for
-// managed mock load tests. Mixed real/mock billing routes are supported while
-// preventing a mock run from ever selecting a real upstream channel.
+// managed mock load tests.
 func FilterMockLoadTestRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
+	return filterRouteChannelsByMockSetting(entries, true)
+}
+
+// FilterRealRouteChannels excludes managed mock channels from normal traffic.
+// Together with FilterMockLoadTestRouteChannels, this allows both channel types
+// to share one billing route without either mode leaking into the other.
+func FilterRealRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
+	return filterRouteChannelsByMockSetting(entries, false)
+}
+
+func filterRouteChannelsByMockSetting(entries []BillingGroupChannel, mock bool) ([]BillingGroupChannel, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
@@ -363,7 +373,7 @@ func FilterMockLoadTestRouteChannels(entries []BillingGroupChannel) ([]BillingGr
 				return nil, err
 			}
 		}
-		if channel != nil && channel.Status == common.ChannelStatusEnabled && channel.GetSetting().MockLoadTest {
+		if channel != nil && channel.Status == common.ChannelStatusEnabled && channel.GetSetting().MockLoadTest == mock {
 			filtered = append(filtered, entry)
 		}
 	}

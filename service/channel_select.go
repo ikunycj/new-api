@@ -209,13 +209,19 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 	p.runtimePolicy = &policy
 	p.routeChannels = entries
 	p.routeConfigured = configured
-	if configured && IsMockLoadTestRequest(p.Ctx) {
-		mockEntries, err := model.FilterMockLoadTestRouteChannels(entries)
-		if err != nil {
-			logger.LogError(p.Ctx, fmt.Sprintf("filter mock load-test channels: %s", err.Error()))
-			mockEntries = nil
+	if configured {
+		var filteredEntries []model.BillingGroupChannel
+		var err error
+		if IsMockLoadTestRequest(p.Ctx) {
+			filteredEntries, err = model.FilterMockLoadTestRouteChannels(entries)
+		} else {
+			filteredEntries, err = model.FilterRealRouteChannels(entries)
 		}
-		p.routeChannels = mockEntries
+		if err != nil {
+			logger.LogError(p.Ctx, fmt.Sprintf("filter billing route channels: %s", err.Error()))
+			filteredEntries = nil
+		}
+		p.routeChannels = filteredEntries
 	}
 	if p.startedAt.IsZero() {
 		p.startedAt = time.Now()
