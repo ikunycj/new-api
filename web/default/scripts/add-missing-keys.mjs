@@ -135,6 +135,7 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Copy ready-to-run curl': '复制命令到本地终端测试',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
     'Throughput trend': '吞吐趋势',

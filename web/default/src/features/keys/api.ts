@@ -180,6 +180,13 @@ type ApiKeyTestRequest = {
   url: URL
 }
 
+const STREAMABLE_API_KEY_TEST_ENDPOINTS = new Set<ApiKeyTestEndpoint>([
+  'openai',
+  'openai-response',
+  'anthropic',
+  'gemini',
+])
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>
@@ -430,7 +437,8 @@ function isValidApiKeyTestResponse(
 function buildApiKeyTestRequest(
   apiBaseUrl: string,
   model: string,
-  endpointType: ApiKeyTestEndpoint
+  endpointType: ApiKeyTestEndpoint,
+  stream = false
 ): ApiKeyTestRequest {
   const normalizedBaseUrl = apiBaseUrl.trim().replace(/\/+$/, '')
   const prompt = 'Reply with OK.'
@@ -440,7 +448,7 @@ function buildApiKeyTestRequest(
       const body: Record<string, unknown> = {
         model,
         messages: [{ role: 'user', content: prompt }],
-        stream: false,
+        stream,
       }
       if (/^(o1|o3|o4)/.test(model)) {
         body.max_completion_tokens = 16
@@ -463,7 +471,7 @@ function buildApiKeyTestRequest(
           model,
           input: [{ role: 'user', content: prompt }],
           max_output_tokens: 16,
-          stream: false,
+          stream,
         },
         endpointPath: '/v1/responses',
         url: new URL(`${normalizedBaseUrl}/responses`),
@@ -474,27 +482,32 @@ function buildApiKeyTestRequest(
         endpointPath: '/v1/responses/compact',
         url: new URL(`${normalizedBaseUrl}/responses/compact`),
       }
-    case 'anthropic':
+    case 'anthropic': {
+      const body: Record<string, unknown> = {
+        model,
+        max_tokens: 16,
+        messages: [{ role: 'user', content: prompt }],
+      }
+      if (stream) body.stream = true
       return {
-        body: {
-          model,
-          max_tokens: 16,
-          messages: [{ role: 'user', content: prompt }],
-        },
+        body,
         endpointPath: '/v1/messages',
         headers: { 'anthropic-version': '2023-06-01' },
         url: new URL(`${normalizedBaseUrl}/messages`),
       }
+    }
     case 'gemini': {
       const url = new URL(normalizedBaseUrl)
       const rootPath = url.pathname.replace(/\/v1\/?$/, '').replace(/\/+$/, '')
-      url.pathname = `${rootPath}/v1beta/models/${encodeURIComponent(model)}:generateContent`
+      const action = stream ? 'streamGenerateContent' : 'generateContent'
+      url.pathname = `${rootPath}/v1beta/models/${encodeURIComponent(model)}:${action}`
+      if (stream) url.searchParams.set('alt', 'sse')
       return {
         body: {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { maxOutputTokens: 3000 },
         },
-        endpointPath: `/v1beta/models/${model}:generateContent`,
+        endpointPath: `/v1beta/models/${model}:${action}${stream ? '?alt=sse' : ''}`,
         url,
       }
     }
@@ -529,6 +542,84 @@ function buildApiKeyTestRequest(
         endpointPath: '/v1/embeddings',
         url: new URL(`${normalizedBaseUrl}/embeddings`),
       }
+  }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function getApiKeyTestAuthHeader(
+  endpointType: ApiKeyTestEndpoint,
+  apiKey: string
+): [string, string] {
+  switch (endpointType) {
+    case 'anthropic':
+      return ['x-api-key', apiKey]
+    case 'gemini':
+      return ['x-goog-api-key', apiKey]
+    default:
+      return ['Authorization', `Bearer ${apiKey}`]
+  }
+}
+
+/**
+ * Build a ready-to-run streaming curl command without changing the browser
+ * availability check, which intentionally uses a non-streaming response.
+ */
+export function buildApiKeyTestCurlCommand(
+  apiBaseUrl: string,
+  apiKey: string,
+  model: string,
+  endpointType: ApiKeyTestEndpoint
+): string | null {
+  if (
+    !STREAMABLE_API_KEY_TEST_ENDPOINTS.has(endpointType) ||
+    !apiBaseUrl.trim() ||
+    !apiKey.trim() ||
+    !model.trim()
+  ) {
+    return null
+  }
+
+  let request: ApiKeyTestRequest
+  try {
+    request = buildApiKeyTestRequest(apiBaseUrl, model, endpointType, true)
+  } catch {
+    return null
+  }
+
+  try {
+    const [authHeaderName, authHeaderValue] = getApiKeyTestAuthHeader(
+      endpointType,
+      apiKey
+    )
+    const headers = new Headers({
+      Accept: 'text/event-stream',
+      [authHeaderName]: authHeaderValue,
+      'Content-Type': 'application/json',
+    })
+    for (const [name, value] of Object.entries(request.headers ?? {})) {
+      headers.set(name, value)
+    }
+
+    const commandParts = [
+      'curl -N',
+      shellQuote(request.url.toString()),
+      `-H ${shellQuote(`Accept: ${headers.get('Accept') ?? 'text/event-stream'}`)}`,
+      `-H ${shellQuote(`${authHeaderName}: ${headers.get(authHeaderName) ?? authHeaderValue}`)}`,
+      `-H ${shellQuote(`Content-Type: ${headers.get('Content-Type') ?? 'application/json'}`)}`,
+    ]
+    for (const [name, value] of Object.entries(request.headers ?? {})) {
+      if (name.toLowerCase() === 'content-type') continue
+      if (name.toLowerCase() === 'accept') continue
+      commandParts.push(`-H ${shellQuote(`${name}: ${value}`)}`)
+    }
+    commandParts.push(`-d ${shellQuote(JSON.stringify(request.body))}`)
+
+    return commandParts.join(' \\\n  ')
+  } catch {
+    return null
   }
 }
 

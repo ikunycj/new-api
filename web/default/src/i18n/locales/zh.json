@@ -1280,7 +1280,7 @@
     "Copy model name": "复制模型名称",
     "Copy model names": "复制模型名称列表",
     "Copy prompt": "复制提示词",
-    "Copy ready-to-run curl": "复制可直接运行的 curl",
+    "Copy ready-to-run curl": "复制命令到本地终端测试",
     "Copy redemption code": "复制兑换码",
     "Copy redirect URL": "复制重定向 URL",
     "Copy referral link": "复制推荐链接",
