@@ -321,6 +321,55 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 	return nil, nil
 }
 
+// FilterMockLoadTestRouteChannels keeps only channels explicitly marked for
+// managed mock load tests. Mixed real/mock billing routes are supported while
+// preventing a mock run from ever selecting a real upstream channel.
+func FilterMockLoadTestRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	channelsByID := make(map[int]*Channel, len(entries))
+	if !common.MemoryCacheEnabled {
+		channelIDs := make([]int, 0, len(entries))
+		seen := make(map[int]struct{}, len(entries))
+		for _, entry := range entries {
+			if !entry.Enabled {
+				continue
+			}
+			if _, ok := seen[entry.ChannelId]; ok {
+				continue
+			}
+			seen[entry.ChannelId] = struct{}{}
+			channelIDs = append(channelIDs, entry.ChannelId)
+		}
+		channels, err := GetChannelsByIds(channelIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, channel := range channels {
+			channelsByID[channel.Id] = channel
+		}
+	}
+	filtered := make([]BillingGroupChannel, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.Enabled {
+			continue
+		}
+		channel := channelsByID[entry.ChannelId]
+		if common.MemoryCacheEnabled {
+			var err error
+			channel, err = CacheGetChannel(entry.ChannelId)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if channel != nil && channel.Status == common.ChannelStatusEnabled && channel.GetSetting().MockLoadTest {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered, nil
+}
+
 // HasSatisfiedChannelExcluding reports whether at least one eligible channel
 // remains after excluding the channels already attempted by a request.
 func HasSatisfiedChannelExcluding(group string, model string, requestPath string, excluded map[int]struct{}) (bool, error) {

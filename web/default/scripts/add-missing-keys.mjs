@@ -1206,6 +1206,12 @@ const mockLoadTestKeys = {
       'Mock mode uses dedicated channels and does not consume the real account pool.',
     'Real mode uses the API key configured account pool.':
       'Real mode uses the API key configured account pool.',
+    'Consume account pool': 'Consume account pool',
+    'Do not consume account pool': 'Do not consume account pool',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      'This mode uses dedicated test channels and does not consume the account pool.',
+    'This mode consumes the API key account pool.':
+      'This mode consumes the API key account pool.',
     'Random failure rate': 'Random failure rate',
     'Failure status': 'Failure status',
     'Additional latency (ms)': 'Additional latency (ms)',
@@ -1220,6 +1226,12 @@ const mockLoadTestKeys = {
       'Mock 模式使用专用渠道，不消耗真实号池。',
     'Real mode uses the API key configured account pool.':
       '真实模式使用 API Key 配置的号池。',
+    'Consume account pool': '消费号池',
+    'Do not consume account pool': '不消费号池',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      '此模式使用专用测试渠道，不消费号池。',
+    'This mode consumes the API key account pool.':
+      '此模式会消费 API Key 配置的号池。',
     'Random failure rate': '随机失败率',
     'Failure status': '失败状态',
     'Additional latency (ms)': '额外延迟（毫秒）',
@@ -1234,6 +1246,12 @@ const mockLoadTestKeys = {
       'Mock 模式使用專用渠道，不消耗真實號池。',
     'Real mode uses the API key configured account pool.':
       '真實模式使用 API Key 設定的號池。',
+    'Consume account pool': '消費號池',
+    'Do not consume account pool': '不消費號池',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      '此模式使用專用測試渠道，不消費號池。',
+    'This mode consumes the API key account pool.':
+      '此模式會消費 API Key 設定的號池。',
     'Random failure rate': '隨機失敗率',
     'Failure status': '失敗狀態',
     'Additional latency (ms)': '額外延遲（毫秒）',
@@ -1248,6 +1266,12 @@ const mockLoadTestKeys = {
       'Le mode simulé utilise des canaux dédiés et ne consomme pas le pool réel.',
     'Real mode uses the API key configured account pool.':
       'Le mode réel utilise le pool configuré par la clé API.',
+    'Consume account pool': 'Utiliser le pool de comptes',
+    'Do not consume account pool': 'Ne pas utiliser le pool de comptes',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      'Ce mode utilise des canaux de test dédiés et ne consomme pas le pool de comptes.',
+    'This mode consumes the API key account pool.':
+      'Ce mode utilise le pool de comptes de la clé API.',
     'Random failure rate': 'Taux d’échec aléatoire',
     'Failure status': 'Statut d’échec',
     'Additional latency (ms)': 'Latence supplémentaire (ms)',
@@ -1262,6 +1286,12 @@ const mockLoadTestKeys = {
       'Mock モードは専用チャネルを使用し、実際のアカウントプールを消費しません。',
     'Real mode uses the API key configured account pool.':
       '実モードは API キーで設定されたアカウントプールを使用します。',
+    'Consume account pool': 'アカウントプールを消費',
+    'Do not consume account pool': 'アカウントプールを消費しない',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      'このモードは専用テストチャネルを使用し、アカウントプールを消費しません。',
+    'This mode consumes the API key account pool.':
+      'このモードは API キーのアカウントプールを消費します。',
     'Random failure rate': 'ランダム失敗率',
     'Failure status': '失敗ステータス',
     'Additional latency (ms)': '追加レイテンシ（ms）',
@@ -1276,6 +1306,12 @@ const mockLoadTestKeys = {
       'В Mock-режиме используются выделенные каналы, реальный пул аккаунтов не расходуется.',
     'Real mode uses the API key configured account pool.':
       'Реальный режим использует пул, настроенный для API-ключа.',
+    'Consume account pool': 'Использовать пул аккаунтов',
+    'Do not consume account pool': 'Не использовать пул аккаунтов',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      'Этот режим использует выделенные тестовые каналы и не расходует пул аккаунтов.',
+    'This mode consumes the API key account pool.':
+      'Этот режим расходует пул аккаунтов, настроенный для API-ключа.',
     'Random failure rate': 'Случайная доля ошибок',
     'Failure status': 'Статус ошибки',
     'Additional latency (ms)': 'Дополнительная задержка (мс)',
@@ -1290,6 +1326,12 @@ const mockLoadTestKeys = {
       'Chế độ Mock dùng các kênh riêng và không tiêu tốn pool tài khoản thật.',
     'Real mode uses the API key configured account pool.':
       'Chế độ thật dùng pool được cấu hình cho API key.',
+    'Consume account pool': 'Tiêu tốn pool tài khoản',
+    'Do not consume account pool': 'Không tiêu tốn pool tài khoản',
+    'This mode uses dedicated test channels and does not consume the account pool.':
+      'Chế độ này dùng các kênh kiểm thử riêng và không tiêu tốn pool tài khoản.',
+    'This mode consumes the API key account pool.':
+      'Chế độ này tiêu tốn pool tài khoản được cấu hình cho API key.',
     'Random failure rate': 'Tỷ lệ lỗi ngẫu nhiên',
     'Failure status': 'Trạng thái lỗi',
     'Additional latency (ms)': 'Độ trễ bổ sung (ms)',

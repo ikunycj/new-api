@@ -2,7 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -13,6 +15,12 @@ import (
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
+
+// IsMockLoadTestRequest reports whether this request must be constrained to
+// channels explicitly marked for managed mock load tests.
+func IsMockLoadTestRequest(c *gin.Context) bool {
+	return c != nil && c.Request != nil && strings.EqualFold(strings.TrimSpace(c.GetHeader(constant.MockLoadTestHeader)), "true")
+}
 
 type RetryParam struct {
 	Ctx         *gin.Context
@@ -201,6 +209,14 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 	p.runtimePolicy = &policy
 	p.routeChannels = entries
 	p.routeConfigured = configured
+	if configured && IsMockLoadTestRequest(p.Ctx) {
+		mockEntries, err := model.FilterMockLoadTestRouteChannels(entries)
+		if err != nil {
+			logger.LogError(p.Ctx, fmt.Sprintf("filter mock load-test channels: %s", err.Error()))
+			mockEntries = nil
+		}
+		p.routeChannels = mockEntries
+	}
 	if p.startedAt.IsZero() {
 		p.startedAt = time.Now()
 	}

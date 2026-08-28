@@ -3,6 +3,11 @@ package constant
 type ContextKey string
 
 const (
+	// MockLoadTestHeader marks requests created by the managed load-test agent.
+	// It is used to constrain channel selection to channels explicitly enabled
+	// for mock load tests.
+	MockLoadTestHeader = "X-Alltoken-Mock-Load-Test"
+
 	ContextKeyTokenCountMeta  ContextKey = "token_count_meta"
 	ContextKeyPromptTokens    ContextKey = "prompt_tokens"
 	ContextKeyEstimatedTokens ContextKey = "estimated_tokens"

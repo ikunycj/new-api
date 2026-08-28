@@ -705,6 +705,7 @@ export default function () {
     'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,
   };
   if (mockEnabled) {
+    headers['X-Alltoken-Mock-Load-Test'] = 'true';
     headers['X-Alltoken-Mock-Failure-Rate'] = __ENV.ALLTOKEN_MOCK_FAILURE_RATE;
     headers['X-Alltoken-Mock-Failure-Status'] = __ENV.ALLTOKEN_MOCK_FAILURE_STATUS;
     headers['X-Alltoken-Mock-Latency-Ms'] = __ENV.ALLTOKEN_MOCK_LATENCY_MS;

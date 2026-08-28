@@ -59,7 +59,7 @@ func TestValidateLoadTestMockSettings(t *testing.T) {
 	}), "require mock mode")
 }
 
-func TestValidateLoadTestMockTokenRejectsMixedRealChannels(t *testing.T) {
+func TestValidateLoadTestMockTokenAllowsMixedRealChannels(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.BillingGroupRoute{}, &model.BillingGroupChannel{}))
@@ -83,15 +83,15 @@ func TestValidateLoadTestMockTokenRejectsMixedRealChannels(t *testing.T) {
 		{BillingGroupRouteId: route.Id, ChannelId: 101, Priority: 100, Enabled: true},
 		{BillingGroupRouteId: route.Id, ChannelId: 102, Priority: 90, Enabled: true},
 	}).Error)
+	require.NoError(t, db.Create(&model.Ability{Group: "mock-only", Model: "gpt-test", ChannelId: 101, Enabled: true}).Error)
 	model.InitChannelRoutingCache()
 
 	token := &model.Token{Group: "mock-only"}
-	assert.ErrorContains(t, validateLoadTestMockToken(token, "gpt-test", "openai"), "contains a non-mock channel")
-
-	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 102).Update("setting", mockSetting).Error)
-	require.NoError(t, db.Create(&model.Ability{Group: "mock-only", Model: "gpt-test", ChannelId: 101, Enabled: true}).Error)
-	model.InitChannelRoutingCache()
 	require.NoError(t, validateLoadTestMockToken(token, "gpt-test", "openai"))
+
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("setting", realSetting).Error)
+	model.InitChannelRoutingCache()
+	assert.ErrorContains(t, validateLoadTestMockToken(token, "gpt-test", "openai"), "has no enabled mock channels")
 }
 
 func TestValidateLoadTestAgentCapacity(t *testing.T) {

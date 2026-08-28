@@ -438,11 +438,9 @@ export function AgentPanel(props: AgentPanelProps) {
                   <p className='text-muted-foreground mt-1 text-xs'>
                     {testMode === 'mock'
                       ? t(
-                          'Mock mode uses dedicated channels and does not consume the real account pool.'
+                          'This mode uses dedicated test channels and does not consume the account pool.'
                         )
-                      : t(
-                          'Real mode uses the API key configured account pool.'
-                        )}
+                      : t('This mode consumes the API key account pool.')}
                   </p>
                 </div>
                 <ToggleGroup
@@ -457,11 +455,11 @@ export function AgentPanel(props: AgentPanelProps) {
                 >
                   <ToggleGroupItem value='real'>
                     <Server className='size-4' />
-                    {t('Real channels')}
+                    {t('Consume account pool')}
                   </ToggleGroupItem>
                   <ToggleGroupItem value='mock'>
                     <FlaskConical className='size-4' />
-                    {t('Mock channels')}
+                    {t('Do not consume account pool')}
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
@@ -679,7 +677,9 @@ export function AgentPanel(props: AgentPanelProps) {
                         <TableCell className='whitespace-nowrap'>
                           {run.mock_enabled ? (
                             <div className='space-y-1'>
-                              <Badge variant='outline'>{t('Mock')}</Badge>
+                              <Badge variant='outline'>
+                                {t('Do not consume account pool')}
+                              </Badge>
                               <p className='text-muted-foreground text-xs tabular-nums'>
                                 {Math.round(run.mock_failure_rate * 100)}% ·
                                 HTTP {run.mock_failure_status} ·{' '}
@@ -687,7 +687,9 @@ export function AgentPanel(props: AgentPanelProps) {
                               </p>
                             </div>
                           ) : (
-                            <Badge variant='secondary'>{t('Real')}</Badge>
+                            <Badge variant='secondary'>
+                              {t('Consume account pool')}
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell>{run.key_name}</TableCell>

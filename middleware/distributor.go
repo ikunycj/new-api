@@ -132,6 +132,7 @@ func Distribute() func(c *gin.Context) {
 					affinityUsable := false
 					preferred, preferredErr := model.CacheGetChannel(preferredChannelID)
 					if preferredErr == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
+						(!service.IsMockLoadTestRequest(c) || preferred.GetSetting().MockLoadTest) &&
 						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) &&
 						model.IsChannelEnabledForGroupModel(selectGroup, modelRequest.Model, preferred.Id) {
 						channel = preferred

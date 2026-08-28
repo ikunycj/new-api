@@ -535,12 +535,21 @@ func validateLoadTestMockToken(token *model.Token, modelName, endpoint string) e
 		if len(channels) != len(channelIDs) {
 			return fmt.Errorf("billing group %q contains unavailable channels", group)
 		}
+		channelsByID := make(map[int]*model.Channel, len(channels))
 		for _, channel := range channels {
-			if channel.Status != common.ChannelStatusEnabled || !channel.GetSetting().MockLoadTest {
-				return fmt.Errorf("billing group %q contains a non-mock channel", group)
+			channelsByID[channel.Id] = channel
+		}
+		mockRouteChannels := make([]model.BillingGroupChannel, 0, len(routeChannels))
+		for _, routeChannel := range routeChannels {
+			channel := channelsByID[routeChannel.ChannelId]
+			if routeChannel.Enabled && channel != nil && channel.Status == common.ChannelStatusEnabled && channel.GetSetting().MockLoadTest {
+				mockRouteChannels = append(mockRouteChannels, routeChannel)
 			}
 		}
-		selected, err := model.GetConfiguredRouteChannel(group, modelName, requestPath, routeChannels, map[int]struct{}{})
+		if len(mockRouteChannels) == 0 {
+			return fmt.Errorf("billing group %q has no enabled mock channels", group)
+		}
+		selected, err := model.GetConfiguredRouteChannel(group, modelName, requestPath, mockRouteChannels, map[int]struct{}{})
 		if err != nil {
 			return fmt.Errorf("resolve mock channel for billing group %q: %w", group, err)
 		}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -75,6 +76,25 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 
 	param.MarkChannelAttempted(third.Id)
 	assert.False(t, param.HasNextRetry())
+}
+
+func TestMockLoadTestRouteSkipsRealChannels(t *testing.T) {
+	channels := setupChannelRoute(t)
+	mockSetting := `{"mock_load_test":true}`
+	realSetting := `{}`
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("setting", mockSetting).Error)
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("setting", realSetting).Error)
+	model.InitChannelCache()
+
+	ctx, _ := gin.CreateTestContext(nil)
+	ctx.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	ctx.Request.Header.Set(constant.MockLoadTestHeader, "true")
+	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
+
+	selected, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, channels[0].Id, selected.Id)
 }
 
 func TestConfiguredRouteIgnoresWeightsAtEqualPriority(t *testing.T) {
