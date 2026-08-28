@@ -640,7 +640,7 @@ func validateTask(task loadTestTask) error {
 			return errors.New("task mock settings are invalid")
 		}
 		switch task.MockFailureStatus {
-		case 429, 500, 502, 503, 504:
+		case 0, 429, 500, 502, 503, 504:
 		default:
 			return errors.New("task mock failure status is invalid")
 		}

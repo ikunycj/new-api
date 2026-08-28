@@ -108,4 +108,7 @@ func TestValidateTaskRejectsInvalidMockSettings(t *testing.T) {
 	invalidStatus := valid
 	invalidStatus.MockFailureStatus = 418
 	assert.ErrorContains(t, validateTask(invalidStatus), "failure status")
+
+	valid.MockFailureStatus = 0
+	require.NoError(t, validateTask(valid))
 }

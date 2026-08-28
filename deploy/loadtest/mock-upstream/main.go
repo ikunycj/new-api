@@ -36,6 +36,14 @@ const (
 	maxMockLatencyMS        = 120000
 )
 
+var mockFailureStatuses = [...]int{
+	http.StatusTooManyRequests,
+	http.StatusInternalServerError,
+	http.StatusBadGateway,
+	http.StatusServiceUnavailable,
+	http.StatusGatewayTimeout,
+}
+
 type request struct {
 	Model  string `json:"model"`
 	Stream bool   `json:"stream"`
@@ -138,7 +146,8 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 	if shouldInjectFailure(requestCfg.errorRate, rand.Float64()) {
 		errorsTotal.Add(1)
 		time.Sleep(cfg.ttft)
-		writeChannelError(w, state, "injected load-test failure", "mock_error", requestCfg.errorStatus)
+		failureStatus := resolveFailureStatus(requestCfg.errorStatus, rand.IntN(len(mockFailureStatuses)))
+		writeChannelError(w, state, "injected load-test failure", "mock_error", failureStatus)
 		return
 	}
 	if !state.consume(30) {
@@ -183,12 +192,25 @@ func loadRequestConfig(header http.Header, cfg config) (requestConfig, error) {
 }
 
 func allowedFailureStatus(status int) bool {
+	if status == 0 {
+		return true
+	}
 	switch status {
 	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return true
 	default:
 		return false
 	}
+}
+
+func resolveFailureStatus(configuredStatus, randomIndex int) int {
+	if configuredStatus != 0 {
+		return configuredStatus
+	}
+	if randomIndex < 0 || randomIndex >= len(mockFailureStatuses) {
+		return http.StatusServiceUnavailable
+	}
+	return mockFailureStatuses[randomIndex]
 }
 
 func shouldInjectFailure(rate, randomValue float64) bool {

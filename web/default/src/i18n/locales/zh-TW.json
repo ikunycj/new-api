@@ -6347,6 +6347,8 @@
     "Mock": "Mock",
     "Real": "真實",
     "Allow account-pool-free load tests": "允許不消耗號池壓測",
-    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "允許「不消耗號池」的伺服器壓測選擇此渠道。"
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "允許「不消耗號池」的伺服器壓測選擇此渠道。",
+    "Mixed distribution": "混合分佈",
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "在 429、500、502、503 和 504 之間隨機分布注入的失敗。"
   }
 }

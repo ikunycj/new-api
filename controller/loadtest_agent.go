@@ -486,7 +486,7 @@ func validateLoadTestMockSettings(agent *model.LoadTestAgent, request createLoad
 		return fmt.Errorf("mock latency must be between 0 and %d milliseconds", loadTestMaxMockLatencyMS)
 	}
 	switch request.MockFailureStatus {
-	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+	case 0, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return nil
 	default:
 		return errors.New("unsupported mock failure status")

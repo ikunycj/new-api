@@ -6347,6 +6347,8 @@
     "Mock": "Mock",
     "Real": "実",
     "Allow account-pool-free load tests": "アカウントプールを消費しない負荷テストを許可",
-    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "アカウントプールを消費しないサーバー負荷テストで、このチャネルを選択できるようにします。"
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "アカウントプールを消費しないサーバー負荷テストで、このチャネルを選択できるようにします。",
+    "Mixed distribution": "混合分布",
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "注入する失敗を 429、500、502、503、504 に均等にランダム分散します。"
   }
 }

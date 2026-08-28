@@ -105,6 +105,7 @@ const ACTIVE_RUN_STATUSES = new Set([
 ])
 
 const MOCK_FAILURE_STATUSES = [429, 500, 502, 503, 504]
+const MOCK_FAILURE_STATUS_MIXED = 0
 
 function formatMemory(bytes: number) {
   if (bytes <= 0) return '-'
@@ -504,6 +505,9 @@ export function AgentPanel(props: AgentPanelProps) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={String(MOCK_FAILURE_STATUS_MIXED)}>
+                          {t('Mixed distribution')}
+                        </SelectItem>
                         {MOCK_FAILURE_STATUSES.map((status) => (
                           <SelectItem key={status} value={String(status)}>
                             HTTP {status}
@@ -511,6 +515,14 @@ export function AgentPanel(props: AgentPanelProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                    {Number(mockFailureStatus) ===
+                      MOCK_FAILURE_STATUS_MIXED && (
+                      <p className='text-muted-foreground text-xs'>
+                        {t(
+                          'Randomly distribute injected failures across 429, 500, 502, 503, and 504.'
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div className='space-y-2'>
                     <Label htmlFor='mock-latency-ms'>
@@ -682,8 +694,11 @@ export function AgentPanel(props: AgentPanelProps) {
                               </Badge>
                               <p className='text-muted-foreground text-xs tabular-nums'>
                                 {Math.round(run.mock_failure_rate * 100)}% ·
-                                HTTP {run.mock_failure_status} ·{' '}
-                                {run.mock_latency_ms}ms
+                                {run.mock_failure_status ===
+                                MOCK_FAILURE_STATUS_MIXED
+                                  ? t('Mixed distribution')
+                                  : `HTTP ${run.mock_failure_status}`}{' '}
+                                · {run.mock_latency_ms}ms
                               </p>
                             </div>
                           ) : (

@@ -6347,6 +6347,8 @@
     "Mock": "Simulé",
     "Real": "Réel",
     "Allow account-pool-free load tests": "Autoriser les tests de charge sans utiliser le pool de comptes",
-    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Autorise les tests de charge gérés qui ne consomment pas le pool de comptes à sélectionner ce canal."
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Autorise les tests de charge gérés qui ne consomment pas le pool de comptes à sélectionner ce canal.",
+    "Mixed distribution": "Distribution mixte",
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Répartit aléatoirement les échecs injectés entre 429, 500, 502, 503 et 504."
   }
 }

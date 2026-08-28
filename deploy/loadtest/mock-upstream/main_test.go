@@ -24,6 +24,24 @@ func TestLoadRequestConfigUsesValidatedHeaders(t *testing.T) {
 	assert.Equal(t, 750*time.Millisecond, got.latency)
 }
 
+func TestLoadRequestConfigAcceptsMixedFailureStatus(t *testing.T) {
+	header := make(http.Header)
+	header.Set(mockFailureStatusHeader, "0")
+
+	got, err := loadRequestConfig(header, config{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, got.errorStatus)
+}
+
+func TestResolveFailureStatus(t *testing.T) {
+	for index, want := range mockFailureStatuses {
+		assert.Equal(t, want, resolveFailureStatus(0, index))
+	}
+	assert.Equal(t, http.StatusBadGateway, resolveFailureStatus(http.StatusBadGateway, 0))
+	assert.Equal(t, http.StatusServiceUnavailable, resolveFailureStatus(0, -1))
+	assert.Equal(t, http.StatusServiceUnavailable, resolveFailureStatus(0, len(mockFailureStatuses)))
+}
+
 func TestLoadRequestConfigRejectsUnsafeValues(t *testing.T) {
 	tests := []struct {
 		name   string

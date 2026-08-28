@@ -6347,6 +6347,8 @@
     "Mock": "Mock",
     "Real": "Реальный",
     "Allow account-pool-free load tests": "Разрешить нагрузочные тесты без расходования пула аккаунтов",
-    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Разрешает серверным нагрузочным тестам, не расходующим пул аккаунтов, выбирать этот канал."
+    "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Разрешает серверным нагрузочным тестам, не расходующим пул аккаунтов, выбирать этот канал.",
+    "Mixed distribution": "Смешанное распределение",
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Случайно распределяет внедрённые ошибки между кодами 429, 500, 502, 503 и 504."
   }
 }

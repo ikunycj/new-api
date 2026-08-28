@@ -45,6 +45,9 @@ func TestValidateLoadTestMockSettings(t *testing.T) {
 	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
 		MockEnabled: true, MockFailureRate: 0.25, MockFailureStatus: 503, MockLatencyMS: 500,
 	}))
+	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockFailureRate: 0.25, MockFailureStatus: 0,
+	}))
 	assert.ErrorContains(t, validateLoadTestMockSettings(&model.LoadTestAgent{}, createLoadTestRunRequest{
 		MockEnabled: true, MockFailureStatus: 503,
 	}), "only available on server")

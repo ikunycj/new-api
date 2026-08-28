@@ -1214,6 +1214,9 @@ const mockLoadTestKeys = {
       'This mode consumes the API key account pool.',
     'Random failure rate': 'Random failure rate',
     'Failure status': 'Failure status',
+    'Mixed distribution': 'Mixed distribution',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      'Randomly distribute injected failures across 429, 500, 502, 503, and 504.',
     'Additional latency (ms)': 'Additional latency (ms)',
     Mock: 'Mock',
     Real: 'Real',
@@ -1234,6 +1237,9 @@ const mockLoadTestKeys = {
       '此模式会消费 API Key 配置的号池。',
     'Random failure rate': '随机失败率',
     'Failure status': '失败状态',
+    'Mixed distribution': '混合分布',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      '在 429、500、502、503 和 504 之间随机分布注入的失败。',
     'Additional latency (ms)': '额外延迟（毫秒）',
     Mock: 'Mock',
     Real: '真实',
@@ -1254,6 +1260,9 @@ const mockLoadTestKeys = {
       '此模式會消費 API Key 設定的號池。',
     'Random failure rate': '隨機失敗率',
     'Failure status': '失敗狀態',
+    'Mixed distribution': '混合分佈',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      '在 429、500、502、503 和 504 之間隨機分布注入的失敗。',
     'Additional latency (ms)': '額外延遲（毫秒）',
     Mock: 'Mock',
     Real: '真實',
@@ -1274,6 +1283,9 @@ const mockLoadTestKeys = {
       'Ce mode utilise le pool de comptes de la clé API.',
     'Random failure rate': 'Taux d’échec aléatoire',
     'Failure status': 'Statut d’échec',
+    'Mixed distribution': 'Distribution mixte',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      'Répartit aléatoirement les échecs injectés entre 429, 500, 502, 503 et 504.',
     'Additional latency (ms)': 'Latence supplémentaire (ms)',
     Mock: 'Simulé',
     Real: 'Réel',
@@ -1294,6 +1306,9 @@ const mockLoadTestKeys = {
       'このモードは API キーのアカウントプールを消費します。',
     'Random failure rate': 'ランダム失敗率',
     'Failure status': '失敗ステータス',
+    'Mixed distribution': '混合分布',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      '注入する失敗を 429、500、502、503、504 に均等にランダム分散します。',
     'Additional latency (ms)': '追加レイテンシ（ms）',
     Mock: 'Mock',
     Real: '実',
@@ -1314,6 +1329,9 @@ const mockLoadTestKeys = {
       'Этот режим расходует пул аккаунтов, настроенный для API-ключа.',
     'Random failure rate': 'Случайная доля ошибок',
     'Failure status': 'Статус ошибки',
+    'Mixed distribution': 'Смешанное распределение',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      'Случайно распределяет внедрённые ошибки между кодами 429, 500, 502, 503 и 504.',
     'Additional latency (ms)': 'Дополнительная задержка (мс)',
     Mock: 'Mock',
     Real: 'Реальный',
@@ -1334,6 +1352,9 @@ const mockLoadTestKeys = {
       'Chế độ này tiêu tốn pool tài khoản được cấu hình cho API key.',
     'Random failure rate': 'Tỷ lệ lỗi ngẫu nhiên',
     'Failure status': 'Trạng thái lỗi',
+    'Mixed distribution': 'Phân phối hỗn hợp',
+    'Randomly distribute injected failures across 429, 500, 502, 503, and 504.':
+      'Phân bổ ngẫu nhiên các lỗi được chèn vào các mã 429, 500, 502, 503 và 504.',
     'Additional latency (ms)': 'Độ trễ bổ sung (ms)',
     Mock: 'Mock',
     Real: 'Thật',
