@@ -84,11 +84,12 @@ SELECT
   '{}',
   '',
   '{"error_source":"channel","mock_load_test":true}',
-  '{"X-Alltoken-Mock-Failure-Rate":"{client_header:X-Alltoken-Mock-Failure-Rate}","X-Alltoken-Mock-Failure-Status":"{client_header:X-Alltoken-Mock-Failure-Status}","X-Alltoken-Mock-Latency-Ms":"{client_header:X-Alltoken-Mock-Latency-Ms}"}',
+  '{"X-Alltoken-Mock-Channels":"{client_header:X-Alltoken-Mock-Channels}","X-Alltoken-Mock-Failure-Rate":"{client_header:X-Alltoken-Mock-Failure-Rate}","X-Alltoken-Mock-Failure-Status":"{client_header:X-Alltoken-Mock-Failure-Status}","X-Alltoken-Mock-Latency-Ms":"{client_header:X-Alltoken-Mock-Latency-Ms}"}',
   seed.priority
 FROM (VALUES
   ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080', 600),
-  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080', 500)
+  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080', 500),
+  ('sk-local-mock-c', 'Load Test Channel C', 'http://mock-upstream-c:8080', 400)
 ) AS seed(api_key, name, base_url, priority);
 
 INSERT INTO abilities ("group", model, channel_id, enabled, priority, weight)
@@ -135,13 +136,21 @@ INSERT INTO billing_group_channels (
 SELECT
   (SELECT id FROM billing_group_routes WHERE billing_group = 'default'),
   id,
-  CASE name WHEN 'Load Test Channel A' THEN 100 ELSE 90 END,
+  CASE name
+    WHEN 'Load Test Channel A' THEN 100
+    WHEN 'Load Test Channel B' THEN 90
+    ELSE 80
+  END,
   100,
   1,
   true,
-  CASE name WHEN 'Load Test Channel A' THEN 0.2 ELSE 1.0 END
+  CASE name
+    WHEN 'Load Test Channel A' THEN 0.2
+    WHEN 'Load Test Channel B' THEN 1.0
+    ELSE 1.2
+  END
 FROM channels
-WHERE name IN ('Load Test Channel A', 'Load Test Channel B');
+WHERE name IN ('Load Test Channel A', 'Load Test Channel B', 'Load Test Channel C');
 
 INSERT INTO channel_error_mappings (
   channel_id, channel_type, raw_code, status_code, alltoken_code,
@@ -149,6 +158,7 @@ INSERT INTO channel_error_mappings (
 )
 VALUES
   (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
+  (0, 0, 'mock_capacity_exceeded', 429, 205003, 'upstream', 'channel', 'switch_channel', true, true),
   (0, 0, 'mock_error', 429, 205002, 'upstream', 'channel', 'switch_channel', true, true),
   (0, 0, 'mock_error', 500, 205002, 'upstream', 'channel', 'switch_channel', true, true),
   (0, 0, 'mock_error', 502, 205002, 'upstream', 'channel', 'switch_channel', true, true),

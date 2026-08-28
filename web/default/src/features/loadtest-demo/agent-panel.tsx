@@ -82,6 +82,7 @@ import {
   type LoadTestAgent,
   type LoadTestAgentRun,
   type LoadTestLimits,
+  type LoadTestMockChannel,
   type LoadTestPricing,
 } from './api'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
@@ -106,6 +107,29 @@ const ACTIVE_RUN_STATUSES = new Set([
 
 const MOCK_FAILURE_STATUSES = [429, 500, 502, 503, 504]
 const MOCK_FAILURE_STATUS_MIXED = 0
+const DEFAULT_MOCK_CHANNELS: LoadTestMockChannel[] = [
+  {
+    slot: 1,
+    max_rps: 20,
+    failure_rate: 0.06,
+    failure_status: 503,
+    latency_ms: 0,
+  },
+  {
+    slot: 2,
+    max_rps: 20,
+    failure_rate: 0.06,
+    failure_status: 503,
+    latency_ms: 0,
+  },
+  {
+    slot: 3,
+    max_rps: 20,
+    failure_rate: 0.06,
+    failure_status: 503,
+    latency_ms: 0,
+  },
+]
 
 function formatMemory(bytes: number) {
   if (bytes <= 0) return '-'
@@ -137,9 +161,9 @@ export function AgentPanel(props: AgentPanelProps) {
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [testMode, setTestMode] = useState<'real' | 'mock'>('real')
-  const [mockFailurePercent, setMockFailurePercent] = useState(20)
-  const [mockFailureStatus, setMockFailureStatus] = useState('503')
-  const [mockLatencyMS, setMockLatencyMS] = useState('0')
+  const [mockChannels, setMockChannels] = useState<LoadTestMockChannel[]>(() =>
+    DEFAULT_MOCK_CHANNELS.map((channel) => ({ ...channel }))
+  )
   const refreshInFlightRef = useRef(false)
   const pricingByKeyRef = useRef<Record<string, LoadTestPricing | null>>({})
 
@@ -264,26 +288,44 @@ export function AgentPanel(props: AgentPanelProps) {
     toast.success(t('Copied'))
   }, [pairing, props.mode, t])
 
+  const updateMockChannel = useCallback(
+    (slot: number, updates: Partial<LoadTestMockChannel>) => {
+      setMockChannels((current) =>
+        current.map((channel) =>
+          channel.slot === slot ? { ...channel, ...updates } : channel
+        )
+      )
+    },
+    []
+  )
+
   const start = useCallback(async () => {
     if (!props.request || !selectedAgentId) return
+    const useMockChannels = props.mode === 'managed' && testMode === 'mock'
+    if (
+      useMockChannels &&
+      mockChannels.some(
+        (channel) =>
+          !Number.isInteger(channel.max_rps) ||
+          channel.max_rps < 1 ||
+          !Number.isInteger(channel.latency_ms) ||
+          channel.latency_ms < 0 ||
+          channel.latency_ms > 120000
+      )
+    ) {
+      toast.error(t('Mock channel capacity or latency is invalid'))
+      return
+    }
     setStarting(true)
     try {
       await createLoadTestAgentRun({
         ...props.request,
         agent_id: selectedAgentId,
-        mock_enabled: props.mode === 'managed' && testMode === 'mock',
-        mock_failure_rate:
-          props.mode === 'managed' && testMode === 'mock'
-            ? mockFailurePercent / 100
-            : 0,
-        mock_failure_status:
-          props.mode === 'managed' && testMode === 'mock'
-            ? Number(mockFailureStatus)
-            : 0,
-        mock_latency_ms:
-          props.mode === 'managed' && testMode === 'mock'
-            ? Number(mockLatencyMS)
-            : 0,
+        mock_enabled: useMockChannels,
+        mock_failure_rate: 0,
+        mock_failure_status: 0,
+        mock_latency_ms: 0,
+        mock_channels: useMockChannels ? mockChannels : [],
       })
       toast.success(t('Agent load test queued'))
       await refresh()
@@ -293,9 +335,7 @@ export function AgentPanel(props: AgentPanelProps) {
       setStarting(false)
     }
   }, [
-    mockFailurePercent,
-    mockFailureStatus,
-    mockLatencyMS,
+    mockChannels,
     props.mode,
     props.request,
     refresh,
@@ -393,6 +433,10 @@ export function AgentPanel(props: AgentPanelProps) {
   const selectedAgent = onlineAgents.find(
     (agent) => agent.id === selectedAgentId
   )
+  const mockCapacityRPS = mockChannels.reduce(
+    (total, channel) => total + channel.max_rps,
+    0
+  )
 
   return (
     <>
@@ -466,76 +510,139 @@ export function AgentPanel(props: AgentPanelProps) {
               </div>
 
               {testMode === 'mock' && (
-                <div className='grid gap-4 md:grid-cols-[minmax(16rem,1fr)_10rem_10rem]'>
-                  <div className='space-y-2'>
-                    <div className='flex items-center justify-between gap-3'>
-                      <Label htmlFor='mock-failure-rate'>
-                        {t('Random failure rate')}
-                      </Label>
-                      <span className='text-sm tabular-nums'>
-                        {mockFailurePercent}%
-                      </span>
-                    </div>
-                    <Slider
-                      id='mock-failure-rate'
-                      max={100}
-                      min={0}
-                      onValueChange={(value) => {
-                        const next = Array.isArray(value) ? value[0] : value
-                        setMockFailurePercent(Number(next))
-                      }}
-                      step={1}
-                      value={[mockFailurePercent]}
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='mock-failure-status'>
-                      {t('Failure status')}
-                    </Label>
-                    <Select
-                      onValueChange={(value) =>
-                        value && setMockFailureStatus(value)
-                      }
-                      value={mockFailureStatus}
-                    >
-                      <SelectTrigger
-                        id='mock-failure-status'
-                        className='w-full'
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={String(MOCK_FAILURE_STATUS_MIXED)}>
-                          {t('Mixed distribution')}
-                        </SelectItem>
-                        {MOCK_FAILURE_STATUSES.map((status) => (
-                          <SelectItem key={status} value={String(status)}>
-                            HTTP {status}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {Number(mockFailureStatus) ===
-                      MOCK_FAILURE_STATUS_MIXED && (
-                      <p className='text-muted-foreground text-xs'>
+                <div className='overflow-hidden rounded-md border'>
+                  <div className='bg-muted/40 flex flex-wrap items-start justify-between gap-3 border-b px-3 py-2'>
+                    <div>
+                      <p className='text-sm font-medium'>
+                        {t('Fallback channel profiles')}
+                      </p>
+                      <p className='text-muted-foreground mt-0.5 text-xs'>
                         {t(
-                          'Randomly distribute injected failures across 429, 500, 502, 503, and 504.'
+                          'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.'
                         )}
                       </p>
-                    )}
+                    </div>
+                    <span className='text-sm font-medium tabular-nums'>
+                      {t('Configured upper bound: {{rps}} RPS', {
+                        rps: mockCapacityRPS,
+                      })}
+                    </span>
                   </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='mock-latency-ms'>
-                      {t('Additional latency (ms)')}
-                    </Label>
-                    <Input
-                      id='mock-latency-ms'
-                      max={120000}
-                      min={0}
-                      onChange={(event) => setMockLatencyMS(event.target.value)}
-                      type='number'
-                      value={mockLatencyMS}
-                    />
+                  <div className='divide-y'>
+                    {mockChannels.map((channel) => {
+                      const prefix = `mock-channel-${channel.slot}`
+                      return (
+                        <div
+                          className='grid gap-4 px-3 py-3 lg:grid-cols-[8rem_minmax(14rem,1fr)_10rem_10rem]'
+                          key={channel.slot}
+                        >
+                          <div className='space-y-2'>
+                            <Label htmlFor={`${prefix}-max-rps`}>
+                              {t('Fallback channel {{index}}', {
+                                index: channel.slot,
+                              })}
+                            </Label>
+                            <div className='relative'>
+                              <Input
+                                className='pr-12'
+                                id={`${prefix}-max-rps`}
+                                max={1000000}
+                                min={1}
+                                onChange={(event) =>
+                                  updateMockChannel(channel.slot, {
+                                    max_rps: Number(event.target.value),
+                                  })
+                                }
+                                type='number'
+                                value={channel.max_rps}
+                              />
+                              <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs'>
+                                RPS
+                              </span>
+                            </div>
+                          </div>
+                          <div className='space-y-2'>
+                            <div className='flex items-center justify-between gap-3'>
+                              <Label htmlFor={`${prefix}-failure-rate`}>
+                                {t('Random failure rate')}
+                              </Label>
+                              <span className='text-sm tabular-nums'>
+                                {Math.round(channel.failure_rate * 100)}%
+                              </span>
+                            </div>
+                            <Slider
+                              id={`${prefix}-failure-rate`}
+                              max={100}
+                              min={0}
+                              onValueChange={(value) => {
+                                const next = Array.isArray(value)
+                                  ? value[0]
+                                  : value
+                                updateMockChannel(channel.slot, {
+                                  failure_rate: Number(next) / 100,
+                                })
+                              }}
+                              step={1}
+                              value={[channel.failure_rate * 100]}
+                            />
+                          </div>
+                          <div className='space-y-2'>
+                            <Label htmlFor={`${prefix}-failure-status`}>
+                              {t('Failure status')}
+                            </Label>
+                            <Select
+                              onValueChange={(value) => {
+                                if (value) {
+                                  updateMockChannel(channel.slot, {
+                                    failure_status: Number(value),
+                                  })
+                                }
+                              }}
+                              value={String(channel.failure_status)}
+                            >
+                              <SelectTrigger
+                                className='w-full'
+                                id={`${prefix}-failure-status`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem
+                                  value={String(MOCK_FAILURE_STATUS_MIXED)}
+                                >
+                                  {t('Mixed distribution')}
+                                </SelectItem>
+                                {MOCK_FAILURE_STATUSES.map((status) => (
+                                  <SelectItem
+                                    key={status}
+                                    value={String(status)}
+                                  >
+                                    HTTP {status}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className='space-y-2'>
+                            <Label htmlFor={`${prefix}-latency-ms`}>
+                              {t('Additional latency (ms)')}
+                            </Label>
+                            <Input
+                              id={`${prefix}-latency-ms`}
+                              max={120000}
+                              min={0}
+                              onChange={(event) =>
+                                updateMockChannel(channel.slot, {
+                                  latency_ms: Number(event.target.value),
+                                })
+                              }
+                              type='number'
+                              value={channel.latency_ms}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -692,14 +799,31 @@ export function AgentPanel(props: AgentPanelProps) {
                               <Badge variant='outline'>
                                 {t('Do not consume account pool')}
                               </Badge>
-                              <p className='text-muted-foreground text-xs tabular-nums'>
-                                {Math.round(run.mock_failure_rate * 100)}% ·
-                                {run.mock_failure_status ===
-                                MOCK_FAILURE_STATUS_MIXED
-                                  ? t('Mixed distribution')
-                                  : `HTTP ${run.mock_failure_status}`}{' '}
-                                · {run.mock_latency_ms}ms
-                              </p>
+                              {(run.mock_channels?.length ?? 0) > 0 ? (
+                                <div className='text-muted-foreground space-y-0.5 text-xs tabular-nums'>
+                                  {run.mock_channels.map((channel) => (
+                                    <p key={channel.slot}>
+                                      #{channel.slot} · {channel.max_rps} RPS ·{' '}
+                                      {Math.round(channel.failure_rate * 100)}%
+                                      ·{' '}
+                                      {channel.failure_status ===
+                                      MOCK_FAILURE_STATUS_MIXED
+                                        ? t('Mixed distribution')
+                                        : `HTTP ${channel.failure_status}`}{' '}
+                                      · {channel.latency_ms}ms
+                                    </p>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className='text-muted-foreground text-xs tabular-nums'>
+                                  {Math.round(run.mock_failure_rate * 100)}% ·
+                                  {run.mock_failure_status ===
+                                  MOCK_FAILURE_STATUS_MIXED
+                                    ? t('Mixed distribution')
+                                    : `HTTP ${run.mock_failure_status}`}{' '}
+                                  · {run.mock_latency_ms}ms
+                                </p>
+                              )}
                             </div>
                           ) : (
                             <Badge variant='secondary'>

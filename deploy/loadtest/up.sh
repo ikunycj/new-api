@@ -7,8 +7,8 @@ export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
 # Build the application before pulling the monitoring stack. This keeps large
 # Grafana/Prometheus image downloads from starving `go mod download`.
-docker compose -f compose.yml build mock-upstream alert-sink new-api
-docker compose -f compose.yml up -d postgres redis mock-upstream pyroscope new-api postgres-exporter redis-exporter cadvisor alert-sink alertmanager prometheus grafana
+docker compose -f compose.yml build mock-upstream mock-upstream-b mock-upstream-c alert-sink new-api
+docker compose -f compose.yml up -d postgres redis mock-upstream mock-upstream-b mock-upstream-c pyroscope new-api postgres-exporter redis-exporter cadvisor alert-sink alertmanager prometheus grafana
 sh ./forward-colima-ports.sh
 docker compose -f compose.yml run --rm seed
 

@@ -16,8 +16,8 @@ esac
 mkdir -p results
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
-docker compose -f compose.yml build mock-upstream mock-upstream-b alert-sink new-api
-docker compose -f compose.yml up -d postgres redis mock-upstream mock-upstream-b pyroscope new-api postgres-exporter redis-exporter cadvisor alert-sink alertmanager prometheus grafana
+docker compose -f compose.yml build mock-upstream mock-upstream-b mock-upstream-c alert-sink new-api
+docker compose -f compose.yml up -d postgres redis mock-upstream mock-upstream-b mock-upstream-c pyroscope new-api postgres-exporter redis-exporter cadvisor alert-sink alertmanager prometheus grafana
 sh ./forward-colima-ports.sh
 docker compose -f compose.yml run --rm seed
 

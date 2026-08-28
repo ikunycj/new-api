@@ -6349,6 +6349,11 @@
     "Allow account-pool-free load tests": "Разрешить нагрузочные тесты без расходования пула аккаунтов",
     "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Разрешает серверным нагрузочным тестам, не расходующим пул аккаунтов, выбирать этот канал.",
     "Mixed distribution": "Смешанное распределение",
-    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Случайно распределяет внедрённые ошибки между кодами 429, 500, 502, 503 и 504."
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Случайно распределяет внедрённые ошибки между кодами 429, 500, 502, 503 и 504.",
+    "Fallback channel profiles": "Профили резервных каналов",
+    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Каналы используются по порядку. Запросы сверх пропускной способности канала переводятся на следующий.",
+    "Fallback channel {{index}}": "Резервный канал {{index}}",
+    "Mock channel capacity or latency is invalid": "Недопустимая пропускная способность или задержка Mock-канала.",
+    "Configured upper bound: {{rps}} RPS": "Заданный предел: {{rps}} RPS"
   }
 }

@@ -25,6 +25,9 @@ const (
 	loadTestMaxErrorMessage    = 4096
 	loadTestMaxErrorKinds      = 100
 	loadTestMaxMockLatencyMS   = 120000
+	loadTestMockChannelCount   = 3
+	loadTestMaxMockChannelRPS  = 1_000_000
+	loadTestMockAgentVersion   = "0.3.0"
 )
 
 var loadTestEndpoints = map[string]struct{}{
@@ -46,19 +49,20 @@ type pairLoadTestAgentRequest struct {
 }
 
 type createLoadTestRunRequest struct {
-	AgentID           string  `json:"agent_id"`
-	TokenID           int     `json:"token_id"`
-	Model             string  `json:"model"`
-	Endpoint          string  `json:"endpoint"`
-	Prompt            string  `json:"prompt"`
-	PromptCache       bool    `json:"prompt_cache"`
-	MockEnabled       bool    `json:"mock_enabled"`
-	MockFailureRate   float64 `json:"mock_failure_rate"`
-	MockFailureStatus int     `json:"mock_failure_status"`
-	MockLatencyMS     int     `json:"mock_latency_ms"`
-	DurationSeconds   int     `json:"duration_seconds"`
-	RequestsPerSecond int     `json:"requests_per_second"`
-	Concurrency       int     `json:"concurrency"`
+	AgentID           string                      `json:"agent_id"`
+	TokenID           int                         `json:"token_id"`
+	Model             string                      `json:"model"`
+	Endpoint          string                      `json:"endpoint"`
+	Prompt            string                      `json:"prompt"`
+	PromptCache       bool                        `json:"prompt_cache"`
+	MockEnabled       bool                        `json:"mock_enabled"`
+	MockFailureRate   float64                     `json:"mock_failure_rate"`
+	MockFailureStatus int                         `json:"mock_failure_status"`
+	MockLatencyMS     int                         `json:"mock_latency_ms"`
+	MockChannels      []model.LoadTestMockChannel `json:"mock_channels"`
+	DurationSeconds   int                         `json:"duration_seconds"`
+	RequestsPerSecond int                         `json:"requests_per_second"`
+	Concurrency       int                         `json:"concurrency"`
 }
 
 type loadTestAgentPollRequest struct {
@@ -355,12 +359,18 @@ func CreateLoadTestRun(c *gin.Context) {
 			packageName = candidates[0]
 		}
 	}
+	mockChannelsJSON, err := model.EncodeLoadTestMockChannels(request.MockChannels)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	run := &model.LoadTestRun{
 		UserID: c.GetInt("id"), AgentID: agent.ID, TokenID: token.Id,
 		KeyName: token.Name, PackageName: packageName, Model: request.Model,
 		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache, AgentManaged: agent.Managed,
 		MockEnabled: request.MockEnabled, MockFailureRate: request.MockFailureRate,
 		MockFailureStatus: request.MockFailureStatus, MockLatencyMS: request.MockLatencyMS,
+		MockChannelsJSON: mockChannelsJSON, MockChannels: request.MockChannels,
 		TargetURL: targetURL, DurationSeconds: request.DurationSeconds,
 		RequestsPerSecond: request.RequestsPerSecond, Concurrency: request.Concurrency,
 	}
@@ -464,6 +474,7 @@ func PollLoadTestAgent(c *gin.Context) {
 			"prompt_cache": run.PromptCache, "duration_seconds": run.DurationSeconds,
 			"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 			"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
+			"mock_channels":       run.MockChannels,
 			"requests_per_second": run.RequestsPerSecond, "concurrency": run.Concurrency,
 		},
 	})
@@ -471,7 +482,7 @@ func PollLoadTestAgent(c *gin.Context) {
 
 func validateLoadTestMockSettings(agent *model.LoadTestAgent, request createLoadTestRunRequest) error {
 	if !request.MockEnabled {
-		if request.MockFailureRate != 0 || request.MockFailureStatus != 0 || request.MockLatencyMS != 0 {
+		if request.MockFailureRate != 0 || request.MockFailureStatus != 0 || request.MockLatencyMS != 0 || len(request.MockChannels) != 0 {
 			return errors.New("mock settings require mock mode")
 		}
 		return nil
@@ -479,18 +490,73 @@ func validateLoadTestMockSettings(agent *model.LoadTestAgent, request createLoad
 	if !agent.Managed {
 		return errors.New("mock mode is only available on server load-test agents")
 	}
+	if !loadTestAgentSupportsMockChannels(agent.Version) {
+		return fmt.Errorf("server load-test agent must be updated to version %s or newer", loadTestMockAgentVersion)
+	}
+	if len(request.MockChannels) > 0 {
+		if request.MockFailureRate != 0 || request.MockFailureStatus != 0 || request.MockLatencyMS != 0 {
+			return errors.New("per-channel mock settings cannot be combined with legacy mock settings")
+		}
+		if len(request.MockChannels) != loadTestMockChannelCount {
+			return fmt.Errorf("mock mode requires exactly %d channel configurations", loadTestMockChannelCount)
+		}
+		seenSlots := make(map[int]struct{}, loadTestMockChannelCount)
+		for _, channel := range request.MockChannels {
+			if channel.Slot < 1 || channel.Slot > loadTestMockChannelCount {
+				return fmt.Errorf("mock channel slot must be between 1 and %d", loadTestMockChannelCount)
+			}
+			if _, exists := seenSlots[channel.Slot]; exists {
+				return errors.New("mock channel slots must be unique")
+			}
+			seenSlots[channel.Slot] = struct{}{}
+			if channel.MaxRPS < 1 || channel.MaxRPS > loadTestMaxMockChannelRPS {
+				return fmt.Errorf("mock channel max RPS must be between 1 and %d", loadTestMaxMockChannelRPS)
+			}
+			if math.IsNaN(channel.FailureRate) || math.IsInf(channel.FailureRate, 0) || channel.FailureRate < 0 || channel.FailureRate > 1 {
+				return errors.New("mock channel failure rate must be between 0 and 1")
+			}
+			if channel.LatencyMS < 0 || channel.LatencyMS > loadTestMaxMockLatencyMS {
+				return fmt.Errorf("mock channel latency must be between 0 and %d milliseconds", loadTestMaxMockLatencyMS)
+			}
+			if !validLoadTestMockFailureStatus(channel.FailureStatus) {
+				return errors.New("unsupported mock channel failure status")
+			}
+		}
+		return nil
+	}
 	if math.IsNaN(request.MockFailureRate) || math.IsInf(request.MockFailureRate, 0) || request.MockFailureRate < 0 || request.MockFailureRate > 1 {
 		return errors.New("mock failure rate must be between 0 and 1")
 	}
 	if request.MockLatencyMS < 0 || request.MockLatencyMS > loadTestMaxMockLatencyMS {
 		return fmt.Errorf("mock latency must be between 0 and %d milliseconds", loadTestMaxMockLatencyMS)
 	}
-	switch request.MockFailureStatus {
-	case 0, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return nil
-	default:
+	if !validLoadTestMockFailureStatus(request.MockFailureStatus) {
 		return errors.New("unsupported mock failure status")
 	}
+	return nil
+}
+
+func validLoadTestMockFailureStatus(status int) bool {
+	switch status {
+	case 0, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func loadTestAgentSupportsMockChannels(version string) bool {
+	parts := strings.Split(strings.TrimSpace(version), ".")
+	if len(parts) != 3 {
+		return false
+	}
+	major, majorErr := strconv.Atoi(parts[0])
+	minor, minorErr := strconv.Atoi(parts[1])
+	patch, patchErr := strconv.Atoi(parts[2])
+	if majorErr != nil || minorErr != nil || patchErr != nil || major < 0 || minor < 0 || patch < 0 {
+		return false
+	}
+	return major > 0 || minor > 3 || (minor == 3 && patch >= 0)
 }
 
 func validateLoadTestMockToken(token *model.Token, modelName, endpoint string) error {
@@ -546,15 +612,19 @@ func validateLoadTestMockToken(token *model.Token, modelName, endpoint string) e
 				mockRouteChannels = append(mockRouteChannels, routeChannel)
 			}
 		}
-		if len(mockRouteChannels) == 0 {
-			return fmt.Errorf("billing group %q has no enabled mock channels", group)
+		if len(mockRouteChannels) < loadTestMockChannelCount {
+			return fmt.Errorf("billing group %q requires %d enabled mock channels", group, loadTestMockChannelCount)
 		}
-		selected, err := model.GetConfiguredRouteChannel(group, modelName, requestPath, mockRouteChannels, map[int]struct{}{})
-		if err != nil {
-			return fmt.Errorf("resolve mock channel for billing group %q: %w", group, err)
-		}
-		if selected == nil || !selected.GetSetting().MockLoadTest {
-			return fmt.Errorf("billing group %q has no mock channel for model %q and endpoint %q", group, modelName, endpoint)
+		excluded := make(map[int]struct{}, loadTestMockChannelCount)
+		for slot := 1; slot <= loadTestMockChannelCount; slot++ {
+			selected, err := model.GetConfiguredRouteChannel(group, modelName, requestPath, mockRouteChannels, excluded)
+			if err != nil {
+				return fmt.Errorf("resolve mock channel %d for billing group %q: %w", slot, group, err)
+			}
+			if selected == nil || !selected.GetSetting().MockLoadTest {
+				return fmt.Errorf("billing group %q requires %d mock channels for model %q and endpoint %q", group, loadTestMockChannelCount, modelName, endpoint)
+			}
+			excluded[selected.Id] = struct{}{}
 		}
 	}
 	return nil

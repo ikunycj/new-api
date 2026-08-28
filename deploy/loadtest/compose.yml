@@ -72,6 +72,27 @@ services:
       retries: 20
     networks: [loadtest]
 
+  mock-upstream-c:
+    build:
+      context: ./mock-upstream
+    environment:
+      CHANNEL_ID: "3"
+      CHANNEL_NAME: mock-channel-c
+      CHANNEL_TOKENS: ${MOCK_C_CHANNEL_TOKENS:-1000000000}
+      TTFT_MS: ${MOCK_C_TTFT_MS:-140}
+      RESPONSE_MS: ${MOCK_C_RESPONSE_MS:-600}
+      STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}
+      STREAM_INTERVAL_MS: ${MOCK_STREAM_INTERVAL_MS:-50}
+      ERROR_RATE: ${MOCK_C_ERROR_RATE:-0}
+    ports:
+      - "127.0.0.1:${LOADTEST_MOCK_C_PORT:-18082}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [loadtest]
+
   pyroscope:
     image: grafana/pyroscope:1.13.2
     command: ["server"]
@@ -125,6 +146,8 @@ services:
       mock-upstream:
         condition: service_healthy
       mock-upstream-b:
+        condition: service_healthy
+      mock-upstream-c:
         condition: service_healthy
       pyroscope:
         condition: service_started
@@ -261,6 +284,7 @@ services:
       FAILOVER_MODE: ${FAILOVER_MODE:-balanced}
       MOCK_CONTROL_A: http://mock-upstream:8080
       MOCK_CONTROL_B: http://mock-upstream-b:8080
+      MOCK_CONTROL_C: http://mock-upstream-c:8080
       SMOKE_DURATION: ${SMOKE_DURATION:-1m}
       SMOKE_VUS: ${SMOKE_VUS:-10}
       BURST_MAX_DURATION: ${BURST_MAX_DURATION:-5m}

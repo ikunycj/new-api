@@ -111,4 +111,15 @@ func TestValidateTaskRejectsInvalidMockSettings(t *testing.T) {
 
 	valid.MockFailureStatus = 0
 	require.NoError(t, validateTask(valid))
+
+	valid.MockFailureRate = 0
+	valid.MockLatencyMS = 0
+	valid.MockChannels = []loadTestMockChannel{
+		{Slot: 1, MaxRPS: 10, FailureRate: 0.1, FailureStatus: 503, LatencyMS: 50},
+		{Slot: 2, MaxRPS: 20, FailureRate: 0.2, FailureStatus: 0, LatencyMS: 100},
+		{Slot: 3, MaxRPS: 30, FailureRate: 0, FailureStatus: 429, LatencyMS: 0},
+	}
+	require.NoError(t, validateTask(valid))
+	valid.MockChannels[2].MaxRPS = 0
+	assert.ErrorContains(t, validateTask(valid), "channel settings")
 }

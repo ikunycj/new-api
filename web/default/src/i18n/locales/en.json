@@ -6349,6 +6349,11 @@
     "Allow account-pool-free load tests": "Allow account-pool-free load tests",
     "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Allow this channel to be selected by managed load tests that do not consume the account pool.",
     "Mixed distribution": "Mixed distribution",
-    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Randomly distribute injected failures across 429, 500, 502, 503, and 504."
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Randomly distribute injected failures across 429, 500, 502, 503, and 504.",
+    "Fallback channel profiles": "Fallback channel profiles",
+    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.",
+    "Fallback channel {{index}}": "Fallback channel {{index}}",
+    "Mock channel capacity or latency is invalid": "Mock channel capacity or latency is invalid",
+    "Configured upper bound: {{rps}} RPS": "Configured upper bound: {{rps}} RPS"
   }
 }

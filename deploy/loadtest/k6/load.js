@@ -10,6 +10,7 @@ const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
 const failoverMode = __ENV.FAILOVER_MODE || 'balanced';
 const mockControlA = normalizeBaseURL(__ENV.MOCK_CONTROL_A || 'http://mock-upstream:8080');
 const mockControlB = normalizeBaseURL(__ENV.MOCK_CONTROL_B || 'http://mock-upstream-b:8080');
+const mockControlC = normalizeBaseURL(__ENV.MOCK_CONTROL_C || 'http://mock-upstream-c:8080');
 const smokeDuration = __ENV.SMOKE_DURATION || '1m';
 const smokeVUs = numberEnv('SMOKE_VUS', 10);
 const burstMaxDuration = __ENV.BURST_MAX_DURATION || '5m';
@@ -44,6 +45,7 @@ export function setup() {
   const responses = http.batch([
     ['POST', `${mockControlA}/control/reset?tokens=300`, null],
     ['POST', `${mockControlB}/control/reset?tokens=3000`, null],
+    ['POST', `${mockControlC}/control/reset?tokens=3000`, null],
   ]);
   const reset = check(responses, {
     'mock channels reset': (items) => items.every((item) => item.status === 200),

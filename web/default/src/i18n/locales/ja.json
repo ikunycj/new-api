@@ -6349,6 +6349,11 @@
     "Allow account-pool-free load tests": "アカウントプールを消費しない負荷テストを許可",
     "Allow this channel to be selected by managed load tests that do not consume the account pool.": "アカウントプールを消費しないサーバー負荷テストで、このチャネルを選択できるようにします。",
     "Mixed distribution": "混合分布",
-    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "注入する失敗を 429、500、502、503、504 に均等にランダム分散します。"
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "注入する失敗を 429、500、502、503、504 に均等にランダム分散します。",
+    "Fallback channel profiles": "フォールバックチャネル設定",
+    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "チャネルは順番に試行されます。容量を超えたリクエストは次のチャネルに切り替わります。",
+    "Fallback channel {{index}}": "フォールバックチャネル {{index}}",
+    "Mock channel capacity or latency is invalid": "Mock チャネルの容量または遅延が無効です。",
+    "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS"
   }
 }

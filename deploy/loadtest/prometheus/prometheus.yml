@@ -19,7 +19,7 @@ scrape_configs:
 
   - job_name: mock-upstream
     static_configs:
-      - targets: [mock-upstream:8080, mock-upstream-b:8080]
+      - targets: [mock-upstream:8080, mock-upstream-b:8080, mock-upstream-c:8080]
 
   - job_name: postgres
     static_configs:

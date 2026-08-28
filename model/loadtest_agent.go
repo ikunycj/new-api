@@ -21,6 +21,14 @@ const (
 	LoadTestRunCancelled       LoadTestRunStatus = "cancelled"
 )
 
+type LoadTestMockChannel struct {
+	Slot          int     `json:"slot"`
+	MaxRPS        int     `json:"max_rps"`
+	FailureRate   float64 `json:"failure_rate"`
+	FailureStatus int     `json:"failure_status"`
+	LatencyMS     int     `json:"latency_ms"`
+}
+
 type LoadTestAgent struct {
 	ID              string  `json:"id" gorm:"type:varchar(64);primaryKey"`
 	UserID          int     `json:"user_id" gorm:"index;not null"`
@@ -41,46 +49,48 @@ type LoadTestAgent struct {
 }
 
 type LoadTestRun struct {
-	ID                string            `json:"id" gorm:"type:varchar(64);primaryKey"`
-	UserID            int               `json:"user_id" gorm:"index;not null"`
-	AgentID           string            `json:"agent_id" gorm:"type:varchar(64);index;not null"`
-	TokenID           int               `json:"token_id" gorm:"index;not null"`
-	KeyName           string            `json:"key_name" gorm:"type:varchar(128);not null"`
-	PackageName       string            `json:"package_name" gorm:"type:varchar(64);not null"`
-	Model             string            `json:"model" gorm:"type:varchar(128);not null"`
-	Endpoint          string            `json:"endpoint" gorm:"type:varchar(32);not null"`
-	Prompt            string            `json:"prompt" gorm:"type:text;not null"`
-	PromptCache       bool              `json:"prompt_cache"`
-	MockEnabled       bool              `json:"mock_enabled"`
-	MockFailureRate   float64           `json:"mock_failure_rate"`
-	MockFailureStatus int               `json:"mock_failure_status"`
-	MockLatencyMS     int               `json:"mock_latency_ms"`
-	TargetURL         string            `json:"-" gorm:"type:varchar(512);not null"`
-	DurationSeconds   int               `json:"duration_seconds" gorm:"not null"`
-	RequestsPerSecond int               `json:"requests_per_second" gorm:"not null"`
-	Concurrency       int               `json:"concurrency" gorm:"not null"`
-	AgentManaged      bool              `json:"agent_managed" gorm:"index"`
-	Status            LoadTestRunStatus `json:"status" gorm:"type:varchar(32);index;not null"`
-	Sent              int64             `json:"sent" gorm:"bigint"`
-	Completed         int64             `json:"completed" gorm:"bigint"`
-	Successes         int64             `json:"successes" gorm:"bigint"`
-	Failures          int64             `json:"failures" gorm:"bigint"`
-	Dropped           int64             `json:"dropped" gorm:"bigint"`
-	InputTokens       int64             `json:"input_tokens" gorm:"bigint"`
-	OutputTokens      int64             `json:"output_tokens" gorm:"bigint"`
-	CacheReadTokens   int64             `json:"cache_read_tokens" gorm:"bigint"`
-	CacheWriteTokens  int64             `json:"cache_write_tokens" gorm:"bigint"`
-	CurrentRPS        float64           `json:"current_rps"`
-	P50MS             float64           `json:"p50_ms"`
-	P95MS             float64           `json:"p95_ms"`
-	P99MS             float64           `json:"p99_ms"`
-	ErrorCountsJSON   string            `json:"-" gorm:"type:text"`
-	ErrorCounts       map[string]int64  `json:"error_counts" gorm:"-"`
-	ErrorMessage      string            `json:"error_message" gorm:"type:text"`
-	CreatedAt         int64             `json:"created_at" gorm:"bigint;index"`
-	StartedAt         int64             `json:"started_at" gorm:"bigint"`
-	FinishedAt        int64             `json:"finished_at" gorm:"bigint"`
-	UpdatedAt         int64             `json:"updated_at" gorm:"bigint;index"`
+	ID                string                `json:"id" gorm:"type:varchar(64);primaryKey"`
+	UserID            int                   `json:"user_id" gorm:"index;not null"`
+	AgentID           string                `json:"agent_id" gorm:"type:varchar(64);index;not null"`
+	TokenID           int                   `json:"token_id" gorm:"index;not null"`
+	KeyName           string                `json:"key_name" gorm:"type:varchar(128);not null"`
+	PackageName       string                `json:"package_name" gorm:"type:varchar(64);not null"`
+	Model             string                `json:"model" gorm:"type:varchar(128);not null"`
+	Endpoint          string                `json:"endpoint" gorm:"type:varchar(32);not null"`
+	Prompt            string                `json:"prompt" gorm:"type:text;not null"`
+	PromptCache       bool                  `json:"prompt_cache"`
+	MockEnabled       bool                  `json:"mock_enabled"`
+	MockFailureRate   float64               `json:"mock_failure_rate"`
+	MockFailureStatus int                   `json:"mock_failure_status"`
+	MockLatencyMS     int                   `json:"mock_latency_ms"`
+	MockChannelsJSON  string                `json:"-" gorm:"type:text"`
+	MockChannels      []LoadTestMockChannel `json:"mock_channels" gorm:"-"`
+	TargetURL         string                `json:"-" gorm:"type:varchar(512);not null"`
+	DurationSeconds   int                   `json:"duration_seconds" gorm:"not null"`
+	RequestsPerSecond int                   `json:"requests_per_second" gorm:"not null"`
+	Concurrency       int                   `json:"concurrency" gorm:"not null"`
+	AgentManaged      bool                  `json:"agent_managed" gorm:"index"`
+	Status            LoadTestRunStatus     `json:"status" gorm:"type:varchar(32);index;not null"`
+	Sent              int64                 `json:"sent" gorm:"bigint"`
+	Completed         int64                 `json:"completed" gorm:"bigint"`
+	Successes         int64                 `json:"successes" gorm:"bigint"`
+	Failures          int64                 `json:"failures" gorm:"bigint"`
+	Dropped           int64                 `json:"dropped" gorm:"bigint"`
+	InputTokens       int64                 `json:"input_tokens" gorm:"bigint"`
+	OutputTokens      int64                 `json:"output_tokens" gorm:"bigint"`
+	CacheReadTokens   int64                 `json:"cache_read_tokens" gorm:"bigint"`
+	CacheWriteTokens  int64                 `json:"cache_write_tokens" gorm:"bigint"`
+	CurrentRPS        float64               `json:"current_rps"`
+	P50MS             float64               `json:"p50_ms"`
+	P95MS             float64               `json:"p95_ms"`
+	P99MS             float64               `json:"p99_ms"`
+	ErrorCountsJSON   string                `json:"-" gorm:"type:text"`
+	ErrorCounts       map[string]int64      `json:"error_counts" gorm:"-"`
+	ErrorMessage      string                `json:"error_message" gorm:"type:text"`
+	CreatedAt         int64                 `json:"created_at" gorm:"bigint;index"`
+	StartedAt         int64                 `json:"started_at" gorm:"bigint"`
+	FinishedAt        int64                 `json:"finished_at" gorm:"bigint"`
+	UpdatedAt         int64                 `json:"updated_at" gorm:"bigint;index"`
 }
 
 type LoadTestAgentRuntime struct {
@@ -300,7 +310,7 @@ func ListLoadTestRuns(userID, limit int) ([]LoadTestRun, error) {
 	var runs []LoadTestRun
 	err := DB.Where("user_id = ?", userID).Order("created_at desc").Limit(limit).Find(&runs).Error
 	for index := range runs {
-		decodeLoadTestRunErrors(&runs[index])
+		decodeLoadTestRunJSON(&runs[index])
 	}
 	return runs, err
 }
@@ -310,7 +320,7 @@ func GetLoadTestRun(userID int, runID string) (*LoadTestRun, error) {
 	if err := DB.Where("id = ? AND user_id = ?", runID, userID).First(&run).Error; err != nil {
 		return nil, err
 	}
-	decodeLoadTestRunErrors(&run)
+	decodeLoadTestRunJSON(&run)
 	return &run, nil
 }
 
@@ -336,6 +346,7 @@ func ClaimLoadTestRun(agentID string) (*LoadTestRun, error) {
 	if err := DB.Where("id = ?", run.ID).First(&run).Error; err != nil {
 		return nil, err
 	}
+	decodeLoadTestRunJSON(&run)
 	return &run, nil
 }
 
@@ -414,9 +425,21 @@ func EncodeLoadTestErrorCounts(counts map[string]int64) (string, error) {
 	return string(data), err
 }
 
-func decodeLoadTestRunErrors(run *LoadTestRun) {
+func EncodeLoadTestMockChannels(channels []LoadTestMockChannel) (string, error) {
+	if len(channels) == 0 {
+		return "", nil
+	}
+	data, err := common.Marshal(channels)
+	return string(data), err
+}
+
+func decodeLoadTestRunJSON(run *LoadTestRun) {
 	run.ErrorCounts = map[string]int64{}
 	if run.ErrorCountsJSON != "" {
 		_ = common.UnmarshalJsonStr(run.ErrorCountsJSON, &run.ErrorCounts)
+	}
+	run.MockChannels = []LoadTestMockChannel{}
+	if run.MockChannelsJSON != "" {
+		_ = common.UnmarshalJsonStr(run.MockChannelsJSON, &run.MockChannels)
 	}
 }

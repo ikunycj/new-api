@@ -1411,6 +1411,77 @@ for (const [locale, translations] of Object.entries(mockChannelSettingKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const mockChannelProfileKeys = {
+  en: {
+    'Fallback channel profiles': 'Fallback channel profiles',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.',
+    'Fallback channel {{index}}': 'Fallback channel {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Mock channel capacity or latency is invalid',
+    'Configured upper bound: {{rps}} RPS':
+      'Configured upper bound: {{rps}} RPS',
+  },
+  zh: {
+    'Fallback channel profiles': '降级渠道配置',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      '渠道将按顺序尝试。超过当前渠道容量的请求会降级到下一个渠道。',
+    'Fallback channel {{index}}': '降级渠道 {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Mock 渠道容量或延迟配置无效',
+    'Configured upper bound: {{rps}} RPS': '配置上限：{{rps}} RPS',
+  },
+  'zh-TW': {
+    'Fallback channel profiles': '降級渠道設定',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      '渠道會依序嘗試。超過目前渠道容量的請求會降級到下一個渠道。',
+    'Fallback channel {{index}}': '降級渠道 {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Mock 渠道容量或延遲設定無效',
+    'Configured upper bound: {{rps}} RPS': '設定上限：{{rps}} RPS',
+  },
+  fr: {
+    'Fallback channel profiles': 'Profils des canaux de secours',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      'Les canaux sont essayés dans l’ordre. Les requêtes dépassant la capacité d’un canal passent au suivant.',
+    'Fallback channel {{index}}': 'Canal de secours {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'La capacité ou la latence du canal simulé est invalide.',
+    'Configured upper bound: {{rps}} RPS': 'Limite configurée : {{rps}} RPS',
+  },
+  ja: {
+    'Fallback channel profiles': 'フォールバックチャネル設定',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      'チャネルは順番に試行されます。容量を超えたリクエストは次のチャネルに切り替わります。',
+    'Fallback channel {{index}}': 'フォールバックチャネル {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Mock チャネルの容量または遅延が無効です。',
+    'Configured upper bound: {{rps}} RPS': '設定上限：{{rps}} RPS',
+  },
+  ru: {
+    'Fallback channel profiles': 'Профили резервных каналов',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      'Каналы используются по порядку. Запросы сверх пропускной способности канала переводятся на следующий.',
+    'Fallback channel {{index}}': 'Резервный канал {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Недопустимая пропускная способность или задержка Mock-канала.',
+    'Configured upper bound: {{rps}} RPS': 'Заданный предел: {{rps}} RPS',
+  },
+  vi: {
+    'Fallback channel profiles': 'Cấu hình kênh dự phòng',
+    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
+      'Các kênh được thử theo thứ tự. Yêu cầu vượt quá công suất của một kênh sẽ chuyển sang kênh tiếp theo.',
+    'Fallback channel {{index}}': 'Kênh dự phòng {{index}}',
+    'Mock channel capacity or latency is invalid':
+      'Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.',
+    'Configured upper bound: {{rps}} RPS': 'Giới hạn đã cấu hình: {{rps}} RPS',
+  },
+}
+
+for (const [locale, translations] of Object.entries(mockChannelProfileKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

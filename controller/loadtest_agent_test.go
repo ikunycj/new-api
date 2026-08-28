@@ -41,7 +41,7 @@ func TestValidLoadTestProgress(t *testing.T) {
 }
 
 func TestValidateLoadTestMockSettings(t *testing.T) {
-	managed := &model.LoadTestAgent{Managed: true}
+	managed := &model.LoadTestAgent{Managed: true, Version: loadTestMockAgentVersion}
 	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
 		MockEnabled: true, MockFailureRate: 0.25, MockFailureStatus: 503, MockLatencyMS: 500,
 	}))
@@ -60,6 +60,26 @@ func TestValidateLoadTestMockSettings(t *testing.T) {
 	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
 		MockFailureStatus: 503,
 	}), "require mock mode")
+	assert.ErrorContains(t, validateLoadTestMockSettings(&model.LoadTestAgent{Managed: true, Version: "0.2.0"}, createLoadTestRunRequest{
+		MockEnabled: true,
+	}), "must be updated")
+
+	channels := []model.LoadTestMockChannel{
+		{Slot: 1, MaxRPS: 10, FailureRate: 0.1, FailureStatus: 503, LatencyMS: 50},
+		{Slot: 2, MaxRPS: 20, FailureRate: 0.2, FailureStatus: 0, LatencyMS: 100},
+		{Slot: 3, MaxRPS: 30, FailureRate: 0, FailureStatus: 429, LatencyMS: 0},
+	}
+	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockChannels: channels,
+	}))
+	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockChannels: channels[:2],
+	}), "exactly 3")
+	invalidChannels := append([]model.LoadTestMockChannel(nil), channels...)
+	invalidChannels[2].Slot = 2
+	assert.ErrorContains(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
+		MockEnabled: true, MockChannels: invalidChannels,
+	}), "unique")
 }
 
 func TestValidateLoadTestMockTokenAllowsMixedRealChannels(t *testing.T) {
@@ -76,8 +96,10 @@ func TestValidateLoadTestMockTokenAllowsMixedRealChannels(t *testing.T) {
 	mockSetting := `{"mock_load_test":true}`
 	realSetting := `{}`
 	channels := []model.Channel{
-		{Id: 101, Name: "mock", Status: common.ChannelStatusEnabled, Setting: &mockSetting},
+		{Id: 101, Name: "mock-a", Status: common.ChannelStatusEnabled, Setting: &mockSetting},
 		{Id: 102, Name: "real", Status: common.ChannelStatusEnabled, Setting: &realSetting},
+		{Id: 103, Name: "mock-b", Status: common.ChannelStatusEnabled, Setting: &mockSetting},
+		{Id: 104, Name: "mock-c", Status: common.ChannelStatusEnabled, Setting: &mockSetting},
 	}
 	require.NoError(t, db.Create(&channels).Error)
 	route := model.BillingGroupRoute{BillingGroup: "mock-only", Enabled: true}
@@ -85,8 +107,14 @@ func TestValidateLoadTestMockTokenAllowsMixedRealChannels(t *testing.T) {
 	require.NoError(t, db.Create(&[]model.BillingGroupChannel{
 		{BillingGroupRouteId: route.Id, ChannelId: 101, Priority: 100, Enabled: true},
 		{BillingGroupRouteId: route.Id, ChannelId: 102, Priority: 90, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 103, Priority: 80, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 104, Priority: 70, Enabled: true},
 	}).Error)
-	require.NoError(t, db.Create(&model.Ability{Group: "mock-only", Model: "gpt-test", ChannelId: 101, Enabled: true}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "mock-only", Model: "gpt-test", ChannelId: 101, Enabled: true},
+		{Group: "mock-only", Model: "gpt-test", ChannelId: 103, Enabled: true},
+		{Group: "mock-only", Model: "gpt-test", ChannelId: 104, Enabled: true},
+	}).Error)
 	model.InitChannelRoutingCache()
 
 	token := &model.Token{Group: "mock-only"}
@@ -94,7 +122,7 @@ func TestValidateLoadTestMockTokenAllowsMixedRealChannels(t *testing.T) {
 
 	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("setting", realSetting).Error)
 	model.InitChannelRoutingCache()
-	assert.ErrorContains(t, validateLoadTestMockToken(token, "gpt-test", "openai"), "has no enabled mock channels")
+	assert.ErrorContains(t, validateLoadTestMockToken(token, "gpt-test", "openai"), "requires 3 enabled mock channels")
 }
 
 func TestValidateLoadTestAgentCapacity(t *testing.T) {

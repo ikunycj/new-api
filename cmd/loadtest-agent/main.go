@@ -24,7 +24,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const agentVersion = "0.2.0"
+const agentVersion = "0.3.0"
 
 var agentHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
@@ -53,20 +53,29 @@ type pollResponse struct {
 }
 
 type loadTestTask struct {
-	RunID             string  `json:"run_id"`
-	TargetURL         string  `json:"target_url"`
-	APIKey            string  `json:"api_key"`
-	Model             string  `json:"model"`
-	Endpoint          string  `json:"endpoint"`
-	Prompt            string  `json:"prompt"`
-	PromptCache       bool    `json:"prompt_cache"`
-	MockEnabled       bool    `json:"mock_enabled"`
-	MockFailureRate   float64 `json:"mock_failure_rate"`
-	MockFailureStatus int     `json:"mock_failure_status"`
-	MockLatencyMS     int     `json:"mock_latency_ms"`
-	DurationSeconds   int     `json:"duration_seconds"`
-	RequestsPerSecond int     `json:"requests_per_second"`
-	Concurrency       int     `json:"concurrency"`
+	RunID             string                `json:"run_id"`
+	TargetURL         string                `json:"target_url"`
+	APIKey            string                `json:"api_key"`
+	Model             string                `json:"model"`
+	Endpoint          string                `json:"endpoint"`
+	Prompt            string                `json:"prompt"`
+	PromptCache       bool                  `json:"prompt_cache"`
+	MockEnabled       bool                  `json:"mock_enabled"`
+	MockFailureRate   float64               `json:"mock_failure_rate"`
+	MockFailureStatus int                   `json:"mock_failure_status"`
+	MockLatencyMS     int                   `json:"mock_latency_ms"`
+	MockChannels      []loadTestMockChannel `json:"mock_channels"`
+	DurationSeconds   int                   `json:"duration_seconds"`
+	RequestsPerSecond int                   `json:"requests_per_second"`
+	Concurrency       int                   `json:"concurrency"`
+}
+
+type loadTestMockChannel struct {
+	Slot          int     `json:"slot"`
+	MaxRPS        int     `json:"max_rps"`
+	FailureRate   float64 `json:"failure_rate"`
+	FailureStatus int     `json:"failure_status"`
+	LatencyMS     int     `json:"latency_ms"`
 }
 
 type agentRuntime struct {
@@ -394,6 +403,10 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 	command := exec.CommandContext(ctx, "k6", "run", "--summary-export", summaryPath, scriptPath)
 	command.Stdout = stdoutFile
 	command.Stderr = stdoutFile
+	mockChannelsJSON, err := common.Marshal(task.MockChannels)
+	if err != nil {
+		return fmt.Errorf("encode mock channels: %w", err)
+	}
 	command.Env = append(os.Environ(),
 		"ALLTOKEN_RUN_ID="+task.RunID,
 		"ALLTOKEN_TARGET_URL="+task.TargetURL,
@@ -406,6 +419,7 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 		"ALLTOKEN_MOCK_FAILURE_RATE="+strconv.FormatFloat(task.MockFailureRate, 'f', -1, 64),
 		"ALLTOKEN_MOCK_FAILURE_STATUS="+strconv.Itoa(task.MockFailureStatus),
 		"ALLTOKEN_MOCK_LATENCY_MS="+strconv.Itoa(task.MockLatencyMS),
+		"ALLTOKEN_MOCK_CHANNELS="+string(mockChannelsJSON),
 		"ALLTOKEN_DURATION_SECONDS="+strconv.Itoa(task.DurationSeconds),
 		"ALLTOKEN_RPS="+strconv.Itoa(task.RequestsPerSecond),
 		"ALLTOKEN_CONCURRENCY="+strconv.Itoa(task.Concurrency),
@@ -636,6 +650,29 @@ func validateTask(task loadTestTask) error {
 		return errors.New("task load settings are invalid")
 	}
 	if task.MockEnabled {
+		if len(task.MockChannels) > 0 {
+			if task.MockFailureRate != 0 || task.MockFailureStatus != 0 || task.MockLatencyMS != 0 || len(task.MockChannels) != 3 {
+				return errors.New("task mock channel settings are invalid")
+			}
+			seenSlots := make(map[int]struct{}, 3)
+			for _, channel := range task.MockChannels {
+				if channel.Slot < 1 || channel.Slot > 3 || channel.MaxRPS < 1 || channel.MaxRPS > 1_000_000 ||
+					math.IsNaN(channel.FailureRate) || math.IsInf(channel.FailureRate, 0) || channel.FailureRate < 0 || channel.FailureRate > 1 ||
+					channel.LatencyMS < 0 || channel.LatencyMS > 120000 {
+					return errors.New("task mock channel settings are invalid")
+				}
+				if _, exists := seenSlots[channel.Slot]; exists {
+					return errors.New("task mock channel settings are invalid")
+				}
+				seenSlots[channel.Slot] = struct{}{}
+				switch channel.FailureStatus {
+				case 0, 429, 500, 502, 503, 504:
+				default:
+					return errors.New("task mock channel failure status is invalid")
+				}
+			}
+			return nil
+		}
 		if math.IsNaN(task.MockFailureRate) || math.IsInf(task.MockFailureRate, 0) || task.MockFailureRate < 0 || task.MockFailureRate > 1 || task.MockLatencyMS < 0 || task.MockLatencyMS > 120000 {
 			return errors.New("task mock settings are invalid")
 		}
@@ -662,6 +699,7 @@ const targetRPS = Number(__ENV.ALLTOKEN_RPS);
 const concurrency = Number(__ENV.ALLTOKEN_CONCURRENCY);
 const promptCache = __ENV.ALLTOKEN_PROMPT_CACHE === 'true';
 const mockEnabled = __ENV.ALLTOKEN_MOCK_ENABLED === 'true';
+const mockChannels = __ENV.ALLTOKEN_MOCK_CHANNELS || '';
 const cachePrefix = Array.from(
   { length: 48 },
   (_, index) => 'Stable load-test context section ' + (index + 1) + ': keep this deterministic prefix unchanged so provider prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.'
@@ -706,9 +744,13 @@ export default function () {
   };
   if (mockEnabled) {
     headers['X-Alltoken-Mock-Load-Test'] = 'true';
-    headers['X-Alltoken-Mock-Failure-Rate'] = __ENV.ALLTOKEN_MOCK_FAILURE_RATE;
-    headers['X-Alltoken-Mock-Failure-Status'] = __ENV.ALLTOKEN_MOCK_FAILURE_STATUS;
-    headers['X-Alltoken-Mock-Latency-Ms'] = __ENV.ALLTOKEN_MOCK_LATENCY_MS;
+    if (mockChannels && mockChannels !== 'null' && mockChannels !== '[]') {
+      headers['X-Alltoken-Mock-Channels'] = mockChannels;
+    } else {
+      headers['X-Alltoken-Mock-Failure-Rate'] = __ENV.ALLTOKEN_MOCK_FAILURE_RATE;
+      headers['X-Alltoken-Mock-Failure-Status'] = __ENV.ALLTOKEN_MOCK_FAILURE_STATUS;
+      headers['X-Alltoken-Mock-Latency-Ms'] = __ENV.ALLTOKEN_MOCK_LATENCY_MS;
+    }
   }
   if (endpoint === 'anthropic') {
     headers['x-api-key'] = apiKey;

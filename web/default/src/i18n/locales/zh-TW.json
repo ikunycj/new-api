@@ -6349,6 +6349,11 @@
     "Allow account-pool-free load tests": "允許不消耗號池壓測",
     "Allow this channel to be selected by managed load tests that do not consume the account pool.": "允許「不消耗號池」的伺服器壓測選擇此渠道。",
     "Mixed distribution": "混合分佈",
-    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "在 429、500、502、503 和 504 之間隨機分布注入的失敗。"
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "在 429、500、502、503 和 504 之間隨機分布注入的失敗。",
+    "Fallback channel profiles": "降級渠道設定",
+    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "渠道會依序嘗試。超過目前渠道容量的請求會降級到下一個渠道。",
+    "Fallback channel {{index}}": "降級渠道 {{index}}",
+    "Mock channel capacity or latency is invalid": "Mock 渠道容量或延遲設定無效",
+    "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS"
   }
 }

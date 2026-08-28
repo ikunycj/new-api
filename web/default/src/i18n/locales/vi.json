@@ -6349,6 +6349,11 @@
     "Allow account-pool-free load tests": "Cho phép kiểm thử tải không tiêu tốn pool tài khoản",
     "Allow this channel to be selected by managed load tests that do not consume the account pool.": "Cho phép các bài kiểm thử tải trên máy chủ không tiêu tốn pool tài khoản chọn kênh này.",
     "Mixed distribution": "Phân phối hỗn hợp",
-    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Phân bổ ngẫu nhiên các lỗi được chèn vào các mã 429, 500, 502, 503 và 504."
+    "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Phân bổ ngẫu nhiên các lỗi được chèn vào các mã 429, 500, 502, 503 và 504.",
+    "Fallback channel profiles": "Cấu hình kênh dự phòng",
+    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Các kênh được thử theo thứ tự. Yêu cầu vượt quá công suất của một kênh sẽ chuyển sang kênh tiếp theo.",
+    "Fallback channel {{index}}": "Kênh dự phòng {{index}}",
+    "Mock channel capacity or latency is invalid": "Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.",
+    "Configured upper bound: {{rps}} RPS": "Giới hạn đã cấu hình: {{rps}} RPS"
   }
 }

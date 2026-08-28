@@ -238,6 +238,14 @@ export type LoadTestAgentRunStatus =
   | 'failed'
   | 'cancelled'
 
+export type LoadTestMockChannel = {
+  slot: number
+  max_rps: number
+  failure_rate: number
+  failure_status: number
+  latency_ms: number
+}
+
 export type LoadTestAgentRun = {
   id: string
   agent_id: string
@@ -252,6 +260,7 @@ export type LoadTestAgentRun = {
   mock_failure_rate: number
   mock_failure_status: number
   mock_latency_ms: number
+  mock_channels: LoadTestMockChannel[]
   duration_seconds: number
   requests_per_second: number
   concurrency: number
@@ -289,6 +298,7 @@ export type CreateLoadTestAgentRun = {
   mock_failure_rate?: number
   mock_failure_status?: number
   mock_latency_ms?: number
+  mock_channels?: LoadTestMockChannel[]
   duration_seconds: number
   requests_per_second: number
   concurrency: number
