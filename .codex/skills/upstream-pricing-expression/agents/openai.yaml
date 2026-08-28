@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upstream Pricing Expression"
+  short_description: "Turn official model prices into verified expressions"
+  default_prompt: "Use $upstream-pricing-expression to convert an official AI provider pricing page into a verified new-api billing expression."
