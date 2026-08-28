@@ -6354,6 +6354,7 @@
     "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Les canaux sont essayés dans l’ordre. Les requêtes dépassant la capacité d’un canal passent au suivant.",
     "Fallback channel {{index}}": "Canal de secours {{index}}",
     "Mock channel capacity or latency is invalid": "La capacité ou la latence du canal simulé est invalide.",
-    "Configured upper bound: {{rps}} RPS": "Limite configurée : {{rps}} RPS"
+    "Configured upper bound: {{rps}} RPS": "Limite configurée : {{rps}} RPS",
+    "Circuit window (seconds)": "Fenêtre du circuit (secondes)"
   }
 }

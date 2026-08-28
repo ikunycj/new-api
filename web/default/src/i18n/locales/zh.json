@@ -6354,6 +6354,7 @@
     "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "渠道将按顺序尝试。超过当前渠道容量的请求会降级到下一个渠道。",
     "Fallback channel {{index}}": "降级渠道 {{index}}",
     "Mock channel capacity or latency is invalid": "Mock 渠道容量或延迟配置无效",
-    "Configured upper bound: {{rps}} RPS": "配置上限：{{rps}} RPS"
+    "Configured upper bound: {{rps}} RPS": "配置上限：{{rps}} RPS",
+    "Circuit window (seconds)": "熔断统计窗口（秒）"
   }
 }

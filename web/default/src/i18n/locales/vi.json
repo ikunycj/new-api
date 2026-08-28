@@ -6354,6 +6354,7 @@
     "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Các kênh được thử theo thứ tự. Yêu cầu vượt quá công suất của một kênh sẽ chuyển sang kênh tiếp theo.",
     "Fallback channel {{index}}": "Kênh dự phòng {{index}}",
     "Mock channel capacity or latency is invalid": "Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.",
-    "Configured upper bound: {{rps}} RPS": "Giới hạn đã cấu hình: {{rps}} RPS"
+    "Configured upper bound: {{rps}} RPS": "Giới hạn đã cấu hình: {{rps}} RPS",
+    "Circuit window (seconds)": "Cửa sổ ngắt mạch (giây)"
   }
 }

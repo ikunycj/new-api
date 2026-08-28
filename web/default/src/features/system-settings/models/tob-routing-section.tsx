@@ -54,7 +54,7 @@ import {
 let nextTemporaryID = -1
 
 const defaultRouteSettings = {
-  max_total_attempts: 1,
+  max_total_attempts: 4,
   total_timeout_ms: 30000,
   circuit_failure_threshold: 5,
   circuit_window_seconds: 60,
@@ -338,6 +338,138 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                 <Trash2 className='size-4' />
               </Button>
             </div>
+
+            <FieldSet className='border-y py-4'>
+              <FieldLegend>{t('Routing strategy')}</FieldLegend>
+              <FieldGroup className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+                <Field>
+                  <FieldLabel htmlFor={`route-mode-${route.id}`}>
+                    {t('Routing strategy')}
+                  </FieldLabel>
+                  <NativeSelect
+                    id={`route-mode-${route.id}`}
+                    value={route.mode}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        mode: event.target.value as BillingGroupRoute['mode'],
+                      })
+                    }
+                  >
+                    <NativeSelectOption value='balanced'>
+                      {t('Balanced')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='cost_first'>
+                      {t('Cost first')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='stability_first'>
+                      {t('Stability first')}
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`max-total-attempts-${route.id}`}>
+                    {t('Maximum total attempts')}
+                  </FieldLabel>
+                  <Input
+                    id={`max-total-attempts-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={route.max_total_attempts}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        max_total_attempts: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`total-timeout-${route.id}`}>
+                    {t('Total timeout (ms)')}
+                  </FieldLabel>
+                  <Input
+                    id={`total-timeout-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1000}
+                    value={route.total_timeout_ms}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        total_timeout_ms: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`circuit-threshold-${route.id}`}>
+                    {t('Circuit failure threshold')}
+                  </FieldLabel>
+                  <Input
+                    id={`circuit-threshold-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={route.circuit_failure_threshold}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        circuit_failure_threshold: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`circuit-window-${route.id}`}>
+                    {t('Circuit window (seconds)')}
+                  </FieldLabel>
+                  <Input
+                    id={`circuit-window-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={route.circuit_window_seconds}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        circuit_window_seconds: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`circuit-cooldown-${route.id}`}>
+                    {t('Circuit cooldown (seconds)')}
+                  </FieldLabel>
+                  <Input
+                    id={`circuit-cooldown-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={route.circuit_cooldown_seconds}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        circuit_cooldown_seconds: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`half-open-requests-${route.id}`}>
+                    {t('Half-open probes')}
+                  </FieldLabel>
+                  <Input
+                    id={`half-open-requests-${route.id}`}
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={route.circuit_half_open_requests}
+                    onChange={(event) =>
+                      updateRoute(routeIndex, {
+                        circuit_half_open_requests: Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+            </FieldSet>
 
             <FieldSet className='border-y py-4'>
               <FieldLegend>{t('Profit protection')}</FieldLegend>

@@ -6354,6 +6354,7 @@
     "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Каналы используются по порядку. Запросы сверх пропускной способности канала переводятся на следующий.",
     "Fallback channel {{index}}": "Резервный канал {{index}}",
     "Mock channel capacity or latency is invalid": "Недопустимая пропускная способность или задержка Mock-канала.",
-    "Configured upper bound: {{rps}} RPS": "Заданный предел: {{rps}} RPS"
+    "Configured upper bound: {{rps}} RPS": "Заданный предел: {{rps}} RPS",
+    "Circuit window (seconds)": "Окно автомата (секунды)"
   }
 }

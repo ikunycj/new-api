@@ -76,6 +76,7 @@ const newKeys = {
     'Channel switches': 'Channel switches',
     'Circuit cooldown (seconds)': 'Circuit cooldown (seconds)',
     'Circuit failure threshold': 'Circuit failure threshold',
+    'Circuit window (seconds)': 'Circuit window (seconds)',
     'Configure ordered channels for each billing group':
       'Configure ordered channels for each billing group',
     'Cost factor': 'Cost factor',
@@ -194,6 +195,7 @@ const newKeys = {
     'Channel switches': '渠道切换次数',
     'Circuit cooldown (seconds)': '熔断冷却时间（秒）',
     'Circuit failure threshold': '熔断失败阈值',
+    'Circuit window (seconds)': '熔断统计窗口（秒）',
     'Configure ordered channels for each billing group':
       '为每个计费分组配置有序渠道',
     'Cost factor': '成本系数',
@@ -282,6 +284,7 @@ const newKeys = {
     'Channel switches': 'Changements de canal',
     'Circuit cooldown (seconds)': 'Délai du circuit (secondes)',
     'Circuit failure threshold': 'Seuil d’échec du circuit',
+    'Circuit window (seconds)': 'Fenêtre du circuit (secondes)',
     'Configure ordered channels for each billing group':
       'Configurer les canaux ordonnés de chaque groupe de facturation',
     'Cost factor': 'Facteur de coût',
@@ -387,6 +390,7 @@ const newKeys = {
     'Channel switches': 'チャネル切替回数',
     'Circuit cooldown (seconds)': 'サーキット待機時間（秒）',
     'Circuit failure threshold': 'サーキット失敗しきい値',
+    'Circuit window (seconds)': 'サーキット集計期間（秒）',
     'Configure ordered channels for each billing group':
       '課金グループごとに順序付きチャネルを設定します',
     'Cost factor': 'コスト係数',
@@ -490,6 +494,7 @@ const newKeys = {
     'Channel switches': 'Переключения каналов',
     'Circuit cooldown (seconds)': 'Пауза автомата (секунды)',
     'Circuit failure threshold': 'Порог ошибок автомата',
+    'Circuit window (seconds)': 'Окно автомата (секунды)',
     'Configure ordered channels for each billing group':
       'Настройте порядок каналов для каждой группы тарификации',
     'Cost factor': 'Коэффициент стоимости',
@@ -594,6 +599,7 @@ const newKeys = {
     'Channel switches': 'Số lần chuyển kênh',
     'Circuit cooldown (seconds)': 'Thời gian chờ ngắt mạch (giây)',
     'Circuit failure threshold': 'Ngưỡng lỗi ngắt mạch',
+    'Circuit window (seconds)': 'Cửa sổ ngắt mạch (giây)',
     'Configure ordered channels for each billing group':
       'Cấu hình thứ tự kênh cho từng nhóm tính phí',
     'Cost factor': 'Hệ số chi phí',
@@ -675,6 +681,7 @@ const newKeys = {
     'Channel switches': '渠道切換次數',
     'Circuit cooldown (seconds)': '熔斷冷卻時間（秒）',
     'Circuit failure threshold': '熔斷失敗閾值',
+    'Circuit window (seconds)': '熔斷統計窗口（秒）',
     'Configure ordered channels for each billing group':
       '為每個計費分組設定有序渠道',
     'Cost factor': '成本係數',

@@ -6354,6 +6354,7 @@
     "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "チャネルは順番に試行されます。容量を超えたリクエストは次のチャネルに切り替わります。",
     "Fallback channel {{index}}": "フォールバックチャネル {{index}}",
     "Mock channel capacity or latency is invalid": "Mock チャネルの容量または遅延が無効です。",
-    "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS"
+    "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS",
+    "Circuit window (seconds)": "サーキット集計期間（秒）"
   }
 }
