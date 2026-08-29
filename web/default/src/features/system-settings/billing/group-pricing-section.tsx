@@ -28,7 +28,6 @@ import type { BillingSettings } from '../types'
 
 const DEFAULT_GROUP_VALUES: GroupPricingValues = {
   GroupRatio: '{}',
-  TopupGroupRatio: '{}',
   UserUsableGroups: '{}',
   GroupGroupRatio: '{}',
   AutoGroups: '[]',
@@ -45,8 +44,6 @@ export function BillingGroupPricingSection({
   const values = useMemo<GroupPricingValues>(
     () => ({
       GroupRatio: settings.GroupRatio ?? DEFAULT_GROUP_VALUES.GroupRatio,
-      TopupGroupRatio:
-        settings.TopupGroupRatio ?? DEFAULT_GROUP_VALUES.TopupGroupRatio,
       UserUsableGroups:
         settings.UserUsableGroups ?? DEFAULT_GROUP_VALUES.UserUsableGroups,
       GroupGroupRatio:
@@ -69,7 +66,6 @@ export function BillingGroupPricingSection({
     async (nextValues: GroupPricingValues) => {
       const updates: Array<[string, string | boolean]> = [
         ['GroupRatio', nextValues.GroupRatio],
-        ['TopupGroupRatio', nextValues.TopupGroupRatio],
         ['UserUsableGroups', nextValues.UserUsableGroups],
         ['GroupGroupRatio', nextValues.GroupGroupRatio],
         ['AutoGroups', nextValues.AutoGroups],

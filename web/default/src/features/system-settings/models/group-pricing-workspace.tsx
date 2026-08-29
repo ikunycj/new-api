@@ -17,7 +17,6 @@ import { ToCGroupsSection } from './toc-groups-section'
 
 export type GroupPricingValues = {
   GroupRatio: string
-  TopupGroupRatio: string
   UserUsableGroups: string
   GroupGroupRatio: string
   AutoGroups: string

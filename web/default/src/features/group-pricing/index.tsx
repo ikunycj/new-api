@@ -13,7 +13,6 @@ import {
 
 const DEFAULT_GROUP_VALUES: GroupPricingValues = {
   GroupRatio: '{}',
-  TopupGroupRatio: '{}',
   UserUsableGroups: '{}',
   GroupGroupRatio: '{}',
   AutoGroups: '[]',
@@ -36,8 +35,6 @@ export function GroupPricing() {
     )
     return {
       GroupRatio: options.get('GroupRatio') ?? DEFAULT_GROUP_VALUES.GroupRatio,
-      TopupGroupRatio:
-        options.get('TopupGroupRatio') ?? DEFAULT_GROUP_VALUES.TopupGroupRatio,
       UserUsableGroups:
         options.get('UserUsableGroups') ??
         DEFAULT_GROUP_VALUES.UserUsableGroups,
@@ -62,7 +59,6 @@ export function GroupPricing() {
     async (nextValues: GroupPricingValues) => {
       const updates: Array<[string, string | boolean]> = [
         ['GroupRatio', nextValues.GroupRatio],
-        ['TopupGroupRatio', nextValues.TopupGroupRatio],
         ['UserUsableGroups', nextValues.UserUsableGroups],
         ['GroupGroupRatio', nextValues.GroupGroupRatio],
         ['AutoGroups', nextValues.AutoGroups],
