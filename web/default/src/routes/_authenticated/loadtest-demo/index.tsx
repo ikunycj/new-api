@@ -39,7 +39,11 @@ export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
     }
 
     const user = useAuthStore.getState().auth.user
-    if (!user || (user.role < ROLE.ADMIN && user.user_type !== 'toB')) {
+    if (
+      !user ||
+      (user.role < ROLE.ADMIN &&
+        !['vip', 'enterprise'].includes((user.group ?? '').toLowerCase()))
+    ) {
       throw redirect({ to: '/403' })
     }
   },

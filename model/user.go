@@ -21,8 +21,6 @@ import (
 const (
 	CurrentOnboardingVersion = 1
 	OnboardingPendingVersion = 0
-	UserTypeToB              = "toB"
-	UserTypeToC              = "toC"
 )
 
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
@@ -33,8 +31,7 @@ type User struct {
 	Password          string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
 	OriginalPassword  string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
 	DisplayName       string                     `json:"display_name" gorm:"index" validate:"max=20"`
-	Role              int                        `json:"role" gorm:"type:int;default:1"` // admin, common
-	UserType          string                     `json:"user_type" gorm:"type:varchar(8);index"`
+	Role              int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
 	Status            int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
 	Email             string                     `json:"email" gorm:"index" validate:"max=50"`
 	GitHubId          string                     `json:"github_id" gorm:"column:github_id;index"`
@@ -64,17 +61,19 @@ type User struct {
 	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
-// NormalizeUserType keeps the business permission in one canonical value.
-// Billing groups remain independent and only control price and routing.
-func NormalizeUserType(userType string) string {
-	if strings.EqualFold(strings.TrimSpace(userType), UserTypeToB) {
-		return UserTypeToB
+// UserGroupHasToBAccess is the single account-scope rule. Pricing and routing
+// groups remain independent from this account classification.
+func UserGroupHasToBAccess(group string) bool {
+	switch strings.ToLower(strings.TrimSpace(group)) {
+	case "vip", "enterprise":
+		return true
+	default:
+		return false
 	}
-	return UserTypeToC
 }
 
 func (user *User) IsToB() bool {
-	return user != nil && NormalizeUserType(user.UserType) == UserTypeToB
+	return user != nil && UserGroupHasToBAccess(user.Group)
 }
 
 // NewUserOnboardingVersion enrolls a newly self-registered user in the
@@ -481,7 +480,6 @@ func HardDeleteUserById(id int) error {
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
-	user.UserType = NormalizeUserType(user.UserType)
 	user.Email = NormalizeEmail(user.Email)
 	user.Username = ResolveUsername(user.Username, user.Email)
 	if user.Username == "" {
@@ -696,16 +694,11 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	if newUser.Username == "" {
 		return ErrUsernameEmpty
 	}
-	userType := strings.TrimSpace(newUser.UserType)
-	if userType == "" {
-		userType = current.UserType
-	}
 	updates := map[string]interface{}{
 		"username":     newUser.Username,
 		"display_name": newUser.DisplayName,
 		"group":        newUser.Group,
 		"remark":       newUser.Remark,
-		"user_type":    NormalizeUserType(userType),
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

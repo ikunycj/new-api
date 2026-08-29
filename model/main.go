@@ -341,7 +341,7 @@ func migrateDB() error {
 	if err := normalizeLoadTestExecutionModes(); err != nil {
 		return err
 	}
-	if err := migrateUserTypes(); err != nil {
+	if err := removeLegacyUserTypeColumn(); err != nil {
 		return err
 	}
 	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
@@ -453,7 +453,7 @@ func migrateDBFast() error {
 	if err := normalizeLoadTestExecutionModes(); err != nil {
 		return err
 	}
-	if err := migrateUserTypes(); err != nil {
+	if err := removeLegacyUserTypeColumn(); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
@@ -484,38 +484,15 @@ func normalizeLoadTestExecutionModes() error {
 		Update("execution_mode", LoadTestExecutionSingle).Error
 }
 
-// migrateUserTypes moves the legacy group-derived ToB permission into the
-// single users.user_type field. Existing explicit values are preserved; only
-// blank values are backfilled so future billing-group edits cannot change
-// access to the load-test demo.
-func migrateUserTypes() error {
-	if DB == nil || !DB.Migrator().HasTable(&User{}) {
+// removeLegacyUserTypeColumn drops the obsolete account-scope column after
+// code has switched to users.group. GORM provides SQLite table-rebuild
+// behavior and native ALTER support for MySQL/PostgreSQL.
+func removeLegacyUserTypeColumn() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) || !DB.Migrator().HasColumn(&User{}, "user_type") {
 		return nil
 	}
-
-	routedGroups := []string{BillingGroupTypeToB}
-	if DB.Migrator().HasTable(&BillingGroupRoute{}) {
-		var configuredGroups []string
-		if err := DB.Model(&BillingGroupRoute{}).Distinct("billing_group").Pluck("billing_group", &configuredGroups).Error; err != nil {
-			return fmt.Errorf("read ToB billing groups: %w", err)
-		}
-		routedGroups = append(routedGroups, configuredGroups...)
-	}
-	for _, group := range routedGroups {
-		group = strings.TrimSpace(group)
-		if group == "" {
-			continue
-		}
-		if err := DB.Model(&User{}).
-			Where("(user_type IS NULL OR user_type = '') AND "+commonGroupCol+" = ?", group).
-			Update("user_type", UserTypeToB).Error; err != nil {
-			return fmt.Errorf("backfill ToB user type: %w", err)
-		}
-	}
-	if err := DB.Model(&User{}).
-		Where("user_type IS NULL OR user_type = ''").
-		Update("user_type", UserTypeToC).Error; err != nil {
-		return fmt.Errorf("backfill ToC user type: %w", err)
+	if err := DB.Migrator().DropColumn(&User{}, "user_type"); err != nil {
+		return fmt.Errorf("remove legacy users.user_type column: %w", err)
 	}
 	return nil
 }

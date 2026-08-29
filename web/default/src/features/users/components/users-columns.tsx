@@ -199,18 +199,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileOrder: 30 },
     },
     {
-      accessorKey: 'user_type',
-      header: t('User Type'),
-      cell: ({ row }) => (
-        <BadgeCell>
-          {row.original.user_type === 'toB' ? t('ToB') : t('ToC')}
-        </BadgeCell>
-      ),
-      enableSorting: false,
-      size: 110,
-      meta: { mobileOrder: 35 },
-    },
-    {
       accessorKey: 'role',
       header: t('Role'),
       cell: ({ row }) => {

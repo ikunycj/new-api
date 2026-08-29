@@ -104,24 +104,18 @@ function parseStringMap(value: string): Record<string, string> {
 
 export function buildGroupPricingSnapshots(
   groupRatio: string,
-  topupGroupRatio: string,
   userUsableGroups: string
 ): GroupPricingSnapshot[] {
   const ratios = parseNumberMap(groupRatio)
-  const topupRatios = parseNumberMap(topupGroupRatio)
   const usableGroups = parseStringMap(userUsableGroups)
-  const names = new Set([
-    ...Object.keys(ratios),
-    ...Object.keys(topupRatios),
-    ...Object.keys(usableGroups),
-  ])
+  const names = new Set([...Object.keys(ratios), ...Object.keys(usableGroups)])
 
   return [...names]
     .sort((a, b) => a.localeCompare(b))
     .map((name) => ({
       name,
       ratio: ratios[name] ?? 1,
-      topupRatio: Object.hasOwn(topupRatios, name) ? topupRatios[name] : null,
+      topupRatio: null,
       selectable: Object.hasOwn(usableGroups, name),
       description: usableGroups[name] ?? '',
     }))

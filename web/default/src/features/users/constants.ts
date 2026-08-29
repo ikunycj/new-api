@@ -18,13 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Shield, User, Users } from 'lucide-react'
 
-import type { User as UserType } from './types'
+import type { User as UserRecord } from './types'
 
 // ============================================================================
 // User Utilities
 // ============================================================================
 
-export const isUserDeleted = (user: UserType): boolean => {
+export const isUserDeleted = (user: UserRecord): boolean => {
   return user.DeletedAt != null
 }
 

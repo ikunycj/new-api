@@ -50,12 +50,11 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     [configQuery.data?.routes]
   )
   const groupRatio = props.form.watch('GroupRatio')
-  const topupGroupRatio = props.form.watch('TopupGroupRatio')
   const userUsableGroups = props.form.watch('UserUsableGroups')
   const groups = useMemo(
     () =>
-      buildGroupPricingSnapshots(groupRatio, topupGroupRatio, userUsableGroups),
-    [groupRatio, topupGroupRatio, userUsableGroups]
+      buildGroupPricingSnapshots(groupRatio, userUsableGroups),
+    [groupRatio, userUsableGroups]
   )
   const classifiedGroups = useMemo(() => {
     const byName = new Map(groups.map((group) => [group.name, group]))

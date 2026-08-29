@@ -56,6 +56,42 @@ type CostReconciliationTotals struct {
 	UnavailableCount           int64 `json:"unavailable_count"`
 }
 
+var legacyPricingGroupAliases = map[string]string{
+	"ChatGPT API":  "通用套餐",
+	"ChatGPT Plus": "通用套餐",
+	"ChatGPT Pro":  "通用套餐",
+	"ChatGPT官转":    "通用套餐",
+	"Claude Plus":  "通用套餐",
+	"Claude Pro":   "通用套餐",
+	"Claude官转":     "通用套餐",
+	"GPT-PLUS":     "通用套餐",
+	"Grok":         "通用套餐",
+	"gpt-image-2":  "通用套餐",
+	"便宜":           "通用套餐",
+	"default":      "通用套餐",
+}
+
+func canonicalCostReconciliationGroup(group string) string {
+	if canonical, ok := legacyPricingGroupAliases[strings.TrimSpace(group)]; ok {
+		return canonical
+	}
+	return group
+}
+
+func costReconciliationGroupAliases(group string) []string {
+	canonical := canonicalCostReconciliationGroup(group)
+	if canonical != "通用套餐" {
+		return []string{canonical}
+	}
+	groups := []string{"通用套餐"}
+	for alias, target := range legacyPricingGroupAliases {
+		if target == canonical {
+			groups = append(groups, alias)
+		}
+	}
+	return groups
+}
+
 type costSnapshot struct {
 	UserChargeUSDMicros        int64
 	EstimatedCostUSDMicros     int64
@@ -181,7 +217,8 @@ func applyCostRollupFilters(tx *gorm.DB, query CostReconciliationQuery) *gorm.DB
 		tx = tx.Where("channel_id = ?", query.ChannelID)
 	}
 	if strings.TrimSpace(query.Group) != "" {
-		tx = tx.Where(commonGroupCol+" = ?", strings.TrimSpace(query.Group))
+		groups := costReconciliationGroupAliases(query.Group)
+		tx = tx.Where(commonGroupCol+" IN ?", groups)
 	}
 	if keyword := strings.TrimSpace(query.Keyword); keyword != "" {
 		pattern := "%" + escapeLikeLiteral(keyword) + "%"
@@ -222,6 +259,9 @@ func ListCostReconciliationRollups(query CostReconciliationQuery) ([]CostReconci
 	rowsQuery := applyCostRollupFilters(DB.Model(&CostReconciliationRollup{}), query)
 	if err := rowsQuery.Order("bucket_start desc, id desc").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, 0, CostReconciliationTotals{}, err
+	}
+	for index := range rows {
+		rows[index].Group = canonicalCostReconciliationGroup(rows[index].Group)
 	}
 	return rows, total, totals, nil
 }

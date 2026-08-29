@@ -164,7 +164,6 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"username":            user.Username,
 			"display_name":        user.DisplayName,
 			"role":                user.Role,
-			"user_type":           model.NormalizeUserType(user.UserType),
 			"status":              user.Status,
 			"group":               user.Group,
 			"loadtest_enabled":    user.Role >= common.RoleAdminUser || user.IsToB(),
@@ -461,7 +460,6 @@ func GetSelf(c *gin.Context) {
 		"username":            user.Username,
 		"display_name":        user.DisplayName,
 		"role":                user.Role,
-		"user_type":           model.NormalizeUserType(user.UserType),
 		"status":              user.Status,
 		"email":               user.Email,
 		"github_id":           user.GitHubId,
@@ -677,11 +675,6 @@ func UpdateUser(c *gin.Context) {
 	}
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
-	}
-	if strings.TrimSpace(updatedUser.UserType) == "" {
-		updatedUser.UserType = originUser.UserType
-	} else {
-		updatedUser.UserType = model.NormalizeUserType(updatedUser.UserType)
 	}
 	updatePassword := updatedUser.Password != ""
 	authzTouched := false
@@ -988,7 +981,6 @@ func CreateUser(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
-		UserType:    model.NormalizeUserType(user.UserType),
 		Group:       user.Group,
 	}
 	authzTouched := false

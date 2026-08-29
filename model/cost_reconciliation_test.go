@@ -73,3 +73,14 @@ func TestParseCostSnapshotReadsFailedPartialUsageCost(t *testing.T) {
 
 	require.Equal(t, int64(321), snapshot.FailedPartialCostUSDMicros)
 }
+
+func TestCostReconciliationGroupAliasIsCanonicalized(t *testing.T) {
+	require.Equal(t, "通用套餐", canonicalCostReconciliationGroup("ChatGPT Plus"))
+	require.Equal(t, "通用套餐", canonicalCostReconciliationGroup("通用套餐"))
+	require.Equal(t, "成本套餐", canonicalCostReconciliationGroup("成本套餐"))
+	aliases := costReconciliationGroupAliases("通用套餐")
+	require.Contains(t, aliases, "通用套餐")
+	require.Contains(t, aliases, "ChatGPT Plus")
+	require.Contains(t, aliases, "GPT-PLUS")
+	require.Contains(t, aliases, "gpt-image-2")
+}
