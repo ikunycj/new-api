@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "連続失敗後にチャネルを一時停止する条件を調整します。",
     "Quick presets": "クイックプリセット",
     "Sensitive": "厳格",
-    "Relaxed": "緩やか"
+    "Relaxed": "緩やか",
+    "Run limits": "実行制限",
+    "The stricter value between the system and selected agent applies.": "システムと選択したエージェントのうち、厳しい方の制限が適用されます。",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "選択中のエージェント：{{name}} · 最大 {{rps}} RPS · 同時実行 {{concurrency}} 件。",
+    "Select a server or local agent to see its capacity here.": "サーバーまたはローカルエージェントを選択すると、ここに容量制限が表示されます。",
+    "System maximum": "システム上限",
+    "Effective maximum": "有効上限",
+    "concurrent requests": "同時実行リクエスト"
   }
 }

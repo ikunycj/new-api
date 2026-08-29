@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "Tune when a channel is temporarily removed after repeated failures.",
     "Quick presets": "Quick presets",
     "Sensitive": "Sensitive",
-    "Relaxed": "Relaxed"
+    "Relaxed": "Relaxed",
+    "Run limits": "Run limits",
+    "The stricter value between the system and selected agent applies.": "The stricter value between the system and selected agent applies.",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.",
+    "Select a server or local agent to see its capacity here.": "Select a server or local agent to see its capacity here.",
+    "System maximum": "System maximum",
+    "Effective maximum": "Effective maximum",
+    "concurrent requests": "concurrent requests"
   }
 }

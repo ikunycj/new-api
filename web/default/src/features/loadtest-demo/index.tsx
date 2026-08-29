@@ -85,6 +85,7 @@ import {
   sendLoadTestRequest,
   type LoadTestChannelStats,
   type LoadTestKey,
+  type LoadTestAgent,
   type LoadTestLimits,
   type LoadTestModel,
   type LoadTestPricing,
@@ -259,6 +260,11 @@ export function LoadTestDemo() {
   )
   const [limits, setLimits] = useState<LoadTestLimits>(DEFAULT_LOAD_TEST_LIMITS)
   const [limitsLoading, setLimitsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'browser' | 'server' | 'local'>(
+    'browser'
+  )
+  const [managedAgent, setManagedAgent] = useState<LoadTestAgent | null>(null)
+  const [localAgent, setLocalAgent] = useState<LoadTestAgent | null>(null)
   const [prompt, setPrompt] = useState(
     persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
   )
@@ -437,6 +443,15 @@ export function LoadTestDemo() {
       requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
     const concurrencyValue =
       concurrency.trim() === '' ? Number.NaN : Number(concurrency)
+    let selectedAgent: LoadTestAgent | null = null
+    if (activeTab === 'server') selectedAgent = managedAgent
+    if (activeTab === 'local') selectedAgent = localAgent
+    const effectiveMaxRPS = selectedAgent?.max_rps
+      ? Math.min(limits.max_rps, selectedAgent.max_rps)
+      : limits.max_rps
+    const effectiveMaxConcurrency = selectedAgent?.max_concurrency
+      ? Math.min(limits.max_concurrency, selectedAgent.max_concurrency)
+      : limits.max_concurrency
     if (!prompt.trim()) {
       toast.error(`${t('Prompt')}: ${t('Required')}`)
       return
@@ -457,12 +472,12 @@ export function LoadTestDemo() {
     if (
       !Number.isFinite(rpsValue) ||
       rpsValue < limits.min_rps ||
-      rpsValue > limits.max_rps
+      rpsValue > effectiveMaxRPS
     ) {
       toast.error(
         t('Requests per second must be between {{min}} and {{max}}.', {
           min: limits.min_rps,
-          max: limits.max_rps,
+          max: effectiveMaxRPS,
         })
       )
       return
@@ -470,12 +485,12 @@ export function LoadTestDemo() {
     if (
       !Number.isInteger(concurrencyValue) ||
       concurrencyValue < limits.min_concurrency ||
-      concurrencyValue > limits.max_concurrency
+      concurrencyValue > effectiveMaxConcurrency
     ) {
       toast.error(
         t('Maximum concurrency must be between {{min}} and {{max}}.', {
           min: limits.min_concurrency,
-          max: limits.max_concurrency,
+          max: effectiveMaxConcurrency,
         })
       )
       return
@@ -582,6 +597,9 @@ export function LoadTestDemo() {
     durationSeconds,
     keys,
     limits,
+    activeTab,
+    localAgent,
+    managedAgent,
     models,
     prompt,
     promptCache,
@@ -688,16 +706,25 @@ export function LoadTestDemo() {
     Number.isFinite(durationValue) && Number.isFinite(rpsValue)
       ? Math.ceil(durationValue * rpsValue)
       : 0
+  let selectedAgentForTab: LoadTestAgent | null = null
+  if (activeTab === 'server') selectedAgentForTab = managedAgent
+  if (activeTab === 'local') selectedAgentForTab = localAgent
+  const effectiveMaxRPS = selectedAgentForTab?.max_rps
+    ? Math.min(limits.max_rps, selectedAgentForTab.max_rps)
+    : limits.max_rps
+  const effectiveMaxConcurrency = selectedAgentForTab?.max_concurrency
+    ? Math.min(limits.max_concurrency, selectedAgentForTab.max_concurrency)
+    : limits.max_concurrency
   const hasValidLoadSettings =
     Number.isFinite(durationValue) &&
     durationValue >= limits.min_duration_seconds &&
     durationValue <= limits.max_duration_seconds &&
     Number.isFinite(rpsValue) &&
     rpsValue >= limits.min_rps &&
-    rpsValue <= limits.max_rps &&
+    rpsValue <= effectiveMaxRPS &&
     Number.isInteger(concurrencyValue) &&
     concurrencyValue >= limits.min_concurrency &&
-    concurrencyValue <= limits.max_concurrency
+    concurrencyValue <= effectiveMaxConcurrency
   const canRun =
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
@@ -706,6 +733,41 @@ export function LoadTestDemo() {
     hasValidLoadSettings &&
     !modelsLoading &&
     !limitsLoading
+  const handleAgentChange = useCallback(
+    (mode: 'server' | 'local', agent: LoadTestAgent | null) => {
+      if (mode === 'server') setManagedAgent(agent)
+      else setLocalAgent(agent)
+    },
+    []
+  )
+  const onManagedAgentChange = useCallback(
+    (agent: LoadTestAgent | null) => handleAgentChange('server', agent),
+    [handleAgentChange]
+  )
+  const onLocalAgentChange = useCallback(
+    (agent: LoadTestAgent | null) => handleAgentChange('local', agent),
+    [handleAgentChange]
+  )
+  useEffect(() => {
+    if (!selectedAgentForTab) return
+    const agentMaxRPS = Math.min(limits.max_rps, selectedAgentForTab.max_rps)
+    const agentMaxConcurrency = Math.min(
+      limits.max_concurrency,
+      selectedAgentForTab.max_concurrency
+    )
+    setRequestsPerSecond((current) => {
+      const value = Number(current)
+      return Number.isFinite(value) && value > agentMaxRPS
+        ? String(agentMaxRPS)
+        : current
+    })
+    setConcurrency((current) => {
+      const value = Number(current)
+      return Number.isFinite(value) && value > agentMaxConcurrency
+        ? String(agentMaxConcurrency)
+        : current
+    })
+  }, [limits, selectedAgentForTab])
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
   const selectedModelMetadata = models.find(
     (model) => model.id === selectedModel
@@ -872,7 +934,7 @@ export function LoadTestDemo() {
                     id='load-test-rps'
                     type='number'
                     min={limits.min_rps}
-                    max={limits.max_rps}
+                    max={effectiveMaxRPS}
                     step={1}
                     value={requestsPerSecond}
                     onChange={(event) =>
@@ -882,7 +944,7 @@ export function LoadTestDemo() {
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} RPS', {
                       min: limits.min_rps,
-                      max: limits.max_rps,
+                      max: effectiveMaxRPS,
                     })}
                   </p>
                 </div>
@@ -894,7 +956,7 @@ export function LoadTestDemo() {
                     id='load-test-concurrency'
                     type='number'
                     min={limits.min_concurrency}
-                    max={limits.max_concurrency}
+                    max={effectiveMaxConcurrency}
                     step={1}
                     value={concurrency}
                     onChange={(event) => setConcurrency(event.target.value)}
@@ -902,10 +964,72 @@ export function LoadTestDemo() {
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: {{min}}-{{max}} concurrent requests', {
                       min: limits.min_concurrency,
-                      max: limits.max_concurrency,
+                      max: effectiveMaxConcurrency,
                     })}
                   </p>
                 </div>
+              </div>
+
+              <div className='bg-muted/30 space-y-2 rounded-lg border p-3 text-sm'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <span className='font-medium'>{t('Run limits')}</span>
+                  <span className='text-muted-foreground text-xs'>
+                    {t(
+                      'The stricter value between the system and selected agent applies.'
+                    )}
+                  </span>
+                </div>
+                <div className='grid gap-2 sm:grid-cols-3'>
+                  <div>
+                    <span className='text-muted-foreground'>
+                      {t('Duration')}
+                    </span>{' '}
+                    <span className='tabular-nums'>
+                      {limits.min_duration_seconds}–
+                      {limits.max_duration_seconds} {t('seconds')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className='text-muted-foreground'>
+                      {t('Requests per second')}
+                    </span>{' '}
+                    <span className='tabular-nums'>
+                      {limits.min_rps}–{effectiveMaxRPS} RPS
+                    </span>
+                  </div>
+                  <div>
+                    <span className='text-muted-foreground'>
+                      {t('Maximum concurrency')}
+                    </span>{' '}
+                    <span className='tabular-nums'>
+                      {limits.min_concurrency}–{effectiveMaxConcurrency}
+                    </span>
+                  </div>
+                </div>
+                <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
+                  <span>
+                    {t('System maximum')}: {limits.max_rps} RPS ·{' '}
+                    {limits.max_concurrency} {t('concurrent requests')}
+                  </span>
+                  <span>
+                    {t('Effective maximum')}: {effectiveMaxRPS} RPS ·{' '}
+                    {effectiveMaxConcurrency} {t('concurrent requests')}
+                  </span>
+                </div>
+                <p className='text-muted-foreground text-xs'>
+                  {selectedAgentForTab
+                    ? t(
+                        'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.',
+                        {
+                          name: selectedAgentForTab.name,
+                          rps: selectedAgentForTab.max_rps,
+                          concurrency: selectedAgentForTab.max_concurrency,
+                        }
+                      )
+                    : t(
+                        'Select a server or local agent to see its capacity here.'
+                      )}
+                </p>
               </div>
 
               {keys.length === 0 ? (
@@ -985,7 +1109,12 @@ export function LoadTestDemo() {
             </CardContent>
           </Card>
 
-          <Tabs defaultValue='browser'>
+          <Tabs
+            onValueChange={(value) =>
+              setActiveTab(value as 'browser' | 'server' | 'local')
+            }
+            value={activeTab}
+          >
             <TabsList className='grid h-auto w-full grid-cols-3 sm:w-fit'>
               <TabsTrigger value='browser'>
                 <Globe2 />
@@ -1370,6 +1499,7 @@ export function LoadTestDemo() {
               <AgentPanel
                 disabled={!canRun}
                 mode='managed'
+                onSelectedAgentChange={onManagedAgentChange}
                 request={agentRequest}
               />
             </TabsContent>
@@ -1378,6 +1508,7 @@ export function LoadTestDemo() {
               <AgentPanel
                 disabled={!canRun}
                 mode='local'
+                onSelectedAgentChange={onLocalAgentChange}
                 request={agentRequest}
               />
             </TabsContent>

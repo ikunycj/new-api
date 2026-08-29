@@ -1538,6 +1538,97 @@ for (const [locale, translations] of Object.entries(mockChannelProfileKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const unifiedLoadTestLimitKeys = {
+  en: {
+    'Run limits': 'Run limits',
+    'The stricter value between the system and selected agent applies.':
+      'The stricter value between the system and selected agent applies.',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.',
+    'Select a server or local agent to see its capacity here.':
+      'Select a server or local agent to see its capacity here.',
+    'System maximum': 'System maximum',
+    'Effective maximum': 'Effective maximum',
+    'concurrent requests': 'concurrent requests',
+  },
+  zh: {
+    'Run limits': '本次运行限制',
+    'The stricter value between the system and selected agent applies.':
+      '系统限制与所选 Agent 限制取较小值。',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      '当前 Agent：{{name}} · 最多 {{rps}} RPS · {{concurrency}} 个并发请求。',
+    'Select a server or local agent to see its capacity here.':
+      '选择服务器或本地 Agent 后，这里会显示它的容量限制。',
+    'System maximum': '系统上限',
+    'Effective maximum': '当前有效上限',
+    'concurrent requests': '个并发请求',
+  },
+  'zh-TW': {
+    'Run limits': '本次執行限制',
+    'The stricter value between the system and selected agent applies.':
+      '系統限制與所選 Agent 限制取較小值。',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      '目前 Agent：{{name}} · 最多 {{rps}} RPS · {{concurrency}} 個並發請求。',
+    'Select a server or local agent to see its capacity here.':
+      '選擇伺服器或本機 Agent 後，這裡會顯示其容量限制。',
+    'System maximum': '系統上限',
+    'Effective maximum': '目前有效上限',
+    'concurrent requests': '個並發請求',
+  },
+  fr: {
+    'Run limits': 'Limites du test',
+    'The stricter value between the system and selected agent applies.':
+      'La limite la plus stricte entre le système et l’agent sélectionné s’applique.',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      'Agent sélectionné : {{name}} · jusqu’à {{rps}} RPS · {{concurrency}} requêtes simultanées.',
+    'Select a server or local agent to see its capacity here.':
+      'Sélectionnez un agent serveur ou local pour voir sa capacité ici.',
+    'System maximum': 'Limite système',
+    'Effective maximum': 'Limite effective',
+    'concurrent requests': 'requêtes simultanées',
+  },
+  ja: {
+    'Run limits': '実行制限',
+    'The stricter value between the system and selected agent applies.':
+      'システムと選択したエージェントのうち、厳しい方の制限が適用されます。',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      '選択中のエージェント：{{name}} · 最大 {{rps}} RPS · 同時実行 {{concurrency}} 件。',
+    'Select a server or local agent to see its capacity here.':
+      'サーバーまたはローカルエージェントを選択すると、ここに容量制限が表示されます。',
+    'System maximum': 'システム上限',
+    'Effective maximum': '有効上限',
+    'concurrent requests': '同時実行リクエスト',
+  },
+  ru: {
+    'Run limits': 'Ограничения запуска',
+    'The stricter value between the system and selected agent applies.':
+      'Применяется меньшее ограничение из системного и ограничения выбранного агента.',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      'Выбранный агент: {{name}} · до {{rps}} RPS · {{concurrency}} одновременных запросов.',
+    'Select a server or local agent to see its capacity here.':
+      'Выберите серверный или локальный агент, чтобы увидеть его ограничения.',
+    'System maximum': 'Системный предел',
+    'Effective maximum': 'Фактический предел',
+    'concurrent requests': 'одновременных запросов',
+  },
+  vi: {
+    'Run limits': 'Giới hạn chạy',
+    'The stricter value between the system and selected agent applies.':
+      'Áp dụng giới hạn nhỏ hơn giữa hệ thống và agent đã chọn.',
+    'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.':
+      'Agent đã chọn: {{name}} · tối đa {{rps}} RPS · {{concurrency}} yêu cầu đồng thời.',
+    'Select a server or local agent to see its capacity here.':
+      'Chọn agent máy chủ hoặc cục bộ để xem giới hạn công suất tại đây.',
+    'System maximum': 'Giới hạn hệ thống',
+    'Effective maximum': 'Giới hạn hiệu dụng',
+    'concurrent requests': 'yêu cầu đồng thời',
+  },
+}
+
+for (const [locale, translations] of Object.entries(unifiedLoadTestLimitKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

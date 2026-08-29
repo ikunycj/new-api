@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "Réglez la mise à l’écart temporaire d’un canal après plusieurs échecs.",
     "Quick presets": "Préréglages rapides",
     "Sensitive": "Sensible",
-    "Relaxed": "Souple"
+    "Relaxed": "Souple",
+    "Run limits": "Limites du test",
+    "The stricter value between the system and selected agent applies.": "La limite la plus stricte entre le système et l’agent sélectionné s’applique.",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "Agent sélectionné : {{name}} · jusqu’à {{rps}} RPS · {{concurrency}} requêtes simultanées.",
+    "Select a server or local agent to see its capacity here.": "Sélectionnez un agent serveur ou local pour voir sa capacité ici.",
+    "System maximum": "Limite système",
+    "Effective maximum": "Limite effective",
+    "concurrent requests": "requêtes simultanées"
   }
 }

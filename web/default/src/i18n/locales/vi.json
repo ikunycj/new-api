@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "Điều chỉnh thời điểm tạm loại kênh sau nhiều lần thất bại.",
     "Quick presets": "Thiết lập nhanh",
     "Sensitive": "Nhạy",
-    "Relaxed": "Thoáng"
+    "Relaxed": "Thoáng",
+    "Run limits": "Giới hạn chạy",
+    "The stricter value between the system and selected agent applies.": "Áp dụng giới hạn nhỏ hơn giữa hệ thống và agent đã chọn.",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "Agent đã chọn: {{name}} · tối đa {{rps}} RPS · {{concurrency}} yêu cầu đồng thời.",
+    "Select a server or local agent to see its capacity here.": "Chọn agent máy chủ hoặc cục bộ để xem giới hạn công suất tại đây.",
+    "System maximum": "Giới hạn hệ thống",
+    "Effective maximum": "Giới hạn hiệu dụng",
+    "concurrent requests": "yêu cầu đồng thời"
   }
 }

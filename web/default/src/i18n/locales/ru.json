@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "Настройте временное исключение канала после повторяющихся сбоев.",
     "Quick presets": "Быстрые пресеты",
     "Sensitive": "Чувствительный",
-    "Relaxed": "Мягкий"
+    "Relaxed": "Мягкий",
+    "Run limits": "Ограничения запуска",
+    "The stricter value between the system and selected agent applies.": "Применяется меньшее ограничение из системного и ограничения выбранного агента.",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "Выбранный агент: {{name}} · до {{rps}} RPS · {{concurrency}} одновременных запросов.",
+    "Select a server or local agent to see its capacity here.": "Выберите серверный или локальный агент, чтобы увидеть его ограничения.",
+    "System maximum": "Системный предел",
+    "Effective maximum": "Фактический предел",
+    "concurrent requests": "одновременных запросов"
   }
 }

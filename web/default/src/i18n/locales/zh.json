@@ -6360,6 +6360,13 @@
     "Tune when a channel is temporarily removed after repeated failures.": "调整渠道在连续失败后暂时下线的触发条件。",
     "Quick presets": "快速预设",
     "Sensitive": "敏感",
-    "Relaxed": "宽松"
+    "Relaxed": "宽松",
+    "Run limits": "本次运行限制",
+    "The stricter value between the system and selected agent applies.": "系统限制与所选 Agent 限制取较小值。",
+    "Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.": "当前 Agent：{{name}} · 最多 {{rps}} RPS · {{concurrency}} 个并发请求。",
+    "Select a server or local agent to see its capacity here.": "选择服务器或本地 Agent 后，这里会显示它的容量限制。",
+    "System maximum": "系统上限",
+    "Effective maximum": "当前有效上限",
+    "concurrent requests": "个并发请求"
   }
 }

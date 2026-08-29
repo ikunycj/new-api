@@ -91,6 +91,7 @@ type AgentPanelProps = {
   disabled: boolean
   mode: 'managed' | 'local'
   request: Omit<CreateLoadTestAgentRun, 'agent_id'> | null
+  onSelectedAgentChange?: (agent: LoadTestAgent | null) => void
 }
 
 type Pairing = {
@@ -433,6 +434,10 @@ export function AgentPanel(props: AgentPanelProps) {
   const selectedAgent = onlineAgents.find(
     (agent) => agent.id === selectedAgentId
   )
+  const { onSelectedAgentChange } = props
+  useEffect(() => {
+    onSelectedAgentChange?.(selectedAgent ?? null)
+  }, [onSelectedAgentChange, selectedAgent])
   const mockCapacityRPS = mockChannels.reduce(
     (total, channel) => total + channel.max_rps,
     0
