@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "Kênh dự phòng {{index}}",
     "Mock channel capacity or latency is invalid": "Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.",
     "Configured upper bound: {{rps}} RPS": "Giới hạn đã cấu hình: {{rps}} RPS",
-    "Circuit window (seconds)": "Cửa sổ ngắt mạch (giây)"
+    "Circuit window (seconds)": "Cửa sổ ngắt mạch (giây)",
+    "Circuit protection": "Bảo vệ ngắt mạch",
+    "Tune when a channel is temporarily removed after repeated failures.": "Điều chỉnh thời điểm tạm loại kênh sau nhiều lần thất bại.",
+    "Quick presets": "Thiết lập nhanh",
+    "Sensitive": "Nhạy",
+    "Relaxed": "Thoáng"
   }
 }

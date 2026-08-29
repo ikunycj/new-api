@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "Fallback channel {{index}}",
     "Mock channel capacity or latency is invalid": "Mock channel capacity or latency is invalid",
     "Configured upper bound: {{rps}} RPS": "Configured upper bound: {{rps}} RPS",
-    "Circuit window (seconds)": "Circuit window (seconds)"
+    "Circuit window (seconds)": "Circuit window (seconds)",
+    "Circuit protection": "Circuit protection",
+    "Tune when a channel is temporarily removed after repeated failures.": "Tune when a channel is temporarily removed after repeated failures.",
+    "Quick presets": "Quick presets",
+    "Sensitive": "Sensitive",
+    "Relaxed": "Relaxed"
   }
 }

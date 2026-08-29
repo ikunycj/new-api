@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "降級渠道 {{index}}",
     "Mock channel capacity or latency is invalid": "Mock 渠道容量或延遲設定無效",
     "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS",
-    "Circuit window (seconds)": "熔斷統計窗口（秒）"
+    "Circuit window (seconds)": "熔斷統計窗口（秒）",
+    "Circuit protection": "熔斷保護",
+    "Tune when a channel is temporarily removed after repeated failures.": "調整渠道連續失敗後暫時停用的條件。",
+    "Quick presets": "快速預設",
+    "Sensitive": "敏感",
+    "Relaxed": "寬鬆"
   }
 }

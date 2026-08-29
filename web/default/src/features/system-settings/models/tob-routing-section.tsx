@@ -64,6 +64,36 @@ const defaultRouteSettings = {
   minimum_profit_margin: 0,
 }
 
+const circuitPresets = [
+  {
+    key: 'sensitive',
+    label: 'Sensitive',
+    threshold: 3,
+    window: 30,
+    cooldown: 60,
+    probes: 1,
+  },
+  {
+    key: 'standard',
+    label: 'Standard',
+    threshold: 20,
+    window: 60,
+    cooldown: 30,
+    probes: 1,
+  },
+  {
+    key: 'relaxed',
+    label: 'Relaxed',
+    threshold: 50,
+    window: 60,
+    cooldown: 30,
+    probes: 2,
+  },
+] as const
+
+const numericInputClass =
+  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+
 function createRoute(): BillingGroupRoute {
   return {
     id: nextTemporaryID--,
@@ -372,10 +402,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   </FieldLabel>
                   <Input
                     id={`max-total-attempts-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1}
                     value={route.max_total_attempts}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         max_total_attempts: Number(event.target.value),
@@ -389,10 +421,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   </FieldLabel>
                   <Input
                     id={`total-timeout-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1000}
                     value={route.total_timeout_ms}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         total_timeout_ms: Number(event.target.value),
@@ -400,16 +434,56 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                     }
                   />
                 </Field>
+              </FieldGroup>
+            </FieldSet>
+
+            <FieldSet className='bg-muted/20 rounded-lg border p-4'>
+              <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                  <FieldLegend>{t('Circuit protection')}</FieldLegend>
+                  <FieldDescription>
+                    {t(
+                      'Tune when a channel is temporarily removed after repeated failures.'
+                    )}
+                  </FieldDescription>
+                </div>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-muted-foreground text-xs'>
+                    {t('Quick presets')}
+                  </span>
+                  {circuitPresets.map((preset) => (
+                    <Button
+                      key={preset.key}
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() =>
+                        updateRoute(routeIndex, {
+                          circuit_failure_threshold: preset.threshold,
+                          circuit_window_seconds: preset.window,
+                          circuit_cooldown_seconds: preset.cooldown,
+                          circuit_half_open_requests: preset.probes,
+                        })
+                      }
+                    >
+                      {t(preset.label)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <FieldGroup className='mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
                 <Field>
                   <FieldLabel htmlFor={`circuit-threshold-${route.id}`}>
                     {t('Circuit failure threshold')}
                   </FieldLabel>
                   <Input
                     id={`circuit-threshold-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1}
                     value={route.circuit_failure_threshold}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         circuit_failure_threshold: Number(event.target.value),
@@ -423,10 +497,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   </FieldLabel>
                   <Input
                     id={`circuit-window-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1}
                     value={route.circuit_window_seconds}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         circuit_window_seconds: Number(event.target.value),
@@ -440,10 +516,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   </FieldLabel>
                   <Input
                     id={`circuit-cooldown-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1}
                     value={route.circuit_cooldown_seconds}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         circuit_cooldown_seconds: Number(event.target.value),
@@ -457,10 +535,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   </FieldLabel>
                   <Input
                     id={`half-open-requests-${route.id}`}
+                    className={numericInputClass}
                     type='number'
                     min={1}
                     step={1}
                     value={route.circuit_half_open_requests}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) =>
                       updateRoute(routeIndex, {
                         circuit_half_open_requests: Number(event.target.value),

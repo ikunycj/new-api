@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "Резервный канал {{index}}",
     "Mock channel capacity or latency is invalid": "Недопустимая пропускная способность или задержка Mock-канала.",
     "Configured upper bound: {{rps}} RPS": "Заданный предел: {{rps}} RPS",
-    "Circuit window (seconds)": "Окно автомата (секунды)"
+    "Circuit window (seconds)": "Окно автомата (секунды)",
+    "Circuit protection": "Защита автомата",
+    "Tune when a channel is temporarily removed after repeated failures.": "Настройте временное исключение канала после повторяющихся сбоев.",
+    "Quick presets": "Быстрые пресеты",
+    "Sensitive": "Чувствительный",
+    "Relaxed": "Мягкий"
   }
 }

@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "Canal de secours {{index}}",
     "Mock channel capacity or latency is invalid": "La capacité ou la latence du canal simulé est invalide.",
     "Configured upper bound: {{rps}} RPS": "Limite configurée : {{rps}} RPS",
-    "Circuit window (seconds)": "Fenêtre du circuit (secondes)"
+    "Circuit window (seconds)": "Fenêtre du circuit (secondes)",
+    "Circuit protection": "Protection du circuit",
+    "Tune when a channel is temporarily removed after repeated failures.": "Réglez la mise à l’écart temporaire d’un canal après plusieurs échecs.",
+    "Quick presets": "Préréglages rapides",
+    "Sensitive": "Sensible",
+    "Relaxed": "Souple"
   }
 }

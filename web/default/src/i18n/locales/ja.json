@@ -6355,6 +6355,11 @@
     "Fallback channel {{index}}": "フォールバックチャネル {{index}}",
     "Mock channel capacity or latency is invalid": "Mock チャネルの容量または遅延が無効です。",
     "Configured upper bound: {{rps}} RPS": "設定上限：{{rps}} RPS",
-    "Circuit window (seconds)": "サーキット集計期間（秒）"
+    "Circuit window (seconds)": "サーキット集計期間（秒）",
+    "Circuit protection": "サーキット保護",
+    "Tune when a channel is temporarily removed after repeated failures.": "連続失敗後にチャネルを一時停止する条件を調整します。",
+    "Quick presets": "クイックプリセット",
+    "Sensitive": "厳格",
+    "Relaxed": "緩やか"
   }
 }
