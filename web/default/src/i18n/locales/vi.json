@@ -6400,6 +6400,7 @@
     "Previous-day probe success rate": "Tỷ lệ kiểm tra thành công ngày trước",
     "Concurrency": "Đồng thời",
     "Admin Console": "Bảng điều khiển quản trị",
-    "Call Logs": "Nhật ký cuộc gọi"
+    "Call Logs": "Nhật ký cuộc gọi",
+    "Group Management": "Quản lý nhóm"
   }
 }

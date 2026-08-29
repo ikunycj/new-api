@@ -21,6 +21,7 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Group Management': 'Group Management',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Channels are attempted in order; each channel can simulate failures and latency.',
     'Mock channel latency is invalid': 'Mock channel latency is invalid',
@@ -162,6 +163,7 @@ const newKeys = {
     'Call Logs': 'Call Logs',
   },
   zh: {
+    'Group Management': '分组管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       '渠道将按顺序尝试；每个渠道可以模拟失败和延迟。',
     'Mock channel latency is invalid': 'Mock 渠道延迟配置无效',
@@ -302,6 +304,7 @@ const newKeys = {
     'Call Logs': '调用日志',
   },
   fr: {
+    'Group Management': 'Gestion des groupes',
     'Local load-test agent': 'Agent de test de charge local',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'Exécutez les tests intensifs hors du navigateur et associez les résultats à ce compte.',
@@ -424,6 +427,7 @@ const newKeys = {
     'Call Logs': 'Journaux d’appels',
   },
   ja: {
+    'Group Management': 'グループ管理',
     'Local load-test agent': 'ローカル負荷テスト Agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'ブラウザ外で大規模テストを実行し、結果をこのアカウントに保存します。',
@@ -546,6 +550,7 @@ const newKeys = {
     'Call Logs': '呼び出しログ',
   },
   ru: {
+    'Group Management': 'Управление группами',
     'Local load-test agent': 'Локальный агент нагрузочного теста',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'Запускайте высокую нагрузку вне браузера и сохраняйте результаты в этой учётной записи.',
@@ -668,6 +673,7 @@ const newKeys = {
     'Call Logs': 'Журналы вызовов',
   },
   vi: {
+    'Group Management': 'Quản lý nhóm',
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'Chạy kiểm thử tải lớn ngoài trình duyệt và lưu kết quả vào tài khoản này.',
@@ -789,6 +795,7 @@ const newKeys = {
     'Call Logs': 'Nhật ký cuộc gọi',
   },
   'zh-TW': {
+    'Group Management': '群組管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       '頻道將按順序嘗試；每個頻道可以模擬失敗和延遲。',
     'Mock channel latency is invalid': 'Mock 頻道延遲設定無效',

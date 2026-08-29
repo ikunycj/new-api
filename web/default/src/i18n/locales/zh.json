@@ -6400,6 +6400,7 @@
     "Previous-day probe success rate": "前日探测成功率",
     "Concurrency": "并发",
     "Admin Console": "管理控制台",
-    "Call Logs": "调用日志"
+    "Call Logs": "调用日志",
+    "Group Management": "分组管理"
   }
 }

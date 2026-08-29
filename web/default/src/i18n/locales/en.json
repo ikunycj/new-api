@@ -6400,6 +6400,7 @@
     "Previous-day probe success rate": "Previous-day probe success rate",
     "Concurrency": "Concurrency",
     "Admin Console": "Admin Console",
-    "Call Logs": "Call Logs"
+    "Call Logs": "Call Logs",
+    "Group Management": "Group Management"
   }
 }

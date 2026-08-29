@@ -6400,6 +6400,7 @@
     "Previous-day probe success rate": "前日のプローブ成功率",
     "Concurrency": "同時実行数",
     "Admin Console": "管理コンソール",
-    "Call Logs": "呼び出しログ"
+    "Call Logs": "呼び出しログ",
+    "Group Management": "グループ管理"
   }
 }

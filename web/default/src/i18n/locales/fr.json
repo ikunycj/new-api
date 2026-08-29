@@ -6400,6 +6400,7 @@
     "Previous-day probe success rate": "Taux de réussite de la sonde (veille)",
     "Concurrency": "Concurrence",
     "Admin Console": "Console d’administration",
-    "Call Logs": "Journaux d’appels"
+    "Call Logs": "Journaux d’appels",
+    "Group Management": "Gestion des groupes"
   }
 }

@@ -27,8 +27,10 @@ import { Route as errors404RouteImport } from './routes/(errors)/404'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedAdminConsoleRouteImport } from './routes/_authenticated/admin-console'
+import { Route as AuthenticatedChannelAffinityRouteImport } from './routes/_authenticated/channel-affinity'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedGroupManagementRouteImport } from './routes/_authenticated/group-management'
+import { Route as AuthenticatedRoutingReliabilityRouteImport } from './routes/_authenticated/routing-reliability'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
@@ -50,6 +52,7 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedLoadtestDemoIndexRouteImport } from './routes/_authenticated/loadtest-demo/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
+import { Route as AuthenticatedOperationsLoadtestRouteImport } from './routes/_authenticated/operations/loadtest'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
@@ -181,6 +184,12 @@ const AuthenticatedAdminConsoleRoute =
     path: '/admin-console',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChannelAffinityRoute =
+  AuthenticatedChannelAffinityRouteImport.update({
+    id: '/channel-affinity',
+    path: '/channel-affinity',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
   id: '/chat2link',
   path: '/chat2link',
@@ -190,6 +199,12 @@ const AuthenticatedGroupManagementRoute =
   AuthenticatedGroupManagementRouteImport.update({
     id: '/group-management',
     path: '/group-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRoutingReliabilityRoute =
+  AuthenticatedRoutingReliabilityRouteImport.update({
+    id: '/routing-reliability',
+    path: '/routing-reliability',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSystemSettingsRouteRoute =
@@ -307,6 +322,12 @@ const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
     path: '/models/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOperationsLoadtestRoute =
+  AuthenticatedOperationsLoadtestRouteImport.update({
+    id: '/operations/loadtest',
+    path: '/operations/loadtest',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPlaygroundIndexRoute =
@@ -559,8 +580,10 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/admin-console': typeof AuthenticatedAdminConsoleRoute
+  '/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
+  '/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
@@ -572,6 +595,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -640,8 +664,10 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/admin-console': typeof AuthenticatedAdminConsoleRoute
+  '/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
+  '/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
   '/docs': typeof DocsIndexRoute
@@ -653,6 +679,7 @@ export interface FileRoutesByTo {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channel-monitors': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
@@ -725,8 +752,10 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/admin-console': typeof AuthenticatedAdminConsoleRoute
+  '/_authenticated/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/_authenticated/group-management': typeof AuthenticatedGroupManagementRoute
+  '/_authenticated/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
@@ -738,6 +767,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -809,8 +839,10 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/admin-console'
+    | '/channel-affinity'
     | '/chat2link'
     | '/group-management'
+    | '/routing-reliability'
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
@@ -822,6 +854,7 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/operations/loadtest'
     | '/usage-logs/$section'
     | '/channel-monitors/'
     | '/channels/'
@@ -890,8 +923,10 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/admin-console'
+    | '/channel-affinity'
     | '/chat2link'
     | '/group-management'
+    | '/routing-reliability'
     | '/oauth/$provider'
     | '/about'
     | '/docs'
@@ -903,6 +938,7 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/operations/loadtest'
     | '/usage-logs/$section'
     | '/channel-monitors'
     | '/channels'
@@ -974,8 +1010,10 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/admin-console'
+    | '/_authenticated/channel-affinity'
     | '/_authenticated/chat2link'
     | '/_authenticated/group-management'
+    | '/_authenticated/routing-reliability'
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
@@ -987,6 +1025,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
+    | '/_authenticated/operations/loadtest'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/channel-monitors/'
     | '/_authenticated/channels/'
@@ -1203,6 +1242,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminConsoleRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/channel-affinity': {
+      id: '/_authenticated/channel-affinity'
+      path: '/channel-affinity'
+      fullPath: '/channel-affinity'
+      preLoaderRoute: typeof AuthenticatedChannelAffinityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/chat2link': {
       id: '/_authenticated/chat2link'
       path: '/chat2link'
@@ -1215,6 +1261,13 @@ declare module '@tanstack/react-router' {
       path: '/group-management'
       fullPath: '/group-management'
       preLoaderRoute: typeof AuthenticatedGroupManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/routing-reliability': {
+      id: '/_authenticated/routing-reliability'
+      path: '/routing-reliability'
+      fullPath: '/routing-reliability'
+      preLoaderRoute: typeof AuthenticatedRoutingReliabilityRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/system-settings': {
@@ -1362,6 +1415,13 @@ declare module '@tanstack/react-router' {
       path: '/models/$section'
       fullPath: '/models/$section'
       preLoaderRoute: typeof AuthenticatedModelsSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/operations/loadtest': {
+      id: '/_authenticated/operations/loadtest'
+      path: '/operations/loadtest'
+      fullPath: '/operations/loadtest'
+      preLoaderRoute: typeof AuthenticatedOperationsLoadtestRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/playground/': {
@@ -1740,12 +1800,15 @@ const AuthenticatedSystemSettingsRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSystemSettingsRouteRoute: typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   AuthenticatedAdminConsoleRoute: typeof AuthenticatedAdminConsoleRoute
+  AuthenticatedChannelAffinityRoute: typeof AuthenticatedChannelAffinityRoute
   AuthenticatedChat2linkRoute: typeof AuthenticatedChat2linkRoute
   AuthenticatedGroupManagementRoute: typeof AuthenticatedGroupManagementRoute
+  AuthenticatedRoutingReliabilityRoute: typeof AuthenticatedRoutingReliabilityRoute
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
   AuthenticatedDashboardSectionRoute: typeof AuthenticatedDashboardSectionRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
+  AuthenticatedOperationsLoadtestRoute: typeof AuthenticatedOperationsLoadtestRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedChannelMonitorsIndexRoute: typeof AuthenticatedChannelMonitorsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
@@ -1770,12 +1833,15 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSystemSettingsRouteRoute:
     AuthenticatedSystemSettingsRouteRouteWithChildren,
   AuthenticatedAdminConsoleRoute: AuthenticatedAdminConsoleRoute,
+  AuthenticatedChannelAffinityRoute: AuthenticatedChannelAffinityRoute,
   AuthenticatedChat2linkRoute: AuthenticatedChat2linkRoute,
   AuthenticatedGroupManagementRoute: AuthenticatedGroupManagementRoute,
+  AuthenticatedRoutingReliabilityRoute: AuthenticatedRoutingReliabilityRoute,
   AuthenticatedChatChatIdRoute: AuthenticatedChatChatIdRoute,
   AuthenticatedDashboardSectionRoute: AuthenticatedDashboardSectionRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
+  AuthenticatedOperationsLoadtestRoute: AuthenticatedOperationsLoadtestRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedChannelMonitorsIndexRoute:
     AuthenticatedChannelMonitorsIndexRoute,
