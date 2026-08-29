@@ -32,7 +32,7 @@ const USAGE_LOGS_SECTIONS = [
   // the same filters and cost statistics.
   {
     id: 'call',
-    titleKey: 'Common Logs',
+    titleKey: 'Call Logs',
     build: () => null,
   },
   {

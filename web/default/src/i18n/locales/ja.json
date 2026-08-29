@@ -6399,6 +6399,7 @@
     "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量",
     "Previous-day probe success rate": "前日のプローブ成功率",
     "Concurrency": "同時実行数",
-    "Admin Console": "管理コンソール"
+    "Admin Console": "管理コンソール",
+    "Call Logs": "呼び出しログ"
   }
 }

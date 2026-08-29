@@ -26,32 +26,8 @@ import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { AffiliateSettingsSection } from './affiliate-settings-section'
+import { getGroupDefaults, getModelDefaults } from './billing-defaults'
 import { BillingGroupPricingSection } from './group-pricing-section'
-
-const getModelDefaults = (settings: BillingSettings) => ({
-  ModelPrice: settings.ModelPrice,
-  ModelRatio: settings.ModelRatio,
-  CacheRatio: settings.CacheRatio,
-  CreateCacheRatio: settings.CreateCacheRatio,
-  CompletionRatio: settings.CompletionRatio,
-  ImageRatio: settings.ImageRatio,
-  AudioRatio: settings.AudioRatio,
-  AudioCompletionRatio: settings.AudioCompletionRatio,
-  ExposeRatioEnabled: settings.ExposeRatioEnabled,
-  BillingMode: settings['billing_setting.billing_mode'],
-  BillingExpr: settings['billing_setting.billing_expr'],
-})
-
-const getGroupDefaults = (settings: BillingSettings) => ({
-  TopupGroupRatio: settings.TopupGroupRatio,
-  GroupRatio: settings.GroupRatio,
-  UserUsableGroups: settings.UserUsableGroups,
-  GroupGroupRatio: settings.GroupGroupRatio,
-  AutoGroups: settings.AutoGroups,
-  DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
-  GroupSpecialUsableGroup:
-    settings['group_ratio_setting.group_special_usable_group'],
-})
 
 const BILLING_SECTIONS = [
   {

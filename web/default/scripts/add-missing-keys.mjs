@@ -159,6 +159,7 @@ const newKeys = {
     'Projected profit margin': 'Projected profit margin',
     'Projected channel cost': 'Projected channel cost',
     'User charge': 'User charge',
+    'Call Logs': 'Call Logs',
   },
   zh: {
     'Channels are attempted in order; each channel can simulate failures and latency.':
@@ -298,6 +299,7 @@ const newKeys = {
     'Projected profit margin': '预计利润率',
     'Projected channel cost': '预计渠道成本',
     'User charge': '用户扣费',
+    'Call Logs': '调用日志',
   },
   fr: {
     'Local load-test agent': 'Agent de test de charge local',
@@ -419,6 +421,7 @@ const newKeys = {
     'Projected profit margin': 'Marge bénéficiaire projetée',
     'Projected channel cost': 'Coût de canal projeté',
     'User charge': 'Facturation utilisateur',
+    'Call Logs': 'Journaux d’appels',
   },
   ja: {
     'Local load-test agent': 'ローカル負荷テスト Agent',
@@ -540,6 +543,7 @@ const newKeys = {
     'Projected profit margin': '予測利益率',
     'Projected channel cost': '予測チャネルコスト',
     'User charge': 'ユーザー請求額',
+    'Call Logs': '呼び出しログ',
   },
   ru: {
     'Local load-test agent': 'Локальный агент нагрузочного теста',
@@ -661,6 +665,7 @@ const newKeys = {
     'Projected profit margin': 'Прогнозируемая маржа',
     'Projected channel cost': 'Прогнозируемая стоимость канала',
     'User charge': 'Списание с пользователя',
+    'Call Logs': 'Журналы вызовов',
   },
   vi: {
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
@@ -781,6 +786,7 @@ const newKeys = {
     'Projected profit margin': 'Biên lợi nhuận dự kiến',
     'Projected channel cost': 'Chi phí kênh dự kiến',
     'User charge': 'Phí người dùng',
+    'Call Logs': 'Nhật ký cuộc gọi',
   },
   'zh-TW': {
     'Channels are attempted in order; each channel can simulate failures and latency.':

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { flexRender, type Row } from '@tanstack/react-table'
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GroupBadge } from '@/components/group-badge'
@@ -30,6 +30,35 @@ import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
 
 const SENSITIVE_MASK = '••••'
+
+function ChannelMetric({
+  label,
+  children,
+  valueClassName,
+}: {
+  label: string
+  children: ReactNode
+  valueClassName?: string
+}) {
+  return (
+    <div className='flex min-w-0 items-center justify-between gap-2'>
+      <span
+        className='text-muted-foreground min-w-0 truncate text-[11px] font-medium select-none'
+        title={label}
+      >
+        {label}
+      </span>
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 justify-end overflow-hidden text-right text-sm',
+          valueClassName
+        )}
+      >
+        {children ?? <span className='text-muted-foreground'>-</span>}
+      </div>
+    </div>
+  )
+}
 
 /**
  * Bespoke channel card for the card view. Reuses every column's existing cell
@@ -60,9 +89,15 @@ function ChannelCardComponent({
   }
 
   const fieldLabels: Record<string, string> = {
-    balance: t('Used / Remaining'),
+    daily_cost_usd: t('Daily Cost / Monthly Cost'),
+    daily_tokens: t('Daily Usage / Monthly Usage'),
     response_time: t('Response'),
     test_time: t('Last Tested'),
+    price_multiplier: t('Channel price multiplier'),
+    test_model: t('Test Model'),
+    upstream_max_retries: t('Retry Times'),
+    max_concurrency: '并发',
+    previous_day_probe_success_rate: t('Previous-day probe success rate'),
   }
 
   const groups = parseGroupsList(row.original.group ?? '')
@@ -72,11 +107,18 @@ function ChannelCardComponent({
   const nameCell = renderCell('name')
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
-  const priorityCell = renderCell('priority')
   const weightCell = renderCell('weight')
-  const balanceCell = renderCell('balance')
+  const costCell = renderCell('daily_cost_usd')
+  const tokenUsageCell = renderCell('daily_tokens')
   const responseCell = renderCell('response_time')
+  const priceMultiplierCell = renderCell('price_multiplier')
+  const testModelCell = renderCell('test_model')
+  const upstreamMaxRetriesCell = renderCell('upstream_max_retries')
+  const concurrencyCell = renderCell('max_concurrency')
   const testCell = renderCell('test_time')
+  const previousDayProbeSuccessRateCell = renderCell(
+    'previous_day_probe_success_rate'
+  )
 
   const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
 
@@ -108,56 +150,54 @@ function ChannelCardComponent({
           </div>
         </div>
 
-        {/* Body: left column (id/name + balance) paired with a right-aligned
-          column (priority/weight + response/test time). */}
-        <div className='flex items-start justify-between gap-3'>
-          {/* Left column */}
-          <div className='flex min-w-0 flex-1 flex-col gap-3 overflow-hidden'>
-            <div className='min-w-0 text-sm'>
-              {!isTagRow && (
-                <div className={labelClass}>
-                  #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
-                </div>
-              )}
-              {nameCell}
-            </div>
-            <div className='min-w-0'>
-              <div className={cn('mb-1', labelClass)}>
-                {fieldLabels.balance}
+        {/* Name and compact label/value metrics retain all channel metrics in card view. */}
+        <div className='flex min-w-0 flex-col gap-2 overflow-hidden'>
+          <div className='min-w-0 text-sm leading-tight'>
+            {!isTagRow && (
+              <div className={labelClass}>
+                #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
               </div>
-              <div className='min-w-0 overflow-hidden text-sm'>
-                {balanceCell ?? (
-                  <span className='text-muted-foreground'>-</span>
-                )}
-              </div>
-            </div>
+            )}
+            {nameCell}
           </div>
 
-          {/* Right column (sits on the right, content left-aligned). A single
-            grid with content-sized columns keeps Priority/Weight and
-            Response/Last Tested aligned without wasting horizontal space. */}
-          <div className='grid shrink-0 grid-cols-[auto_auto] items-center gap-x-3 gap-y-1'>
-            <span className={labelClass}>{t('Priority')}</span>
-            <span className={labelClass}>{t('Weight')}</span>
-            <div className='flex justify-start'>{priorityCell}</div>
-            <div className='flex justify-start'>{weightCell}</div>
-            <span className={cn('mt-2', labelClass)}>
-              {fieldLabels.response_time}
-            </span>
-            <span className={cn('mt-2', labelClass)}>
-              {fieldLabels.test_time}
-            </span>
-            <div className='overflow-hidden text-sm'>
-              {responseCell ?? <span className='text-muted-foreground'>-</span>}
-            </div>
-            <div className='overflow-hidden text-sm'>
-              {testCell ?? <span className='text-muted-foreground'>-</span>}
-            </div>
+          <div className='grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2'>
+            <ChannelMetric label={fieldLabels.previous_day_probe_success_rate}>
+              {previousDayProbeSuccessRateCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.test_time}>
+              {testCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.daily_cost_usd}>
+              {costCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.daily_tokens}>
+              {tokenUsageCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.test_model}>
+              {testModelCell}
+            </ChannelMetric>
+            <ChannelMetric label={t('Priority')}>
+              {renderCell('priority')}
+            </ChannelMetric>
+            <ChannelMetric label={t('Weight')}>{weightCell}</ChannelMetric>
+            <ChannelMetric label={fieldLabels.response_time}>
+              {responseCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.price_multiplier}>
+              {priceMultiplierCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.upstream_max_retries}>
+              {upstreamMaxRetriesCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.max_concurrency}>
+              {concurrencyCell}
+            </ChannelMetric>
           </div>
         </div>
 
         {/* Last row: groups span the full width, showing every group (no label) */}
-        <div className='min-w-0'>
+        <div className='-mt-0.5 min-w-0'>
           {groups.length > 0 ? (
             <div className='-ml-1.5 flex flex-wrap gap-1'>
               {groups.map((g) => (

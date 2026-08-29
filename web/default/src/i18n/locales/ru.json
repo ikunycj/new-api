@@ -6399,6 +6399,7 @@
     "Daily Usage / Monthly Usage": "Дневное / месячное использование",
     "Previous-day probe success rate": "Успешность проверок за предыдущий день",
     "Concurrency": "Параллельность",
-    "Admin Console": "Консоль администратора"
+    "Admin Console": "Консоль администратора",
+    "Call Logs": "Журналы вызовов"
   }
 }

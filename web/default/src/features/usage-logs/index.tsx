@@ -48,7 +48,7 @@ const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
     titleKey: 'Common Logs',
   },
   call: {
-    titleKey: 'Common Logs',
+    titleKey: 'Call Logs',
   },
   drawing: {
     titleKey: 'Drawing Logs',
@@ -125,8 +125,9 @@ function UsageLogsContent() {
     [setViewScope]
   )
 
-  const pageMeta =
-    activeCategory === 'common' ? SECTION_META.common : SECTION_META.task
+  // Keep the legacy `/usage-logs/call` entry visibly distinct while reusing
+  // the common log data/query implementation underneath.
+  const pageMeta = SECTION_META[requestedSection]
   const showTaskSwitcher =
     activeCategory !== 'common' && visibleSections.length > 1
 

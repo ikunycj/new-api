@@ -6399,6 +6399,7 @@
     "Daily Usage / Monthly Usage": "每日用量 / 每月用量",
     "Previous-day probe success rate": "前日探測成功率",
     "Concurrency": "並發",
-    "Admin Console": "管理控制台"
+    "Admin Console": "管理控制台",
+    "Call Logs": "Call Logs"
   }
 }
