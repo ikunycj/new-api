@@ -16,8 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// IsMockLoadTestRequest reports whether this request must be constrained to
-// channels explicitly marked for managed mock load tests.
+// IsMockLoadTestRequest reports whether the controller must use the internal
+// managed load-test executor instead of entering channel routing.
 func IsMockLoadTestRequest(c *gin.Context) bool {
 	return c != nil && c.Request != nil && strings.EqualFold(strings.TrimSpace(c.GetHeader(constant.MockLoadTestHeader)), "true")
 }
@@ -212,11 +212,12 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 	if configured {
 		var filteredEntries []model.BillingGroupChannel
 		var err error
-		if IsMockLoadTestRequest(p.Ctx) {
-			filteredEntries, err = model.FilterMockLoadTestRouteChannels(entries)
-		} else {
-			filteredEntries, err = model.FilterRealRouteChannels(entries)
-		}
+		// Managed load-test mocks are terminated by controller.Relay before a
+		// RetryParam is created. Any request that reaches routing is therefore a
+		// real request and must use only real channels; retaining a mock-channel
+		// fallback here could accidentally send an unauthenticated request to a
+		// provider configured solely for legacy mocks.
+		filteredEntries, err = model.FilterRealRouteChannels(entries)
 		if err != nil {
 			logger.LogError(p.Ctx, fmt.Sprintf("filter billing route channels: %s", err.Error()))
 			filteredEntries = nil

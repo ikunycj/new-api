@@ -78,7 +78,7 @@ func TestConfiguredRouteRetriesChannelThenSwitchesInOrder(t *testing.T) {
 	assert.False(t, param.HasNextRetry())
 }
 
-func TestMockLoadTestRouteSkipsRealChannels(t *testing.T) {
+func TestMockMarkerCannotAlterRealRouting(t *testing.T) {
 	channels := setupChannelRoute(t)
 	mockSetting := `{"mock_load_test":true}`
 	realSetting := `{}`
@@ -94,7 +94,7 @@ func TestMockLoadTestRouteSkipsRealChannels(t *testing.T) {
 	selected, _, err := CacheGetRandomSatisfiedChannel(param)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
-	assert.Equal(t, channels[0].Id, selected.Id)
+	assert.Equal(t, channels[1].Id, selected.Id)
 }
 
 func TestRealRouteSkipsMockLoadTestChannels(t *testing.T) {

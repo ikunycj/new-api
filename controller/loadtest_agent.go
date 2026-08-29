@@ -11,6 +11,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ const (
 	loadTestMaxErrorKinds      = 100
 	loadTestMaxMockLatencyMS   = 120000
 	loadTestMockChannelCount   = 3
-	loadTestMockAgentVersion   = "0.3.0"
+	loadTestMockAgentVersion   = "0.4.0"
 )
 
 var loadTestEndpoints = map[string]struct{}{
@@ -339,12 +340,6 @@ func CreateLoadTestRun(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "API key is not enabled"})
 		return
 	}
-	if request.MockEnabled {
-		if err := validateLoadTestMockToken(token, request.Model, request.Endpoint); err != nil {
-			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
-			return
-		}
-	}
 	targetURL := strings.TrimRight(strings.TrimSpace(system_setting.ServerAddress), "/")
 	parsedTarget, err := url.Parse(targetURL)
 	if err != nil || (parsedTarget.Scheme != "http" && parsedTarget.Scheme != "https") || parsedTarget.Host == "" {
@@ -474,6 +469,7 @@ func PollLoadTestAgent(c *gin.Context) {
 			"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 			"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
 			"mock_channels":       run.MockChannels,
+			"mock_token":          service.MockLoadTestSignature(run.ID, run.TokenID, run.MockChannelsJSON, run.MockFailureRate, run.MockFailureStatus, run.MockLatencyMS),
 			"requests_per_second": run.RequestsPerSecond, "concurrency": run.Concurrency,
 		},
 	})
@@ -552,7 +548,7 @@ func loadTestAgentSupportsMockChannels(version string) bool {
 	if majorErr != nil || minorErr != nil || patchErr != nil || major < 0 || minor < 0 || patch < 0 {
 		return false
 	}
-	return major > 0 || minor > 3 || (minor == 3 && patch >= 0)
+	return major > 0 || minor > 4 || (minor == 4 && patch >= 0)
 }
 
 func validateLoadTestMockToken(token *model.Token, modelName, endpoint string) error {

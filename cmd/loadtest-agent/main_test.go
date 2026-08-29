@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -97,6 +99,7 @@ func TestValidateTaskRejectsInvalidMockSettings(t *testing.T) {
 		RunID: "run-1", TargetURL: "https://alltokenapi.com", APIKey: "sk-test",
 		Model: "gpt-test", Endpoint: "openai", Prompt: "OK", DurationSeconds: 5,
 		RequestsPerSecond: 1, Concurrency: 1, MockEnabled: true,
+		MockToken:       "signed-mock-token",
 		MockFailureRate: 0.25, MockFailureStatus: 503, MockLatencyMS: 100,
 	}
 	require.NoError(t, validateTask(valid))
@@ -120,4 +123,20 @@ func TestValidateTaskRejectsInvalidMockSettings(t *testing.T) {
 		{Slot: 3, FailureRate: 0, FailureStatus: 429, LatencyMS: 0},
 	}
 	require.NoError(t, validateTask(valid))
+}
+
+func TestPreflightMockRequiresInternalExecutionMarker(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Alltoken-Mock-Executed", "true")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	task := loadTestTask{RunID: "run-1", TargetURL: server.URL, APIKey: "sk-test", Model: "gpt-test", Endpoint: "openai", Prompt: "ping", MockEnabled: true, MockToken: "signed"}
+	require.NoError(t, preflightMock(t.Context(), task))
+
+	missingMarker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer missingMarker.Close()
+	task.TargetURL = missingMarker.URL
+	err := preflightMock(t.Context(), task)
+	assert.ErrorContains(t, err, "mock preflight rejected")
 }

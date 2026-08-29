@@ -24,7 +24,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const agentVersion = "0.3.0"
+const agentVersion = "0.4.0"
 
 var agentHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
@@ -65,6 +65,7 @@ type loadTestTask struct {
 	MockFailureStatus int                   `json:"mock_failure_status"`
 	MockLatencyMS     int                   `json:"mock_latency_ms"`
 	MockChannels      []loadTestMockChannel `json:"mock_channels"`
+	MockToken         string                `json:"mock_token"`
 	DurationSeconds   int                   `json:"duration_seconds"`
 	RequestsPerSecond int                   `json:"requests_per_second"`
 	Concurrency       int                   `json:"concurrency"`
@@ -378,6 +379,11 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 	if err := validateTask(task); err != nil {
 		return err
 	}
+	if task.MockEnabled {
+		if err := preflightMock(ctx, task); err != nil {
+			return err
+		}
+	}
 
 	tempDir, err := os.MkdirTemp("", "alltoken-loadtest-")
 	if err != nil {
@@ -418,6 +424,7 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 		"ALLTOKEN_MOCK_FAILURE_RATE="+strconv.FormatFloat(task.MockFailureRate, 'f', -1, 64),
 		"ALLTOKEN_MOCK_FAILURE_STATUS="+strconv.Itoa(task.MockFailureStatus),
 		"ALLTOKEN_MOCK_LATENCY_MS="+strconv.Itoa(task.MockLatencyMS),
+		"ALLTOKEN_MOCK_TOKEN="+task.MockToken,
 		"ALLTOKEN_MOCK_CHANNELS="+string(mockChannelsJSON),
 		"ALLTOKEN_DURATION_SECONDS="+strconv.Itoa(task.DurationSeconds),
 		"ALLTOKEN_RPS="+strconv.Itoa(task.RequestsPerSecond),
@@ -459,6 +466,66 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 			return nil
 		}
 	}
+}
+
+// preflightMock performs one guarded request before k6 starts. It verifies
+// the server-side executor marker and prevents a misconfigured/old gateway
+// from launching a high-rate run that could touch a real provider.
+func preflightMock(ctx context.Context, task loadTestTask) error {
+	requestPath := "/v1/responses"
+	if task.Endpoint == "anthropic" {
+		requestPath = "/v1/messages"
+	} else if task.Endpoint == "openai" {
+		requestPath = "/v1/chat/completions"
+	} else if task.Endpoint == "openai-response-compact" {
+		requestPath = "/v1/responses/compact"
+	}
+	body := map[string]any{"model": task.Model, "input": []map[string]any{{"role": "user", "content": task.Prompt}}}
+	if task.Endpoint == "anthropic" {
+		body = map[string]any{"model": task.Model, "max_tokens": 1, "messages": []map[string]any{{"role": "user", "content": task.Prompt}}}
+	} else if task.Endpoint == "openai" {
+		body = map[string]any{"model": task.Model, "max_tokens": 1, "messages": []map[string]any{{"role": "user", "content": task.Prompt}}}
+	}
+	data, err := common.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("encode mock preflight request: %w", err)
+	}
+	target := strings.TrimRight(task.TargetURL, "/") + requestPath
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build mock preflight request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+task.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	// The run id is part of the server-issued signature; reuse it for the
+	// preflight request rather than inventing a second unsigned id.
+	req.Header.Set("X-Load-Test-ID", task.RunID)
+	req.Header.Set("X-Alltoken-Mock-Load-Test", "true")
+	req.Header.Set("X-Alltoken-Mock-Token", task.MockToken)
+	if len(task.MockChannels) > 0 {
+		channelsJSON, marshalErr := common.Marshal(task.MockChannels)
+		if marshalErr != nil {
+			return fmt.Errorf("encode mock preflight channels: %w", marshalErr)
+		}
+		req.Header.Set("X-Alltoken-Mock-Channels", string(channelsJSON))
+	} else {
+		req.Header.Set("X-Alltoken-Mock-Failure-Rate", strconv.FormatFloat(task.MockFailureRate, 'f', -1, 64))
+		req.Header.Set("X-Alltoken-Mock-Failure-Status", strconv.Itoa(task.MockFailureStatus))
+		req.Header.Set("X-Alltoken-Mock-Latency-Ms", strconv.Itoa(task.MockLatencyMS))
+	}
+	if task.Endpoint == "anthropic" {
+		req.Header.Set("x-api-key", task.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+	resp, err := agentHTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("mock preflight failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("X-Alltoken-Mock-Executed") != "true" {
+		return fmt.Errorf("mock preflight rejected: status=%d executed=%q", resp.StatusCode, resp.Header.Get("X-Alltoken-Mock-Executed"))
+	}
+	return nil
 }
 
 func readK6Summary(path string, configuredRPS int) (finishPayload, error) {
@@ -649,6 +716,9 @@ func validateTask(task loadTestTask) error {
 		return errors.New("task load settings are invalid")
 	}
 	if task.MockEnabled {
+		if strings.TrimSpace(task.MockToken) == "" {
+			return errors.New("mock authorization token is missing")
+		}
 		if len(task.MockChannels) > 0 {
 			if task.MockFailureRate != 0 || task.MockFailureStatus != 0 || task.MockLatencyMS != 0 || len(task.MockChannels) != 3 {
 				return errors.New("task mock channel settings are invalid")
@@ -743,6 +813,7 @@ export default function () {
   };
   if (mockEnabled) {
     headers['X-Alltoken-Mock-Load-Test'] = 'true';
+    headers['X-Alltoken-Mock-Token'] = __ENV.ALLTOKEN_MOCK_TOKEN;
     if (mockChannels && mockChannels !== 'null' && mockChannels !== '[]') {
       headers['X-Alltoken-Mock-Channels'] = mockChannels;
     } else {
@@ -779,6 +850,10 @@ export default function () {
     }
   }
   const response = http.post(target + requestPath, JSON.stringify(body), { headers, timeout: '120s' });
+  if (mockEnabled && response.headers['X-Alltoken-Mock-Executed'] !== 'true') {
+    alltokenErrors.add(1, { code: 'mock_not_executed' });
+    throw new Error('mock request was not executed by the internal mock executor');
+  }
   if (response.status !== 200) {
     if (errorStatusCounters[response.status]) errorStatusCounters[response.status].add(1);
     let payload;

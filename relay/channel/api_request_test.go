@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	common2 "github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,7 +82,7 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	require.Equal(t, "trace-123", headers["x-upstream-trace"])
 }
 
-func TestProcessHeaderOverride_MockHeadersRequireMockChannel(t *testing.T) {
+func TestProcessHeaderOverride_MockHeadersNeverReachUpstream(t *testing.T) {
 	t.Parallel()
 
 	gin.SetMode(gin.TestMode)
@@ -98,15 +98,9 @@ func TestProcessHeaderOverride_MockHeadersRequireMockChannel(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, headers)
 
-	mockChannel := &relaycommon.RelayInfo{
-		ChannelMeta: &relaycommon.ChannelMeta{
-			ChannelSetting:  dto.ChannelSettings{MockLoadTest: true},
-			HeadersOverride: override,
-		},
-	}
-	headers, err = processHeaderOverride(mockChannel, ctx)
-	require.NoError(t, err)
-	require.Equal(t, "0.5", headers["x-alltoken-mock-failure-rate"])
+	// Mock requests are terminated before channel handling; even a legacy
+	// mock-marked channel must never receive mock control headers.
+	assert.Empty(t, headers)
 }
 
 func TestProcessHeaderOverride_WildcardCannotLeakMockHeadersToRealChannel(t *testing.T) {

@@ -7,6 +7,12 @@ const (
 	// It is used to constrain channel selection to channels explicitly enabled
 	// for mock load tests.
 	MockLoadTestHeader = "X-Alltoken-Mock-Load-Test"
+	// MockLoadTestTokenHeader authenticates a managed load-test request. The
+	// signature is minted when the agent claims a run and binds the run,
+	// token, and mock configuration together so clients cannot enable the
+	// free in-process executor by merely setting the legacy marker header.
+	MockLoadTestTokenHeader = "X-Alltoken-Mock-Token"
+	MockLoadTestRunHeader   = "X-Load-Test-ID"
 
 	ContextKeyTokenCountMeta  ContextKey = "token_count_meta"
 	ContextKeyPromptTokens    ContextKey = "prompt_tokens"

@@ -177,6 +177,20 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	finalModel = relayInfo.OriginModelName
 	finalStream = relayInfo.IsStream
+	if service.IsMockLoadTestRequest(c) {
+		// Reject forged markers before token counting or any other expensive
+		// request processing. The same check is repeated by the executor after
+		// parsing its configuration as defense in depth.
+		channelsJSON := strings.TrimSpace(c.GetHeader("X-Alltoken-Mock-Channels"))
+		if authErr := service.VerifyMockLoadTestRequest(c, channelsJSON, parseMockFloatHeader(c, "X-Alltoken-Mock-Failure-Rate"), parseMockIntHeader(c, "X-Alltoken-Mock-Failure-Status"), parseMockIntHeader(c, "X-Alltoken-Mock-Latency-Ms")); authErr != nil {
+			if apiErr, ok := authErr.(*types.NewAPIError); ok {
+				newAPIError = apiErr
+			} else {
+				newAPIError = types.NewErrorWithStatusCode(authErr, types.ErrorCodeAccessDenied, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+			}
+			return
+		}
+	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
@@ -204,6 +218,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+
+	// Managed load-test mock requests are handled entirely in-process. This
+	// branch intentionally precedes pricing, quota pre-consumption, channel
+	// selection, circuit state, and relay handlers; an authorized mock run can
+	// therefore never consume a real token/号池 or issue an upstream request.
+	if service.IsMockLoadTestRequest(c) {
+		newAPIError = executeInternalMockLoadTest(c, relayInfo, relayFormat, tokens)
+		return
+	}
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {

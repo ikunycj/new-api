@@ -321,15 +321,8 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 	return nil, nil
 }
 
-// FilterMockLoadTestRouteChannels keeps only channels explicitly marked for
-// managed mock load tests.
-func FilterMockLoadTestRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
-	return filterRouteChannelsByMockSetting(entries, true)
-}
-
-// FilterRealRouteChannels excludes managed mock channels from normal traffic.
-// Together with FilterMockLoadTestRouteChannels, this allows both channel types
-// to share one billing route without either mode leaking into the other.
+// FilterRealRouteChannels excludes channels reserved for managed mock tests
+// from normal traffic. Mock requests never enter channel routing.
 func FilterRealRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
 	return filterRouteChannelsByMockSetting(entries, false)
 }
