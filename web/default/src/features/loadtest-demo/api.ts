@@ -240,7 +240,6 @@ export type LoadTestAgentRunStatus =
 
 export type LoadTestMockChannel = {
   slot: number
-  max_rps: number
   failure_rate: number
   failure_status: number
   latency_ms: number

@@ -27,12 +27,10 @@ type requestConfig struct {
 	errorRate   float64
 	errorStatus int
 	latency     time.Duration
-	maxRPS      int
 }
 
 type mockChannelConfig struct {
 	Slot          int     `json:"slot"`
-	MaxRPS        int     `json:"max_rps"`
 	FailureRate   float64 `json:"failure_rate"`
 	FailureStatus int     `json:"failure_status"`
 	LatencyMS     int     `json:"latency_ms"`
@@ -44,7 +42,6 @@ const (
 	mockLatencyMSHeader     = "X-Alltoken-Mock-Latency-Ms"
 	mockChannelsHeader      = "X-Alltoken-Mock-Channels"
 	maxMockLatencyMS        = 120000
-	maxMockChannelRPS       = 1_000_000
 	maxMockChannelsBytes    = 4096
 )
 
@@ -68,15 +65,12 @@ type channelState struct {
 	disabled  bool
 	remaining int64
 	consumed  uint64
-	windowAt  time.Time
-	windowRPS int
 }
 
 var (
 	activeRequests atomic.Int64
 	requests       atomic.Uint64
 	errorsTotal    atomic.Uint64
-	capacityErrors atomic.Uint64
 	durationNanos  atomic.Uint64
 )
 
@@ -158,12 +152,6 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 		http.Error(w, `{"error":{"message":"invalid request"}}`, http.StatusBadRequest)
 		return
 	}
-	if !state.allowRequest(requestCfg.maxRPS, time.Now()) {
-		errorsTotal.Add(1)
-		capacityErrors.Add(1)
-		writeChannelError(w, state, "mock channel capacity exceeded", "mock_capacity_exceeded", http.StatusTooManyRequests)
-		return
-	}
 	if requestCfg.latency > 0 {
 		time.Sleep(requestCfg.latency)
 	}
@@ -208,7 +196,7 @@ func loadRequestConfig(header http.Header, cfg config, channelSlot int) (request
 		}
 		seenSlots := make(map[int]struct{}, 3)
 		for _, channel := range channels {
-			if channel.Slot < 1 || channel.Slot > 3 || channel.MaxRPS < 1 || channel.MaxRPS > maxMockChannelRPS ||
+			if channel.Slot < 1 || channel.Slot > 3 ||
 				math.IsNaN(channel.FailureRate) || math.IsInf(channel.FailureRate, 0) || channel.FailureRate < 0 || channel.FailureRate > 1 ||
 				channel.LatencyMS < 0 || channel.LatencyMS > maxMockLatencyMS || !allowedFailureStatus(channel.FailureStatus) {
 				return requestConfig{}, fmt.Errorf("%s contains an invalid channel configuration", mockChannelsHeader)
@@ -218,14 +206,10 @@ func loadRequestConfig(header http.Header, cfg config, channelSlot int) (request
 			}
 			seenSlots[channel.Slot] = struct{}{}
 			if channel.Slot == channelSlot {
-				requestCfg.maxRPS = channel.MaxRPS
 				requestCfg.errorRate = channel.FailureRate
 				requestCfg.errorStatus = channel.FailureStatus
 				requestCfg.latency = time.Duration(channel.LatencyMS) * time.Millisecond
 			}
-		}
-		if requestCfg.maxRPS == 0 {
-			return requestConfig{}, fmt.Errorf("%s has no configuration for channel slot %d", mockChannelsHeader, channelSlot)
 		}
 		return requestCfg, nil
 	}
@@ -251,23 +235,6 @@ func loadRequestConfig(header http.Header, cfg config, channelSlot int) (request
 		requestCfg.latency = time.Duration(parsed) * time.Millisecond
 	}
 	return requestCfg, nil
-}
-
-func (s *channelState) allowRequest(maxRPS int, now time.Time) bool {
-	if maxRPS <= 0 {
-		return true
-	}
-	s.Lock()
-	defer s.Unlock()
-	if s.windowAt.IsZero() || now.Sub(s.windowAt) >= time.Second {
-		s.windowAt = now
-		s.windowRPS = 0
-	}
-	if s.windowRPS >= maxRPS {
-		return false
-	}
-	s.windowRPS++
-	return true
 }
 
 func allowedFailureStatus(status int) bool {
@@ -399,8 +366,6 @@ func metrics(w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_requests_total counter\nmock_openai_requests_total %d\n", requestCount)
 	_, _ = fmt.Fprintf(w, "# HELP mock_openai_errors_total Injected or validation errors.\n")
 	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_errors_total counter\nmock_openai_errors_total %d\n", errorsTotal.Load())
-	_, _ = fmt.Fprintf(w, "# HELP mock_openai_capacity_rejections_total Requests rejected by the configured per-channel RPS limit.\n")
-	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_capacity_rejections_total counter\nmock_openai_capacity_rejections_total %d\n", capacityErrors.Load())
 	_, _ = fmt.Fprintf(w, "# HELP mock_openai_request_duration_seconds Total request handling duration.\n")
 	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_request_duration_seconds summary\nmock_openai_request_duration_seconds_sum %.6f\nmock_openai_request_duration_seconds_count %d\n", durationSeconds, requestCount)
 }

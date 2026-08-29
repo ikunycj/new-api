@@ -6351,10 +6351,7 @@
     "Mixed distribution": "Mixed distribution",
     "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Randomly distribute injected failures across 429, 500, 502, 503, and 504.",
     "Fallback channel profiles": "Fallback channel profiles",
-    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.",
     "Fallback channel {{index}}": "Fallback channel {{index}}",
-    "Mock channel capacity or latency is invalid": "Mock channel capacity or latency is invalid",
-    "Configured upper bound: {{rps}} RPS": "Configured upper bound: {{rps}} RPS",
     "Circuit window (seconds)": "Circuit window (seconds)",
     "Circuit protection": "Circuit protection",
     "Tune when a channel is temporarily removed after repeated failures.": "Tune when a channel is temporarily removed after repeated failures.",
@@ -6367,6 +6364,9 @@
     "Select a server or local agent to see its capacity here.": "Select a server or local agent to see its capacity here.",
     "System maximum": "System maximum",
     "Effective maximum": "Effective maximum",
-    "concurrent requests": "concurrent requests"
+    "concurrent requests": "concurrent requests",
+    "Channels are attempted in order; each channel can simulate failures and latency.": "Channels are attempted in order; each channel can simulate failures and latency.",
+    "No capacity limit": "No capacity limit",
+    "Mock channel latency is invalid": "Mock channel latency is invalid"
   }
 }

@@ -6351,10 +6351,7 @@
     "Mixed distribution": "Phân phối hỗn hợp",
     "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Phân bổ ngẫu nhiên các lỗi được chèn vào các mã 429, 500, 502, 503 và 504.",
     "Fallback channel profiles": "Cấu hình kênh dự phòng",
-    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Các kênh được thử theo thứ tự. Yêu cầu vượt quá công suất của một kênh sẽ chuyển sang kênh tiếp theo.",
     "Fallback channel {{index}}": "Kênh dự phòng {{index}}",
-    "Mock channel capacity or latency is invalid": "Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.",
-    "Configured upper bound: {{rps}} RPS": "Giới hạn đã cấu hình: {{rps}} RPS",
     "Circuit window (seconds)": "Cửa sổ ngắt mạch (giây)",
     "Circuit protection": "Bảo vệ ngắt mạch",
     "Tune when a channel is temporarily removed after repeated failures.": "Điều chỉnh thời điểm tạm loại kênh sau nhiều lần thất bại.",
@@ -6367,6 +6364,9 @@
     "Select a server or local agent to see its capacity here.": "Chọn agent máy chủ hoặc cục bộ để xem giới hạn công suất tại đây.",
     "System maximum": "Giới hạn hệ thống",
     "Effective maximum": "Giới hạn hiệu dụng",
-    "concurrent requests": "yêu cầu đồng thời"
+    "concurrent requests": "yêu cầu đồng thời",
+    "Channels are attempted in order; each channel can simulate failures and latency.": "Các kênh được thử theo thứ tự; mỗi kênh có thể mô phỏng lỗi và độ trễ.",
+    "No capacity limit": "Không giới hạn công suất",
+    "Mock channel latency is invalid": "Độ trễ của kênh mô phỏng không hợp lệ."
   }
 }

@@ -111,21 +111,18 @@ const MOCK_FAILURE_STATUS_MIXED = 0
 const DEFAULT_MOCK_CHANNELS: LoadTestMockChannel[] = [
   {
     slot: 1,
-    max_rps: 20,
     failure_rate: 0.06,
     failure_status: 503,
     latency_ms: 0,
   },
   {
     slot: 2,
-    max_rps: 20,
     failure_rate: 0.06,
     failure_status: 503,
     latency_ms: 0,
   },
   {
     slot: 3,
-    max_rps: 20,
     failure_rate: 0.06,
     failure_status: 503,
     latency_ms: 0,
@@ -307,14 +304,12 @@ export function AgentPanel(props: AgentPanelProps) {
       useMockChannels &&
       mockChannels.some(
         (channel) =>
-          !Number.isInteger(channel.max_rps) ||
-          channel.max_rps < 1 ||
           !Number.isInteger(channel.latency_ms) ||
           channel.latency_ms < 0 ||
           channel.latency_ms > 120000
       )
     ) {
-      toast.error(t('Mock channel capacity or latency is invalid'))
+      toast.error(t('Mock channel latency is invalid'))
       return
     }
     setStarting(true)
@@ -438,11 +433,6 @@ export function AgentPanel(props: AgentPanelProps) {
   useEffect(() => {
     onSelectedAgentChange?.(selectedAgent ?? null)
   }, [onSelectedAgentChange, selectedAgent])
-  const mockCapacityRPS = mockChannels.reduce(
-    (total, channel) => total + channel.max_rps,
-    0
-  )
-
   return (
     <>
       <Card>
@@ -522,16 +512,9 @@ export function AgentPanel(props: AgentPanelProps) {
                         {t('Fallback channel profiles')}
                       </p>
                       <p className='text-muted-foreground mt-0.5 text-xs'>
-                        {t(
-                          'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.'
-                        )}
+                        {t('Channels are attempted in order; each channel can simulate failures and latency.')}
                       </p>
                     </div>
-                    <span className='text-sm font-medium tabular-nums'>
-                      {t('Configured upper bound: {{rps}} RPS', {
-                        rps: mockCapacityRPS,
-                      })}
-                    </span>
                   </div>
                   <div className='divide-y'>
                     {mockChannels.map((channel) => {
@@ -542,29 +525,14 @@ export function AgentPanel(props: AgentPanelProps) {
                           key={channel.slot}
                         >
                           <div className='space-y-2'>
-                            <Label htmlFor={`${prefix}-max-rps`}>
+                            <Label>
                               {t('Fallback channel {{index}}', {
                                 index: channel.slot,
                               })}
                             </Label>
-                            <div className='relative'>
-                              <Input
-                                className='pr-12'
-                                id={`${prefix}-max-rps`}
-                                max={1000000}
-                                min={1}
-                                onChange={(event) =>
-                                  updateMockChannel(channel.slot, {
-                                    max_rps: Number(event.target.value),
-                                  })
-                                }
-                                type='number'
-                                value={channel.max_rps}
-                              />
-                              <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs'>
-                                RPS
-                              </span>
-                            </div>
+                            <p className='text-muted-foreground text-sm'>
+                              {t('No capacity limit')}
+                            </p>
                           </div>
                           <div className='space-y-2'>
                             <div className='flex items-center justify-between gap-3'>
@@ -808,7 +776,7 @@ export function AgentPanel(props: AgentPanelProps) {
                                 <div className='text-muted-foreground space-y-0.5 text-xs tabular-nums'>
                                   {run.mock_channels.map((channel) => (
                                     <p key={channel.slot}>
-                                      #{channel.slot} · {channel.max_rps} RPS ·{' '}
+                                      #{channel.slot} ·{' '}
                                       {Math.round(channel.failure_rate * 100)}%
                                       ·{' '}
                                       {channel.failure_status ===

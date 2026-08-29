@@ -26,7 +26,6 @@ const (
 	loadTestMaxErrorKinds      = 100
 	loadTestMaxMockLatencyMS   = 120000
 	loadTestMockChannelCount   = 3
-	loadTestMaxMockChannelRPS  = 1_000_000
 	loadTestMockAgentVersion   = "0.3.0"
 )
 
@@ -509,9 +508,6 @@ func validateLoadTestMockSettings(agent *model.LoadTestAgent, request createLoad
 				return errors.New("mock channel slots must be unique")
 			}
 			seenSlots[channel.Slot] = struct{}{}
-			if channel.MaxRPS < 1 || channel.MaxRPS > loadTestMaxMockChannelRPS {
-				return fmt.Errorf("mock channel max RPS must be between 1 and %d", loadTestMaxMockChannelRPS)
-			}
 			if math.IsNaN(channel.FailureRate) || math.IsInf(channel.FailureRate, 0) || channel.FailureRate < 0 || channel.FailureRate > 1 {
 				return errors.New("mock channel failure rate must be between 0 and 1")
 			}

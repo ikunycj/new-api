@@ -6351,10 +6351,7 @@
     "Mixed distribution": "混合分布",
     "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "在 429、500、502、503 和 504 之间随机分布注入的失败。",
     "Fallback channel profiles": "降级渠道配置",
-    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "渠道将按顺序尝试。超过当前渠道容量的请求会降级到下一个渠道。",
     "Fallback channel {{index}}": "降级渠道 {{index}}",
-    "Mock channel capacity or latency is invalid": "Mock 渠道容量或延迟配置无效",
-    "Configured upper bound: {{rps}} RPS": "配置上限：{{rps}} RPS",
     "Circuit window (seconds)": "熔断统计窗口（秒）",
     "Circuit protection": "熔断保护",
     "Tune when a channel is temporarily removed after repeated failures.": "调整渠道在连续失败后暂时下线的触发条件。",
@@ -6367,6 +6364,9 @@
     "Select a server or local agent to see its capacity here.": "选择服务器或本地 Agent 后，这里会显示它的容量限制。",
     "System maximum": "系统上限",
     "Effective maximum": "当前有效上限",
-    "concurrent requests": "个并发请求"
+    "concurrent requests": "个并发请求",
+    "Channels are attempted in order; each channel can simulate failures and latency.": "渠道将按顺序尝试；每个渠道可以模拟失败和延迟。",
+    "No capacity limit": "不限制容量",
+    "Mock channel latency is invalid": "Mock 渠道延迟配置无效"
   }
 }

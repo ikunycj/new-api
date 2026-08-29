@@ -23,7 +23,6 @@ const (
 
 type LoadTestMockChannel struct {
 	Slot          int     `json:"slot"`
-	MaxRPS        int     `json:"max_rps"`
 	FailureRate   float64 `json:"failure_rate"`
 	FailureStatus int     `json:"failure_status"`
 	LatencyMS     int     `json:"latency_ms"`

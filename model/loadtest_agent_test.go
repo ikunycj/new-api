@@ -46,9 +46,9 @@ func TestLoadTestAgentPairingIsOneTimeAndScopedToOwner(t *testing.T) {
 func TestLoadTestRunClaimsOnceAndPreservesTerminalResult(t *testing.T) {
 	setupLoadTestAgentDB(t)
 	mockChannels := []LoadTestMockChannel{
-		{Slot: 1, MaxRPS: 10, FailureRate: 0.1, FailureStatus: 503, LatencyMS: 50},
-		{Slot: 2, MaxRPS: 20, FailureRate: 0.2, FailureStatus: 0, LatencyMS: 100},
-		{Slot: 3, MaxRPS: 30, FailureRate: 0, FailureStatus: 429, LatencyMS: 0},
+		{Slot: 1, FailureRate: 0.1, FailureStatus: 503, LatencyMS: 50},
+		{Slot: 2, FailureRate: 0.2, FailureStatus: 0, LatencyMS: 100},
+		{Slot: 3, FailureRate: 0, FailureStatus: 429, LatencyMS: 0},
 	}
 	mockChannelsJSON, err := EncodeLoadTestMockChannels(mockChannels)
 	require.NoError(t, err)

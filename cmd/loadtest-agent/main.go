@@ -72,7 +72,6 @@ type loadTestTask struct {
 
 type loadTestMockChannel struct {
 	Slot          int     `json:"slot"`
-	MaxRPS        int     `json:"max_rps"`
 	FailureRate   float64 `json:"failure_rate"`
 	FailureStatus int     `json:"failure_status"`
 	LatencyMS     int     `json:"latency_ms"`
@@ -656,7 +655,7 @@ func validateTask(task loadTestTask) error {
 			}
 			seenSlots := make(map[int]struct{}, 3)
 			for _, channel := range task.MockChannels {
-				if channel.Slot < 1 || channel.Slot > 3 || channel.MaxRPS < 1 || channel.MaxRPS > 1_000_000 ||
+				if channel.Slot < 1 || channel.Slot > 3 ||
 					math.IsNaN(channel.FailureRate) || math.IsInf(channel.FailureRate, 0) || channel.FailureRate < 0 || channel.FailureRate > 1 ||
 					channel.LatencyMS < 0 || channel.LatencyMS > 120000 {
 					return errors.New("task mock channel settings are invalid")

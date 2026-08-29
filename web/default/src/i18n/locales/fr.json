@@ -6351,10 +6351,7 @@
     "Mixed distribution": "Distribution mixte",
     "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Répartit aléatoirement les échecs injectés entre 429, 500, 502, 503 et 504.",
     "Fallback channel profiles": "Profils des canaux de secours",
-    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Les canaux sont essayés dans l’ordre. Les requêtes dépassant la capacité d’un canal passent au suivant.",
     "Fallback channel {{index}}": "Canal de secours {{index}}",
-    "Mock channel capacity or latency is invalid": "La capacité ou la latence du canal simulé est invalide.",
-    "Configured upper bound: {{rps}} RPS": "Limite configurée : {{rps}} RPS",
     "Circuit window (seconds)": "Fenêtre du circuit (secondes)",
     "Circuit protection": "Protection du circuit",
     "Tune when a channel is temporarily removed after repeated failures.": "Réglez la mise à l’écart temporaire d’un canal après plusieurs échecs.",
@@ -6367,6 +6364,9 @@
     "Select a server or local agent to see its capacity here.": "Sélectionnez un agent serveur ou local pour voir sa capacité ici.",
     "System maximum": "Limite système",
     "Effective maximum": "Limite effective",
-    "concurrent requests": "requêtes simultanées"
+    "concurrent requests": "requêtes simultanées",
+    "Channels are attempted in order; each channel can simulate failures and latency.": "Les canaux sont essayés dans l’ordre ; chacun peut simuler des échecs et une latence.",
+    "No capacity limit": "Aucune limite de capacité",
+    "Mock channel latency is invalid": "La latence du canal simulé est invalide."
   }
 }

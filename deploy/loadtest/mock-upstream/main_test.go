@@ -65,44 +65,28 @@ func TestLoadRequestConfigRejectsUnsafeValues(t *testing.T) {
 func TestLoadRequestConfigSelectsChannelProfile(t *testing.T) {
 	header := make(http.Header)
 	header.Set(mockChannelsHeader, `[
-  {"slot":1,"max_rps":10,"failure_rate":0.1,"failure_status":503,"latency_ms":50},
-  {"slot":2,"max_rps":20,"failure_rate":0.2,"failure_status":0,"latency_ms":100},
-  {"slot":3,"max_rps":30,"failure_rate":0,"failure_status":429,"latency_ms":0}
+  {"slot":1,"failure_rate":0.1,"failure_status":503,"latency_ms":50},
+  {"slot":2,"failure_rate":0.2,"failure_status":0,"latency_ms":100},
+  {"slot":3,"failure_rate":0,"failure_status":429,"latency_ms":0}
 ]`)
 
 	got, err := loadRequestConfig(header, config{}, 2)
 	require.NoError(t, err)
-	assert.Equal(t, 20, got.maxRPS)
 	assert.Equal(t, 0.2, got.errorRate)
 	assert.Equal(t, 0, got.errorStatus)
 	assert.Equal(t, 100*time.Millisecond, got.latency)
 }
 
-func TestChannelCapacityLimitsRequestsPerWindow(t *testing.T) {
-	state := &channelState{}
-	now := time.Unix(100, 0)
-	assert.True(t, state.allowRequest(2, now))
-	assert.True(t, state.allowRequest(2, now.Add(100*time.Millisecond)))
-	assert.False(t, state.allowRequest(2, now.Add(200*time.Millisecond)))
-	assert.True(t, state.allowRequest(2, now.Add(time.Second)))
-}
-
-func TestHandleChatRejectsRequestsAboveConfiguredChannelCapacity(t *testing.T) {
+func TestHandleChatIgnoresLegacyChannelCapacity(t *testing.T) {
 	profiles := `[{"slot":1,"max_rps":1,"failure_rate":0,"failure_status":503,"latency_ms":0},{"slot":2,"max_rps":1,"failure_rate":0,"failure_status":503,"latency_ms":0},{"slot":3,"max_rps":1,"failure_rate":0,"failure_status":503,"latency_ms":0}]`
 	state := &channelState{id: 1, name: "mock-a", remaining: 1000}
-	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-test","stream":false}`))
-	firstRequest.Header.Set(mockChannelsHeader, profiles)
-	firstRecorder := httptest.NewRecorder()
-	handleChat(firstRecorder, firstRequest, config{}, state)
-	require.Equal(t, http.StatusOK, firstRecorder.Code)
-
-	secondRequest := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-test","stream":false}`))
-	secondRequest.Header.Set(mockChannelsHeader, profiles)
-	secondRecorder := httptest.NewRecorder()
-	handleChat(secondRecorder, secondRequest, config{}, state)
-
-	assert.Equal(t, http.StatusTooManyRequests, secondRecorder.Code)
-	assert.Contains(t, secondRecorder.Body.String(), `"code":"mock_capacity_exceeded"`)
+	for i := 0; i < 2; i++ {
+		request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-test","stream":false}`))
+		request.Header.Set(mockChannelsHeader, profiles)
+		recorder := httptest.NewRecorder()
+		handleChat(recorder, request, config{}, state)
+		assert.Equal(t, http.StatusOK, recorder.Code)
+	}
 }
 
 func TestShouldInjectFailureHonorsBoundary(t *testing.T) {

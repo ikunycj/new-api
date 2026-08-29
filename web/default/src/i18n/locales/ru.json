@@ -6351,10 +6351,7 @@
     "Mixed distribution": "Смешанное распределение",
     "Randomly distribute injected failures across 429, 500, 502, 503, and 504.": "Случайно распределяет внедрённые ошибки между кодами 429, 500, 502, 503 и 504.",
     "Fallback channel profiles": "Профили резервных каналов",
-    "Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.": "Каналы используются по порядку. Запросы сверх пропускной способности канала переводятся на следующий.",
     "Fallback channel {{index}}": "Резервный канал {{index}}",
-    "Mock channel capacity or latency is invalid": "Недопустимая пропускная способность или задержка Mock-канала.",
-    "Configured upper bound: {{rps}} RPS": "Заданный предел: {{rps}} RPS",
     "Circuit window (seconds)": "Окно автомата (секунды)",
     "Circuit protection": "Защита автомата",
     "Tune when a channel is temporarily removed after repeated failures.": "Настройте временное исключение канала после повторяющихся сбоев.",
@@ -6367,6 +6364,9 @@
     "Select a server or local agent to see its capacity here.": "Выберите серверный или локальный агент, чтобы увидеть его ограничения.",
     "System maximum": "Системный предел",
     "Effective maximum": "Фактический предел",
-    "concurrent requests": "одновременных запросов"
+    "concurrent requests": "одновременных запросов",
+    "Channels are attempted in order; each channel can simulate failures and latency.": "Каналы проверяются по порядку; для каждого можно смоделировать ошибки и задержку.",
+    "No capacity limit": "Без ограничения ёмкости",
+    "Mock channel latency is invalid": "Недопустимая задержка Mock-канала."
   }
 }

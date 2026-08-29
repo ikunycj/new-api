@@ -5,6 +5,10 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      'Channels are attempted in order; each channel can simulate failures and latency.',
+    'Mock channel latency is invalid': 'Mock channel latency is invalid',
+    'No capacity limit': 'No capacity limit',
     'Local load-test agent': 'Local load-test agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       'Run high-volume tests outside the browser and keep results linked to this account.',
@@ -132,6 +136,10 @@ const newKeys = {
     'User charge': 'User charge',
   },
   zh: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      '渠道将按顺序尝试；每个渠道可以模拟失败和延迟。',
+    'Mock channel latency is invalid': 'Mock 渠道延迟配置无效',
+    'No capacity limit': '不限制容量',
     'Local load-test agent': '本地压测 Agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
       '在浏览器外执行大规模压测，并将结果保存到当前账户。',
@@ -705,6 +713,10 @@ const newKeys = {
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      '頻道將按順序嘗試；每個頻道可以模擬失敗和延遲。',
+    'Mock channel latency is invalid': 'Mock 頻道延遲設定無效',
+    'No capacity limit': '不限制容量',
     'User Type': '使用者類型',
     ToB: 'ToB',
     ToC: 'ToC',
@@ -912,6 +924,10 @@ const groupPricingWorkspaceKeys = {
       '每秒請求數必須介於 {{min}} 到 {{max}} 之間。',
   },
   fr: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      'Les canaux sont essayés dans l’ordre ; chacun peut simuler des échecs et une latence.',
+    'Mock channel latency is invalid': 'La latence du canal simulé est invalide.',
+    'No capacity limit': 'Aucune limite de capacité',
     'Current billing group ratio: {{ratio}}x':
       'Ratio actuel du groupe de facturation : {{ratio}}x',
     Enforce: 'Appliquer',
@@ -960,6 +976,10 @@ const groupPricingWorkspaceKeys = {
       'Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.',
   },
   ja: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      'チャネルは順番に試行され、それぞれで失敗と遅延をシミュレートできます。',
+    'Mock channel latency is invalid': 'Mock チャネルの遅延が無効です。',
+    'No capacity limit': '容量制限なし',
     'Current billing group ratio: {{ratio}}x':
       '現在の課金グループ倍率：{{ratio}}x',
     Enforce: '強制',
@@ -1008,6 +1028,10 @@ const groupPricingWorkspaceKeys = {
       '1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。',
   },
   ru: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      'Каналы проверяются по порядку; для каждого можно смоделировать ошибки и задержку.',
+    'Mock channel latency is invalid': 'Недопустимая задержка Mock-канала.',
+    'No capacity limit': 'Без ограничения ёмкости',
     'Current billing group ratio: {{ratio}}x':
       'Текущий коэффициент группы биллинга: {{ratio}}x',
     Enforce: 'Применять',
@@ -1056,6 +1080,10 @@ const groupPricingWorkspaceKeys = {
       'Число запросов в секунду должно быть от {{min}} до {{max}}.',
   },
   vi: {
+    'Channels are attempted in order; each channel can simulate failures and latency.':
+      'Các kênh được thử theo thứ tự; mỗi kênh có thể mô phỏng lỗi và độ trễ.',
+    'Mock channel latency is invalid': 'Độ trễ của kênh mô phỏng không hợp lệ.',
+    'No capacity limit': 'Không giới hạn công suất',
     'Current billing group ratio: {{ratio}}x':
       'Hệ số nhóm thanh toán hiện tại: {{ratio}}x',
     Enforce: 'Bắt buộc',
@@ -1470,67 +1498,31 @@ for (const [locale, translations] of Object.entries(mockChannelSettingKeys)) {
 const mockChannelProfileKeys = {
   en: {
     'Fallback channel profiles': 'Fallback channel profiles',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.',
     'Fallback channel {{index}}': 'Fallback channel {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Mock channel capacity or latency is invalid',
-    'Configured upper bound: {{rps}} RPS':
-      'Configured upper bound: {{rps}} RPS',
   },
   zh: {
     'Fallback channel profiles': '降级渠道配置',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      '渠道将按顺序尝试。超过当前渠道容量的请求会降级到下一个渠道。',
     'Fallback channel {{index}}': '降级渠道 {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Mock 渠道容量或延迟配置无效',
-    'Configured upper bound: {{rps}} RPS': '配置上限：{{rps}} RPS',
   },
   'zh-TW': {
     'Fallback channel profiles': '降級渠道設定',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      '渠道會依序嘗試。超過目前渠道容量的請求會降級到下一個渠道。',
     'Fallback channel {{index}}': '降級渠道 {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Mock 渠道容量或延遲設定無效',
-    'Configured upper bound: {{rps}} RPS': '設定上限：{{rps}} RPS',
   },
   fr: {
     'Fallback channel profiles': 'Profils des canaux de secours',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      'Les canaux sont essayés dans l’ordre. Les requêtes dépassant la capacité d’un canal passent au suivant.',
     'Fallback channel {{index}}': 'Canal de secours {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'La capacité ou la latence du canal simulé est invalide.',
-    'Configured upper bound: {{rps}} RPS': 'Limite configurée : {{rps}} RPS',
   },
   ja: {
     'Fallback channel profiles': 'フォールバックチャネル設定',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      'チャネルは順番に試行されます。容量を超えたリクエストは次のチャネルに切り替わります。',
     'Fallback channel {{index}}': 'フォールバックチャネル {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Mock チャネルの容量または遅延が無効です。',
-    'Configured upper bound: {{rps}} RPS': '設定上限：{{rps}} RPS',
   },
   ru: {
     'Fallback channel profiles': 'Профили резервных каналов',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      'Каналы используются по порядку. Запросы сверх пропускной способности канала переводятся на следующий.',
     'Fallback channel {{index}}': 'Резервный канал {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Недопустимая пропускная способность или задержка Mock-канала.',
-    'Configured upper bound: {{rps}} RPS': 'Заданный предел: {{rps}} RPS',
   },
   vi: {
     'Fallback channel profiles': 'Cấu hình kênh dự phòng',
-    'Channels are attempted in order. Requests above a channel capacity are downgraded to the next channel.':
-      'Các kênh được thử theo thứ tự. Yêu cầu vượt quá công suất của một kênh sẽ chuyển sang kênh tiếp theo.',
     'Fallback channel {{index}}': 'Kênh dự phòng {{index}}',
-    'Mock channel capacity or latency is invalid':
-      'Công suất hoặc độ trễ của kênh mô phỏng không hợp lệ.',
-    'Configured upper bound: {{rps}} RPS': 'Giới hạn đã cấu hình: {{rps}} RPS',
   },
 }
 
