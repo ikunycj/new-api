@@ -149,6 +149,15 @@ const newKeys = {
     Tokens: 'Tokens',
     'Upstream endpoints': 'Upstream endpoints',
     'Usage breakdown': 'Usage breakdown',
+    'User revenue': 'User revenue',
+    Blocked: 'Blocked',
+    'Profit difference': 'Profit difference',
+    'Profit protection decision': 'Profit protection decision',
+    'Successful cost': 'Successful cost',
+    'Retry cost': 'Retry cost',
+    'Failed partial cost': 'Failed partial cost',
+    'Projected profit margin': 'Projected profit margin',
+    'Projected channel cost': 'Projected channel cost',
     'User charge': 'User charge',
   },
   zh: {
@@ -279,6 +288,15 @@ const newKeys = {
     Tokens: 'Token 数',
     'Upstream endpoints': '上游端点',
     'Usage breakdown': '使用明细',
+    'User revenue': '用户收入',
+    Blocked: '已阻止',
+    'Profit difference': '利润差额',
+    'Profit protection decision': '利润保护决策',
+    'Successful cost': '成功请求成本',
+    'Retry cost': '重试成本',
+    'Failed partial cost': '失败部分成本',
+    'Projected profit margin': '预计利润率',
+    'Projected channel cost': '预计渠道成本',
     'User charge': '用户扣费',
   },
   fr: {
@@ -391,6 +409,15 @@ const newKeys = {
     Tokens: 'Tokens',
     'Upstream endpoints': 'Points de sortie',
     'Usage breakdown': 'Répartition de l’utilisation',
+    'User revenue': 'Revenu utilisateur',
+    Blocked: 'Bloqué',
+    'Profit difference': 'Écart de profit',
+    'Profit protection decision': 'Décision de protection du profit',
+    'Successful cost': 'Coût de la requête réussie',
+    'Retry cost': 'Coût des nouvelles tentatives',
+    'Failed partial cost': 'Coût partiel des échecs',
+    'Projected profit margin': 'Marge bénéficiaire projetée',
+    'Projected channel cost': 'Coût de canal projeté',
     'User charge': 'Facturation utilisateur',
   },
   ja: {
@@ -503,6 +530,15 @@ const newKeys = {
     Tokens: 'トークン',
     'Upstream endpoints': '上流エンドポイント',
     'Usage breakdown': '利用内訳',
+    'User revenue': 'ユーザー収益',
+    Blocked: 'ブロック',
+    'Profit difference': '利益差額',
+    'Profit protection decision': '利益保護の判定',
+    'Successful cost': '成功リクエストのコスト',
+    'Retry cost': '再試行コスト',
+    'Failed partial cost': '失敗部分コスト',
+    'Projected profit margin': '予測利益率',
+    'Projected channel cost': '予測チャネルコスト',
     'User charge': 'ユーザー請求額',
   },
   ru: {
@@ -615,6 +651,15 @@ const newKeys = {
     Tokens: 'Токены',
     'Upstream endpoints': 'Внешние точки',
     'Usage breakdown': 'Разбивка использования',
+    'User revenue': 'Доход от пользователя',
+    Blocked: 'Заблокировано',
+    'Profit difference': 'Разница прибыли',
+    'Profit protection decision': 'Решение по защите прибыли',
+    'Successful cost': 'Стоимость успешного запроса',
+    'Retry cost': 'Стоимость повторной попытки',
+    'Failed partial cost': 'Частичная стоимость ошибки',
+    'Projected profit margin': 'Прогнозируемая маржа',
+    'Projected channel cost': 'Прогнозируемая стоимость канала',
     'User charge': 'Списание с пользователя',
   },
   vi: {
@@ -726,6 +771,15 @@ const newKeys = {
     Tokens: 'Token',
     'Upstream endpoints': 'Điểm cuối upstream',
     'Usage breakdown': 'Phân tích sử dụng',
+    'User revenue': 'Doanh thu từ người dùng',
+    Blocked: 'Đã chặn',
+    'Profit difference': 'Chênh lệch lợi nhuận',
+    'Profit protection decision': 'Quyết định bảo vệ lợi nhuận',
+    'Successful cost': 'Chi phí yêu cầu thành công',
+    'Retry cost': 'Chi phí thử lại',
+    'Failed partial cost': 'Chi phí một phần do lỗi',
+    'Projected profit margin': 'Biên lợi nhuận dự kiến',
+    'Projected channel cost': 'Chi phí kênh dự kiến',
     'User charge': 'Phí người dùng',
   },
   'zh-TW': {
@@ -804,6 +858,15 @@ const newKeys = {
     Tokens: 'Token 數',
     'Upstream endpoints': '上游端點',
     'Usage breakdown': '使用明細',
+    'User revenue': '使用者收入',
+    Blocked: '已阻止',
+    'Profit difference': '利潤差額',
+    'Profit protection decision': '利潤保護決策',
+    'Successful cost': '成功請求成本',
+    'Retry cost': '重試成本',
+    'Failed partial cost': '失敗部分成本',
+    'Projected profit margin': '預計利潤率',
+    'Projected channel cost': '預計渠道成本',
     'User charge': '使用者扣費',
   },
 }
@@ -942,7 +1005,8 @@ const groupPricingWorkspaceKeys = {
   fr: {
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Les canaux sont essayés dans l’ordre ; chacun peut simuler des échecs et une latence.',
-    'Mock channel latency is invalid': 'La latence du canal simulé est invalide.',
+    'Mock channel latency is invalid':
+      'La latence du canal simulé est invalide.',
     'No capacity limit': 'Aucune limite de capacité',
     'Current billing group ratio: {{ratio}}x':
       'Ratio actuel du groupe de facturation : {{ratio}}x',
@@ -1641,7 +1705,8 @@ const sharedAgentKeys = {
     'Expected workers': 'Expected workers',
     'Use one paired Agent across multiple machines; the total load is split between workers.':
       'Use one paired Agent across multiple machines; the total load is split between workers.',
-    'Run the load from one paired Agent.': 'Run the load from one paired Agent.',
+    'Run the load from one paired Agent.':
+      'Run the load from one paired Agent.',
     'All RPS and concurrency values on this page are the total across workers.':
       'All RPS and concurrency values on this page are the total across workers.',
     'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
@@ -1675,14 +1740,16 @@ const sharedAgentKeys = {
     'Expected workers': 'Workers attendus',
     'Use one paired Agent across multiple machines; the total load is split between workers.':
       'Utilisez un Agent appairé sur plusieurs machines ; la charge totale est répartie entre les workers.',
-    'Run the load from one paired Agent.': 'Lancer la charge depuis un Agent appairé.',
+    'Run the load from one paired Agent.':
+      'Lancer la charge depuis un Agent appairé.',
     'All RPS and concurrency values on this page are the total across workers.':
       'Les valeurs RPS et de concurrence indiquées sont le total de tous les workers.',
     'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
       'Capacité agrégée estimée : {{rps}} RPS · {{concurrency}} requêtes simultanées',
     'Enter 2-256 workers to estimate aggregate capacity.':
       'Saisissez 2 à 256 workers pour estimer la capacité agrégée.',
-    'Shared mode requires 2-256 workers': 'Le mode partagé nécessite 2 à 256 workers',
+    'Shared mode requires 2-256 workers':
+      'Le mode partagé nécessite 2 à 256 workers',
     'Workers joined': 'Workers connectés',
   },
   ja: {
@@ -1692,14 +1759,16 @@ const sharedAgentKeys = {
     'Expected workers': '想定 Worker 数',
     'Use one paired Agent across multiple machines; the total load is split between workers.':
       '1 つのペア済み Agent を複数マシンで使い、総負荷を Worker 間で分割します。',
-    'Run the load from one paired Agent.': '1 台のペア済み Agent から負荷を生成します。',
+    'Run the load from one paired Agent.':
+      '1 台のペア済み Agent から負荷を生成します。',
     'All RPS and concurrency values on this page are the total across workers.':
       'このページの RPS と同時実行数は全 Worker の合計です。',
     'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
       '推定合計容量：{{rps}} RPS · 同時実行 {{concurrency}} 件',
     'Enter 2-256 workers to estimate aggregate capacity.':
       '合計容量を推定するには 2〜256 の Worker を入力してください。',
-    'Shared mode requires 2-256 workers': '共有モードでは 2〜256 Worker が必要です',
+    'Shared mode requires 2-256 workers':
+      '共有モードでは 2〜256 Worker が必要です',
     'Workers joined': '参加 Worker',
   },
   ru: {
@@ -1709,14 +1778,16 @@ const sharedAgentKeys = {
     'Expected workers': 'Ожидаемое число workers',
     'Use one paired Agent across multiple machines; the total load is split between workers.':
       'Используйте одного сопряжённого агента на нескольких машинах; общая нагрузка распределяется между workers.',
-    'Run the load from one paired Agent.': 'Запускать нагрузку с одного сопряжённого агента.',
+    'Run the load from one paired Agent.':
+      'Запускать нагрузку с одного сопряжённого агента.',
     'All RPS and concurrency values on this page are the total across workers.':
       'Значения RPS и параллельности на этой странице являются суммой по всем workers.',
     'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
       'Расчётная общая ёмкость: {{rps}} RPS · {{concurrency}} одновременных запросов',
     'Enter 2-256 workers to estimate aggregate capacity.':
       'Введите от 2 до 256 workers для оценки общей ёмкости.',
-    'Shared mode requires 2-256 workers': 'Общий режим требует от 2 до 256 workers',
+    'Shared mode requires 2-256 workers':
+      'Общий режим требует от 2 до 256 workers',
     'Workers joined': 'Подключено workers',
   },
   vi: {
@@ -1763,6 +1834,129 @@ for (const [locale, translations] of Object.entries(sharedAgentKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const channelRoutingKeys = {
+  en: {
+    'Admin Console': 'Admin Console',
+    'Automatic probe': 'Automatic probe',
+    'Automatically probe this channel in the background':
+      'Automatically probe this channel in the background',
+    'Probe interval (seconds)': 'Probe interval (seconds)',
+    'Auto-disabled probe interval (seconds)':
+      'Auto-disabled probe interval (seconds)',
+    'Upstream retry limit': 'Upstream retry limit',
+    'Maximum concurrency': 'Maximum concurrency',
+    'Channel price multiplier': 'Channel price multiplier',
+    'Price multiplier currency': 'Price multiplier currency',
+    'Daily Cost / Monthly Cost': 'Daily Cost / Monthly Cost',
+    'Daily Usage / Monthly Usage': 'Daily Usage / Monthly Usage',
+    'Previous-day probe success rate': 'Previous-day probe success rate',
+    Concurrency: 'Concurrency',
+  },
+  zh: {
+    'Admin Console': '管理控制台',
+    'Automatic probe': '自动探测',
+    'Automatically probe this channel in the background':
+      '在后台自动探测此渠道',
+    'Probe interval (seconds)': '探测间隔（秒）',
+    'Auto-disabled probe interval (seconds)': '自动禁用探测间隔（秒）',
+    'Upstream retry limit': '上游重试上限',
+    'Maximum concurrency': '最大并发数',
+    'Channel price multiplier': '渠道价格倍率',
+    'Price multiplier currency': '价格倍率币种',
+    'Daily Cost / Monthly Cost': '每日成本 / 月度成本',
+    'Daily Usage / Monthly Usage': '每日用量 / 月度用量',
+    'Previous-day probe success rate': '前日探测成功率',
+    Concurrency: '并发',
+  },
+  fr: {
+    'Admin Console': 'Console d’administration',
+    'Automatic probe': 'Sonde automatique',
+    'Automatically probe this channel in the background':
+      'Sonder automatiquement ce canal en arrière-plan',
+    'Probe interval (seconds)': 'Intervalle de sonde (secondes)',
+    'Auto-disabled probe interval (seconds)':
+      'Intervalle de sonde désactivée (secondes)',
+    'Upstream retry limit': 'Limite de tentatives amont',
+    'Maximum concurrency': 'Concurrence maximale',
+    'Channel price multiplier': 'Multiplicateur de prix du canal',
+    'Price multiplier currency': 'Devise du multiplicateur',
+    'Daily Cost / Monthly Cost': 'Coût quotidien / mensuel',
+    'Daily Usage / Monthly Usage': 'Usage quotidien / mensuel',
+    'Previous-day probe success rate': 'Taux de réussite de la sonde (veille)',
+    Concurrency: 'Concurrence',
+  },
+  ja: {
+    'Admin Console': '管理コンソール',
+    'Automatic probe': '自動プローブ',
+    'Automatically probe this channel in the background':
+      'バックグラウンドでこのチャネルを自動プローブ',
+    'Probe interval (seconds)': 'プローブ間隔（秒）',
+    'Auto-disabled probe interval (seconds)':
+      '自動無効化時のプローブ間隔（秒）',
+    'Upstream retry limit': '上流リトライ上限',
+    'Maximum concurrency': '最大同時実行数',
+    'Channel price multiplier': 'チャネル価格倍率',
+    'Price multiplier currency': '価格倍率の通貨',
+    'Daily Cost / Monthly Cost': '日次コスト / 月次コスト',
+    'Daily Usage / Monthly Usage': '日次使用量 / 月次使用量',
+    'Previous-day probe success rate': '前日のプローブ成功率',
+    Concurrency: '同時実行数',
+  },
+  ru: {
+    'Admin Console': 'Консоль администратора',
+    'Automatic probe': 'Автоматическая проверка',
+    'Automatically probe this channel in the background':
+      'Автоматически проверять канал в фоне',
+    'Probe interval (seconds)': 'Интервал проверки (секунды)',
+    'Auto-disabled probe interval (seconds)':
+      'Интервал проверки отключённого канала (секунды)',
+    'Upstream retry limit': 'Лимит повторов upstream',
+    'Maximum concurrency': 'Максимальная параллельность',
+    'Channel price multiplier': 'Множитель цены канала',
+    'Price multiplier currency': 'Валюта множителя цены',
+    'Daily Cost / Monthly Cost': 'Дневная / месячная стоимость',
+    'Daily Usage / Monthly Usage': 'Дневное / месячное использование',
+    'Previous-day probe success rate': 'Успешность проверок за предыдущий день',
+    Concurrency: 'Параллельность',
+  },
+  vi: {
+    'Admin Console': 'Bảng điều khiển quản trị',
+    'Automatic probe': 'Tự động kiểm tra',
+    'Automatically probe this channel in the background':
+      'Tự động kiểm tra kênh này ở chế độ nền',
+    'Probe interval (seconds)': 'Khoảng kiểm tra (giây)',
+    'Auto-disabled probe interval (seconds)':
+      'Khoảng kiểm tra kênh tự tắt (giây)',
+    'Upstream retry limit': 'Giới hạn thử lại upstream',
+    'Maximum concurrency': 'Đồng thời tối đa',
+    'Channel price multiplier': 'Hệ số giá kênh',
+    'Price multiplier currency': 'Đơn vị tiền của hệ số giá',
+    'Daily Cost / Monthly Cost': 'Chi phí ngày / tháng',
+    'Daily Usage / Monthly Usage': 'Lượng dùng ngày / tháng',
+    'Previous-day probe success rate': 'Tỷ lệ kiểm tra thành công ngày trước',
+    Concurrency: 'Đồng thời',
+  },
+  'zh-TW': {
+    'Admin Console': '管理控制台',
+    'Automatic probe': '自動探測',
+    'Automatically probe this channel in the background':
+      '在背景自動探測此渠道',
+    'Probe interval (seconds)': '探測間隔（秒）',
+    'Auto-disabled probe interval (seconds)': '自動停用探測間隔（秒）',
+    'Upstream retry limit': '上游重試上限',
+    'Maximum concurrency': '最大並發數',
+    'Channel price multiplier': '渠道價格倍率',
+    'Price multiplier currency': '價格倍率幣種',
+    'Daily Cost / Monthly Cost': '每日成本 / 每月成本',
+    'Daily Usage / Monthly Usage': '每日用量 / 每月用量',
+    'Previous-day probe success rate': '前日探測成功率',
+    Concurrency: '並發',
+  },
+}
+for (const [locale, translations] of Object.entries(channelRoutingKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
@@ -1772,5 +1966,11 @@ for (const locale of Object.keys(newKeys)) {
   for (const [key, value] of Object.entries(newKeys[locale])) {
     if (json.translation[key] !== value) json.translation[key] = value
   }
-  await fs.writeFile(file, `${JSON.stringify(json, null, 2)}\n`, 'utf8')
+  // Preserve the historical escaped key spelling; it is intentionally kept
+  // that way in the locale source to avoid confusing translation scanners.
+  const serialized = JSON.stringify(json, null, 2).replaceAll(
+    '"footer.newapi.projectAttributionSuffix"',
+    '"footer.new\\u0061pi.projectAttributionSuffix"'
+  )
+  await fs.writeFile(file, `${serialized}\n`, 'utf8')
 }

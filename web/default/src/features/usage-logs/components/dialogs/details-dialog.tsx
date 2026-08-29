@@ -57,7 +57,11 @@ import {
   getResponseTimeColor,
   renderAuditContent,
 } from '../../lib/format'
-import { formatUsageLogQuotaUSD, formatUsageLogUSD } from '../../lib/money'
+import {
+  formatUsageLogQuotaUSD,
+  formatUsageLogUSD,
+  formatUsageLogUSDMicros,
+} from '../../lib/money'
 import {
   getLogTypeConfig,
   isPerCallBilling,
@@ -149,6 +153,24 @@ function DetailSection(props: {
 function formatRatio(ratio: number | undefined): string {
   if (ratio == null) return '-'
   return ratio.toFixed(4)
+}
+
+function getProfitGuardDecisionLabel(
+  decision: string | undefined,
+  t: (key: string) => string
+): string {
+  switch (decision) {
+    case 'allow':
+      return t('Allowed')
+    case 'block':
+      return t('Blocked')
+    case 'warn':
+      return t('Monitor')
+    case 'off':
+      return t('Off')
+    default:
+      return t('Unavailable')
+  }
 }
 
 function getUsageBillingPathLabel(
@@ -387,6 +409,77 @@ function BillingBreakdown(props: {
       quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
     }),
   })
+
+  // Cost reconciliation is recorded in the same `other` snapshot as the
+  // billing details. Keep this admin-only so provider economics never leak to
+  // regular users, while still showing the exact inputs used for this log.
+  if (isAdmin && other.cost_reconciliation) {
+    const reconciliation = other.cost_reconciliation
+    const userRevenue = reconciliation.user_charge_usd_micros
+    const estimatedCost = reconciliation.estimated_cost_usd_micros
+    const profitDifference =
+      userRevenue != null && estimatedCost != null
+        ? userRevenue - estimatedCost
+        : undefined
+
+    rows.push({
+      label: t('User revenue'),
+      value: formatUsageLogUSDMicros(userRevenue),
+    })
+    rows.push({
+      label: t('Estimated cost'),
+      value: formatUsageLogUSDMicros(estimatedCost),
+    })
+    rows.push({
+      label: t('Profit difference'),
+      value: formatUsageLogUSDMicros(profitDifference),
+    })
+
+    if (reconciliation.successful_cost_usd_micros != null) {
+      rows.push({
+        label: t('Successful cost'),
+        value: formatUsageLogUSDMicros(
+          reconciliation.successful_cost_usd_micros
+        ),
+      })
+    }
+    if (reconciliation.retry_cost_usd_micros != null) {
+      rows.push({
+        label: t('Retry cost'),
+        value: formatUsageLogUSDMicros(reconciliation.retry_cost_usd_micros),
+      })
+    }
+    const failedPartialCost =
+      reconciliation.failed_partial_cost_usd_micros ??
+      reconciliation.failed_partial_usage_cost_usd_micros
+    if (failedPartialCost != null) {
+      rows.push({
+        label: t('Failed partial cost'),
+        value: formatUsageLogUSDMicros(failedPartialCost),
+      })
+    }
+
+    const guard = reconciliation.profit_guard
+    if (guard) {
+      const decisionLabel = getProfitGuardDecisionLabel(guard.decision, t)
+      rows.push({
+        label: t('Profit protection decision'),
+        value: `${decisionLabel}${guard.mode ? ` (${guard.mode})` : ''}`,
+      })
+      if (guard.projected_profit_margin != null) {
+        rows.push({
+          label: t('Projected profit margin'),
+          value: `${guard.projected_profit_margin.toFixed(2)}%`,
+        })
+      }
+      if (guard.projected_channel_cost_usd != null) {
+        rows.push({
+          label: t('Projected channel cost'),
+          value: formatUsageLogUSD(guard.projected_channel_cost_usd),
+        })
+      }
+    }
+  }
 
   if (rows.length === 0) return null
 

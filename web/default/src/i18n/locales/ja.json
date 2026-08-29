@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "推定合計容量：{{rps}} RPS · 同時実行 {{concurrency}} 件",
     "Enter 2-256 workers to estimate aggregate capacity.": "合計容量を推定するには 2〜256 の Worker を入力してください。",
     "Shared mode requires 2-256 workers": "共有モードでは 2〜256 Worker が必要です",
-    "Workers joined": "参加 Worker"
+    "Workers joined": "参加 Worker",
+    "User revenue": "ユーザー収益",
+    "Profit difference": "利益差額",
+    "Profit protection decision": "利益保護の判定",
+    "Successful cost": "成功リクエストのコスト",
+    "Retry cost": "再試行コスト",
+    "Failed partial cost": "失敗部分コスト",
+    "Projected profit margin": "予測利益率",
+    "Projected channel cost": "予測チャネルコスト",
+    "Blocked": "ブロック",
+    "Automatic probe": "自動プローブ",
+    "Automatically probe this channel in the background": "バックグラウンドでこのチャネルを自動プローブ",
+    "Probe interval (seconds)": "プローブ間隔（秒）",
+    "Auto-disabled probe interval (seconds)": "自動無効化時のプローブ間隔（秒）",
+    "Upstream retry limit": "上流リトライ上限",
+    "Channel price multiplier": "チャネル価格倍率",
+    "Price multiplier currency": "価格倍率の通貨",
+    "Daily Cost / Monthly Cost": "日次コスト / 月次コスト",
+    "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量",
+    "Previous-day probe success rate": "前日のプローブ成功率",
+    "Concurrency": "同時実行数",
+    "Admin Console": "管理コンソール"
   }
 }

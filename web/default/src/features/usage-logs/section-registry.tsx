@@ -27,6 +27,14 @@ const USAGE_LOGS_SECTIONS = [
     titleKey: 'Common Logs',
     build: () => null, // Content is rendered directly in the page component
   },
+  // Keep the historical URL as a stable alias for call logs. The page
+  // normalizes this id to the common log table, so existing bookmarks keep
+  // the same filters and cost statistics.
+  {
+    id: 'call',
+    titleKey: 'Common Logs',
+    build: () => null,
+  },
   {
     id: 'drawing',
     titleKey: 'Drawing Logs',

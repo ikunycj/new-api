@@ -240,10 +240,22 @@ export interface LogOtherData {
     successful_cost_usd_micros?: number
     retry_cost_usd_micros?: number
     failed_partial_usage_cost_usd_micros?: number
+    // Newer snapshots use the shorter key; keep the legacy name above for
+    // logs written before the rollup migration.
+    failed_partial_cost_usd_micros?: number
     channel_cost_factor_source?: string
     cost_basis?: string
     retry_cost_basis?: string
     failed_partial_usage_basis?: string
+    profit_guard?: {
+      mode?: string
+      decision?: string
+      channel_id?: number
+      minimum_profit_margin?: number
+      projected_profit_margin?: number
+      estimated_revenue_usd?: number
+      projected_channel_cost_usd?: number
+    }
   }
 }
 

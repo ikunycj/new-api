@@ -3,6 +3,7 @@ package ratio_setting
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -84,6 +85,33 @@ func GetGroupRatio(name string) float64 {
 	}
 	return ratio
 }
+
+// GetPricingGroupOrder returns a deterministic catalog order while retaining
+// the historical default-first behavior used by routing and admin screens.
+func GetPricingGroupOrder() []string {
+	names := make([]string, 0, len(groupRatioMap.ReadAll()))
+	for name := range groupRatioMap.ReadAll() {
+		if name == "auto" || name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if names[i] == "default" {
+			return true
+		}
+		if names[j] == "default" {
+			return false
+		}
+		return names[i] < names[j]
+	})
+	return names
+}
+
+// IsPricingGroupEnabled is the compatibility hook for the richer routing
+// catalog. Existing master configurations have no disabled pricing-group
+// flag, so configured groups are enabled by definition.
+func IsPricingGroupEnabled(name string) bool { return ContainsGroupRatio(name) }
 
 func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 	gp, ok := groupGroupRatioMap.Get(userGroup)

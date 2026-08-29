@@ -1,0 +1,7 @@
+[Unit]
+Description=Private Alertmanager proxy for the AllToken application
+Requires=alltoken-failover-private-alertmanager.socket
+After=alltoken-failover-private-alertmanager.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 10.66.0.2:9093

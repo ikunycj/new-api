@@ -43,6 +43,30 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	return groupsCopy
 }
 
+// GetUserGroupPricingGroups exposes the pricing-group view used by the
+// consolidated group-management APIs without removing legacy usable-group
+// behavior from existing token and model flows.
+func GetUserGroupPricingGroups(userGroup string) map[string]string {
+	groups := make(map[string]string)
+	for _, group := range ratio_setting.GetPricingGroupOrder() {
+		groups[group] = group
+	}
+	if setting.UserGroupPricingGroupsAreAll(userGroup) {
+		return groups
+	}
+	allowed := setting.GetUserGroupPricingGroups(userGroup)
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, group := range allowed {
+		allowedSet[group] = struct{}{}
+	}
+	for group := range groups {
+		if _, ok := allowedSet[group]; !ok {
+			delete(groups, group)
+		}
+	}
+	return groups
+}
+
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	_, ok := GetUserUsableGroups(userGroup)[groupName]
 	return ok

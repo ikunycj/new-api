@@ -197,6 +197,31 @@
       "description": "Global pre-routing metric; authentication failures happen before a channel is selected.",
       "title": "Global gateway authentication failures",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki-alltoken" },
+      "description": "Authoritative HTTP 502 attribution. gateway_* means OpenResty did not receive an application response. application_* means new-api returned HTTP 502, with the suffix identifying the cause layer.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "drawStyle": "bars", "fillOpacity": 40, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "normal" }, "thresholdsStyle": { "mode": "off" } }, "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "id": 15,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "sum by (error_layer, error_type) (rate({job=\"alltoken/openresty-5xx\",status=\"502\"}[$__rate_interval]))", "legendFormat": "{{error_layer}} / {{error_type}}", "queryType": "range", "refId": "A" }],
+      "title": "HTTP 502 by layer and type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki-alltoken" },
+      "description": "Raw gateway evidence for exact diagnosis: upstream address/status/timings from the structured 5xx log, plus OpenResty connection and resource errors.",
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "id": 16,
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [
+        { "expr": "{job=\"alltoken/openresty-5xx\",status=\"502\"}", "queryType": "range", "refId": "A" },
+        { "expr": "{job=\"alltoken/openresty-error\"} |~ \"connect\\\\(\\\\) failed|recv\\\\(\\\\) failed|upstream timed out|no live upstreams|Too many open files|prematurely closed|invalid header\"", "queryType": "range", "refId": "B" }
+      ],
+      "title": "HTTP 502 diagnostic evidence",
+      "type": "logs"
     }
   ],
   "refresh": "15s",

@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests",
     "Enter 2-256 workers to estimate aggregate capacity.": "Enter 2-256 workers to estimate aggregate capacity.",
     "Shared mode requires 2-256 workers": "Shared mode requires 2-256 workers",
-    "Workers joined": "Workers joined"
+    "Workers joined": "Workers joined",
+    "User revenue": "User revenue",
+    "Profit difference": "Profit difference",
+    "Profit protection decision": "Profit protection decision",
+    "Successful cost": "Successful cost",
+    "Retry cost": "Retry cost",
+    "Failed partial cost": "Failed partial cost",
+    "Projected profit margin": "Projected profit margin",
+    "Projected channel cost": "Projected channel cost",
+    "Blocked": "Blocked",
+    "Automatic probe": "Automatic probe",
+    "Automatically probe this channel in the background": "Automatically probe this channel in the background",
+    "Probe interval (seconds)": "Probe interval (seconds)",
+    "Auto-disabled probe interval (seconds)": "Auto-disabled probe interval (seconds)",
+    "Upstream retry limit": "Upstream retry limit",
+    "Channel price multiplier": "Channel price multiplier",
+    "Price multiplier currency": "Price multiplier currency",
+    "Daily Cost / Monthly Cost": "Daily Cost / Monthly Cost",
+    "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage",
+    "Previous-day probe success rate": "Previous-day probe success rate",
+    "Concurrency": "Concurrency",
+    "Admin Console": "Admin Console"
   }
 }

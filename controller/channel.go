@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -97,6 +98,46 @@ func GetChannelOps(c *gin.Context) {
 	})
 }
 
+func enrichChannelListMetrics(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	probeTimes, probeErr := model.GetLastChannelProbeTimes(ids)
+	if probeErr != nil {
+		common.SysLog("failed to load channel probe times: " + probeErr.Error())
+	}
+	rates, _, rateErr := model.GetPreviousDayChannelProbeStats(ids, time.Now())
+	if rateErr != nil {
+		common.SysLog("failed to load channel probe rates: " + rateErr.Error())
+	}
+	usage, usageErr := model.GetChannelTokenUsageAt(ids, time.Now())
+	if usageErr != nil {
+		common.SysLog("failed to load channel usage: " + usageErr.Error())
+	}
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		channel.LastTestTime = channel.TestTime
+		if probeTimes[channel.Id] > channel.TestTime {
+			channel.LastTestTime = probeTimes[channel.Id]
+			channel.LastTestIsAuto = true
+		}
+		channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+		channel.CurrentConcurrency = service.CurrentChannelConcurrency(channel.Id)
+		channel.DailyTokens = usage[channel.Id].DailyTokens
+		channel.MonthlyTokens = usage[channel.Id].MonthlyTokens
+		channel.DailyCostUSD = channel.CalculateTokenCostUSD(channel.DailyTokens, operation_setting.GetBillingUSDToCNYRate())
+		channel.MonthlyCostUSD = channel.CalculateTokenCostUSD(channel.MonthlyTokens, operation_setting.GetBillingUSDToCNYRate())
+	}
+}
+
 func GetAllChannels(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	channelData := make([]*model.Channel, 0)
@@ -168,6 +209,7 @@ func GetAllChannels(c *gin.Context) {
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
 	}
+	enrichChannelListMetrics(channelData)
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {

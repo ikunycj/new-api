@@ -31,6 +31,9 @@ export interface QuotaDataItem {
   token_used?: number
   count?: number
   quota?: number
+  use_group?: string
+  channel_id?: number
+  channel_name?: string
 }
 
 export interface FlowQuotaDataItem {

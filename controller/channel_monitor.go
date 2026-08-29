@@ -8,10 +8,20 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+func GetPricingGroupMetrics(c *gin.Context) {
+	items, err := service.GetPricingGroupMetrics(ratio_setting.GetPricingGroupOrder())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": items})
+}
 
 type channelMonitorCreateRequest struct {
 	Name                     string   `json:"name"`

@@ -1,0 +1,7 @@
+[Unit]
+Description=Private Loki proxy
+Requires=alltoken-grafana-private-loki.socket
+After=alltoken-grafana-private-loki.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:3100

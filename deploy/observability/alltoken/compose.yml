@@ -34,6 +34,7 @@ services:
       - ./data/alloy:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /opt/1panel/apps/openresty/openresty/www/sites/alltokenapi.com/log:/var/log/openresty/alltoken:ro
     depends_on:
       - loki
     security_opt:

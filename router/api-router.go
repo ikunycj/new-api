@@ -29,6 +29,9 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
 		apiRouter.GET("/admin/analytics/package-comparison", middleware.AdminAuth(), controller.GetPackageComparison)
+		apiRouter.GET("/admin/console", middleware.AdminAuth(), controller.GetAdminConsole)
+		apiRouter.GET("/admin/realtime", middleware.AdminAuth(), controller.GetAdminConsoleRealtime)
+		apiRouter.GET("/admin/system-load", middleware.AdminAuth(), controller.GetAdminConsoleSystemLoad)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/loadtest/config", middleware.UserAuth(), controller.GetLoadTestConfig)
 		loadTestRoute := apiRouter.Group("/loadtest")
@@ -360,6 +363,11 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+			groupRoute.GET("/manage", middleware.RootAuth(), controller.GetManagedUserGroups)
+			groupRoute.POST("/", middleware.RootAuth(), controller.CreateManagedUserGroup)
+			groupRoute.PUT("/:name", middleware.RootAuth(), controller.UpdateManagedUserGroup)
+			groupRoute.DELETE("/:name", middleware.RootAuth(), controller.DeleteManagedUserGroup)
+			groupRoute.GET("/pricing-groups", controller.GetPricingGroups)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")

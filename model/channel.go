@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ type Channel struct {
 	Weight             *uint   `json:"weight" gorm:"default:0"`
 	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
 	TestTime           int64   `json:"test_time" gorm:"bigint"`
+	LastTestTime       int64   `json:"last_test_time" gorm:"-"`
+	LastTestIsAuto     bool    `json:"last_test_is_auto" gorm:"-"`
 	ResponseTime       int     `json:"response_time"` // in milliseconds
 	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
 	Other              string  `json:"other"`
@@ -41,15 +44,33 @@ type Channel struct {
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
-	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`
-	AutoBan           *int    `json:"auto_ban" gorm:"default:1"`
-	OtherInfo         string  `json:"other_info"`
-	Tag               *string `json:"tag" gorm:"index"`
-	Setting           *string `json:"setting" gorm:"type:text"` // 渠道额外设置
-	ParamOverride     *string `json:"param_override" gorm:"type:text"`
-	HeaderOverride    *string `json:"header_override" gorm:"type:text"`
-	Remark            *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	StatusCodeMapping                *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
+	Priority                         *int64  `json:"priority" gorm:"bigint;default:0"`
+	AutoBan                          *int    `json:"auto_ban" gorm:"default:1"`
+	AutoProbeEnabled                 *bool   `json:"auto_probe_enabled"`
+	ProbeIntervalSeconds             int     `json:"probe_interval_seconds"`
+	AutoDisabledProbeIntervalSeconds int     `json:"auto_disabled_probe_interval_seconds"`
+	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
+	ProbeSuccessAutoEnable           *bool   `json:"probe_success_auto_enable"`
+	UpstreamMaxRetries               *int    `json:"upstream_max_retries"`
+	MaxConcurrency                   *int    `json:"max_concurrency"`
+	CurrentConcurrency               int     `json:"current_concurrency" gorm:"-"`
+	PriceMultiplier                  float64 `json:"price_multiplier"`
+	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	DailyTokens                      int64   `json:"daily_tokens" gorm:"-"`
+	MonthlyTokens                    int64   `json:"monthly_tokens" gorm:"-"`
+	DailyCostUSD                     float64 `json:"daily_cost_usd" gorm:"-"`
+	MonthlyCostUSD                   float64 `json:"monthly_cost_usd" gorm:"-"`
+	ForcePriority                    *bool   `json:"force_priority"`
+	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
+	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
+	PreviousDayProbeSampleCount      int     `json:"-" gorm:"-"`
+	OtherInfo                        string  `json:"other_info"`
+	Tag                              *string `json:"tag" gorm:"index"`
+	Setting                          *string `json:"setting" gorm:"type:text"` // 渠道额外设置
+	ParamOverride                    *string `json:"param_override" gorm:"type:text"`
+	HeaderOverride                   *string `json:"header_override" gorm:"type:text"`
+	Remark                           *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -340,6 +361,20 @@ func (channel *Channel) GetAutoBan() bool {
 		return false
 	}
 	return *channel.AutoBan == 1
+}
+
+func (channel *Channel) GetPriceMultiplier() float64 {
+	if channel == nil || channel.PriceMultiplier <= 0 || math.IsNaN(channel.PriceMultiplier) || math.IsInf(channel.PriceMultiplier, 0) {
+		return 1
+	}
+	return channel.PriceMultiplier
+}
+
+func (channel *Channel) CalculateTokenCostUSD(tokens int64, billingUSDToCNYRate float64) float64 {
+	if tokens <= 0 || billingUSDToCNYRate <= 0 || math.IsNaN(billingUSDToCNYRate) || math.IsInf(billingUSDToCNYRate, 0) {
+		return 0
+	}
+	return float64(tokens) * channel.GetPriceMultiplier() / 1_000_000 * billingUSDToCNYRate
 }
 
 func (channel *Channel) Save() error {

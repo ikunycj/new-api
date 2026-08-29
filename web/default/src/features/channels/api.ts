@@ -98,6 +98,15 @@ export async function searchChannels(
   return res.data
 }
 
+export async function getPricingGroups(): Promise<{
+  success: boolean
+  data?: string[]
+  message?: string
+}> {
+  const res = await api.get('/api/group/pricing-groups')
+  return res.data
+}
+
 /**
  * Get single channel by ID
  */

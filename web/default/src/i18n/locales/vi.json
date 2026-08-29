@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Công suất tổng ước tính: {{rps}} RPS · {{concurrency}} yêu cầu đồng thời",
     "Enter 2-256 workers to estimate aggregate capacity.": "Nhập 2-256 worker để ước tính công suất tổng.",
     "Shared mode requires 2-256 workers": "Chế độ dùng chung cần 2-256 worker",
-    "Workers joined": "Worker đã tham gia"
+    "Workers joined": "Worker đã tham gia",
+    "User revenue": "Doanh thu từ người dùng",
+    "Profit difference": "Chênh lệch lợi nhuận",
+    "Profit protection decision": "Quyết định bảo vệ lợi nhuận",
+    "Successful cost": "Chi phí yêu cầu thành công",
+    "Retry cost": "Chi phí thử lại",
+    "Failed partial cost": "Chi phí một phần do lỗi",
+    "Projected profit margin": "Biên lợi nhuận dự kiến",
+    "Projected channel cost": "Chi phí kênh dự kiến",
+    "Blocked": "Đã chặn",
+    "Automatic probe": "Tự động kiểm tra",
+    "Automatically probe this channel in the background": "Tự động kiểm tra kênh này ở chế độ nền",
+    "Probe interval (seconds)": "Khoảng kiểm tra (giây)",
+    "Auto-disabled probe interval (seconds)": "Khoảng kiểm tra kênh tự tắt (giây)",
+    "Upstream retry limit": "Giới hạn thử lại upstream",
+    "Channel price multiplier": "Hệ số giá kênh",
+    "Price multiplier currency": "Đơn vị tiền của hệ số giá",
+    "Daily Cost / Monthly Cost": "Chi phí ngày / tháng",
+    "Daily Usage / Monthly Usage": "Lượng dùng ngày / tháng",
+    "Previous-day probe success rate": "Tỷ lệ kiểm tra thành công ngày trước",
+    "Concurrency": "Đồng thời",
+    "Admin Console": "Bảng điều khiển quản trị"
   }
 }

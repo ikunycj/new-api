@@ -79,3 +79,10 @@ func updateSystemStatus() {
 func GetSystemStatus() SystemStatus {
 	return latestSystemStatus.Load().(SystemStatus)
 }
+
+// RefreshSystemStatus forces one synchronous sample for admin dashboards.
+// The background monitor continues to own periodic refreshes.
+func RefreshSystemStatus() SystemStatus {
+	updateSystemStatus()
+	return GetSystemStatus()
+}

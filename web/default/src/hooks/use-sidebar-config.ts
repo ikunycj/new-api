@@ -58,6 +58,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   },
   admin: {
     enabled: true,
+    dashboard: true,
     channel: true,
     models: true,
     redemption: true,
@@ -111,6 +112,8 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/profile': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
   '/group-pricing': { section: 'admin', module: 'setting' },
+  '/group-management': { section: 'admin', module: 'setting' },
+  '/admin-console': { section: 'admin', module: 'dashboard' },
   '/failover': { section: 'admin', module: 'channel' },
   '/models': { section: 'admin', module: 'models' },
   '/models/metadata': { section: 'admin', module: 'models' },

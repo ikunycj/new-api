@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Расчётная общая ёмкость: {{rps}} RPS · {{concurrency}} одновременных запросов",
     "Enter 2-256 workers to estimate aggregate capacity.": "Введите от 2 до 256 workers для оценки общей ёмкости.",
     "Shared mode requires 2-256 workers": "Общий режим требует от 2 до 256 workers",
-    "Workers joined": "Подключено workers"
+    "Workers joined": "Подключено workers",
+    "User revenue": "Доход от пользователя",
+    "Profit difference": "Разница прибыли",
+    "Profit protection decision": "Решение по защите прибыли",
+    "Successful cost": "Стоимость успешного запроса",
+    "Retry cost": "Стоимость повторной попытки",
+    "Failed partial cost": "Частичная стоимость ошибки",
+    "Projected profit margin": "Прогнозируемая маржа",
+    "Projected channel cost": "Прогнозируемая стоимость канала",
+    "Blocked": "Заблокировано",
+    "Automatic probe": "Автоматическая проверка",
+    "Automatically probe this channel in the background": "Автоматически проверять канал в фоне",
+    "Probe interval (seconds)": "Интервал проверки (секунды)",
+    "Auto-disabled probe interval (seconds)": "Интервал проверки отключённого канала (секунды)",
+    "Upstream retry limit": "Лимит повторов upstream",
+    "Channel price multiplier": "Множитель цены канала",
+    "Price multiplier currency": "Валюта множителя цены",
+    "Daily Cost / Monthly Cost": "Дневная / месячная стоимость",
+    "Daily Usage / Monthly Usage": "Дневное / месячное использование",
+    "Previous-day probe success rate": "Успешность проверок за предыдущий день",
+    "Concurrency": "Параллельность",
+    "Admin Console": "Консоль администратора"
   }
 }

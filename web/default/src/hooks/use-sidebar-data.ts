@@ -135,6 +135,12 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
+            title: t('Admin Console'),
+            url: '/admin-console',
+            icon: LayoutDashboard,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
@@ -143,6 +149,12 @@ export function useSidebarData(): SidebarData {
             title: t('Group Pricing'),
             url: '/group-pricing',
             icon: Settings2,
+          },
+          {
+            title: '分组管理',
+            url: '/group-management',
+            icon: Users,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('Channel Monitors'),

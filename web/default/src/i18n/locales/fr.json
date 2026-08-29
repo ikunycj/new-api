@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Capacité agrégée estimée : {{rps}} RPS · {{concurrency}} requêtes simultanées",
     "Enter 2-256 workers to estimate aggregate capacity.": "Saisissez 2 à 256 workers pour estimer la capacité agrégée.",
     "Shared mode requires 2-256 workers": "Le mode partagé nécessite 2 à 256 workers",
-    "Workers joined": "Workers connectés"
+    "Workers joined": "Workers connectés",
+    "User revenue": "Revenu utilisateur",
+    "Profit difference": "Écart de profit",
+    "Profit protection decision": "Décision de protection du profit",
+    "Successful cost": "Coût de la requête réussie",
+    "Retry cost": "Coût des nouvelles tentatives",
+    "Failed partial cost": "Coût partiel des échecs",
+    "Projected profit margin": "Marge bénéficiaire projetée",
+    "Projected channel cost": "Coût de canal projeté",
+    "Blocked": "Bloqué",
+    "Automatic probe": "Sonde automatique",
+    "Automatically probe this channel in the background": "Sonder automatiquement ce canal en arrière-plan",
+    "Probe interval (seconds)": "Intervalle de sonde (secondes)",
+    "Auto-disabled probe interval (seconds)": "Intervalle de sonde désactivée (secondes)",
+    "Upstream retry limit": "Limite de tentatives amont",
+    "Channel price multiplier": "Multiplicateur de prix du canal",
+    "Price multiplier currency": "Devise du multiplicateur",
+    "Daily Cost / Monthly Cost": "Coût quotidien / mensuel",
+    "Daily Usage / Monthly Usage": "Usage quotidien / mensuel",
+    "Previous-day probe success rate": "Taux de réussite de la sonde (veille)",
+    "Concurrency": "Concurrence",
+    "Admin Console": "Console d’administration"
   }
 }

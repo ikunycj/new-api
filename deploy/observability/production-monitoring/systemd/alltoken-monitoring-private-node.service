@@ -1,0 +1,7 @@
+[Unit]
+Description=Private node exporter proxy
+Requires=alltoken-monitoring-private-node.socket
+After=alltoken-monitoring-private-node.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:9100

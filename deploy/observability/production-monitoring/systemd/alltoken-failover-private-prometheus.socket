@@ -1,0 +1,11 @@
+[Unit]
+Description=Private Prometheus socket for the AllToken application
+After=docker.service wg-quick@wg0.service
+Requires=docker.service wg-quick@wg0.service
+
+[Socket]
+ListenStream=172.17.0.1:9090
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

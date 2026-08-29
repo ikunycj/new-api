@@ -47,6 +47,9 @@ const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
   common: {
     titleKey: 'Common Logs',
   },
+  call: {
+    titleKey: 'Common Logs',
+  },
   drawing: {
     titleKey: 'Drawing Logs',
   },
@@ -59,10 +62,15 @@ function UsageLogsContent() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
-  const activeCategory: UsageLogsSectionId =
+  const requestedSection: UsageLogsSectionId =
     params.section && isUsageLogsSectionId(params.section)
       ? params.section
       : USAGE_LOGS_DEFAULT_SECTION
+  // `call` is the legacy public URL for the common/call log table. Normalize
+  // it before rendering so the table, filters, and reconciliation cards all
+  // share the common-log implementation.
+  const activeCategory =
+    requestedSection === 'call' ? 'common' : requestedSection
   const {
     selectedUserId,
     userInfoDialogOpen,

@@ -6378,6 +6378,27 @@
     "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "预计总容量：{{rps}} RPS · {{concurrency}} 个并发请求",
     "Enter 2-256 workers to estimate aggregate capacity.": "请输入 2-256 个 Worker 以估算总容量。",
     "Shared mode requires 2-256 workers": "共享模式需要 2-256 个 Worker",
-    "Workers joined": "已加入 Worker"
+    "Workers joined": "已加入 Worker",
+    "User revenue": "用户收入",
+    "Profit difference": "利润差额",
+    "Profit protection decision": "利润保护决策",
+    "Successful cost": "成功请求成本",
+    "Retry cost": "重试成本",
+    "Failed partial cost": "失败部分成本",
+    "Projected profit margin": "预计利润率",
+    "Projected channel cost": "预计渠道成本",
+    "Blocked": "已阻止",
+    "Automatic probe": "自动探测",
+    "Automatically probe this channel in the background": "在后台自动探测此渠道",
+    "Probe interval (seconds)": "探测间隔（秒）",
+    "Auto-disabled probe interval (seconds)": "自动禁用探测间隔（秒）",
+    "Upstream retry limit": "上游重试上限",
+    "Channel price multiplier": "渠道价格倍率",
+    "Price multiplier currency": "价格倍率币种",
+    "Daily Cost / Monthly Cost": "每日成本 / 月度成本",
+    "Daily Usage / Monthly Usage": "每日用量 / 月度用量",
+    "Previous-day probe success rate": "前日探测成功率",
+    "Concurrency": "并发",
+    "Admin Console": "管理控制台"
   }
 }

@@ -46,12 +46,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 import {
   formatCurrencyFromUSD,
+  formatBillingCurrencyFromUSD,
   formatQuotaWithCurrency,
   getCurrencyLabel,
 } from '@/lib/currency'
-import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
@@ -102,6 +103,173 @@ function parseIonetMeta(otherInfo: string | null | undefined): null | {
     return null
   }
   return null
+}
+
+function getProbeSuccessRateVariant(rate: number): StatusBadgeProps['variant'] {
+  if (rate >= 99) return 'success'
+  if (rate >= 90) return 'warning'
+  return 'danger'
+}
+
+function getDisplayPriceMultiplier(channel: Channel): number {
+  const multiplier = channel.price_multiplier
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
+}
+
+function getDisplayTestTime(channel: Channel): number {
+  return channel.last_test_time > 0 ? channel.last_test_time : channel.test_time
+}
+
+function PriceMultiplierCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <NumericSpinnerInput
+      value={getDisplayPriceMultiplier(channel)}
+      min={0}
+      max={1000}
+      step={0.01}
+      onChange={(value) =>
+        handleUpdateChannelField(
+          channel.id,
+          'price_multiplier',
+          value,
+          queryClient
+        )
+      }
+    />
+  )
+}
+
+function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <NumericSpinnerInput
+      value={channel.upstream_max_retries ?? 1}
+      min={0}
+      max={100}
+      onChange={(value) =>
+        handleUpdateChannelField(
+          channel.id,
+          'upstream_max_retries',
+          value,
+          queryClient
+        )
+      }
+    />
+  )
+}
+
+function ConcurrencyCell({ channel }: { channel: Channel }) {
+  const queryClient = useQueryClient()
+  if (isTagAggregateRow(channel)) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  const maximum =
+    channel.max_concurrency && channel.max_concurrency > 0
+      ? channel.max_concurrency
+      : 1000
+  return (
+    <div className='flex min-w-[118px] items-center gap-2'>
+      <NumericSpinnerInput
+        value={maximum}
+        min={1}
+        max={10000}
+        onChange={(value) =>
+          handleUpdateChannelField(
+            channel.id,
+            'max_concurrency',
+            value,
+            queryClient
+          )
+        }
+      />
+      <span className='text-muted-foreground text-xs tabular-nums'>
+        {channel.current_concurrency ?? 0}/{maximum}
+      </span>
+    </div>
+  )
+}
+
+function PeriodMetricCell(props: {
+  dailyLabel: string
+  dailyValue: string
+  monthlyLabel: string
+  monthlyValue: string
+}) {
+  const { sensitiveVisible } = useChannels()
+  const mask = sensitiveVisible ? undefined : SENSITIVE_MASK
+  return (
+    <TooltipProvider>
+      <div className='-ml-1.5 flex items-center gap-1'>
+        {[
+          [props.dailyLabel, props.dailyValue],
+          [props.monthlyLabel, props.monthlyValue],
+        ].map(([label, value]) => (
+          <Tooltip key={label}>
+            <TooltipTrigger
+              render={
+                <StatusBadge
+                  label={mask ?? value}
+                  variant='neutral'
+                  size='sm'
+                  copyable={false}
+                  showDot={false}
+                  className='cursor-help'
+                />
+              }
+            />
+            <TooltipContent>
+              <p>
+                {label}: {mask ?? value}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
+  )
+}
+
+function ChannelCostCell({ channel }: { channel: Channel }) {
+  const { t, i18n } = useTranslation()
+  const options = {
+    abbreviate: false,
+    digitsLarge: 2,
+    digitsSmall: 4,
+    locale: toIntlLocale(i18n.resolvedLanguage || i18n.language),
+  } as const
+  return (
+    <PeriodMetricCell
+      dailyLabel={t('Daily Cost')}
+      dailyValue={formatBillingCurrencyFromUSD(channel.daily_cost_usd, options)}
+      monthlyLabel={t('Monthly Cost')}
+      monthlyValue={formatBillingCurrencyFromUSD(
+        channel.monthly_cost_usd,
+        options
+      )}
+    />
+  )
+}
+
+function ChannelTokenUsageCell({ channel }: { channel: Channel }) {
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const fmt = (tokens: number) =>
+    `${new Intl.NumberFormat(locale, { maximumFractionDigits: tokens >= 100_000_000 ? 1 : 2 }).format((Number.isFinite(tokens) && tokens > 0 ? tokens : 0) / 1_000_000)} M`
+  return (
+    <PeriodMetricCell
+      dailyLabel={t('Daily Usage')}
+      dailyValue={fmt(channel.daily_tokens)}
+      monthlyLabel={t('Monthly Usage')}
+      monthlyValue={fmt(channel.monthly_tokens)}
+    />
+  )
 }
 
 /**
@@ -1057,6 +1225,53 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
+      {
+        accessorKey: 'price_multiplier',
+        header: t('Channel price multiplier'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => <PriceMultiplierCell channel={row.original} />,
+        size: 130,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'daily_cost_usd',
+        header: t('Daily Cost / Monthly Cost'),
+        cell: ({ row }) => <ChannelCostCell channel={row.original} />,
+        size: 180,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'daily_tokens',
+        header: t('Daily Usage / Monthly Usage'),
+        cell: ({ row }) => <ChannelTokenUsageCell channel={row.original} />,
+        size: 175,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'previous_day_probe_success_rate',
+        header: t('Previous-day probe success rate'),
+        cell: ({ row }) => {
+          const raw = row.original.previous_day_probe_success_rate
+          const rate = Number.isFinite(raw)
+            ? Math.min(100, Math.max(0, raw))
+            : 100
+          return (
+            <StatusBadge
+              label={`${rate.toFixed(1)}%`}
+              variant={getProbeSuccessRateVariant(rate)}
+              size='sm'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          )
+        },
+        size: 145,
+        enableSorting: false,
+      },
+
       // Balance column (Used/Remaining)
       {
         accessorKey: 'balance',
@@ -1093,7 +1308,7 @@ export function useChannelsColumns(
         header: t('Last Tested'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
-          const testTime = row.getValue('test_time') as number
+          const testTime = getDisplayTestTime(row.original)
 
           // For invalid timestamps, show "Never" badge
           if (!testTime || testTime === 0) {
@@ -1126,6 +1341,24 @@ export function useChannelsColumns(
           )
         },
         size: 120,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'upstream_max_retries',
+        header: t('Retry Times'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => <UpstreamMaxRetriesCell channel={row.original} />,
+        size: 125,
+        enableSorting: false,
+      },
+
+      {
+        accessorKey: 'max_concurrency',
+        header: t('Concurrency'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => <ConcurrencyCell channel={row.original} />,
+        size: 170,
         enableSorting: false,
       },
 

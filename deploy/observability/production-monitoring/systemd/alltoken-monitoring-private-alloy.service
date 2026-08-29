@@ -1,0 +1,7 @@
+[Unit]
+Description=Private Alloy metrics proxy
+Requires=alltoken-monitoring-private-alloy.socket
+After=alltoken-monitoring-private-alloy.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:12345

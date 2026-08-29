@@ -275,6 +275,7 @@ func migrateDB() error {
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
+		&UserGroup{},
 		&User{},
 		&PasskeyCredential{},
 		&Option{},
@@ -303,6 +304,8 @@ func migrateDB() error {
 		&SystemTaskLock{},
 		&ChannelMonitor{},
 		&ChannelMonitorHistory{},
+		&ChannelProbeState{},
+		&ChannelProbeHistory{},
 		&ChannelCostEntry{},
 		&BillingGroupRoute{},
 		&BillingGroupChannel{},
@@ -330,6 +333,9 @@ func migrateDB() error {
 		&LoadTestRunWorker{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := EnsureDefaultUserGroup(); err != nil {
 		return err
 	}
 	if err := normalizeLoadTestExecutionModes(); err != nil {
@@ -366,6 +372,7 @@ func migrateDBFast() error {
 	}{
 		{&Channel{}, "Channel"},
 		{&Token{}, "Token"},
+		{&UserGroup{}, "UserGroup"},
 		{&User{}, "User"},
 		{&PasskeyCredential{}, "PasskeyCredential"},
 		{&Option{}, "Option"},
@@ -394,6 +401,8 @@ func migrateDBFast() error {
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&ChannelMonitor{}, "ChannelMonitor"},
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
+		{&ChannelProbeState{}, "ChannelProbeState"},
+		{&ChannelProbeHistory{}, "ChannelProbeHistory"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&BillingGroupRoute{}, "BillingGroupRoute"},
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
@@ -460,6 +469,9 @@ func migrateDBFast() error {
 		return err
 	}
 	common.SysLog("database migrated")
+	if err := EnsureDefaultUserGroup(); err != nil {
+		return err
+	}
 	return nil
 }
 

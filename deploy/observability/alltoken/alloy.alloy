@@ -1,115 +1,212 @@
 loki.write "alltoken" {
-  endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
-  }
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
 }
 
 discovery.docker "containers" {
-  host             = "unix:///var/run/docker.sock"
-  refresh_interval = "10s"
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "10s"
 }
 
 discovery.relabel "new_api" {
-  targets = discovery.docker.containers.targets
+	targets = discovery.docker.containers.targets
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/new-api"
-    action        = "keep"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/new-api(-secondary)?"
+		action        = "keep"
+	}
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-    replacement   = "$1"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+		replacement   = "$1"
+	}
 
-  rule {
-    source_labels = ["__meta_docker_container_id"]
-    target_label  = "__path__"
-    replacement   = "/var/lib/docker/containers/$1/$1-json.log"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_id"]
+		target_label  = "__path__"
+		replacement   = "/var/lib/docker/containers/$1/$1-json.log"
+	}
 
-  rule {
-    target_label = "source"
-    replacement  = "docker"
-  }
+	rule {
+		target_label = "source"
+		replacement  = "docker"
+	}
 
-  rule {
-    target_label = "host"
-    replacement  = "alltoken"
-  }
+	rule {
+		target_label = "host"
+		replacement  = "alltoken"
+	}
 
-  rule {
-    target_label = "service"
-    replacement  = "new-api"
-  }
+	rule {
+		target_label = "service"
+		replacement  = "new-api"
+	}
 
-  rule {
-    target_label = "job"
-    replacement  = "alltoken/new-api"
-  }
+	rule {
+		target_label = "job"
+		replacement  = "alltoken/new-api"
+	}
 }
 
 loki.source.file "new_api" {
-  targets       = discovery.relabel.new_api.output
-  forward_to    = [loki.process.new_api.receiver]
-  tail_from_end = true
+	targets       = discovery.relabel.new_api.output
+	forward_to    = [loki.process.new_api.receiver]
+	tail_from_end = true
 }
 
 loki.process "new_api" {
-  stage.docker {}
+	stage.docker { }
 
-  stage.match {
-    selector = "{job=\"alltoken/new-api\"} |~ \"observability_event=\""
+	stage.match {
+		selector = "{job=\"alltoken/new-api\"} |~ \"observability_event=\""
 
-    stage.regex {
-      expression = "observability_event=(?P<payload>\\{.*\\})$"
-    }
+		stage.regex {
+			expression = "observability_event=(?P<payload>\\{.*\\})$"
+		}
 
-    stage.json {
-      source = "payload"
-      expressions = {
-        event               = "event",
-        provider            = "provider",
-        error_class         = "error_class",
-        request_id          = "request_id",
-        client_trace_id     = "client_trace_id",
-        upstream_request_id = "upstream_request_id",
-        status              = "status",
-        upstream_status     = "upstream_status",
-        retry_index         = "retry_index",
-        channel_id          = "channel_id",
-        model               = "model",
-        duration_ms         = "duration_ms",
-        attempt_duration_ms = "attempt_duration_ms",
-      }
-    }
+		stage.json {
+			source      = "payload"
+			expressions = {
+				event               = "event",
+				provider            = "provider",
+				error_class         = "error_class",
+				request_id          = "request_id",
+				client_trace_id     = "client_trace_id",
+				upstream_request_id = "upstream_request_id",
+				status              = "status",
+				upstream_status     = "upstream_status",
+				retry_index         = "retry_index",
+				channel_id          = "channel_id",
+				model               = "model",
+				duration_ms         = "duration_ms",
+				attempt_duration_ms = "attempt_duration_ms",
+			}
+		}
 
-    stage.labels {
-      values = {
-        event       = "event",
-        provider    = "provider",
-        error_class = "error_class",
-      }
-    }
+		stage.labels {
+			values = {
+				event       = "event",
+				provider    = "provider",
+				error_class = "error_class",
+			}
+		}
 
-    stage.structured_metadata {
-      values = {
-        request_id          = "request_id",
-        client_trace_id     = "client_trace_id",
-        upstream_request_id = "upstream_request_id",
-        status              = "status",
-        upstream_status     = "upstream_status",
-        retry_index         = "retry_index",
-        channel_id          = "channel_id",
-        model               = "model",
-        duration_ms         = "duration_ms",
-        attempt_duration_ms = "attempt_duration_ms",
-      }
-    }
-  }
+		stage.structured_metadata {
+			values = {
+				request_id          = "request_id",
+				client_trace_id     = "client_trace_id",
+				upstream_request_id = "upstream_request_id",
+				status              = "status",
+				upstream_status     = "upstream_status",
+				retry_index         = "retry_index",
+				channel_id          = "channel_id",
+				model               = "model",
+				duration_ms         = "duration_ms",
+				attempt_duration_ms = "attempt_duration_ms",
+			}
+		}
+	}
 
-  forward_to = [loki.write.alltoken.receiver]
+	forward_to = [loki.write.alltoken.receiver]
+}
+
+local.file_match "openresty_5xx" {
+	path_targets = [{
+		__path__ = "/var/log/openresty/alltoken/gateway-5xx.log",
+		host     = "alltoken",
+		job      = "alltoken/openresty-5xx",
+		service  = "openresty",
+		source   = "file",
+	}]
+}
+
+loki.source.file "openresty_5xx" {
+	targets       = local.file_match.openresty_5xx.targets
+	tail_from_end = true
+	forward_to    = [loki.process.openresty_5xx.receiver]
+}
+
+loki.process "openresty_5xx" {
+	stage.json {
+		expressions = {
+			status                 = "status",
+			error_layer            = "error_layer",
+			error_type             = "error_type",
+			request_id             = "request_id",
+			method                 = "method",
+			uri                    = "uri",
+			app_error_source       = "app_error_source",
+			app_error_code         = "app_error_code",
+			alltoken_code          = "alltoken_code",
+			error_ref              = "error_ref",
+			upstream_addr          = "upstream_addr",
+			upstream_status        = "upstream_status",
+			upstream_connect_time  = "upstream_connect_time",
+			upstream_header_time   = "upstream_header_time",
+			upstream_response_time = "upstream_response_time",
+			request_time           = "request_time",
+		}
+	}
+
+	stage.labels {
+		values = {
+			status      = "status",
+			error_layer = "error_layer",
+			error_type  = "error_type",
+		}
+	}
+
+	stage.structured_metadata {
+		values = {
+			request_id             = "request_id",
+			method                 = "method",
+			uri                    = "uri",
+			app_error_source       = "app_error_source",
+			app_error_code         = "app_error_code",
+			alltoken_code          = "alltoken_code",
+			error_ref              = "error_ref",
+			upstream_addr          = "upstream_addr",
+			upstream_status        = "upstream_status",
+			upstream_connect_time  = "upstream_connect_time",
+			upstream_header_time   = "upstream_header_time",
+			upstream_response_time = "upstream_response_time",
+			request_time           = "request_time",
+		}
+	}
+
+	forward_to = [loki.write.alltoken.receiver]
+}
+
+local.file_match "openresty_error" {
+	path_targets = [{
+		__path__ = "/var/log/openresty/alltoken/error.log",
+		host     = "alltoken",
+		job      = "alltoken/openresty-error",
+		service  = "openresty",
+		source   = "file",
+	}]
+}
+
+loki.source.file "openresty_error" {
+	targets       = local.file_match.openresty_error.targets
+	tail_from_end = true
+	forward_to    = [loki.process.openresty_error.receiver]
+}
+
+loki.process "openresty_error" {
+	stage.regex {
+		expression = "^(?P<time>\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(?P<level>[^\\]]+)\\]"
+	}
+
+	stage.labels {
+		values = {
+			level = "level",
+		}
+	}
+
+	forward_to = [loki.write.alltoken.receiver]
 }
