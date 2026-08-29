@@ -172,6 +172,20 @@ function formatDuration(milliseconds: number) {
   return `${Math.max(0, Math.floor(milliseconds / 1000))}s`
 }
 
+function formatTokensPerMinute(totalTokens: number, durationSeconds: number) {
+  if (
+    !Number.isFinite(totalTokens) ||
+    totalTokens <= 0 ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds <= 0
+  ) {
+    return '-'
+  }
+  return ((totalTokens * 60) / durationSeconds).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })
+}
+
 function calculateChannelUserCharge(
   channel: LoadTestChannelStats,
   pricing: LoadTestPricing
@@ -674,6 +688,10 @@ export function LoadTestDemo() {
         stats.outputTokens +
         stats.cacheReadTokens +
         stats.cacheWriteTokens
+  const currentTokensPerMinute = formatTokensPerMinute(
+    totalTokens,
+    status === 'running' ? elapsed / 1000 : durationValue
+  )
   const averageTokenPrice =
     pricing && totalTokens > 0 ? userCharge / totalTokens : null
 
@@ -1228,6 +1246,7 @@ export function LoadTestDemo() {
                             <TableHead>{t('Output tokens')}</TableHead>
                             <TableHead>{t('Cache tokens')}</TableHead>
                             <TableHead>{t('Total tokens')}</TableHead>
+                            <TableHead>{t('TPM')}</TableHead>
                             <TableHead>{t('Average token price')}</TableHead>
                             <TableHead>{t('User charge')}</TableHead>
                           </TableRow>
@@ -1238,6 +1257,11 @@ export function LoadTestDemo() {
                               getHistoricalUserCharge(run)
                             const historicalTotalTokens =
                               getLoadTestTotalTokens(run.stats)
+                            const historicalTokensPerMinute =
+                              formatTokensPerMinute(
+                                historicalTotalTokens,
+                                run.durationSeconds
+                              )
                             return (
                               <TableRow key={run.runId}>
                                 <TableCell>
@@ -1280,6 +1304,9 @@ export function LoadTestDemo() {
                                     run.stats.cacheWriteTokens
                                   ).toLocaleString()}
                                 </TableCell>
+                                <TableCell className='tabular-nums'>
+                                  {historicalTokensPerMinute}
+                                </TableCell>
                                 <TableCell>
                                   {historicalTotalTokens > 0
                                     ? `$${(historicalUserCharge / historicalTotalTokens).toFixed(8)}`
@@ -1301,7 +1328,7 @@ export function LoadTestDemo() {
               <div className='text-muted-foreground text-sm font-medium'>
                 {t('Current run metrics')}
               </div>
-              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-6'>
+              <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-7'>
                 <Metric label={t('Requests')} value={String(stats.completed)} />
                 <Metric label={t('Failed')} value={String(stats.failures)} />
                 <Metric label={t('Success rate')} value={`${successRate}%`} />
@@ -1317,6 +1344,7 @@ export function LoadTestDemo() {
                   label={t('P95 latency')}
                   value={p95 ? `${p95}ms` : '-'}
                 />
+                <Metric label={t('TPM')} value={currentTokensPerMinute} />
               </div>
 
               <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
