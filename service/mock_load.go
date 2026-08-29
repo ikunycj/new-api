@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -38,10 +39,38 @@ func VerifyMockLoadTestRequest(c *gin.Context, channelsJSON string, failureRate 
 	if tokenID <= 0 {
 		return types.NewErrorWithStatusCode(fmt.Errorf("mock load-test token context is missing"), types.ErrorCodeAccessDenied, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 	}
-	expected := MockLoadTestSignature(runID, tokenID, channelsJSON, failureRate, failureStatus, latencyMS)
 	provided := strings.TrimSpace(c.GetHeader(constant.MockLoadTestTokenHeader))
-	if len(provided) != len(expected) || subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
-		return types.NewErrorWithStatusCode(fmt.Errorf("mock load-test authorization is invalid"), types.ErrorCodeAccessDenied, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+	for _, signedRunID := range mockLoadTestSignedRunIDs(runID) {
+		expected := MockLoadTestSignature(signedRunID, tokenID, channelsJSON, failureRate, failureStatus, latencyMS)
+		if len(provided) == len(expected) && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1 {
+			return nil
+		}
 	}
-	return nil
+	return types.NewErrorWithStatusCode(fmt.Errorf("mock load-test authorization is invalid"), types.ErrorCodeAccessDenied, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+}
+
+// mockLoadTestSignedRunIDs accepts the exact server-issued run ID and the
+// legacy Agent trace form (<run-id>-<vu>-<iteration>). The latter keeps older
+// managed agents compatible while the per-request trace remains unique.
+func mockLoadTestSignedRunIDs(runID string) []string {
+	ids := []string{runID}
+	lastDash := strings.LastIndexByte(runID, '-')
+	if lastDash <= 0 || lastDash == len(runID)-1 {
+		return ids
+	}
+	previousDash := strings.LastIndexByte(runID[:lastDash], '-')
+	if previousDash <= 0 || previousDash == lastDash-1 {
+		return ids
+	}
+	if _, err := strconv.Atoi(runID[lastDash+1:]); err != nil || strings.IndexFunc(runID[lastDash+1:], func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return ids
+	}
+	if _, err := strconv.Atoi(runID[previousDash+1 : lastDash]); err != nil || strings.IndexFunc(runID[previousDash+1:lastDash], func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return ids
+	}
+	base := runID[:previousDash]
+	if base != "" {
+		ids = append(ids, base)
+	}
+	return ids
 }

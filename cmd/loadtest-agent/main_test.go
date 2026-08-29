@@ -140,3 +140,13 @@ func TestPreflightMockRequiresInternalExecutionMarker(t *testing.T) {
 	err := preflightMock(t.Context(), task)
 	assert.ErrorContains(t, err, "mock preflight rejected")
 }
+
+func TestK6MockRequestsKeepSignedRunIDAndUseUniqueTraceID(t *testing.T) {
+	// The mock signature is bound to the exact run ID. Per-request uniqueness
+	// belongs in X-Request-ID so logs remain correlatable without invalidating
+	// the server-issued signature.
+	require.Contains(t, k6TaskScript, "'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID,")
+	require.Contains(t, k6TaskScript, "'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,")
+	require.NotContains(t, k6TaskScript, "'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,")
+	require.Contains(t, k6TaskScript, "X-Alltoken-Mock-Token")
+}

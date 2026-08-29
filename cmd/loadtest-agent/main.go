@@ -809,7 +809,11 @@ export default function () {
   const headers = {
     Authorization: 'Bearer ' + apiKey,
     'Content-Type': 'application/json',
-    'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,
+    // The managed mock signature is bound to the server-issued run ID. Keep
+    // that value stable for authorization and put the per-request identity in
+    // the ordinary request ID used for tracing and log correlation.
+    'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID,
+    'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,
   };
   if (mockEnabled) {
     headers['X-Alltoken-Mock-Load-Test'] = 'true';

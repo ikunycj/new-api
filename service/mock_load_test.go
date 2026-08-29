@@ -33,3 +33,18 @@ func TestVerifyMockLoadTestRequestRequiresMarkerAndTokenContext(t *testing.T) {
 	c.Request.Header.Set(constant.MockLoadTestHeader, "true")
 	assert.Error(t, VerifyMockLoadTestRequest(c, "", 0, 0, 0))
 }
+
+func TestVerifyMockLoadTestRequestAcceptsLegacyAgentTraceSuffix(t *testing.T) {
+	channels := `[{"slot":1,"failure_rate":0,"failure_status":0,"latency_ms":0}]`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set(constant.MockLoadTestHeader, "true")
+	req.Header.Set(constant.MockLoadTestRunHeader, "run-1-12-34")
+	req.Header.Set(constant.MockLoadTestTokenHeader, MockLoadTestSignature("run-1", 7, channels, 0, 0, 0))
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+	c.Set("token_id", 7)
+	require.NoError(t, VerifyMockLoadTestRequest(c, channels, 0, 0, 0))
+
+	req.Header.Set(constant.MockLoadTestRunHeader, "run-1-not-a-trace")
+	assert.Error(t, VerifyMockLoadTestRequest(c, channels, 0, 0, 0))
+}
