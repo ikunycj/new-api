@@ -35,6 +35,17 @@ func isPlaygroundRequest(path string) bool {
 
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
+		// Managed load-test mock requests are executed entirely inside
+		// controller.Relay. Bypass channel discovery here, otherwise the
+		// distributor can reject the request (or select a real channel) before
+		// the controller gets a chance to enter the internal mock executor.
+		// Authentication and mock-signature validation still happen in Relay.
+		if service.IsMockLoadTestRequest(c) {
+			common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
+			c.Next()
+			return
+		}
+
 		var channel *model.Channel
 		channelId, ok := common.GetContextKey(c, constant.ContextKeyTokenSpecificChannelId)
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
