@@ -6367,6 +6367,17 @@
     "concurrent requests": "concurrent requests",
     "Channels are attempted in order; each channel can simulate failures and latency.": "Channels are attempted in order; each channel can simulate failures and latency.",
     "No capacity limit": "No capacity limit",
-    "Mock channel latency is invalid": "Mock channel latency is invalid"
+    "Mock channel latency is invalid": "Mock channel latency is invalid",
+    "Execution mode": "Execution mode",
+    "Single Agent": "Single Agent",
+    "Shared Agent": "Shared Agent",
+    "Expected workers": "Expected workers",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "Use one paired Agent across multiple machines; the total load is split between workers.",
+    "Run the load from one paired Agent.": "Run the load from one paired Agent.",
+    "All RPS and concurrency values on this page are the total across workers.": "All RPS and concurrency values on this page are the total across workers.",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests",
+    "Enter 2-256 workers to estimate aggregate capacity.": "Enter 2-256 workers to estimate aggregate capacity.",
+    "Shared mode requires 2-256 workers": "Shared mode requires 2-256 workers",
+    "Workers joined": "Workers joined"
   }
 }

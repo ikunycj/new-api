@@ -14,11 +14,126 @@ func setupLoadTestAgentDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&LoadTestAgent{}, &LoadTestRun{}))
+	require.NoError(t, db.AutoMigrate(&LoadTestAgent{}, &LoadTestRun{}, &LoadTestRunWorker{}))
 	previousDB := DB
 	DB = db
 	t.Cleanup(func() { DB = previousDB })
 	return db
+}
+
+func TestSharedLoadTestRunAssignsDistinctWorkerShards(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	run := &LoadTestRun{
+		UserID: 7, AgentID: "agent-shared", TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 100,
+		Concurrency: 40, ExecutionMode: LoadTestExecutionShared, ExpectedWorkers: 2,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+
+	first, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.Equal(t, 50, first.AssignedRPS)
+	assert.Equal(t, 20, first.AssignedConcurrency)
+
+	second, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-b")
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.Equal(t, 50, second.AssignedRPS)
+	assert.Equal(t, 20, second.AssignedConcurrency)
+	assert.NotEqual(t, first.WorkerID, second.WorkerID)
+
+	retry, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	require.NotNil(t, retry)
+	assert.Equal(t, first.WorkerID, retry.WorkerID)
+	assert.Equal(t, first.AssignedRPS, retry.AssignedRPS)
+	require.NoError(t, FinishLoadTestRunWorker(run.ID, "worker-a", LoadTestRunWorkerCompleted, map[string]any{}))
+	terminalRetry, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	assert.Nil(t, terminalRetry)
+}
+
+func TestNormalizeLoadTestExecutionModesBackfillsLegacyRows(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	run := &LoadTestRun{
+		UserID: 7, AgentID: "agent-legacy", TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 1,
+		Concurrency: 1,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+	require.NoError(t, DB.Model(&LoadTestRun{}).Where("id = ?", run.ID).Update("execution_mode", "").Error)
+	require.NoError(t, normalizeLoadTestExecutionModes())
+	var stored LoadTestRun
+	require.NoError(t, DB.First(&stored, "id = ?", run.ID).Error)
+	assert.Equal(t, LoadTestExecutionSingle, stored.ExecutionMode)
+}
+
+func TestSharedLoadTestRunAggregatesWorkerProgressOnlyOnce(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	run := &LoadTestRun{
+		UserID: 7, AgentID: "agent-shared", TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 100,
+		Concurrency: 40, ExecutionMode: LoadTestExecutionShared, ExpectedWorkers: 2,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+	first, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	second, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-b")
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+
+	progress := map[string]any{
+		"sent": int64(50), "completed": int64(48), "successes": int64(45), "failures": int64(3),
+		"dropped": int64(2), "current_rps": 50.0,
+	}
+	require.NoError(t, UpdateLoadTestRunWorkerProgress(run.ID, "worker-a", progress))
+	require.NoError(t, UpdateLoadTestRunWorkerProgress(run.ID, "worker-b", map[string]any{
+		"sent": int64(50), "completed": int64(50), "successes": int64(49), "failures": int64(1),
+		"dropped": int64(0), "current_rps": 50.0,
+	}))
+	// A repeated progress payload from the same worker replaces its snapshot,
+	// it must not double-count the parent aggregate.
+	require.NoError(t, UpdateLoadTestRunWorkerProgress(run.ID, "worker-a", progress))
+
+	aggregate, err := GetLoadTestRunAggregate(run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), aggregate.Sent)
+	assert.Equal(t, int64(98), aggregate.Completed)
+	assert.Equal(t, int64(94), aggregate.Successes)
+	assert.Equal(t, int64(4), aggregate.Failures)
+	assert.Equal(t, int64(2), aggregate.Dropped)
+}
+
+func TestSharedLoadTestRunMarksStaleWorkerAsFailed(t *testing.T) {
+	setupLoadTestAgentDB(t)
+	run := &LoadTestRun{
+		UserID: 7, AgentID: "agent-shared", TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 100,
+		Concurrency: 40, ExecutionMode: LoadTestExecutionShared, ExpectedWorkers: 2,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+	first, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	_, err = ClaimLoadTestRunForWorker(run.AgentID, "worker-b")
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.NoError(t, UpdateLoadTestRunWorkerProgress(run.ID, "worker-a", map[string]any{
+		"sent": int64(10), "completed": int64(10), "successes": int64(10),
+	}))
+	require.NoError(t, DB.Model(&LoadTestRunWorker{}).Where("run_id = ? AND worker_id = ?", run.ID, "worker-a").Update("last_seen_at", common.GetTimestamp()-60).Error)
+	require.NoError(t, FinishLoadTestRunWorker(run.ID, "worker-b", LoadTestRunWorkerCompleted, map[string]any{
+		"sent": int64(10), "completed": int64(10), "successes": int64(10),
+	}))
+	stored, err := GetLoadTestRun(7, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, LoadTestRunFailed, stored.Status)
+	assert.Equal(t, "worker heartbeat timed out", stored.Workers[0].ErrorMessage)
 }
 
 func TestLoadTestAgentPairingIsOneTimeAndScopedToOwner(t *testing.T) {

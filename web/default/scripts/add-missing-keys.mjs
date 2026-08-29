@@ -1,3 +1,19 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+*/
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -1617,7 +1633,133 @@ const unifiedLoadTestLimitKeys = {
   },
 }
 
+const sharedAgentKeys = {
+  en: {
+    'Execution mode': 'Execution mode',
+    'Single Agent': 'Single Agent',
+    'Shared Agent': 'Shared Agent',
+    'Expected workers': 'Expected workers',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      'Use one paired Agent across multiple machines; the total load is split between workers.',
+    'Run the load from one paired Agent.': 'Run the load from one paired Agent.',
+    'All RPS and concurrency values on this page are the total across workers.':
+      'All RPS and concurrency values on this page are the total across workers.',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      'Enter 2-256 workers to estimate aggregate capacity.',
+    'Shared mode requires 2-256 workers': 'Shared mode requires 2-256 workers',
+    'Workers joined': 'Workers joined',
+  },
+  zh: {
+    'Execution mode': '执行模式',
+    'Single Agent': '单机 Agent',
+    'Shared Agent': '共享 Agent',
+    'Expected workers': '预计 Worker 数量',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      '将同一配对 Agent 复制到多台机器，页面配置的总压力会分摊到各 Worker。',
+    'Run the load from one paired Agent.': '由一台已配对 Agent 发起压测。',
+    'All RPS and concurrency values on this page are the total across workers.':
+      '本页面的 RPS 和并发数均表示所有 Worker 的总和。',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      '预计总容量：{{rps}} RPS · {{concurrency}} 个并发请求',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      '请输入 2-256 个 Worker 以估算总容量。',
+    'Shared mode requires 2-256 workers': '共享模式需要 2-256 个 Worker',
+    'Workers joined': '已加入 Worker',
+  },
+  fr: {
+    'Execution mode': 'Mode d’exécution',
+    'Single Agent': 'Agent unique',
+    'Shared Agent': 'Agent partagé',
+    'Expected workers': 'Workers attendus',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      'Utilisez un Agent appairé sur plusieurs machines ; la charge totale est répartie entre les workers.',
+    'Run the load from one paired Agent.': 'Lancer la charge depuis un Agent appairé.',
+    'All RPS and concurrency values on this page are the total across workers.':
+      'Les valeurs RPS et de concurrence indiquées sont le total de tous les workers.',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      'Capacité agrégée estimée : {{rps}} RPS · {{concurrency}} requêtes simultanées',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      'Saisissez 2 à 256 workers pour estimer la capacité agrégée.',
+    'Shared mode requires 2-256 workers': 'Le mode partagé nécessite 2 à 256 workers',
+    'Workers joined': 'Workers connectés',
+  },
+  ja: {
+    'Execution mode': '実行モード',
+    'Single Agent': '単一 Agent',
+    'Shared Agent': '共有 Agent',
+    'Expected workers': '想定 Worker 数',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      '1 つのペア済み Agent を複数マシンで使い、総負荷を Worker 間で分割します。',
+    'Run the load from one paired Agent.': '1 台のペア済み Agent から負荷を生成します。',
+    'All RPS and concurrency values on this page are the total across workers.':
+      'このページの RPS と同時実行数は全 Worker の合計です。',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      '推定合計容量：{{rps}} RPS · 同時実行 {{concurrency}} 件',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      '合計容量を推定するには 2〜256 の Worker を入力してください。',
+    'Shared mode requires 2-256 workers': '共有モードでは 2〜256 Worker が必要です',
+    'Workers joined': '参加 Worker',
+  },
+  ru: {
+    'Execution mode': 'Режим выполнения',
+    'Single Agent': 'Один агент',
+    'Shared Agent': 'Общий агент',
+    'Expected workers': 'Ожидаемое число workers',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      'Используйте одного сопряжённого агента на нескольких машинах; общая нагрузка распределяется между workers.',
+    'Run the load from one paired Agent.': 'Запускать нагрузку с одного сопряжённого агента.',
+    'All RPS and concurrency values on this page are the total across workers.':
+      'Значения RPS и параллельности на этой странице являются суммой по всем workers.',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      'Расчётная общая ёмкость: {{rps}} RPS · {{concurrency}} одновременных запросов',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      'Введите от 2 до 256 workers для оценки общей ёмкости.',
+    'Shared mode requires 2-256 workers': 'Общий режим требует от 2 до 256 workers',
+    'Workers joined': 'Подключено workers',
+  },
+  vi: {
+    'Execution mode': 'Chế độ thực thi',
+    'Single Agent': 'Agent đơn',
+    'Shared Agent': 'Agent dùng chung',
+    'Expected workers': 'Số worker dự kiến',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      'Dùng một Agent đã ghép nối trên nhiều máy; tổng tải được chia cho các worker.',
+    'Run the load from one paired Agent.': 'Tạo tải từ một Agent đã ghép nối.',
+    'All RPS and concurrency values on this page are the total across workers.':
+      'Các giá trị RPS và đồng thời trên trang này là tổng của tất cả worker.',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      'Công suất tổng ước tính: {{rps}} RPS · {{concurrency}} yêu cầu đồng thời',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      'Nhập 2-256 worker để ước tính công suất tổng.',
+    'Shared mode requires 2-256 workers': 'Chế độ dùng chung cần 2-256 worker',
+    'Workers joined': 'Worker đã tham gia',
+  },
+  'zh-TW': {
+    'Execution mode': '執行模式',
+    'Single Agent': '單機 Agent',
+    'Shared Agent': '共享 Agent',
+    'Expected workers': '預計 Worker 數量',
+    'Use one paired Agent across multiple machines; the total load is split between workers.':
+      '將同一個配對 Agent 複製到多台機器，頁面設定的總壓力會分攤到各 Worker。',
+    'Run the load from one paired Agent.': '由一台已配對 Agent 發起壓測。',
+    'All RPS and concurrency values on this page are the total across workers.':
+      '本頁面的 RPS 和並發數均表示所有 Worker 的總和。',
+    'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests':
+      '預計總容量：{{rps}} RPS · {{concurrency}} 個並發請求',
+    'Enter 2-256 workers to estimate aggregate capacity.':
+      '請輸入 2-256 個 Worker 以估算總容量。',
+    'Shared mode requires 2-256 workers': '共享模式需要 2-256 個 Worker',
+    'Workers joined': '已加入 Worker',
+  },
+}
+
 for (const [locale, translations] of Object.entries(unifiedLoadTestLimitKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+for (const [locale, translations] of Object.entries(sharedAgentKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

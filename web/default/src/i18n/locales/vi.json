@@ -6367,6 +6367,17 @@
     "concurrent requests": "yêu cầu đồng thời",
     "Channels are attempted in order; each channel can simulate failures and latency.": "Các kênh được thử theo thứ tự; mỗi kênh có thể mô phỏng lỗi và độ trễ.",
     "No capacity limit": "Không giới hạn công suất",
-    "Mock channel latency is invalid": "Độ trễ của kênh mô phỏng không hợp lệ."
+    "Mock channel latency is invalid": "Độ trễ của kênh mô phỏng không hợp lệ.",
+    "Execution mode": "Chế độ thực thi",
+    "Single Agent": "Agent đơn",
+    "Shared Agent": "Agent dùng chung",
+    "Expected workers": "Số worker dự kiến",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "Dùng một Agent đã ghép nối trên nhiều máy; tổng tải được chia cho các worker.",
+    "Run the load from one paired Agent.": "Tạo tải từ một Agent đã ghép nối.",
+    "All RPS and concurrency values on this page are the total across workers.": "Các giá trị RPS và đồng thời trên trang này là tổng của tất cả worker.",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Công suất tổng ước tính: {{rps}} RPS · {{concurrency}} yêu cầu đồng thời",
+    "Enter 2-256 workers to estimate aggregate capacity.": "Nhập 2-256 worker để ước tính công suất tổng.",
+    "Shared mode requires 2-256 workers": "Chế độ dùng chung cần 2-256 worker",
+    "Workers joined": "Worker đã tham gia"
   }
 }

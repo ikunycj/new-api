@@ -6367,6 +6367,17 @@
     "concurrent requests": "個並發請求",
     "Channels are attempted in order; each channel can simulate failures and latency.": "頻道將按順序嘗試；每個頻道可以模擬失敗和延遲。",
     "No capacity limit": "不限制容量",
-    "Mock channel latency is invalid": "Mock 頻道延遲設定無效"
+    "Mock channel latency is invalid": "Mock 頻道延遲設定無效",
+    "Execution mode": "執行模式",
+    "Single Agent": "單機 Agent",
+    "Shared Agent": "共享 Agent",
+    "Expected workers": "預計 Worker 數量",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "將同一個配對 Agent 複製到多台機器，頁面設定的總壓力會分攤到各 Worker。",
+    "Run the load from one paired Agent.": "由一台已配對 Agent 發起壓測。",
+    "All RPS and concurrency values on this page are the total across workers.": "本頁面的 RPS 和並發數均表示所有 Worker 的總和。",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "預計總容量：{{rps}} RPS · {{concurrency}} 個並發請求",
+    "Enter 2-256 workers to estimate aggregate capacity.": "請輸入 2-256 個 Worker 以估算總容量。",
+    "Shared mode requires 2-256 workers": "共享模式需要 2-256 個 Worker",
+    "Workers joined": "已加入 Worker"
   }
 }

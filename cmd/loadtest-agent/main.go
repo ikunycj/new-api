@@ -24,7 +24,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const agentVersion = "0.4.0"
+const agentVersion = "0.5.0"
 
 var agentHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
@@ -54,6 +54,7 @@ type pollResponse struct {
 
 type loadTestTask struct {
 	RunID             string                `json:"run_id"`
+	WorkerID          string                `json:"worker_id"`
 	TargetURL         string                `json:"target_url"`
 	APIKey            string                `json:"api_key"`
 	Model             string                `json:"model"`
@@ -69,6 +70,8 @@ type loadTestTask struct {
 	DurationSeconds   int                   `json:"duration_seconds"`
 	RequestsPerSecond int                   `json:"requests_per_second"`
 	Concurrency       int                   `json:"concurrency"`
+	StartAt           int64                 `json:"start_at"`
+	ExpectedWorkers   int                   `json:"expected_workers"`
 }
 
 type loadTestMockChannel struct {
@@ -90,6 +93,7 @@ type agentHeartbeat struct {
 	Name           string `json:"name"`
 	Platform       string `json:"platform"`
 	Version        string `json:"version"`
+	WorkerID       string `json:"worker_id"`
 	CurrentRunID   string `json:"current_run_id"`
 	CPUCores       int    `json:"cpu_cores"`
 	MemoryBytes    int64  `json:"memory_bytes"`
@@ -98,6 +102,7 @@ type agentHeartbeat struct {
 }
 
 type progressPayload struct {
+	WorkerID    string           `json:"worker_id,omitempty"`
 	Sent        int64            `json:"sent"`
 	Completed   int64            `json:"completed"`
 	Successes   int64            `json:"successes"`
@@ -111,6 +116,7 @@ type progressPayload struct {
 }
 
 type finishPayload struct {
+	WorkerID         string           `json:"worker_id,omitempty"`
 	Status           string           `json:"status"`
 	Sent             int64            `json:"sent"`
 	Completed        int64            `json:"completed"`
@@ -285,6 +291,10 @@ func runAgent(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	workerID, err := newLoadTestWorkerID()
+	if err != nil {
+		return err
+	}
 	fmt.Printf("agent %s is online; capacity %d RPS / %d concurrent\n", config.Name, runtimeInfo.MaxRPS, runtimeInfo.MaxConcurrency)
 	var activeRunID string
 	var activeCancel context.CancelFunc
@@ -303,7 +313,7 @@ func runAgent(args []string) error {
 			}
 		case <-time.After(2 * time.Second):
 		}
-		response, err := poll(ctx, config, activeRunID, runtimeInfo)
+		response, err := poll(ctx, config, workerID, activeRunID, runtimeInfo)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "poll failed:", err)
 			continue
@@ -312,7 +322,7 @@ func runAgent(args []string) error {
 			if activeCancel != nil && response.RunID == activeRunID {
 				activeCancel()
 			} else if response.RunID != "" {
-				if err := postCompletion(context.Background(), config, response.RunID, finishPayload{Status: "cancelled", ErrorMessage: "cancelled after agent restart"}); err != nil {
+				if err := postCompletion(context.Background(), config, workerID, response.RunID, finishPayload{Status: "cancelled", ErrorMessage: "cancelled after agent restart"}); err != nil {
 					fmt.Fprintln(os.Stderr, "cancel acknowledgement failed:", err)
 				}
 			}
@@ -329,7 +339,7 @@ func runAgent(args []string) error {
 		activeCancel = cancel
 		go func(task loadTestTask) {
 			defer func() { done <- task.RunID }()
-			if err := executeTask(runCtx, config, task); err != nil {
+			if err := executeTask(runCtx, config, workerID, task); err != nil {
 				fmt.Fprintf(os.Stderr, "run %s failed: %v\n", task.RunID, err)
 			}
 		}(response.Task)
@@ -345,11 +355,47 @@ func printStatus() error {
 	return nil
 }
 
-func poll(ctx context.Context, config agentConfig, currentRunID string, runtimeInfo agentRuntime) (pollResponse, error) {
+func newLoadTestWorkerID() (string, error) {
+	id, err := common.GenerateRandomCharsKey(24)
+	if err != nil {
+		return "", err
+	}
+	return "worker_" + id, nil
+}
+
+func loadTestTerminalStatus(ctx context.Context, runErr error) (string, string) {
+	if runErr == nil {
+		return "completed", ""
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return "cancelled", "cancelled by user"
+	}
+	return "failed", runErr.Error()
+}
+
+func waitForLoadTestStart(ctx context.Context, startAt int64) error {
+	if startAt <= 0 {
+		return nil
+	}
+	delay := time.Until(time.Unix(startAt, 0))
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func poll(ctx context.Context, config agentConfig, workerID, currentRunID string, runtimeInfo agentRuntime) (pollResponse, error) {
 	var response apiResponse[pollResponse]
 	body := agentHeartbeat{
 		Name: config.Name, Platform: runtime.GOOS + "/" + runtime.GOARCH,
-		Version: agentVersion, CurrentRunID: currentRunID, CPUCores: runtimeInfo.CPUCores,
+		Version: agentVersion, WorkerID: workerID, CurrentRunID: currentRunID, CPUCores: runtimeInfo.CPUCores,
 		MemoryBytes: runtimeInfo.MemoryBytes, MaxRPS: runtimeInfo.MaxRPS, MaxConcurrency: runtimeInfo.MaxConcurrency,
 	}
 	err := requestJSON(ctx, http.MethodPost, config.ServerURL+"/api/loadtest-agent/poll", config.Secret, body, &response)
@@ -362,15 +408,16 @@ func poll(ctx context.Context, config agentConfig, currentRunID string, runtimeI
 	return response.Data, nil
 }
 
-func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (runErr error) {
+func executeTask(ctx context.Context, config agentConfig, workerID string, task loadTestTask) (runErr error) {
 	terminalReported := false
 	defer func() {
 		if runErr == nil || terminalReported {
 			return
 		}
-		reportErr := postCompletion(context.Background(), config, task.RunID, finishPayload{
-			Status:       "failed",
-			ErrorMessage: runErr.Error(),
+		status, errorMessage := loadTestTerminalStatus(ctx, runErr)
+		reportErr := postCompletion(context.Background(), config, workerID, task.RunID, finishPayload{
+			Status:       status,
+			ErrorMessage: errorMessage,
 		})
 		if reportErr != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("report terminal status: %w", reportErr))
@@ -383,6 +430,9 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 		if err := preflightMock(ctx, task); err != nil {
 			return err
 		}
+	}
+	if err := waitForLoadTestStart(ctx, task.StartAt); err != nil {
+		return err
 	}
 
 	tempDir, err := os.MkdirTemp("", "alltoken-loadtest-")
@@ -414,6 +464,7 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 	}
 	command.Env = append(os.Environ(),
 		"ALLTOKEN_RUN_ID="+task.RunID,
+		"ALLTOKEN_WORKER_ID="+workerID,
 		"ALLTOKEN_TARGET_URL="+task.TargetURL,
 		"ALLTOKEN_API_KEY_FILE="+keyPath,
 		"ALLTOKEN_MODEL="+task.Model,
@@ -442,7 +493,7 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 	for {
 		select {
 		case <-ticker.C:
-			_ = postProgress(context.Background(), config, task.RunID, progressPayload{CurrentRPS: float64(task.RequestsPerSecond)})
+			_ = postProgress(context.Background(), config, workerID, task.RunID, progressPayload{CurrentRPS: float64(task.RequestsPerSecond)})
 		case commandErr := <-done:
 			payload, summaryErr := readK6Summary(summaryPath, task.RequestsPerSecond)
 			payload.ErrorMessage = ""
@@ -458,7 +509,7 @@ func executeTask(ctx context.Context, config agentConfig, task loadTestTask) (ru
 					payload.ErrorMessage = summaryErr.Error()
 				}
 			}
-			if err := postCompletion(context.Background(), config, task.RunID, payload); err != nil {
+			if err := postCompletion(context.Background(), config, workerID, task.RunID, payload); err != nil {
 				return err
 			}
 			terminalReported = true
@@ -497,6 +548,7 @@ func preflightMock(ctx context.Context, task loadTestTask) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+task.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", task.RunID+"-preflight")
 	// The run id is part of the server-issued signature; reuse it for the
 	// preflight request rather than inventing a second unsigned id.
 	req.Header.Set("X-Load-Test-ID", task.RunID)
@@ -583,7 +635,8 @@ func readK6Summary(path string, configuredRPS int) (finishPayload, error) {
 	}, nil
 }
 
-func postProgress(ctx context.Context, config agentConfig, runID string, payload progressPayload) error {
+func postProgress(ctx context.Context, config agentConfig, workerID, runID string, payload progressPayload) error {
+	payload.WorkerID = workerID
 	var response apiResponse[any]
 	if err := requestJSON(ctx, http.MethodPost, config.ServerURL+"/api/loadtest-agent/runs/"+runID+"/progress", config.Secret, payload, &response); err != nil {
 		return err
@@ -594,7 +647,8 @@ func postProgress(ctx context.Context, config agentConfig, runID string, payload
 	return nil
 }
 
-func postCompletion(ctx context.Context, config agentConfig, runID string, payload finishPayload) error {
+func postCompletion(ctx context.Context, config agentConfig, workerID, runID string, payload finishPayload) error {
+	payload.WorkerID = workerID
 	var response apiResponse[any]
 	if err := requestJSON(ctx, http.MethodPost, config.ServerURL+"/api/loadtest-agent/runs/"+runID+"/complete", config.Secret, payload, &response); err != nil {
 		return err
@@ -813,7 +867,7 @@ export default function () {
     // that value stable for authorization and put the per-request identity in
     // the ordinary request ID used for tracing and log correlation.
     'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID,
-    'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,
+    'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __ENV.ALLTOKEN_WORKER_ID + '-' + __VU + '-' + __ITER,
   };
   if (mockEnabled) {
     headers['X-Alltoken-Mock-Load-Test'] = 'true';

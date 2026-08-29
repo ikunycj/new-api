@@ -6367,6 +6367,17 @@
     "concurrent requests": "requêtes simultanées",
     "Channels are attempted in order; each channel can simulate failures and latency.": "Les canaux sont essayés dans l’ordre ; chacun peut simuler des échecs et une latence.",
     "No capacity limit": "Aucune limite de capacité",
-    "Mock channel latency is invalid": "La latence du canal simulé est invalide."
+    "Mock channel latency is invalid": "La latence du canal simulé est invalide.",
+    "Execution mode": "Mode d’exécution",
+    "Single Agent": "Agent unique",
+    "Shared Agent": "Agent partagé",
+    "Expected workers": "Workers attendus",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "Utilisez un Agent appairé sur plusieurs machines ; la charge totale est répartie entre les workers.",
+    "Run the load from one paired Agent.": "Lancer la charge depuis un Agent appairé.",
+    "All RPS and concurrency values on this page are the total across workers.": "Les valeurs RPS et de concurrence indiquées sont le total de tous les workers.",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Capacité agrégée estimée : {{rps}} RPS · {{concurrency}} requêtes simultanées",
+    "Enter 2-256 workers to estimate aggregate capacity.": "Saisissez 2 à 256 workers pour estimer la capacité agrégée.",
+    "Shared mode requires 2-256 workers": "Le mode partagé nécessite 2 à 256 workers",
+    "Workers joined": "Workers connectés"
   }
 }

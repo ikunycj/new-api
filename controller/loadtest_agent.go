@@ -27,7 +27,9 @@ const (
 	loadTestMaxErrorKinds      = 100
 	loadTestMaxMockLatencyMS   = 120000
 	loadTestMockChannelCount   = 3
-	loadTestMockAgentVersion   = "0.4.0"
+	loadTestMockAgentVersion   = "0.5.0"
+	loadTestSharedMinWorkers   = 2
+	loadTestSharedMaxWorkers   = 256
 )
 
 var loadTestEndpoints = map[string]struct{}{
@@ -50,6 +52,8 @@ type pairLoadTestAgentRequest struct {
 
 type createLoadTestRunRequest struct {
 	AgentID           string                      `json:"agent_id"`
+	ExecutionMode     model.LoadTestExecutionMode `json:"execution_mode"`
+	ExpectedWorkers   int                         `json:"expected_workers"`
 	TokenID           int                         `json:"token_id"`
 	Model             string                      `json:"model"`
 	Endpoint          string                      `json:"endpoint"`
@@ -69,6 +73,7 @@ type loadTestAgentPollRequest struct {
 	Name           string `json:"name"`
 	Platform       string `json:"platform"`
 	Version        string `json:"version"`
+	WorkerID       string `json:"worker_id"`
 	CurrentRunID   string `json:"current_run_id"`
 	CPUCores       int    `json:"cpu_cores"`
 	MemoryBytes    int64  `json:"memory_bytes"`
@@ -82,6 +87,7 @@ type updateManagedLoadTestAgentCapacityRequest struct {
 }
 
 type loadTestRunProgressRequest struct {
+	WorkerID    string           `json:"worker_id"`
 	Sent        int64            `json:"sent"`
 	Completed   int64            `json:"completed"`
 	Successes   int64            `json:"successes"`
@@ -95,6 +101,7 @@ type loadTestRunProgressRequest struct {
 }
 
 type finishLoadTestRunRequest struct {
+	WorkerID         string                  `json:"worker_id"`
 	Status           model.LoadTestRunStatus `json:"status"`
 	Sent             int64                   `json:"sent"`
 	Completed        int64                   `json:"completed"`
@@ -323,9 +330,18 @@ func CreateLoadTestRun(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "load-test agent is offline"})
 		return
 	}
-	if err := validateLoadTestAgentCapacity(agent, request); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+	if request.ExecutionMode == "" {
+		request.ExecutionMode = model.LoadTestExecutionSingle
+	}
+	if err := validateLoadTestExecutionSettings(agent, request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
+	}
+	if request.ExecutionMode == model.LoadTestExecutionSingle {
+		if err := validateLoadTestAgentCapacity(agent, request); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+			return
+		}
 	}
 	if err := validateLoadTestMockSettings(agent, request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
@@ -362,6 +378,7 @@ func CreateLoadTestRun(c *gin.Context) {
 		UserID: c.GetInt("id"), AgentID: agent.ID, TokenID: token.Id,
 		KeyName: token.Name, PackageName: packageName, Model: request.Model,
 		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache, AgentManaged: agent.Managed,
+		ExecutionMode: request.ExecutionMode, ExpectedWorkers: request.ExpectedWorkers,
 		MockEnabled: request.MockEnabled, MockFailureRate: request.MockFailureRate,
 		MockFailureStatus: request.MockFailureStatus, MockLatencyMS: request.MockLatencyMS,
 		MockChannelsJSON: mockChannelsJSON, MockChannels: request.MockChannels,
@@ -441,9 +458,65 @@ func PollLoadTestAgent(c *gin.Context) {
 		common.ApiSuccess(c, gin.H{"command": "stop", "run_id": cancelRun.ID})
 		return
 	}
+	runtimeInfo := loadTestAgentRuntime(request.Name, request.Platform, request.Version, request.CPUCores, request.MemoryBytes, request.MaxRPS, request.MaxConcurrency)
+	workerID := strings.TrimSpace(request.WorkerID)
+	if workerID != "" && !validLoadTestWorkerID(workerID) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid worker id"})
+		return
+	}
 	if strings.TrimSpace(request.CurrentRunID) != "" {
+		currentRun, runErr := model.GetLoadTestRunByID(request.CurrentRunID)
+		if runErr != nil {
+			common.ApiError(c, runErr)
+			return
+		}
+		if currentRun.Status != model.LoadTestRunDispatched && currentRun.Status != model.LoadTestRunRunning {
+			common.ApiSuccess(c, gin.H{"command": "stop", "run_id": currentRun.ID})
+			return
+		}
+		if workerID != "" && currentRun.ExecutionMode == model.LoadTestExecutionShared {
+			if err := model.TouchLoadTestRunWorker(request.CurrentRunID, workerID, runtimeInfo); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+		}
 		common.ApiSuccess(c, gin.H{"command": "wait"})
 		return
+	}
+	if workerID != "" {
+		worker, err := model.ClaimLoadTestRunForWorker(agent.ID, workerID)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if worker != nil {
+			run, err := model.GetLoadTestRunByID(worker.RunID)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			token, err := model.GetTokenByIds(run.TokenID, run.UserID)
+			if err != nil {
+				_ = model.FinishLoadTestRunWorker(worker.RunID, worker.WorkerID, model.LoadTestRunWorkerFailed, map[string]any{"error_message": "API key is unavailable"})
+				common.ApiError(c, err)
+				return
+			}
+			common.ApiSuccess(c, gin.H{
+				"command": "run",
+				"task": gin.H{
+					"run_id": run.ID, "worker_id": worker.WorkerID, "target_url": run.TargetURL, "api_key": "sk-" + token.GetFullKey(),
+					"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt,
+					"prompt_cache": run.PromptCache, "duration_seconds": run.DurationSeconds,
+					"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
+					"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
+					"mock_channels":       run.MockChannels,
+					"mock_token":          service.MockLoadTestSignature(run.ID, run.TokenID, run.MockChannelsJSON, run.MockFailureRate, run.MockFailureStatus, run.MockLatencyMS),
+					"requests_per_second": worker.AssignedRPS, "concurrency": worker.AssignedConcurrency,
+					"start_at": run.StartAt, "expected_workers": run.ExpectedWorkers,
+				},
+			})
+			return
+		}
 	}
 	run, err := model.ClaimLoadTestRun(agent.ID)
 	if err != nil {
@@ -642,12 +715,31 @@ func UpdateLoadTestRunProgress(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	err = model.UpdateLoadTestRunProgress(agent.ID, c.Param("id"), map[string]any{
-		"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
-		"failures": request.Failures, "dropped": request.Dropped, "current_rps": request.CurrentRPS,
-		"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
-		"error_counts_json": errorJSON,
-	})
+	runID := c.Param("id")
+	run, err := model.GetLoadTestRunByID(runID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if run.ExecutionMode == model.LoadTestExecutionShared {
+		if !validLoadTestWorkerID(request.WorkerID) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "worker id is required for shared load-test runs"})
+			return
+		}
+		err = model.UpdateLoadTestRunWorkerProgress(runID, request.WorkerID, map[string]any{
+			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
+			"failures": request.Failures, "dropped": request.Dropped, "current_rps": request.CurrentRPS,
+			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
+			"error_counts_json": errorJSON,
+		})
+	} else {
+		err = model.UpdateLoadTestRunProgress(agent.ID, runID, map[string]any{
+			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
+			"failures": request.Failures, "dropped": request.Dropped, "current_rps": request.CurrentRPS,
+			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
+			"error_counts_json": errorJSON,
+		})
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -676,14 +768,41 @@ func FinishLoadTestRun(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	err = model.FinishLoadTestRun(agent.ID, c.Param("id"), request.Status, map[string]any{
-		"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
-		"failures": request.Failures, "dropped": request.Dropped, "input_tokens": request.InputTokens,
-		"output_tokens": request.OutputTokens, "cache_read_tokens": request.CacheReadTokens,
-		"cache_write_tokens": request.CacheWriteTokens, "current_rps": request.CurrentRPS,
-		"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
-		"error_counts_json": errorJSON, "error_message": strings.TrimSpace(request.ErrorMessage),
-	})
+	runID := c.Param("id")
+	run, err := model.GetLoadTestRunByID(runID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if run.ExecutionMode == model.LoadTestExecutionShared {
+		if !validLoadTestWorkerID(request.WorkerID) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "worker id is required for shared load-test runs"})
+			return
+		}
+		workerStatus := model.LoadTestRunWorkerCompleted
+		if request.Status == model.LoadTestRunFailed {
+			workerStatus = model.LoadTestRunWorkerFailed
+		} else if request.Status == model.LoadTestRunCancelled {
+			workerStatus = model.LoadTestRunWorkerCancelled
+		}
+		err = model.FinishLoadTestRunWorker(runID, request.WorkerID, workerStatus, map[string]any{
+			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
+			"failures": request.Failures, "dropped": request.Dropped, "input_tokens": request.InputTokens,
+			"output_tokens": request.OutputTokens, "cache_read_tokens": request.CacheReadTokens,
+			"cache_write_tokens": request.CacheWriteTokens, "current_rps": request.CurrentRPS,
+			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
+			"error_counts_json": errorJSON, "error_message": strings.TrimSpace(request.ErrorMessage),
+		})
+	} else {
+		err = model.FinishLoadTestRun(agent.ID, runID, request.Status, map[string]any{
+			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
+			"failures": request.Failures, "dropped": request.Dropped, "input_tokens": request.InputTokens,
+			"output_tokens": request.OutputTokens, "cache_read_tokens": request.CacheReadTokens,
+			"cache_write_tokens": request.CacheWriteTokens, "current_rps": request.CurrentRPS,
+			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
+			"error_counts_json": errorJSON, "error_message": strings.TrimSpace(request.ErrorMessage),
+		})
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -728,6 +847,29 @@ func validateLoadTestAgentCapacity(agent *model.LoadTestAgent, request createLoa
 	return nil
 }
 
+func validateLoadTestExecutionSettings(agent *model.LoadTestAgent, request createLoadTestRunRequest) error {
+	mode := request.ExecutionMode
+	if mode == "" {
+		mode = model.LoadTestExecutionSingle
+	}
+	switch mode {
+	case model.LoadTestExecutionSingle:
+		if request.ExpectedWorkers != 0 {
+			return errors.New("expected workers is only valid for shared mode")
+		}
+	case model.LoadTestExecutionShared:
+		if agent == nil || !agent.Managed {
+			return errors.New("shared mode requires a managed load-test agent")
+		}
+		if request.ExpectedWorkers < loadTestSharedMinWorkers || request.ExpectedWorkers > loadTestSharedMaxWorkers {
+			return fmt.Errorf("shared mode requires at least %d and at most %d workers", loadTestSharedMinWorkers, loadTestSharedMaxWorkers)
+		}
+	default:
+		return errors.New("unsupported load-test execution mode")
+	}
+	return nil
+}
+
 func validLoadTestProgress(sent, completed, successes, failures, dropped int64, currentRPS, p50MS, p95MS, p99MS float64, errorCounts map[string]int64) bool {
 	if sent < 0 || completed < 0 || successes < 0 || failures < 0 || dropped < 0 || completed > sent || successes+failures > completed {
 		return false
@@ -746,4 +888,9 @@ func validLoadTestProgress(sent, completed, successes, failures, dropped int64, 
 		}
 	}
 	return true
+}
+
+func validLoadTestWorkerID(workerID string) bool {
+	workerID = strings.TrimSpace(workerID)
+	return workerID != "" && len(workerID) <= 96
 }

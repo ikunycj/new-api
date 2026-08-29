@@ -327,8 +327,12 @@ func migrateDB() error {
 		&CostReconciliationRollup{},
 		&LoadTestAgent{},
 		&LoadTestRun{},
+		&LoadTestRunWorker{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := normalizeLoadTestExecutionModes(); err != nil {
 		return err
 	}
 	if err := migrateUserTypes(); err != nil {
@@ -412,6 +416,7 @@ func migrateDBFast() error {
 		{&CostReconciliationRollup{}, "CostReconciliationRollup"},
 		{&LoadTestAgent{}, "LoadTestAgent"},
 		{&LoadTestRun{}, "LoadTestRun"},
+		{&LoadTestRunWorker{}, "LoadTestRunWorker"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -436,6 +441,9 @@ func migrateDBFast() error {
 			return err
 		}
 	}
+	if err := normalizeLoadTestExecutionModes(); err != nil {
+		return err
+	}
 	if err := migrateUserTypes(); err != nil {
 		return err
 	}
@@ -453,6 +461,15 @@ func migrateDBFast() error {
 	}
 	common.SysLog("database migrated")
 	return nil
+}
+
+func normalizeLoadTestExecutionModes() error {
+	if DB == nil || !DB.Migrator().HasTable(&LoadTestRun{}) {
+		return nil
+	}
+	return DB.Model(&LoadTestRun{}).
+		Where("execution_mode IS NULL OR execution_mode = ?", "").
+		Update("execution_mode", LoadTestExecutionSingle).Error
 }
 
 // migrateUserTypes moves the legacy group-derived ToB permission into the

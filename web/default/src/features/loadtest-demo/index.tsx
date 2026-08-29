@@ -86,6 +86,7 @@ import {
   type LoadTestChannelStats,
   type LoadTestKey,
   type LoadTestAgent,
+  type LoadTestExecutionMode,
   type LoadTestLimits,
   type LoadTestModel,
   type LoadTestPricing,
@@ -265,6 +266,8 @@ export function LoadTestDemo() {
   )
   const [managedAgent, setManagedAgent] = useState<LoadTestAgent | null>(null)
   const [localAgent, setLocalAgent] = useState<LoadTestAgent | null>(null)
+  const [managedExecutionMode, setManagedExecutionMode] =
+    useState<LoadTestExecutionMode>('single')
   const [prompt, setPrompt] = useState(
     persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
   )
@@ -709,12 +712,19 @@ export function LoadTestDemo() {
   let selectedAgentForTab: LoadTestAgent | null = null
   if (activeTab === 'server') selectedAgentForTab = managedAgent
   if (activeTab === 'local') selectedAgentForTab = localAgent
-  const effectiveMaxRPS = selectedAgentForTab?.max_rps
-    ? Math.min(limits.max_rps, selectedAgentForTab.max_rps)
-    : limits.max_rps
-  const effectiveMaxConcurrency = selectedAgentForTab?.max_concurrency
-    ? Math.min(limits.max_concurrency, selectedAgentForTab.max_concurrency)
-    : limits.max_concurrency
+  const sharedManagedRun =
+    activeTab === 'server' && managedExecutionMode === 'shared'
+  let effectiveMaxRPS = limits.max_rps
+  let effectiveMaxConcurrency = limits.max_concurrency
+  if (!sharedManagedRun && selectedAgentForTab?.max_rps) {
+    effectiveMaxRPS = Math.min(limits.max_rps, selectedAgentForTab.max_rps)
+  }
+  if (!sharedManagedRun && selectedAgentForTab?.max_concurrency) {
+    effectiveMaxConcurrency = Math.min(
+      limits.max_concurrency,
+      selectedAgentForTab.max_concurrency
+    )
+  }
   const hasValidLoadSettings =
     Number.isFinite(durationValue) &&
     durationValue >= limits.min_duration_seconds &&
@@ -744,12 +754,16 @@ export function LoadTestDemo() {
     (agent: LoadTestAgent | null) => handleAgentChange('server', agent),
     [handleAgentChange]
   )
+  const onManagedExecutionModeChange = useCallback(
+    (mode: LoadTestExecutionMode) => setManagedExecutionMode(mode),
+    []
+  )
   const onLocalAgentChange = useCallback(
     (agent: LoadTestAgent | null) => handleAgentChange('local', agent),
     [handleAgentChange]
   )
   useEffect(() => {
-    if (!selectedAgentForTab) return
+    if (!selectedAgentForTab || sharedManagedRun) return
     const agentMaxRPS = Math.min(limits.max_rps, selectedAgentForTab.max_rps)
     const agentMaxConcurrency = Math.min(
       limits.max_concurrency,
@@ -767,7 +781,7 @@ export function LoadTestDemo() {
         ? String(agentMaxConcurrency)
         : current
     })
-  }, [limits, selectedAgentForTab])
+  }, [limits, selectedAgentForTab, sharedManagedRun])
   const selectedKeyMetadata = keys.find((key) => key.key === selectedKeyValue)
   const selectedModelMetadata = models.find(
     (model) => model.id === selectedModel
@@ -1499,6 +1513,7 @@ export function LoadTestDemo() {
               <AgentPanel
                 disabled={!canRun}
                 mode='managed'
+                onExecutionModeChange={onManagedExecutionModeChange}
                 onSelectedAgentChange={onManagedAgentChange}
                 request={agentRequest}
               />

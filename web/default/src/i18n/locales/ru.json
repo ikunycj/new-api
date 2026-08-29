@@ -6367,6 +6367,17 @@
     "concurrent requests": "одновременных запросов",
     "Channels are attempted in order; each channel can simulate failures and latency.": "Каналы проверяются по порядку; для каждого можно смоделировать ошибки и задержку.",
     "No capacity limit": "Без ограничения ёмкости",
-    "Mock channel latency is invalid": "Недопустимая задержка Mock-канала."
+    "Mock channel latency is invalid": "Недопустимая задержка Mock-канала.",
+    "Execution mode": "Режим выполнения",
+    "Single Agent": "Один агент",
+    "Shared Agent": "Общий агент",
+    "Expected workers": "Ожидаемое число workers",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "Используйте одного сопряжённого агента на нескольких машинах; общая нагрузка распределяется между workers.",
+    "Run the load from one paired Agent.": "Запускать нагрузку с одного сопряжённого агента.",
+    "All RPS and concurrency values on this page are the total across workers.": "Значения RPS и параллельности на этой странице являются суммой по всем workers.",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "Расчётная общая ёмкость: {{rps}} RPS · {{concurrency}} одновременных запросов",
+    "Enter 2-256 workers to estimate aggregate capacity.": "Введите от 2 до 256 workers для оценки общей ёмкости.",
+    "Shared mode requires 2-256 workers": "Общий режим требует от 2 до 256 workers",
+    "Workers joined": "Подключено workers"
   }
 }

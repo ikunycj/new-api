@@ -2,6 +2,7 @@ package controller
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -38,6 +39,12 @@ func TestValidLoadTestProgress(t *testing.T) {
 			assert.Equal(t, test.want, got)
 		})
 	}
+}
+
+func TestValidLoadTestWorkerID(t *testing.T) {
+	assert.True(t, validLoadTestWorkerID("worker-a"))
+	assert.False(t, validLoadTestWorkerID("   "))
+	assert.False(t, validLoadTestWorkerID(strings.Repeat("w", 97)))
 }
 
 func TestValidateLoadTestMockSettings(t *testing.T) {
@@ -167,4 +174,23 @@ func TestValidateLoadTestAgentCapacity(t *testing.T) {
 			assert.ErrorContains(t, err, test.message)
 		})
 	}
+}
+
+func TestValidateLoadTestExecutionSettings(t *testing.T) {
+	managed := &model.LoadTestAgent{Managed: true}
+	local := &model.LoadTestAgent{Managed: false}
+
+	require.NoError(t, validateLoadTestExecutionSettings(managed, createLoadTestRunRequest{
+		ExecutionMode: model.LoadTestExecutionShared, ExpectedWorkers: 3,
+	}))
+	assert.ErrorContains(t, validateLoadTestExecutionSettings(managed, createLoadTestRunRequest{
+		ExecutionMode: model.LoadTestExecutionShared, ExpectedWorkers: 1,
+	}), "at least 2")
+	assert.ErrorContains(t, validateLoadTestExecutionSettings(local, createLoadTestRunRequest{
+		ExecutionMode: model.LoadTestExecutionShared, ExpectedWorkers: 2,
+	}), "managed")
+	assert.ErrorContains(t, validateLoadTestExecutionSettings(managed, createLoadTestRunRequest{
+		ExecutionMode: "unknown", ExpectedWorkers: 2,
+	}), "unsupported")
+	require.NoError(t, validateLoadTestExecutionSettings(managed, createLoadTestRunRequest{}))
 }

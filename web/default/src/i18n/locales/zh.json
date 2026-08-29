@@ -6367,6 +6367,17 @@
     "concurrent requests": "个并发请求",
     "Channels are attempted in order; each channel can simulate failures and latency.": "渠道将按顺序尝试；每个渠道可以模拟失败和延迟。",
     "No capacity limit": "不限制容量",
-    "Mock channel latency is invalid": "Mock 渠道延迟配置无效"
+    "Mock channel latency is invalid": "Mock 渠道延迟配置无效",
+    "Execution mode": "执行模式",
+    "Single Agent": "单机 Agent",
+    "Shared Agent": "共享 Agent",
+    "Expected workers": "预计 Worker 数量",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "将同一配对 Agent 复制到多台机器，页面配置的总压力会分摊到各 Worker。",
+    "Run the load from one paired Agent.": "由一台已配对 Agent 发起压测。",
+    "All RPS and concurrency values on this page are the total across workers.": "本页面的 RPS 和并发数均表示所有 Worker 的总和。",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "预计总容量：{{rps}} RPS · {{concurrency}} 个并发请求",
+    "Enter 2-256 workers to estimate aggregate capacity.": "请输入 2-256 个 Worker 以估算总容量。",
+    "Shared mode requires 2-256 workers": "共享模式需要 2-256 个 Worker",
+    "Workers joined": "已加入 Worker"
   }
 }

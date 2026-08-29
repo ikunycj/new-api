@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +148,33 @@ func TestK6MockRequestsKeepSignedRunIDAndUseUniqueTraceID(t *testing.T) {
 	// belongs in X-Request-ID so logs remain correlatable without invalidating
 	// the server-issued signature.
 	require.Contains(t, k6TaskScript, "'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID,")
-	require.Contains(t, k6TaskScript, "'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,")
+	require.Contains(t, k6TaskScript, "'X-Request-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __ENV.ALLTOKEN_WORKER_ID + '-' + __VU + '-' + __ITER,")
 	require.NotContains(t, k6TaskScript, "'X-Load-Test-ID': __ENV.ALLTOKEN_RUN_ID + '-' + __VU + '-' + __ITER,")
 	require.Contains(t, k6TaskScript, "X-Alltoken-Mock-Token")
+}
+
+func TestLoadTestWorkerIDIsUniquePerProcess(t *testing.T) {
+	first, err := newLoadTestWorkerID()
+	require.NoError(t, err)
+	second, err := newLoadTestWorkerID()
+	require.NoError(t, err)
+	assert.NotEmpty(t, first)
+	assert.NotEqual(t, first, second)
+}
+
+func TestWaitForLoadTestStartHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := waitForLoadTestStart(ctx, time.Now().Unix()+2)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestExecuteTaskTreatsCancellationBeforeStartAsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := waitForLoadTestStart(ctx, time.Now().Unix()+2)
+	assert.ErrorIs(t, err, context.Canceled)
+	status, message := loadTestTerminalStatus(ctx, err)
+	assert.Equal(t, "cancelled", status)
+	assert.Equal(t, "cancelled by user", message)
 }

@@ -6367,6 +6367,17 @@
     "concurrent requests": "同時実行リクエスト",
     "Channels are attempted in order; each channel can simulate failures and latency.": "チャネルは順番に試行され、それぞれで失敗と遅延をシミュレートできます。",
     "No capacity limit": "容量制限なし",
-    "Mock channel latency is invalid": "Mock チャネルの遅延が無効です。"
+    "Mock channel latency is invalid": "Mock チャネルの遅延が無効です。",
+    "Execution mode": "実行モード",
+    "Single Agent": "単一 Agent",
+    "Shared Agent": "共有 Agent",
+    "Expected workers": "想定 Worker 数",
+    "Use one paired Agent across multiple machines; the total load is split between workers.": "1 つのペア済み Agent を複数マシンで使い、総負荷を Worker 間で分割します。",
+    "Run the load from one paired Agent.": "1 台のペア済み Agent から負荷を生成します。",
+    "All RPS and concurrency values on this page are the total across workers.": "このページの RPS と同時実行数は全 Worker の合計です。",
+    "Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests": "推定合計容量：{{rps}} RPS · 同時実行 {{concurrency}} 件",
+    "Enter 2-256 workers to estimate aggregate capacity.": "合計容量を推定するには 2〜256 の Worker を入力してください。",
+    "Shared mode requires 2-256 workers": "共有モードでは 2〜256 Worker が必要です",
+    "Workers joined": "参加 Worker"
   }
 }

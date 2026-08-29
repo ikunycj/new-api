@@ -81,17 +81,24 @@ import {
   type CreateLoadTestAgentRun,
   type LoadTestAgent,
   type LoadTestAgentRun,
+  type LoadTestExecutionMode,
   type LoadTestLimits,
   type LoadTestMockChannel,
   type LoadTestPricing,
 } from './api'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
+import {
+  getJoinedWorkerLabel,
+  getSharedCapacityEstimate,
+  parseSharedWorkerCount,
+} from './shared'
 
 type AgentPanelProps = {
   disabled: boolean
   mode: 'managed' | 'local'
   request: Omit<CreateLoadTestAgentRun, 'agent_id'> | null
   onSelectedAgentChange?: (agent: LoadTestAgent | null) => void
+  onExecutionModeChange?: (mode: LoadTestExecutionMode) => void
 }
 
 type Pairing = {
@@ -158,7 +165,12 @@ export function AgentPanel(props: AgentPanelProps) {
   const [savingCapacity, setSavingCapacity] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [confirmAccountPoolOpen, setConfirmAccountPoolOpen] = useState(false)
   const [testMode, setTestMode] = useState<'real' | 'mock'>('real')
+  const [executionMode, setExecutionMode] = useState<'single' | 'shared'>(
+    'single'
+  )
+  const [expectedWorkers, setExpectedWorkers] = useState('2')
   const [mockChannels, setMockChannels] = useState<LoadTestMockChannel[]>(() =>
     DEFAULT_MOCK_CHANNELS.map((channel) => ({ ...channel }))
   )
@@ -300,6 +312,15 @@ export function AgentPanel(props: AgentPanelProps) {
   const start = useCallback(async () => {
     if (!props.request || !selectedAgentId) return
     const useMockChannels = props.mode === 'managed' && testMode === 'mock'
+    const workerCount = parseSharedWorkerCount(expectedWorkers)
+    if (
+      props.mode === 'managed' &&
+      executionMode === 'shared' &&
+      workerCount === null
+    ) {
+      toast.error(t('Shared mode requires 2-256 workers'))
+      return
+    }
     if (
       useMockChannels &&
       mockChannels.some(
@@ -317,6 +338,11 @@ export function AgentPanel(props: AgentPanelProps) {
       await createLoadTestAgentRun({
         ...props.request,
         agent_id: selectedAgentId,
+        execution_mode: props.mode === 'managed' ? executionMode : 'single',
+        expected_workers:
+          props.mode === 'managed' && executionMode === 'shared'
+            ? (workerCount ?? 0)
+            : 0,
         mock_enabled: useMockChannels,
         mock_failure_rate: 0,
         mock_failure_status: 0,
@@ -331,6 +357,8 @@ export function AgentPanel(props: AgentPanelProps) {
       setStarting(false)
     }
   }, [
+    executionMode,
+    expectedWorkers,
     mockChannels,
     props.mode,
     props.request,
@@ -339,6 +367,19 @@ export function AgentPanel(props: AgentPanelProps) {
     t,
     testMode,
   ])
+
+  const handleStart = useCallback(() => {
+    if (props.mode === 'managed' && testMode === 'real') {
+      setConfirmAccountPoolOpen(true)
+      return
+    }
+    void start()
+  }, [props.mode, start, testMode])
+
+  const confirmStart = useCallback(async () => {
+    setConfirmAccountPoolOpen(false)
+    await start()
+  }, [start])
 
   const stop = useCallback(
     async (runId: string) => {
@@ -429,10 +470,22 @@ export function AgentPanel(props: AgentPanelProps) {
   const selectedAgent = onlineAgents.find(
     (agent) => agent.id === selectedAgentId
   )
-  const { onSelectedAgentChange } = props
+  const { onExecutionModeChange, onSelectedAgentChange } = props
   useEffect(() => {
     onSelectedAgentChange?.(selectedAgent ?? null)
   }, [onSelectedAgentChange, selectedAgent])
+  const executionModeForCallback =
+    props.mode === 'managed' ? executionMode : 'single'
+  useEffect(() => {
+    onExecutionModeChange?.(executionModeForCallback)
+  }, [executionModeForCallback, onExecutionModeChange])
+  const parsedWorkerCount = parseSharedWorkerCount(expectedWorkers)
+  const sharedCapacity = getSharedCapacityEstimate(
+    selectedAgent ?? null,
+    parsedWorkerCount,
+    executionMode,
+    loadTestLimits ?? undefined
+  )
   return (
     <>
       <Card>
@@ -512,7 +565,9 @@ export function AgentPanel(props: AgentPanelProps) {
                         {t('Fallback channel profiles')}
                       </p>
                       <p className='text-muted-foreground mt-0.5 text-xs'>
-                        {t('Channels are attempted in order; each channel can simulate failures and latency.')}
+                        {t(
+                          'Channels are attempted in order; each channel can simulate failures and latency.'
+                        )}
                       </p>
                     </div>
                   </div>
@@ -619,6 +674,86 @@ export function AgentPanel(props: AgentPanelProps) {
                   </div>
                 </div>
               )}
+              <div className='space-y-3 border-t pt-4'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                  <div>
+                    <Label>{t('Execution mode')}</Label>
+                    <p className='text-muted-foreground mt-1 text-xs'>
+                      {executionMode === 'shared'
+                        ? t(
+                            'Use one paired Agent across multiple machines; the total load is split between workers.'
+                          )
+                        : t('Run the load from one paired Agent.')}
+                    </p>
+                  </div>
+                  <ToggleGroup
+                    aria-label={t('Execution mode')}
+                    onValueChange={(values) => {
+                      const value = values[0] as
+                        | LoadTestExecutionMode
+                        | undefined
+                      if (value === 'single' || value === 'shared') {
+                        setExecutionMode(value)
+                      }
+                    }}
+                    size='sm'
+                    value={[executionMode]}
+                    variant='outline'
+                  >
+                    <ToggleGroupItem value='single'>
+                      <Server className='size-4' />
+                      {t('Single Agent')}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value='shared'>
+                      <MonitorCog className='size-4' />
+                      {t('Shared Agent')}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+                {executionMode === 'shared' && (
+                  <div className='bg-muted/20 grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(12rem,16rem)_1fr] sm:items-end'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='shared-agent-worker-count'>
+                        {t('Expected workers')}
+                      </Label>
+                      <Input
+                        id='shared-agent-worker-count'
+                        max={256}
+                        min={2}
+                        onChange={(event) =>
+                          setExpectedWorkers(event.target.value)
+                        }
+                        type='number'
+                        value={expectedWorkers}
+                      />
+                    </div>
+                    <div className='text-muted-foreground text-xs'>
+                      <p>
+                        {t(
+                          'All RPS and concurrency values on this page are the total across workers.'
+                        )}
+                      </p>
+                      {sharedCapacity ? (
+                        <p className='text-foreground mt-1 font-medium'>
+                          {t(
+                            'Estimated aggregate capacity: {{rps}} RPS · {{concurrency}} concurrent requests',
+                            {
+                              rps: sharedCapacity.rps,
+                              concurrency: sharedCapacity.concurrency,
+                            }
+                          )}
+                        </p>
+                      ) : (
+                        <p className='mt-1'>
+                          {t(
+                            'Enter 2-256 workers to estimate aggregate capacity.'
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div className='flex flex-wrap items-end gap-3'>
@@ -651,7 +786,7 @@ export function AgentPanel(props: AgentPanelProps) {
               disabled={
                 props.disabled || !props.request || !selectedAgentId || starting
               }
-              onClick={() => void start()}
+              onClick={handleStart}
             >
               <Play className='size-4' />
               {t('Start with agent')}
@@ -767,42 +902,61 @@ export function AgentPanel(props: AgentPanelProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className='whitespace-nowrap'>
-                          {run.mock_enabled ? (
-                            <div className='space-y-1'>
+                          <div className='space-y-1'>
+                            <div className='flex flex-wrap items-center gap-1'>
                               <Badge variant='outline'>
-                                {t('Do not consume account pool')}
+                                {run.execution_mode === 'shared'
+                                  ? t('Shared Agent')
+                                  : t('Single Agent')}
                               </Badge>
-                              {(run.mock_channels?.length ?? 0) > 0 ? (
-                                <div className='text-muted-foreground space-y-0.5 text-xs tabular-nums'>
-                                  {run.mock_channels.map((channel) => (
-                                    <p key={channel.slot}>
-                                      #{channel.slot} ·{' '}
-                                      {Math.round(channel.failure_rate * 100)}%
-                                      ·{' '}
-                                      {channel.failure_status ===
-                                      MOCK_FAILURE_STATUS_MIXED
-                                        ? t('Mixed distribution')
-                                        : `HTTP ${channel.failure_status}`}{' '}
-                                      · {channel.latency_ms}ms
-                                    </p>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className='text-muted-foreground text-xs tabular-nums'>
-                                  {Math.round(run.mock_failure_rate * 100)}% ·
-                                  {run.mock_failure_status ===
-                                  MOCK_FAILURE_STATUS_MIXED
-                                    ? t('Mixed distribution')
-                                    : `HTTP ${run.mock_failure_status}`}{' '}
-                                  · {run.mock_latency_ms}ms
-                                </p>
+                              {run.execution_mode === 'shared' && (
+                                <Badge variant='secondary'>
+                                  {t('Workers joined')}:{' '}
+                                  {getJoinedWorkerLabel(
+                                    run.execution_mode,
+                                    run.workers.length,
+                                    run.expected_workers
+                                  )}
+                                </Badge>
                               )}
                             </div>
-                          ) : (
-                            <Badge variant='secondary'>
-                              {t('Consume account pool')}
-                            </Badge>
-                          )}
+                            {run.mock_enabled ? (
+                              <div className='space-y-1'>
+                                <Badge variant='outline'>
+                                  {t('Do not consume account pool')}
+                                </Badge>
+                                {(run.mock_channels?.length ?? 0) > 0 ? (
+                                  <div className='text-muted-foreground space-y-0.5 text-xs tabular-nums'>
+                                    {run.mock_channels.map((channel) => (
+                                      <p key={channel.slot}>
+                                        #{channel.slot} ·{' '}
+                                        {Math.round(channel.failure_rate * 100)}
+                                        % ·{' '}
+                                        {channel.failure_status ===
+                                        MOCK_FAILURE_STATUS_MIXED
+                                          ? t('Mixed distribution')
+                                          : `HTTP ${channel.failure_status}`}{' '}
+                                        · {channel.latency_ms}ms
+                                      </p>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className='text-muted-foreground text-xs tabular-nums'>
+                                    {Math.round(run.mock_failure_rate * 100)}% ·
+                                    {run.mock_failure_status ===
+                                    MOCK_FAILURE_STATUS_MIXED
+                                      ? t('Mixed distribution')
+                                      : `HTTP ${run.mock_failure_status}`}{' '}
+                                    · {run.mock_latency_ms}ms
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <Badge variant='secondary'>
+                                {t('Consume account pool')}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{run.key_name}</TableCell>
                         <TableCell>{run.model}</TableCell>
@@ -861,6 +1015,32 @@ export function AgentPanel(props: AgentPanelProps) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={confirmAccountPoolOpen}
+        onOpenChange={setConfirmAccountPoolOpen}
+      >
+        <DialogContent className='sm:max-w-lg'>
+          <DialogHeader>
+            <DialogTitle>{t('Consume account pool')}</DialogTitle>
+            <DialogDescription>
+              {t('This mode consumes the API key account pool.')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => setConfirmAccountPoolOpen(false)}
+              variant='outline'
+            >
+              {t('Cancel')}
+            </Button>
+            <Button onClick={() => void confirmStart()} variant='destructive'>
+              <Play className='size-4' />
+              {t('Start with agent')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={pairing !== null}

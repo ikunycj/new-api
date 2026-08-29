@@ -1,5 +1,3 @@
-import { isAxiosError } from 'axios'
-
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -18,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { isAxiosError } from 'axios'
 import {
   fetchTokenKeysBatch,
   getApiKeys,
@@ -238,6 +237,39 @@ export type LoadTestAgentRunStatus =
   | 'failed'
   | 'cancelled'
 
+export type LoadTestExecutionMode = 'single' | 'shared'
+
+export type LoadTestRunWorker = {
+  id: string
+  run_id: string
+  agent_id: string
+  worker_id: string
+  slot: number
+  name: string
+  platform: string
+  cpu_cores: number
+  memory_bytes: number
+  max_rps: number
+  max_concurrency: number
+  assigned_rps: number
+  assigned_concurrency: number
+  status: string
+  sent: number
+  completed: number
+  successes: number
+  failures: number
+  dropped: number
+  current_rps: number
+  p50_ms: number
+  p95_ms: number
+  p99_ms: number
+  error_counts: Record<string, number>
+  error_message: string
+  last_seen_at: number
+  started_at: number
+  finished_at: number
+}
+
 export type LoadTestMockChannel = {
   slot: number
   failure_rate: number
@@ -248,6 +280,10 @@ export type LoadTestMockChannel = {
 export type LoadTestAgentRun = {
   id: string
   agent_id: string
+  execution_mode: LoadTestExecutionMode
+  expected_workers: number
+  join_deadline_at: number
+  start_at: number
   token_id: number
   key_name: string
   package_name: string
@@ -260,6 +296,7 @@ export type LoadTestAgentRun = {
   mock_failure_status: number
   mock_latency_ms: number
   mock_channels: LoadTestMockChannel[]
+  workers: LoadTestRunWorker[]
   duration_seconds: number
   requests_per_second: number
   concurrency: number
@@ -288,6 +325,8 @@ export type LoadTestAgentRun = {
 
 export type CreateLoadTestAgentRun = {
   agent_id: string
+  execution_mode?: LoadTestExecutionMode
+  expected_workers?: number
   token_id: number
   model: string
   endpoint: LoadTestEndpoint

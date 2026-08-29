@@ -21,6 +21,18 @@ const (
 	LoadTestRunCancelled       LoadTestRunStatus = "cancelled"
 )
 
+type LoadTestExecutionMode string
+
+const (
+	LoadTestExecutionSingle LoadTestExecutionMode = "single"
+	LoadTestExecutionShared LoadTestExecutionMode = "shared"
+)
+
+const (
+	loadTestSharedJoinWindowSeconds = 10
+	loadTestWorkerStaleSeconds      = 30
+)
+
 type LoadTestMockChannel struct {
 	Slot          int     `json:"slot"`
 	FailureRate   float64 `json:"failure_rate"`
@@ -64,6 +76,13 @@ type LoadTestRun struct {
 	MockLatencyMS     int                   `json:"mock_latency_ms"`
 	MockChannelsJSON  string                `json:"-" gorm:"type:text"`
 	MockChannels      []LoadTestMockChannel `json:"mock_channels" gorm:"-"`
+	Workers           []LoadTestRunWorker   `json:"workers" gorm:"-"`
+	// Nullable on purpose: existing installations may already have rows when
+	// this column is added. Migration backfills empty values to "single".
+	ExecutionMode     LoadTestExecutionMode `json:"execution_mode" gorm:"type:varchar(16);index"`
+	ExpectedWorkers   int                   `json:"expected_workers"`
+	JoinDeadlineAt    int64                 `json:"join_deadline_at" gorm:"bigint"`
+	StartAt           int64                 `json:"start_at" gorm:"bigint"`
 	TargetURL         string                `json:"-" gorm:"type:varchar(512);not null"`
 	DurationSeconds   int                   `json:"duration_seconds" gorm:"not null"`
 	RequestsPerSecond int                   `json:"requests_per_second" gorm:"not null"`
@@ -90,6 +109,73 @@ type LoadTestRun struct {
 	StartedAt         int64                 `json:"started_at" gorm:"bigint"`
 	FinishedAt        int64                 `json:"finished_at" gorm:"bigint"`
 	UpdatedAt         int64                 `json:"updated_at" gorm:"bigint;index"`
+}
+
+type LoadTestRunWorkerStatus string
+
+const (
+	LoadTestRunWorkerJoined    LoadTestRunWorkerStatus = "joined"
+	LoadTestRunWorkerRunning   LoadTestRunWorkerStatus = "running"
+	LoadTestRunWorkerCompleted LoadTestRunWorkerStatus = "completed"
+	LoadTestRunWorkerFailed    LoadTestRunWorkerStatus = "failed"
+	LoadTestRunWorkerCancelled LoadTestRunWorkerStatus = "cancelled"
+	LoadTestRunWorkerLost      LoadTestRunWorkerStatus = "lost"
+)
+
+// LoadTestRunWorker is an ephemeral execution record for one process joined
+// to a shared logical Agent. Its counters are snapshots, so retries of the
+// same progress payload replace the row instead of double-counting a run.
+type LoadTestRunWorker struct {
+	ID                  string                  `json:"id" gorm:"type:varchar(96);primaryKey"`
+	RunID               string                  `json:"run_id" gorm:"type:varchar(64);uniqueIndex:idx_loadtest_worker_run_worker,priority:1;index;not null"`
+	AgentID             string                  `json:"agent_id" gorm:"type:varchar(64);index;not null"`
+	WorkerID            string                  `json:"worker_id" gorm:"type:varchar(96);uniqueIndex:idx_loadtest_worker_run_worker,priority:2;not null"`
+	Slot                int                     `json:"slot"`
+	Name                string                  `json:"name" gorm:"type:varchar(128)"`
+	Platform            string                  `json:"platform" gorm:"type:varchar(64)"`
+	CPUCores            int                     `json:"cpu_cores"`
+	MemoryBytes         int64                   `json:"memory_bytes" gorm:"bigint"`
+	MaxRPS              int                     `json:"max_rps"`
+	MaxConcurrency      int                     `json:"max_concurrency"`
+	AssignedRPS         int                     `json:"assigned_rps"`
+	AssignedConcurrency int                     `json:"assigned_concurrency"`
+	Status              LoadTestRunWorkerStatus `json:"status" gorm:"type:varchar(16);index;not null"`
+	Sent                int64                   `json:"sent" gorm:"bigint"`
+	Completed           int64                   `json:"completed" gorm:"bigint"`
+	Successes           int64                   `json:"successes" gorm:"bigint"`
+	Failures            int64                   `json:"failures" gorm:"bigint"`
+	Dropped             int64                   `json:"dropped" gorm:"bigint"`
+	InputTokens         int64                   `json:"input_tokens" gorm:"bigint"`
+	OutputTokens        int64                   `json:"output_tokens" gorm:"bigint"`
+	CacheReadTokens     int64                   `json:"cache_read_tokens" gorm:"bigint"`
+	CacheWriteTokens    int64                   `json:"cache_write_tokens" gorm:"bigint"`
+	CurrentRPS          float64                 `json:"current_rps"`
+	P50MS               float64                 `json:"p50_ms"`
+	P95MS               float64                 `json:"p95_ms"`
+	P99MS               float64                 `json:"p99_ms"`
+	ErrorCountsJSON     string                  `json:"-" gorm:"type:text"`
+	ErrorCounts         map[string]int64        `json:"error_counts" gorm:"-"`
+	ErrorMessage        string                  `json:"error_message" gorm:"type:text"`
+	LastSeenAt          int64                   `json:"last_seen_at" gorm:"bigint;index"`
+	StartedAt           int64                   `json:"started_at" gorm:"bigint"`
+	FinishedAt          int64                   `json:"finished_at" gorm:"bigint"`
+}
+
+type LoadTestRunAggregate struct {
+	Sent             int64
+	Completed        int64
+	Successes        int64
+	Failures         int64
+	Dropped          int64
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CurrentRPS       float64
+	P50MS            float64
+	P95MS            float64
+	P99MS            float64
+	ErrorCounts      map[string]int64
 }
 
 type LoadTestAgentRuntime struct {
@@ -297,9 +383,361 @@ func CreateLoadTestRun(run *LoadTestRun) error {
 		run.ID = "loadtest_" + randomID
 	}
 	run.Status = LoadTestRunQueued
+	if run.ExecutionMode == "" {
+		run.ExecutionMode = LoadTestExecutionSingle
+	}
 	run.CreatedAt = now
 	run.UpdatedAt = now
 	return DB.Create(run).Error
+}
+
+func splitLoadTestCapacity(total, workers, slot int) int {
+	if total <= 0 || workers <= 0 || slot < 1 || slot > workers {
+		return 0
+	}
+	base, remainder := total/workers, total%workers
+	if slot <= remainder {
+		return base + 1
+	}
+	return base
+}
+
+func newLoadTestRunWorker(run *LoadTestRun, workerID string, slot int, now int64) (*LoadTestRunWorker, error) {
+	randomID, err := common.GenerateRandomCharsKey(16)
+	if err != nil {
+		return nil, err
+	}
+	return &LoadTestRunWorker{
+		ID:                  "loadtest_worker_" + randomID,
+		RunID:               run.ID,
+		AgentID:             run.AgentID,
+		WorkerID:            workerID,
+		Slot:                slot,
+		AssignedRPS:         splitLoadTestCapacity(run.RequestsPerSecond, run.ExpectedWorkers, slot),
+		AssignedConcurrency: splitLoadTestCapacity(run.Concurrency, run.ExpectedWorkers, slot),
+		Status:              LoadTestRunWorkerJoined,
+		LastSeenAt:          now,
+	}, nil
+}
+
+// ClaimLoadTestRunForWorker joins a worker to a shared run. The run row is
+// locked while selecting a slot so two application instances cannot assign
+// the same slot. A repeated poll from the same worker returns its existing
+// snapshot and never creates another execution record.
+func ClaimLoadTestRunForWorker(agentID, workerID string) (*LoadTestRunWorker, error) {
+	agentID = strings.TrimSpace(agentID)
+	workerID = strings.TrimSpace(workerID)
+	if agentID == "" || workerID == "" {
+		return nil, errors.New("agent and worker identifiers are required")
+	}
+	var claimed *LoadTestRunWorker
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		now := common.GetTimestamp()
+		var run LoadTestRun
+		err := lockForUpdate(tx).
+			Where("agent_id = ? AND execution_mode = ? AND status IN ?", agentID, LoadTestExecutionShared, []LoadTestRunStatus{LoadTestRunDispatched, LoadTestRunRunning}).
+			Order("created_at asc").First(&run).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = lockForUpdate(tx).
+				Where("agent_id = ? AND status = ?", agentID, LoadTestRunQueued).
+				Order("created_at asc").First(&run).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if run.ExecutionMode != LoadTestExecutionShared || run.ExpectedWorkers < 2 {
+				return nil
+			}
+			run.JoinDeadlineAt = now + loadTestSharedJoinWindowSeconds
+			run.StartAt = run.JoinDeadlineAt
+			if err := tx.Model(&LoadTestRun{}).Where("id = ? AND status = ?", run.ID, LoadTestRunQueued).
+				Updates(map[string]any{"status": LoadTestRunDispatched, "started_at": now, "join_deadline_at": run.JoinDeadlineAt, "start_at": run.StartAt, "updated_at": now}).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		if run.ExecutionMode != LoadTestExecutionShared || run.ExpectedWorkers < 2 || (run.JoinDeadlineAt > 0 && now > run.JoinDeadlineAt) {
+			return nil
+		}
+
+		var existing LoadTestRunWorker
+		existingErr := tx.Where("run_id = ? AND worker_id = ?", run.ID, workerID).First(&existing).Error
+		if existingErr == nil {
+			switch existing.Status {
+			case LoadTestRunWorkerCompleted, LoadTestRunWorkerFailed, LoadTestRunWorkerCancelled, LoadTestRunWorkerLost:
+				// A process keeps its WorkerID for its lifetime. Once that worker
+				// has reported a terminal result, a later poll must not replay the
+				// same logical run while other workers are still finishing.
+				return nil
+			}
+			existing.LastSeenAt = now
+			if err := tx.Model(&LoadTestRunWorker{}).Where("id = ?", existing.ID).Update("last_seen_at", now).Error; err != nil {
+				return err
+			}
+			claimed = &existing
+			return nil
+		}
+		if !errors.Is(existingErr, gorm.ErrRecordNotFound) {
+			return existingErr
+		}
+
+		var workers []LoadTestRunWorker
+		if err := tx.Where("run_id = ?", run.ID).Order("slot asc").Find(&workers).Error; err != nil {
+			return err
+		}
+		if len(workers) >= run.ExpectedWorkers {
+			return nil
+		}
+		usedSlots := make(map[int]struct{}, len(workers))
+		for _, worker := range workers {
+			usedSlots[worker.Slot] = struct{}{}
+		}
+		slot := 1
+		for ; slot <= run.ExpectedWorkers; slot++ {
+			if _, exists := usedSlots[slot]; !exists {
+				break
+			}
+		}
+		worker, err := newLoadTestRunWorker(&run, workerID, slot, now)
+		if err != nil {
+			return err
+		}
+		if err := tx.Create(worker).Error; err != nil {
+			return err
+		}
+		claimed = worker
+		return nil
+	})
+	return claimed, err
+}
+
+func UpdateLoadTestRunWorkerProgress(runID, workerID string, updates map[string]any) error {
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(workerID) == "" {
+		return errors.New("run and worker identifiers are required")
+	}
+	updates["status"] = LoadTestRunWorkerRunning
+	updates["last_seen_at"] = common.GetTimestamp()
+	result := DB.Model(&LoadTestRunWorker{}).
+		Where("run_id = ? AND worker_id = ? AND status IN ?", runID, workerID, []LoadTestRunWorkerStatus{LoadTestRunWorkerJoined, LoadTestRunWorkerRunning}).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("load-test worker is not active")
+	}
+	return DB.Model(&LoadTestRun{}).Where("id = ? AND status = ?", runID, LoadTestRunStatus(LoadTestRunDispatched)).Updates(map[string]any{"status": LoadTestRunRunning, "updated_at": common.GetTimestamp()}).Error
+}
+
+func TouchLoadTestRunWorker(runID, workerID string, runtime LoadTestAgentRuntime) error {
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(workerID) == "" {
+		return errors.New("run and worker identifiers are required")
+	}
+	updates := map[string]any{
+		"last_seen_at":    common.GetTimestamp(),
+		"name":            runtime.Name,
+		"platform":        runtime.Platform,
+		"cpu_cores":       runtime.CPUCores,
+		"memory_bytes":    runtime.MemoryBytes,
+		"max_rps":         runtime.MaxRPS,
+		"max_concurrency": runtime.MaxConcurrency,
+	}
+	result := DB.Model(&LoadTestRunWorker{}).
+		Where("run_id = ? AND worker_id = ? AND status IN ?", runID, workerID, []LoadTestRunWorkerStatus{LoadTestRunWorkerJoined, LoadTestRunWorkerRunning}).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("load-test worker is not active")
+	}
+	return nil
+}
+
+func FinishLoadTestRunWorker(runID, workerID string, status LoadTestRunWorkerStatus, updates map[string]any) error {
+	switch status {
+	case LoadTestRunWorkerCompleted, LoadTestRunWorkerFailed, LoadTestRunWorkerCancelled:
+	default:
+		return errors.New("invalid terminal worker status")
+	}
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(workerID) == "" {
+		return errors.New("run and worker identifiers are required")
+	}
+	now := common.GetTimestamp()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var worker LoadTestRunWorker
+		if err := lockForUpdate(tx).Where("run_id = ? AND worker_id = ?", runID, workerID).First(&worker).Error; err != nil {
+			return err
+		}
+		if worker.Status == LoadTestRunWorkerCompleted || worker.Status == LoadTestRunWorkerFailed || worker.Status == LoadTestRunWorkerCancelled {
+			return nil
+		}
+		updates["status"] = status
+		updates["finished_at"] = now
+		updates["last_seen_at"] = now
+		result := tx.Model(&LoadTestRunWorker{}).
+			Where("id = ? AND status IN ?", worker.ID, []LoadTestRunWorkerStatus{LoadTestRunWorkerJoined, LoadTestRunWorkerRunning}).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("load-test worker is not active")
+		}
+
+		var run LoadTestRun
+		if err := lockForUpdate(tx).Where("id = ?", runID).First(&run).Error; err != nil {
+			return err
+		}
+		if run.ExecutionMode != LoadTestExecutionShared {
+			return nil
+		}
+		var workers []LoadTestRunWorker
+		if err := tx.Where("run_id = ?", runID).Find(&workers).Error; err != nil {
+			return err
+		}
+		staleBefore := now - loadTestWorkerStaleSeconds
+		for index := range workers {
+			worker := &workers[index]
+			if (worker.Status == LoadTestRunWorkerJoined || worker.Status == LoadTestRunWorkerRunning) && worker.LastSeenAt > 0 && worker.LastSeenAt < staleBefore {
+				if err := tx.Model(&LoadTestRunWorker{}).Where("id = ? AND status IN ?", worker.ID, []LoadTestRunWorkerStatus{LoadTestRunWorkerJoined, LoadTestRunWorkerRunning}).Updates(map[string]any{
+					"status": LoadTestRunWorkerLost, "finished_at": now, "error_message": "worker heartbeat timed out", "last_seen_at": now,
+				}).Error; err != nil {
+					return err
+				}
+				worker.Status = LoadTestRunWorkerLost
+				worker.FinishedAt = now
+				worker.ErrorMessage = "worker heartbeat timed out"
+			}
+		}
+		terminal := 0
+		anyFailed := false
+		anyCancelled := false
+		for _, item := range workers {
+			switch item.Status {
+			case LoadTestRunWorkerCompleted:
+				terminal++
+			case LoadTestRunWorkerFailed:
+				terminal++
+				anyFailed = true
+			case LoadTestRunWorkerLost:
+				terminal++
+				anyFailed = true
+			case LoadTestRunWorkerCancelled:
+				terminal++
+				anyCancelled = true
+			}
+		}
+		// If a worker never joined, close its slot after the scheduled run
+		// window. This prevents a partially provisioned test from remaining
+		// active forever while making the missing capacity visible as failed.
+		missingWorkersExpired := run.StartAt > 0 && common.GetTimestamp() >= run.StartAt+int64(run.DurationSeconds)+5 && len(workers) < run.ExpectedWorkers
+		if terminal < len(workers) && !missingWorkersExpired {
+			return nil
+		}
+		if missingWorkersExpired {
+			anyFailed = true
+		}
+		if terminal < run.ExpectedWorkers && !missingWorkersExpired {
+			return nil
+		}
+		aggregate := aggregateLoadTestRunWorkers(workers)
+		statusValue := LoadTestRunCompleted
+		if anyFailed {
+			statusValue = LoadTestRunFailed
+		} else if anyCancelled {
+			statusValue = LoadTestRunCancelled
+		}
+		errorJSON, err := EncodeLoadTestErrorCounts(aggregate.ErrorCounts)
+		if err != nil {
+			return err
+		}
+		return tx.Model(&LoadTestRun{}).Where("id = ? AND status IN ?", runID, []LoadTestRunStatus{LoadTestRunDispatched, LoadTestRunRunning, LoadTestRunCancelRequested}).Updates(map[string]any{
+			"status": statusValue, "finished_at": common.GetTimestamp(), "updated_at": common.GetTimestamp(),
+			"sent": aggregate.Sent, "completed": aggregate.Completed, "successes": aggregate.Successes,
+			"failures": aggregate.Failures, "dropped": aggregate.Dropped, "input_tokens": aggregate.InputTokens,
+			"output_tokens": aggregate.OutputTokens, "cache_read_tokens": aggregate.CacheReadTokens,
+			"cache_write_tokens": aggregate.CacheWriteTokens, "current_rps": aggregate.CurrentRPS,
+			"p50_ms": aggregate.P50MS, "p95_ms": aggregate.P95MS, "p99_ms": aggregate.P99MS,
+			"error_counts_json": errorJSON,
+		}).Error
+	})
+}
+
+func GetLoadTestRunAggregate(runID string) (LoadTestRunAggregate, error) {
+	var workers []LoadTestRunWorker
+	if err := DB.Where("run_id = ?", runID).Find(&workers).Error; err != nil {
+		return LoadTestRunAggregate{}, err
+	}
+	return aggregateLoadTestRunWorkers(workers), nil
+}
+
+func aggregateLoadTestRunWorkers(workers []LoadTestRunWorker) LoadTestRunAggregate {
+	aggregate := LoadTestRunAggregate{ErrorCounts: map[string]int64{}}
+	for index := range workers {
+		worker := &workers[index]
+		aggregate.Sent += worker.Sent
+		aggregate.Completed += worker.Completed
+		aggregate.Successes += worker.Successes
+		aggregate.Failures += worker.Failures
+		aggregate.Dropped += worker.Dropped
+		aggregate.InputTokens += worker.InputTokens
+		aggregate.OutputTokens += worker.OutputTokens
+		aggregate.CacheReadTokens += worker.CacheReadTokens
+		aggregate.CacheWriteTokens += worker.CacheWriteTokens
+		aggregate.CurrentRPS += worker.CurrentRPS
+		aggregate.P50MS = max(aggregate.P50MS, worker.P50MS)
+		aggregate.P95MS = max(aggregate.P95MS, worker.P95MS)
+		aggregate.P99MS = max(aggregate.P99MS, worker.P99MS)
+		if worker.ErrorCounts == nil && worker.ErrorCountsJSON != "" {
+			_ = common.UnmarshalJsonStr(worker.ErrorCountsJSON, &worker.ErrorCounts)
+		}
+		for code, count := range worker.ErrorCounts {
+			aggregate.ErrorCounts[code] += count
+		}
+	}
+	return aggregate
+}
+
+func hydrateLoadTestRunAggregate(run *LoadTestRun) {
+	if run == nil || run.ExecutionMode != LoadTestExecutionShared {
+		return
+	}
+	aggregate, err := GetLoadTestRunAggregate(run.ID)
+	if err != nil {
+		return
+	}
+	run.Sent = aggregate.Sent
+	run.Completed = aggregate.Completed
+	run.Successes = aggregate.Successes
+	run.Failures = aggregate.Failures
+	run.Dropped = aggregate.Dropped
+	run.InputTokens = aggregate.InputTokens
+	run.OutputTokens = aggregate.OutputTokens
+	run.CacheReadTokens = aggregate.CacheReadTokens
+	run.CacheWriteTokens = aggregate.CacheWriteTokens
+	run.CurrentRPS = aggregate.CurrentRPS
+	run.P50MS = aggregate.P50MS
+	run.P95MS = aggregate.P95MS
+	run.P99MS = aggregate.P99MS
+	run.ErrorCounts = aggregate.ErrorCounts
+	var workers []LoadTestRunWorker
+	if DB.Where("run_id = ?", run.ID).Order("slot asc").Find(&workers).Error == nil {
+		for index := range workers {
+			decodeLoadTestRunWorkerJSON(&workers[index])
+		}
+		run.Workers = workers
+	}
+}
+
+func decodeLoadTestRunWorkerJSON(worker *LoadTestRunWorker) {
+	worker.ErrorCounts = map[string]int64{}
+	if worker.ErrorCountsJSON != "" {
+		_ = common.UnmarshalJsonStr(worker.ErrorCountsJSON, &worker.ErrorCounts)
+	}
 }
 
 func ListLoadTestRuns(userID, limit int) ([]LoadTestRun, error) {
@@ -310,6 +748,7 @@ func ListLoadTestRuns(userID, limit int) ([]LoadTestRun, error) {
 	err := DB.Where("user_id = ?", userID).Order("created_at desc").Limit(limit).Find(&runs).Error
 	for index := range runs {
 		decodeLoadTestRunJSON(&runs[index])
+		hydrateLoadTestRunAggregate(&runs[index])
 	}
 	return runs, err
 }
@@ -320,12 +759,23 @@ func GetLoadTestRun(userID int, runID string) (*LoadTestRun, error) {
 		return nil, err
 	}
 	decodeLoadTestRunJSON(&run)
+	hydrateLoadTestRunAggregate(&run)
+	return &run, nil
+}
+
+func GetLoadTestRunByID(runID string) (*LoadTestRun, error) {
+	var run LoadTestRun
+	if err := DB.Where("id = ?", runID).First(&run).Error; err != nil {
+		return nil, err
+	}
+	decodeLoadTestRunJSON(&run)
+	hydrateLoadTestRunAggregate(&run)
 	return &run, nil
 }
 
 func ClaimLoadTestRun(agentID string) (*LoadTestRun, error) {
 	var run LoadTestRun
-	err := DB.Where("agent_id = ? AND status = ?", agentID, LoadTestRunQueued).Order("created_at asc").First(&run).Error
+	err := DB.Where("agent_id = ? AND status = ? AND (execution_mode <> ? OR execution_mode IS NULL OR execution_mode = ?)", agentID, LoadTestRunQueued, LoadTestExecutionShared, "").Order("created_at asc").First(&run).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
