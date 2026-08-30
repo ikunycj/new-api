@@ -1,6 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { GroupPricing } from '@/features/group-pricing'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -10,6 +9,9 @@ export const Route = createFileRoute('/_authenticated/group-pricing/')({
     if (!auth.user || auth.user.role < ROLE.ADMIN) {
       throw redirect({ to: '/403' })
     }
+    throw redirect({
+      to: '/group-management',
+      search: { tab: 'pricing-groups' },
+    })
   },
-  component: GroupPricing,
 })

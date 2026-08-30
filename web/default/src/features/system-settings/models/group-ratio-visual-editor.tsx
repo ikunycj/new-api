@@ -25,7 +25,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useState, useMemo, useEffect, useCallback, memo } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
@@ -84,6 +84,7 @@ type GroupRatioVisualEditorProps = {
   onChange: (field: string, value: string) => void
   groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
   onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
+  onGroupRename?: (previousName: string, nextName: string) => void
 }
 
 type GroupPricingRow = {
@@ -268,6 +269,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   onChange,
   groupTypeByName,
   onGroupTypeChange,
+  onGroupRename,
 }: GroupRatioVisualEditorProps) {
   const { t } = useTranslation()
   const [detailGroup, setDetailGroup] = useState<string | null>(null)
@@ -354,6 +356,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
         onShowDetail={setDetailGroup}
         groupTypeByName={groupTypeByName}
         onGroupTypeChange={onGroupTypeChange}
+        onGroupRename={onGroupRename}
       />
       {metricsQuery.isError ? (
         <p className='text-destructive text-sm'>
@@ -453,6 +456,7 @@ type GroupPricingTableProps = {
   onShowDetail: (name: string) => void
   groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
   onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
+  onGroupRename?: (previousName: string, nextName: string) => void
 }
 
 function GroupPricingTable({
@@ -464,7 +468,9 @@ function GroupPricingTable({
   onShowDetail,
   groupTypeByName,
   onGroupTypeChange,
+  onGroupRename,
 }: GroupPricingTableProps) {
+  const nameBeforeEdit = useRef(new Map<string, string>())
   const { t } = useTranslation()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
     buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
@@ -585,6 +591,18 @@ function GroupPricingTable({
                 cell: (row) => (
                   <Input
                     value={row.name}
+                    onFocus={() => {
+                      nameBeforeEdit.current.set(row._id, row.name)
+                    }}
+                    onBlur={() => {
+                      const previousName =
+                        nameBeforeEdit.current.get(row._id) ?? row.name
+                      nameBeforeEdit.current.delete(row._id)
+                      const nextName = row.name.trim()
+                      if (previousName.trim() !== nextName) {
+                        onGroupRename?.(previousName.trim(), nextName)
+                      }
+                    }}
                     onChange={(event) =>
                       updateRow(row._id, 'name', event.target.value)
                     }

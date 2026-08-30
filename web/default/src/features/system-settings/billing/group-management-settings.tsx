@@ -20,18 +20,13 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Link } from '@tanstack/react-router'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { SettingsPageFrame } from '../components/settings-page'
 import { getOptionValue, useSystemOptions } from '../hooks/use-system-options'
-import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
-import {
-  defaultBillingSettings,
-  getGroupDefaults,
-  getModelDefaults,
-} from './billing-defaults'
+import { defaultBillingSettings } from './billing-defaults'
+import { BillingGroupPricingSection } from './group-pricing-section'
 import { UserGroupManagementSection } from './user-group-management-section'
 
 export type GroupManagementTab = 'user-groups' | 'pricing-groups'
@@ -94,23 +89,7 @@ export function GroupManagementSettings({
           <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
         </TabsList>
         <TabsContent value='pricing-groups' className='min-h-0'>
-          <div className='flex flex-col gap-4'>
-            <RatioSettingsCard
-              titleKey='定价分组'
-              modelDefaults={getModelDefaults(settings)}
-              groupDefaults={getGroupDefaults(settings)}
-              toolPricesDefault={settings['tool_price_setting.prices']}
-              visibleTabs={['groups']}
-            />
-            <div className='flex items-center justify-between rounded-lg border p-4'>
-              <p className='text-muted-foreground text-sm'>
-                ToB/ToC 路由、权重调度、熔断和利润保护在分组定价工作区维护。
-              </p>
-              <Button render={<Link to='/group-pricing' />}>
-                打开分组定价
-              </Button>
-            </div>
-          </div>
+          <BillingGroupPricingSection settings={settings} />
         </TabsContent>
         <TabsContent value='user-groups' className='min-h-0'>
           <UserGroupManagementSection />

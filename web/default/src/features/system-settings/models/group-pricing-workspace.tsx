@@ -143,6 +143,30 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     }
     groupTypeMutation.mutate({ ...configQuery.data, routes })
   }
+  const handleGroupRename = (previousName: string, nextName: string) => {
+    if (
+      !previousName ||
+      !nextName ||
+      previousName === nextName ||
+      !configQuery.data ||
+      groupTypeMutation.isPending
+    ) {
+      return
+    }
+    const routes = structuredClone(configQuery.data.routes)
+    const route = routes.find(
+      (candidate) => candidate.billing_group === previousName
+    )
+    if (
+      !route ||
+      routes.some((candidate) => candidate.billing_group === nextName)
+    ) {
+      return
+    }
+    route.billing_group = nextName
+    route.name = nextName
+    groupTypeMutation.mutate({ ...configQuery.data, routes })
+  }
 
   return (
     <Tabs defaultValue='basic' className='gap-5'>
@@ -202,6 +226,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
             )
           }
           onGroupTypeChange={handleGroupTypeChange}
+          onGroupRename={handleGroupRename}
         />
       </TabsContent>
       <TabsContent value='tob'>

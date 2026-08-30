@@ -77,6 +77,7 @@ type GroupRatioFormProps = {
   isSaving: boolean
   groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
   onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
+  onGroupRename?: (previousName: string, nextName: string) => void
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
@@ -85,6 +86,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   isSaving,
   groupTypeByName,
   onGroupTypeChange,
+  onGroupRename,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
@@ -167,6 +169,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               }
               groupTypeByName={groupTypeByName}
               onGroupTypeChange={onGroupTypeChange}
+              onGroupRename={onGroupRename}
             />
 
             <GroupSpecialUsableRulesEditor
