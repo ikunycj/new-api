@@ -1,4 +1,6 @@
 export type RoutingMode = 'cost_first' | 'balanced' | 'stability_first'
+export type BillingGroupType = 'toB' | 'toC'
+export type RoutingStrategy = 'priority' | 'weighted'
 export type ProfitGuardMode = 'off' | 'warn' | 'enforce'
 export type FailureScope = 'request' | 'credential' | 'channel' | 'provider'
 export type RoutingAction =
@@ -14,6 +16,8 @@ export type BillingGroupRoute = {
   billing_group: string
   name: string
   mode: RoutingMode
+  group_type: BillingGroupType
+  strategy_config: string
   enabled: boolean
   max_total_attempts: number
   total_timeout_ms: number

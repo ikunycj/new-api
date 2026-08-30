@@ -27,6 +27,7 @@ import type {
   ChannelMonitorRunResponse,
   GroupStatusMonitor,
   GroupStatusTestResponse,
+  PricingGroupMetrics,
 } from './types'
 
 type ApiResponse<T> = {
@@ -45,6 +46,14 @@ function requireData<T>(response: ApiResponse<T>): T {
 export async function getChannelMonitors(): Promise<ChannelMonitor[]> {
   const response = await api.get<ApiResponse<{ items: ChannelMonitor[] }>>(
     '/api/monitor/channel/'
+  )
+  return requireData(response.data).items
+}
+
+export async function getPricingGroupMetrics(): Promise<PricingGroupMetrics[]> {
+  const response = await api.get<ApiResponse<{ items: PricingGroupMetrics[] }>>(
+    '/api/monitor/channel/metrics',
+    { skipErrorHandler: true }
   )
   return requireData(response.data).items
 }

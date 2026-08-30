@@ -125,7 +125,10 @@ export function getToBGroupNames(
   routes: BillingGroupRoute[]
 ): ReadonlySet<string> {
   return new Set(
-    routes.map((route) => route.billing_group.trim()).filter(Boolean)
+    routes
+      .filter((route) => route.group_type !== 'toC')
+      .map((route) => route.billing_group.trim())
+      .filter(Boolean)
   )
 }
 

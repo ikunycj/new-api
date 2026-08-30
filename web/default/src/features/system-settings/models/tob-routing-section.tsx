@@ -100,10 +100,29 @@ function createRoute(): BillingGroupRoute {
     billing_group: '',
     name: '',
     mode: 'balanced',
+    group_type: 'toB',
+    strategy_config: JSON.stringify({ type: 'priority' }),
     enabled: false,
     ...defaultRouteSettings,
     created_time: 0,
     updated_time: 0,
+  }
+}
+
+function getRouteStrategy(route: BillingGroupRoute): 'priority' | 'weighted' {
+  try {
+    const parsed = JSON.parse(route.strategy_config || '{}') as {
+      type?: string
+    }
+    return parsed.type === 'weighted' ? 'weighted' : 'priority'
+  } catch {
+    return 'priority'
+  }
+}
+
+function setRouteStrategy(strategy: 'priority' | 'weighted') {
+  return {
+    strategy_config: JSON.stringify({ type: strategy }),
   }
 }
 
@@ -339,6 +358,25 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   <Input value={route.billing_group} disabled />
                 )}
               </div>
+              <div className='space-y-1.5'>
+                <Label>{t('Customer type')}</Label>
+                <NativeSelect
+                  value={route.group_type}
+                  onChange={(event) =>
+                    updateRoute(routeIndex, {
+                      group_type: event.target
+                        .value as BillingGroupRoute['group_type'],
+                    })
+                  }
+                >
+                  <NativeSelectOption value='toB'>
+                    {t('ToB')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='toC'>
+                    {t('ToC')}
+                  </NativeSelectOption>
+                </NativeSelect>
+              </div>
               <div className='flex items-center gap-2 pb-2'>
                 <Switch
                   checked={route.enabled}
@@ -372,6 +410,30 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
             <FieldSet className='border-y py-4'>
               <FieldLegend>{t('Routing strategy')}</FieldLegend>
               <FieldGroup className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+                <Field>
+                  <FieldLabel htmlFor={`route-strategy-${route.id}`}>
+                    {t('Channel scheduling strategy')}
+                  </FieldLabel>
+                  <NativeSelect
+                    id={`route-strategy-${route.id}`}
+                    value={getRouteStrategy(route)}
+                    onChange={(event) =>
+                      updateRoute(
+                        routeIndex,
+                        setRouteStrategy(
+                          event.target.value as 'priority' | 'weighted'
+                        )
+                      )
+                    }
+                  >
+                    <NativeSelectOption value='priority'>
+                      {t('Priority order')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='weighted'>
+                      {t('Weighted distribution')}
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </Field>
                 <Field>
                   <FieldLabel htmlFor={`route-mode-${route.id}`}>
                     {t('Routing strategy')}
@@ -645,6 +707,9 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                           <th className='px-4 py-2'>
                             {t('Channel cost factor')}
                           </th>
+                          <th className='px-4 py-2'>
+                            {t('Distribution weight')}
+                          </th>
                           <th className='px-4 py-2 text-right'>
                             {t('Actions')}
                           </th>
@@ -678,6 +743,26 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                                   onChange={(event) =>
                                     updateEntry(entry, {
                                       max_attempts: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className='px-4 py-2'>
+                                <Input
+                                  className='w-24'
+                                  type='number'
+                                  min={0}
+                                  step={1}
+                                  value={entry.weight}
+                                  disabled={
+                                    getRouteStrategy(route) !== 'weighted'
+                                  }
+                                  onChange={(event) =>
+                                    updateEntry(entry, {
+                                      weight: Math.max(
+                                        0,
+                                        Number(event.target.value)
+                                      ),
                                     })
                                   }
                                 />

@@ -113,6 +113,31 @@ func TestSaveChannelRoutingConfigRemapsTemporaryIDs(t *testing.T) {
 	assert.Equal(t, config.Routes[0].Id, config.RouteChannels[0].BillingGroupRouteId)
 }
 
+func TestSaveChannelRoutingConfigPreservesWeightsForWeightedStrategy(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Pro", Group: "claude"}).Error)
+
+	config := &ChannelRoutingConfig{
+		Routes: []BillingGroupRoute{{
+			Id: -10, BillingGroup: "claude", Enabled: true,
+			StrategyConfig: `{"type":"weighted"}`,
+		}},
+		RouteChannels: []BillingGroupChannel{{
+			Id: -20, BillingGroupRouteId: -10, ChannelId: 38,
+			Priority: 1, Weight: 73, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	}
+
+	require.NoError(t, SaveChannelRoutingConfig(config))
+	var saved BillingGroupChannel
+	require.NoError(t, DB.First(&saved, config.RouteChannels[0].Id).Error)
+	assert.Equal(t, 73, saved.Weight)
+	InitChannelRoutingCache()
+	policy, _, ok := ResolveBillingGroupRoute("claude")
+	assert.True(t, ok)
+	assert.Equal(t, RoutingStrategyWeighted, policy.Strategy)
+}
+
 func TestGetBillingGroupTypesUsesRouteMembershipIncludingDisabledRoutes(t *testing.T) {
 	setupChannelRoutingTables(t)
 	require.NoError(t, DB.Create(&[]BillingGroupRoute{

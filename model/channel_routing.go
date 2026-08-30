@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -16,6 +17,8 @@ const (
 	RoutingModeStabilityFirst = "stability_first"
 	BillingGroupTypeToB       = "toB"
 	BillingGroupTypeToC       = "toC"
+	RoutingStrategyPriority   = "priority"
+	RoutingStrategyWeighted   = "weighted"
 	ProfitGuardModeOff        = "off"
 	ProfitGuardModeWarn       = "warn"
 	ProfitGuardModeEnforce    = "enforce"
@@ -25,10 +28,16 @@ const (
 // The billing group is the existing group used by tokens, abilities, and
 // channels; no extra cluster or account-pool layer is involved.
 type BillingGroupRoute struct {
-	Id                      int     `json:"id"`
-	BillingGroup            string  `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
-	Name                    string  `json:"name" gorm:"type:varchar(128)"`
-	Mode                    string  `json:"mode" gorm:"type:varchar(32)"`
+	Id           int    `json:"id"`
+	BillingGroup string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
+	Name         string `json:"name" gorm:"type:varchar(128)"`
+	Mode         string `json:"mode" gorm:"type:varchar(32)"`
+	// GroupType is the customer scope of this pricing/routing group. Empty
+	// values are treated as ToB for backwards compatibility with legacy routes.
+	GroupType string `json:"group_type" gorm:"type:varchar(8);index"`
+	// StrategyConfig keeps the strategy and its tunables in one extensible JSON
+	// document. The default is the legacy priority ordering.
+	StrategyConfig          string  `json:"strategy_config" gorm:"type:text"`
 	Enabled                 bool    `json:"enabled" gorm:"index"`
 	MaxTotalAttempts        int     `json:"max_total_attempts"`
 	TotalTimeoutMs          int     `json:"total_timeout_ms"`
@@ -93,6 +102,17 @@ type RuntimeRoutingPolicy struct {
 	CircuitHalfOpenRequests int
 	ProfitGuardMode         string
 	MinimumProfitMargin     float64
+	Strategy                string
+	StrategyConfig          RoutingStrategyConfig
+}
+
+// RoutingStrategyConfig is intentionally a single JSON object so future
+// strategy knobs do not require another database column or API shape.
+type RoutingStrategyConfig struct {
+	Type               string  `json:"type"`
+	PriceWeight        float64 `json:"price_weight,omitempty"`
+	AvailabilityWeight float64 `json:"availability_weight,omitempty"`
+	LoadWeight         float64 `json:"load_weight,omitempty"`
 }
 
 func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
@@ -105,6 +125,7 @@ func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
 		CircuitCooldownSeconds:  60,
 		CircuitHalfOpenRequests: 1,
 		ProfitGuardMode:         ProfitGuardModeOff,
+		Strategy:                RoutingStrategyPriority,
 	}
 	switch policy.Mode {
 	case RoutingModeCostFirst:
@@ -150,7 +171,9 @@ func InitChannelRoutingCache() {
 				if billingGroup == "" {
 					continue
 				}
-				cache.toBBillingGroups[billingGroup] = struct{}{}
+				if normalizeBillingGroupType(route.GroupType) == BillingGroupTypeToB {
+					cache.toBBillingGroups[billingGroup] = struct{}{}
+				}
 				if route.Enabled {
 					cache.routes[billingGroup] = route
 				}
@@ -173,8 +196,8 @@ func InitChannelRoutingCache() {
 	channelRoutingLookup.Unlock()
 }
 
-// GetBillingGroupTypes classifies routed billing groups as ToB and all other
-// configured groups as ToC. Disabled routes remain ToB configuration.
+// GetBillingGroupTypes classifies groups from the explicit route type. Legacy
+// routes without group_type remain ToB so existing deployments do not change.
 func GetBillingGroupTypes(groups map[string]float64) map[string]string {
 	groupTypes := make(map[string]string, len(groups))
 	channelRoutingLookup.RLock()
@@ -195,8 +218,7 @@ func IsBillingGroupToB(group string) bool {
 	if group == "" {
 		return false
 	}
-	// `toB` is the existing reserved user billing group. Other ToB groups are
-	// data-driven through BillingGroupRoute below.
+	// `toB` is the existing reserved user billing group.
 	if strings.EqualFold(group, BillingGroupTypeToB) {
 		return true
 	}
@@ -211,6 +233,8 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 		return DefaultRuntimeRoutingPolicy(RoutingModeBalanced), nil, false
 	}
 	policy := DefaultRuntimeRoutingPolicy(route.Mode)
+	policy.StrategyConfig = parseRoutingStrategyConfig(route.StrategyConfig)
+	policy.Strategy = policy.StrategyConfig.Type
 	if route.MaxTotalAttempts > 0 {
 		policy.MaxTotalAttempts = route.MaxTotalAttempts
 	}
@@ -309,6 +333,8 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 	}
 	for i := range config.Routes {
 		config.Routes[i].ProfitGuardMode = normalizeProfitGuardMode(config.Routes[i].ProfitGuardMode)
+		config.Routes[i].GroupType = normalizeBillingGroupType(config.Routes[i].GroupType)
+		config.Routes[i].StrategyConfig = normalizeStrategyConfigJSON(config.Routes[i].StrategyConfig)
 	}
 	return config, nil
 }
@@ -331,6 +357,12 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			route.BillingGroup = strings.TrimSpace(route.BillingGroup)
 			route.Name = strings.TrimSpace(route.Name)
 			route.Mode = normalizeRoutingMode(route.Mode)
+			route.GroupType = normalizeBillingGroupType(route.GroupType)
+			if route.StrategyConfig == "" {
+				route.StrategyConfig = marshalRoutingStrategyConfig(RoutingStrategyConfig{Type: RoutingStrategyPriority})
+			} else {
+				route.StrategyConfig = normalizeStrategyConfigJSON(route.StrategyConfig)
+			}
 			route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
 			if route.BillingGroup == "" {
 				return errors.New("billing_group is required")
@@ -428,7 +460,12 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if !ok {
 				return gorm.ErrRecordNotFound
 			}
-			entry.Weight = 0
+			strategy := parseRoutingStrategyConfig(routeStrategyConfig(config.Routes, entry.BillingGroupRouteId))
+			if strategy.Type == RoutingStrategyPriority {
+				entry.Weight = 0
+			} else if entry.Weight < 0 {
+				return errors.New("route channel weight must be non-negative")
+			}
 			belongsToGroup := false
 			for _, group := range strings.Split(channel.Group, ",") {
 				if strings.TrimSpace(group) == billingGroup {
@@ -547,6 +584,63 @@ func normalizeRoutingMode(mode string) string {
 	default:
 		return RoutingModeBalanced
 	}
+}
+
+func normalizeBillingGroupType(groupType string) string {
+	if strings.EqualFold(strings.TrimSpace(groupType), BillingGroupTypeToC) {
+		return BillingGroupTypeToC
+	}
+	return BillingGroupTypeToB
+}
+
+func parseRoutingStrategyConfig(raw string) RoutingStrategyConfig {
+	config := RoutingStrategyConfig{Type: RoutingStrategyPriority}
+	if strings.TrimSpace(raw) != "" {
+		var payload struct {
+			Type               string  `json:"type"`
+			Strategy           string  `json:"strategy"`
+			PriceWeight        float64 `json:"price_weight"`
+			AvailabilityWeight float64 `json:"availability_weight"`
+			LoadWeight         float64 `json:"load_weight"`
+		}
+		if err := common.Unmarshal([]byte(raw), &payload); err != nil {
+			return config
+		}
+		config.Type = payload.Type
+		if config.Type == "" {
+			config.Type = payload.Strategy
+		}
+		config.PriceWeight = payload.PriceWeight
+		config.AvailabilityWeight = payload.AvailabilityWeight
+		config.LoadWeight = payload.LoadWeight
+	}
+	if strings.EqualFold(config.Type, RoutingStrategyWeighted) {
+		config.Type = RoutingStrategyWeighted
+	} else {
+		config.Type = RoutingStrategyPriority
+	}
+	return config
+}
+
+func marshalRoutingStrategyConfig(config RoutingStrategyConfig) string {
+	data, err := common.Marshal(config)
+	if err != nil {
+		return `{"type":"priority"}`
+	}
+	return string(data)
+}
+
+func normalizeStrategyConfigJSON(raw string) string {
+	return marshalRoutingStrategyConfig(parseRoutingStrategyConfig(raw))
+}
+
+func routeStrategyConfig(routes []BillingGroupRoute, routeID int) string {
+	for _, route := range routes {
+		if route.Id == routeID {
+			return route.StrategyConfig
+		}
+	}
+	return ""
 }
 
 func normalizeProfitGuardMode(mode string) string {

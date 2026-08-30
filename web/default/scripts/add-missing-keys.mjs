@@ -1970,6 +1970,61 @@ for (const [locale, translations] of Object.entries(channelRoutingKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const groupRoutingLabels = {
+  en: {
+    'Customer type': 'Customer type',
+    'Channel scheduling strategy': 'Channel scheduling strategy',
+    'Priority order': 'Priority order',
+    'Weighted distribution': 'Weighted distribution',
+    'Distribution weight': 'Distribution weight',
+  },
+  zh: {
+    'Customer type': '客户类型',
+    'Channel scheduling strategy': '渠道调度策略',
+    'Priority order': '优先级顺序',
+    'Weighted distribution': '权重分配',
+    'Distribution weight': '分配权重',
+  },
+  fr: {
+    'Customer type': 'Type de client',
+    'Channel scheduling strategy': 'Stratégie de planification des canaux',
+    'Priority order': 'Ordre de priorité',
+    'Weighted distribution': 'Distribution pondérée',
+    'Distribution weight': 'Poids de distribution',
+  },
+  ja: {
+    'Customer type': '顧客タイプ',
+    'Channel scheduling strategy': 'チャネルスケジューリング戦略',
+    'Priority order': '優先順位',
+    'Weighted distribution': '重み付け分散',
+    'Distribution weight': '分散の重み',
+  },
+  ru: {
+    'Customer type': 'Тип клиента',
+    'Channel scheduling strategy': 'Стратегия распределения каналов',
+    'Priority order': 'Порядок приоритета',
+    'Weighted distribution': 'Взвешенное распределение',
+    'Distribution weight': 'Вес распределения',
+  },
+  vi: {
+    'Customer type': 'Loại khách hàng',
+    'Channel scheduling strategy': 'Chiến lược phân phối kênh',
+    'Priority order': 'Thứ tự ưu tiên',
+    'Weighted distribution': 'Phân phối theo trọng số',
+    'Distribution weight': 'Trọng số phân phối',
+  },
+  'zh-TW': {
+    'Customer type': '客戶類型',
+    'Channel scheduling strategy': '渠道調度策略',
+    'Priority order': '優先順序',
+    'Weighted distribution': '加權分配',
+    'Distribution weight': '分配權重',
+  },
+}
+for (const [locale, translations] of Object.entries(groupRoutingLabels)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

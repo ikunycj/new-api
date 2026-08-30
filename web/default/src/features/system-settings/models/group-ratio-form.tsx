@@ -75,12 +75,16 @@ type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
+  groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
+  onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   onSave,
   isSaving,
+  groupTypeByName,
+  onGroupTypeChange,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
@@ -111,12 +115,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       watchedUserUsableGroups,
       { fallback: {}, silent: true }
     )
-    return [
-      ...new Set([
-        ...Object.keys(ratioMap),
-        ...Object.keys(usableMap),
-      ]),
-    ]
+    return [...new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])]
   }, [watchedGroupRatio, watchedUserUsableGroups])
 
   return (
@@ -166,6 +165,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               onChange={(field, value) =>
                 handleFieldChange(field as keyof GroupFormValues, value)
               }
+              groupTypeByName={groupTypeByName}
+              onGroupTypeChange={onGroupTypeChange}
             />
 
             <GroupSpecialUsableRulesEditor

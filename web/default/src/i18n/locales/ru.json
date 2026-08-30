@@ -6401,6 +6401,11 @@
     "Concurrency": "Параллельность",
     "Admin Console": "Консоль администратора",
     "Call Logs": "Журналы вызовов",
-    "Group Management": "Управление группами"
+    "Group Management": "Управление группами",
+    "Customer type": "Тип клиента",
+    "Channel scheduling strategy": "Стратегия распределения каналов",
+    "Priority order": "Порядок приоритета",
+    "Weighted distribution": "Взвешенное распределение",
+    "Distribution weight": "Вес распределения"
   }
 }

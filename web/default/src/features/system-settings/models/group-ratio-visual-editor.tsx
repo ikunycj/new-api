@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ChevronDown,
@@ -29,6 +30,7 @@ import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
+import { Dialog } from '@/components/dialog'
 import {
   sideDrawerContentClassName,
   sideDrawerFormClassName,
@@ -49,9 +51,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Dialog } from '@/components/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import {
   Select,
   SelectContent,
@@ -67,6 +69,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { getPricingGroupMetrics } from '@/features/channel-monitors/api'
+import type { PricingGroupMetrics } from '@/features/channel-monitors/types'
+import { formatQuota } from '@/lib/format'
 
 import { safeJsonParse } from '../utils/json-parser'
 
@@ -77,6 +82,8 @@ type GroupRatioVisualEditorProps = {
   autoGroups: string
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
+  groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
+  onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
 }
 
 type GroupPricingRow = {
@@ -85,6 +92,24 @@ type GroupPricingRow = {
   ratio: string
   selectable: boolean
   description: string
+  groupType: 'toB' | 'toC'
+}
+
+const EMPTY_PRICING_GROUP_METRICS: PricingGroupMetrics[] = []
+
+function formatMetricTokens(tokens: number): string {
+  const absolute = Math.abs(tokens)
+  let divisor = 1
+  let suffix = ''
+  if (absolute >= 1_000_000) {
+    divisor = 1_000_000
+    suffix = 'M'
+  } else if (absolute >= 1_000) {
+    divisor = 1_000
+    suffix = 'K'
+  }
+  const value = tokens / divisor
+  return `${Number(value.toFixed(Math.abs(value) >= 100 ? 0 : 2))}${suffix}`
 }
 
 type RegistryEntry = {
@@ -144,6 +169,7 @@ function buildGroupPricingRows(
     ratio: String(normalizeRatio(ratioMap[name])),
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
+    groupType: 'toC',
   }))
 }
 
@@ -240,14 +266,32 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   autoGroups,
   groupSpecialUsableGroup,
   onChange,
+  groupTypeByName,
+  onGroupTypeChange,
 }: GroupRatioVisualEditorProps) {
   const { t } = useTranslation()
   const [detailGroup, setDetailGroup] = useState<string | null>(null)
+  const metricsQuery = useQuery({
+    queryKey: ['pricing-group-metrics'],
+    queryFn: getPricingGroupMetrics,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+  })
+  const metricsByName = useMemo(
+    () =>
+      new Map(
+        (metricsQuery.data ?? EMPTY_PRICING_GROUP_METRICS).map((metric) => [
+          metric.pricing_group,
+          metric,
+        ])
+      ),
+    [metricsQuery.data]
+  )
 
   const registry = useMemo<RegistryEntry[]>(() => {
     const ratioMap = parseRatioMap(groupRatio)
     const usableMap = parseUsableMap(userUsableGroups)
-  const names = new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])
+    const names = new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])
     return [...names].map((name) => ({
       name,
       ratio: normalizeRatio(ratioMap[name]),
@@ -304,9 +348,19 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       <GroupPricingTable
         groupRatio={groupRatio}
         userUsableGroups={userUsableGroups}
+        metricsByName={metricsByName}
+        metricsLoading={metricsQuery.isLoading}
         onChange={onChange}
         onShowDetail={setDetailGroup}
+        groupTypeByName={groupTypeByName}
+        onGroupTypeChange={onGroupTypeChange}
       />
+      {metricsQuery.isError ? (
+        <p className='text-destructive text-sm'>
+          {t('Pricing group metrics failed to load')}:{' '}
+          {metricsQuery.error.message}
+        </p>
+      ) : null}
 
       <GroupOverrideRules
         registry={registry}
@@ -393,19 +447,30 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 type GroupPricingTableProps = {
   groupRatio: string
   userUsableGroups: string
+  metricsByName: ReadonlyMap<string, PricingGroupMetrics>
+  metricsLoading: boolean
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
+  groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
+  onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
 }
 
 function GroupPricingTable({
   groupRatio,
   userUsableGroups,
+  metricsByName,
+  metricsLoading,
   onChange,
   onShowDetail,
+  groupTypeByName,
+  onGroupTypeChange,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio, userUsableGroups)
+    buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
+      ...row,
+      groupType: groupTypeByName?.get(row.name) ?? row.groupType,
+    }))
   )
 
   useEffect(() => {
@@ -417,12 +482,12 @@ function GroupPricingTable({
       if (groupPricingSignature(currentRows) === incomingSignature) {
         return currentRows
       }
-      return buildGroupPricingRows(
-        groupRatio,
-        userUsableGroups
-      )
+      return buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
+        ...row,
+        groupType: groupTypeByName?.get(row.name) ?? row.groupType,
+      }))
     })
-  }, [groupRatio, userUsableGroups])
+  }, [groupRatio, userUsableGroups, groupTypeByName])
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
@@ -463,6 +528,7 @@ function GroupPricingTable({
         ratio: '1',
         selectable: true,
         description: '',
+        groupType: 'toC',
       },
     ])
   }, [emitRows, rows])
@@ -493,7 +559,9 @@ function GroupPricingTable({
           <div>
             <CardTitle>{t('Pricing groups')}</CardTitle>
             <CardDescription>
-              {t('Edit billing ratios and user-selectable groups in one table.')}
+              {t(
+                'Edit billing ratios and user-selectable groups in one table.'
+              )}
             </CardDescription>
           </div>
           <Button onClick={addRow} size='sm' className='sm:self-start'>
@@ -557,6 +625,28 @@ function GroupPricingTable({
                 ),
               },
               {
+                id: 'group-type',
+                header: t('Customer type'),
+                className: 'w-28',
+                cell: (row) => (
+                  <NativeSelect
+                    value={row.groupType}
+                    onChange={(event) => {
+                      const type = event.target.value as 'toB' | 'toC'
+                      updateRow(row._id, 'groupType', type)
+                      onGroupTypeChange?.(row.name.trim(), type)
+                    }}
+                  >
+                    <NativeSelectOption value='toB'>
+                      {t('ToB')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='toC'>
+                      {t('ToC')}
+                    </NativeSelectOption>
+                  </NativeSelect>
+                ),
+              },
+              {
                 id: 'description',
                 header: t('Description'),
                 className: 'min-w-56',
@@ -574,6 +664,106 @@ function GroupPricingTable({
                       -
                     </span>
                   ),
+              },
+              {
+                id: 'usage',
+                header: t('Usage'),
+                className: 'min-w-40',
+                cell: (row) => {
+                  const metrics = metricsByName.get(row.name.trim())
+                  if (metricsLoading) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>
+                        {t('Loading...')}
+                      </span>
+                    )
+                  }
+                  if (!metrics) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>-</span>
+                    )
+                  }
+                  return (
+                    <div className='text-xs leading-5'>
+                      <div>
+                        {t('Today')}:{' '}
+                        {formatMetricTokens(metrics.usage.today.tokens)}/
+                        {formatQuota(metrics.usage.today.quota)}
+                      </div>
+                      <div>
+                        {t('Yesterday')}:{' '}
+                        {formatMetricTokens(metrics.usage.yesterday.tokens)}/
+                        {formatQuota(metrics.usage.yesterday.quota)}
+                      </div>
+                      <div>
+                        {t('Total')}:{' '}
+                        {formatMetricTokens(metrics.usage.total.tokens)}/
+                        {formatQuota(metrics.usage.total.quota)}
+                      </div>
+                    </div>
+                  )
+                },
+              },
+              {
+                id: 'channels',
+                header: t('Channels'),
+                className: 'min-w-28',
+                cell: (row) => {
+                  const metrics = metricsByName.get(row.name.trim())
+                  if (metricsLoading) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>
+                        {t('Loading...')}
+                      </span>
+                    )
+                  }
+                  if (!metrics) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>-</span>
+                    )
+                  }
+                  return (
+                    <div className='text-xs leading-5'>
+                      <div>
+                        {t('Available')}: {metrics.channels.available}
+                      </div>
+                      <div>
+                        {t('Total')}: {metrics.channels.total}
+                      </div>
+                    </div>
+                  )
+                },
+              },
+              {
+                id: 'activity',
+                header: t('Activity'),
+                className: 'min-w-28',
+                cell: (row) => {
+                  const metrics = metricsByName.get(row.name.trim())
+                  if (metricsLoading) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>
+                        {t('Loading...')}
+                      </span>
+                    )
+                  }
+                  if (!metrics) {
+                    return (
+                      <span className='text-muted-foreground text-xs'>-</span>
+                    )
+                  }
+                  return (
+                    <div className='text-xs leading-5'>
+                      <div>
+                        {t('Active users')}: {metrics.activity.users}
+                      </div>
+                      <div>
+                        {t('Active connections')}:{' '}
+                        {metrics.activity.connections}
+                      </div>
+                    </div>
+                  )
+                },
               },
               {
                 id: 'actions',
@@ -1049,10 +1239,13 @@ function GroupOverrideDialog({
           <p className='text-muted-foreground text-xs'>
             {baseRatio !== undefined
               ? t('(instead of {{ratio}})', { ratio: baseRatio })
-              : t('Multiplier applied when {{userGroup}} uses {{targetGroup}}', {
-                  userGroup: userGroup || t('this user group'),
-                  targetGroup: targetGroup || t('this token group'),
-                })}
+              : t(
+                  'Multiplier applied when {{userGroup}} uses {{targetGroup}}',
+                  {
+                    userGroup: userGroup || t('this user group'),
+                    targetGroup: targetGroup || t('this token group'),
+                  }
+                )}
           </p>
         </div>
       </div>

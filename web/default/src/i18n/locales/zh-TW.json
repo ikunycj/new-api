@@ -6401,6 +6401,11 @@
     "Concurrency": "並發",
     "Admin Console": "管理控制台",
     "Call Logs": "Call Logs",
-    "Group Management": "群組管理"
+    "Group Management": "群組管理",
+    "Customer type": "客戶類型",
+    "Channel scheduling strategy": "渠道調度策略",
+    "Priority order": "優先順序",
+    "Weighted distribution": "加權分配",
+    "Distribution weight": "分配權重"
   }
 }

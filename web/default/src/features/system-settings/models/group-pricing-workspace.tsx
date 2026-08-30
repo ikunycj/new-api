@@ -1,11 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getChannels } from '@/features/channels/api'
-import { getFailoverConfig } from '@/features/failover/api'
+import {
+  getFailoverConfig,
+  updateFailoverConfig,
+} from '@/features/failover/api'
+import type { BillingGroupRoute } from '@/features/failover/types'
 
 import {
   buildGroupPricingSnapshots,
@@ -32,6 +36,7 @@ type GroupPricingWorkspaceProps = {
 
 export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const configQuery = useQuery({
     queryKey: ['channel-routing-config'],
     queryFn: getFailoverConfig,
@@ -48,16 +53,24 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     () => getToBGroupNames(configQuery.data?.routes ?? []),
     [configQuery.data?.routes]
   )
+  const routeGroupNames = useMemo(
+    () =>
+      new Set(
+        (configQuery.data?.routes ?? [])
+          .map((route) => route.billing_group.trim())
+          .filter(Boolean)
+      ),
+    [configQuery.data?.routes]
+  )
   const groupRatio = props.form.watch('GroupRatio')
   const userUsableGroups = props.form.watch('UserUsableGroups')
   const groups = useMemo(
-    () =>
-      buildGroupPricingSnapshots(groupRatio, userUsableGroups),
+    () => buildGroupPricingSnapshots(groupRatio, userUsableGroups),
     [groupRatio, userUsableGroups]
   )
   const classifiedGroups = useMemo(() => {
     const byName = new Map(groups.map((group) => [group.name, group]))
-    for (const name of toBGroupNames) {
+    for (const name of routeGroupNames) {
       if (!byName.has(name)) {
         byName.set(name, {
           name,
@@ -69,7 +82,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       }
     }
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [groups, toBGroupNames])
+  }, [groups, routeGroupNames])
   const groupNames = useMemo(
     () => classifiedGroups.map((group) => group.name),
     [classifiedGroups]
@@ -89,6 +102,47 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       ),
     [classifiedGroups, toBGroupNames]
   )
+  const groupTypeMutation = useMutation({
+    mutationFn: updateFailoverConfig,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['channel-routing-config'],
+      })
+    },
+  })
+  const handleGroupTypeChange = (name: string, type: 'toB' | 'toC') => {
+    if (!name || !configQuery.data || groupTypeMutation.isPending) return
+    const routes = structuredClone(configQuery.data.routes)
+    const existing = routes.find((route) => route.billing_group === name)
+    if (existing) {
+      if (existing.group_type === type) return
+      existing.group_type = type
+    } else if (type === 'toB') {
+      const route: BillingGroupRoute = {
+        id: -Date.now(),
+        billing_group: name,
+        name,
+        mode: 'balanced',
+        group_type: type,
+        strategy_config: JSON.stringify({ type: 'priority' }),
+        enabled: false,
+        max_total_attempts: 4,
+        total_timeout_ms: 30000,
+        circuit_failure_threshold: 5,
+        circuit_window_seconds: 60,
+        circuit_cooldown_seconds: 60,
+        circuit_half_open_requests: 1,
+        profit_guard_mode: 'off',
+        minimum_profit_margin: 0,
+        created_time: 0,
+        updated_time: 0,
+      }
+      routes.push(route)
+    } else {
+      return
+    }
+    groupTypeMutation.mutate({ ...configQuery.data, routes })
+  }
 
   return (
     <Tabs defaultValue='basic' className='gap-5'>
@@ -139,6 +193,15 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
           form={props.form}
           onSave={props.onSave}
           isSaving={props.isSaving}
+          groupTypeByName={
+            new Map(
+              classifiedGroups.map((group) => [
+                group.name,
+                (groupTypes.get(group.name) ?? 'ToC') === 'ToB' ? 'toB' : 'toC',
+              ])
+            )
+          }
+          onGroupTypeChange={handleGroupTypeChange}
         />
       </TabsContent>
       <TabsContent value='tob'>

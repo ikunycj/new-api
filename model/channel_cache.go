@@ -229,10 +229,16 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 	return nil, errors.New("channel not found")
 }
 
-// GetConfiguredRouteChannel selects the first eligible channel in the billing
-// group's configured order. Legacy channel priority and weight do not affect
-// configured ToB routes.
+// GetConfiguredRouteChannel preserves the legacy priority strategy.
 func GetConfiguredRouteChannel(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}) (*Channel, error) {
+	return GetConfiguredRouteChannelWithStrategy(group, model, requestPath, entries, excluded, RoutingStrategyPriority)
+}
+
+// GetConfiguredRouteChannelWithStrategy selects an eligible channel according
+// to the route strategy. Priority keeps deterministic ordering; weighted uses
+// the per-route channel weights and falls back to priority when all weights
+// are zero.
+func GetConfiguredRouteChannelWithStrategy(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}, strategy string) (*Channel, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
@@ -282,12 +288,13 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		for i := range channels {
 			channelByID[channels[i].Id] = &channels[i]
 		}
+		candidates := make([]weightedRouteCandidate, 0, len(orderedEntries))
 		for _, entry := range orderedEntries {
 			if channel := channelByID[entry.ChannelId]; channel != nil {
-				return channel, nil
+				candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight})
 			}
 		}
-		return nil, nil
+		return chooseRouteCandidate(candidates, strategy), nil
 	}
 
 	channelSyncLock.RLock()
@@ -302,6 +309,7 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		eligible[channelID] = struct{}{}
 	}
 
+	candidates := make([]weightedRouteCandidate, 0, len(orderedEntries))
 	for _, entry := range orderedEntries {
 		if !entry.Enabled {
 			continue
@@ -316,9 +324,43 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 		if channel == nil || channel.Status != common.ChannelStatusEnabled {
 			continue
 		}
-		return channel, nil
+		candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight})
 	}
-	return nil, nil
+	return chooseRouteCandidate(candidates, strategy), nil
+}
+
+type weightedRouteCandidate struct {
+	channel *Channel
+	weight  int
+}
+
+func chooseRouteCandidate(candidates []weightedRouteCandidate, strategy string) *Channel {
+	if len(candidates) == 0 {
+		return nil
+	}
+	if strategy != RoutingStrategyWeighted {
+		return candidates[0].channel
+	}
+	total := 0
+	for _, candidate := range candidates {
+		if candidate.weight > 0 {
+			total += candidate.weight
+		}
+	}
+	if total <= 0 {
+		return candidates[0].channel
+	}
+	choice := rand.Intn(total)
+	for _, candidate := range candidates {
+		if candidate.weight <= 0 {
+			continue
+		}
+		choice -= candidate.weight
+		if choice < 0 {
+			return candidate.channel
+		}
+	}
+	return candidates[0].channel
 }
 
 // FilterRealRouteChannels excludes channels reserved for managed mock tests

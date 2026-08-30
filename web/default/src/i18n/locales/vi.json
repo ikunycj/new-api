@@ -6401,6 +6401,11 @@
     "Concurrency": "Đồng thời",
     "Admin Console": "Bảng điều khiển quản trị",
     "Call Logs": "Nhật ký cuộc gọi",
-    "Group Management": "Quản lý nhóm"
+    "Group Management": "Quản lý nhóm",
+    "Customer type": "Loại khách hàng",
+    "Channel scheduling strategy": "Chiến lược phân phối kênh",
+    "Priority order": "Thứ tự ưu tiên",
+    "Weighted distribution": "Phân phối theo trọng số",
+    "Distribution weight": "Trọng số phân phối"
   }
 }

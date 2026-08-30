@@ -90,6 +90,29 @@ export type ChannelMonitorRunResponse = {
   monitor: ChannelMonitor
 }
 
+export type PricingGroupUsagePeriod = {
+  tokens: number
+  quota: number
+}
+
+export type PricingGroupMetrics = {
+  pricing_group: string
+  usage: {
+    today: PricingGroupUsagePeriod
+    yesterday: PricingGroupUsagePeriod
+    total: PricingGroupUsagePeriod
+  }
+  channels: {
+    available: number
+    total: number
+  }
+  activity: {
+    users: number
+    connections: number
+  }
+  updated_at: number
+}
+
 export type GroupStatusTestResult = {
   success: boolean
   latency_ms: number

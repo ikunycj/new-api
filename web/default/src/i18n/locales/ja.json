@@ -6401,6 +6401,11 @@
     "Concurrency": "同時実行数",
     "Admin Console": "管理コンソール",
     "Call Logs": "呼び出しログ",
-    "Group Management": "グループ管理"
+    "Group Management": "グループ管理",
+    "Customer type": "顧客タイプ",
+    "Channel scheduling strategy": "チャネルスケジューリング戦略",
+    "Priority order": "優先順位",
+    "Weighted distribution": "重み付け分散",
+    "Distribution weight": "分散の重み"
   }
 }

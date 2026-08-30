@@ -6401,6 +6401,11 @@
     "Concurrency": "Concurrence",
     "Admin Console": "Console d’administration",
     "Call Logs": "Journaux d’appels",
-    "Group Management": "Gestion des groupes"
+    "Group Management": "Gestion des groupes",
+    "Customer type": "Type de client",
+    "Channel scheduling strategy": "Stratégie de planification des canaux",
+    "Priority order": "Ordre de priorité",
+    "Weighted distribution": "Distribution pondérée",
+    "Distribution weight": "Poids de distribution"
   }
 }
