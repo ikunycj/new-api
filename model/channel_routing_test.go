@@ -136,6 +136,22 @@ func TestSaveChannelRoutingConfigPreservesWeightsForWeightedStrategy(t *testing.
 	policy, _, ok := ResolveBillingGroupRoute("claude")
 	assert.True(t, ok)
 	assert.Equal(t, RoutingStrategyWeighted, policy.Strategy)
+	assert.InDelta(t, 40, policy.StrategyConfig.PriceWeight, 0.0001)
+	assert.InDelta(t, 40, policy.StrategyConfig.AvailabilityWeight, 0.0001)
+	assert.InDelta(t, 20, policy.StrategyConfig.LoadWeight, 0.0001)
+}
+
+func TestWeightedStrategyDefaultsAndNormalizesDynamicWeights(t *testing.T) {
+	defaults := parseRoutingStrategyConfig(`{"type":"weighted"}`)
+	assert.Equal(t, RoutingStrategyWeighted, defaults.Type)
+	assert.InDelta(t, 40, defaults.PriceWeight, 0.0001)
+	assert.InDelta(t, 40, defaults.AvailabilityWeight, 0.0001)
+	assert.InDelta(t, 20, defaults.LoadWeight, 0.0001)
+
+	normalized := parseRoutingStrategyConfig(`{"type":"weighted","price_weight":2,"availability_weight":1,"load_weight":1}`)
+	assert.InDelta(t, 50, normalized.PriceWeight, 0.0001)
+	assert.InDelta(t, 25, normalized.AvailabilityWeight, 0.0001)
+	assert.InDelta(t, 25, normalized.LoadWeight, 0.0001)
 }
 
 func TestGetBillingGroupTypesUsesRouteMembershipIncludingDisabledRoutes(t *testing.T) {

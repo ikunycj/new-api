@@ -310,7 +310,8 @@ func (p *RetryParam) hasAvailableChannelInCurrentGroup() bool {
 	}
 	p.loadPolicy()
 	if p.routeConfigured {
-		channel, err := model.GetConfiguredRouteChannelWithStrategy(group, p.ModelName, p.RequestPath, p.routeChannels, p.excludedChannels, p.loadPolicy().Strategy)
+		policy := p.loadPolicy()
+		channel, err := model.GetConfiguredRouteChannelWithStrategyConfig(group, p.ModelName, p.RequestPath, p.routeChannels, p.excludedChannels, policy.StrategyConfig)
 		return err == nil && channel != nil
 	}
 	available, err := model.HasSatisfiedChannelExcluding(group, p.ModelName, p.RequestPath, p.excludedChannels)
@@ -338,10 +339,12 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 					}
 				}
 				param.retryChannelID = 0
-				channel, err = model.GetConfiguredRouteChannelWithStrategy(group, param.ModelName, param.RequestPath, retryEntries, param.excludedChannels, param.loadPolicy().Strategy)
+				policy := param.loadPolicy()
+				channel, err = model.GetConfiguredRouteChannelWithStrategyConfig(group, param.ModelName, param.RequestPath, retryEntries, param.excludedChannels, policy.StrategyConfig)
 			}
 			if channel == nil && err == nil {
-				channel, err = model.GetConfiguredRouteChannelWithStrategy(group, param.ModelName, param.RequestPath, param.routeChannels, param.excludedChannels, param.loadPolicy().Strategy)
+				policy := param.loadPolicy()
+				channel, err = model.GetConfiguredRouteChannelWithStrategyConfig(group, param.ModelName, param.RequestPath, param.routeChannels, param.excludedChannels, policy.StrategyConfig)
 			}
 		} else {
 			priorityRetry := param.GetRetry()

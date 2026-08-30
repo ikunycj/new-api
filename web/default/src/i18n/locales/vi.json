@@ -6406,6 +6406,8 @@
     "Channel scheduling strategy": "Chiến lược phân phối kênh",
     "Priority order": "Thứ tự ưu tiên",
     "Weighted distribution": "Phân phối theo trọng số",
-    "Distribution weight": "Trọng số phân phối"
+    "Distribution weight": "Trọng số phân phối",
+    "Load": "Tải",
+    "Dynamic strategy weights must total 100%": "Tổng trọng số chiến lược động phải bằng 100%"
   }
 }

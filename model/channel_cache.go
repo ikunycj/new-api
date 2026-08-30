@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -40,6 +41,18 @@ func InitChannelCache() {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
 				newChannel2advancedCustomConfig[channel.Id] = config
 			}
+		}
+	}
+	channelIDs := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		channelIDs = append(channelIDs, channel.Id)
+	}
+	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, time.Now()); err != nil {
+		common.SysLog(fmt.Sprintf("failed to load channel probe rates: %v", err))
+	} else {
+		for _, channel := range channels {
+			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+			channel.PreviousDayProbeSampleCount = samples[channel.Id]
 		}
 	}
 	var abilities []*Ability
@@ -236,12 +249,19 @@ func GetConfiguredRouteChannel(group string, model string, requestPath string, e
 
 // GetConfiguredRouteChannelWithStrategy selects an eligible channel according
 // to the route strategy. Priority keeps deterministic ordering; weighted uses
-// the per-route channel weights and falls back to priority when all weights
-// are zero.
+// the legacy per-channel weight as a base for dynamic route scoring.
 func GetConfiguredRouteChannelWithStrategy(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}, strategy string) (*Channel, error) {
+	return GetConfiguredRouteChannelWithStrategyConfig(group, model, requestPath, entries, excluded, RoutingStrategyConfig{Type: strategy})
+}
+
+// GetConfiguredRouteChannelWithStrategyConfig selects an eligible channel using
+// the complete persisted strategy configuration. The string-only wrapper above
+// remains for callers that only provide the strategy type.
+func GetConfiguredRouteChannelWithStrategyConfig(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}, strategyConfig RoutingStrategyConfig) (*Channel, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
+	strategyConfig = normalizeRoutingStrategyConfig(strategyConfig)
 	orderedEntries := append([]BillingGroupChannel(nil), entries...)
 	SortRouteChannels(orderedEntries)
 	if !common.MemoryCacheEnabled {
@@ -291,10 +311,10 @@ func GetConfiguredRouteChannelWithStrategy(group string, model string, requestPa
 		candidates := make([]weightedRouteCandidate, 0, len(orderedEntries))
 		for _, entry := range orderedEntries {
 			if channel := channelByID[entry.ChannelId]; channel != nil {
-				candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight})
+				candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
 			}
 		}
-		return chooseRouteCandidate(candidates, strategy), nil
+		return chooseRouteCandidate(candidates, strategyConfig), nil
 	}
 
 	channelSyncLock.RLock()
@@ -324,38 +344,80 @@ func GetConfiguredRouteChannelWithStrategy(group string, model string, requestPa
 		if channel == nil || channel.Status != common.ChannelStatusEnabled {
 			continue
 		}
-		candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight})
+		candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
 	}
-	return chooseRouteCandidate(candidates, strategy), nil
+	return chooseRouteCandidate(candidates, strategyConfig), nil
 }
 
 type weightedRouteCandidate struct {
-	channel *Channel
-	weight  int
+	channel    *Channel
+	weight     int
+	costFactor float64
 }
 
-func chooseRouteCandidate(candidates []weightedRouteCandidate, strategy string) *Channel {
+func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig RoutingStrategyConfig) *Channel {
 	if len(candidates) == 0 {
 		return nil
 	}
-	if strategy != RoutingStrategyWeighted {
+	if strategyConfig.Type != RoutingStrategyWeighted {
 		return candidates[0].channel
 	}
-	total := 0
+
+	weights := make([]float64, len(candidates))
+	maxResponseTime := 0
+	minCostFactor := math.MaxFloat64
 	for _, candidate := range candidates {
-		if candidate.weight > 0 {
-			total += candidate.weight
+		if candidate.channel.ResponseTime > maxResponseTime {
+			maxResponseTime = candidate.channel.ResponseTime
+		}
+		if candidate.costFactor > 0 && candidate.costFactor < minCostFactor {
+			minCostFactor = candidate.costFactor
 		}
 	}
-	if total <= 0 {
+	if minCostFactor == math.MaxFloat64 {
+		minCostFactor = 1
+	}
+	for index, candidate := range candidates {
+		staticWeight := float64(candidate.weight)
+		if staticWeight <= 0 {
+			staticWeight = 1
+		}
+		priceScore := 100.0
+		if candidate.costFactor > 0 {
+			priceScore = minCostFactor / candidate.costFactor * 100
+		}
+		availabilityScore := candidate.channel.PreviousDayProbeSuccessRate
+		if availabilityScore <= 0 || math.IsNaN(availabilityScore) || math.IsInf(availabilityScore, 0) {
+			availabilityScore = 100
+		}
+		if availabilityScore > 100 {
+			availabilityScore = 100
+		}
+		loadScore := 100.0
+		if maxResponseTime > 0 && candidate.channel.ResponseTime > 0 {
+			loadScore = float64(maxResponseTime) / float64(candidate.channel.ResponseTime) * 100
+		}
+		dynamicScore := priceScore*strategyConfig.PriceWeight/100 +
+			availabilityScore*strategyConfig.AvailabilityWeight/100 +
+			loadScore*strategyConfig.LoadWeight/100
+		weights[index] = staticWeight * dynamicScore
+	}
+
+	total := 0.0
+	for _, weight := range weights {
+		if weight > 0 && !math.IsNaN(weight) && !math.IsInf(weight, 0) {
+			total += weight
+		}
+	}
+	if total <= 0 || math.IsNaN(total) || math.IsInf(total, 0) {
 		return candidates[0].channel
 	}
-	choice := rand.Intn(total)
-	for _, candidate := range candidates {
-		if candidate.weight <= 0 {
+	choice := rand.Float64() * total
+	for index, candidate := range candidates {
+		if weights[index] <= 0 {
 			continue
 		}
-		choice -= candidate.weight
+		choice -= weights[index]
 		if choice < 0 {
 			return candidate.channel
 		}

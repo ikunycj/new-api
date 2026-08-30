@@ -51,9 +51,8 @@ type BillingGroupRoute struct {
 	UpdatedTime             int64   `json:"updated_time" gorm:"bigint"`
 }
 
-// BillingGroupChannel defines the deterministic channel order inside a billing
-// group. Weight remains only for database and API compatibility and is ignored
-// by configured ToB routing.
+// BillingGroupChannel defines the channel order and static distribution weight
+// inside a billing group. Dynamic strategy weights are stored on the route.
 type BillingGroupChannel struct {
 	Id                  int     `json:"id"`
 	BillingGroupRouteId int     `json:"billing_group_route_id" gorm:"index;uniqueIndex:idx_billing_route_channel"`
@@ -618,6 +617,36 @@ func parseRoutingStrategyConfig(raw string) RoutingStrategyConfig {
 		config.Type = RoutingStrategyWeighted
 	} else {
 		config.Type = RoutingStrategyPriority
+	}
+	return normalizeRoutingStrategyConfig(config)
+}
+
+func normalizeRoutingStrategyConfig(config RoutingStrategyConfig) RoutingStrategyConfig {
+	if config.Type != RoutingStrategyWeighted {
+		return RoutingStrategyConfig{Type: RoutingStrategyPriority}
+	}
+	weights := []float64{config.PriceWeight, config.AvailabilityWeight, config.LoadWeight}
+	total := 0.0
+	valid := true
+	for _, weight := range weights {
+		if weight < 0 || math.IsNaN(weight) || math.IsInf(weight, 0) {
+			valid = false
+			break
+		}
+		total += weight
+	}
+	if !valid || total <= 0 || math.IsNaN(total) || math.IsInf(total, 0) {
+		return RoutingStrategyConfig{
+			Type:               RoutingStrategyWeighted,
+			PriceWeight:        40,
+			AvailabilityWeight: 40,
+			LoadWeight:         20,
+		}
+	}
+	if math.Abs(total-100) > 0.0001 {
+		config.PriceWeight *= 100 / total
+		config.AvailabilityWeight *= 100 / total
+		config.LoadWeight *= 100 / total
 	}
 	return config
 }

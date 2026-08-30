@@ -6406,6 +6406,8 @@
     "Channel scheduling strategy": "Stratégie de planification des canaux",
     "Priority order": "Ordre de priorité",
     "Weighted distribution": "Distribution pondérée",
-    "Distribution weight": "Poids de distribution"
+    "Distribution weight": "Poids de distribution",
+    "Load": "Charge",
+    "Dynamic strategy weights must total 100%": "Le total des poids de stratégie dynamique doit être de 100 %"
   }
 }

@@ -64,6 +64,12 @@ const defaultRouteSettings = {
   minimum_profit_margin: 0,
 }
 
+const defaultStrategyWeights = {
+  price_weight: 40,
+  availability_weight: 40,
+  load_weight: 20,
+}
+
 const circuitPresets = [
   {
     key: 'sensitive',
@@ -110,19 +116,83 @@ function createRoute(): BillingGroupRoute {
 }
 
 function getRouteStrategy(route: BillingGroupRoute): 'priority' | 'weighted' {
+  return getRouteStrategyConfig(route).type
+}
+
+type RouteStrategyConfig = {
+  type: 'priority' | 'weighted'
+  price_weight: number
+  availability_weight: number
+  load_weight: number
+}
+
+function getRouteStrategyConfig(route: BillingGroupRoute): RouteStrategyConfig {
   try {
-    const parsed = JSON.parse(route.strategy_config || '{}') as {
-      type?: string
+    const parsed = JSON.parse(
+      route.strategy_config || '{}'
+    ) as Partial<RouteStrategyConfig> & { strategy?: string }
+    const type =
+      parsed.type === 'weighted' || parsed.strategy === 'weighted'
+        ? 'weighted'
+        : 'priority'
+    const weights = {
+      price_weight: Number(parsed.price_weight),
+      availability_weight: Number(parsed.availability_weight),
+      load_weight: Number(parsed.load_weight),
     }
-    return parsed.type === 'weighted' ? 'weighted' : 'priority'
+    for (const key of Object.keys(weights) as Array<keyof typeof weights>) {
+      if (!Number.isFinite(weights[key]) || weights[key] < 0) weights[key] = 0
+    }
+    if (
+      type === 'priority' &&
+      Object.values(weights).every((weight) => weight === 0)
+    ) {
+      return { type, ...defaultStrategyWeights }
+    }
+    const total = Object.values(weights).reduce(
+      (sum, weight) =>
+        sum + (Number.isFinite(weight) && weight > 0 ? weight : 0),
+      0
+    )
+    if (total <= 0) return { type, ...defaultStrategyWeights }
+    return { type, ...weights }
   } catch {
-    return 'priority'
+    return { type: 'priority', ...defaultStrategyWeights }
   }
 }
 
-function setRouteStrategy(strategy: 'priority' | 'weighted') {
+function setRouteStrategy(
+  route: BillingGroupRoute,
+  strategy: 'priority' | 'weighted'
+) {
+  const current = getRouteStrategyConfig(route)
   return {
-    strategy_config: JSON.stringify({ type: strategy }),
+    strategy_config: JSON.stringify(
+      strategy === 'weighted'
+        ? {
+            type: strategy,
+            price_weight: current.price_weight,
+            availability_weight: current.availability_weight,
+            load_weight: current.load_weight,
+          }
+        : { type: strategy }
+    ),
+  }
+}
+
+function updateRouteStrategyWeights(
+  route: BillingGroupRoute,
+  patch: Partial<Omit<RouteStrategyConfig, 'type'>>
+) {
+  const current = getRouteStrategyConfig(route)
+  return {
+    strategy_config: JSON.stringify({
+      type: current.type,
+      price_weight: patch.price_weight ?? current.price_weight,
+      availability_weight:
+        patch.availability_weight ?? current.availability_weight,
+      load_weight: patch.load_weight ?? current.load_weight,
+    }),
   }
 }
 
@@ -237,6 +307,22 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
 
   const saveConfig = () => {
     if (!config) return
+    const invalidWeightedRoute = config.routes.find((route) => {
+      const strategy = getRouteStrategyConfig(route)
+      return (
+        strategy.type === 'weighted' &&
+        Math.abs(
+          strategy.price_weight +
+            strategy.availability_weight +
+            strategy.load_weight -
+            100
+        ) > 0.001
+      )
+    })
+    if (invalidWeightedRoute) {
+      toast.error(t('Dynamic strategy weights must total 100%'))
+      return
+    }
     saveMutation.mutate(structuredClone(config))
   }
 
@@ -293,6 +379,11 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       {config.routes.map((route, routeIndex) => {
         if (route.id !== selectedRoute?.id) return null
         const entries = routeEntries(route)
+        const strategyConfig = getRouteStrategyConfig(route)
+        const strategyWeightTotal =
+          strategyConfig.price_weight +
+          strategyConfig.availability_weight +
+          strategyConfig.load_weight
         const groupRatio = props.groupRatios.get(route.billing_group) ?? 1
         let cumulativeFactor = 0
         let firstRiskPosition = 0
@@ -408,7 +499,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
             </div>
 
             <FieldSet className='border-y py-4'>
-              <FieldLegend>{t('Routing strategy')}</FieldLegend>
+              <FieldLegend>{t('Channel routing')}</FieldLegend>
               <FieldGroup className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
                 <Field>
                   <FieldLabel htmlFor={`route-strategy-${route.id}`}>
@@ -421,6 +512,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                       updateRoute(
                         routeIndex,
                         setRouteStrategy(
+                          route,
                           event.target.value as 'priority' | 'weighted'
                         )
                       )
@@ -442,30 +534,6 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                           'Channels are attempted in order; each channel can simulate failures and latency.'
                         )}
                   </FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`route-mode-${route.id}`}>
-                    {t('Routing strategy')}
-                  </FieldLabel>
-                  <NativeSelect
-                    id={`route-mode-${route.id}`}
-                    value={route.mode}
-                    onChange={(event) =>
-                      updateRoute(routeIndex, {
-                        mode: event.target.value as BillingGroupRoute['mode'],
-                      })
-                    }
-                  >
-                    <NativeSelectOption value='balanced'>
-                      {t('Balanced')}
-                    </NativeSelectOption>
-                    <NativeSelectOption value='cost_first'>
-                      {t('Cost first')}
-                    </NativeSelectOption>
-                    <NativeSelectOption value='stability_first'>
-                      {t('Stability first')}
-                    </NativeSelectOption>
-                  </NativeSelect>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`max-total-attempts-${route.id}`}>
@@ -507,6 +575,110 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                 </Field>
               </FieldGroup>
             </FieldSet>
+
+            {strategyConfig.type === 'weighted' ? (
+              <FieldSet className='border-y py-4'>
+                <div className='flex flex-wrap items-baseline justify-between gap-2'>
+                  <div>
+                    <FieldLegend>{t('Weight')}</FieldLegend>
+                    <FieldDescription>
+                      {t(
+                        'Used for load balancing. Higher weight = more requests'
+                      )}
+                    </FieldDescription>
+                  </div>
+                  <span
+                    className={
+                      strategyWeightTotal === 100
+                        ? 'text-muted-foreground text-sm'
+                        : 'text-destructive text-sm'
+                    }
+                  >
+                    {t('Total')}: {strategyWeightTotal.toFixed(1)}%
+                  </span>
+                </div>
+                <FieldGroup className='mt-4 grid gap-4 sm:grid-cols-3'>
+                  <Field>
+                    <FieldLabel htmlFor={`price-weight-${route.id}`}>
+                      {t('Price')} {t('Weight')} (%)
+                    </FieldLabel>
+                    <Input
+                      id={`price-weight-${route.id}`}
+                      className={numericInputClass}
+                      type='number'
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={strategyConfig.price_weight}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) =>
+                        updateRoute(
+                          routeIndex,
+                          updateRouteStrategyWeights(route, {
+                            price_weight: Math.max(
+                              0,
+                              Math.min(100, Number(event.target.value))
+                            ),
+                          })
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`availability-weight-${route.id}`}>
+                      {t('Availability')} {t('Weight')} (%)
+                    </FieldLabel>
+                    <Input
+                      id={`availability-weight-${route.id}`}
+                      className={numericInputClass}
+                      type='number'
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={strategyConfig.availability_weight}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) =>
+                        updateRoute(
+                          routeIndex,
+                          updateRouteStrategyWeights(route, {
+                            availability_weight: Math.max(
+                              0,
+                              Math.min(100, Number(event.target.value))
+                            ),
+                          })
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`load-weight-${route.id}`}>
+                      {t('Load')} {t('Weight')} (%)
+                    </FieldLabel>
+                    <Input
+                      id={`load-weight-${route.id}`}
+                      className={numericInputClass}
+                      type='number'
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={strategyConfig.load_weight}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) =>
+                        updateRoute(
+                          routeIndex,
+                          updateRouteStrategyWeights(route, {
+                            load_weight: Math.max(
+                              0,
+                              Math.min(100, Number(event.target.value))
+                            ),
+                          })
+                        )
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+              </FieldSet>
+            ) : null}
 
             <FieldSet className='bg-muted/20 rounded-lg border p-4'>
               <div className='flex flex-wrap items-start justify-between gap-3'>

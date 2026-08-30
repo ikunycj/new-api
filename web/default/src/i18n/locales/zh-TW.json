@@ -6406,6 +6406,8 @@
     "Channel scheduling strategy": "渠道調度策略",
     "Priority order": "優先順序",
     "Weighted distribution": "加權分配",
-    "Distribution weight": "分配權重"
+    "Distribution weight": "分配權重",
+    "Load": "負載",
+    "Dynamic strategy weights must total 100%": "動態策略權重總和必須為 100%"
   }
 }

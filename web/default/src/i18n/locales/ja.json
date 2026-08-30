@@ -6406,6 +6406,8 @@
     "Channel scheduling strategy": "チャネルスケジューリング戦略",
     "Priority order": "優先順位",
     "Weighted distribution": "重み付け分散",
-    "Distribution weight": "分散の重み"
+    "Distribution weight": "分散の重み",
+    "Load": "負荷",
+    "Dynamic strategy weights must total 100%": "動的戦略ウェイトの合計は 100% にする必要があります"
   }
 }
