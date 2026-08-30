@@ -6410,6 +6410,7 @@
     "Load": "负载",
     "Dynamic strategy weights must total 100%": "动态策略权重合计必须为 100%",
     "Confirm customer type change": "确认客户类型变更",
-    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "将 {{name}} 改为 {{type}} 会更新路由范围，并可能改变可服务请求的渠道。"
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "将 {{name}} 改为 {{type}} 会更新路由范围，并可能改变可服务请求的渠道。",
+    "Add all matching channels": "添加全部匹配渠道"
   }
 }

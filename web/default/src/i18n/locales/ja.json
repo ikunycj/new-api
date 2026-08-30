@@ -6410,6 +6410,7 @@
     "Load": "負荷",
     "Dynamic strategy weights must total 100%": "動的戦略ウェイトの合計は 100% にする必要があります",
     "Confirm customer type change": "顧客タイプの変更を確認",
-    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "{{name}} を {{type}} に変更するとルーティング範囲が更新され、リクエストを処理できるチャネルが変わる場合があります。"
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "{{name}} を {{type}} に変更するとルーティング範囲が更新され、リクエストを処理できるチャネルが変わる場合があります。",
+    "Add all matching channels": "一致するチャネルをすべて追加"
   }
 }

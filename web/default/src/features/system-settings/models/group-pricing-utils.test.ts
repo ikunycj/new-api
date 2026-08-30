@@ -19,7 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { reorderBillingGroupChannels } from './group-pricing-utils'
+import {
+  channelBelongsToGroup,
+  reorderBillingGroupChannels,
+} from './group-pricing-utils'
 
 const entries = [
   { id: 11, channel_id: 35, priority: 300 },
@@ -76,5 +79,15 @@ describe('billing group channel ordering', () => {
   test('returns the original entries when movement is out of bounds', () => {
     assert.strictEqual(reorderBillingGroupChannels(entries, 35, -1), entries)
     assert.strictEqual(reorderBillingGroupChannels(entries, 999, 1), entries)
+  })
+})
+
+describe('billing group channel matching', () => {
+  test('matches one of several configured groups without partial matches', () => {
+    const channel = { group: ' default, svip ' }
+
+    assert.equal(channelBelongsToGroup(channel, 'svip'), true)
+    assert.equal(channelBelongsToGroup(channel, 'vip'), false)
+    assert.equal(channelBelongsToGroup(channel, 'svip-extra'), false)
   })
 })

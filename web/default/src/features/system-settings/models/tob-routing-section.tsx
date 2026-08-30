@@ -242,6 +242,45 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       .filter((entry) => entry.billing_group_route_id === route.id)
       .sort((a, b) => b.priority - a.priority || a.id - b.id) ?? []
 
+  const matchingChannels = (route: BillingGroupRoute) =>
+    props.channels
+      .filter((channel) => channelBelongsToGroup(channel, route.billing_group))
+      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id - b.id)
+
+  const addMatchingChannels = (route: BillingGroupRoute) => {
+    updateConfig((current) => {
+      const entries = current.route_channels.filter(
+        (entry) => entry.billing_group_route_id === route.id
+      )
+      const existingChannelIDs = new Set(
+        entries.map((entry) => entry.channel_id)
+      )
+      const channelsToAdd = matchingChannels(route).filter(
+        (channel) => !existingChannelIDs.has(channel.id)
+      )
+      if (channelsToAdd.length === 0) return current
+
+      let nextPriority =
+        entries.length === 0
+          ? 1
+          : Math.min(1, ...entries.map((entry) => entry.priority)) - 1
+      for (const channel of channelsToAdd) {
+        current.route_channels.push({
+          id: nextTemporaryID--,
+          billing_group_route_id: route.id,
+          channel_id: channel.id,
+          priority: nextPriority,
+          weight: 0,
+          max_attempts: 1,
+          enabled: true,
+          cost_factor: 1,
+        })
+        nextPriority -= 1
+      }
+      return current
+    })
+  }
+
   const updateRoute = (
     routeIndex: number,
     patch: Partial<BillingGroupRoute>
@@ -379,6 +418,9 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       {config.routes.map((route, routeIndex) => {
         if (route.id !== selectedRoute?.id) return null
         const entries = routeEntries(route)
+        const availableMatchingChannels = matchingChannels(route).filter(
+          (channel) => !entries.some((entry) => entry.channel_id === channel.id)
+        )
         const strategyConfig = getRouteStrategyConfig(route)
         const strategyWeightTotal =
           strategyConfig.price_weight +
@@ -865,6 +907,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
               ) : null}
             </FieldSet>
 
+            {entries.length === 0 ? (
+              <div className='text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm'>
+                {t('No channels configured for this group')}
+              </div>
+            ) : null}
+
             {[...entriesByProtocol.entries()].map(
               ([channelType, protocolEntries]) => (
                 <div
@@ -1016,51 +1064,60 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
               )
             )}
 
-            <NativeSelect
-              className='w-full max-w-sm'
-              value=''
-              onChange={(event) => {
-                const channelID = Number(event.target.value)
-                const channel = channelByID.get(channelID)
-                if (!channel) return
-                updateConfig((current) => {
-                  const currentEntries = current.route_channels.filter(
-                    (entry) => entry.billing_group_route_id === route.id
-                  )
-                  const lastPriority = currentEntries.reduce(
-                    (lowest, entry) => Math.min(lowest, entry.priority),
-                    1
-                  )
-                  current.route_channels.push({
-                    id: nextTemporaryID--,
-                    billing_group_route_id: route.id,
-                    channel_id: channelID,
-                    priority:
-                      currentEntries.length === 0 ? 1 : lastPriority - 1,
-                    weight: 0,
-                    max_attempts: 1,
-                    enabled: true,
-                    cost_factor: 1,
+            <div className='flex flex-wrap items-center gap-2'>
+              <NativeSelect
+                className='w-full max-w-sm'
+                value=''
+                onChange={(event) => {
+                  const channelID = Number(event.target.value)
+                  const channel = channelByID.get(channelID)
+                  if (!channel) return
+                  updateConfig((current) => {
+                    const currentEntries = current.route_channels.filter(
+                      (entry) => entry.billing_group_route_id === route.id
+                    )
+                    const nextPriority =
+                      currentEntries.length === 0
+                        ? 1
+                        : Math.min(
+                            1,
+                            ...currentEntries.map((entry) => entry.priority)
+                          ) - 1
+                    current.route_channels.push({
+                      id: nextTemporaryID--,
+                      billing_group_route_id: route.id,
+                      channel_id: channelID,
+                      priority: nextPriority,
+                      weight: 0,
+                      max_attempts: 1,
+                      enabled: true,
+                      cost_factor: 1,
+                    })
+                    return current
                   })
-                  return current
-                })
-              }}
-            >
-              <NativeSelectOption value=''>
-                {t('Add channel')}
-              </NativeSelectOption>
-              {props.channels
-                .filter(
-                  (channel) =>
-                    channelBelongsToGroup(channel, route.billing_group) &&
-                    !entries.some((entry) => entry.channel_id === channel.id)
-                )
-                .map((channel) => (
+                }}
+              >
+                <NativeSelectOption value=''>
+                  {t('Add channel')}
+                </NativeSelectOption>
+                {availableMatchingChannels.map((channel) => (
                   <NativeSelectOption key={channel.id} value={channel.id}>
                     {channel.name} (#{channel.id})
                   </NativeSelectOption>
                 ))}
-            </NativeSelect>
+              </NativeSelect>
+              {availableMatchingChannels.length > 0 ? (
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={() => addMatchingChannels(route)}
+                >
+                  <Plus className='size-4' />
+                  {t('Add all matching channels')} (
+                  {availableMatchingChannels.length})
+                </Button>
+              ) : null}
+            </div>
           </section>
         )
       })}
