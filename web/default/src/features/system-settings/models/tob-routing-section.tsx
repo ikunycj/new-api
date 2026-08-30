@@ -433,6 +433,15 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                       {t('Weighted distribution')}
                     </NativeSelectOption>
                   </NativeSelect>
+                  <FieldDescription>
+                    {getRouteStrategy(route) === 'weighted'
+                      ? t(
+                          'Used for load balancing. Higher weight = more requests'
+                        )
+                      : t(
+                          'Channels are attempted in order; each channel can simulate failures and latency.'
+                        )}
+                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`route-mode-${route.id}`}>
@@ -751,6 +760,20 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                                 <Input
                                   className='w-24'
                                   type='number'
+                                  min={0.0001}
+                                  step={0.01}
+                                  value={entry.cost_factor}
+                                  onChange={(event) =>
+                                    updateEntry(entry, {
+                                      cost_factor: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className='px-4 py-2'>
+                                <Input
+                                  className='w-24'
+                                  type='number'
                                   min={0}
                                   step={1}
                                   value={entry.weight}
@@ -763,20 +786,6 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                                         0,
                                         Number(event.target.value)
                                       ),
-                                    })
-                                  }
-                                />
-                              </td>
-                              <td className='px-4 py-2'>
-                                <Input
-                                  className='w-24'
-                                  type='number'
-                                  min={0.0001}
-                                  step={0.01}
-                                  value={entry.cost_factor}
-                                  onChange={(event) =>
-                                    updateEntry(entry, {
-                                      cost_factor: Number(event.target.value),
                                     })
                                   }
                                 />
