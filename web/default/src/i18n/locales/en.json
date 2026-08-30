@@ -6408,6 +6408,8 @@
     "Weighted distribution": "Weighted distribution",
     "Distribution weight": "Distribution weight",
     "Load": "Load",
-    "Dynamic strategy weights must total 100%": "Dynamic strategy weights must total 100%"
+    "Dynamic strategy weights must total 100%": "Dynamic strategy weights must total 100%",
+    "Confirm customer type change": "Confirm customer type change",
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests."
   }
 }

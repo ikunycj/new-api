@@ -6408,6 +6408,8 @@
     "Weighted distribution": "Взвешенное распределение",
     "Distribution weight": "Вес распределения",
     "Load": "Нагрузка",
-    "Dynamic strategy weights must total 100%": "Сумма весов динамической стратегии должна составлять 100 %"
+    "Dynamic strategy weights must total 100%": "Сумма весов динамической стратегии должна составлять 100 %",
+    "Confirm customer type change": "Подтвердите изменение типа клиента",
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "Изменение {{name}} на {{type}} обновит область маршрутизации и может изменить каналы, обслуживающие запросы."
   }
 }

@@ -6408,6 +6408,8 @@
     "Weighted distribution": "Distribution pondérée",
     "Distribution weight": "Poids de distribution",
     "Load": "Charge",
-    "Dynamic strategy weights must total 100%": "Le total des poids de stratégie dynamique doit être de 100 %"
+    "Dynamic strategy weights must total 100%": "Le total des poids de stratégie dynamique doit être de 100 %",
+    "Confirm customer type change": "Confirmer le changement de type de client",
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "Le passage de {{name}} à {{type}} modifie son périmètre de routage et peut changer les canaux pouvant traiter les requêtes."
   }
 }

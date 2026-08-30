@@ -28,6 +28,7 @@ import {
 import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
 import { Dialog } from '@/components/dialog'
@@ -472,6 +473,12 @@ function GroupPricingTable({
 }: GroupPricingTableProps) {
   const nameBeforeEdit = useRef(new Map<string, string>())
   const { t } = useTranslation()
+  const [pendingTypeChange, setPendingTypeChange] = useState<{
+    id: string
+    name: string
+    previousType: 'toB' | 'toC'
+    nextType: 'toB' | 'toC'
+  } | null>(null)
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
     buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
       ...row,
@@ -486,7 +493,14 @@ function GroupPricingTable({
     )
     setRows((currentRows) => {
       if (groupPricingSignature(currentRows) === incomingSignature) {
-        return currentRows
+        let typeChanged = false
+        const syncedRows = currentRows.map((row) => {
+          const nextType = groupTypeByName?.get(row.name) ?? row.groupType
+          if (row.groupType === nextType) return row
+          typeChanged = true
+          return { ...row, groupType: nextType }
+        })
+        return typeChanged ? syncedRows : currentRows
       }
       return buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
         ...row,
@@ -545,6 +559,31 @@ function GroupPricingTable({
     },
     [emitRows, rows]
   )
+
+  const requestTypeChange = useCallback(
+    (row: GroupPricingRow, nextType: 'toB' | 'toC') => {
+      if (row.groupType === nextType) return
+      setPendingTypeChange({
+        id: row._id,
+        name: row.name.trim(),
+        previousType: row.groupType,
+        nextType,
+      })
+    },
+    []
+  )
+
+  const confirmTypeChange = useCallback(() => {
+    if (!pendingTypeChange) return
+    const { id, name, nextType } = pendingTypeChange
+    setRows((currentRows) =>
+      currentRows.map((row) =>
+        row._id === id ? { ...row, groupType: nextType } : row
+      )
+    )
+    onGroupTypeChange?.(name, nextType)
+    setPendingTypeChange(null)
+  }, [onGroupTypeChange, pendingTypeChange])
 
   const duplicateNames = useMemo(() => {
     const counts = new Map<string, number>()
@@ -651,8 +690,7 @@ function GroupPricingTable({
                     value={row.groupType}
                     onChange={(event) => {
                       const type = event.target.value as 'toB' | 'toC'
-                      updateRow(row._id, 'groupType', type)
-                      onGroupTypeChange?.(row.name.trim(), type)
+                      requestTypeChange(row, type)
                     }}
                   >
                     <NativeSelectOption value='toB'>
@@ -822,6 +860,22 @@ function GroupPricingTable({
           )}
         </div>
       </CardContent>
+      <ConfirmDialog
+        open={pendingTypeChange !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingTypeChange(null)
+        }}
+        title={t('Confirm customer type change')}
+        desc={t(
+          'Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.',
+          {
+            name: pendingTypeChange?.name ?? '',
+            type: pendingTypeChange?.nextType === 'toB' ? t('ToB') : t('ToC'),
+          }
+        )}
+        confirmText={t('Update')}
+        handleConfirm={confirmTypeChange}
+      />
     </Card>
   )
 }

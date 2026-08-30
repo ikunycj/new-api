@@ -6408,6 +6408,8 @@
     "Weighted distribution": "加權分配",
     "Distribution weight": "分配權重",
     "Load": "負載",
-    "Dynamic strategy weights must total 100%": "動態策略權重總和必須為 100%"
+    "Dynamic strategy weights must total 100%": "動態策略權重總和必須為 100%",
+    "Confirm customer type change": "確認客戶類型變更",
+    "Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.": "將 {{name}} 改為 {{type}} 會更新路由範圍，並可能改變可服務請求的渠道。"
   }
 }

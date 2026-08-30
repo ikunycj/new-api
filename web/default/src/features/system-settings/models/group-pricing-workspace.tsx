@@ -102,6 +102,16 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       ),
     [classifiedGroups, toBGroupNames]
   )
+  const groupTypeByName = useMemo(
+    (): ReadonlyMap<string, 'toB' | 'toC'> =>
+      new Map<string, 'toB' | 'toC'>(
+        classifiedGroups.map((group) => [
+          group.name,
+          (groupTypes.get(group.name) ?? 'ToC') === 'ToB' ? 'toB' : 'toC',
+        ])
+      ),
+    [classifiedGroups, groupTypes]
+  )
   const groupTypeMutation = useMutation({
     mutationFn: updateFailoverConfig,
     onSuccess: async () => {
@@ -217,14 +227,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
           form={props.form}
           onSave={props.onSave}
           isSaving={props.isSaving}
-          groupTypeByName={
-            new Map(
-              classifiedGroups.map((group) => [
-                group.name,
-                (groupTypes.get(group.name) ?? 'ToC') === 'ToB' ? 'toB' : 'toC',
-              ])
-            )
-          }
+          groupTypeByName={groupTypeByName}
           onGroupTypeChange={handleGroupTypeChange}
           onGroupRename={handleGroupRename}
         />
