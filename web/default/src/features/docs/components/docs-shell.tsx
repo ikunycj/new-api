@@ -40,12 +40,13 @@ import {
 export type DocsTocItem = {
   id: string
   label: string
+  level?: 1 | 2 | 3
 }
 
 type DocsShellProps = {
   pageId: DocsPageId
   title: string
-  description: string
+  description?: string
   toc: DocsTocItem[]
   children: React.ReactNode
 }
@@ -55,6 +56,8 @@ function DocsNavigation(props: {
   groups: DocsNavigationGroup[]
   ariaLabel: string
 }) {
+  const { t } = useTranslation()
+
   return (
     <nav aria-label={props.ariaLabel} className='flex flex-col'>
       <Link
@@ -74,7 +77,7 @@ function DocsNavigation(props: {
               aria-controls={contentId}
               className='text-foreground hover:bg-muted/50 focus-visible:ring-ring/50 flex min-h-10 cursor-pointer list-none items-center rounded-md px-3 text-left text-sm font-semibold transition-colors outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden'
             >
-              <span>{group.label}</span>
+              <span>{t(group.label)}</span>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
                 strokeWidth={2}
@@ -110,7 +113,7 @@ function DocsNavigation(props: {
                           'border-success/25 bg-success/10 text-foreground hover:bg-success/15'
                       )}
                     >
-                      <span>{item.label}</span>
+                      <span>{t(item.label)}</span>
                       {isReferralRewards && (
                         <span className='bg-success/15 text-success ml-auto flex size-6 shrink-0 items-center justify-center rounded-md'>
                           <HugeiconsIcon
@@ -137,6 +140,7 @@ function DocsMobileNavigation(props: {
   groups: DocsNavigationGroup[]
   ariaLabel: string
 }) {
+  const { t } = useTranslation()
   const currentItem = props.groups
     .flatMap((group) => group.items)
     .find((item) => item.id === props.currentPageId)
@@ -159,7 +163,7 @@ function DocsMobileNavigation(props: {
             {props.ariaLabel}
           </span>
           <span className='truncate text-sm leading-5 font-semibold'>
-            {currentItem?.label ?? props.ariaLabel}
+            {currentItem ? t(currentItem.label) : props.ariaLabel}
           </span>
         </span>
         <HugeiconsIcon
@@ -177,7 +181,7 @@ function DocsMobileNavigation(props: {
         {props.groups.map((group) => (
           <section key={group.id} className='py-1'>
             <p className='text-muted-foreground px-2.5 py-1.5 text-xs font-semibold'>
-              {group.label}
+              {t(group.label)}
             </p>
             <div className='flex flex-col gap-px'>
               {group.items.map((item) => {
@@ -205,7 +209,7 @@ function DocsMobileNavigation(props: {
                         'border-success/25 bg-success/10 text-foreground hover:bg-success/15'
                     )}
                   >
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                     {isReferralRewards && (
                       <span className='bg-success/15 text-success ml-auto flex size-6 shrink-0 items-center justify-center rounded-md'>
                         <HugeiconsIcon
@@ -281,9 +285,11 @@ export function DocsShell(props: DocsShellProps) {
 
             <header>
               <h1 className='text-3xl font-semibold'>{props.title}</h1>
-              <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
-                {props.description}
-              </p>
+              {props.description && (
+                <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-7'>
+                  {props.description}
+                </p>
+              )}
             </header>
 
             <Separator className='my-8' />
@@ -309,7 +315,7 @@ export function DocsShell(props: DocsShellProps) {
                     <span>
                       <span className='block text-xs'>{t('Previous')}</span>
                       <span className='text-foreground font-medium'>
-                        {previous.label}
+                        {t(previous.label)}
                       </span>
                     </span>
                   </Link>
@@ -324,7 +330,7 @@ export function DocsShell(props: DocsShellProps) {
                     <span>
                       <span className='block text-xs'>{t('Next')}</span>
                       <span className='text-foreground font-medium'>
-                        {next.label}
+                        {t(next.label)}
                       </span>
                     </span>
                     <HugeiconsIcon
@@ -351,7 +357,12 @@ export function DocsShell(props: DocsShellProps) {
                   <a
                     key={item.id}
                     href={`#${item.id}`}
-                    className='text-muted-foreground hover:text-foreground text-sm transition-colors'
+                    className={cn(
+                      'text-muted-foreground hover:text-foreground text-sm transition-colors',
+                      item.level === 1 && 'text-foreground font-semibold',
+                      item.level === 2 && 'pl-2 text-xs leading-5',
+                      item.level === 3 && 'pl-4 text-[11px] leading-4'
+                    )}
                   >
                     {item.label}
                   </a>
