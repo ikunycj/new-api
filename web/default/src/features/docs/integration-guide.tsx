@@ -173,8 +173,8 @@ export function DocsIntegrationGuide() {
           </li>
         </ol>
         <p className='border-border bg-muted/30 mt-4 border-l-2 px-4 py-3 leading-7'>
-          建议把密钥保存到本地安全位置。文档中的{' '}
-          <code>AllTokenAPI_API_KEY</code> 只是占位示例。
+          建议把密钥保存到客户端的私有配置文件或凭据存储中。文档中的 API Key
+          只是占位示例，不要将真实密钥写入项目共享配置。
         </p>
       </section>
 

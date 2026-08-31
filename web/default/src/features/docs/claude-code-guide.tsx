@@ -63,19 +63,13 @@ export function DocsClaudeCode() {
   },
   "model": "此处替换为准确的模型 ID"
 }`
-  const shellConfig = `export ANTHROPIC_AUTH_TOKEN="此处替换为 API Key"
-export ANTHROPIC_BASE_URL="${baseUrl}"
-export ANTHROPIC_MODEL="此处替换为准确的模型 ID"`
-  const powershellConfig = `$env:ANTHROPIC_AUTH_TOKEN = "此处替换为 API Key"
-$env:ANTHROPIC_BASE_URL = "${baseUrl}"
-$env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
   const windowsSettingsPath = '%USERPROFILE%\\.claude\\settings.json'
 
   return (
     <DocsShell
       pageId='claude-code'
       title='Claude Code'
-      description='可通过 CC Switch 一键导入，或使用 Claude Code 官方支持的 LLM Gateway 环境变量手动接入。'
+      description='可通过 CC Switch 一键导入，或使用 Claude Code 用户级 settings.json 配置文件手动接入。'
       toc={CLAUDE_TOC}
     >
       <Alert>
@@ -193,7 +187,7 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
         <h2 className='text-2xl font-semibold'>3. 手动配置</h2>
 
         <h3 className='mt-6 text-lg font-semibold'>
-          3.1 推荐：写入用户 settings.json
+          3.1 在用户 settings.json 中直接保存密钥
         </h3>
         <p className='text-muted-foreground mt-3 leading-7'>
           用户配置对所有项目生效，也能被 Claude Code 的后台 Agent
@@ -209,6 +203,10 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
         <div className='mt-4'>
           <CodeBlock code={settingsJson} label='settings.json' />
         </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          这里的 <code>env</code> 是 Claude Code 配置文件中的字段；保存后由
+          Claude Code 在新会话中加载，不需要再在终端里手动设置这些配置项。
+        </p>
         <Alert className='mt-6' variant='destructive'>
           <HugeiconsIcon icon={Alert02Icon} aria-hidden='true' />
           <AlertTitle>不要提交密钥</AlertTitle>
@@ -230,18 +228,7 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
         </Alert>
 
         <h3 className='mt-8 text-lg font-semibold'>
-          3.2 临时测试：设置当前终端环境变量
-        </h3>
-        <p className='text-muted-foreground mt-3 leading-7'>
-          这些变量只对当前终端及其启动的进程生效，适合先验证再写入配置文件。
-        </p>
-        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code={shellConfig} label='macOS / Linux' />
-          <CodeBlock code={powershellConfig} label='PowerShell' />
-        </div>
-
-        <h3 className='mt-8 text-lg font-semibold'>
-          3.3 为什么 Base URL 不带 /v1
+          3.2 为什么 Base URL 不带 /v1
         </h3>
         <p className='text-muted-foreground mt-3 leading-7'>
           Claude Code 会在
@@ -255,13 +242,13 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
           。如果 Base URL 已经包含 /v1，最终可能形成重复路径并返回 404。
         </p>
         <p className='text-muted-foreground mt-3 leading-7'>
-          Claude Code 的凭据变量与请求头对应关系如下：
+          Claude Code 配置文件中的凭据字段与请求头对应关系如下：
         </p>
         <div className='mt-5 rounded-lg border'>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>变量</TableHead>
+                <TableHead>配置字段</TableHead>
                 <TableHead>请求头</TableHead>
                 <TableHead>适用场景</TableHead>
               </TableRow>
@@ -290,7 +277,7 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
         </div>
         <Alert className='mt-6'>
           <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
-          <AlertTitle>不要同时设置两个凭据变量</AlertTitle>
+          <AlertTitle>不要同时配置两个凭据字段</AlertTitle>
           <AlertDescription>
             本站使用 ANTHROPIC_AUTH_TOKEN。不要同时设置 ANTHROPIC_AUTH_TOKEN 和
             ANTHROPIC_API_KEY，以免出现认证来源冲突。
@@ -302,14 +289,17 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
         <h2 className='text-2xl font-semibold'>4. 启动并验证</h2>
         <GuideSteps
           items={[
-            { content: '使用与配置相同的终端启动 claude。' },
+            {
+              content:
+                '启动 claude；用户级配置会对新会话生效，不依赖特定终端。',
+            },
             {
               content:
                 '如果出现登录页，说明网关凭据没有被读取；不要选择 Claude 订阅登录，先检查配置文件路径和 JSON 格式。',
             },
             {
               content:
-                '进入会话后运行 /status，核对服务地址、认证变量和当前模型。',
+                '进入会话后运行 /status，核对服务地址、认证字段和当前模型。',
             },
             {
               content: (
@@ -364,7 +354,6 @@ $env:ANTHROPIC_MODEL = "此处替换为准确的模型 ID"`
           <li>
             确认 <code>env</code> 位于 JSON 顶层。
           </li>
-          <li>如果只使用了 Shell 环境变量，请从同一个终端启动 Claude Code。</li>
           <li>
             运行 <code>/logout</code> 可清除与网关凭据冲突的历史登录状态。
           </li>

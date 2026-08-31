@@ -18,33 +18,9 @@
 
 不要只根据模型名称猜测接口类型。
 
-## 2. 保存 API Key
+## 2. 在 openclaw.json 中直接保存 API Key
 
-OpenClaw 会读取父进程环境变量、当前目录的 `.env`，以及 `~/.openclaw/.env`。Gateway 以服务方式运行时，使用全局 `.env` 最稳定。
-
-macOS / Linux：
-
-```bash
-mkdir -p ~/.openclaw
-```
-
-在 `~/.openclaw/.env` 中添加：
-
-```dotenv
-ALLTOKEN_API_KEY=此处替换为 API Key
-```
-
-Windows 对应路径为 `%USERPROFILE%\.openclaw\.env`。
-
-也可以临时设置环境变量：
-
-```bash
-export ALLTOKEN_API_KEY="此处替换为 API Key"
-```
-
-```powershell
-$env:ALLTOKEN_API_KEY = "此处替换为 API Key"
-```
+OpenClaw 的主配置文件为 `~/.openclaw/openclaw.json`（Windows 对应 `%USERPROFILE%\.openclaw\openclaw.json`），格式为 JSON5。将 API Key 直接写入该用户级配置文件，关闭终端后仍然有效。不要把含有明文密钥的项目配置提交到 Git。
 
 ## 3. 编辑 openclaw.json
 
@@ -63,7 +39,7 @@ openclaw config file
     providers: {
       alltokenapi: {
         baseUrl: "https://alltokenapi.com/v1",
-        apiKey: "${ALLTOKEN_API_KEY}",
+        apiKey: "此处替换为 API Key",
         api: "openai-responses",
         models: [
           {
@@ -86,8 +62,8 @@ openclaw config file
 
 需要替换三处模型 ID，且大小写必须一致。
 
-> [!tip] JSON5 与环境变量
-> OpenClaw 允许注释、未加引号的键和尾随逗号。`${ALLTOKEN_API_KEY}` 会在加载配置时解析；变量缺失或为空会直接导致配置加载失败。
+> [!tip] JSON5 与密钥
+> OpenClaw 允许注释、未加引号的键和尾随逗号。请确认 `apiKey` 已替换为真实密钥，并限制配置文件的访问权限。
 
 `models.mode` 默认为 `merge`，显式写出是为了避免误用 `replace` 后隐藏内置模型目录。
 
@@ -131,7 +107,7 @@ openclaw doctor
 ```
 
 - 检查 JSON5 层级和逗号。
-- 检查 `ALLTOKEN_API_KEY` 是否可被 Gateway 进程读取。
+- 检查 `models.providers.alltokenapi.apiKey` 是否已填写有效密钥。
 - 不要添加文档中不存在的字段；OpenClaw 会拒绝未知字段。
 
 ### 404 或请求路径错误

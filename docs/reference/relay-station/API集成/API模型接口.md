@@ -16,7 +16,7 @@ https://alltokenapi.com
 | Anthropic Messages | `x-api-key: sk-your-api-key`，并提供 `anthropic-version` |
 | Gemini 原生接口 | `x-goog-api-key: sk-your-api-key` |
 
-请仅在服务端、受信任的本地客户端或安全的环境变量中保存 API Key。
+请仅在服务端、受信任的本地客户端私有配置文件或凭据存储中保存 API Key。不要将密钥提交到代码仓库、项目共享配置或公开内容。
 
 ## 模型
 

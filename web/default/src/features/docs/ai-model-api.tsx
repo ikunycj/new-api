@@ -81,7 +81,7 @@ print(response.choices[0].message.content)`
         </ul>
         <p className='text-muted-foreground mt-4 leading-7'>
           API Key
-          只放在服务端配置、受信任的本地客户端或环境变量中，不要提交到代码仓库、网页前端或公开日志。
+          只放在服务端配置、受信任的本地客户端私有配置文件或凭据存储中，不要提交到代码仓库、网页前端或公开日志。
         </p>
         <div className='mt-5'>
           <DocsTable

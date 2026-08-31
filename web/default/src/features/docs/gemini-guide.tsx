@@ -52,18 +52,12 @@ export function DocsGemini() {
   const dotenvConfig = `GEMINI_API_KEY=此处替换为 API Key
 GOOGLE_GEMINI_BASE_URL=${baseUrl}
 GEMINI_MODEL=此处替换为准确的模型 ID`
-  const powershellConfig = `$env:GEMINI_API_KEY = "此处替换为 API Key"
-$env:GOOGLE_GEMINI_BASE_URL = "${baseUrl}"
-$env:GEMINI_MODEL = "此处替换为准确的模型 ID"`
-  const shellConfig = `export GEMINI_API_KEY="此处替换为 API Key"
-export GOOGLE_GEMINI_BASE_URL="${baseUrl}"
-export GEMINI_MODEL="此处替换为准确的模型 ID"`
 
   return (
     <DocsShell
       pageId='gemini'
       title='Gemini CLI'
-      description='通过 CC Switch 一键导入，或使用 Gemini CLI 官方支持的 API Key、模型和自定义 Base URL 环境变量手动接入。'
+      description='通过 CC Switch 一键导入，或使用 Gemini CLI 官方支持的 API Key、模型和自定义 Base URL 配置文件手动接入。'
       toc={[
         { id: 'prepare', label: '1. 准备 API Key 和模型' },
         { id: 'cc-switch', label: '2. 使用 CC Switch 一键导入' },
@@ -177,11 +171,11 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
       <section id='manual' className='scroll-mt-28'>
         <h2 className='text-2xl font-semibold'>3. 手动配置</h2>
         <h3 className='mt-5 text-lg font-semibold'>
-          3.1 推荐：写入 Gemini CLI 的用户 .env
+          3.1 将 API Key 写入 Gemini CLI 的用户 .env 配置文件
         </h3>
         <div className='mt-4'>
           <DocsTable
-            headers={['系统', '用户环境文件']}
+            headers={['系统', '用户配置文件']}
             rows={[
               {
                 key: 'windows',
@@ -205,18 +199,12 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
         </div>
         <p className='text-muted-foreground mt-4 leading-7'>
           Gemini CLI 从当前目录向上查找 .env，再读取用户级
-          ~/.gemini/.env，并使用找到的第一份环境文件，而不是合并所有文件。
-          如果项目目录已有 .env，请确认它没有覆盖或遗漏上述变量。
+          ~/.gemini/.env，并使用找到的第一份配置文件，而不是合并所有文件。写入用户级
+          .env 后，关闭终端不会清除密钥；请将该文件视为私密配置，不要提交到
+          Git。如果项目目录已有 .env，请确认它没有覆盖或遗漏上述配置项。
         </p>
         <h3 className='mt-7 text-lg font-semibold'>
-          3.2 临时测试：设置当前终端环境变量
-        </h3>
-        <div className='mt-4 grid gap-4 lg:grid-cols-2'>
-          <CodeBlock code={shellConfig} label='macOS / Linux' />
-          <CodeBlock code={powershellConfig} label='PowerShell' />
-        </div>
-        <h3 className='mt-7 text-lg font-semibold'>
-          3.3 Base URL 和认证头说明
+          3.2 Base URL 和认证头说明
         </h3>
         <ul className='text-muted-foreground mt-3 list-disc space-y-2 pl-5 leading-7'>
           <li>
@@ -232,6 +220,10 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
         <div className='mt-4'>
           <CodeBlock code='GEMINI_API_KEY_AUTH_MECHANISM=bearer' label='.env' />
         </div>
+        <p className='text-muted-foreground mt-4 leading-7'>
+          如需使用该认证机制，请将这一行也写入同一个用户级 .env
+          配置文件，不要只在当前终端临时设置。
+        </p>
         <p className='text-muted-foreground mt-4 leading-7'>
           不要在没有认证错误的情况下随意切换认证头。
         </p>
@@ -278,7 +270,8 @@ export GEMINI_MODEL="此处替换为准确的模型 ID"`
           <div>
             <h3 className='font-semibold'>Gemini CLI 仍使用 Google 登录</h3>
             <p className='text-muted-foreground mt-2 leading-7'>
-              重启 CLI 并选择 Use Gemini API key；确认启动进程能读取
+              重启 CLI 并选择 Use Gemini API key；确认用户级
+              ~/.gemini/.env（Windows 为 %USERPROFILE%\.gemini\.env）中写入了
               GEMINI_API_KEY，且项目 .env 没有抢先覆盖用户文件。
             </p>
           </div>

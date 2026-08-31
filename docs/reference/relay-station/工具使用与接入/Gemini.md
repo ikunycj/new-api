@@ -1,6 +1,6 @@
 # Gemini CLI
 
-可通过 CC Switch 一键导入，或使用 Gemini CLI 官方支持的 API Key、模型和自定义 Base URL 环境变量手动接入。
+可通过 CC Switch 一键导入，或使用 Gemini CLI 官方支持的 API Key、模型和自定义 Base URL 配置文件手动接入。
 
 > [!info] 配置核验
 > Gemini CLI 仅在 `gemini-api-key` 认证方式下使用 `GOOGLE_GEMINI_BASE_URL`。本文配置不适用于 Google 登录或 Vertex AI 认证。
@@ -23,9 +23,9 @@
 
 ## 3. 手动配置
 
-### 3.1 推荐：写入 Gemini CLI 的用户 .env
+### 3.1 将 API Key 写入 Gemini CLI 的用户 .env 配置文件
 
-| 系统 | 用户环境文件 |
+| 系统 | 用户配置文件 |
 | --- | --- |
 | Windows | `%USERPROFILE%\.gemini\.env` |
 | macOS / Linux | `~/.gemini/.env` |
@@ -38,27 +38,9 @@ GOOGLE_GEMINI_BASE_URL=https://alltokenapi.com
 GEMINI_MODEL=此处替换为准确的模型 ID
 ```
 
-Gemini CLI 从当前目录向上查找 `.env`，再读取用户级 `~/.gemini/.env`，并使用找到的第一份环境文件而不是合并所有文件。如果项目目录已有 `.env`，请确认它没有覆盖或遗漏上述变量。
+Gemini CLI 从当前目录向上查找 `.env`，再读取用户级 `~/.gemini/.env`，并使用找到的第一份配置文件而不是合并所有文件。写入用户级 `.env` 后，关闭终端不会清除密钥；请将该文件视为私密配置，不要提交到 Git。如果项目目录已有 `.env`，请确认它没有覆盖或遗漏上述配置项。
 
-### 3.2 临时测试：设置当前终端环境变量
-
-macOS / Linux：
-
-```bash
-export GEMINI_API_KEY="此处替换为 API Key"
-export GOOGLE_GEMINI_BASE_URL="https://alltokenapi.com"
-export GEMINI_MODEL="此处替换为准确的模型 ID"
-```
-
-PowerShell：
-
-```powershell
-$env:GEMINI_API_KEY = "此处替换为 API Key"
-$env:GOOGLE_GEMINI_BASE_URL = "https://alltokenapi.com"
-$env:GEMINI_MODEL = "此处替换为准确的模型 ID"
-```
-
-### 3.3 Base URL 和认证头说明
+### 3.2 Base URL 和认证头说明
 
 - `GOOGLE_GEMINI_BASE_URL` 使用服务根地址，不带 `/v1` 或 `/v1beta`；Google Gen AI SDK 会自行拼接 API 版本和模型路径。
 - 默认情况下，Gemini CLI 按 Gemini 原生方式发送 `x-goog-api-key`。
@@ -67,6 +49,8 @@ $env:GEMINI_MODEL = "此处替换为准确的模型 ID"
 ```dotenv
 GEMINI_API_KEY_AUTH_MECHANISM=bearer
 ```
+
+如需使用该认证机制，请将这一行也写入同一个用户级 `.env` 配置文件，不要只在当前终端临时设置。
 
 不要在没有认证错误的情况下随意切换认证头。
 
@@ -90,7 +74,7 @@ gemini --model "此处替换为准确的模型 ID"
 ### Gemini CLI 仍使用 Google 登录
 
 - 重新启动 CLI，并选择 **Use Gemini API key**。
-- 检查 `GEMINI_API_KEY` 是否在启动进程中可见。
+- 检查实际加载的 `.env` 文件中是否写入了 `GEMINI_API_KEY`，并确认没有被项目目录中的其他 `.env` 覆盖。
 - 项目目录中的 `.env` 可能抢先于 `~/.gemini/.env` 被加载。
 
 ### 401 或 Invalid API key

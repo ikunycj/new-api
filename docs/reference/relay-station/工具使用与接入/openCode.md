@@ -3,7 +3,7 @@
 在 OpenCode 中保存 All Token API 凭据，并将其注册为自定义 OpenAI 兼容服务商。
 
 > [!info] 配置核验
-> OpenCode 官方推荐用 `/connect` 保存凭据，再用 `opencode.json` 定义自定义服务商。凭据默认存放在 `~/.local/share/opencode/auth.json`，无需把 API Key 写入项目配置。
+> 本文主流程将 API Key 直接写入用户级 `opencode.json`，因此关闭终端后仍然有效。也可以使用 OpenCode 的 `/connect` 保存凭据，但不要同时依赖两种来源。
 
 ## 1. 选择配置范围
 
@@ -30,19 +30,11 @@ OpenCode 支持 JSON 和 JSONC，多个配置源会合并，后加载的配置�
 
 以下主教程按 Chat Completions 编写。Responses 模型必须切换适配器，不能只修改模型 ID。
 
-## 3. 推荐：使用 /connect 保存密钥
+## 3. 在 opencode.json 中直接保存密钥
 
-1. 启动 OpenCode。
-2. 输入 `/connect`。
-3. 滚动到并选择 **Other**。
-4. Provider ID 输入 `alltokenapi`。
-5. 粘贴 API Key。
+在全局配置文件 `~/.config/opencode/opencode.json`（Windows 对应用户配置目录）中合并以下内容。不要把含有明文密钥的项目级 `opencode.json` 提交到 Git。
 
-Provider ID 必须与后续配置中的 `provider.alltokenapi` 完全一致。
-
-## 4. 编辑 opencode.json
-
-将以下配置合并到全局或项目配置文件：
+将以下配置合并到全局配置文件：
 
 ```json
 {
@@ -54,7 +46,8 @@ Provider ID 必须与后续配置中的 `provider.alltokenapi` 完全一致。
       "npm": "@ai-sdk/openai-compatible",
       "name": "All Token API",
       "options": {
-        "baseURL": "https://alltokenapi.com/v1"
+        "baseURL": "https://alltokenapi.com/v1",
+        "apiKey": "此处替换为 API Key"
       },
       "models": {
         "此处替换为准确的模型 ID": {
@@ -78,60 +71,30 @@ Provider ID 必须与后续配置中的 `provider.alltokenapi` 完全一致。
 
 其余 Provider ID、Base URL 和模型引用保持不变。
 
-## 5. 备选：使用环境变量，不保存到 auth.json
-
-先设置密钥：
-
-```bash
-export ALLTOKEN_API_KEY="此处替换为 API Key"
-```
-
-```powershell
-$env:ALLTOKEN_API_KEY = "此处替换为 API Key"
-```
-
-然后在 `options` 中增加 `apiKey`：
-
-```json
-{
-  "baseURL": "https://alltokenapi.com/v1",
-  "apiKey": "{env:ALLTOKEN_API_KEY}"
-}
-```
-
-此方式不需要 `/connect`。OpenCode 在环境变量缺失时会把 `{env:ALLTOKEN_API_KEY}` 替换为空字符串，因此认证失败时应先检查启动进程的环境。
-
-## 6. 选择并验证模型
+## 4. 选择并验证模型
 
 1. 启动 `opencode`。
-2. 如果使用 `/connect`，先执行以下命令确认凭据已保存：
-
-```bash
-opencode auth list
-```
-
-3. 在 TUI 中输入 `/models`，选择 `alltokenapi/模型ID`。
-4. 发送一个简短提示，或执行一次非交互测试：
+2. 在 TUI 中输入 `/models`，选择 `alltokenapi/模型ID`。
+3. 发送一个简短提示，或执行一次非交互测试：
 
 ```bash
 opencode run "只回复 OK"
 ```
 
-5. 在[使用日志](https://alltokenapi.com/usage-logs)确认请求模型、状态和费用。
+4. 在[使用日志](https://alltokenapi.com/usage-logs)确认请求模型、状态和费用。
 
-## 7. 常见问题
+## 5. 常见问题
 
 ### /models 中没有 alltokenapi
 
 - 检查 `opencode.json` 的生效范围和 JSON/JSONC 语法。
-- Provider ID 必须在 `/connect` 和 `provider` 配置中都写成 `alltokenapi`。
+- Provider ID 必须在 `model`、`small_model` 和 `provider` 配置中都写成 `alltokenapi`。
 - 模型必须定义在 `provider.alltokenapi.models` 中。
 
 ### 认证失败
 
-- `/connect` 方式：运行 `opencode auth list` 检查凭据。
-- 环境变量方式：确认从包含 `ALLTOKEN_API_KEY` 的终端启动 OpenCode。
-- 不要同时保留错误的 auth.json 凭据和正确的环境变量而不确认实际优先级；排障时只保留一种来源。
+- 确认 `provider.alltokenapi.options.apiKey` 已替换为有效密钥。
+- 如果曾使用 `/connect`，不要同时保留错误的 `auth.json` 凭据；排障时只保留一种来源。
 
 ### 404、流式输出或工具调用失败
 
@@ -153,7 +116,7 @@ opencode run "只回复 OK"
 
 不要从模型名称猜测限制；错误值会影响 OpenCode 的上下文压缩判断。
 
-## 8. 官方参考
+## 6. 官方参考
 
 - [OpenCode 服务商配置](https://opencode.ai/docs/providers/)
 - [OpenCode 配置文件](https://opencode.ai/docs/config/)
