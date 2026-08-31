@@ -93,6 +93,7 @@ import {
   type LoadTestRequestResult,
 } from './api'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
+import { formatLoadTestSuccessRate } from './shared'
 import {
   clearPersistedLoadTestRuns,
   loadPersistedLoadTestRuns,
@@ -644,9 +645,10 @@ export function LoadTestDemo() {
   const durationMs = Number.isFinite(durationValue) ? durationValue * 1000 : 0
   const progress =
     durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
-  const successRate = stats.completed
-    ? ((stats.successes / stats.completed) * 100).toFixed(1)
-    : '0.0'
+  const successRate = formatLoadTestSuccessRate(
+    stats.successes,
+    stats.completed
+  )
   const p50 = percentile(stats.latencies, 0.5)
   const p95 = percentile(stats.latencies, 0.95)
   const cacheAttemptTokens =

@@ -23,6 +23,15 @@ import type {
 export const LOAD_TEST_SHARED_MIN_WORKERS = 2
 export const LOAD_TEST_SHARED_MAX_WORKERS = 256
 
+export function formatLoadTestSuccessRate(
+  successes: number,
+  completed: number
+): string {
+  if (completed <= 0) return '0.000'
+  const truncatedRate = Math.trunc((successes / completed) * 100_000) / 1_000
+  return truncatedRate.toFixed(3)
+}
+
 export function parseSharedWorkerCount(value: string): number | null {
   const count = Number(value)
   if (

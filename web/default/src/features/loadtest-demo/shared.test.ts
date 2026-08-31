@@ -19,10 +19,17 @@ import test from 'node:test'
 
 import type { LoadTestAgent } from './api'
 import {
+  formatLoadTestSuccessRate,
   getJoinedWorkerLabel,
   getSharedCapacityEstimate,
   parseSharedWorkerCount,
 } from './shared'
+
+test('load-test success rate truncates to three decimal places', () => {
+  assert.equal(formatLoadTestSuccessRate(117_479, 117_495), '99.986')
+  assert.equal(formatLoadTestSuccessRate(1, 3), '33.333')
+  assert.equal(formatLoadTestSuccessRate(1, 0), '0.000')
+})
 
 const agent: LoadTestAgent = {
   id: 'agent-1',

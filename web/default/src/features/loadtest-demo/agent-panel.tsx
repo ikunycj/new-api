@@ -88,6 +88,7 @@ import {
 } from './api'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
 import {
+  formatLoadTestSuccessRate,
   getJoinedWorkerLabel,
   getSharedCapacityEstimate,
   parseSharedWorkerCount,
@@ -872,9 +873,10 @@ export function AgentPanel(props: AgentPanelProps) {
                 </TableHeader>
                 <TableBody>
                   {runs.map((run) => {
-                    const successRate = run.completed
-                      ? ((run.successes / run.completed) * 100).toFixed(1)
-                      : '0.0'
+                    const successRate = formatLoadTestSuccessRate(
+                      run.successes,
+                      run.completed
+                    )
                     const usage = {
                       successes: run.successes,
                       inputTokens: run.input_tokens,
