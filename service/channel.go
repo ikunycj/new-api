@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -62,6 +63,61 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	lowerMessage := strings.ToLower(err.Error())
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
 	return search
+}
+
+// ShouldDisableChannelForChannel evaluates only rules configured on the
+// affected channel; global automatic-disable settings are intentionally not
+// consulted.
+func ShouldDisableChannelForChannel(err *types.NewAPIError, channel *model.Channel) bool {
+	if err == nil || channel == nil || !channel.GetAutoBan() {
+		return false
+	}
+	if types.IsChannelError(err) {
+		return true
+	}
+	if types.IsSkipRetryError(err) {
+		return false
+	}
+	settings := channel.GetSetting()
+	if statusCodeMatches(err.StatusCode, settings.AutoDisableStatusCodes) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, keyword := range strings.FieldsFunc(strings.ToLower(settings.AutoDisableKeywords), func(r rune) bool {
+		return r == '\n' || r == '\r' || r == ',' || r == ';'
+	}) {
+		if keyword = strings.TrimSpace(keyword); keyword != "" && strings.Contains(message, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func statusCodeMatches(status int, rules string) bool {
+	for _, raw := range strings.FieldsFunc(rules, func(r rune) bool { return r == '\n' || r == '\r' || r == ',' || r == ';' }) {
+		parts := strings.SplitN(strings.TrimSpace(raw), "-", 2)
+		if len(parts) == 0 || parts[0] == "" {
+			continue
+		}
+		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			continue
+		}
+		end := start
+		if len(parts) == 2 {
+			end, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err != nil {
+				continue
+			}
+		}
+		if start > end {
+			start, end = end, start
+		}
+		if status >= start && status <= end {
+			return true
+		}
+	}
+	return false
 }
 
 func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {

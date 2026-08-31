@@ -115,25 +115,10 @@ func GetChannel(group string, model string, retry int, requestPath string) (*Cha
 func GetChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
 	excludedChannels := excluded
 	var abilities []Ability
-
-	var err error
-	var channelQuery *gorm.DB
-	if len(excludedChannels) > 0 {
-		// Load all priorities when failing over. The highest remaining priority
-		// is selected after exclusions; querying only the original max priority
-		// would incorrectly skip a healthy lower-priority fallback.
-		channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	} else {
-		channelQuery, err = getChannelQuery(group, model, retry)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) || common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	} else {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	}
+	// Priority is a legacy persistence field only. Runtime selection considers
+	// every enabled ability and uses Weight for distribution in all DB modes.
+	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
+	err := channelQuery.Order("weight DESC").Find(&abilities).Error
 	if err != nil {
 		return nil, err
 	}
@@ -147,32 +132,6 @@ func GetChannelExcluding(group string, model string, retry int, requestPath stri
 			filtered = append(filtered, ability)
 		}
 		abilities = filtered
-		if len(abilities) > 0 {
-			maxPriority := int64(0)
-			if abilities[0].Priority != nil {
-				maxPriority = *abilities[0].Priority
-			}
-			for _, ability := range abilities[1:] {
-				priority := int64(0)
-				if ability.Priority != nil {
-					priority = *ability.Priority
-				}
-				if priority > maxPriority {
-					maxPriority = priority
-				}
-			}
-			prioritized := make([]Ability, 0, len(abilities))
-			for _, ability := range abilities {
-				priority := int64(0)
-				if ability.Priority != nil {
-					priority = *ability.Priority
-				}
-				if priority == maxPriority {
-					prioritized = append(prioritized, ability)
-				}
-			}
-			abilities = prioritized
-		}
 	}
 	channel := Channel{}
 	if len(abilities) > 0 {

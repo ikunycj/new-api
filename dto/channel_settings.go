@@ -15,14 +15,17 @@ type ChannelSettings struct {
 	// is empty, alltoken infers OpenAI for api.openai.com and IKUN for other
 	// OpenAI-compatible upstreams. IKUN-compatible clusters may also send an
 	// X-Error-Source header to override the inference per response.
-	ErrorSource            string `json:"error_source,omitempty"`
-	MockLoadTest           bool   `json:"mock_load_test,omitempty"`
-	ForceFormat            bool   `json:"force_format,omitempty"`
-	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
-	Proxy                  string `json:"proxy"`
-	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
-	SystemPrompt           string `json:"system_prompt,omitempty"`
-	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	ErrorSource               string `json:"error_source,omitempty"`
+	MockLoadTest              bool   `json:"mock_load_test,omitempty"`
+	ForceFormat               bool   `json:"force_format,omitempty"`
+	ThinkingToContent         bool   `json:"thinking_to_content,omitempty"`
+	Proxy                     string `json:"proxy"`
+	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
+	SystemPrompt              string `json:"system_prompt,omitempty"`
+	SystemPromptOverride      bool   `json:"system_prompt_override,omitempty"`
+	AutoDisableKeywords       string `json:"auto_disable_keywords,omitempty"`
+	AutoDisableStatusCodes    string `json:"auto_disable_status_codes,omitempty"`
+	AutoDisableResponseTimeMs int    `json:"auto_disable_response_time_ms,omitempty"`
 }
 
 type VertexKeyType string

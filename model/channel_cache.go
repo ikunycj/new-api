@@ -130,10 +130,10 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	return GetRandomSatisfiedChannelExcluding(group, model, retry, requestPath, nil)
 }
 
-// GetRandomSatisfiedChannelExcluding selects a weighted channel while
-// excluding channels already attempted for this request. This is used by the
-// relay failover loop so a failed upstream is not selected again at the same
-// priority.
+// GetRandomSatisfiedChannelExcluding selects a channel by its weight while
+// excluding channels already attempted for this request. Priority is retained
+// in the database for backwards compatibility but is not part of runtime
+// scheduling.
 func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
 	excludedChannels := excluded
 	// if memory cache is disabled, get channel directly from database
@@ -174,41 +174,19 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 		return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channels[0])
 	}
 
-	uniquePriorities := make(map[int]bool)
+	var sumWeight int
+	targetChannels := make([]*Channel, 0, len(channels))
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
-			uniquePriorities[int(channel.GetPriority())] = true
-		} else {
-			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
-		}
-	}
-	var sortedUniquePriorities []int
-	for priority := range uniquePriorities {
-		sortedUniquePriorities = append(sortedUniquePriorities, priority)
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
-
-	if retry >= len(uniquePriorities) {
-		retry = len(uniquePriorities) - 1
-	}
-	targetPriority := int64(sortedUniquePriorities[retry])
-
-	// get the priority for the given retry number
-	var sumWeight = 0
-	var targetChannels []*Channel
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
-			if channel.GetPriority() == targetPriority {
-				sumWeight += channel.GetWeight()
-				targetChannels = append(targetChannels, channel)
-			}
+			sumWeight += channel.GetWeight()
+			targetChannels = append(targetChannels, channel)
 		} else {
 			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
 		}
 	}
 
 	if len(targetChannels) == 0 {
-		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
+		return nil, fmt.Errorf("no channel found, group: %s, model: %s", group, model)
 	}
 
 	// smoothing factor and adjustment

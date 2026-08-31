@@ -331,7 +331,6 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     hasConfiguredOverrideValue(values.status_code_mapping) ||
     values.tag?.trim() ||
     values.remark?.trim() ||
-    values.priority ||
     values.weight ||
     values.proxy?.trim() ||
     values.system_prompt?.trim() ||
@@ -730,7 +729,6 @@ export function ChannelMutateDrawer({
   )
   const currentSettings = form.watch('settings')
   const currentAdvancedCustom = form.watch('advanced_custom')
-  const currentPriority = form.watch('priority')
   const currentWeight = form.watch('weight')
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
@@ -993,7 +991,6 @@ export function ChannelMutateDrawer({
     : 'idle'
   const advancedSummary = advancedHaveErrors ? t('Error') : undefined
   const routingStrategyConfigured = Boolean(
-    currentPriority ||
     currentWeight ||
     currentTestModel?.trim() ||
     (currentAutoBan ?? 1) !== 1
@@ -1882,7 +1879,7 @@ export function ChannelMutateDrawer({
                   'Sensitive channel settings are read-only for your account.'
                 )}{' '}
                 {t(
-                  'You can still edit non-sensitive operations fields such as models, groups, priority, and weight.'
+                  'You can still edit non-sensitive operations fields such as models, groups, and weight.'
                 )}
               </AlertDescription>
             </Alert>
@@ -3617,30 +3614,6 @@ export function ChannelMutateDrawer({
                             <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
-                                name='priority'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>{t('Priority')}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type='number'
-                                        placeholder='0'
-                                        {...field}
-                                        onChange={(e) =>
-                                          field.onChange(Number(e.target.value))
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.PRIORITY)}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-
-                              <FormField
-                                control={form.control}
                                 name='weight'
                                 render={({ field }) => (
                                   <FormItem>
@@ -3705,6 +3678,56 @@ export function ChannelMutateDrawer({
                                       }
                                     />
                                   </FormControl>
+                                </FormItem>
+                                )}
+                              />
+                            <div className='grid gap-4 sm:grid-cols-2'>
+                              <FormField
+                                control={form.control}
+                                name='auto_disable_status_codes'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t('Auto-disable status codes')}</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder='401, 429, 500-599' {...field} />
+                                    </FormControl>
+                                    <FormDescription>{t('Per-channel codes or ranges that trigger automatic disable')}</FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name='auto_disable_keywords'
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t('Auto-disable keywords')}</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder='rate limit, invalid key' {...field} />
+                                    </FormControl>
+                                    <FormDescription>{t('Comma or newline separated channel-specific error keywords')}</FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <FormField
+                              control={form.control}
+                              name='auto_disable_response_time_ms'
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('Auto-disable response time (ms)')}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type='number'
+                                      min={0}
+                                      max={3600000}
+                                      value={field.value ?? 0}
+                                      onChange={(e) => field.onChange(Number(e.target.value))}
+                                    />
+                                  </FormControl>
+                                  <FormDescription>{t('Set 0 to disable response-time auto disable')}</FormDescription>
+                                  <FormMessage />
                                 </FormItem>
                               )}
                             />

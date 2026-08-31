@@ -65,7 +65,7 @@ function ChannelMetric({
  * renderer via `flexRender`, so the table's information and interactions are
  * preserved: row selection, provider/multi-key/IO.NET type badge, id,
  * name/remark + warning icons, status (with tooltips), groups, inline
- * priority/weight spinners, balance refresh, response/test times, tag
+ * weight spinner, balance refresh, response/test times, tag
  * expand-collapse, and the per-row (or per-tag) actions menu.
  */
 function ChannelCardComponent({
@@ -176,9 +176,6 @@ function ChannelCardComponent({
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.test_model}>
               {testModelCell}
-            </ChannelMetric>
-            <ChannelMetric label={t('Priority')}>
-              {renderCell('priority')}
             </ChannelMetric>
             <ChannelMetric label={t('Weight')}>{weightCell}</ChannelMetric>
             <ChannelMetric label={fieldLabels.response_time}>

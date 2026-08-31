@@ -931,11 +931,6 @@ type channelTestSummary struct {
 // the system task can surface progress.
 func performChannelTests(ctx context.Context, channels []*model.Channel, testUserID int, allowDisable bool, report func(processed, total int)) channelTestSummary {
 	summary := channelTestSummary{}
-	var disableThreshold = int64(common.ChannelDisableThreshold * 1000)
-	if disableThreshold == 0 {
-		disableThreshold = 10000000 // a impossible value
-	}
-
 	total := len(channels)
 	for index, channel := range channels {
 		if ctx != nil && ctx.Err() != nil {
@@ -962,13 +957,15 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 		newAPIError := result.newAPIError
 		// request error disables the channel
 		if newAPIError != nil {
-			shouldBanChannel = service.ShouldDisableChannel(result.newAPIError)
+			shouldBanChannel = service.ShouldDisableChannelForChannel(result.newAPIError, channel)
 		}
 
 		// 当错误检查通过，才检查响应时间
-		if common.AutomaticDisableChannelEnabled && !shouldBanChannel {
-			if milliseconds > disableThreshold {
-				err := fmt.Errorf("响应时间 %.2fs 超过阈值 %.2fs", float64(milliseconds)/1000.0, float64(disableThreshold)/1000.0)
+		channelSettings := channel.GetSetting()
+		if channelSettings.AutoDisableResponseTimeMs > 0 && !shouldBanChannel {
+			threshold := int64(channelSettings.AutoDisableResponseTimeMs)
+			if milliseconds > threshold {
+				err := fmt.Errorf("响应时间 %.2fs 超过阈值 %.2fs", float64(milliseconds)/1000.0, float64(threshold)/1000.0)
 				newAPIError = types.NewOpenAIError(err, types.ErrorCodeChannelResponseTimeExceeded, http.StatusRequestTimeout)
 				shouldBanChannel = true
 			}

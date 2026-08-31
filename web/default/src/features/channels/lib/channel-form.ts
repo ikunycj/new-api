@@ -144,10 +144,12 @@ export const channelFormSchema = z
         isOptionalModelMapping,
         'Model mapping must be a JSON object with string values'
       ),
-    priority: z.number().optional(),
     weight: z.number().optional(),
     test_model: z.string().optional(),
     auto_ban: z.number().optional(),
+    auto_disable_keywords: z.string().optional(),
+    auto_disable_status_codes: z.string().optional(),
+    auto_disable_response_time_ms: z.number().int().min(0).max(3600000),
     auto_probe_enabled: z.boolean(),
     probe_interval_seconds: z.number().int().min(0).max(604800),
     auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
@@ -157,8 +159,6 @@ export const channelFormSchema = z
     max_concurrency: z.number().int().min(1).max(10000).nullable(),
     price_multiplier: z.number().finite().min(0).max(1000),
     price_multiplier_mode: z.enum(['usd', 'cny']),
-    force_priority: z.boolean(),
-    force_priority_scope: z.enum(['group', 'cross_group']),
     status: z.number(),
     status_code_mapping: z
       .string()
@@ -319,10 +319,12 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   models: '',
   group: ['default'],
   model_mapping: '',
-  priority: 0,
   weight: 0,
   test_model: '',
   auto_ban: 1,
+  auto_disable_keywords: '',
+  auto_disable_status_codes: '',
+  auto_disable_response_time_ms: 0,
   auto_probe_enabled: false,
   probe_interval_seconds: 120,
   auto_disabled_probe_interval_seconds: 10,
@@ -332,8 +334,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   max_concurrency: 1000,
   price_multiplier: 1,
   price_multiplier_mode: 'usd',
-  force_priority: false,
-  force_priority_scope: 'group',
   status: CHANNEL_STATUS.ENABLED,
   status_code_mapping: '',
   tag: '',
@@ -394,6 +394,9 @@ export function transformChannelToFormDefaults(
     system_prompt: '',
     system_prompt_override: false,
     mock_load_test: false,
+    auto_disable_keywords: '',
+    auto_disable_status_codes: '',
+    auto_disable_response_time_ms: 0,
   }
 
   if (channel.setting) {
@@ -407,6 +410,9 @@ export function transformChannelToFormDefaults(
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
         mock_load_test: parsed.mock_load_test === true,
+        auto_disable_keywords: parsed.auto_disable_keywords || '',
+        auto_disable_status_codes: parsed.auto_disable_status_codes || '',
+        auto_disable_response_time_ms: Number(parsed.auto_disable_response_time_ms) || 0,
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -474,7 +480,6 @@ export function transformChannelToFormDefaults(
     models: channel.models || '',
     group: parseGroups(channel.group || 'default'),
     model_mapping: channel.model_mapping || '',
-    priority: channel.priority || 0,
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 1,
@@ -495,9 +500,6 @@ export function transformChannelToFormDefaults(
     price_multiplier: channel.price_multiplier ?? 1,
     price_multiplier_mode:
       channel.price_multiplier_mode === 'cny' ? 'cny' : 'usd',
-    force_priority: channel.force_priority ?? false,
-    force_priority_scope:
-      channel.force_priority_scope === 'cross_group' ? 'cross_group' : 'group',
     status: channel.status,
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
@@ -545,6 +547,9 @@ function buildSettingJSON(formData: ChannelFormValues): string {
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
     mock_load_test: formData.mock_load_test === true,
+    auto_disable_keywords: formData.auto_disable_keywords || '',
+    auto_disable_status_codes: formData.auto_disable_status_codes || '',
+    auto_disable_response_time_ms: formData.auto_disable_response_time_ms || 0,
   }
   return JSON.stringify(settingObj)
 }
@@ -701,7 +706,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     models: formData.models,
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
-    priority: formData.priority || null,
     weight: formData.weight || null,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
@@ -715,8 +719,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
-    force_priority: formData.force_priority,
-    force_priority_scope: formData.force_priority_scope,
     status: formData.status,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
@@ -761,7 +763,6 @@ export function transformFormDataToUpdatePayload(
     models: formData.models,
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
-    priority: formData.priority ?? 0,
     weight: formData.weight ?? 0,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
@@ -775,8 +776,6 @@ export function transformFormDataToUpdatePayload(
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
-    force_priority: formData.force_priority,
-    force_priority_scope: formData.force_priority_scope,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
