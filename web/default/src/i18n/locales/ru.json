@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "Подключайтесь к мировым моделям ИИ",
     "Connect to the model providers configured on this site": "Подключайтесь к поставщикам моделей, настроенным на этом сайте",
     "Connect your applications to leading AI models through one compatible API.": "Подключайте приложения к ведущим моделям ИИ через единый совместимый API.",
-    "Connected to AllTokenAPI": "Подключено к AllTokenAPI",
     "Connected to io.net service normally.": "Соединение с сервисом io.net установлено.",
     "Connection closed": "Соединение закрыто",
     "Connection error": "Ошибка соединения",
@@ -6176,6 +6175,7 @@
     "Run IQ test": "Запустить IQ-тест",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQ-тест остановлен: завершено {{completed}}/{{total}}, успешно {{success}}, с ошибкой {{failed}}",
     "Result not retained; run again": "Результат не сохранён; запустите тест снова",
+    "Connected to ikun.love": "Подключено к ikun.love",
     "All channels": "Все каналы"
   }
 }

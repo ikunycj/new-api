@@ -237,7 +237,7 @@ function StartStepItem(props: {
           'flex min-h-16 items-center gap-2 rounded-xl border px-3 py-2.5 shadow-xs transition-transform duration-300 sm:gap-3',
           isCompleted && 'border-success/35 bg-success/12',
           isCurrent &&
-            'scale-[1.03] border-warning/90 bg-warning/20 shadow-[0_0_0_4px_color-mix(in_oklch,var(--warning)_28%,transparent)] motion-safe:animate-[pulse_2s_ease-in-out_infinite]',
+            'scale-[1.015] border-warning/70 bg-warning/12 shadow-[0_0_0_3px_color-mix(in_oklch,var(--warning)_16%,transparent)] motion-safe:animate-[pulse_2s_ease-in-out_infinite]',
           !isCompleted && !isCurrent && 'border-border bg-background'
         )}
       >

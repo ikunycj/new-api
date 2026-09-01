@@ -5,6 +5,7 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Connected to ikun.love': 'Connected to ikun.love',
     '一直重连，等待网络': 'Constantly reconnecting, waiting for network',
     用户网络故障: 'User network failure',
     检查网络是否连通: 'Check whether the network is connected',
@@ -197,6 +198,7 @@ const newKeys = {
     'Result not retained; run again': 'Result not retained; run again',
   },
   zh: {
+    'Connected to ikun.love': '已连接到 ikun.love',
     'Automatically disable channels when tests fail':
       '当对渠道的批量测试失败/普通请求失败时，自动禁用对应渠道',
     'Authentication email templates': '认证邮件模板',
@@ -384,6 +386,7 @@ const newKeys = {
     'Result not retained; run again': '结果未保留，请重新测试',
   },
   fr: {
+    'Connected to ikun.love': 'Connecté à ikun.love',
     'Authentication email templates': 'Modèles d’e-mails d’authentification',
     'Available placeholders': 'Variables disponibles',
     'Verification email subject': 'Objet de l’e-mail de vérification',
@@ -581,6 +584,7 @@ const newKeys = {
       'Résultat non conservé ; relancez le test',
   },
   ja: {
+    'Connected to ikun.love': 'ikun.love に接続済み',
     'Authentication email templates': '認証メールテンプレート',
     'Available placeholders': '使用できるプレースホルダー',
     'Verification email subject': '認証メールの件名',
@@ -770,6 +774,7 @@ const newKeys = {
       '結果を保持できませんでした。もう一度実行してください',
   },
   ru: {
+    'Connected to ikun.love': 'Подключено к ikun.love',
     'Authentication email templates': 'Шаблоны писем для аутентификации',
     'Available placeholders': 'Доступные подстановки',
     'Verification email subject': 'Тема письма с кодом подтверждения',
@@ -963,6 +968,7 @@ const newKeys = {
       'Результат не сохранён; запустите тест снова',
   },
   vi: {
+    'Connected to ikun.love': 'Đã kết nối với ikun.love',
     'Authentication email templates': 'Mẫu email xác thực',
     'Available placeholders': 'Biến thay thế khả dụng',
     'Verification email subject': 'Tiêu đề email xác minh',
@@ -1152,6 +1158,7 @@ const newKeys = {
     'Result not retained; run again': 'Kết quả không được lưu; hãy chạy lại',
   },
   'zh-TW': {
+    'Connected to ikun.love': '已連接至 ikun.love',
     'Automatically disable channels when tests fail':
       '當對渠道的批量測試失敗/普通請求失敗時，自動停用對應渠道',
     'Cumulative:': '累計：',
@@ -2567,6 +2574,7 @@ for (const [locale, translations] of Object.entries(
 }
 
 const retiredKeys = new Set([
+  'Connected to AllTokenAPI',
   // Remove malformed locale-key entries from an earlier homepage pricing pass.
   '各種價格一目了然',
   '前往模型廣場查看更多',
