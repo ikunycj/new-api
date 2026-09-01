@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "Подключайтесь к мировым моделям ИИ",
     "Connect to the model providers configured on this site": "Подключайтесь к поставщикам моделей, настроенным на этом сайте",
     "Connect your applications to leading AI models through one compatible API.": "Подключайте приложения к ведущим моделям ИИ через единый совместимый API.",
-    "Connected to AllTokenAPI": "Подключено к AllTokenAPI",
     "Connected to io.net service normally.": "Соединение с сервисом io.net установлено.",
     "Connection closed": "Соединение закрыто",
     "Connection error": "Ошибка соединения",
@@ -6152,6 +6151,7 @@
     "Group status query": "Проверка статуса групп",
     "Check available groups, latency, and recent test results for an API key.": "Проверяйте доступные группы, задержку и последние результаты тестов для API-ключа.",
     "Check status": "Проверить статус",
-    "All channels": "Все каналы"
+    "All channels": "Все каналы",
+    "Connected to ikun.love": "Подключено к ikun.love"
   }
 }

@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "接入全球 AI 模型",
     "Connect to the model providers configured on this site": "接入本站已配置的模型供应商",
     "Connect your applications to leading AI models through one compatible API.": "通过一个兼容接口将应用连接到主流 AI 模型。",
-    "Connected to AllTokenAPI": "已连接到 AllTokenAPI",
     "Connected to io.net service normally.": "已正常连接 io.net 服务。",
     "Connection closed": "连接已关闭",
     "Connection error": "连接错误",
@@ -6152,6 +6151,7 @@
     "Group status query": "分组状态查询",
     "Check available groups, latency, and recent test results for an API key.": "按 API 密钥查询可用分组、延迟和最近检测结果。",
     "Check status": "查询状态",
-    "All channels": "所有渠道"
+    "All channels": "所有渠道",
+    "Connected to ikun.love": "已连接到 ikun.love"
   }
 }

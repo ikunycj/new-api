@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useStatus } from '@/hooks/use-status'
 
-export const DOCS_PRODUCTION_BASE_URL = 'https://alltokenapi.com'
+export const DOCS_PRODUCTION_BASE_URL = 'https://ikun.love'
 
 export function resolveDocsBaseUrl(configuredAddress?: unknown): string {
   if (import.meta.env.PROD) {

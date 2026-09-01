@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "世界中の AI モデルに接続",
     "Connect to the model providers configured on this site": "このサイトに設定されたモデルプロバイダーに接続",
     "Connect your applications to leading AI models through one compatible API.": "1 つの互換 API でアプリケーションを主要な AI モデルに接続します。",
-    "Connected to AllTokenAPI": "AllTokenAPI に接続済み",
     "Connected to io.net service normally.": "io.net サービスに正常に接続しました。",
     "Connection closed": "接続が閉じられました",
     "Connection error": "接続エラー",
@@ -6152,6 +6151,7 @@
     "Group status query": "グループ状態の照会",
     "Check available groups, latency, and recent test results for an API key.": "API キーごとに利用可能なグループ、レイテンシー、最新のテスト結果を確認します。",
     "Check status": "状態を確認",
-    "All channels": "すべてのチャンネル"
+    "All channels": "すべてのチャンネル",
+    "Connected to ikun.love": "ikun.love に接続済み"
   }
 }
