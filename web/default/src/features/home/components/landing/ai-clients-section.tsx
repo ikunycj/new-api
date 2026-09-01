@@ -57,10 +57,10 @@ interface ClientPreview {
 
 const PROVIDER_PREVIEWS: ProviderPreview[] = [
   {
-    id: 'alltokenapi',
-    mark: 'A',
-    name: 'AllTokenAPI',
-    detail: 'https://alltokenapi.com',
+    id: 'gateway',
+    mark: 'I',
+    name: 'ikun.love',
+    detail: 'https://ikun.love',
     stateKey: 'Enabled',
     selected: true,
   },
@@ -295,7 +295,7 @@ function ClientPreviewSurface(props: { kind: ClientPreviewKind }) {
           <span>
             <span className='text-emerald-400'>$</span> claude
           </span>
-          <span>{t('Connected to AllTokenAPI')}</span>
+          <span>{t('Connected to ikun.love')}</span>
           <span className='text-blue-300'>
             {t('Ready for your next task.')}
           </span>

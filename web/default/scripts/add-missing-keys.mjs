@@ -5,6 +5,7 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Connected to ikun.love': 'Connected to ikun.love',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (thousands)',
     'Throughput trend': 'Throughput trend',
@@ -136,6 +137,7 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Connected to ikun.love': '已连接到 ikun.love',
     'Copy ready-to-run curl': '复制命令到本地终端测试',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
@@ -266,6 +268,7 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Connected to ikun.love': 'Connecté à ikun.love',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (milliers)',
     'Throughput trend': 'Tendance du débit',
@@ -401,6 +404,7 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Connected to ikun.love': 'ikun.love に接続済み',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千単位）',
     'Throughput trend': 'スループット推移',
@@ -532,6 +536,7 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Connected to ikun.love': 'Подключено к ikun.love',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (тыс.)',
     'Throughput trend': 'Тренд пропускной способности',
@@ -665,6 +670,7 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Connected to ikun.love': 'Đã kết nối với ikun.love',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (nghìn)',
     'Throughput trend': 'Xu hướng thông lượng',
@@ -797,6 +803,7 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'Connected to ikun.love': '已連接至 ikun.love',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
     'Throughput trend': '吞吐趨勢',
@@ -924,6 +931,7 @@ const newKeys = {
 }
 
 const retiredKeys = new Set([
+  'Connected to AllTokenAPI',
   'footer.columns.about.links.aboutProject',
   'footer.columns.about.links.contact',
   'footer.columns.about.links.features',
