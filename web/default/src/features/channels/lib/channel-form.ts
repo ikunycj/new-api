@@ -317,7 +317,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   key: '',
   openai_organization: '',
   models: '',
-  group: ['default'],
+  group: ['成本套餐'],
   model_mapping: '',
   weight: 0,
   test_model: '',
