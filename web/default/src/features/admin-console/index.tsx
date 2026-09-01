@@ -108,7 +108,7 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
       detail: (
         <>
           <span className='text-success'>
-            今日使用 {formatCompactNumber(stats?.api_keys.active ?? 0)}
+            已用 {formatCompactNumber(stats?.api_keys.active ?? 0)}
           </span>
           {' / '}启用 {formatCompactNumber(stats?.api_keys.enabled ?? 0)}
         </>
@@ -134,7 +134,7 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
       tone: 'chart-2',
     },
     {
-      title: '今日响应',
+      title: '平均响应',
       value: props.data.realtimeStatsError
         ? '--'
         : formatDuration(realtimeStats?.response_seconds ?? 0),
@@ -146,47 +146,37 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
       loading: props.data.statsLoading || props.data.realtimeStatsLoading,
     },
     {
-      title: '今日新增用户',
+      title: '新增用户',
       value: `+${formatCompactNumber(stats?.users.today ?? 0)}`,
-      detail: (
-        <div
-          className='truncate'
-          title={`用户总数 ${formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`}
-        >
-          用户总数 {formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今{' '}
-          {formatCompactNumber(stats?.users.active_today ?? 0)} / 7天{' '}
-          {formatCompactNumber(stats?.users.active_week ?? 0)} / 30天{' '}
-          {formatCompactNumber(stats?.users.active_month ?? 0)}
-        </div>
-      ),
+      detail: `活跃${formatCompactNumber(stats?.users.active_today ?? 0)}/总共${formatCompactNumber(stats?.users.total ?? 0)}`,
       icon: UserAdd01Icon,
       tone: 'chart-4',
     },
     {
-      title: '今日请求',
+      title: '请求',
       value: formatCompactNumber(stats?.requests.today ?? 0),
-      detail: `本月 ${formatCompactNumber(stats?.requests.month ?? 0)} / 累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
+      detail: `累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
       icon: ChartUpIcon,
       tone: 'chart-3',
     },
     {
-      title: '今日收入',
+      title: '钱包收入',
       value: formatLocalCurrencyAmount(stats?.revenue.today ?? 0),
-      detail: `本月 ${formatLocalCurrencyAmount(stats?.revenue.month ?? 0, { compact: true })} / 累计 ${formatLocalCurrencyAmount(stats?.revenue.total ?? 0, { compact: true })}`,
+      detail: `累计 ${formatLocalCurrencyAmount(stats?.revenue.total ?? 0, { compact: true })}`,
       icon: MoneyReceive01Icon,
       tone: 'chart-3',
     },
     {
-      title: '扣费额度',
+      title: '用户扣费',
       value: formatQuota(stats?.quota.today ?? 0),
-      detail: `本月 ${formatQuota(stats?.quota.month ?? 0)} / 累计 ${formatQuota(stats?.quota.total ?? 0)}`,
+      detail: `累计 ${formatQuota(stats?.quota.total ?? 0)}`,
       icon: Coins01Icon,
       tone: 'chart-2',
     },
     {
       title: 'Token 数',
       value: formatTokenAmount(stats?.tokens.today ?? 0),
-      detail: `本月 ${formatTokenAmount(stats?.tokens.month ?? 0)} / 累计 ${formatTokenAmount(stats?.tokens.total ?? 0)}`,
+      detail: `累计 ${formatTokenAmount(stats?.tokens.total ?? 0)}`,
       icon: Layers01Icon,
       tone: 'chart-4',
     },

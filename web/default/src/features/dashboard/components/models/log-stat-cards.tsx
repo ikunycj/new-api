@@ -246,7 +246,7 @@ export function LogStatCards(props: LogStatCardsProps) {
         loading: cardLoading,
       },
       {
-        title: '系统负载',
+        title: '实时负载',
         value: (
           <div className='grid grid-cols-3 gap-2 font-sans'>
             <SystemLoadMetric
@@ -269,7 +269,7 @@ export function LogStatCards(props: LogStatCardsProps) {
         loading: Boolean(adminData.systemLoadLoading && !systemLoad),
       },
       {
-        title: '今日 RPM',
+        title: '实时 RPM',
         value: realtimeError ? '--' : rpm.displayValue,
         detail: adminError
           ? '统计数据加载失败'
@@ -279,7 +279,7 @@ export function LogStatCards(props: LogStatCardsProps) {
         loading: cardLoading,
       },
       {
-        title: '今日 TPM',
+        title: '实时 TPM',
         value: realtimeError ? '--' : tpm.displayValue,
         detail: adminError
           ? '统计数据加载失败'

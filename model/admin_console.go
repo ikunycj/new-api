@@ -425,7 +425,7 @@ func GetAdminConsoleRealtimeStats() (AdminConsoleRealtimeStats, error) {
 }
 
 func GetAdminConsoleSystemLoad() AdminConsoleSystemLoad {
-	return getAdminConsoleSystemLoad(true)
+	return getAdminConsoleSystemLoad(false)
 }
 
 func getAdminConsoleSystemLoad(refresh bool) AdminConsoleSystemLoad {
