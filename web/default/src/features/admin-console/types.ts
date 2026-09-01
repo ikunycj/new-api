@@ -89,6 +89,18 @@ export interface AdminConsoleStats {
   system_load: AdminConsoleSystemLoad
 }
 
+export interface AdminConsoleDataState {
+  stats?: AdminConsoleStats
+  realtimeStats?: AdminConsoleRealtimeStats
+  systemLoad?: AdminConsoleSystemLoad
+  statsLoading: boolean
+  realtimeStatsLoading: boolean
+  systemLoadLoading: boolean
+  statsError: boolean
+  realtimeStatsError: boolean
+  systemLoadError: boolean
+}
+
 export interface AdminConsoleResponse {
   success: boolean
   message?: string

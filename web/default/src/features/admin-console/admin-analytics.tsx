@@ -14,29 +14,17 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
-import { Eye, EyeOff } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { DimensionUsageChart } from '@/features/admin-console/components/dimension-usage-chart'
-import { DashboardChartControls } from '@/features/dashboard/components/dashboard-chart-controls'
+import type { AdminConsoleDataState } from '@/features/admin-console/types'
 import { FlowCharts } from '@/features/dashboard/components/flow/flow-charts'
 import { ConsumptionDistributionChart } from '@/features/dashboard/components/models/consumption-distribution-chart'
 import { LogStatCards } from '@/features/dashboard/components/models/log-stat-cards'
 import { ModelCharts } from '@/features/dashboard/components/models/model-charts'
 import { UserCharts } from '@/features/dashboard/components/users/user-charts'
 import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
-import {
-  buildDefaultDashboardFilters,
-  getDefaultDays,
-  getSavedGranularity,
-} from '@/features/dashboard/lib'
+import { getDefaultDays, getSavedGranularity } from '@/features/dashboard/lib'
 import type {
   DashboardFilters,
   QuotaDataItem,
@@ -47,15 +35,14 @@ export type AdminAnalyticsSection = 'overview' | 'flow'
 
 interface AdminAnalyticsProps {
   section: AdminAnalyticsSection
+  filters: DashboardFilters
+  flowSensitiveVisible: boolean
+  adminData: AdminConsoleDataState
 }
 
 export function AdminAnalytics(props: AdminAnalyticsProps) {
-  const { t } = useTranslation()
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters()
-  )
   const [userChartsFilters, setUserChartsFilters] = useState<UserChartsFilters>(
     () => {
       const timeGranularity = getSavedGranularity()
@@ -66,7 +53,6 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
       }
     }
   )
-  const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
@@ -76,65 +62,16 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
     []
   )
 
-  const modelActions = (
-    <DashboardChartControls filters={modelFilters} onChange={setModelFilters} />
-  )
-
-  const flowActions = (
-    <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant='ghost'
-              size='icon'
-              onClick={() => setFlowSensitiveVisible((prev) => !prev)}
-              aria-label={
-                flowSensitiveVisible
-                  ? t('Hide sensitive data')
-                  : t('Show sensitive data')
-              }
-              className='text-muted-foreground hover:text-foreground size-8'
-            />
-          }
-        >
-          {flowSensitiveVisible ? <Eye /> : <EyeOff />}
-        </TooltipTrigger>
-        <TooltipContent>
-          {flowSensitiveVisible
-            ? t('Hide sensitive data')
-            : t('Show sensitive data')}
-        </TooltipContent>
-      </Tooltip>
-      <DashboardChartControls
-        filters={modelFilters}
-        onChange={setModelFilters}
-      />
-    </>
-  )
-
   return (
     <div className='space-y-3 sm:space-y-4'>
       {props.section === 'overview' && (
         <LogStatCards
-          filters={modelFilters}
+          filters={props.filters}
           onDataUpdate={handleDataUpdate}
           includeAdminData
+          adminData={props.adminData}
         />
       )}
-
-      <div className='flex flex-wrap items-center justify-end gap-2'>
-        {props.section === 'overview' && (
-          <div className='flex shrink-0 flex-wrap items-center gap-2'>
-            {modelActions}
-          </div>
-        )}
-        {props.section === 'flow' && (
-          <div className='flex shrink-0 flex-wrap items-center gap-2'>
-            {flowActions}
-          </div>
-        )}
-      </div>
 
       {props.section === 'overview' && (
         <div className='grid gap-3 md:grid-cols-2'>
@@ -142,16 +79,16 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             data={modelData}
             loading={dataLoading}
             timeGranularity={
-              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+              props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
-            metric={modelFilters.metric}
+            metric={props.filters.metric}
             compact
           />
           <ModelCharts
             data={modelData}
             loading={dataLoading}
             timeGranularity={
-              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+              props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
             compact
           />
@@ -161,9 +98,9 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             data={modelData}
             loading={dataLoading}
             timeGranularity={
-              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+              props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
-            metric={modelFilters.metric}
+            metric={props.filters.metric}
           />
           <DimensionUsageChart
             title='渠道用量'
@@ -171,9 +108,9 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             data={modelData}
             loading={dataLoading}
             timeGranularity={
-              modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
+              props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
-            metric={modelFilters.metric}
+            metric={props.filters.metric}
           />
           <UserCharts
             filters={userChartsFilters}
@@ -185,8 +122,8 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
 
       {props.section === 'flow' && (
         <FlowCharts
-          filters={modelFilters}
-          sensitiveVisible={flowSensitiveVisible}
+          filters={props.filters}
+          sensitiveVisible={props.flowSensitiveVisible}
           includeAdminData
         />
       )}

@@ -19,23 +19,20 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity01Icon,
   ChartUpIcon,
-  Clock01Icon,
+  DashboardSpeed01Icon,
   Layers01Icon,
 } from '@hugeicons/core-free-icons'
-import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
+import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getAdminConsoleRealtimeStats,
-  getAdminConsoleStats,
-} from '@/features/admin-console/api'
 import {
   AdminConsoleStatCard,
   type AdminConsoleStatTone,
 } from '@/features/admin-console/components/admin-console-stat-card'
+import type { AdminConsoleDataState } from '@/features/admin-console/types'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
@@ -51,18 +48,28 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
-interface LogStatCardsProps {
+interface LogStatCardsBaseProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
-  includeAdminData?: boolean
 }
+
+interface UserLogStatCardsProps extends LogStatCardsBaseProps {
+  includeAdminData: false
+  adminData?: never
+}
+
+interface AdminLogStatCardsProps extends LogStatCardsBaseProps {
+  includeAdminData: true
+  adminData: AdminConsoleDataState
+}
+
+type LogStatCardsProps = UserLogStatCardsProps | AdminLogStatCardsProps
 
 interface AdminLogStatItem {
   title: string
-  value: string
-  detail: string
+  value: ReactNode
+  detail: ReactNode
   icon: typeof Activity01Icon
   tone: AdminConsoleStatTone
   loading: boolean
@@ -83,34 +90,41 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
   }
 }
 
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0 秒'
-  if (seconds < 1) return `${Math.round(seconds * 1000)} 毫秒`
-  return `${seconds.toFixed(seconds >= 10 ? 0 : 2)} 秒`
+function normalizePercentage(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
+
+function formatPercentage(value: number): string {
+  return `${new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: 1,
+  }).format(normalizePercentage(value))}%`
+}
+
+function SystemLoadMetric(props: { label: string; value: number }) {
+  const percentage = normalizePercentage(props.value)
+
+  return (
+    <Progress
+      value={percentage}
+      className='gap-1'
+      aria-label={`${props.label}使用率 ${formatPercentage(percentage)}`}
+    >
+      <div className='flex w-full min-w-0 items-baseline justify-between gap-1'>
+        <span className='text-muted-foreground truncate font-sans text-[10px] font-medium'>
+          {props.label}
+        </span>
+        <span className='font-mono text-xs font-semibold tabular-nums'>
+          {formatPercentage(percentage)}
+        </span>
+      </div>
+    </Progress>
+  )
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
-  const user = useAuthStore((state) => state.auth.user)
-  const includeAdminData =
-    props.includeAdminData ?? !!(user?.role && user.role >= 10)
-  const adminStatsQuery = useQuery({
-    queryKey: ['admin-console-stats'],
-    queryFn: getAdminConsoleStats,
-    enabled: includeAdminData,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    placeholderData: (previous) => previous,
-  })
-  const realtimeStatsQuery = useQuery({
-    queryKey: ['admin-console-realtime'],
-    queryFn: getAdminConsoleRealtimeStats,
-    enabled: includeAdminData,
-    staleTime: 5_000,
-    refetchInterval: 5_000,
-    placeholderData: (previous) => previous,
-  })
   const [stats, setStats] = useState<{
     totalQuota: number
     totalCount: number
@@ -141,7 +155,7 @@ export function LogStatCards(props: LogStatCardsProps) {
 
     void getUserQuotaDates(
       buildQueryParams(timeRange, filters),
-      includeAdminData
+      props.includeAdminData
     )
       .then((res) => {
         if (abortController.signal.aborted) return
@@ -164,7 +178,7 @@ export function LogStatCards(props: LogStatCardsProps) {
     return () => {
       abortController.abort()
     }
-  }, [filters, includeAdminData, onDataUpdate])
+  }, [filters, onDataUpdate, props.includeAdminData])
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,
@@ -173,7 +187,7 @@ export function LogStatCards(props: LogStatCardsProps) {
   }
 
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const modelConfigs = includeAdminData ? [] : statCardsConfig
+  const modelConfigs = props.includeAdminData ? [] : statCardsConfig
   const modelItems = modelConfigs.map((config) => {
     const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
     const formatted =
@@ -196,21 +210,30 @@ export function LogStatCards(props: LogStatCardsProps) {
     }
   })
 
-  if (includeAdminData) {
-    const adminStats = adminStatsQuery.data
-    const realtimeStats = realtimeStatsQuery.data
+  if (props.includeAdminData) {
+    const adminData = props.adminData
+    const adminStats = adminData.stats
+    const realtimeStats = adminData.realtimeStats
+    const systemLoad = adminData.systemLoad
     const rpm = formatStatNumber(realtimeStats?.rpm ?? 0, locale)
     const tpm = formatStatNumber(realtimeStats?.tpm ?? 0, locale)
     const concurrency = formatStatNumber(
       realtimeStats?.current_concurrency ?? 0,
       locale
     )
-    const adminLoading = adminStatsQuery.isLoading && !adminStats
-    const adminError = adminStatsQuery.isError
-    const realtimeLoading =
-      realtimeStatsQuery.isLoading && !realtimeStatsQuery.data
-    const realtimeError = realtimeStatsQuery.isError
+    const adminLoading = adminData.statsLoading
+    const adminError = adminData.statsError
+    const realtimeLoading = adminData.realtimeStatsLoading
+    const realtimeError = adminData.realtimeStatsError
     const cardLoading = adminLoading || realtimeLoading
+    let systemLoadDetail = '实时采样 · 每 5 秒更新'
+    if (adminData.systemLoadLoading) {
+      systemLoadDetail = '正在读取实时负载…'
+    } else if (adminData.systemLoadError) {
+      systemLoadDetail = adminData.systemLoad
+        ? '实时负载刷新失败，当前为最近一次数据'
+        : '实时负载加载失败'
+    }
     const adminItems: AdminLogStatItem[] = [
       {
         title: '实时并发',
@@ -223,16 +246,27 @@ export function LogStatCards(props: LogStatCardsProps) {
         loading: cardLoading,
       },
       {
-        title: '今日响应',
-        value: realtimeError
-          ? '--'
-          : formatDuration(realtimeStats?.response_seconds ?? 0),
-        detail: adminError
-          ? '统计数据加载失败'
-          : `P50 ${formatDuration(adminStats?.performance.today_response_p50_seconds ?? 0)} / P90 ${formatDuration(adminStats?.performance.today_response_p90_seconds ?? 0)} / P99 ${formatDuration(adminStats?.performance.today_response_p99_seconds ?? 0)}`,
-        icon: Clock01Icon,
-        tone: 'chart-4',
-        loading: cardLoading,
+        title: '系统负载',
+        value: (
+          <div className='grid grid-cols-3 gap-2 font-sans'>
+            <SystemLoadMetric
+              label='CPU'
+              value={systemLoad?.cpu_usage_percent ?? 0}
+            />
+            <SystemLoadMetric
+              label='内存'
+              value={systemLoad?.memory_usage_percent ?? 0}
+            />
+            <SystemLoadMetric
+              label='存储'
+              value={systemLoad?.storage_usage_percent ?? 0}
+            />
+          </div>
+        ),
+        detail: systemLoadDetail,
+        icon: DashboardSpeed01Icon,
+        tone: 'chart-5',
+        loading: Boolean(adminData.systemLoadLoading && !systemLoad),
       },
       {
         title: '今日 RPM',
