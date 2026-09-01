@@ -78,10 +78,14 @@ import {
   createUser,
   updateUser,
   getUser,
-  getGroups,
   getPermissionCatalog,
 } from '../api'
-import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  ACCOUNT_GROUPS,
+  BINDING_FIELDS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants'
 import {
   userFormSchema,
   type UserFormValues,
@@ -111,14 +115,7 @@ export function UsersMutateDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
 
-  // Fetch groups
-  const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const groups = groupsData?.data || []
+  const groups = ACCOUNT_GROUPS
 
   // Permission catalog is owned by the backend; fetched once and reused.
   const { data: permissionCatalog = EMPTY_PERMISSION_CATALOG } = useQuery({
@@ -303,7 +300,6 @@ export function UsersMutateDrawer({
                     )}
                   />
                 )}
-
 
                 <FormField
                   control={form.control}

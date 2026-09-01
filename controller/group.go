@@ -2,7 +2,6 @@ package controller
 
 import (
 	"net/http"
-	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -15,19 +14,21 @@ import (
 )
 
 func managedUserGroups() []string {
-	groupSet := map[string]struct{}{
-		"default": {},
-		"toB":     {},
+	// Account groups are deliberately independent from pricing and routing
+	// groups. Keep this contract stable so a pricing package can never appear
+	// in the user editor or be accepted by the account API.
+	return []string{"default", "vip"}
+}
+
+func normalizeManagedUserGroup(group string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(group)) {
+	case "vip", "tob", "enterprise":
+		return "vip", true
+	case "default":
+		return "default", true
+	default:
+		return "", false
 	}
-	for groupName := range ratio_setting.GetGroupRatioCopy() {
-		groupSet[groupName] = struct{}{}
-	}
-	groupNames := make([]string, 0, len(groupSet))
-	for groupName := range groupSet {
-		groupNames = append(groupNames, groupName)
-	}
-	sort.Strings(groupNames)
-	return groupNames
 }
 
 func GetGroups(c *gin.Context) {

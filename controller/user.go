@@ -667,6 +667,16 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	updatedUser.Group = strings.TrimSpace(updatedUser.Group)
+	if updatedUser.Group == "" {
+		updatedUser.Group = originUser.Group
+	}
+	canonicalGroup, validGroup := normalizeManagedUserGroup(updatedUser.Group)
+	if !validGroup {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	updatedUser.Group = canonicalGroup
 	updatedUser.Role = originUser.Role
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
@@ -959,17 +969,12 @@ func CreateUser(c *gin.Context) {
 	if user.Group == "" {
 		user.Group = "default"
 	}
-	validGroup := false
-	for _, group := range managedUserGroups() {
-		if group == user.Group {
-			validGroup = true
-			break
-		}
-	}
+	canonicalGroup, validGroup := normalizeManagedUserGroup(user.Group)
 	if !validGroup {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	user.Group = canonicalGroup
 	myRole := c.GetInt("role")
 	if user.Role >= myRole {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)

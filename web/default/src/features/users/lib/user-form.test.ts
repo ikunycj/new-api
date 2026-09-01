@@ -19,18 +19,47 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { transformFormDataToPayload } from './user-form'
+import {
+  transformFormDataToPayload,
+  transformUserToFormDefaults,
+} from './user-form'
 
 describe('user form payload', () => {
-  test('keeps the selected user group in the payload', () => {
+  test('normalizes account groups and excludes pricing groups', () => {
     const payload = transformFormDataToPayload({
       username: 'business-user',
       display_name: 'Business User',
       password: 'password123',
       role: 1,
-      group: 'premium',
+      group: '成本套餐',
     })
 
-    assert.equal(payload.group, 'premium')
+    assert.equal(payload.group, 'default')
+    assert.equal(
+      transformFormDataToPayload({
+        username: 'business-user',
+        display_name: 'Business User',
+        password: 'password123',
+        role: 1,
+        group: 'toB',
+      }).group,
+      'vip'
+    )
+  })
+
+  test('maps legacy account groups when loading an existing user', () => {
+    const defaults = transformUserToFormDefaults({
+      id: 1,
+      username: 'legacy-user',
+      display_name: 'Legacy User',
+      quota: 0,
+      used_quota: 0,
+      request_count: 0,
+      group: 'enterprise',
+      status: 1,
+      role: 1,
+    })
+
+    assert.equal(defaults.group, 'vip')
   })
 })

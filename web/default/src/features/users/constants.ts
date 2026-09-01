@@ -102,6 +102,21 @@ export const getUserRoleOptions = (t: (key: string) => string) => [
 
 export const DEFAULT_GROUP = 'default' as const
 
+// Account groups are separate from pricing/routing groups. Pricing packages
+// must never be offered in the user editor.
+export const ACCOUNT_GROUPS = ['default', 'vip'] as const
+
+export function normalizeAccountGroup(
+  group?: string
+): (typeof ACCOUNT_GROUPS)[number] {
+  const normalized = group?.trim().toLowerCase()
+  return normalized === 'vip' ||
+    normalized === 'tob' ||
+    normalized === 'enterprise'
+    ? 'vip'
+    : 'default'
+}
+
 // ============================================================================
 // Third-party Binding Fields
 // ============================================================================

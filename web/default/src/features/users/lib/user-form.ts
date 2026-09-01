@@ -26,7 +26,7 @@ import {
 import { quotaUnitsToDollars } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 
-import { DEFAULT_GROUP } from '../constants'
+import { DEFAULT_GROUP, normalizeAccountGroup } from '../constants'
 import type { UserFormData, User } from '../types'
 
 // ============================================================================
@@ -95,12 +95,14 @@ export function transformFormDataToPayload(
   }
 
   // For create: only send required fields
+  const accountGroup = normalizeAccountGroup(data.group)
+
   if (userId === undefined) {
     payload.role = role
-    payload.group = data.group || DEFAULT_GROUP
+    payload.group = accountGroup
   } else {
     // For update: quota is adjusted atomically via /api/user/manage, not sent here
-    payload.group = data.group
+    payload.group = accountGroup
     payload.remark = data.remark || undefined
     payload.id = userId
   }
@@ -120,7 +122,7 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     password: '',
     role: user.role,
     quota_dollars: quotaUnitsToDollars(user.quota),
-    group: user.group || DEFAULT_GROUP,
+    group: normalizeAccountGroup(user.group),
     remark: user.remark || '',
     admin_permissions: user.admin_permissions ?? {},
   }
