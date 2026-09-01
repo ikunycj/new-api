@@ -59,10 +59,10 @@ interface SupportedClient {
 
 const PROVIDER_PREVIEWS: ProviderPreview[] = [
   {
-    id: 'alltokenapi',
-    mark: 'A',
-    name: 'API Key',
-    detailKey: 'Model gateway address',
+    id: 'gateway',
+    mark: 'I',
+    name: 'ikun.love',
+    detail: 'https://ikun.love',
     stateKey: 'Enabled',
     selected: true,
   },
