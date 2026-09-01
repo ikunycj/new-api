@@ -24,6 +24,7 @@ import {
   LEGACY_DEFAULT_LOGO,
 } from '@/lib/constants'
 import { applyFaviconToDom } from '@/lib/dom-utils'
+import { setPreferredModelOrder } from '@/lib/model-preferences'
 import {
   useSystemConfigStore,
   type CurrencyConfig,
@@ -31,15 +32,12 @@ import {
   type SystemConfig,
   DEFAULT_CURRENCY_CONFIG,
 } from '@/stores/system-config-store'
-import { setPreferredModelOrder } from '@/lib/model-preferences'
 
 interface StatusApiResponse {
   success: boolean
   data: {
     system_name?: string
     logo?: string
-    footer_html?: string
-    demo_site_enabled?: boolean
     display_token_stat_enabled?: boolean
     display_in_currency?: boolean
     quota_display_type?: CurrencyDisplayType
@@ -70,8 +68,7 @@ export function mapStatusDataToConfig(
 
   setPreferredModelOrder(data.preferred_models)
 
-  const has = (key: keyof StatusApiResponse['data']) =>
-    Object.hasOwn(data, key)
+  const has = (key: keyof StatusApiResponse['data']) => Object.hasOwn(data, key)
   const nextConfig: Partial<SystemConfig> = {}
 
   if (has('system_name')) {
@@ -79,13 +76,7 @@ export function mapStatusDataToConfig(
   }
   if (has('logo')) {
     nextConfig.logo =
-      !data.logo || data.logo === LEGACY_DEFAULT_LOGO
-        ? DEFAULT_LOGO
-        : data.logo
-  }
-  if (has('footer_html')) nextConfig.footerHtml = data.footer_html
-  if (has('demo_site_enabled')) {
-    nextConfig.demoSiteEnabled = data.demo_site_enabled
+      !data.logo || data.logo === LEGACY_DEFAULT_LOGO ? DEFAULT_LOGO : data.logo
   }
   if (has('display_token_stat_enabled')) {
     nextConfig.displayTokenStatEnabled = data.display_token_stat_enabled

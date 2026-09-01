@@ -917,6 +917,21 @@ const newKeys = {
 }
 
 const retiredKeys = new Set([
+  'footer.columns.about.links.aboutProject',
+  'footer.columns.about.links.contact',
+  'footer.columns.about.links.features',
+  'footer.columns.about.title',
+  'footer.columns.docs.links.apiDocs',
+  'footer.columns.docs.links.installation',
+  'footer.columns.docs.links.quickStart',
+  'footer.columns.docs.title',
+  'footer.columns.related.links.midjourney',
+  'footer.columns.related.links.newApiKeyTool',
+  'footer.columns.related.links.oneApi',
+  'footer.columns.related.title',
+  'footer.defaultCopyright',
+  'footer.newapi.projectAttributionSuffix',
+  'Powerful API Management Platform',
   // Superseded API-key setup guidance now stores credentials in each
   // tool's persistent configuration file instead of a shell environment.
   'Claude Code environment variables',
