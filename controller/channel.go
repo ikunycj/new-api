@@ -148,9 +148,9 @@ func enrichChannelUsage(channels []*model.Channel) {
 		}
 		usage := usageByChannel[channel.Id]
 		channel.DailyTokens = usage.DailyTokens
-		channel.MonthlyTokens = usage.MonthlyTokens
-		channel.DailyCostUSD = channel.CalculateTokenCostUSD(usage.DailyTokens, billingRate)
-		channel.MonthlyCostUSD = channel.CalculateTokenCostUSD(usage.MonthlyTokens, billingRate)
+		channel.TotalTokens = usage.TotalTokens
+		channel.DailyCostUSD = model.CalculateQuotaCostUSD(usage.DailyQuota, billingRate)
+		channel.TotalCostUSD = model.CalculateQuotaCostUSD(usage.TotalQuota, billingRate)
 	}
 }
 

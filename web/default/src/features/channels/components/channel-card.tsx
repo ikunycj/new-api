@@ -90,8 +90,8 @@ function ChannelCardComponent({
   }
 
   const fieldLabels: Record<string, string> = {
-    daily_cost_usd: t('Daily Cost / Monthly Cost'),
-    daily_tokens: t('Daily Usage / Monthly Usage'),
+    daily_cost_usd: `${t('Daily Cost')} / ${t('Total cost')}`,
+    daily_tokens: `${t('Daily Usage')} / ${t('Total Usage')}`,
     response_time: t('Response'),
     test_time: t('Last Tested'),
     price_multiplier: t('Channel price multiplier'),

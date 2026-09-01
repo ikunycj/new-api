@@ -57,9 +57,9 @@ type Channel struct {
 	PriceMultiplier                  float64 `json:"price_multiplier"`
 	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
 	DailyTokens                      int64   `json:"daily_tokens" gorm:"-"`
-	MonthlyTokens                    int64   `json:"monthly_tokens" gorm:"-"`
+	TotalTokens                      int64   `json:"total_tokens" gorm:"-"`
 	DailyCostUSD                     float64 `json:"daily_cost_usd" gorm:"-"`
-	MonthlyCostUSD                   float64 `json:"monthly_cost_usd" gorm:"-"`
+	TotalCostUSD                     float64 `json:"total_cost_usd" gorm:"-"`
 	ForcePriority                    *bool   `json:"force_priority"`
 	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
 	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
@@ -517,6 +517,20 @@ func (channel *Channel) CalculateTokenCostUSD(tokens int64, billingUSDToCNYRate 
 		multiplier /= billingUSDToCNYRate
 	}
 	return float64(tokens) / 1_000_000 * multiplier
+}
+
+// CalculateQuotaCostUSD converts recorded consume quota to its USD-equivalent
+// using the configured quota unit and billing exchange rate. Unlike
+// CalculateTokenCostUSD, this reflects the quota actually written to logs and
+// includes fixed-price, cache, audio, image, and other billing paths.
+func CalculateQuotaCostUSD(quota int64, billingUSDToCNYRate float64) float64 {
+	if quota <= 0 || common.QuotaPerUnit <= 0 || math.IsNaN(common.QuotaPerUnit) || math.IsInf(common.QuotaPerUnit, 0) {
+		return 0
+	}
+	if billingUSDToCNYRate <= 0 || math.IsNaN(billingUSDToCNYRate) || math.IsInf(billingUSDToCNYRate, 0) {
+		billingUSDToCNYRate = 1
+	}
+	return float64(quota) / common.QuotaPerUnit / billingUSDToCNYRate
 }
 
 func (channel *Channel) IsForcePriority() bool {

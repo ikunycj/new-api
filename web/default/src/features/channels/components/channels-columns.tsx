@@ -329,54 +329,39 @@ const SENSITIVE_MASK = '••••'
 function PeriodMetricCell(props: {
   dailyLabel: string
   dailyValue: string
-  monthlyLabel: string
-  monthlyValue: string
+  totalLabel: string
+  totalValue: string
 }) {
   const { sensitiveVisible } = useChannels()
 
   return (
     <TooltipProvider>
       <div className='-ml-1.5 flex items-center gap-1'>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <StatusBadge
-                label={sensitiveVisible ? props.dailyValue : SENSITIVE_MASK}
-                variant='neutral'
-                size='sm'
-                copyable={false}
-                showDot={false}
-                className='cursor-help'
-              />
-            }
-          />
-          <TooltipContent>
-            <p>
-              {props.dailyLabel}:{' '}
-              {sensitiveVisible ? props.dailyValue : SENSITIVE_MASK}
-            </p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <StatusBadge
-                label={sensitiveVisible ? props.monthlyValue : SENSITIVE_MASK}
-                variant='neutral'
-                size='sm'
-                copyable={false}
-                showDot={false}
-                className='cursor-help'
-              />
-            }
-          />
-          <TooltipContent>
-            <p>
-              {props.monthlyLabel}:{' '}
-              {sensitiveVisible ? props.monthlyValue : SENSITIVE_MASK}
-            </p>
-          </TooltipContent>
-        </Tooltip>
+        {[
+          { label: props.dailyLabel, value: props.dailyValue },
+          { label: props.totalLabel, value: props.totalValue },
+        ].map((metric) => (
+          <Tooltip key={metric.label}>
+            <TooltipTrigger
+              render={
+                <StatusBadge
+                  label={sensitiveVisible ? metric.value : SENSITIVE_MASK}
+                  variant='neutral'
+                  size='sm'
+                  copyable={false}
+                  showDot={false}
+                  className='cursor-help'
+                />
+              }
+            />
+            <TooltipContent>
+              <p>
+                {metric.label}:{' '}
+                {sensitiveVisible ? metric.value : SENSITIVE_MASK}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
       </div>
     </TooltipProvider>
   )
@@ -395,17 +380,26 @@ function ChannelCostCell({ channel }: { channel: Channel }) {
   return (
     <PeriodMetricCell
       dailyLabel={t('Daily Cost')}
-      dailyValue={formatBillingCurrencyFromUSD(channel.daily_cost_usd, options)}
-      monthlyLabel={t('Monthly Cost')}
-      monthlyValue={formatBillingCurrencyFromUSD(
-        channel.monthly_cost_usd,
-        options
-      )}
+      dailyValue={formatChannelCost(channel.daily_cost_usd, options)}
+      totalLabel={t('Total cost')}
+      totalValue={formatChannelCost(channel.total_cost_usd, options)}
     />
   )
 }
 
+function formatChannelCost(
+  amountUSD: number,
+  options: Parameters<typeof formatBillingCurrencyFromUSD>[1]
+): string {
+  return amountUSD === 0
+    ? '0'
+    : formatBillingCurrencyFromUSD(amountUSD, options)
+}
+
 function formatTokenMillions(tokens: number, locale?: string): string {
+  if (tokens === 0) {
+    return '0'
+  }
   const value = Number.isFinite(tokens) && tokens > 0 ? tokens / 1_000_000 : 0
   let maximumFractionDigits = 4
   if (value >= 100) {
@@ -424,8 +418,8 @@ function ChannelTokenUsageCell({ channel }: { channel: Channel }) {
     <PeriodMetricCell
       dailyLabel={t('Daily Usage')}
       dailyValue={formatTokenMillions(channel.daily_tokens, locale)}
-      monthlyLabel={t('Monthly Usage')}
-      monthlyValue={formatTokenMillions(channel.monthly_tokens, locale)}
+      totalLabel={t('Total Usage')}
+      totalValue={formatTokenMillions(channel.total_tokens, locale)}
     />
   )
 }
@@ -979,19 +973,19 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
-      // Daily/monthly estimated channel cost
+      // Today's and lifetime recorded consume cost
       {
         accessorKey: 'daily_cost_usd',
-        header: t('Daily Cost / Monthly Cost'),
+        header: `${t('Daily Cost')} / ${t('Total cost')}`,
         cell: ({ row }) => <ChannelCostCell channel={row.original} />,
         size: 180,
         enableSorting: false,
       },
 
-      // Daily/monthly token volume
+      // Today's and lifetime token volume from consume logs
       {
         accessorKey: 'daily_tokens',
-        header: t('Daily Usage / Monthly Usage'),
+        header: `${t('Daily Usage')} / ${t('Total Usage')}`,
         cell: ({ row }) => <ChannelTokenUsageCell channel={row.original} />,
         size: 175,
         enableSorting: false,

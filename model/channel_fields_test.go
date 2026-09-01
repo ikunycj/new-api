@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,6 +36,16 @@ func TestChannelCalculateTokenCostUSDUsesMultiplierCurrency(t *testing.T) {
 	cnyChannel := &Channel{PriceMultiplier: 15, PriceMultiplierMode: ChannelPriceMultiplierModeCNY}
 	assert.InDelta(t, 3, cnyChannel.CalculateTokenCostUSD(1_500_000, 7.5), 0.000001)
 	assert.Zero(t, cnyChannel.CalculateTokenCostUSD(0, 7.5))
+}
+
+func TestCalculateQuotaCostUSDUsesRecordedQuota(t *testing.T) {
+	previousQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() { common.QuotaPerUnit = previousQuotaPerUnit })
+	common.QuotaPerUnit = 500_000
+
+	assert.InDelta(t, 2, CalculateQuotaCostUSD(7_300_000, 7.3), 0.000001)
+	assert.Zero(t, CalculateQuotaCostUSD(0, 7.3))
+	assert.Zero(t, CalculateQuotaCostUSD(-1, 7.3))
 }
 
 func TestChannelGetTestModel(t *testing.T) {
