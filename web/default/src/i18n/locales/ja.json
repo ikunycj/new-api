@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "世界中の AI モデルに接続",
     "Connect to the model providers configured on this site": "このサイトに設定されたモデルプロバイダーに接続",
     "Connect your applications to leading AI models through one compatible API.": "1 つの互換 API でアプリケーションを主要な AI モデルに接続します。",
-    "Connected to AllTokenAPI": "AllTokenAPI に接続済み",
     "Connected to io.net service normally.": "io.net サービスに正常に接続しました。",
     "Connection closed": "接続が閉じられました",
     "Connection error": "接続エラー",
@@ -6161,6 +6160,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "{{date}} より前の集計データを完全に削除します。元のログには影響しません。",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "選択した時刻より前の集計データを完全に削除します。元のログには影響しません。",
     "Delete aggregation data": "集計データを削除",
+    "Connected to ikun.love": "ikun.love に接続済み",
     "All channels": "すべてのチャンネル"
   }
 }

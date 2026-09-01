@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "Kết nối với các mô hình AI toàn cầu",
     "Connect to the model providers configured on this site": "Kết nối với các nhà cung cấp mô hình được cấu hình trên trang này",
     "Connect your applications to leading AI models through one compatible API.": "Kết nối ứng dụng với các mô hình AI hàng đầu qua một API tương thích.",
-    "Connected to AllTokenAPI": "Đã kết nối với AllTokenAPI",
     "Connected to io.net service normally.": "Đã kết nối bình thường tới dịch vụ io.net.",
     "Connection closed": "Kết nối đã đóng",
     "Connection error": "Lỗi kết nối",
@@ -6161,6 +6160,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Dữ liệu tổng hợp trước {{date}} sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Dữ liệu tổng hợp trước thời điểm đã chọn sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
     "Delete aggregation data": "Xóa dữ liệu tổng hợp",
+    "Connected to ikun.love": "Đã kết nối với ikun.love",
     "All channels": "Tất cả kênh"
   }
 }

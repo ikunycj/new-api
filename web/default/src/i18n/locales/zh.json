@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "接入全球 AI 模型",
     "Connect to the model providers configured on this site": "接入本站已配置的模型供应商",
     "Connect your applications to leading AI models through one compatible API.": "通过一个兼容接口将应用连接到主流 AI 模型。",
-    "Connected to AllTokenAPI": "已连接到 AllTokenAPI",
     "Connected to io.net service normally.": "已正常连接 io.net 服务。",
     "Connection closed": "连接已关闭",
     "Connection error": "连接错误",
@@ -6161,6 +6160,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "这将永久删除 {{date}} 之前的聚合数据，不会影响源日志。",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "这将永久删除所选时间之前的聚合数据，不会影响源日志。",
     "Delete aggregation data": "删除聚合数据",
+    "Connected to ikun.love": "已连接到 ikun.love",
     "All channels": "所有渠道"
   }
 }

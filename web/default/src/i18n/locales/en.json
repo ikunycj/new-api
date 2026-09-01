@@ -1204,7 +1204,6 @@
     "Connect to global AI models": "Connect to global AI models",
     "Connect to the model providers configured on this site": "Connect to the model providers configured on this site",
     "Connect your applications to leading AI models through one compatible API.": "Connect your applications to leading AI models through one compatible API.",
-    "Connected to AllTokenAPI": "Connected to AllTokenAPI",
     "Connected to io.net service normally.": "Connected to io.net service normally.",
     "Connection closed": "Connection closed",
     "Connection error": "Connection error",
@@ -6161,6 +6160,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.",
     "Delete aggregation data": "Delete aggregation data",
+    "Connected to ikun.love": "Connected to ikun.love",
     "All channels": "All channels"
   }
 }
