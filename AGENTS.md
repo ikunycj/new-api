@@ -159,7 +159,7 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 ### Local Development Ports
 
 - The Go backend uses `http://127.0.0.1:3000`.
-- Frontend development ports are branch-scoped: use `http://localhost:5173` for the main-style branch (`feature/docs-perfect`) and `http://localhost:5713` when no branch-specific port is specified.
+- Frontend development ports are branch-scoped: use `http://localhost:5173` for the main-style branch (`feature/docs-perfect`) and `http://localhost:5173` when no branch-specific port is specified.
 - Start the frontend from `web/default/` with `bun run dev` and keep `strictPort: true`; do not silently fall through to another port.
 - Before starting the frontend, check the port assigned to the current branch and reuse a healthy server for this workspace. If it is occupied by an unrelated or unhealthy process, identify the owning process and report the conflict. Do not terminate a user-owned process or switch ports without explicit approval.
 - Do not start a frontend server for checks that only require tests, type checking, linting, formatting, or a production build. When browser verification is required, use the branch-assigned URL above and keep it running for user review. No exceptions.
