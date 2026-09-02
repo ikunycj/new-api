@@ -40,12 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@/components/ui/empty'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import {
   Field,
   FieldDescription,
@@ -886,19 +881,6 @@ function PersonalizedAffiliateSettings() {
         </EmptyHeader>
       </Empty>
     )
-  } else if (items.length === 0) {
-    results = (
-      <Empty className='min-h-40'>
-        <EmptyHeader>
-          <EmptyTitle>
-            {keyword ? t('No matching users') : t('No users')}
-          </EmptyTitle>
-          <EmptyDescription>
-            {t('No users available. Try adjusting your search or filters.')}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
   } else {
     results = (
       <div className='overflow-x-auto rounded-lg border'>
@@ -914,6 +896,22 @@ function PersonalizedAffiliateSettings() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className='h-36 text-center'>
+                  <div className='mx-auto flex max-w-md flex-col items-center gap-1'>
+                    <p className='font-medium'>
+                      {keyword ? t('No matching users') : t('No users')}
+                    </p>
+                    <p className='text-muted-foreground text-sm'>
+                      {t(
+                        'No users available. Try adjusting your search or filters.'
+                      )}
+                    </p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : null}
             {items.map((view) => {
               const overriddenKeys = getOverriddenKeys(view)
               const override = view.override
