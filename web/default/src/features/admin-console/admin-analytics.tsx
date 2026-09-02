@@ -24,11 +24,9 @@ import { LogStatCards } from '@/features/dashboard/components/models/log-stat-ca
 import { ModelCharts } from '@/features/dashboard/components/models/model-charts'
 import { UserCharts } from '@/features/dashboard/components/users/user-charts'
 import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
-import { getDefaultDays, getSavedGranularity } from '@/features/dashboard/lib'
 import type {
   DashboardFilters,
   QuotaDataItem,
-  UserChartsFilters,
 } from '@/features/dashboard/types'
 
 export type AdminAnalyticsSection = 'overview' | 'flow'
@@ -43,16 +41,7 @@ interface AdminAnalyticsProps {
 export function AdminAnalytics(props: AdminAnalyticsProps) {
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [userChartsFilters, setUserChartsFilters] = useState<UserChartsFilters>(
-    () => {
-      const timeGranularity = getSavedGranularity()
-      return {
-        timeGranularity,
-        selectedRange: getDefaultDays(timeGranularity),
-        topUserLimit: 10,
-      }
-    }
-  )
+  const [topUserLimit, setTopUserLimit] = useState(10)
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
@@ -113,8 +102,9 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
             metric={props.filters.metric}
           />
           <UserCharts
-            filters={userChartsFilters}
-            onFiltersChange={setUserChartsFilters}
+            filters={props.filters}
+            topUserLimit={topUserLimit}
+            onTopUserLimitChange={setTopUserLimit}
             compact
           />
         </div>

@@ -204,15 +204,6 @@ export type DashboardRangePreset =
   | 'month'
   | 'custom'
 
-// User analytics selections are held by the dashboard parent so they survive
-// switching between dashboard sub-sections, matching the model/flow filters.
-export interface UserChartsFilters {
-  timeGranularity: TimeGranularity
-  selectedRange: number
-  topUserLimit: number
-  metric?: DashboardMetric
-}
-
 // ============================================================================
 // API Info Types
 // ============================================================================

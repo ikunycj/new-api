@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import { Users, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -27,13 +27,16 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTheme } from '@/context/theme-provider'
 import { getUserQuotaDataByUsers } from '@/features/dashboard/api'
-import { TIME_GRANULARITY_OPTIONS } from '@/features/dashboard/constants'
-import { getDefaultDays, processUserChartData } from '@/features/dashboard/lib'
+import { DEFAULT_TIME_GRANULARITY } from '@/features/dashboard/constants'
+import {
+  getDashboardPresetRange,
+  processUserChartData,
+} from '@/features/dashboard/lib'
 import type {
+  DashboardFilters,
   ProcessedUserChartData,
-  UserChartsFilters,
 } from '@/features/dashboard/types'
-import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
+import { dateToUnixTimestamp } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 let themeManagerPromise: Promise<
@@ -58,16 +61,11 @@ const USER_CHARTS: {
 ]
 
 const TOP_USER_LIMIT_OPTIONS = [5, 10, 20, 50]
-const USER_TIME_RANGE_PRESETS = [
-  { label: '1 Day', days: 1 },
-  { label: '7 Days', days: 7 },
-  { label: '14 Days', days: 14 },
-  { label: '29 Days', days: 29 },
-] as const
 
 interface UserChartsProps {
-  filters: UserChartsFilters
-  onFiltersChange: (filters: UserChartsFilters) => void
+  filters: DashboardFilters
+  topUserLimit: number
+  onTopUserLimitChange: (limit: number) => void
   compact?: boolean
 }
 
@@ -79,43 +77,19 @@ export function UserCharts(props: UserChartsProps) {
     (typeof import('@visactor/vchart'))['ThemeManager'] | null
   >(null)
 
-  const timeGranularity = props.filters.timeGranularity
-  const selectedRange = props.filters.selectedRange
-  const topUserLimit = props.filters.topUserLimit
-  const onFiltersChange = props.onFiltersChange
+  const timeGranularity =
+    props.filters.time_granularity ?? DEFAULT_TIME_GRANULARITY
+  const topUserLimit = props.topUserLimit
 
   const timeRange = useMemo(() => {
-    const { start, end } = getRollingDateRange(selectedRange)
+    const fallback = getDashboardPresetRange('today')
+    const start = props.filters.start_timestamp ?? fallback.start
+    const end = props.filters.end_timestamp ?? fallback.end
     return {
-      start_timestamp: Math.floor(start.getTime() / 1000),
-      end_timestamp: Math.floor(end.getTime() / 1000),
+      start_timestamp: dateToUnixTimestamp(start),
+      end_timestamp: dateToUnixTimestamp(end),
     }
-  }, [selectedRange])
-
-  const handleRangeChange = useCallback(
-    (days: number) => {
-      onFiltersChange({ ...props.filters, selectedRange: days })
-    },
-    [onFiltersChange, props.filters]
-  )
-
-  const handleGranularityChange = useCallback(
-    (granularity: TimeGranularity) => {
-      onFiltersChange({
-        ...props.filters,
-        timeGranularity: granularity,
-        selectedRange: getDefaultDays(granularity),
-      })
-    },
-    [onFiltersChange, props.filters]
-  )
-
-  const handleTopUserLimitChange = useCallback(
-    (limit: number) => {
-      onFiltersChange({ ...props.filters, topUserLimit: limit })
-    },
-    [onFiltersChange, props.filters]
-  )
+  }, [props.filters.end_timestamp, props.filters.start_timestamp])
 
   useEffect(() => {
     const updateTheme = async () => {
@@ -158,46 +132,8 @@ export function UserCharts(props: UserChartsProps) {
         }`}
       >
         <Tabs
-          value={String(selectedRange)}
-          onValueChange={(value) => handleRangeChange(Number(value))}
-          className='shrink-0'
-        >
-          <TabsList>
-            {USER_TIME_RANGE_PRESETS.map((preset) => (
-              <TabsTrigger
-                key={preset.days}
-                value={String(preset.days)}
-                className='px-2.5 text-xs'
-              >
-                {t(preset.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Tabs
-          value={timeGranularity}
-          onValueChange={(value) =>
-            handleGranularityChange(value as TimeGranularity)
-          }
-          className='shrink-0'
-        >
-          <TabsList>
-            {TIME_GRANULARITY_OPTIONS.map((option) => (
-              <TabsTrigger
-                key={option.value}
-                value={option.value}
-                className='px-2.5 text-xs'
-              >
-                {t(option.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Tabs
           value={String(topUserLimit)}
-          onValueChange={(value) => handleTopUserLimitChange(Number(value))}
+          onValueChange={(value) => props.onTopUserLimitChange(Number(value))}
           className='shrink-0'
         >
           <TabsList>
