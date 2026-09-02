@@ -44,6 +44,31 @@ type ApiResponse<T> = {
   data?: T
 }
 
+function normalizeCount(value: unknown): number {
+  const count = Number(value)
+  return Number.isFinite(count) ? count : 0
+}
+
+function normalizeUserGroupSummary(
+  summary: UserGroupSummary
+): UserGroupSummary {
+  const pricingGroups = Array.isArray(summary.pricing_groups)
+    ? summary.pricing_groups.filter(
+        (group): group is string => typeof group === 'string'
+      )
+    : []
+  const pricingGroupsAll =
+    summary.pricing_groups_all === true || pricingGroups.length === 0
+
+  return {
+    ...summary,
+    active_today: normalizeCount(summary.active_today),
+    active_month: normalizeCount(summary.active_month),
+    pricing_groups: pricingGroupsAll ? ['*'] : pricingGroups,
+    pricing_groups_all: pricingGroupsAll,
+  }
+}
+
 function requireData<T>(response: ApiResponse<T>): T {
   if (!response.success || response.data === undefined) {
     throw new Error(response.message || '请求失败')
@@ -58,7 +83,7 @@ export async function getUserGroupSummaries(): Promise<UserGroupSummary[]> {
       skipErrorHandler: true,
     }
   )
-  return requireData(response.data)
+  return requireData(response.data).map(normalizeUserGroupSummary)
 }
 
 export async function createUserGroup(name: string): Promise<UserGroupSummary> {
@@ -66,7 +91,7 @@ export async function createUserGroup(name: string): Promise<UserGroupSummary> {
     '/api/group/',
     { name }
   )
-  return requireData(response.data)
+  return normalizeUserGroupSummary(requireData(response.data))
 }
 
 export async function deleteUserGroup(name: string): Promise<void> {
@@ -86,7 +111,7 @@ export async function updateUserGroup(
     `/api/group/${encodeURIComponent(name)}`,
     request
   )
-  return requireData(response.data)
+  return normalizeUserGroupSummary(requireData(response.data))
 }
 
 export async function getPricingGroupNames(): Promise<string[]> {
