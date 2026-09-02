@@ -131,6 +131,7 @@ import {
   getChannel,
   getChannelKey,
   getPrefillGroups,
+  getPricingGroups,
   refreshCodexCredential,
 } from '../../api'
 import {
@@ -219,8 +220,6 @@ type ChannelEditorNavItem = {
   configured?: boolean
   children?: ChannelEditorNavChildItem[]
 }
-
-const BILLING_GROUP_NAMES = new Set(['成本套餐', 'gpt-plus'])
 
 // Helper functions
 const createEmptyModelMappingGuardrail = (): ModelMappingGuardrail => ({
@@ -671,6 +670,11 @@ export function ChannelMutateDrawer({
     queryFn: () => getPrefillGroups('model'),
   })
 
+  const { data: pricingGroupsData } = useQuery({
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
+  })
+
   const { copyToClipboard } = useCopyToClipboard()
 
   const {
@@ -890,11 +894,16 @@ export function ChannelMutateDrawer({
 
   // Transform groups to multi-select options
   const groupOptions = useMemo(() => {
-    return [...BILLING_GROUP_NAMES].map((group) => ({
+    const configuredGroups = pricingGroupsData?.data ?? []
+    const selectedGroups = currentGroups
+      .map((group) => group.trim())
+      .filter(Boolean)
+    const groups = new Set([...configuredGroups, ...selectedGroups])
+    return [...groups].map((group) => ({
       value: group,
       label: group,
     }))
-  }, [])
+  }, [currentGroups, pricingGroupsData?.data])
 
   // Parse current models as array
   const currentModelsArray = useMemo(
@@ -983,9 +992,7 @@ export function ChannelMutateDrawer({
     : 'idle'
   const advancedSummary = advancedHaveErrors ? t('Error') : undefined
   const routingStrategyConfigured = Boolean(
-    currentWeight ||
-    currentTestModel?.trim() ||
-    (currentAutoBan ?? 1) !== 1
+    currentWeight || currentTestModel?.trim() || (currentAutoBan ?? 1) !== 1
   )
   const internalNotesConfigured = Boolean(
     currentTag?.trim() || currentRemark?.trim()
@@ -3558,9 +3565,7 @@ export function ChannelMutateDrawer({
                                       selected={field.value}
                                       onChange={field.onChange}
                                       includeSelectedItems={false}
-                                      placeholder={t(
-                                        FIELD_PLACEHOLDERS.GROUP
-                                      )}
+                                      placeholder={t(FIELD_PLACEHOLDERS.GROUP)}
                                     />
                                   </FormControl>
                                   <FormMessage />
@@ -3668,19 +3673,28 @@ export function ChannelMutateDrawer({
                                     />
                                   </FormControl>
                                 </FormItem>
-                                )}
-                              />
+                              )}
+                            />
                             <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
                                 name='auto_disable_status_codes'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>{t('Auto-disable status codes')}</FormLabel>
+                                    <FormLabel>
+                                      {t('Auto-disable status codes')}
+                                    </FormLabel>
                                     <FormControl>
-                                      <Input placeholder='401, 429, 500-599' {...field} />
+                                      <Input
+                                        placeholder='401, 429, 500-599'
+                                        {...field}
+                                      />
                                     </FormControl>
-                                    <FormDescription>{t('Per-channel codes or ranges that trigger automatic disable')}</FormDescription>
+                                    <FormDescription>
+                                      {t(
+                                        'Per-channel codes or ranges that trigger automatic disable'
+                                      )}
+                                    </FormDescription>
                                     <FormMessage />
                                   </FormItem>
                                 )}
@@ -3690,11 +3704,20 @@ export function ChannelMutateDrawer({
                                 name='auto_disable_keywords'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>{t('Auto-disable keywords')}</FormLabel>
+                                    <FormLabel>
+                                      {t('Auto-disable keywords')}
+                                    </FormLabel>
                                     <FormControl>
-                                      <Input placeholder='rate limit, invalid key' {...field} />
+                                      <Input
+                                        placeholder='rate limit, invalid key'
+                                        {...field}
+                                      />
                                     </FormControl>
-                                    <FormDescription>{t('Comma or newline separated channel-specific error keywords')}</FormDescription>
+                                    <FormDescription>
+                                      {t(
+                                        'Comma or newline separated channel-specific error keywords'
+                                      )}
+                                    </FormDescription>
                                     <FormMessage />
                                   </FormItem>
                                 )}
@@ -3705,17 +3728,25 @@ export function ChannelMutateDrawer({
                               name='auto_disable_response_time_ms'
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>{t('Auto-disable response time (ms)')}</FormLabel>
+                                  <FormLabel>
+                                    {t('Auto-disable response time (ms)')}
+                                  </FormLabel>
                                   <FormControl>
                                     <Input
                                       type='number'
                                       min={0}
                                       max={3600000}
                                       value={field.value ?? 0}
-                                      onChange={(e) => field.onChange(Number(e.target.value))}
+                                      onChange={(e) =>
+                                        field.onChange(Number(e.target.value))
+                                      }
                                     />
                                   </FormControl>
-                                  <FormDescription>{t('Set 0 to disable response-time auto disable')}</FormDescription>
+                                  <FormDescription>
+                                    {t(
+                                      'Set 0 to disable response-time auto disable'
+                                    )}
+                                  </FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}
