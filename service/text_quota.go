@@ -84,6 +84,43 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 	return usage.ClaudeCacheCreation5mTokens > 0 || usage.ClaudeCacheCreation1hTokens > 0
 }
 
+// CacheStatsInputTokens returns the reliable input-token denominator used by
+// cache analytics. OpenAI-compatible responses may expose cache details while
+// leaving the normalized input_tokens field empty, in which case prompt_tokens
+// is the full input total. Claude prompt_tokens has different semantics and is
+// intentionally excluded from this fallback.
+func CacheStatsInputTokens(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) (int, bool) {
+	return cacheStatsInputTokens(relayInfo, effectiveBillingUsage(usage))
+}
+
+func cacheStatsInputTokens(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) (int, bool) {
+	if usage == nil {
+		return 0, false
+	}
+	if usage.InputTokens > 0 && (usage.UsageSource != "" || usage.UsageSemantic != "") {
+		return usage.InputTokens, true
+	}
+	if usage.PromptTokens <= 0 ||
+		(usage.PromptTokensDetails.CachedTokens <= 0 && usage.PromptTokensDetails.CacheCreationTokensTotal() <= 0) {
+		return 0, false
+	}
+	if strings.EqualFold(usage.UsageSemantic, dto.BillingUsageSemanticAnthropic) ||
+		strings.EqualFold(usage.UsageSource, dto.BillingUsageSourceClaudeMessages) ||
+		strings.EqualFold(usage.UsageSource, dto.BillingUsageSemanticAnthropic) ||
+		(relayInfo != nil && relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatClaude) {
+		return 0, false
+	}
+	if relayInfo == nil {
+		return 0, false
+	}
+	switch relayInfo.GetFinalRequestRelayFormat() {
+	case types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses:
+		return usage.PromptTokens, true
+	default:
+		return 0, false
+	}
+}
+
 func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
 	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit).Mul(decimal.NewFromFloat(summary.BillingUSDToCNYRate))
@@ -215,20 +252,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CacheCreationTokensTotal()
 	summary.CacheCreationTokens5m = usage.ClaudeCacheCreation5mTokens
 	summary.CacheCreationTokens1h = usage.ClaudeCacheCreation1hTokens
-	if (usage.UsageSource != "" || usage.UsageSemantic != "") && usage.InputTokens > 0 {
-		summary.InputTokensTotal = usage.InputTokens
-		summary.CacheStatsAvailable = true
-	} else if usage.UsageSource == "" && usage.UsageSemantic == "" &&
-		usage.PromptTokens > 0 &&
-		(relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatOpenAI ||
-			relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatOpenAIResponses) &&
-		(summary.CacheTokens > 0 || summary.CacheCreationTokens > 0) {
-		// Some OpenAI-compatible upstreams return prompt_tokens and cached_tokens
-		// without the normalized billing metadata. prompt_tokens is the full input
-		// total for this response, so it is a reliable denominator when a cache
-		// field is explicitly present. Keep unknown cache responses ineligible
-		// instead of treating missing cache metadata as a zero hit.
-		summary.InputTokensTotal = usage.PromptTokens
+	if inputTokens, ok := cacheStatsInputTokens(relayInfo, usage); ok {
+		summary.InputTokensTotal = inputTokens
 		summary.CacheStatsAvailable = true
 	}
 	summary.ImageTokens = usage.PromptTokensDetails.ImageTokens
@@ -497,10 +522,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other["cache_write_tokens"] = cacheWriteTokens
 	}
 	if summary.CacheStatsAvailable {
-		// input_tokens_total is populated only when the upstream usage conversion
-		// provided a reliable normalized input total. Do not infer it from prompt/cache
-		// fields, otherwise provider-specific semantics can double-count tokens.
-		other["input_tokens_total"] = billingUsage.InputTokens
+		// Keep the detail payload aligned with the persisted analytics denominator.
+		other["input_tokens_total"] = summary.InputTokensTotal
 	}
 	if tieredBillingApplied {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)

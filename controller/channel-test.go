@@ -538,14 +538,15 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 	milliseconds := tok.Sub(tik).Milliseconds()
 	consumedTime := float64(milliseconds) / 1000.0
 	other := buildTestLogOther(c, info, priceData, usage, tieredResult)
+	cacheInputTokens, cacheStatsAvailable := service.CacheStatsInputTokens(info, usage)
 	model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
 		ChannelId:           channel.Id,
 		PromptTokens:        usage.PromptTokens,
 		CompletionTokens:    usage.CompletionTokens,
-		InputTokensTotal:    usage.InputTokens,
+		InputTokensTotal:    cacheInputTokens,
 		CacheReadTokens:     usage.PromptTokensDetails.CachedTokens,
 		CacheWriteTokens:    usage.PromptTokensDetails.CacheCreationTokensTotal(),
-		CacheStatsAvailable: usage.UsageSource != "" && usage.InputTokens > 0,
+		CacheStatsAvailable: cacheStatsAvailable,
 		ModelName:           info.OriginModelName,
 		TokenName:           tokenName,
 		Quota:               quota,

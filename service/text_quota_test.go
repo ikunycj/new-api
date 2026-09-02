@@ -278,6 +278,55 @@ func TestCalculateTextQuotaSummaryUsesPromptTokensForOpenAIUpstreamCacheStats(t 
 	require.True(t, summary.CacheStatsAvailable)
 }
 
+func TestCacheStatsInputTokensUsesPromptTokensWithUsageSource(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		PromptTokens: 4387,
+		UsageSource:  dto.BillingUsageSourceOAIChat,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 3840,
+		},
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
+func TestCacheStatsInputTokensNormalizesOpenAIBillingUsage(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		BillingUsage: dto.NewOpenAIChatBillingUsage(&dto.Usage{
+			PromptTokens: 4387,
+			PromptTokensDetails: dto.InputTokenDetails{
+				CachedTokens: 3840,
+			},
+		}),
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
+func TestCacheStatsInputTokensDoesNotInferClaudeUsageSource(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		PromptTokens: 4387,
+		UsageSource:  dto.BillingUsageSourceClaudeMessages,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 3840,
+		},
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.False(t, ok)
+	require.Zero(t, inputTokens)
+}
+
 func TestCalculateTextQuotaSummaryDoesNotInferClaudeCacheStatsFromPromptTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
