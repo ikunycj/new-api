@@ -1016,6 +1016,23 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
+      // Previous-day average time to first token
+      {
+        accessorKey: 'previous_day_average_ttft_ms',
+        header: t('Previous-day average TTFT'),
+        cell: ({ row }) => {
+          const ttft = row.getValue('previous_day_average_ttft_ms') as number
+          if (!Number.isFinite(ttft) || ttft <= 0) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          return (
+            <span className='text-xs tabular-nums'>{Math.round(ttft)} ms</span>
+          )
+        },
+        size: 155,
+        enableSorting: false,
+      },
+
       // Test Time column
       {
         accessorKey: 'test_time',

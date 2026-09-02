@@ -233,6 +233,7 @@ func TestUpdateChannelStatusRestoresMemoryCacheMembership(t *testing.T) {
 	require.NoError(t, channel.Insert())
 	InitChannelCache()
 	channelsIDM[channel.Id].PreviousDayProbeSuccessRate = 42.5
+	channelsIDM[channel.Id].PreviousDayAverageTTFTMs = 123.4
 
 	eligible, err := GetEligibleChannels("pricing-a", "model-a", "", nil)
 	require.NoError(t, err)
@@ -243,6 +244,7 @@ func TestUpdateChannelStatusRestoresMemoryCacheMembership(t *testing.T) {
 	require.Len(t, eligible, 1)
 	assert.Equal(t, channel.Id, eligible[0].Id)
 	assert.Equal(t, 42.5, eligible[0].PreviousDayProbeSuccessRate)
+	assert.Equal(t, 123.4, eligible[0].PreviousDayAverageTTFTMs)
 
 	var ability Ability
 	require.NoError(t, DB.Where("channel_id = ?", channel.Id).First(&ability).Error)

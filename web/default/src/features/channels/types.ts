@@ -81,6 +81,7 @@ export const channelSchema = z.object({
     .or(z.literal(''))
     .default('group'),
   previous_day_probe_success_rate: z.number().default(100),
+  previous_day_average_ttft_ms: z.number().default(0),
   other_info: z.string().default(''),
   tag: z.string().nullish(),
   setting: z.string().nullish(),

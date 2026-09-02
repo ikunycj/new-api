@@ -97,6 +97,7 @@ const newKeys = {
     'Current group only': 'Current group only',
     'Across selected groups': 'Across selected groups',
     'Previous-day probe success rate': 'Previous-day probe success rate',
+    'Previous-day average TTFT': 'Previous-day average TTFT',
     'Automatic probe': 'Automatic probe',
     'Automatically probe this channel in the background':
       'Automatically probe this channel in the background',
@@ -227,6 +228,7 @@ const newKeys = {
     'Current group only': '仅当前分组',
     'Across selected groups': '跨所选分组',
     'Previous-day probe success rate': '昨日成功率',
+    'Previous-day average TTFT': '昨日平均 TTFT',
     'Automatic probe': '自动探测',
     'Automatically probe this channel in the background':
       '在后台自动探测此渠道',
@@ -360,6 +362,7 @@ const newKeys = {
     'Across selected groups': 'Tous les groupes sélectionnés',
     'Previous-day probe success rate':
       'Taux de réussite des sondes du jour précédent',
+    'Previous-day average TTFT': 'TTFT moyen du jour précédent',
     'Automatic probe': 'Sonde automatique',
     'Automatically probe this channel in the background':
       'Sonder automatiquement ce canal en arrière-plan',
@@ -490,6 +493,7 @@ const newKeys = {
     'Current group only': '現在のグループのみ',
     'Across selected groups': '選択したグループ全体',
     'Previous-day probe success rate': '前日のプローブ成功率',
+    'Previous-day average TTFT': '前日の平均 TTFT',
     'Automatic probe': '自動プローブ',
     'Automatically probe this channel in the background':
       'このチャネルをバックグラウンドで自動的にプローブする',
@@ -622,6 +626,7 @@ const newKeys = {
     'Current group only': 'Только текущая группа',
     'Across selected groups': 'Во всех выбранных группах',
     'Previous-day probe success rate': 'Успешность проверок за предыдущий день',
+    'Previous-day average TTFT': 'Средний TTFT за предыдущий день',
     'Automatic probe': 'Автоматическая проверка',
     'Automatically probe this channel in the background':
       'Автоматически проверять этот канал в фоновом режиме',
@@ -753,6 +758,7 @@ const newKeys = {
     'Current group only': 'Chỉ nhóm hiện tại',
     'Across selected groups': 'Trên các nhóm đã chọn',
     'Previous-day probe success rate': 'Tỷ lệ kiểm tra thành công ngày trước',
+    'Previous-day average TTFT': 'TTFT trung bình ngày trước',
     'Automatic probe': 'Kiểm tra tự động',
     'Automatically probe this channel in the background':
       'Tự động dò kênh này trong nền',
@@ -878,6 +884,7 @@ const newKeys = {
     'Current group only': '僅目前分組',
     'Across selected groups': '跨所選分組',
     'Previous-day probe success rate': '前一自然日探測成功率',
+    'Previous-day average TTFT': '前一自然日平均 TTFT',
     'Automatic probe': '自動探測',
     'Automatically probe this channel in the background':
       '在背景自動探測此渠道',

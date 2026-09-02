@@ -817,6 +817,36 @@ func TestDynamicRoutingUsesConfiguredStrategyWeights(t *testing.T) {
 	assert.Greater(t, expensiveAvailabilityScore, cheapAvailabilityScore)
 }
 
+func TestDynamicRoutingUsesTTFTWeightAndNeutralMissingSamples(t *testing.T) {
+	fast := &model.Channel{Id: 94115, PreviousDayAverageTTFTMs: 100}
+	slow := &model.Channel{Id: 94116, PreviousDayAverageTTFTMs: 200}
+	missing := &model.Channel{Id: 94117}
+	strategy := ratio_setting.PricingGroupRoutingStrategy{
+		Strategy:           "custom_ttft_only",
+		PriceWeight:        0,
+		AvailabilityWeight: 0,
+		LoadWeight:         0,
+		TTFTWeight:         100,
+	}
+	candidates := []dynamicChannelCandidate{
+		{channel: fast},
+		{channel: slow},
+		{channel: missing},
+	}
+	baseline := dynamicTTFTBaseline(candidates)
+	fastScore := dynamicCandidateScore(candidates[0], 1, strategy, baseline)
+	slowScore := dynamicCandidateScore(candidates[1], 1, strategy, baseline)
+	missingScore := dynamicCandidateScore(candidates[2], 1, strategy, baseline)
+
+	assert.Greater(t, fastScore, slowScore)
+	assert.InDelta(t, 100, fastScore, 0.0001)
+	assert.InDelta(t, 50, slowScore, 0.0001)
+	assert.InDelta(t, 50, missingScore, 0.0001)
+
+	groupScore := dynamicGroupScore(candidates[:2], 1, strategy)
+	assert.InDelta(t, 75, groupScore, 0.0001)
+}
+
 func TestDynamicRoutingUsesRouteCostFactor(t *testing.T) {
 	cheap := &model.Channel{Id: 94001, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}
 	expensive := &model.Channel{Id: 94002, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}

@@ -104,25 +104,27 @@ func TestChannelHasSensitiveChanges(t *testing.T) {
 
 func TestClearChannelReadOnlyFields(t *testing.T) {
 	channel := PatchChannel{Channel: model.Channel{
-		CreatedTime:        11,
-		TestTime:           22,
-		ResponseTime:       33,
-		Balance:            44.5,
-		BalanceUpdatedTime: 55,
-		UsedQuota:          66,
-		Models:             "gpt-4o",
-		Group:              "default",
+		CreatedTime:              11,
+		TestTime:                 22,
+		ResponseTime:             33,
+		Balance:                  44.5,
+		BalanceUpdatedTime:       55,
+		UsedQuota:                66,
+		PreviousDayAverageTTFTMs: 77,
+		Models:                   "gpt-4o",
+		Group:                    "default",
 	}}
 
 	clearChannelReadOnlyFields(&channel, map[string]any{
-		"created_time":         channel.CreatedTime,
-		"test_time":            channel.TestTime,
-		"response_time":        channel.ResponseTime,
-		"balance":              channel.Balance,
-		"balance_updated_time": channel.BalanceUpdatedTime,
-		"used_quota":           channel.UsedQuota,
-		"models":               channel.Models,
-		"group":                channel.Group,
+		"created_time":                 channel.CreatedTime,
+		"test_time":                    channel.TestTime,
+		"response_time":                channel.ResponseTime,
+		"balance":                      channel.Balance,
+		"balance_updated_time":         channel.BalanceUpdatedTime,
+		"used_quota":                   channel.UsedQuota,
+		"previous_day_average_ttft_ms": channel.PreviousDayAverageTTFTMs,
+		"models":                       channel.Models,
+		"group":                        channel.Group,
 	})
 
 	assert.Zero(t, channel.CreatedTime)
@@ -131,6 +133,7 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 	assert.Zero(t, channel.Balance)
 	assert.Zero(t, channel.BalanceUpdatedTime)
 	assert.Zero(t, channel.UsedQuota)
+	assert.Zero(t, channel.PreviousDayAverageTTFTMs)
 	assert.Equal(t, "gpt-4o", channel.Models)
 	assert.Equal(t, "default", channel.Group)
 }

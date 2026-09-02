@@ -193,6 +193,7 @@ func TestPricingGroupRoutingStrategyPresetsAndDefaults(t *testing.T) {
 		PriceWeight:        65,
 		AvailabilityWeight: 20,
 		LoadWeight:         15,
+		TTFTWeight:         0,
 	}, PricingGroupRoutingStrategyPreset(PricingGroupRoutingStrategyPriceFirst))
 	assert.Equal(t, DefaultPricingGroupRoutingStrategy(), PricingGroupRoutingStrategyPreset("unknown"))
 
@@ -237,6 +238,30 @@ func TestPricingGroupRoutingConfigurationCRUDValidation(t *testing.T) {
 		_, err := ParsePricingGroupRoutingConfiguration(value, map[string]float64{"alpha": 1, "beta": 1})
 		require.Error(t, err, value)
 	}
+}
+
+func TestPricingGroupRoutingConfigurationSupportsTTFTWeight(t *testing.T) {
+	configuration, err := ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"latency":{"name":"低延迟","price_weight":20,"availability_weight":20,"load_weight":10,"ttft_weight":50}},
+		"group_bindings":{"alpha":"latency"}
+	}`, map[string]float64{"alpha": 1})
+	require.NoError(t, err)
+	assert.Equal(t, float64(50), configuration.Strategies["latency"].TTFTWeight)
+
+	// Existing persisted configurations omit ttft_weight and retain their
+	// original three-weight total.
+	legacy, err := ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"legacy":{"name":"旧策略","price_weight":40,"availability_weight":40,"load_weight":20}},
+		"group_bindings":{"alpha":"legacy"}
+	}`, map[string]float64{"alpha": 1})
+	require.NoError(t, err)
+	assert.Zero(t, legacy.Strategies["legacy"].TTFTWeight)
+
+	_, err = ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"ttft_weight":10}},
+		"group_bindings":{"alpha":"invalid"}
+	}`, map[string]float64{"alpha": 1})
+	require.Error(t, err)
 }
 
 func TestPricingGroupRoutingConfigurationRejectsDeletingReferencedStrategy(t *testing.T) {

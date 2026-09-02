@@ -95,6 +95,25 @@ func enrichPreviousDayProbeRates(channels []*model.Channel) {
 	}
 }
 
+func enrichPreviousDayAverageTTFTs(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	averages, err := model.GetPreviousDayChannelAverageTTFTs(ids, time.Now())
+	if err != nil {
+		common.SysLog("failed to load previous-day channel average TTFTs: " + err.Error())
+		return
+	}
+	for _, channel := range channels {
+		if channel != nil {
+			channel.PreviousDayAverageTTFTMs = averages[channel.Id]
+		}
+	}
+}
+
 func enrichLastChannelTestTimes(channels []*model.Channel) {
 	ids := make([]int, 0, len(channels))
 	for _, channel := range channels {
@@ -247,6 +266,7 @@ func GetAllChannels(c *gin.Context) {
 	}
 	enrichLastChannelTestTimes(channelData)
 	enrichPreviousDayProbeRates(channelData)
+	enrichPreviousDayAverageTTFTs(channelData)
 	enrichCurrentChannelConcurrency(channelData)
 	enrichChannelUsage(channelData)
 
@@ -457,6 +477,7 @@ func SearchChannels(c *gin.Context) {
 	}
 	enrichLastChannelTestTimes(pagedData)
 	enrichPreviousDayProbeRates(pagedData)
+	enrichPreviousDayAverageTTFTs(pagedData)
 	enrichCurrentChannelConcurrency(pagedData)
 	enrichChannelUsage(pagedData)
 
@@ -487,6 +508,7 @@ func GetChannel(c *gin.Context) {
 		clearChannelInfo(channel)
 		enrichLastChannelTestTimes([]*model.Channel{channel})
 		enrichPreviousDayProbeRates([]*model.Channel{channel})
+		enrichPreviousDayAverageTTFTs([]*model.Channel{channel})
 		enrichCurrentChannelConcurrency([]*model.Channel{channel})
 		enrichChannelUsage([]*model.Channel{channel})
 	}

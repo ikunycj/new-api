@@ -115,6 +115,7 @@ type PricingGroupRoutingStrategy = {
   price_weight: number
   availability_weight: number
   load_weight: number
+  ttft_weight: number
 }
 
 type PricingGroupRoutingConfiguration = {
@@ -129,6 +130,7 @@ type StrategyDraft = {
   priceWeight: string
   availabilityWeight: string
   loadWeight: string
+  ttftWeight: string
 }
 
 type GroupPricingEditorState = {
@@ -150,11 +152,11 @@ const RETRY_MODE_ITEMS = [
 const DEFAULT_ROUTING_STRATEGY_DEFINITIONS: Array<{
   id: string
   name: string
-  weights: [number, number, number]
+  weights: [number, number, number, number]
 }> = [
-  { id: 'price_first', name: '价格优先', weights: [65, 20, 15] },
-  { id: 'balanced', name: '均衡', weights: [40, 40, 20] },
-  { id: 'stable', name: '稳定', weights: [20, 60, 20] },
+  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0] },
+  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0] },
+  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0] },
 ]
 const STRATEGY_WEIGHT_EPSILON = 0.0001
 
@@ -255,6 +257,7 @@ function parsePricingGroupRoutingConfiguration(
               price_weight: definition.weights[0],
               availability_weight: definition.weights[1],
               load_weight: definition.weights[2],
+              ttft_weight: definition.weights[3],
             },
           ])
         ),
@@ -278,6 +281,8 @@ function parsePricingGroupRoutingConfiguration(
       price_weight: readWeight('price_weight'),
       availability_weight: readWeight('availability_weight'),
       load_weight: readWeight('load_weight'),
+      // Older saved configurations predate TTFT routing and omit this field.
+      ttft_weight: readWeight('ttft_weight') || 0,
     }
   }
 
@@ -301,6 +306,7 @@ function strategyDraftsFromConfiguration(
     priceWeight: String(strategy.price_weight),
     availabilityWeight: String(strategy.availability_weight),
     loadWeight: String(strategy.load_weight),
+    ttftWeight: String(strategy.ttft_weight),
   }))
 }
 
@@ -340,14 +346,16 @@ function isValidStrategyDraft(strategy: StrategyDraft): boolean {
     strategy.name.trim() === '' ||
     !isValidStrategyWeight(strategy.priceWeight) ||
     !isValidStrategyWeight(strategy.availabilityWeight) ||
-    !isValidStrategyWeight(strategy.loadWeight)
+    !isValidStrategyWeight(strategy.loadWeight) ||
+    !isValidStrategyWeight(strategy.ttftWeight)
   ) {
     return false
   }
   const total =
     Number(strategy.priceWeight) +
     Number(strategy.availabilityWeight) +
-    Number(strategy.loadWeight)
+    Number(strategy.loadWeight) +
+    Number(strategy.ttftWeight)
   return Math.abs(total - 100) <= STRATEGY_WEIGHT_EPSILON
 }
 
@@ -455,6 +463,7 @@ function serializeGroupPricingState(
       price_weight: Number(strategy.priceWeight),
       availability_weight: Number(strategy.availabilityWeight),
       load_weight: Number(strategy.loadWeight),
+      ttft_weight: Number(strategy.ttftWeight),
     }
   }
 
@@ -806,7 +815,12 @@ function GroupPricingTable({
   const updateStrategy = useCallback(
     (
       draftId: string,
-      field: 'name' | 'priceWeight' | 'availabilityWeight' | 'loadWeight',
+      field:
+        | 'name'
+        | 'priceWeight'
+        | 'availabilityWeight'
+        | 'loadWeight'
+        | 'ttftWeight',
       value: string
     ) => {
       const nextStrategies = currentStrategies.map((strategy) =>
@@ -845,6 +859,7 @@ function GroupPricingTable({
         priceWeight: '40',
         availabilityWeight: '40',
         loadWeight: '20',
+        ttftWeight: '0',
       },
     ])
   }, [currentRows, currentStrategies, emitState])
@@ -1272,7 +1287,7 @@ function GroupPricingTable({
                 <div>
                   <div className='text-sm font-semibold'>策略设置</div>
                   <div className='text-muted-foreground text-xs'>
-                    策略独立于定价分组维护，三项权重总和必须为 100。
+                    策略独立于定价分组维护，四项权重总和必须为 100。
                   </div>
                 </div>
                 <Button
@@ -1289,7 +1304,7 @@ function GroupPricingTable({
                 {currentStrategies.map((strategy) => (
                   <div
                     key={strategy._id}
-                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(3,7rem)_2.5rem] md:items-end'
+                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(4,7rem)_2.5rem] md:items-end'
                   >
                     <div className='space-y-1'>
                       <Label className='text-xs'>名称</Label>
@@ -1313,6 +1328,7 @@ function GroupPricingTable({
                         ['价格', 'priceWeight'],
                         ['可用性', 'availabilityWeight'],
                         ['负载', 'loadWeight'],
+                        ['首Token延迟', 'ttftWeight'],
                       ] as const
                     ).map(([label, field]) => (
                       <div key={field} className='space-y-1'>
@@ -1344,9 +1360,10 @@ function GroupPricingTable({
                     >
                       <HugeiconsIcon icon={Delete02Icon} />
                     </Button>
-                    <div className='text-muted-foreground text-xs md:col-span-5'>
+                    <div className='text-muted-foreground text-xs md:col-span-6'>
                       当前比例：{strategy.priceWeight}% /{' '}
-                      {strategy.availabilityWeight}% / {strategy.loadWeight}%
+                      {strategy.availabilityWeight}% / {strategy.loadWeight}% /{' '}
+                      {strategy.ttftWeight}%
                     </div>
                   </div>
                 ))}

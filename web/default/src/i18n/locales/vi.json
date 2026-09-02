@@ -6066,6 +6066,7 @@
     "Daily Usage": "Mức sử dụng ngày",
     "Monthly Usage": "Mức sử dụng tháng",
     "Daily Usage / Monthly Usage": "Mức sử dụng ngày / Mức sử dụng tháng",
-    "Automatically probe this channel in the background": "Tự động dò kênh này trong nền"
+    "Automatically probe this channel in the background": "Tự động dò kênh này trong nền",
+    "Previous-day average TTFT": "TTFT trung bình ngày trước"
   }
 }

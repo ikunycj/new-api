@@ -178,6 +178,7 @@ var channelReadOnlyFields = map[string]struct{}{
 	"daily_cost_usd":                  {},
 	"total_cost_usd":                  {},
 	"previous_day_probe_success_rate": {},
+	"previous_day_average_ttft_ms":    {},
 	"current_concurrency":             {},
 }
 
@@ -220,6 +221,9 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	}
 	if _, ok := requestData["current_concurrency"]; ok {
 		channel.CurrentConcurrency = 0
+	}
+	if _, ok := requestData["previous_day_average_ttft_ms"]; ok {
+		channel.PreviousDayAverageTTFTMs = 0
 	}
 }
 

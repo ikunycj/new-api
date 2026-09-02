@@ -609,6 +609,7 @@ export function aggregateChannelsByTag(
   channels: Channel[]
 ): (Channel | TagRow)[] {
   const tagMap = new Map<string, TagRow>()
+  const ttftStatsByTag = new Map<string, { sum: number; count: number }>()
   const result: (Channel | TagRow)[] = []
 
   for (const channel of channels) {
@@ -640,9 +641,11 @@ export function aggregateChannelsByTag(
         balance_updated_time: 0,
         models: '',
         previous_day_probe_success_rate: 0,
+        previous_day_average_ttft_ms: 0,
         children: [],
       } as TagRow
       tagMap.set(tag, tagRow)
+      ttftStatsByTag.set(tag, { sum: 0, count: 0 })
       result.push(tagRow)
     }
 
@@ -673,6 +676,14 @@ export function aggregateChannelsByTag(
     tagRow.previous_day_probe_success_rate =
       (tagRow.previous_day_probe_success_rate * (childCount - 1) + probeRate) /
       childCount
+
+    const ttft = channel.previous_day_average_ttft_ms
+    const ttftStats = ttftStatsByTag.get(tag)
+    if (ttftStats && Number.isFinite(ttft) && ttft > 0) {
+      ttftStats.sum += ttft
+      ttftStats.count += 1
+      tagRow.previous_day_average_ttft_ms = ttftStats.sum / ttftStats.count
+    }
 
     // Aggregate weight (same value or null if different)
     if (tagRow.weight === -1) {

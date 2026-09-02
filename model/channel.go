@@ -64,6 +64,7 @@ type Channel struct {
 	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
 	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
 	PreviousDayProbeSampleCount      int     `json:"-" gorm:"-"`
+	PreviousDayAverageTTFTMs         float64 `json:"previous_day_average_ttft_ms" gorm:"-"`
 	OtherInfo                        string  `json:"other_info"`
 	Tag                              *string `json:"tag" gorm:"index"`
 	Setting                          *string `json:"setting" gorm:"type:text"` // 渠道额外设置

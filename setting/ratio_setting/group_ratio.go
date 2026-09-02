@@ -44,6 +44,7 @@ type PricingGroupRoutingStrategy struct {
 	PriceWeight        float64 `json:"price_weight"`
 	AvailabilityWeight float64 `json:"availability_weight"`
 	LoadWeight         float64 `json:"load_weight"`
+	TTFTWeight         float64 `json:"ttft_weight"`
 }
 
 // PricingGroupRoutingConfiguration stores the strategy catalog separately
@@ -60,6 +61,7 @@ func DefaultPricingGroupRoutingStrategy() PricingGroupRoutingStrategy {
 		PriceWeight:        40,
 		AvailabilityWeight: 40,
 		LoadWeight:         20,
+		TTFTWeight:         0,
 	}
 }
 
@@ -68,10 +70,10 @@ func PricingGroupRoutingStrategyPreset(strategy string) PricingGroupRoutingStrat
 	switch strings.TrimSpace(strategy) {
 	case PricingGroupRoutingStrategyPriceFirst:
 		result.Strategy = PricingGroupRoutingStrategyPriceFirst
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight = 65, 20, 15
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight = 65, 20, 15, 0
 	case PricingGroupRoutingStrategyStable:
 		result.Strategy = PricingGroupRoutingStrategyStable
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight = 20, 60, 20
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight = 20, 60, 20, 0
 	}
 	return result
 }
@@ -694,6 +696,7 @@ func ParsePricingGroupRoutingConfiguration(
 		PriceWeight        *float64 `json:"price_weight"`
 		AvailabilityWeight *float64 `json:"availability_weight"`
 		LoadWeight         *float64 `json:"load_weight"`
+		TTFTWeight         *float64 `json:"ttft_weight"`
 	}
 	type rawConfiguration struct {
 		Strategies    map[string]rawRoutingStrategy `json:"strategies"`
@@ -733,7 +736,11 @@ func ParsePricingGroupRoutingConfiguration(
 		}
 		strategyNames[name] = strategyID
 		if definition.PriceWeight == nil || definition.AvailabilityWeight == nil || definition.LoadWeight == nil {
-			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 必须同时设置价格、可用性和负载权重")
+			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 必须同时设置价格、可用性、负载和首Token延迟权重")
+		}
+		ttftWeight := float64(0)
+		if definition.TTFTWeight != nil {
+			ttftWeight = *definition.TTFTWeight
 		}
 		strategy := PricingGroupRoutingStrategy{
 			Strategy:           strategyID,
@@ -741,11 +748,12 @@ func ParsePricingGroupRoutingConfiguration(
 			PriceWeight:        *definition.PriceWeight,
 			AvailabilityWeight: *definition.AvailabilityWeight,
 			LoadWeight:         *definition.LoadWeight,
+			TTFTWeight:         ttftWeight,
 		}
-		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 ||
-			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) ||
-			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) ||
-			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight-100) > 0.0001 {
+		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 ||
+			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) || math.IsNaN(strategy.TTFTWeight) ||
+			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) || math.IsInf(strategy.TTFTWeight, 0) ||
+			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight+strategy.TTFTWeight-100) > 0.0001 {
 			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 的调度权重总和必须为 100")
 		}
 		strategies[strategyID] = strategy

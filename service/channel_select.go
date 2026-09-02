@@ -83,6 +83,9 @@ const (
 	dynamicPricePenaltyCap     = 0.20
 	dynamicAvailabilityPrior   = 0.95
 	dynamicAvailabilitySamples = 100.0
+	// A channel without a valid previous-day TTFT sample receives a neutral
+	// score. It must not be treated as either the fastest or slowest channel.
+	dynamicTTFTPrior           = 0.5
 	dynamicScoreTemperature    = 5.0
 	dynamicGroupScoreTolerance = 5.0
 )
@@ -1005,7 +1008,7 @@ func groupCandidatesHaveCrossForce(grouped [][]dynamicChannelCandidate) bool {
 }
 
 // selectDynamicGroupIndex chooses one pricing group before channel-level
-// ranking. Group scores use a common price baseline and weighted aggregate
+// ranking. Group scores use common price/TTFT baselines and weighted aggregate
 // availability/load, so a group with more channels does not receive more
 // traffic merely because it has a larger candidate set.
 func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate, _ []int, commit ...bool) int {
@@ -1032,6 +1035,7 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 	// participate in this group comparison when a force layer is active.
 	filtered := make([][]dynamicChannelCandidate, len(grouped))
 	globalMinPrice := math.Inf(1)
+	globalMinTTFT := math.Inf(1)
 	for index, candidates := range grouped {
 		if len(candidates) == 0 {
 			continue
@@ -1049,6 +1053,9 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 			if price := channelComparableCost(candidate); price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) && price < globalMinPrice {
 				globalMinPrice = price
 			}
+			if ttft := dynamicChannelTTFT(candidate.channel); ttft > 0 && ttft < globalMinTTFT {
+				globalMinTTFT = ttft
+			}
 		}
 	}
 
@@ -1063,7 +1070,7 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 		}
 		grouped[index] = candidates
 		strategy := routingStrategyForCandidates(candidates)
-		score := dynamicGroupScore(candidates, globalMinPrice, strategy)
+		score := dynamicGroupScore(candidates, globalMinPrice, strategy, globalMinTTFT)
 		if math.IsInf(score, -1) || math.IsNaN(score) {
 			continue
 		}
@@ -1309,11 +1316,11 @@ func routingStrategyForCandidates(candidates []dynamicChannelCandidate) ratio_se
 }
 
 func normalizeRoutingStrategy(strategy ratio_setting.PricingGroupRoutingStrategy) ratio_setting.PricingGroupRoutingStrategy {
-	weightTotal := strategy.PriceWeight + strategy.AvailabilityWeight + strategy.LoadWeight
+	weightTotal := strategy.PriceWeight + strategy.AvailabilityWeight + strategy.LoadWeight + strategy.TTFTWeight
 	// Strategy IDs are administrator-defined catalog keys. They are not a
 	// closed enum; only an empty ID or invalid weights should fall back.
 	if strings.TrimSpace(strategy.Strategy) == "" ||
-		strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 ||
+		strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 ||
 		math.IsNaN(weightTotal) || math.IsInf(weightTotal, 0) || math.Abs(weightTotal-100) > 0.0001 {
 		return ratio_setting.DefaultPricingGroupRoutingStrategy()
 	}
@@ -1337,6 +1344,38 @@ func dynamicAvailabilityScore(channel *model.Channel) float64 {
 	}
 	confidence := math.Min(samples/dynamicAvailabilitySamples, 1)
 	return confidence*availability + (1-confidence)*dynamicAvailabilityPrior
+}
+
+func dynamicChannelTTFT(channel *model.Channel) float64 {
+	if channel == nil {
+		return 0
+	}
+	ttft := channel.PreviousDayAverageTTFTMs
+	if ttft <= 0 || math.IsNaN(ttft) || math.IsInf(ttft, 0) {
+		return 0
+	}
+	return ttft
+}
+
+func dynamicTTFTBaseline(candidates []dynamicChannelCandidate) float64 {
+	baseline := math.Inf(1)
+	for _, candidate := range candidates {
+		if ttft := dynamicChannelTTFT(candidate.channel); ttft > 0 && ttft < baseline {
+			baseline = ttft
+		}
+	}
+	return baseline
+}
+
+// dynamicTTFTScore maps lower previous-day average TTFT to a higher score.
+// A missing sample uses a neutral prior and never establishes the baseline.
+func dynamicTTFTScore(channel *model.Channel, baseline float64) float64 {
+	ttft := dynamicChannelTTFT(channel)
+	if ttft <= 0 || baseline <= 0 || math.IsNaN(baseline) || math.IsInf(baseline, 0) {
+		return dynamicTTFTPrior
+	}
+	score := baseline / ttft
+	return math.Min(1, math.Max(0, score))
 }
 
 func dynamicCandidateFeatures(candidate dynamicChannelCandidate, minPrice float64) (float64, float64, float64) {
@@ -1364,12 +1403,16 @@ func dynamicCandidateFeatures(candidate dynamicChannelCandidate, minPrice float6
 	return priceScore, dynamicAvailabilityScore(candidate.channel), 1 - dynamicCandidateUtilization(candidate)
 }
 
-func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, strategy ratio_setting.PricingGroupRoutingStrategy) float64 {
+func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, strategy ratio_setting.PricingGroupRoutingStrategy, ttftBaselines ...float64) float64 {
 	if len(candidates) == 0 {
 		return 0
 	}
 	strategy = normalizeRoutingStrategy(strategy)
-	priceSum, availabilitySum, weightSum := 0.0, 0.0, 0.0
+	ttftBaseline := dynamicTTFTBaseline(candidates)
+	if len(ttftBaselines) > 0 {
+		ttftBaseline = ttftBaselines[0]
+	}
+	priceSum, availabilitySum, ttftSum, weightSum := 0.0, 0.0, 0.0, 0.0
 	totalCapacity, totalCurrent := 0.0, 0.0
 	for _, candidate := range candidates {
 		if candidate.channel == nil {
@@ -1388,6 +1431,7 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 		}
 		priceSum += price * weight
 		availabilitySum += availability * weight
+		ttftSum += dynamicTTFTScore(candidate.channel, ttftBaseline) * weight
 		weightSum += weight
 
 		// At the group level, load represents aggregate remaining capacity.
@@ -1414,7 +1458,8 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 	}
 	return 100 * ((strategy.PriceWeight/100)*(priceSum/weightSum) +
 		(strategy.AvailabilityWeight/100)*(availabilitySum/weightSum) +
-		(strategy.LoadWeight/100)*loadScore)
+		(strategy.LoadWeight/100)*loadScore +
+		(strategy.TTFTWeight/100)*(ttftSum/weightSum))
 }
 
 func smoothWeightedCandidateIndex(p *RetryParam, candidates []dynamicChannelCandidate) int {
@@ -1486,11 +1531,13 @@ func annotateDynamicCandidateScores(candidates []dynamicChannelCandidate) {
 				minPrice = price
 			}
 		}
-		strategy := routingStrategyForCandidates(candidatesForIndices(candidates, indices))
+		groupCandidates := candidatesForIndices(candidates, indices)
+		strategy := routingStrategyForCandidates(groupCandidates)
+		minTTFT := dynamicTTFTBaseline(groupCandidates)
 		maxScore := 0.0
 		for _, index := range indices {
 			candidate := &candidates[index]
-			candidate.score = dynamicCandidateScore(*candidate, minPrice, strategy)
+			candidate.score = dynamicCandidateScore(*candidate, minPrice, strategy, minTTFT)
 			if candidate.score > maxScore {
 				maxScore = candidate.score
 			}
@@ -1519,15 +1566,20 @@ func candidatesForIndices(candidates []dynamicChannelCandidate, indices []int) [
 	return result
 }
 
-func dynamicCandidateScore(candidate dynamicChannelCandidate, minPrice float64, strategy ratio_setting.PricingGroupRoutingStrategy) float64 {
+func dynamicCandidateScore(candidate dynamicChannelCandidate, minPrice float64, strategy ratio_setting.PricingGroupRoutingStrategy, ttftBaselines ...float64) float64 {
 	if candidate.channel == nil {
 		return 0
 	}
 	strategy = normalizeRoutingStrategy(strategy)
 	priceScore, availability, load := dynamicCandidateFeatures(candidate, minPrice)
+	ttftBaseline := dynamicTTFTBaseline([]dynamicChannelCandidate{candidate})
+	if len(ttftBaselines) > 0 {
+		ttftBaseline = ttftBaselines[0]
+	}
 	return 100 * ((strategy.PriceWeight/100)*priceScore +
 		(strategy.AvailabilityWeight/100)*availability +
-		(strategy.LoadWeight/100)*load)
+		(strategy.LoadWeight/100)*load +
+		(strategy.TTFTWeight/100)*dynamicTTFTScore(candidate.channel, ttftBaseline))
 }
 
 func dynamicCandidateUtilization(candidate dynamicChannelCandidate) float64 {

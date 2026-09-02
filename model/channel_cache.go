@@ -49,16 +49,7 @@ func InitChannelCache() {
 			}
 		}
 	}
-	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, time.Now()); err == nil {
-		for _, channel := range channels {
-			if channel != nil {
-				channel.PreviousDayProbeSuccessRate = rates[channel.Id]
-				channel.PreviousDayProbeSampleCount = samples[channel.Id]
-			}
-		}
-	} else {
-		common.SysLog("failed to load channel probe rates while syncing cache: " + err.Error())
-	}
+	enrichPreviousDayChannelRuntimeMetrics(channels, time.Now())
 	var abilities []*Ability
 	if err := DB.Find(&abilities).Error; err != nil {
 		common.SysLog("failed to load channel abilities while syncing cache: " + err.Error())
@@ -220,18 +211,46 @@ func getEligibleChannelsFromDB(group string, modelName string, requestPath strin
 			result = append(result, channel)
 		}
 	}
-	rateIDs := make([]int, 0, len(result))
-	for _, channel := range result {
-		rateIDs = append(rateIDs, channel.Id)
-	}
-	if rates, samples, err := GetPreviousDayChannelProbeStats(rateIDs, time.Now()); err == nil {
-		for _, channel := range result {
-			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
-			channel.PreviousDayProbeSampleCount = samples[channel.Id]
-		}
-	}
+	enrichPreviousDayChannelRuntimeMetrics(result, time.Now())
 	sort.SliceStable(result, func(i, j int) bool { return result[i].Id < result[j].Id })
 	return result, nil
+}
+
+// enrichPreviousDayChannelRuntimeMetrics loads the non-persisted metrics used
+// by dynamic routing. Keeping this enrichment beside cache loading ensures the
+// selector sees the same probe and TTFT data as the channel management API.
+func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) {
+	if len(channels) == 0 {
+		return
+	}
+	channelIDs := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			channelIDs = append(channelIDs, channel.Id)
+		}
+	}
+	if len(channelIDs) == 0 {
+		return
+	}
+	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, now); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+				channel.PreviousDayProbeSampleCount = samples[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load channel probe rates while syncing cache: " + err.Error())
+	}
+	if averages, err := GetPreviousDayChannelAverageTTFTs(channelIDs, now); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.PreviousDayAverageTTFTMs = averages[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load channel TTFT metrics while syncing cache: " + err.Error())
+	}
 }
 
 // GetRandomSatisfiedChannelExcluding selects a weighted channel while
@@ -530,6 +549,11 @@ func CacheUpdateChannel(channel *Channel) {
 	}
 	if oldChannel, ok := channelsIDM[channel.Id]; ok {
 		logger.LogDebug(nil, "CacheUpdateChannel before: id=%d, name=%s, status=%d, polling_index=%d", channel.Id, channel.Name, channel.Status, oldChannel.ChannelInfo.MultiKeyPollingIndex)
+		// These metrics are computed outside the channels table. Preserve them
+		// when a caller replaces the cached channel with a persisted copy.
+		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
 	}
 	channelsIDM[channel.Id] = channel
 	if channel2advancedCustomConfig == nil {
@@ -575,6 +599,7 @@ func SyncChannelCacheEntry(channel *Channel) {
 		// does not temporarily make a channel look like it has a 0% success rate.
 		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
 		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		channel.Keys = channel.GetKeys()
