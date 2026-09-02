@@ -6071,6 +6071,13 @@
     "Customer Service": "客服信息",
     "Enter customer service contact information": "输入客服联系方式",
     "Information displayed to users for contacting customer service": "向用户展示的客服联系方式",
-    "The system probe task scans the task queue every 60 seconds.": "系统探测任务每60秒扫描一次任务队列"
+    "The system probe task scans the task queue every 60 seconds.": "系统探测任务每60秒扫描一次任务队列",
+    "Choose which fields follow global settings and which fields use this user-specific strategy.": "选择跟随全局设置的字段，以及使用该用户独立策略的字段。",
+    "Configure {{username}}": "配置 {{username}}",
+    "Failed to reset settings": "重置设置失败",
+    "Failed to save settings": "保存设置失败",
+    "No personalized settings": "未设置个性化配置",
+    "{{count}} customized fields": "已个性化 {{count}} 个字段",
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新规则将应用于该用户的后续奖励事件。已生成的奖励和解冻时间不会重新计算。"
   }
 }

@@ -23,6 +23,8 @@ import type {
   AffiliateSettingsResponse,
   AffiliateAdminRewardsResponse,
   AffiliateAdjustmentResponse,
+  AffiliateUserOverride,
+  AffiliateUserOverrideResponse,
   AffiliateUserOverridesResponse,
   ConfirmPaymentComplianceResponse,
   FetchUpstreamRatiosRequest,
@@ -66,6 +68,24 @@ export async function searchAffiliateUserOverrides(params: {
         page_size: params.pageSize,
       },
     }
+  )
+  return res.data
+}
+
+export async function updateAffiliateUserOverride(
+  userId: number,
+  request: AffiliateUserOverride
+) {
+  const res = await api.put<AffiliateUserOverrideResponse>(
+    `/api/affiliate/admin/user-overrides/${userId}`,
+    request
+  )
+  return res.data
+}
+
+export async function deleteAffiliateUserOverride(userId: number) {
+  const res = await api.delete<AffiliateUserOverrideResponse>(
+    `/api/affiliate/admin/user-overrides/${userId}`
   )
   return res.data
 }

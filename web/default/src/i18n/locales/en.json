@@ -6071,6 +6071,13 @@
     "Customer Service": "Customer Service",
     "Enter customer service contact information": "Enter customer service contact information",
     "Information displayed to users for contacting customer service": "Information displayed to users for contacting customer service",
-    "The system probe task scans the task queue every 60 seconds.": "The system probe task scans the task queue every 60 seconds."
+    "The system probe task scans the task queue every 60 seconds.": "The system probe task scans the task queue every 60 seconds.",
+    "Choose which fields follow global settings and which fields use this user-specific strategy.": "Choose which fields follow global settings and which fields use this user-specific strategy.",
+    "Configure {{username}}": "Configure {{username}}",
+    "Failed to reset settings": "Failed to reset settings",
+    "Failed to save settings": "Failed to save settings",
+    "No personalized settings": "No personalized settings",
+    "{{count}} customized fields": "{{count}} customized fields",
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated."
   }
 }

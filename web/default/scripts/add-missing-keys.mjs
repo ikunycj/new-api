@@ -5,6 +5,15 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      'Choose which fields follow global settings and which fields use this user-specific strategy.',
+    'Configure {{username}}': 'Configure {{username}}',
+    'Failed to reset settings': 'Failed to reset settings',
+    'Failed to save settings': 'Failed to save settings',
+    'No personalized settings': 'No personalized settings',
+    '{{count}} customized fields': '{{count}} customized fields',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.',
     'Customer Service': 'Customer Service',
     'Enter customer service contact information':
       'Enter customer service contact information',
@@ -143,6 +152,15 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      '选择跟随全局设置的字段，以及使用该用户独立策略的字段。',
+    'Configure {{username}}': '配置 {{username}}',
+    'Failed to reset settings': '重置设置失败',
+    'Failed to save settings': '保存设置失败',
+    'No personalized settings': '未设置个性化配置',
+    '{{count}} customized fields': '已个性化 {{count}} 个字段',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      '新规则将应用于该用户的后续奖励事件。已生成的奖励和解冻时间不会重新计算。',
     'Customer Service': '客服信息',
     'Enter customer service contact information': '输入客服联系方式',
     'Information displayed to users for contacting customer service':
@@ -279,6 +297,15 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      'Choisissez les champs qui suivent les paramètres globaux et ceux qui utilisent cette stratégie utilisateur.',
+    'Configure {{username}}': 'Configurer {{username}}',
+    'Failed to reset settings': 'Échec de la réinitialisation des paramètres',
+    'Failed to save settings': 'Échec de l’enregistrement des paramètres',
+    'No personalized settings': 'Aucun paramètre personnalisé',
+    '{{count}} customized fields': '{{count}} champs personnalisés',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      'La nouvelle règle s’applique aux futurs événements de récompense de cet utilisateur. Les récompenses et dates de déblocage existantes ne seront pas recalculées.',
     'Customer Service': 'Service client',
     'Enter customer service contact information':
       'Saisissez les coordonnées du service client',
@@ -421,6 +448,15 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      'グローバル設定に従うフィールドと、このユーザー固有の戦略を使うフィールドを選択します。',
+    'Configure {{username}}': '{{username}} を設定',
+    'Failed to reset settings': '設定のリセットに失敗しました',
+    'Failed to save settings': '設定の保存に失敗しました',
+    'No personalized settings': '個別設定なし',
+    '{{count}} customized fields': '{{count}} 個のカスタムフィールド',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      '新しいルールはこのユーザーの今後の報酬イベントに適用されます。既存の報酬と解除日時は再計算されません。',
     'Customer Service': 'カスタマーサービス',
     'Enter customer service contact information':
       'カスタマーサービスの連絡先を入力',
@@ -559,6 +595,15 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      'Выберите поля, которые следуют глобальным настройкам, и поля для этой индивидуальной стратегии.',
+    'Configure {{username}}': 'Настроить {{username}}',
+    'Failed to reset settings': 'Не удалось сбросить настройки',
+    'Failed to save settings': 'Не удалось сохранить настройки',
+    'No personalized settings': 'Индивидуальные настройки отсутствуют',
+    '{{count}} customized fields': '{{count}} индивидуальных полей',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      'Новое правило применяется к будущим событиям наград для этого пользователя. Существующие награды и сроки разблокировки не пересчитываются.',
     'Customer Service': 'Служба поддержки',
     'Enter customer service contact information':
       'Введите контактную информацию службы поддержки',
@@ -699,6 +744,15 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      'Chọn các trường theo cài đặt chung và các trường dùng chiến lược riêng cho người dùng này.',
+    'Configure {{username}}': 'Cấu hình {{username}}',
+    'Failed to reset settings': 'Không thể đặt lại cài đặt',
+    'Failed to save settings': 'Không thể lưu cài đặt',
+    'No personalized settings': 'Chưa có cài đặt riêng',
+    '{{count}} customized fields': '{{count}} trường được tùy chỉnh',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      'Quy tắc mới áp dụng cho các sự kiện thưởng trong tương lai của người dùng này. Phần thưởng và thời gian mở khóa hiện có sẽ không được tính lại.',
     'Customer Service': 'Chăm sóc khách hàng',
     'Enter customer service contact information':
       'Nhập thông tin liên hệ bộ phận chăm sóc khách hàng',
@@ -838,6 +892,15 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'Choose which fields follow global settings and which fields use this user-specific strategy.':
+      '選擇跟隨全域設定的欄位，以及使用此使用者專屬策略的欄位。',
+    'Configure {{username}}': '設定 {{username}}',
+    'Failed to reset settings': '重設設定失敗',
+    'Failed to save settings': '儲存設定失敗',
+    'No personalized settings': '尚未設定個人化設定',
+    '{{count}} customized fields': '{{count}} 個個人化欄位',
+    'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
+      '新規則將套用至此使用者未來的獎勵事件。現有獎勵與解鎖時間不會重新計算。',
     'Customer Service': '客服資訊',
     'Enter customer service contact information': '輸入客服聯絡資訊',
     'Information displayed to users for contacting customer service':

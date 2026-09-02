@@ -6071,6 +6071,13 @@
     "Customer Service": "カスタマーサービス",
     "Enter customer service contact information": "カスタマーサービスの連絡先を入力",
     "Information displayed to users for contacting customer service": "ユーザーに表示するカスタマーサービスの連絡先情報",
-    "The system probe task scans the task queue every 60 seconds.": "システムのプローブタスクは60秒ごとにタスクキューをスキャンします。"
+    "The system probe task scans the task queue every 60 seconds.": "システムのプローブタスクは60秒ごとにタスクキューをスキャンします。",
+    "Choose which fields follow global settings and which fields use this user-specific strategy.": "グローバル設定に従うフィールドと、このユーザー固有の戦略を使うフィールドを選択します。",
+    "Configure {{username}}": "{{username}} を設定",
+    "Failed to reset settings": "設定のリセットに失敗しました",
+    "Failed to save settings": "設定の保存に失敗しました",
+    "No personalized settings": "個別設定なし",
+    "{{count}} customized fields": "{{count}} 個のカスタムフィールド",
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新しいルールはこのユーザーの今後の報酬イベントに適用されます。既存の報酬と解除日時は再計算されません。"
   }
 }

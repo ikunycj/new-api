@@ -1609,6 +1609,61 @@ const affiliateUserOverrideConfiguredCondition = `(
 	affiliate_user_overrides.show_invitee_top_ups IS NOT NULL
 )`
 
+func hasAffiliateUserOverrideValues(override *AffiliateUserOverride) bool {
+	if override == nil {
+		return false
+	}
+	return override.Enabled != nil ||
+		override.InviterRewardQuota != nil ||
+		override.InviteeRewardQuota != nil ||
+		override.RegistrationRewardTrigger != nil ||
+		override.RewardMode != nil ||
+		override.CashbackFrequency != nil ||
+		override.RewardRateBps != nil ||
+		override.FixedRewardQuota != nil ||
+		override.UnlimitedReward != nil ||
+		override.MaximumRewardQuota != nil ||
+		override.MinimumTopUpCents != nil ||
+		override.HoldSeconds != nil ||
+		override.MinimumTransferQuota != nil ||
+		override.ShowInviteeTopUps != nil
+}
+
+func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUserOverride) (*AffiliateUserOverrideView, error) {
+	changeReason := strings.TrimSpace(override.ChangeReason)
+	if userID <= 0 || adminUserID <= 0 || changeReason == "" || len(changeReason) > 500 || !hasAffiliateUserOverrideValues(&override) {
+		return nil, ErrAffiliateRuleInvalid
+	}
+	override.UserID = userID
+	override.ID = 0
+	override.UpdatedBy = adminUserID
+	override.ChangeReason = changeReason
+	rule := applyAffiliateOverride(globalAffiliateRule(), &override)
+	if err := validateAffiliateRule(rule); err != nil {
+		return nil, err
+	}
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := tx.Select("id").Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}},
+			UpdateAll: true,
+		}).Create(&override).Error
+	}); err != nil {
+		return nil, err
+	}
+	return GetAffiliateUserOverrideView(userID)
+}
+
+func DeleteAffiliateUserOverride(userID int) error {
+	if userID <= 0 {
+		return ErrAffiliateRuleInvalid
+	}
+	return DB.Where("user_id = ?", userID).Delete(&AffiliateUserOverride{}).Error
+}
+
 func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*AffiliateUserOverrideView, int64, error) {
 	if startIdx < 0 {
 		startIdx = 0
@@ -1617,12 +1672,13 @@ func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*A
 		limit = 100
 	}
 
-	query := DB.Model(&AffiliateUserOverride{}).
-		Joins("JOIN users ON users.id = affiliate_user_overrides.user_id").
-		Where("users.deleted_at IS NULL").
-		Where(affiliateUserOverrideConfiguredCondition)
+	query := DB.Table("users").
+		Joins("LEFT JOIN affiliate_user_overrides ON affiliate_user_overrides.user_id = users.id").
+		Where("users.deleted_at IS NULL")
 	keyword = strings.TrimSpace(keyword)
-	if keyword != "" {
+	if keyword == "" {
+		query = query.Where(affiliateUserOverrideConfiguredCondition)
+	} else {
 		pattern, err := sanitizeLikePattern(strings.ToLower(keyword))
 		if err != nil {
 			return nil, 0, err
@@ -1636,22 +1692,25 @@ func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*A
 		}
 		query = query.Where("("+condition+")", args...)
 	}
+	if keyword == "" {
+		query = query.Order("affiliate_user_overrides.updated_at DESC, users.id ASC")
+	} else {
+		query = query.Order("CASE WHEN " + affiliateUserOverrideConfiguredCondition + " THEN 0 ELSE 1 END, users.username ASC, users.id ASC")
+	}
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	var overrides []AffiliateUserOverride
-	if err := query.Select("affiliate_user_overrides.*").
-		Order("affiliate_user_overrides.updated_at DESC, affiliate_user_overrides.user_id ASC").
-		Offset(startIdx).Limit(limit).Find(&overrides).Error; err != nil {
+	var userIDs []int
+	if err := query.Select("users.id").Offset(startIdx).Limit(limit).Pluck("users.id", &userIDs).Error; err != nil {
 		return nil, 0, err
 	}
 
-	items := make([]*AffiliateUserOverrideView, 0, len(overrides))
-	for index := range overrides {
-		item, err := GetAffiliateUserOverrideView(overrides[index].UserID)
+	items := make([]*AffiliateUserOverrideView, 0, len(userIDs))
+	for _, userID := range userIDs {
+		item, err := GetAffiliateUserOverrideView(userID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -1670,7 +1729,9 @@ func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error
 	var overridePtr *AffiliateUserOverride
 	updatedByUsername := ""
 	if err := DB.Where("user_id = ?", userID).First(&override).Error; err == nil {
-		overridePtr = &override
+		if hasAffiliateUserOverrideValues(&override) {
+			overridePtr = &override
+		}
 		if override.UpdatedBy > 0 {
 			var updatedBy User
 			if err := DB.Unscoped().Select("username").Where("id = ?", override.UpdatedBy).First(&updatedBy).Error; err == nil {

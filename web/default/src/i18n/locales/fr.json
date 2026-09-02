@@ -6071,6 +6071,13 @@
     "Customer Service": "Service client",
     "Enter customer service contact information": "Saisissez les coordonnées du service client",
     "Information displayed to users for contacting customer service": "Informations affichées aux utilisateurs pour contacter le service client",
-    "The system probe task scans the task queue every 60 seconds.": "La tâche de sondage système analyse la file d’attente toutes les 60 secondes."
+    "The system probe task scans the task queue every 60 seconds.": "La tâche de sondage système analyse la file d’attente toutes les 60 secondes.",
+    "Choose which fields follow global settings and which fields use this user-specific strategy.": "Choisissez les champs qui suivent les paramètres globaux et ceux qui utilisent cette stratégie utilisateur.",
+    "Configure {{username}}": "Configurer {{username}}",
+    "Failed to reset settings": "Échec de la réinitialisation des paramètres",
+    "Failed to save settings": "Échec de l’enregistrement des paramètres",
+    "No personalized settings": "Aucun paramètre personnalisé",
+    "{{count}} customized fields": "{{count}} champs personnalisés",
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "La nouvelle règle s’applique aux futurs événements de récompense de cet utilisateur. Les récompenses et dates de déblocage existantes ne seront pas recalculées."
   }
 }

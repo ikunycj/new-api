@@ -167,6 +167,8 @@ func SetApiRouter(router *gin.Engine) {
 			affiliateAdminRoute.PUT("/settings", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateSettings)
 			affiliateAdminRoute.GET("/user-overrides", controller.AdminGetAffiliateUserOverrides)
 			affiliateAdminRoute.GET("/user-overrides/:user_id", controller.AdminGetAffiliateUserOverride)
+			affiliateAdminRoute.PUT("/user-overrides/:user_id", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateUserOverride)
+			affiliateAdminRoute.DELETE("/user-overrides/:user_id", middleware.CriticalRateLimit(), controller.AdminDeleteAffiliateUserOverride)
 			affiliateAdminRoute.GET("/rewards", controller.AdminGetAffiliateRewards)
 			affiliateAdminRoute.POST("/rewards/:id/adjustments", middleware.CriticalRateLimit(), controller.AdminAdjustAffiliateReward)
 		}

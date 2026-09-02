@@ -144,6 +144,43 @@ func AdminGetAffiliateUserOverride(c *gin.Context) {
 	common.ApiSuccess(c, view)
 }
 
+func AdminUpdateAffiliateUserOverride(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var request model.AffiliateUserOverride
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	view, err := model.SaveAffiliateUserOverride(userID, c.GetInt("id"), request)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "affiliate.user_override.update", map[string]interface{}{
+		"user_id":       userID,
+		"change_reason": request.ChangeReason,
+	})
+	common.ApiSuccess(c, view)
+}
+
+func AdminDeleteAffiliateUserOverride(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.DeleteAffiliateUserOverride(userID); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "affiliate.user_override.delete", map[string]interface{}{"user_id": userID})
+	common.ApiSuccess(c, nil)
+}
+
 func AdminGetAffiliateRewards(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	startAt, _ := strconv.ParseInt(c.Query("start_at"), 10, 64)

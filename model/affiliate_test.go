@@ -372,7 +372,7 @@ func TestAffiliateOverrideAffectsExistingReferralFutureTopUps(t *testing.T) {
 	assert.NotEqual(t, rewards[0].RuleVersionID, rewards[1].RuleVersionID)
 }
 
-func TestAffiliateUserOverrideSearchReturnsOnlyCustomizedUsers(t *testing.T) {
+func TestAffiliateUserOverrideSearchSupportsCustomizedAndUncustomizedUsers(t *testing.T) {
 	truncateTables(t)
 	configureAffiliateTest(t, nil)
 	inviter, invitee := createAffiliateUsers(t, "")
@@ -397,8 +397,47 @@ func TestAffiliateUserOverrideSearchReturnsOnlyCustomizedUsers(t *testing.T) {
 
 	items, total, err = SearchAffiliateUserOverrides(invitee.Username, 0, 20)
 	require.NoError(t, err)
-	assert.Zero(t, total)
-	assert.Empty(t, items)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, items, 1)
+	assert.Equal(t, invitee.Id, items[0].UserID)
+	assert.Nil(t, items[0].Override)
+	assert.Equal(t, "global", items[0].EffectiveRule.Source)
+
+	items, total, err = SearchAffiliateUserOverrides("affiliate-", 0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	require.Len(t, items, 2)
+	assert.Equal(t, inviter.Id, items[0].UserID)
+	assert.NotNil(t, items[0].Override)
+	assert.Equal(t, invitee.Id, items[1].UserID)
+	assert.Nil(t, items[1].Override)
+}
+
+func TestAffiliateUserOverrideSaveAndDelete(t *testing.T) {
+	truncateTables(t)
+	configureAffiliateTest(t, nil)
+	inviter, _ := createAffiliateUsers(t, "")
+	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		ChangeReason: "empty override",
+	})
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+	require.ErrorIs(t, DeleteAffiliateUserOverride(0), ErrAffiliateRuleInvalid)
+
+	rate := int64(5000)
+	view, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		RewardRateBps: &rate,
+		ChangeReason:  "partner agreement",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, view.Override)
+	require.NotNil(t, view.Override.RewardRateBps)
+	assert.Equal(t, rate, *view.Override.RewardRateBps)
+
+	require.NoError(t, DeleteAffiliateUserOverride(inviter.Id))
+	view, err = GetAffiliateUserOverrideView(inviter.Id)
+	require.NoError(t, err)
+	assert.Nil(t, view.Override)
+	assert.Equal(t, "global", view.EffectiveRule.Source)
 }
 
 func TestAffiliateAdminCompletedTopUpIsExcluded(t *testing.T) {
