@@ -102,7 +102,7 @@ export const defaultBillingSettings: BillingSettings = {
   'affiliate_setting.registration_reward_trigger': 'registration_success',
   'affiliate_setting.reward_mode': 'percentage',
   'affiliate_setting.cashback_frequency': 'first_qualified',
-  'affiliate_setting.reward_rate_bps': 2500,
+  'affiliate_setting.reward_rate_bps': 500,
   'affiliate_setting.fixed_reward_quota': 2_500_000,
   'affiliate_setting.unlimited_reward': false,
   'affiliate_setting.maximum_reward_quota': 12_500_000,

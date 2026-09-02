@@ -79,7 +79,10 @@ import {
   updateAffiliateSettings,
   updateAffiliateUserOverride,
 } from '../api'
-import { SettingsForm } from '../components/settings-form-layout'
+import {
+  SettingsForm,
+  SettingsSwitchField,
+} from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import type {
@@ -198,6 +201,7 @@ interface RuleEditorProps {
   following?: Record<RuleFieldKey, boolean>
   onFollowingChange?: (key: RuleFieldKey, following: boolean) => void
   disabled?: boolean
+  grouped?: boolean
 }
 
 function RuleEditor(props: RuleEditorProps) {
@@ -239,244 +243,347 @@ function RuleEditor(props: RuleEditorProps) {
     )
   }
 
+  function switchField(
+    key: RuleFieldKey,
+    label: string,
+    checked: boolean,
+    onCheckedChange: (checked: boolean) => void,
+    description?: string
+  ) {
+    return (
+      <SettingsSwitchField
+        key={key}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        label={label}
+        description={description}
+        disabled={isDisabled(key)}
+        aria-label={label}
+      />
+    )
+  }
+
+  const enabledField = ruleField(
+    'enabled',
+    t('Enable referral cashback'),
+    <Switch
+      checked={props.draft.enabled}
+      onCheckedChange={(checked) => update('enabled', checked)}
+      disabled={isDisabled('enabled')}
+    />,
+    t('The invitation code remains valid when rewards are disabled.')
+  )
+  const registrationRewardTriggerField = ruleField(
+    'registration_reward_trigger',
+    t('Registration reward timing'),
+    <ToggleGroup
+      value={[props.draft.registrationRewardTrigger]}
+      onValueChange={(values) => {
+        const next = values[0] as AffiliateRegistrationRewardTrigger
+        if (next) update('registrationRewardTrigger', next)
+      }}
+      disabled={isDisabled('registration_reward_trigger')}
+      className='grid h-auto min-h-10 w-full grid-cols-2'
+    >
+      <ToggleGroupItem
+        value='registration_success'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('After registration')}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value='first_qualified_topup'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('After first qualification')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+  const inviterRewardField = ruleField(
+    'inviter_reward_quota',
+    t('Inviter reward'),
+    <InputGroup>
+      <InputGroupInput
+        type='number'
+        min={0}
+        step='0.01'
+        value={props.draft.inviterReward}
+        onChange={(event) => update('inviterReward', event.target.value)}
+        disabled={isDisabled('inviter_reward_quota')}
+      />
+      <InputGroupAddon align='inline-end'>
+        <InputGroupText>{t('CNY')}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>,
+    t('The inviter reward uses the same hold period as cashback.')
+  )
+  const inviteeRewardField = ruleField(
+    'invitee_reward_quota',
+    t('Invitee reward'),
+    <InputGroup>
+      <InputGroupInput
+        type='number'
+        min={0}
+        step='0.01'
+        value={props.draft.inviteeReward}
+        onChange={(event) => update('inviteeReward', event.target.value)}
+        disabled={isDisabled('invitee_reward_quota')}
+      />
+      <InputGroupAddon align='inline-end'>
+        <InputGroupText>{t('CNY')}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>,
+    t('The invitee reward is credited directly to account balance.')
+  )
+  const cashbackFrequencyField = ruleField(
+    'cashback_frequency',
+    t('Cashback frequency'),
+    <ToggleGroup
+      value={[props.draft.cashbackFrequency]}
+      onValueChange={(values) => {
+        const next = values[0] as AffiliateCashbackFrequency
+        if (next) update('cashbackFrequency', next)
+      }}
+      disabled={isDisabled('cashback_frequency')}
+      className='grid h-auto min-h-10 w-full grid-cols-2'
+    >
+      <ToggleGroupItem
+        value='first_qualified'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('First qualification only')}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value='every_topup'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('Every top-up')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+  const rewardModeField = ruleField(
+    'reward_mode',
+    t('Cashback method'),
+    <ToggleGroup
+      value={[props.draft.rewardMode]}
+      onValueChange={(values) => {
+        const next = values[0] as AffiliateRewardMode
+        if (next) update('rewardMode', next)
+      }}
+      disabled={isDisabled('reward_mode')}
+      className='grid h-auto min-h-10 w-full grid-cols-2'
+    >
+      <ToggleGroupItem
+        value='percentage'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('Percentage')}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value='fixed'
+        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
+      >
+        {t('Fixed amount')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+  const rewardValueField =
+    props.draft.rewardMode === 'percentage'
+      ? ruleField(
+          'reward_rate_bps',
+          t('Cashback rate'),
+          <InputGroup>
+            <InputGroupInput
+              type='number'
+              min={0}
+              max={100}
+              step='0.01'
+              value={props.draft.rewardRate}
+              onChange={(event) => update('rewardRate', event.target.value)}
+              disabled={isDisabled('reward_rate_bps')}
+            />
+            <InputGroupAddon align='inline-end'>
+              <InputGroupText>%</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+        )
+      : ruleField(
+          'fixed_reward_quota',
+          t('Fixed cashback'),
+          <InputGroup>
+            <InputGroupInput
+              type='number'
+              min={0}
+              step='0.01'
+              value={props.draft.fixedReward}
+              onChange={(event) => update('fixedReward', event.target.value)}
+              disabled={isDisabled('fixed_reward_quota')}
+            />
+            <InputGroupAddon align='inline-end'>
+              <InputGroupText>{t('CNY')}</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+        )
+  const minimumTopUpField = ruleField(
+    'minimum_topup_cents',
+    t('First qualifying cumulative top-up'),
+    <InputGroup>
+      <InputGroupInput
+        type='number'
+        min={0}
+        step='0.01'
+        value={props.draft.minimumTopUp}
+        onChange={(event) => update('minimumTopUp', event.target.value)}
+        disabled={isDisabled('minimum_topup_cents')}
+      />
+      <InputGroupAddon align='inline-end'>
+        <InputGroupText>{t('CNY')}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>,
+    t('After qualification, later top-ups have no minimum amount.')
+  )
+  const maximumRewardField = props.draft.unlimitedReward
+    ? null
+    : ruleField(
+        'maximum_reward_quota',
+        t('Maximum cashback per invitee'),
+        <InputGroup>
+          <InputGroupInput
+            type='number'
+            min={0.01}
+            step='0.01'
+            value={props.draft.maximumReward}
+            onChange={(event) => update('maximumReward', event.target.value)}
+            disabled={isDisabled('maximum_reward_quota')}
+          />
+          <InputGroupAddon align='inline-end'>
+            <InputGroupText>{t('CNY')}</InputGroupText>
+          </InputGroupAddon>
+        </InputGroup>
+      )
+  const holdPeriodField = ruleField(
+    'hold_seconds',
+    t('Hold period'),
+    <InputGroup>
+      <InputGroupInput
+        type='number'
+        min={0}
+        max={365}
+        step={1}
+        value={props.draft.holdDays}
+        onChange={(event) => update('holdDays', event.target.value)}
+        disabled={isDisabled('hold_seconds')}
+      />
+      <InputGroupAddon align='inline-end'>
+        <InputGroupText>{t('Days')}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>
+  )
+  const minimumTransferField = ruleField(
+    'minimum_transfer_quota',
+    t('Minimum balance transfer'),
+    <InputGroup>
+      <InputGroupInput
+        type='number'
+        min={0}
+        step='0.01'
+        value={props.draft.minimumTransfer}
+        onChange={(event) => update('minimumTransfer', event.target.value)}
+        disabled={isDisabled('minimum_transfer_quota')}
+      />
+      <InputGroupAddon align='inline-end'>
+        <InputGroupText>{t('CNY')}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>
+  )
+
+  if (!props.grouped) {
+    return (
+      <FieldGroup className='grid gap-5 md:grid-cols-2'>
+        {enabledField}
+        {registrationRewardTriggerField}
+        {inviterRewardField}
+        {inviteeRewardField}
+        {cashbackFrequencyField}
+        {rewardModeField}
+        {rewardValueField}
+        {minimumTopUpField}
+        {ruleField(
+          'unlimited_reward',
+          t('Unlimited cashback per invitee'),
+          <Switch
+            checked={props.draft.unlimitedReward}
+            onCheckedChange={(checked) => update('unlimitedReward', checked)}
+            disabled={isDisabled('unlimited_reward')}
+          />
+        )}
+        {maximumRewardField}
+        {holdPeriodField}
+        {minimumTransferField}
+        {ruleField(
+          'show_invitee_topups',
+          t('Allow invitee top-up records'),
+          <Switch
+            checked={props.draft.showInviteeTopUps}
+            onCheckedChange={(checked) => update('showInviteeTopUps', checked)}
+            disabled={isDisabled('show_invitee_topups')}
+          />,
+          t('Emails are masked before records are returned to the inviter.')
+        )}
+      </FieldGroup>
+    )
+  }
+
   return (
-    <FieldGroup className='grid gap-5 md:grid-cols-2'>
-      {ruleField(
-        'enabled',
-        t('Enable referral cashback'),
-        <Switch
-          checked={props.draft.enabled}
-          onCheckedChange={(checked) => update('enabled', checked)}
-          disabled={isDisabled('enabled')}
-        />,
-        t('The invitation code remains valid when rewards are disabled.')
-      )}
-      {ruleField(
-        'registration_reward_trigger',
-        t('Registration reward timing'),
-        <ToggleGroup
-          value={[props.draft.registrationRewardTrigger]}
-          onValueChange={(values) => {
-            const next = values[0] as AffiliateRegistrationRewardTrigger
-            if (next) update('registrationRewardTrigger', next)
-          }}
-          disabled={isDisabled('registration_reward_trigger')}
-          className='grid w-full grid-cols-2'
-        >
-          <ToggleGroupItem value='registration_success' className='w-full'>
-            {t('After registration')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value='first_qualified_topup' className='w-full'>
-            {t('After first qualification')}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
-      {ruleField(
-        'inviter_reward_quota',
-        t('Inviter reward'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0}
-            step='0.01'
-            value={props.draft.inviterReward}
-            onChange={(event) => update('inviterReward', event.target.value)}
-            disabled={isDisabled('inviter_reward_quota')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('CNY')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>,
-        t('The inviter reward uses the same hold period as cashback.')
-      )}
-      {ruleField(
-        'invitee_reward_quota',
-        t('Invitee reward'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0}
-            step='0.01'
-            value={props.draft.inviteeReward}
-            onChange={(event) => update('inviteeReward', event.target.value)}
-            disabled={isDisabled('invitee_reward_quota')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('CNY')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>,
-        t('The invitee reward is credited directly to account balance.')
-      )}
-      {ruleField(
-        'cashback_frequency',
-        t('Cashback frequency'),
-        <ToggleGroup
-          value={[props.draft.cashbackFrequency]}
-          onValueChange={(values) => {
-            const next = values[0] as AffiliateCashbackFrequency
-            if (next) update('cashbackFrequency', next)
-          }}
-          disabled={isDisabled('cashback_frequency')}
-          className='grid w-full grid-cols-2'
-        >
-          <ToggleGroupItem value='first_qualified' className='w-full'>
-            {t('First qualification only')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value='every_topup' className='w-full'>
-            {t('Every top-up')}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
-      {ruleField(
-        'reward_mode',
-        t('Cashback method'),
-        <ToggleGroup
-          value={[props.draft.rewardMode]}
-          onValueChange={(values) => {
-            const next = values[0] as AffiliateRewardMode
-            if (next) update('rewardMode', next)
-          }}
-          disabled={isDisabled('reward_mode')}
-          className='grid w-full grid-cols-2'
-        >
-          <ToggleGroupItem value='percentage' className='w-full'>
-            {t('Percentage')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value='fixed' className='w-full'>
-            {t('Fixed amount')}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
-      {props.draft.rewardMode === 'percentage'
-        ? ruleField(
-            'reward_rate_bps',
-            t('Cashback rate'),
-            <InputGroup>
-              <InputGroupInput
-                type='number'
-                min={0}
-                max={100}
-                step='0.01'
-                value={props.draft.rewardRate}
-                onChange={(event) => update('rewardRate', event.target.value)}
-                disabled={isDisabled('reward_rate_bps')}
-              />
-              <InputGroupAddon align='inline-end'>
-                <InputGroupText>%</InputGroupText>
-              </InputGroupAddon>
-            </InputGroup>
-          )
-        : ruleField(
-            'fixed_reward_quota',
-            t('Fixed cashback'),
-            <InputGroup>
-              <InputGroupInput
-                type='number'
-                min={0}
-                step='0.01'
-                value={props.draft.fixedReward}
-                onChange={(event) => update('fixedReward', event.target.value)}
-                disabled={isDisabled('fixed_reward_quota')}
-              />
-              <InputGroupAddon align='inline-end'>
-                <InputGroupText>{t('CNY')}</InputGroupText>
-              </InputGroupAddon>
-            </InputGroup>
+    <div className='space-y-6'>
+      <section className='space-y-3'>
+        <h4 className='text-sm font-semibold'>{t('Preferences')}</h4>
+        <div className='divide-y rounded-lg border px-3'>
+          {switchField(
+            'enabled',
+            t('Enable referral cashback'),
+            props.draft.enabled,
+            (checked) => update('enabled', checked),
+            t('The invitation code remains valid when rewards are disabled.')
           )}
-      {ruleField(
-        'minimum_topup_cents',
-        t('First qualifying cumulative top-up'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0}
-            step='0.01'
-            value={props.draft.minimumTopUp}
-            onChange={(event) => update('minimumTopUp', event.target.value)}
-            disabled={isDisabled('minimum_topup_cents')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('CNY')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>,
-        t('After qualification, later top-ups have no minimum amount.')
-      )}
-      {ruleField(
-        'unlimited_reward',
-        t('Unlimited cashback per invitee'),
-        <Switch
-          checked={props.draft.unlimitedReward}
-          onCheckedChange={(checked) => update('unlimitedReward', checked)}
-          disabled={isDisabled('unlimited_reward')}
-        />
-      )}
-      {!props.draft.unlimitedReward
-        ? ruleField(
-            'maximum_reward_quota',
-            t('Maximum cashback per invitee'),
-            <InputGroup>
-              <InputGroupInput
-                type='number'
-                min={0.01}
-                step='0.01'
-                value={props.draft.maximumReward}
-                onChange={(event) =>
-                  update('maximumReward', event.target.value)
-                }
-                disabled={isDisabled('maximum_reward_quota')}
-              />
-              <InputGroupAddon align='inline-end'>
-                <InputGroupText>{t('CNY')}</InputGroupText>
-              </InputGroupAddon>
-            </InputGroup>
-          )
-        : null}
-      {ruleField(
-        'hold_seconds',
-        t('Hold period'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0}
-            max={365}
-            step={1}
-            value={props.draft.holdDays}
-            onChange={(event) => update('holdDays', event.target.value)}
-            disabled={isDisabled('hold_seconds')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('Days')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>
-      )}
-      {ruleField(
-        'minimum_transfer_quota',
-        t('Minimum balance transfer'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0}
-            step='0.01'
-            value={props.draft.minimumTransfer}
-            onChange={(event) => update('minimumTransfer', event.target.value)}
-            disabled={isDisabled('minimum_transfer_quota')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('CNY')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>
-      )}
-      {ruleField(
-        'show_invitee_topups',
-        t('Allow invitee top-up records'),
-        <Switch
-          checked={props.draft.showInviteeTopUps}
-          onCheckedChange={(checked) => update('showInviteeTopUps', checked)}
-          disabled={isDisabled('show_invitee_topups')}
-        />,
-        t('Emails are masked before records are returned to the inviter.')
-      )}
-    </FieldGroup>
+          {switchField(
+            'unlimited_reward',
+            t('Unlimited cashback per invitee'),
+            props.draft.unlimitedReward,
+            (checked) => update('unlimitedReward', checked)
+          )}
+          {switchField(
+            'show_invitee_topups',
+            t('Allow invitee top-up records'),
+            props.draft.showInviteeTopUps,
+            (checked) => update('showInviteeTopUps', checked),
+            t('Emails are masked before records are returned to the inviter.')
+          )}
+        </div>
+      </section>
+
+      <section className='space-y-3 border-t pt-5'>
+        <h4 className='text-sm font-semibold'>{t('Rules')}</h4>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          {registrationRewardTriggerField}
+          {cashbackFrequencyField}
+          {rewardModeField}
+        </div>
+      </section>
+
+      <section className='space-y-3 border-t pt-5'>
+        <h4 className='text-sm font-semibold'>{t('Configuration')}</h4>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          {inviterRewardField}
+          {inviteeRewardField}
+          {rewardValueField}
+          {minimumTopUpField}
+          {maximumRewardField}
+          {holdPeriodField}
+          {minimumTransferField}
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -538,6 +645,7 @@ function GlobalAffiliateSettings() {
           setDirty(true)
         }}
         disabled={mutation.isPending}
+        grouped
       />
     </SettingsForm>
   )

@@ -38,7 +38,7 @@ var affiliateSetting = AffiliateSetting{
 	RegistrationRewardTrigger: AffiliateRegistrationTriggerRegistrationSuccess,
 	RewardMode:                AffiliateRewardModePercentage,
 	CashbackFrequency:         AffiliateCashbackFrequencyFirstQualified,
-	RewardRateBps:             2500,
+	RewardRateBps:             500,
 	FixedRewardQuota:          int64(5 * common.QuotaPerUnit),
 	MaximumRewardQuota:        int64(25 * common.QuotaPerUnit),
 	MinimumTopUpCents:         20 * 100,
