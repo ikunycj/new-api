@@ -17,21 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RotateCcw, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,20 +54,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
+  formatQuotaAsCNY,
   formatTimestampToDate,
   parseQuotaFromCNY,
   quotaUnitsToCNY,
 } from '@/lib/format'
 
 import {
-  deleteAffiliateUserOverride,
   getAffiliateSettings,
   searchAffiliateUserOverrides,
   updateAffiliateSettings,
-  updateAffiliateUserOverride,
 } from '../api'
 import {
   SettingsForm,
@@ -90,12 +78,12 @@ import type {
   AffiliateRegistrationRewardTrigger,
   AffiliateRewardMode,
   AffiliateSettings,
-  AffiliateUserOverride,
   AffiliateUserOverrideView,
 } from '../types'
 import { AffiliateAdjustmentsSection } from './affiliate-adjustments-section'
 
 const SECONDS_PER_DAY = 86_400
+const AFFILIATE_OVERRIDES_PAGE_SIZE = 20
 
 type RuleFieldKey = keyof AffiliateSettings
 
@@ -198,8 +186,6 @@ function draftToSettings(draft: RuleDraft): AffiliateSettings | null {
 interface RuleEditorProps {
   draft: RuleDraft
   onChange: (draft: RuleDraft) => void
-  following?: Record<RuleFieldKey, boolean>
-  onFollowingChange?: (key: RuleFieldKey, following: boolean) => void
   disabled?: boolean
   grouped?: boolean
 }
@@ -208,8 +194,7 @@ function RuleEditor(props: RuleEditorProps) {
   const { t } = useTranslation()
   const update = <K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) =>
     props.onChange({ ...props.draft, [key]: value })
-  const isDisabled = (key: RuleFieldKey) =>
-    props.disabled || props.following?.[key] === true
+  const isDisabled = () => props.disabled
 
   function ruleField(
     key: RuleFieldKey,
@@ -217,24 +202,9 @@ function RuleEditor(props: RuleEditorProps) {
     content: ReactNode,
     description?: string
   ) {
-    const following = props.following?.[key]
     return (
-      <Field key={key} data-disabled={isDisabled(key)}>
-        <div className='flex min-h-5 items-center justify-between gap-3'>
-          <FieldLabel>{label}</FieldLabel>
-          {following !== undefined ? (
-            <label className='text-muted-foreground flex items-center gap-2 text-xs'>
-              {t('Follow global')}
-              <Switch
-                checked={following}
-                onCheckedChange={(checked) =>
-                  props.onFollowingChange?.(key, checked)
-                }
-                disabled={props.disabled}
-              />
-            </label>
-          ) : null}
-        </div>
+      <Field key={key} data-disabled={isDisabled()}>
+        <FieldLabel>{label}</FieldLabel>
         {content}
         {description ? (
           <FieldDescription>{description}</FieldDescription>
@@ -257,7 +227,7 @@ function RuleEditor(props: RuleEditorProps) {
         onCheckedChange={onCheckedChange}
         label={label}
         description={description}
-        disabled={isDisabled(key)}
+        disabled={isDisabled()}
         aria-label={label}
       />
     )
@@ -269,7 +239,7 @@ function RuleEditor(props: RuleEditorProps) {
     <Switch
       checked={props.draft.enabled}
       onCheckedChange={(checked) => update('enabled', checked)}
-      disabled={isDisabled('enabled')}
+      disabled={isDisabled()}
     />,
     t('The invitation code remains valid when rewards are disabled.')
   )
@@ -282,7 +252,7 @@ function RuleEditor(props: RuleEditorProps) {
         const next = values[0] as AffiliateRegistrationRewardTrigger
         if (next) update('registrationRewardTrigger', next)
       }}
-      disabled={isDisabled('registration_reward_trigger')}
+      disabled={isDisabled()}
       className='grid h-auto min-h-10 w-full grid-cols-2'
     >
       <ToggleGroupItem
@@ -309,7 +279,7 @@ function RuleEditor(props: RuleEditorProps) {
         step='0.01'
         value={props.draft.inviterReward}
         onChange={(event) => update('inviterReward', event.target.value)}
-        disabled={isDisabled('inviter_reward_quota')}
+        disabled={isDisabled()}
       />
       <InputGroupAddon align='inline-end'>
         <InputGroupText>{t('CNY')}</InputGroupText>
@@ -327,7 +297,7 @@ function RuleEditor(props: RuleEditorProps) {
         step='0.01'
         value={props.draft.inviteeReward}
         onChange={(event) => update('inviteeReward', event.target.value)}
-        disabled={isDisabled('invitee_reward_quota')}
+        disabled={isDisabled()}
       />
       <InputGroupAddon align='inline-end'>
         <InputGroupText>{t('CNY')}</InputGroupText>
@@ -344,7 +314,7 @@ function RuleEditor(props: RuleEditorProps) {
         const next = values[0] as AffiliateCashbackFrequency
         if (next) update('cashbackFrequency', next)
       }}
-      disabled={isDisabled('cashback_frequency')}
+      disabled={isDisabled()}
       className='grid h-auto min-h-10 w-full grid-cols-2'
     >
       <ToggleGroupItem
@@ -370,7 +340,7 @@ function RuleEditor(props: RuleEditorProps) {
         const next = values[0] as AffiliateRewardMode
         if (next) update('rewardMode', next)
       }}
-      disabled={isDisabled('reward_mode')}
+      disabled={isDisabled()}
       className='grid h-auto min-h-10 w-full grid-cols-2'
     >
       <ToggleGroupItem
@@ -400,7 +370,7 @@ function RuleEditor(props: RuleEditorProps) {
               step='0.01'
               value={props.draft.rewardRate}
               onChange={(event) => update('rewardRate', event.target.value)}
-              disabled={isDisabled('reward_rate_bps')}
+              disabled={isDisabled()}
             />
             <InputGroupAddon align='inline-end'>
               <InputGroupText>%</InputGroupText>
@@ -417,7 +387,7 @@ function RuleEditor(props: RuleEditorProps) {
               step='0.01'
               value={props.draft.fixedReward}
               onChange={(event) => update('fixedReward', event.target.value)}
-              disabled={isDisabled('fixed_reward_quota')}
+              disabled={isDisabled()}
             />
             <InputGroupAddon align='inline-end'>
               <InputGroupText>{t('CNY')}</InputGroupText>
@@ -434,7 +404,7 @@ function RuleEditor(props: RuleEditorProps) {
         step='0.01'
         value={props.draft.minimumTopUp}
         onChange={(event) => update('minimumTopUp', event.target.value)}
-        disabled={isDisabled('minimum_topup_cents')}
+        disabled={isDisabled()}
       />
       <InputGroupAddon align='inline-end'>
         <InputGroupText>{t('CNY')}</InputGroupText>
@@ -454,7 +424,7 @@ function RuleEditor(props: RuleEditorProps) {
             step='0.01'
             value={props.draft.maximumReward}
             onChange={(event) => update('maximumReward', event.target.value)}
-            disabled={isDisabled('maximum_reward_quota')}
+            disabled={isDisabled()}
           />
           <InputGroupAddon align='inline-end'>
             <InputGroupText>{t('CNY')}</InputGroupText>
@@ -472,7 +442,7 @@ function RuleEditor(props: RuleEditorProps) {
         step={1}
         value={props.draft.holdDays}
         onChange={(event) => update('holdDays', event.target.value)}
-        disabled={isDisabled('hold_seconds')}
+        disabled={isDisabled()}
       />
       <InputGroupAddon align='inline-end'>
         <InputGroupText>{t('Days')}</InputGroupText>
@@ -489,7 +459,7 @@ function RuleEditor(props: RuleEditorProps) {
         step='0.01'
         value={props.draft.minimumTransfer}
         onChange={(event) => update('minimumTransfer', event.target.value)}
-        disabled={isDisabled('minimum_transfer_quota')}
+        disabled={isDisabled()}
       />
       <InputGroupAddon align='inline-end'>
         <InputGroupText>{t('CNY')}</InputGroupText>
@@ -514,7 +484,7 @@ function RuleEditor(props: RuleEditorProps) {
           <Switch
             checked={props.draft.unlimitedReward}
             onCheckedChange={(checked) => update('unlimitedReward', checked)}
-            disabled={isDisabled('unlimited_reward')}
+            disabled={isDisabled()}
           />
         )}
         {maximumRewardField}
@@ -526,7 +496,7 @@ function RuleEditor(props: RuleEditorProps) {
           <Switch
             checked={props.draft.showInviteeTopUps}
             onCheckedChange={(checked) => update('showInviteeTopUps', checked)}
-            disabled={isDisabled('show_invitee_topups')}
+            disabled={isDisabled()}
           />,
           t('Emails are masked before records are returned to the inviter.')
         )}
@@ -653,111 +623,24 @@ function GlobalAffiliateSettings() {
 
 function PersonalizedAffiliateSettings() {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
   const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
-  const [selected, setSelected] = useState<AffiliateUserOverrideView>()
-  const [draft, setDraft] = useState<RuleDraft>()
-  const [following, setFollowing] = useState<Record<RuleFieldKey, boolean>>()
-  const [changeReason, setChangeReason] = useState('')
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [page, setPage] = useState(1)
   const query = useQuery({
-    queryKey: ['admin', 'affiliate', 'user-overrides', keyword],
-    queryFn: () => searchAffiliateUserOverrides(keyword),
-    select: (response) => response.data?.items ?? [],
-    enabled: keyword.length > 0,
+    queryKey: ['admin', 'affiliate', 'user-overrides', keyword, page],
+    queryFn: () =>
+      searchAffiliateUserOverrides({
+        keyword,
+        page,
+        pageSize: AFFILIATE_OVERRIDES_PAGE_SIZE,
+      }),
+    select: (response) =>
+      response.data ?? {
+        items: [] as AffiliateUserOverrideView[],
+        total: 0,
+      },
   })
 
-  function selectUser(view: AffiliateUserOverrideView) {
-    const follow = {} as Record<RuleFieldKey, boolean>
-    for (const key of ruleFieldKeys) {
-      follow[key] = view.override?.[key] == null
-    }
-    setSelected(view)
-    setDraft(settingsToDraft(view.effective_rule))
-    setFollowing(follow)
-    setChangeReason('')
-  }
-
-  const saveMutation = useMutation({
-    mutationFn: (request: {
-      userId: number
-      override: AffiliateUserOverride
-    }) => updateAffiliateUserOverride(request.userId, request.override),
-    onSuccess: async (response) => {
-      if (!response.success || !response.data) return
-      toast.success(t('User-specific cashback settings saved'))
-      selectUser(response.data)
-      setConfirmOpen(false)
-      await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate', 'user-overrides'],
-      })
-    },
-  })
-  const resetMutation = useMutation({
-    mutationFn: (userId: number) => deleteAffiliateUserOverride(userId),
-    onSuccess: async (response) => {
-      if (!response.success || !selected) return
-      toast.success(t('User now follows global cashback settings'))
-      selectUser({
-        ...selected,
-        override: null,
-        effective_rule: selected.global_rule,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate', 'user-overrides'],
-      })
-    },
-  })
-
-  function buildOverride(): AffiliateUserOverride | null {
-    if (!draft || !following) return null
-    const settings = draftToSettings(draft)
-    if (!settings || !changeReason.trim()) return null
-    return {
-      enabled: following.enabled ? null : settings.enabled,
-      inviter_reward_quota: following.inviter_reward_quota
-        ? null
-        : settings.inviter_reward_quota,
-      invitee_reward_quota: following.invitee_reward_quota
-        ? null
-        : settings.invitee_reward_quota,
-      registration_reward_trigger: following.registration_reward_trigger
-        ? null
-        : settings.registration_reward_trigger,
-      reward_mode: following.reward_mode ? null : settings.reward_mode,
-      cashback_frequency: following.cashback_frequency
-        ? null
-        : settings.cashback_frequency,
-      reward_rate_bps: following.reward_rate_bps
-        ? null
-        : settings.reward_rate_bps,
-      fixed_reward_quota: following.fixed_reward_quota
-        ? null
-        : settings.fixed_reward_quota,
-      unlimited_reward: following.unlimited_reward
-        ? null
-        : settings.unlimited_reward,
-      maximum_reward_quota: following.maximum_reward_quota
-        ? null
-        : settings.maximum_reward_quota,
-      minimum_topup_cents: following.minimum_topup_cents
-        ? null
-        : settings.minimum_topup_cents,
-      hold_seconds: following.hold_seconds ? null : settings.hold_seconds,
-      minimum_transfer_quota: following.minimum_transfer_quota
-        ? null
-        : settings.minimum_transfer_quota,
-      show_invitee_topups: following.show_invitee_topups
-        ? null
-        : settings.show_invitee_topups,
-      change_reason: changeReason.trim(),
-    }
-  }
-
-  const overriddenKeys = following
-    ? ruleFieldKeys.filter((key) => !following[key])
-    : []
   const fieldLabels: Record<RuleFieldKey, string> = {
     enabled: t('Enable referral cashback'),
     inviter_reward_quota: t('Inviter reward'),
@@ -775,11 +658,190 @@ function PersonalizedAffiliateSettings() {
     show_invitee_topups: t('Allow invitee top-up records'),
   }
 
+  function formatValue(key: RuleFieldKey, value: unknown): string {
+    if (value === null || value === undefined) return '-'
+    switch (key) {
+      case 'enabled':
+      case 'unlimited_reward':
+      case 'show_invitee_topups':
+        return t(value ? 'Enabled' : 'Disabled')
+      case 'registration_reward_trigger':
+        return value === 'first_qualified_topup'
+          ? t('After first qualification')
+          : t('After registration')
+      case 'reward_mode':
+        return value === 'fixed' ? t('Fixed amount') : t('Percentage')
+      case 'cashback_frequency':
+        return value === 'every_topup'
+          ? t('Every top-up')
+          : t('First qualification only')
+      case 'reward_rate_bps':
+        return `${Number(value) / 100}%`
+      case 'minimum_topup_cents':
+        return `${(Number(value) / 100).toFixed(2)} ${t('CNY')}`
+      case 'hold_seconds':
+        return `${Number(value) / SECONDS_PER_DAY} ${t('Days')}`
+      case 'inviter_reward_quota':
+      case 'invitee_reward_quota':
+      case 'fixed_reward_quota':
+      case 'maximum_reward_quota':
+      case 'minimum_transfer_quota':
+        return formatQuotaAsCNY(Number(value))
+      default:
+        return String(value)
+    }
+  }
+
+  function getOverriddenKeys(view: AffiliateUserOverrideView): RuleFieldKey[] {
+    if (!view.override) return []
+    return ruleFieldKeys.filter((key) => view.override?.[key] != null)
+  }
+
+  const items = query.data?.items ?? []
+  const total = query.data?.total ?? 0
+  const totalPages = Math.max(
+    1,
+    Math.ceil(total / AFFILIATE_OVERRIDES_PAGE_SIZE)
+  )
+
+  let results: ReactNode
+  if (query.isLoading) {
+    results = (
+      <div className='flex justify-center py-12'>
+        <Spinner />
+      </div>
+    )
+  } else if (query.isError) {
+    results = (
+      <Empty className='min-h-40'>
+        <EmptyHeader>
+          <EmptyTitle>{t('Loading failed')}</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    )
+  } else if (items.length === 0) {
+    results = (
+      <Empty className='min-h-40'>
+        <EmptyHeader>
+          <EmptyTitle>
+            {keyword ? t('No matching users') : t('No users')}
+          </EmptyTitle>
+          <EmptyDescription>
+            {t('No users available. Try adjusting your search or filters.')}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  } else {
+    results = (
+      <div className='overflow-x-auto rounded-lg border'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('User')}</TableHead>
+              <TableHead>{t('Email')}</TableHead>
+              <TableHead>{t('Configuration')}</TableHead>
+              <TableHead>{t('Last modified at')}</TableHead>
+              <TableHead>{t('Change reason')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((view) => {
+              const overriddenKeys = getOverriddenKeys(view)
+              const override = view.override
+              return (
+                <TableRow key={view.user_id}>
+                  <TableCell className='min-w-44 align-top font-medium'>
+                    <div>{view.username}</div>
+                    <div className='text-muted-foreground text-xs'>
+                      #{view.user_id}
+                    </div>
+                  </TableCell>
+                  <TableCell className='min-w-52 align-top'>
+                    {view.email || '-'}
+                  </TableCell>
+                  <TableCell className='max-w-[42rem] min-w-[24rem] align-top'>
+                    <div className='flex flex-wrap gap-1.5'>
+                      {overriddenKeys.map((key) => (
+                        <Badge
+                          key={key}
+                          variant='outline'
+                          className='max-w-full text-left whitespace-normal'
+                        >
+                          {fieldLabels[key]}:{' '}
+                          {formatValue(key, override?.[key])}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className='min-w-44 align-top'>
+                    <div>
+                      {formatTimestampToDate(override?.updated_at ?? 0)}
+                    </div>
+                    <div className='text-muted-foreground mt-1 text-xs'>
+                      {view.updated_by_username || t('User')} #
+                      {override?.updated_by ?? '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell className='max-w-80 min-w-56 align-top whitespace-normal'>
+                    <span className='wrap-break-word'>
+                      {override?.change_reason || '-'}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+        {total > 0 ? (
+          <div className='border-border flex items-center justify-between gap-3 border-t px-4 py-3'>
+            <div className='text-muted-foreground text-xs'>
+              {t('Showing')} {(page - 1) * AFFILIATE_OVERRIDES_PAGE_SIZE + 1}-
+              {Math.min(page * AFFILIATE_OVERRIDES_PAGE_SIZE, total)} {t('of')}{' '}
+              {total}
+            </div>
+            <div className='flex items-center gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='size-8 p-0'
+                disabled={page <= 1}
+                onClick={() => setPage((current) => current - 1)}
+                aria-label={t('Previous page')}
+                title={t('Previous page')}
+              >
+                <ChevronLeft />
+              </Button>
+              <span className='text-muted-foreground min-w-12 text-center text-sm tabular-nums'>
+                {page} / {totalPages}
+              </span>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='size-8 p-0'
+                disabled={page >= totalPages}
+                onClick={() => setPage((current) => current + 1)}
+                aria-label={t('Next page')}
+                title={t('Next page')}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
-    <div className='grid gap-6'>
+    <div className='grid gap-5'>
       <form
+        className='max-w-xl'
         onSubmit={(event) => {
           event.preventDefault()
+          setPage(1)
           setKeyword(searchInput.trim())
         }}
       >
@@ -803,190 +865,7 @@ function PersonalizedAffiliateSettings() {
         </Field>
       </form>
 
-      {keyword ? (
-        <div className='overflow-x-auto'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('User')}</TableHead>
-                <TableHead>{t('Email')}</TableHead>
-                <TableHead>{t('Configuration')}</TableHead>
-                <TableHead className='text-right'>{t('Action')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(query.data ?? []).map((view) => (
-                <TableRow key={view.user_id}>
-                  <TableCell className='font-medium'>
-                    {view.username}{' '}
-                    <span className='text-muted-foreground'>
-                      #{view.user_id}
-                    </span>
-                  </TableCell>
-                  <TableCell>{view.email || '-'}</TableCell>
-                  <TableCell>
-                    <Badge variant='outline'>
-                      {view.override ? t('Customized') : t('Follows global')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='outline'
-                      onClick={() => selectUser(view)}
-                    >
-                      {t('Configure')}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {!query.isLoading && (query.data?.length ?? 0) === 0 ? (
-            <Empty className='min-h-40'>
-              <EmptyHeader>
-                <EmptyTitle>{t('No matching users')}</EmptyTitle>
-                <EmptyDescription>
-                  {t('Try another username, email, or user ID.')}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : null}
-        </div>
-      ) : null}
-
-      {selected && draft && following ? (
-        <div className='grid gap-5'>
-          <div className='flex flex-wrap items-center justify-between gap-3'>
-            <div>
-              <h3 className='text-sm font-semibold'>
-                {selected.username} #{selected.user_id}
-              </h3>
-              <p className='text-muted-foreground text-xs'>
-                {t('{{count}} fields currently override global settings', {
-                  count: overriddenKeys.length,
-                })}
-              </p>
-            </div>
-            <Button
-              type='button'
-              variant='outline'
-              disabled={!selected.override || resetMutation.isPending}
-              onClick={() => resetMutation.mutate(selected.user_id)}
-            >
-              <RotateCcw data-icon='inline-start' />
-              {t('Follow all global settings')}
-            </Button>
-          </div>
-          <RuleEditor
-            draft={draft}
-            onChange={setDraft}
-            following={following}
-            onFollowingChange={(key, value) =>
-              setFollowing({ ...following, [key]: value })
-            }
-            disabled={saveMutation.isPending || resetMutation.isPending}
-          />
-          {selected.override ? (
-            <div className='border-border grid gap-3 border-y py-3 text-xs sm:grid-cols-3'>
-              <div>
-                <div className='text-muted-foreground'>
-                  {t('Last modified by')}
-                </div>
-                <div className='mt-1 font-medium'>
-                  {selected.updated_by_username || t('User')} #
-                  {selected.override.updated_by ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div className='text-muted-foreground'>
-                  {t('Last modified at')}
-                </div>
-                <div className='mt-1 font-medium'>
-                  {formatTimestampToDate(selected.override.updated_at ?? 0)}
-                </div>
-              </div>
-              <div>
-                <div className='text-muted-foreground'>
-                  {t('Change reason')}
-                </div>
-                <div className='mt-1 font-medium wrap-break-word'>
-                  {selected.override.change_reason}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <Field>
-            <FieldLabel htmlFor='affiliate-change-reason'>
-              {t('Change reason')}
-            </FieldLabel>
-            <Textarea
-              id='affiliate-change-reason'
-              value={changeReason}
-              maxLength={500}
-              onChange={(event) => setChangeReason(event.target.value)}
-              placeholder={t('Required for audit history')}
-            />
-          </Field>
-          <div className='flex justify-end'>
-            <Button
-              type='button'
-              disabled={saveMutation.isPending || !changeReason.trim()}
-              onClick={() => {
-                if (!buildOverride()) {
-                  toast.error(t('Check the cashback settings and try again'))
-                  return
-                }
-                setConfirmOpen(true)
-              }}
-            >
-              {saveMutation.isPending ? (
-                <Spinner data-icon='inline-start' />
-              ) : null}
-              {t('Save user-specific settings')}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('Apply user-specific settings?')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'The new rule applies to future reward events for all existing and future invitees. Existing rewards and unlock times will not be recalculated.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className='flex flex-wrap gap-1.5'>
-            {overriddenKeys.map((key) => (
-              <Badge key={key} variant='secondary'>
-                {fieldLabels[key]}
-              </Badge>
-            ))}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const request = buildOverride()
-                if (request && selected) {
-                  saveMutation.mutate({
-                    userId: selected.user_id,
-                    override: request,
-                  })
-                }
-              }}
-            >
-              {t('Confirm and save')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {results}
     </div>
   )
 }

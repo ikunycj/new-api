@@ -1592,36 +1592,72 @@ func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endA
 	return items, total, nil
 }
 
-func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUserOverride) (*AffiliateUserOverrideView, error) {
-	changeReason := strings.TrimSpace(override.ChangeReason)
-	if userID <= 0 || adminUserID <= 0 || changeReason == "" || len(changeReason) > 500 {
-		return nil, ErrAffiliateRuleInvalid
-	}
-	override.UserID = userID
-	override.ID = 0
-	override.UpdatedBy = adminUserID
-	override.ChangeReason = changeReason
-	rule := applyAffiliateOverride(globalAffiliateRule(), &override)
-	if err := validateAffiliateRule(rule); err != nil {
-		return nil, err
-	}
-	if err := DB.Transaction(func(tx *gorm.DB) error {
-		var user User
-		if err := tx.Select("id").Where("id = ?", userID).First(&user).Error; err != nil {
-			return err
-		}
-		return tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}},
-			UpdateAll: true,
-		}).Create(&override).Error
-	}); err != nil {
-		return nil, err
-	}
-	return GetAffiliateUserOverrideView(userID)
-}
+const affiliateUserOverrideConfiguredCondition = `(
+	affiliate_user_overrides.enabled IS NOT NULL OR
+	affiliate_user_overrides.inviter_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.invitee_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.registration_reward_trigger IS NOT NULL OR
+	affiliate_user_overrides.reward_mode IS NOT NULL OR
+	affiliate_user_overrides.cashback_frequency IS NOT NULL OR
+	affiliate_user_overrides.reward_rate_bps IS NOT NULL OR
+	affiliate_user_overrides.fixed_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.unlimited_reward IS NOT NULL OR
+	affiliate_user_overrides.maximum_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.minimum_top_up_cents IS NOT NULL OR
+	affiliate_user_overrides.hold_seconds IS NOT NULL OR
+	affiliate_user_overrides.minimum_transfer_quota IS NOT NULL OR
+	affiliate_user_overrides.show_invitee_top_ups IS NOT NULL
+)`
 
-func DeleteAffiliateUserOverride(userID int) error {
-	return DB.Where("user_id = ?", userID).Delete(&AffiliateUserOverride{}).Error
+func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*AffiliateUserOverrideView, int64, error) {
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+
+	query := DB.Model(&AffiliateUserOverride{}).
+		Joins("JOIN users ON users.id = affiliate_user_overrides.user_id").
+		Where("users.deleted_at IS NULL").
+		Where(affiliateUserOverrideConfiguredCondition)
+	keyword = strings.TrimSpace(keyword)
+	if keyword != "" {
+		pattern, err := sanitizeLikePattern(strings.ToLower(keyword))
+		if err != nil {
+			return nil, 0, err
+		}
+		pattern = "%" + pattern + "%"
+		condition := "LOWER(users.username) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!' OR LOWER(users.display_name) LIKE ? ESCAPE '!' OR LOWER(users.remark) LIKE ? ESCAPE '!'"
+		args := []interface{}{pattern, pattern, pattern, pattern}
+		if userID, err := strconv.Atoi(keyword); err == nil && userID > 0 {
+			condition = "users.id = ? OR " + condition
+			args = append([]interface{}{userID}, args...)
+		}
+		query = query.Where("("+condition+")", args...)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var overrides []AffiliateUserOverride
+	if err := query.Select("affiliate_user_overrides.*").
+		Order("affiliate_user_overrides.updated_at DESC, affiliate_user_overrides.user_id ASC").
+		Offset(startIdx).Limit(limit).Find(&overrides).Error; err != nil {
+		return nil, 0, err
+	}
+
+	items := make([]*AffiliateUserOverrideView, 0, len(overrides))
+	for index := range overrides {
+		item, err := GetAffiliateUserOverrideView(overrides[index].UserID)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, nil
 }
 
 func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error) {

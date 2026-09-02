@@ -412,12 +412,6 @@ export type AffiliateUserOverridesResponse = {
   }
 }
 
-export type AffiliateUserOverrideResponse = {
-  success: boolean
-  message: string
-  data?: AffiliateUserOverrideView
-}
-
 export type AffiliateAdminReward = {
   id: number
   inviter_user_id: number
