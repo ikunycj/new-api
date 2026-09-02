@@ -28,6 +28,7 @@ import type {
   DashboardFilters,
   QuotaDataItem,
 } from '@/features/dashboard/types'
+import { dateToUnixTimestamp } from '@/lib/time'
 
 export type AdminAnalyticsSection = 'overview' | 'flow'
 
@@ -42,6 +43,12 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
   const [topUserLimit, setTopUserLimit] = useState(10)
+  const startTimestamp = props.filters.start_timestamp
+    ? dateToUnixTimestamp(props.filters.start_timestamp)
+    : undefined
+  const endTimestamp = props.filters.end_timestamp
+    ? dateToUnixTimestamp(props.filters.end_timestamp)
+    : undefined
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
@@ -90,6 +97,8 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
               props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
             metric={props.filters.metric}
+            startTimestamp={startTimestamp}
+            endTimestamp={endTimestamp}
           />
           <DimensionUsageChart
             title='渠道用量'
@@ -100,6 +109,8 @@ export function AdminAnalytics(props: AdminAnalyticsProps) {
               props.filters.time_granularity || DEFAULT_TIME_GRANULARITY
             }
             metric={props.filters.metric}
+            startTimestamp={startTimestamp}
+            endTimestamp={endTimestamp}
           />
           <UserCharts
             filters={props.filters}

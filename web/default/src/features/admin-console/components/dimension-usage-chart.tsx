@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -15,6 +14,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
+import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import { Layers3, RadioTower } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -31,11 +31,12 @@ import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
+import { getAdminConsoleCacheTrend } from '@/features/admin-console/api'
 import { getPricingGroups } from '@/features/channels/api'
 import { processChartData } from '@/features/dashboard/lib'
 import type { DashboardMetric, QuotaDataItem } from '@/features/dashboard/types'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
-import type { TimeGranularity } from '@/lib/time'
+import { formatChartTime, type TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 let themeManagerPromise: Promise<
@@ -49,6 +50,8 @@ interface DimensionUsageChartProps {
   loading?: boolean
   timeGranularity: TimeGranularity
   metric?: DashboardMetric
+  startTimestamp?: number
+  endTimestamp?: number
 }
 
 export function DimensionUsageChart(props: DimensionUsageChartProps) {
@@ -67,6 +70,38 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     queryKey: ['pricing-groups'],
     queryFn: getPricingGroups,
     enabled: props.dimension === 'group',
+  })
+  const cacheTrendEnabled =
+    !props.loading &&
+    props.startTimestamp !== undefined &&
+    props.endTimestamp !== undefined
+  const timezoneOffset = -new Date().getTimezoneOffset()
+  const cacheTrendQuery = useQuery({
+    queryKey: [
+      'admin-console-cache-trend',
+      props.dimension,
+      props.startTimestamp,
+      props.endTimestamp,
+      props.timeGranularity,
+      timezoneOffset,
+    ],
+    queryFn: () => {
+      if (
+        props.startTimestamp === undefined ||
+        props.endTimestamp === undefined
+      ) {
+        return Promise.resolve([])
+      }
+      return getAdminConsoleCacheTrend({
+        dimension: props.dimension,
+        start_timestamp: props.startTimestamp,
+        end_timestamp: props.endTimestamp,
+        granularity: props.timeGranularity,
+        timezone_offset: timezoneOffset,
+      })
+    },
+    enabled: cacheTrendEnabled,
+    staleTime: 60_000,
   })
 
   useEffect(() => {
@@ -136,7 +171,120 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     ]
   )
   const Icon = props.dimension === 'group' ? Layers3 : RadioTower
-  const spec = chartData.spec_area
+  const cacheTrendPoints = useMemo(() => {
+    const points = cacheTrendQuery.data ?? []
+    if (props.dimension !== 'group') return points
+    if (!pricingGroupsQuery.data?.success) return []
+    const pricingGroupSet = new Set(pricingGroupNames)
+    return points.filter((point) => pricingGroupSet.has(point.name.trim()))
+  }, [
+    cacheTrendQuery.data,
+    pricingGroupNames,
+    pricingGroupsQuery.data?.success,
+    props.dimension,
+  ])
+  const cacheTrendHasData = cacheTrendPoints.some(
+    (point) => point.cache_input_tokens > 0
+  )
+  const spec = useMemo(() => {
+    const cacheValues = cacheTrendPoints
+      .filter(
+        (point) =>
+          point.cache_input_tokens > 0 && Number.isFinite(point.cache_hit_rate)
+      )
+      .map((point) => ({
+        Time: formatChartTime(point.timestamp, props.timeGranularity),
+        CacheRate: point.cache_hit_rate,
+        Model: point.name.trim(),
+      }))
+    if (cacheValues.length === 0) return chartData.spec_area
+
+    const areaData = chartData.spec_area.data?.[0] ?? {
+      id: 'areaData',
+      values: [],
+    }
+    const usageSeriesId = 'dimension-usage-series'
+    const cacheSeriesId = 'cache-rate-series'
+    const areaAxes =
+      Array.isArray(chartData.spec_area.axes) &&
+      chartData.spec_area.axes.length > 0
+        ? chartData.spec_area.axes
+        : [
+            { orient: 'bottom', type: 'band' },
+            {
+              orient: 'left',
+              type: 'linear',
+              seriesId: usageSeriesId,
+            },
+          ]
+    return {
+      ...chartData.spec_area,
+      type: 'common',
+      data: [areaData, { id: 'cacheTrendData', values: cacheValues }],
+      series: [
+        {
+          id: usageSeriesId,
+          type: 'area',
+          dataId: areaData.id,
+          xField: 'Time',
+          yField: 'Usage',
+          seriesField: 'Model',
+          stack: false,
+          area: chartData.spec_area.area,
+          line: chartData.spec_area.line,
+          point: chartData.spec_area.point,
+        },
+        {
+          id: cacheSeriesId,
+          type: 'line',
+          dataId: 'cacheTrendData',
+          xField: 'Time',
+          yField: 'CacheRate',
+          seriesField: 'Model',
+          zIndex: 10,
+          line: {
+            style: {
+              lineWidth: 2,
+              lineDash: [4, 3],
+              curveType: 'monotone',
+            },
+          },
+          point: { visible: false },
+          tooltip: {
+            mark: {
+              content: [
+                {
+                  key: t('Cache hit rate'),
+                  value: (datum: Record<string, unknown>) => {
+                    const rate = Number(datum?.CacheRate)
+                    return Number.isFinite(rate) ? `${rate.toFixed(2)}%` : '-'
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      axes: [
+        ...areaAxes,
+        {
+          id: 'cache-rate-axis',
+          orient: 'right',
+          type: 'linear',
+          seriesId: cacheSeriesId,
+          min: 0,
+          max: 100,
+          visible: true,
+          label: {
+            formatMethod: (value: number | string) => `${value}%`,
+          },
+        },
+      ],
+      color: chartData.spec_area.color,
+      legends: chartData.spec_area.legends,
+      tooltip: chartData.spec_area.tooltip,
+    }
+  }, [cacheTrendPoints, chartData.spec_area, props.timeGranularity, t])
   let chartContent = themeReady ? (
     <VChart
       key={`${props.dimension}-${props.metric}-${props.timeGranularity}-${resolvedTheme}`}
@@ -201,6 +349,9 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
         <span className='text-muted-foreground text-xs'>
           合计 {chartData.totalCountDisplay}
         </span>
+        {cacheTrendHasData && (
+          <span className='text-muted-foreground text-xs'>· 缓存命中率</span>
+        )}
       </div>
 
       <div className='h-64 p-1.5 sm:p-2'>{chartContent}</div>

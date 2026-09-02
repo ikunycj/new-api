@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -85,6 +86,52 @@ type LogFilterOptions struct {
 	Channels []LogFilterChannel `json:"channels"`
 }
 
+type LogCacheTrendDimension string
+
+const (
+	LogCacheTrendDimensionGroup   LogCacheTrendDimension = "group"
+	LogCacheTrendDimensionChannel LogCacheTrendDimension = "channel"
+)
+
+type LogCacheTrendFilters struct {
+	Dimension      LogCacheTrendDimension
+	StartTimestamp int64
+	EndTimestamp   int64
+	Granularity    string
+	TimezoneOffset int
+}
+
+type LogCacheTrendPoint struct {
+	Timestamp             int64   `json:"timestamp"`
+	Name                  string  `json:"name"`
+	ChannelID             int     `json:"channel_id,omitempty"`
+	CacheInputTokens      int64   `json:"cache_input_tokens"`
+	CacheReadTokens       int64   `json:"cache_read_tokens"`
+	CacheWriteTokens      int64   `json:"cache_write_tokens"`
+	CacheHitRequests      int64   `json:"cache_hit_requests"`
+	CacheEligibleRequests int64   `json:"cache_eligible_requests"`
+	CacheHitRate          float64 `json:"cache_hit_rate"`
+}
+
+type logCacheTrendMetricRow struct {
+	Timestamp             int64 `gorm:"column:timestamp"`
+	CacheInputTokens      int64 `gorm:"column:cache_input_tokens"`
+	CacheReadTokens       int64 `gorm:"column:cache_read_tokens"`
+	CacheWriteTokens      int64 `gorm:"column:cache_write_tokens"`
+	CacheHitRequests      int64 `gorm:"column:cache_hit_requests"`
+	CacheEligibleRequests int64 `gorm:"column:cache_eligible_requests"`
+}
+
+type logCacheTrendGroupRow struct {
+	logCacheTrendMetricRow
+	Name string `gorm:"column:name"`
+}
+
+type logCacheTrendChannelRow struct {
+	logCacheTrendMetricRow
+	ChannelID int `gorm:"column:channel_id"`
+}
+
 func validateLogAnalyticsFilters(filters *LogAnalyticsFilters) error {
 	if filters.StartTimestamp <= 0 || filters.EndTimestamp <= 0 {
 		return errors.New("start_timestamp and end_timestamp are required")
@@ -133,11 +180,162 @@ func applyLogAnalyticsFilters(tx *gorm.DB, filters LogAnalyticsFilters) (*gorm.D
 
 func logAnalyticsBucketExpression(granularity string, timezoneOffsetMinutes int) string {
 	interval := int64(time.Hour / time.Second)
-	if granularity == "day" {
+	switch granularity {
+	case "day":
 		interval = int64(24 * time.Hour / time.Second)
+	case "week":
+		interval = int64(7 * 24 * time.Hour / time.Second)
 	}
 	offset := int64(timezoneOffsetMinutes) * 60
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return fmt.Sprintf("intDiv(logs.created_at - (%d), %d) * %d + (%d)", offset, interval, interval, offset)
+	}
+	if common.UsingLogDatabase(common.DatabaseTypeMySQL) {
+		return fmt.Sprintf("FLOOR((logs.created_at - (%d)) / %d) * %d + (%d)", offset, interval, interval, offset)
+	}
 	return fmt.Sprintf("((logs.created_at - (%d)) / %d) * %d + (%d)", offset, interval, interval, offset)
+}
+
+func validateLogCacheTrendFilters(filters *LogCacheTrendFilters) error {
+	if filters.Dimension != LogCacheTrendDimensionGroup && filters.Dimension != LogCacheTrendDimensionChannel {
+		return errors.New("dimension must be group or channel")
+	}
+	analyticsFilters := LogAnalyticsFilters{
+		StartTimestamp: filters.StartTimestamp,
+		EndTimestamp:   filters.EndTimestamp,
+		Granularity:    filters.Granularity,
+		TimezoneOffset: filters.TimezoneOffset,
+	}
+	if filters.Granularity == "week" {
+		// The existing analytics endpoint only supports hour/day; validate the
+		// shared range and timezone fields without normalizing cache week data.
+		analyticsFilters.Granularity = "hour"
+	}
+	if err := validateLogAnalyticsFilters(&analyticsFilters); err != nil {
+		return err
+	}
+	if filters.Granularity != "day" && filters.Granularity != "week" {
+		filters.Granularity = "hour"
+	}
+	return nil
+}
+
+func cacheTrendMetricSelect(bucketExpression string) string {
+	return bucketExpression + ` AS timestamp,
+		COALESCE(SUM(logs.input_tokens_total), 0) AS cache_input_tokens,
+		COALESCE(SUM(logs.cache_read_tokens), 0) AS cache_read_tokens,
+		COALESCE(SUM(logs.cache_write_tokens), 0) AS cache_write_tokens,
+		COALESCE(SUM(CASE WHEN logs.cache_read_tokens > 0 THEN 1 ELSE 0 END), 0) AS cache_hit_requests,
+		COUNT(*) AS cache_eligible_requests`
+}
+
+func cacheTrendPointFromMetrics(metrics logCacheTrendMetricRow) LogCacheTrendPoint {
+	point := LogCacheTrendPoint{
+		Timestamp:             metrics.Timestamp,
+		CacheInputTokens:      metrics.CacheInputTokens,
+		CacheReadTokens:       metrics.CacheReadTokens,
+		CacheWriteTokens:      metrics.CacheWriteTokens,
+		CacheHitRequests:      metrics.CacheHitRequests,
+		CacheEligibleRequests: metrics.CacheEligibleRequests,
+	}
+	if point.CacheInputTokens > 0 {
+		point.CacheHitRate = float64(point.CacheReadTokens) / float64(point.CacheInputTokens) * 100
+	}
+	return point
+}
+
+func getLogCacheTrendByGroup(filters LogCacheTrendFilters, bucketExpression string) ([]LogCacheTrendPoint, error) {
+	groupColumn := "logs." + logGroupCol
+	var rows []logCacheTrendGroupRow
+	query := LOG_DB.Table("logs").
+		Where("logs.type = ? AND logs.cache_stats_available = ?", LogTypeConsume, true).
+		Where("logs.created_at >= ? AND logs.created_at <= ?", filters.StartTimestamp, filters.EndTimestamp).
+		Select(groupColumn + " AS name, " + cacheTrendMetricSelect(bucketExpression)).
+		Group(groupColumn + ", " + bucketExpression).
+		Order("timestamp ASC, name ASC")
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	points := make([]LogCacheTrendPoint, 0, len(rows))
+	for _, row := range rows {
+		point := cacheTrendPointFromMetrics(row.logCacheTrendMetricRow)
+		point.Name = row.Name
+		if strings.TrimSpace(point.Name) == "" {
+			point.Name = "未记录分组"
+		}
+		points = append(points, point)
+	}
+	return points, nil
+}
+
+func getLogCacheTrendChannelNames(channelIDs []int) map[int]string {
+	names := make(map[int]string, len(channelIDs))
+	if len(channelIDs) == 0 || DB == nil {
+		return names
+	}
+	var channels []struct {
+		ID   int    `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+	if err := DB.Table("channels").Select("id", "name").Where("id IN ?", channelIDs).Scan(&channels).Error; err != nil {
+		return names
+	}
+	for _, channel := range channels {
+		names[channel.ID] = strings.TrimSpace(channel.Name)
+	}
+	return names
+}
+
+func getLogCacheTrendByChannel(filters LogCacheTrendFilters, bucketExpression string) ([]LogCacheTrendPoint, error) {
+	var rows []logCacheTrendChannelRow
+	channelColumn := "logs.channel_id"
+	query := LOG_DB.Table("logs").
+		Where("logs.type = ? AND logs.cache_stats_available = ?", LogTypeConsume, true).
+		Where("logs.created_at >= ? AND logs.created_at <= ?", filters.StartTimestamp, filters.EndTimestamp).
+		Select(channelColumn + " AS channel_id, " + cacheTrendMetricSelect(bucketExpression)).
+		Group(channelColumn + ", " + bucketExpression).
+		Order("timestamp ASC, channel_id ASC")
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	channelIDs := make([]int, 0, len(rows))
+	seenChannelIDs := make(map[int]struct{}, len(rows))
+	for _, row := range rows {
+		if _, ok := seenChannelIDs[row.ChannelID]; ok {
+			continue
+		}
+		seenChannelIDs[row.ChannelID] = struct{}{}
+		channelIDs = append(channelIDs, row.ChannelID)
+	}
+	channelNames := getLogCacheTrendChannelNames(channelIDs)
+
+	points := make([]LogCacheTrendPoint, 0, len(rows))
+	for _, row := range rows {
+		point := cacheTrendPointFromMetrics(row.logCacheTrendMetricRow)
+		point.ChannelID = row.ChannelID
+		point.Name = channelNames[row.ChannelID]
+		if point.Name == "" {
+			if row.ChannelID == 0 {
+				point.Name = "未记录渠道"
+			} else {
+				point.Name = fmt.Sprintf("渠道 #%d", row.ChannelID)
+			}
+		}
+		points = append(points, point)
+	}
+	return points, nil
+}
+
+func GetLogCacheTrend(filters LogCacheTrendFilters) ([]LogCacheTrendPoint, error) {
+	points := []LogCacheTrendPoint{}
+	if err := validateLogCacheTrendFilters(&filters); err != nil {
+		return points, err
+	}
+	bucketExpression := logAnalyticsBucketExpression(filters.Granularity, filters.TimezoneOffset)
+	if filters.Dimension == LogCacheTrendDimensionGroup {
+		return getLogCacheTrendByGroup(filters, bucketExpression)
+	}
+	return getLogCacheTrendByChannel(filters, bucketExpression)
 }
 
 func GetLogAnalytics(filters LogAnalyticsFilters) (LogAnalytics, error) {

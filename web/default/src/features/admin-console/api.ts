@@ -17,9 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import type { TimeGranularity } from '@/lib/time'
 
 import type {
   AdminConsoleResponse,
+  AdminConsoleCacheTrendDimension,
+  AdminConsoleCacheTrendPoint,
+  AdminConsoleCacheTrendResponse,
   AdminConsoleRealtimeResponse,
   AdminConsoleRealtimeStats,
   AdminConsoleStats,
@@ -30,6 +34,12 @@ import type {
 export interface AdminConsoleTimeRange {
   start_timestamp?: number
   end_timestamp?: number
+}
+
+export interface AdminConsoleCacheTrendParams extends AdminConsoleTimeRange {
+  dimension: AdminConsoleCacheTrendDimension
+  granularity: Extract<TimeGranularity, 'hour' | 'day' | 'week'>
+  timezone_offset: number
 }
 
 export async function getAdminConsoleStats(
@@ -63,6 +73,19 @@ export async function getAdminConsoleRealtimeStats(
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '实时统计数据加载失败')
+  }
+  return response.data.data
+}
+
+export async function getAdminConsoleCacheTrend(
+  params: AdminConsoleCacheTrendParams
+): Promise<AdminConsoleCacheTrendPoint[]> {
+  const response = await api.get<AdminConsoleCacheTrendResponse>(
+    '/api/log/cache-trend',
+    { params }
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || '缓存命中率数据加载失败')
   }
   return response.data.data
 }

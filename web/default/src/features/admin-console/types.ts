@@ -122,3 +122,23 @@ export interface AdminConsoleRealtimeResponse {
   message?: string
   data?: AdminConsoleRealtimeStats
 }
+
+export type AdminConsoleCacheTrendDimension = 'group' | 'channel'
+
+export interface AdminConsoleCacheTrendPoint {
+  timestamp: number
+  name: string
+  channel_id?: number
+  cache_input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  cache_hit_requests: number
+  cache_eligible_requests: number
+  cache_hit_rate: number
+}
+
+export interface AdminConsoleCacheTrendResponse {
+  success: boolean
+  message?: string
+  data?: AdminConsoleCacheTrendPoint[]
+}

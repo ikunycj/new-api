@@ -293,6 +293,7 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
 		logRoute.GET("/analytics", middleware.AdminAuth(), controller.GetLogAnalytics)
+		logRoute.GET("/cache-trend", middleware.AdminAuth(), controller.GetLogCacheTrend)
 		logRoute.GET("/options", middleware.AdminAuth(), controller.GetLogFilterOptions)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)

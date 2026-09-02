@@ -277,6 +277,113 @@ func TestGetLogAnalyticsUsesPostgresPercentilesAndUserSearch(t *testing.T) {
 	assert.Equal(t, time.Date(2026, time.August, 22, 16, 0, 0, 0, time.UTC).Unix(), localDay.TokenTrend[1].Timestamp)
 }
 
+func TestGetLogCacheTrendAggregatesByDimension(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Log{})
+
+	base := time.Date(2026, time.August, 24, 0, 0, 0, 0, time.UTC).Unix()
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 1, Name: "primary"},
+		{Id: 2, Name: "secondary"},
+	}).Error)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 60,
+			Group:               "paid",
+			ChannelId:           1,
+			InputTokensTotal:    100,
+			CacheReadTokens:     60,
+			CacheWriteTokens:    10,
+			CacheStatsAvailable: true,
+		},
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 120,
+			Group:               "paid",
+			ChannelId:           1,
+			InputTokensTotal:    50,
+			CacheWriteTokens:    5,
+			CacheStatsAvailable: true,
+		},
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 3600 + 60,
+			Group:               "paid",
+			ChannelId:           2,
+			InputTokensTotal:    200,
+			CacheReadTokens:     50,
+			CacheStatsAvailable: true,
+		},
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 60,
+			Group:               "legacy",
+			ChannelId:           2,
+			InputTokensTotal:    999,
+			CacheReadTokens:     999,
+			CacheStatsAvailable: false,
+		},
+		{
+			Type:                LogTypeError,
+			CreatedAt:           base + 120,
+			Group:               "paid",
+			ChannelId:           1,
+			InputTokensTotal:    500,
+			CacheReadTokens:     500,
+			CacheStatsAvailable: true,
+		},
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 7200 + 60,
+			Group:               "zero",
+			InputTokensTotal:    0,
+			CacheStatsAvailable: true,
+		},
+	}).Error)
+
+	filters := LogCacheTrendFilters{
+		StartTimestamp: base,
+		EndTimestamp:   base + 3*3600,
+		Granularity:    "hour",
+		TimezoneOffset: 0,
+	}
+
+	groupFilters := filters
+	groupFilters.Dimension = LogCacheTrendDimensionGroup
+	groupPoints, err := GetLogCacheTrend(groupFilters)
+	require.NoError(t, err)
+	require.Len(t, groupPoints, 3)
+	assert.Equal(t, base, groupPoints[0].Timestamp)
+	assert.Equal(t, "paid", groupPoints[0].Name)
+	assert.Equal(t, int64(150), groupPoints[0].CacheInputTokens)
+	assert.Equal(t, int64(60), groupPoints[0].CacheReadTokens)
+	assert.Equal(t, int64(15), groupPoints[0].CacheWriteTokens)
+	assert.Equal(t, int64(1), groupPoints[0].CacheHitRequests)
+	assert.Equal(t, int64(2), groupPoints[0].CacheEligibleRequests)
+	assert.InDelta(t, 40, groupPoints[0].CacheHitRate, 0.001)
+	assert.Equal(t, base+3600, groupPoints[1].Timestamp)
+	assert.Equal(t, "paid", groupPoints[1].Name)
+	assert.InDelta(t, 25, groupPoints[1].CacheHitRate, 0.001)
+	assert.Equal(t, base+7200, groupPoints[2].Timestamp)
+	assert.Equal(t, "zero", groupPoints[2].Name)
+	assert.Zero(t, groupPoints[2].CacheHitRate)
+
+	channelFilters := filters
+	channelFilters.Dimension = LogCacheTrendDimensionChannel
+	channelPoints, err := GetLogCacheTrend(channelFilters)
+	require.NoError(t, err)
+	require.Len(t, channelPoints, 3)
+	assert.Equal(t, "primary", channelPoints[0].Name)
+	assert.Equal(t, 1, channelPoints[0].ChannelID)
+	assert.Equal(t, int64(150), channelPoints[0].CacheInputTokens)
+	assert.InDelta(t, 40, channelPoints[0].CacheHitRate, 0.001)
+	assert.Equal(t, "secondary", channelPoints[1].Name)
+	assert.Equal(t, 2, channelPoints[1].ChannelID)
+	assert.InDelta(t, 25, channelPoints[1].CacheHitRate, 0.001)
+	assert.Equal(t, "未记录渠道", channelPoints[2].Name)
+	assert.Zero(t, channelPoints[2].ChannelID)
+}
+
 func TestGetLogFilterOptionsUsesConfiguredPricingGroups(t *testing.T) {
 	setupPostgresAnalyticsTestDB(t, &Channel{}, &Log{})
 

@@ -164,6 +164,25 @@ func GetLogAnalytics(c *gin.Context) {
 	common.ApiSuccess(c, analytics)
 }
 
+func GetLogCacheTrend(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	timezoneOffset, _ := strconv.Atoi(c.Query("timezone_offset"))
+
+	trend, err := model.GetLogCacheTrend(model.LogCacheTrendFilters{
+		Dimension:      model.LogCacheTrendDimension(c.DefaultQuery("dimension", "group")),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		Granularity:    c.DefaultQuery("granularity", "hour"),
+		TimezoneOffset: timezoneOffset,
+	})
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	common.ApiSuccess(c, trend)
+}
+
 func GetLogFilterOptions(c *gin.Context) {
 	options, err := model.GetLogFilterOptions()
 	if err != nil {
