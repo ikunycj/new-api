@@ -32,11 +32,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
 import { getAdminConsoleCacheTrend } from '@/features/admin-console/api'
+import { buildCacheTrendChartValues } from '@/features/admin-console/cache-trend'
 import { getPricingGroups } from '@/features/channels/api'
 import { processChartData } from '@/features/dashboard/lib'
 import type { DashboardMetric, QuotaDataItem } from '@/features/dashboard/types'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
-import { formatChartTime, type TimeGranularity } from '@/lib/time'
+import type { TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 let themeManagerPromise: Promise<
@@ -183,21 +184,28 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     pricingGroupsQuery.data?.success,
     props.dimension,
   ])
-  const cacheTrendHasData = cacheTrendPoints.some(
-    (point) => point.cache_input_tokens > 0
-  )
+  const cacheTrendValues = useMemo(() => {
+    if (!cacheTrendQuery.isSuccess || dimensionData.length === 0) return []
+    const areaValues = (chartData.spec_area.data?.[0]?.values ?? []) as {
+      Time?: unknown
+      Model?: unknown
+    }[]
+    return buildCacheTrendChartValues(
+      dimensionData,
+      areaValues,
+      cacheTrendPoints,
+      props.timeGranularity
+    )
+  }, [
+    cacheTrendPoints,
+    cacheTrendQuery.isSuccess,
+    chartData.spec_area.data,
+    dimensionData,
+    props.timeGranularity,
+  ])
+  const cacheTrendHasSeries = cacheTrendValues.length > 0
   const spec = useMemo(() => {
-    const cacheValues = cacheTrendPoints
-      .filter(
-        (point) =>
-          point.cache_input_tokens > 0 && Number.isFinite(point.cache_hit_rate)
-      )
-      .map((point) => ({
-        Time: formatChartTime(point.timestamp, props.timeGranularity),
-        CacheRate: point.cache_hit_rate,
-        Model: point.name.trim(),
-      }))
-    if (cacheValues.length === 0) return chartData.spec_area
+    if (cacheTrendValues.length === 0) return chartData.spec_area
 
     const areaData = chartData.spec_area.data?.[0] ?? {
       id: 'areaData',
@@ -220,7 +228,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     return {
       ...chartData.spec_area,
       type: 'common',
-      data: [areaData, { id: 'cacheTrendData', values: cacheValues }],
+      data: [areaData, { id: 'cacheTrendData', values: cacheTrendValues }],
       series: [
         {
           id: usageSeriesId,
@@ -284,7 +292,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
       legends: chartData.spec_area.legends,
       tooltip: chartData.spec_area.tooltip,
     }
-  }, [cacheTrendPoints, chartData.spec_area, props.timeGranularity, t])
+  }, [cacheTrendValues, chartData.spec_area, t])
   let chartContent = themeReady ? (
     <VChart
       key={`${props.dimension}-${props.metric}-${props.timeGranularity}-${resolvedTheme}`}
@@ -349,7 +357,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
         <span className='text-muted-foreground text-xs'>
           合计 {chartData.totalCountDisplay}
         </span>
-        {cacheTrendHasData && (
+        {cacheTrendHasSeries && (
           <span className='text-muted-foreground text-xs'>· 缓存命中率</span>
         )}
       </div>
