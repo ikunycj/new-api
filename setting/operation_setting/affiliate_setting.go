@@ -34,15 +34,18 @@ type AffiliateSetting struct {
 }
 
 var affiliateSetting = AffiliateSetting{
-	Enabled:                   false,
+	Enabled:                   true,
+	InviterRewardQuota:        0,
+	InviteeRewardQuota:        int64(common.QuotaPerUnit),
 	RegistrationRewardTrigger: AffiliateRegistrationTriggerRegistrationSuccess,
 	RewardMode:                AffiliateRewardModePercentage,
-	CashbackFrequency:         AffiliateCashbackFrequencyFirstQualified,
+	CashbackFrequency:         AffiliateCashbackFrequencyEveryTopUp,
 	RewardRateBps:             500,
 	FixedRewardQuota:          int64(5 * common.QuotaPerUnit),
-	MaximumRewardQuota:        int64(25 * common.QuotaPerUnit),
-	MinimumTopUpCents:         20 * 100,
-	HoldSeconds:               7 * 24 * 60 * 60,
+	UnlimitedReward:           true,
+	MaximumRewardQuota:        0,
+	MinimumTopUpCents:         10 * 100,
+	HoldSeconds:               3 * 24 * 60 * 60,
 	MinimumTransferQuota:      int64(common.QuotaPerUnit),
 	ShowInviteeTopUps:         true,
 }
