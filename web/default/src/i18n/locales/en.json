@@ -6067,6 +6067,7 @@
     "Monthly Usage": "Monthly Usage",
     "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage",
     "Automatically probe this channel in the background": "Automatically probe this channel in the background",
-    "Previous-day average TTFT": "Previous-day average TTFT"
+    "Previous-day average TTFT": "Previous-day average TTFT",
+    "The system probe task scans the task queue every 60 seconds.": "The system probe task scans the task queue every 60 seconds."
   }
 }

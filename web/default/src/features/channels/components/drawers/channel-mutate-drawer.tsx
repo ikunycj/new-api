@@ -3809,6 +3809,11 @@ export function ChannelMutateDrawer({
                                   </FormItem>
                                 )}
                               />
+                              <p className='text-muted-foreground text-xs sm:col-span-2'>
+                                {t(
+                                  'The system probe task scans the task queue every 60 seconds.'
+                                )}
+                              </p>
                               <FormField
                                 control={form.control}
                                 name='upstream_max_retries'

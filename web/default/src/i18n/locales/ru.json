@@ -6067,6 +6067,7 @@
     "Monthly Usage": "Месячное потребление",
     "Daily Usage / Monthly Usage": "Дневное / месячное потребление",
     "Automatically probe this channel in the background": "Автоматически проверять этот канал в фоновом режиме",
-    "Previous-day average TTFT": "Средний TTFT за предыдущий день"
+    "Previous-day average TTFT": "Средний TTFT за предыдущий день",
+    "The system probe task scans the task queue every 60 seconds.": "Системная задача проверки сканирует очередь задач каждые 60 секунд."
   }
 }

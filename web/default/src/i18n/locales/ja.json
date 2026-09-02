@@ -6067,6 +6067,7 @@
     "Monthly Usage": "月次使用量",
     "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量",
     "Automatically probe this channel in the background": "このチャネルをバックグラウンドで自動的にプローブする",
-    "Previous-day average TTFT": "前日の平均 TTFT"
+    "Previous-day average TTFT": "前日の平均 TTFT",
+    "The system probe task scans the task queue every 60 seconds.": "システムのプローブタスクは60秒ごとにタスクキューをスキャンします。"
   }
 }

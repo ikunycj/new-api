@@ -99,6 +99,8 @@ const newKeys = {
     'Previous-day probe success rate': 'Previous-day probe success rate',
     'Previous-day average TTFT': 'Previous-day average TTFT',
     'Automatic probe': 'Automatic probe',
+    'The system probe task scans the task queue every 60 seconds.':
+      'The system probe task scans the task queue every 60 seconds.',
     'Automatically probe this channel in the background':
       'Automatically probe this channel in the background',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -230,6 +232,8 @@ const newKeys = {
     'Previous-day probe success rate': '昨日成功率',
     'Previous-day average TTFT': '昨日平均 TTFT',
     'Automatic probe': '自动探测',
+    'The system probe task scans the task queue every 60 seconds.':
+      '系统探测任务每60秒扫描一次任务队列',
     'Automatically probe this channel in the background':
       '在后台自动探测此渠道',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -364,6 +368,8 @@ const newKeys = {
       'Taux de réussite des sondes du jour précédent',
     'Previous-day average TTFT': 'TTFT moyen du jour précédent',
     'Automatic probe': 'Sonde automatique',
+    'The system probe task scans the task queue every 60 seconds.':
+      'La tâche de sondage système analyse la file d’attente toutes les 60 secondes.',
     'Automatically probe this channel in the background':
       'Sonder automatiquement ce canal en arrière-plan',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -495,6 +501,8 @@ const newKeys = {
     'Previous-day probe success rate': '前日のプローブ成功率',
     'Previous-day average TTFT': '前日の平均 TTFT',
     'Automatic probe': '自動プローブ',
+    'The system probe task scans the task queue every 60 seconds.':
+      'システムのプローブタスクは60秒ごとにタスクキューをスキャンします。',
     'Automatically probe this channel in the background':
       'このチャネルをバックグラウンドで自動的にプローブする',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -628,6 +636,8 @@ const newKeys = {
     'Previous-day probe success rate': 'Успешность проверок за предыдущий день',
     'Previous-day average TTFT': 'Средний TTFT за предыдущий день',
     'Automatic probe': 'Автоматическая проверка',
+    'The system probe task scans the task queue every 60 seconds.':
+      'Системная задача проверки сканирует очередь задач каждые 60 секунд.',
     'Automatically probe this channel in the background':
       'Автоматически проверять этот канал в фоновом режиме',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -760,6 +770,8 @@ const newKeys = {
     'Previous-day probe success rate': 'Tỷ lệ kiểm tra thành công ngày trước',
     'Previous-day average TTFT': 'TTFT trung bình ngày trước',
     'Automatic probe': 'Kiểm tra tự động',
+    'The system probe task scans the task queue every 60 seconds.':
+      'Tác vụ kiểm tra hệ thống quét hàng đợi tác vụ mỗi 60 giây.',
     'Automatically probe this channel in the background':
       'Tự động dò kênh này trong nền',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
@@ -886,6 +898,8 @@ const newKeys = {
     'Previous-day probe success rate': '前一自然日探測成功率',
     'Previous-day average TTFT': '前一自然日平均 TTFT',
     'Automatic probe': '自動探測',
+    'The system probe task scans the task queue every 60 seconds.':
+      '系統探測任務每 60 秒掃描一次任務佇列',
     'Automatically probe this channel in the background':
       '在背景自動探測此渠道',
     'You can still edit non-sensitive operations fields such as models, groups, weight, and routing settings.':
