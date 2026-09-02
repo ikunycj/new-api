@@ -124,18 +124,6 @@ func defaultAffiliateCampaign() AffiliateCampaign {
 	}
 }
 
-func validateAffiliateCampaign(campaign AffiliateCampaign) error {
-	if strings.TrimSpace(campaign.Name) == "" || len(campaign.Name) > 120 ||
-		campaign.InviterCashbackRateBps != 2500 || campaign.InviteeBonusRateBps != 2000 ||
-		campaign.HoldSeconds < 0 || campaign.HoldSeconds > 365*24*60*60 {
-		return ErrAffiliateRuleInvalid
-	}
-	if campaign.Enabled && (campaign.StartsAt <= 0 || campaign.EndsAt <= campaign.StartsAt) {
-		return ErrAffiliateRuleInvalid
-	}
-	return nil
-}
-
 func getAffiliateCampaignWithTx(tx *gorm.DB) (*AffiliateCampaign, error) {
 	var campaign AffiliateCampaign
 	if err := tx.Where("code = ?", affiliateCampaignCode).First(&campaign).Error; err == nil {
@@ -160,34 +148,6 @@ func getAffiliateCampaignWithTx(tx *gorm.DB) (*AffiliateCampaign, error) {
 
 func GetAffiliateCampaign() (*AffiliateCampaign, error) {
 	return getAffiliateCampaignWithTx(DB)
-}
-
-func UpdateAffiliateCampaign(next AffiliateCampaign) (*AffiliateCampaign, error) {
-	next.Code = affiliateCampaignCode
-	next.Name = strings.TrimSpace(next.Name)
-	if err := validateAffiliateCampaign(next); err != nil {
-		return nil, err
-	}
-	var campaign *AffiliateCampaign
-	err := DB.Transaction(func(tx *gorm.DB) error {
-		current, err := getAffiliateCampaignWithTx(tx)
-		if err != nil {
-			return err
-		}
-		current.Name = next.Name
-		current.Enabled = next.Enabled
-		current.StartsAt = next.StartsAt
-		current.EndsAt = next.EndsAt
-		current.InviterCashbackRateBps = next.InviterCashbackRateBps
-		current.InviteeBonusRateBps = next.InviteeBonusRateBps
-		current.HoldSeconds = next.HoldSeconds
-		if err := tx.Save(current).Error; err != nil {
-			return err
-		}
-		campaign = current
-		return nil
-	})
-	return campaign, err
 }
 
 func activeAffiliateCampaignWithTx(tx *gorm.DB, completedAt int64) (*AffiliateCampaign, error) {

@@ -72,11 +72,16 @@ func createAffiliateTopUp(t *testing.T, inviteeID int, tradeNo string, money flo
 
 func enableAffiliateCampaignForTest(t *testing.T, startsAt int64, endsAt int64, holdSeconds int64) *AffiliateCampaign {
 	t.Helper()
-	campaign, err := UpdateAffiliateCampaign(AffiliateCampaign{
-		Name: "Test referral campaign", Enabled: true, StartsAt: startsAt, EndsAt: endsAt,
-		InviterCashbackRateBps: 2500, InviteeBonusRateBps: 2000, HoldSeconds: holdSeconds,
-	})
+	campaign, err := getAffiliateCampaignWithTx(DB)
 	require.NoError(t, err)
+	campaign.Name = "Test referral campaign"
+	campaign.Enabled = true
+	campaign.StartsAt = startsAt
+	campaign.EndsAt = endsAt
+	campaign.InviterCashbackRateBps = 2500
+	campaign.InviteeBonusRateBps = 2000
+	campaign.HoldSeconds = holdSeconds
+	require.NoError(t, DB.Save(campaign).Error)
 	return campaign
 }
 

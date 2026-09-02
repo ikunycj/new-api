@@ -35,15 +35,6 @@ func GetAffiliateSummary(c *gin.Context) {
 	common.ApiSuccess(c, summary)
 }
 
-func GetAffiliateCampaign(c *gin.Context) {
-	campaign, err := model.GetAffiliateCampaign()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	common.ApiSuccess(c, campaign)
-}
-
 func GetAffiliateInviteeTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	startAt, _ := strconv.ParseInt(c.Query("start_at"), 10, 64)
@@ -105,27 +96,6 @@ func GetAffiliateBalanceTransfers(c *gin.Context) {
 
 func AdminGetAffiliateSettings(c *gin.Context) {
 	common.ApiSuccess(c, model.GetGlobalAffiliateSetting())
-}
-
-func AdminGetAffiliateCampaign(c *gin.Context) {
-	GetAffiliateCampaign(c)
-}
-
-func AdminUpdateAffiliateCampaign(c *gin.Context) {
-	var request model.AffiliateCampaign
-	if err := c.ShouldBindJSON(&request); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	campaign, err := model.UpdateAffiliateCampaign(request)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	recordManageAudit(c, "affiliate.campaign.update", map[string]interface{}{
-		"enabled": request.Enabled, "starts_at": request.StartsAt, "ends_at": request.EndsAt,
-	})
-	common.ApiSuccess(c, campaign)
 }
 
 func AdminUpdateAffiliateSettings(c *gin.Context) {
