@@ -57,6 +57,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { parseQuotaFromCNY, quotaUnitsToCNY } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import {
   getAffiliateSettings,
@@ -1069,7 +1070,7 @@ function PersonalizedAffiliateSettings() {
     )
   } else {
     results = (
-      <div className='overflow-x-auto rounded-lg border'>
+      <div className='min-w-0 rounded-lg border'>
         <Table>
           <TableHeader>
             <TableRow>
@@ -1092,7 +1093,7 @@ function PersonalizedAffiliateSettings() {
               <TableHead className='min-w-52'>
                 {t('Note')} ({t('Optional')})
               </TableHead>
-              <TableHead className='min-w-44 text-right'>
+              <TableHead className='sticky right-0 z-30 min-w-44 bg-[var(--table-header)] text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))]'>
                 {t('Action')}
               </TableHead>
             </TableRow>
@@ -1256,7 +1257,12 @@ function PersonalizedAffiliateSettings() {
                       disabled={disabled}
                     />
                   </TableCell>
-                  <TableCell className='align-top'>
+                  <TableCell
+                    className={cn(
+                      'sticky right-0 z-10 min-w-44 bg-background align-top text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))] group-hover:[background-color:color-mix(in_oklch,var(--muted)_50%,var(--background))]',
+                      rowClassName && 'bg-muted/30 group-hover:bg-muted/40'
+                    )}
+                  >
                     <div className='flex flex-wrap justify-end gap-2'>
                       <Button
                         type='button'
