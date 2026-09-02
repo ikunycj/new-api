@@ -6068,6 +6068,9 @@
     "Daily Usage / Monthly Usage": "Daily Usage / Monthly Usage",
     "Automatically probe this channel in the background": "Automatically probe this channel in the background",
     "Previous-day average TTFT": "Previous-day average TTFT",
+    "Customer Service": "Customer Service",
+    "Enter customer service contact information": "Enter customer service contact information",
+    "Information displayed to users for contacting customer service": "Information displayed to users for contacting customer service",
     "The system probe task scans the task queue every 60 seconds.": "The system probe task scans the task queue every 60 seconds."
   }
 }

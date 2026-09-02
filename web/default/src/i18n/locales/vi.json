@@ -6068,6 +6068,9 @@
     "Daily Usage / Monthly Usage": "Mức sử dụng ngày / Mức sử dụng tháng",
     "Automatically probe this channel in the background": "Tự động dò kênh này trong nền",
     "Previous-day average TTFT": "TTFT trung bình ngày trước",
+    "Customer Service": "Chăm sóc khách hàng",
+    "Enter customer service contact information": "Nhập thông tin liên hệ bộ phận chăm sóc khách hàng",
+    "Information displayed to users for contacting customer service": "Thông tin hiển thị cho người dùng để liên hệ bộ phận chăm sóc khách hàng",
     "The system probe task scans the task queue every 60 seconds.": "Tác vụ kiểm tra hệ thống quét hàng đợi tác vụ mỗi 60 giây."
   }
 }

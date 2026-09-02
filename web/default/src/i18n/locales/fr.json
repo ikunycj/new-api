@@ -6068,6 +6068,9 @@
     "Daily Usage / Monthly Usage": "Utilisation quotidienne / Utilisation mensuelle",
     "Automatically probe this channel in the background": "Sonder automatiquement ce canal en arrière-plan",
     "Previous-day average TTFT": "TTFT moyen du jour précédent",
+    "Customer Service": "Service client",
+    "Enter customer service contact information": "Saisissez les coordonnées du service client",
+    "Information displayed to users for contacting customer service": "Informations affichées aux utilisateurs pour contacter le service client",
     "The system probe task scans the task queue every 60 seconds.": "La tâche de sondage système analyse la file d’attente toutes les 60 secondes."
   }
 }

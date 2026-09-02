@@ -6068,6 +6068,9 @@
     "Daily Usage / Monthly Usage": "日用量 / 月用量",
     "Automatically probe this channel in the background": "在后台自动探测此渠道",
     "Previous-day average TTFT": "昨日平均 TTFT",
+    "Customer Service": "客服信息",
+    "Enter customer service contact information": "输入客服联系方式",
+    "Information displayed to users for contacting customer service": "向用户展示的客服联系方式",
     "The system probe task scans the task queue every 60 seconds.": "系统探测任务每60秒扫描一次任务队列"
   }
 }

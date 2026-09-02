@@ -6068,6 +6068,9 @@
     "Daily Usage / Monthly Usage": "日次使用量 / 月次使用量",
     "Automatically probe this channel in the background": "このチャネルをバックグラウンドで自動的にプローブする",
     "Previous-day average TTFT": "前日の平均 TTFT",
+    "Customer Service": "カスタマーサービス",
+    "Enter customer service contact information": "カスタマーサービスの連絡先を入力",
+    "Information displayed to users for contacting customer service": "ユーザーに表示するカスタマーサービスの連絡先情報",
     "The system probe task scans the task queue every 60 seconds.": "システムのプローブタスクは60秒ごとにタスクキューをスキャンします。"
   }
 }

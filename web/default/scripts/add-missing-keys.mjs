@@ -5,6 +5,11 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Customer Service': 'Customer Service',
+    'Enter customer service contact information':
+      'Enter customer service contact information',
+    'Information displayed to users for contacting customer service':
+      'Information displayed to users for contacting customer service',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (thousands)',
     'Throughput trend': 'Throughput trend',
@@ -138,6 +143,10 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'Customer Service': '客服信息',
+    'Enter customer service contact information': '输入客服联系方式',
+    'Information displayed to users for contacting customer service':
+      '向用户展示的客服联系方式',
     'Copy ready-to-run curl': '复制命令到本地终端测试',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
@@ -270,6 +279,11 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'Customer Service': 'Service client',
+    'Enter customer service contact information':
+      'Saisissez les coordonnées du service client',
+    'Information displayed to users for contacting customer service':
+      'Informations affichées aux utilisateurs pour contacter le service client',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (milliers)',
     'Throughput trend': 'Tendance du débit',
@@ -407,6 +421,11 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'Customer Service': 'カスタマーサービス',
+    'Enter customer service contact information':
+      'カスタマーサービスの連絡先を入力',
+    'Information displayed to users for contacting customer service':
+      'ユーザーに表示するカスタマーサービスの連絡先情報',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千単位）',
     'Throughput trend': 'スループット推移',
@@ -540,6 +559,11 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'Customer Service': 'Служба поддержки',
+    'Enter customer service contact information':
+      'Введите контактную информацию службы поддержки',
+    'Information displayed to users for contacting customer service':
+      'Информация для пользователей о связи со службой поддержки',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (тыс.)',
     'Throughput trend': 'Тренд пропускной способности',
@@ -675,6 +699,11 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'Customer Service': 'Chăm sóc khách hàng',
+    'Enter customer service contact information':
+      'Nhập thông tin liên hệ bộ phận chăm sóc khách hàng',
+    'Information displayed to users for contacting customer service':
+      'Thông tin hiển thị cho người dùng để liên hệ bộ phận chăm sóc khách hàng',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (nghìn)',
     'Throughput trend': 'Xu hướng thông lượng',
@@ -809,6 +838,10 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'Customer Service': '客服資訊',
+    'Enter customer service contact information': '輸入客服聯絡資訊',
+    'Information displayed to users for contacting customer service':
+      '向使用者顯示的客服聯絡資訊',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
     'Throughput trend': '吞吐趨勢',

@@ -145,6 +145,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			common.OptionMapRWMutex.RLock()
 			homePageContent := common.OptionMap["HomePageContent"]
 			headerNavModules := common.OptionMap["HeaderNavModules"]
+			customerService := common.OptionMap["CustomerService"]
 			common.OptionMapRWMutex.RUnlock()
 			if canonicalPath == "/" && strings.TrimSpace(homePageContent) != "" {
 				c.Header("Cache-Control", "no-cache, must-revalidate")
@@ -177,6 +178,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 					"setup":                    true,
 					"status": map[string]any{
 						"HeaderNavModules": headerNavModules,
+						"customer_service": customerService,
 						"logo":             logo,
 						"server_address":   serverAddress,
 						"system_name":      common.SystemName,

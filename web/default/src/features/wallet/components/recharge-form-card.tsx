@@ -20,6 +20,7 @@ import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CustomerServiceInfo } from '@/components/layout/components/customer-service-info'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -312,9 +313,12 @@ export function RechargeFormCard({
               </div>
 
               <div className='space-y-2.5 sm:space-y-3'>
-                <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
-                  {t('Payment Method')}
-                </Label>
+                <div className='flex flex-wrap items-baseline gap-x-3 gap-y-1'>
+                  <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
+                    {t('Payment Method')}
+                  </Label>
+                  <CustomerServiceInfo inline />
+                </div>
                 {hasStandardPaymentMethods ? (
                   <div className='grid grid-cols-2 gap-1.5 sm:gap-3 lg:grid-cols-3'>
                     {topupInfo?.pay_methods?.map((method) => {
@@ -497,6 +501,8 @@ export function RechargeFormCard({
             />
           </div>
         )}
+
+      {!hasConfigurableTopup && <CustomerServiceInfo compact />}
 
       {/* Redemption Code Section */}
       {redemptionEnabled ? (
