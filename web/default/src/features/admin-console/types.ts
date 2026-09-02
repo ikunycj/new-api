@@ -50,6 +50,7 @@ export interface AdminConsoleRevenueStats {
 }
 
 export interface AdminConsolePerformanceStats {
+  average_response_seconds: number
   today_response_p50_seconds: number
   today_response_p90_seconds: number
   today_response_p99_seconds: number
@@ -59,6 +60,9 @@ export interface AdminConsolePerformanceStats {
   today_tpm_p50: number
   today_tpm_p90: number
   today_tpm_p99: number
+  concurrency_p50: number
+  concurrency_p90: number
+  concurrency_p99: number
   month_concurrency_p50: number
   month_concurrency_p90: number
   month_concurrency_p95: number

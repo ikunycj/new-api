@@ -240,7 +240,7 @@ export function LogStatCards(props: LogStatCardsProps) {
         value: realtimeError ? '--' : concurrency.displayValue,
         detail: adminError
           ? '统计数据加载失败'
-          : `本月 P50 ${formatCompactNumber(adminStats?.performance.month_concurrency_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.month_concurrency_p90 ?? 0, locale)} / P95 ${formatCompactNumber(adminStats?.performance.month_concurrency_p95 ?? 0, locale)}`,
+          : `P50 ${formatCompactNumber(adminStats?.performance.concurrency_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.concurrency_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.concurrency_p99 ?? 0, locale)}`,
         icon: Activity01Icon,
         tone: 'chart-2',
         loading: cardLoading,

@@ -159,6 +159,54 @@ func TestGetAdminConsoleStatsCalculatesThroughputAndConcurrencyPercentiles(t *te
 	assert.Equal(t, int64(2), stats.Performance.MonthConcurrencyP95)
 }
 
+func TestGetAdminConsoleStatsAtRangeFiltersRangeMetrics(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Token{}, &Channel{}, &User{}, &Log{}, &TopUp{})
+
+	now := time.Date(2026, time.August, 22, 12, 0, 0, 0, time.Local)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	rangeStart := startOfDay + 100
+	rangeEnd := startOfDay + 200
+	require.NoError(t, DB.Create(&[]User{
+		{Id: 1, Username: "inside", CreatedAt: rangeStart + 1},
+		{Id: 2, Username: "before", CreatedAt: rangeStart - 1},
+		{Id: 3, Username: "after", CreatedAt: rangeEnd + 1},
+	}).Error)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeStart + 20, PromptTokens: 10, CompletionTokens: 20, Quota: 100, UseTime: 10},
+		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeEnd - 1, PromptTokens: 20, CompletionTokens: 30, Quota: 200, UseTime: 20},
+		{UserId: 2, TokenId: 2, Type: LogTypeConsume, CreatedAt: rangeStart - 1, PromptTokens: 100, CompletionTokens: 100, Quota: 1000, UseTime: 30},
+		{UserId: 3, TokenId: 3, Type: LogTypeConsume, CreatedAt: rangeEnd + 2, PromptTokens: 200, CompletionTokens: 200, Quota: 2000, UseTime: 1},
+	}).Error)
+	require.NoError(t, DB.Create(&[]TopUp{
+		{UserId: 1, Money: 5, TradeNo: "inside", PaymentMethod: "stripe", CreateTime: rangeStart + 10, CompleteTime: rangeStart + 10, Status: common.TopUpStatusSuccess},
+		{UserId: 2, Money: 7, TradeNo: "before", PaymentMethod: "stripe", CreateTime: rangeStart - 1, CompleteTime: rangeStart - 1, Status: common.TopUpStatusSuccess},
+		{UserId: 3, Money: 9, TradeNo: "after", PaymentMethod: "stripe", CreateTime: rangeEnd + 1, CompleteTime: rangeEnd + 1, Status: common.TopUpStatusSuccess},
+	}).Error)
+
+	selectedRange, err := normalizeAdminConsoleTimeRange(now, rangeStart, rangeEnd)
+	require.NoError(t, err)
+	stats, err := getAdminConsoleStatsAtRange(now, selectedRange)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), stats.Users.Today)
+	assert.Equal(t, int64(2), stats.Requests.Today)
+	assert.Equal(t, int64(80), stats.Tokens.Today)
+	assert.Equal(t, int64(300), stats.Quota.Today)
+	assert.InDelta(t, 5, stats.Revenue.Today, 0.001)
+	assert.InDelta(t, 15, stats.Performance.AverageResponseSeconds, 0.001)
+	assert.InDelta(t, 15, stats.Performance.TodayResponseP50Seconds, 0.001)
+	assert.InDelta(t, 19, stats.Performance.TodayResponseP90Seconds, 0.001)
+	assert.InDelta(t, 19.9, stats.Performance.TodayResponseP99Seconds, 0.001)
+	assert.InDelta(t, 1, stats.Performance.TodayRPMP50, 0.001)
+	assert.InDelta(t, 1, stats.Performance.TodayRPMP90, 0.001)
+	assert.InDelta(t, 1, stats.Performance.TodayRPMP99, 0.001)
+	assert.InDelta(t, 30, stats.Performance.TodayTPMP50, 0.001)
+	assert.InDelta(t, 46, stats.Performance.TodayTPMP90, 0.001)
+	assert.InDelta(t, 49.6, stats.Performance.TodayTPMP99, 0.001)
+	assert.Equal(t, int64(0), stats.Performance.ConcurrencyP50)
+	assert.Equal(t, int64(1), stats.Performance.ConcurrencyP90)
+	assert.Equal(t, int64(1), stats.Performance.ConcurrencyP99)
+}
+
 func TestGetAdminConsoleRealtimeStatsUsesSixtySecondWindow(t *testing.T) {
 	setupPostgresAnalyticsTestDB(t, &Log{})
 

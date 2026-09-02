@@ -27,8 +27,17 @@ import type {
   AdminConsoleSystemLoadResponse,
 } from './types'
 
-export async function getAdminConsoleStats(): Promise<AdminConsoleStats> {
-  const response = await api.get<AdminConsoleResponse>('/api/admin/console')
+export interface AdminConsoleTimeRange {
+  start_timestamp?: number
+  end_timestamp?: number
+}
+
+export async function getAdminConsoleStats(
+  params?: AdminConsoleTimeRange
+): Promise<AdminConsoleStats> {
+  const response = await api.get<AdminConsoleResponse>('/api/admin/console', {
+    params,
+  })
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '管理控制台数据加载失败')
   }
@@ -45,9 +54,12 @@ export async function getAdminConsoleSystemLoad(): Promise<AdminConsoleSystemLoa
   return response.data.data
 }
 
-export async function getAdminConsoleRealtimeStats(): Promise<AdminConsoleRealtimeStats> {
+export async function getAdminConsoleRealtimeStats(
+  params?: AdminConsoleTimeRange
+): Promise<AdminConsoleRealtimeStats> {
   const response = await api.get<AdminConsoleRealtimeResponse>(
-    '/api/admin/realtime'
+    '/api/admin/realtime',
+    { params }
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '实时统计数据加载失败')

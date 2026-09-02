@@ -30,7 +30,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff } from 'lucide-react'
-import { lazy, Suspense, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -48,6 +48,7 @@ import { buildDefaultDashboardFilters } from '@/features/dashboard/lib'
 import type { DashboardFilters } from '@/features/dashboard/types'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
+import { dateToUnixTimestamp } from '@/lib/time'
 
 import type { AdminAnalyticsSection } from './admin-analytics'
 import {
@@ -100,7 +101,6 @@ interface ConsoleStatItem {
 
 function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
   const stats = props.data.stats
-  const realtimeStats = props.data.realtimeStats
   const items: ConsoleStatItem[] = [
     {
       title: 'API 密钥',
@@ -135,15 +135,15 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
     },
     {
       title: '平均响应',
-      value: props.data.realtimeStatsError
+      value: props.data.statsError
         ? '--'
-        : formatDuration(realtimeStats?.response_seconds ?? 0),
+        : formatDuration(stats?.performance.average_response_seconds ?? 0),
       detail: props.data.statsError
         ? '统计数据加载失败'
         : `P50 ${formatDuration(stats?.performance.today_response_p50_seconds ?? 0)} / P90 ${formatDuration(stats?.performance.today_response_p90_seconds ?? 0)} / P99 ${formatDuration(stats?.performance.today_response_p99_seconds ?? 0)}`,
       icon: Clock01Icon,
       tone: 'chart-4',
-      loading: props.data.statsLoading || props.data.realtimeStatsLoading,
+      loading: props.data.statsLoading,
     },
     {
       title: '新增用户',
@@ -207,9 +207,22 @@ export function AdminConsole() {
     buildDefaultDashboardFilters()
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
+  const adminConsoleTimeRange = useMemo(() => {
+    if (!modelFilters.start_timestamp || !modelFilters.end_timestamp) {
+      return undefined
+    }
+    return {
+      start_timestamp: dateToUnixTimestamp(modelFilters.start_timestamp),
+      end_timestamp: dateToUnixTimestamp(modelFilters.end_timestamp),
+    }
+  }, [modelFilters.end_timestamp, modelFilters.start_timestamp])
   const statsQuery = useQuery({
-    queryKey: ['admin-console-stats'],
-    queryFn: getAdminConsoleStats,
+    queryKey: [
+      'admin-console-stats',
+      adminConsoleTimeRange?.start_timestamp,
+      adminConsoleTimeRange?.end_timestamp,
+    ],
+    queryFn: () => getAdminConsoleStats(adminConsoleTimeRange),
     staleTime: 30_000,
     refetchInterval: 60_000,
     placeholderData: (previous) => previous,
@@ -223,8 +236,12 @@ export function AdminConsole() {
     placeholderData: (previous) => previous,
   })
   const realtimeStatsQuery = useQuery({
-    queryKey: ['admin-console-realtime'],
-    queryFn: getAdminConsoleRealtimeStats,
+    queryKey: [
+      'admin-console-realtime',
+      adminConsoleTimeRange?.start_timestamp,
+      adminConsoleTimeRange?.end_timestamp,
+    ],
+    queryFn: () => getAdminConsoleRealtimeStats(adminConsoleTimeRange),
     enabled: activeView === 'overview',
     staleTime: 5_000,
     refetchInterval: 5_000,
