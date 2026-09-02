@@ -265,7 +265,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       </TabsContent>
       <TabsContent value='toc'>
         <ToCGroupsSection
-          groups={groups}
+          groups={classifiedGroups}
           channels={channels}
           toBGroupNames={toBGroupNames}
         />

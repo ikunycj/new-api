@@ -8,7 +8,6 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -126,7 +125,12 @@ func GetUserGroups(c *gin.Context) {
 		isToBUser = user.IsToB()
 	}
 	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
+	pricingGroups, err := model.GetPricingGroupNames()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	for _, groupName := range pricingGroups {
 		if isToBUser && !model.IsBillingGroupToB(groupName) {
 			continue
 		}
