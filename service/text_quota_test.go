@@ -311,6 +311,21 @@ func TestCacheStatsInputTokensNormalizesOpenAIBillingUsage(t *testing.T) {
 	require.Equal(t, 4387, inputTokens)
 }
 
+func TestCacheStatsInputTokensUsesPromptTokensForGeminiCacheStats(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatGemini}
+	usage := &dto.Usage{
+		BillingUsage: dto.NewGeminiChatBillingUsage(&dto.GeminiUsageMetadata{
+			PromptTokenCount:        4387,
+			CachedContentTokenCount: 3840,
+		}),
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
 func TestCacheStatsInputTokensDoesNotInferClaudeUsageSource(t *testing.T) {
 	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
 	usage := &dto.Usage{

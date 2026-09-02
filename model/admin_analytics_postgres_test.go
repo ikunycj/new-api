@@ -373,15 +373,96 @@ func TestGetLogCacheTrendAggregatesByDimension(t *testing.T) {
 	channelPoints, err := GetLogCacheTrend(channelFilters)
 	require.NoError(t, err)
 	require.Len(t, channelPoints, 3)
-	assert.Equal(t, "primary", channelPoints[0].Name)
+	assert.Equal(t, "primary #1", channelPoints[0].Name)
 	assert.Equal(t, 1, channelPoints[0].ChannelID)
 	assert.Equal(t, int64(150), channelPoints[0].CacheInputTokens)
 	assert.InDelta(t, 40, channelPoints[0].CacheHitRate, 0.001)
-	assert.Equal(t, "secondary", channelPoints[1].Name)
+	assert.Equal(t, "secondary #2", channelPoints[1].Name)
 	assert.Equal(t, 2, channelPoints[1].ChannelID)
 	assert.InDelta(t, 25, channelPoints[1].CacheHitRate, 0.001)
 	assert.Equal(t, "未记录渠道", channelPoints[2].Name)
 	assert.Zero(t, channelPoints[2].ChannelID)
+}
+
+func TestGetLogCacheTrendKeepsSameNamedChannelsSeparate(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Log{})
+
+	base := time.Date(2026, time.August, 24, 0, 0, 0, 0, time.UTC).Unix()
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 1, Name: "ChatGPT Plus"},
+		{Id: 2, Name: "ChatGPT Plus"},
+	}).Error)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 60,
+			ChannelId:           1,
+			InputTokensTotal:    100,
+			CacheReadTokens:     40,
+			CacheStatsAvailable: true,
+		},
+		{
+			Type:                LogTypeConsume,
+			CreatedAt:           base + 120,
+			ChannelId:           2,
+			InputTokensTotal:    200,
+			CacheReadTokens:     20,
+			CacheStatsAvailable: true,
+		},
+	}).Error)
+
+	points, err := GetLogCacheTrend(LogCacheTrendFilters{
+		Dimension:      LogCacheTrendDimensionChannel,
+		StartTimestamp: base,
+		EndTimestamp:   base + int64(time.Hour/time.Second),
+		Granularity:    "hour",
+	})
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+	assert.Equal(t, "ChatGPT Plus #1", points[0].Name)
+	assert.InDelta(t, 40, points[0].CacheHitRate, 0.001)
+	assert.Equal(t, "ChatGPT Plus #2", points[1].Name)
+	assert.InDelta(t, 10, points[1].CacheHitRate, 0.001)
+}
+
+func TestGetLogCacheTrendUsesStableNameForDeletedChannels(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Log{})
+
+	base := time.Date(2026, time.August, 24, 0, 0, 0, 0, time.UTC).Unix()
+	require.NoError(t, LOG_DB.Create(&Log{
+		Type:                LogTypeConsume,
+		CreatedAt:           base + 60,
+		ChannelId:           12,
+		InputTokensTotal:    100,
+		CacheReadTokens:     25,
+		CacheStatsAvailable: true,
+	}).Error)
+
+	points, err := GetLogCacheTrend(LogCacheTrendFilters{
+		Dimension:      LogCacheTrendDimensionChannel,
+		StartTimestamp: base,
+		EndTimestamp:   base + int64(time.Hour/time.Second),
+		Granularity:    "hour",
+	})
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+	assert.Equal(t, "渠道 #12", points[0].Name)
+}
+
+func TestGetAllQuotaDatesUsesStableNameForDeletedChannels(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &QuotaData{}, &Channel{})
+	require.NoError(t, DB.Create(&QuotaData{
+		Username:  "alice",
+		ModelName: "gpt-a",
+		ChannelID: 12,
+		CreatedAt: 1000,
+		Count:     1,
+	}).Error)
+
+	rows, err := GetAllQuotaDates(900, 1100, "")
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "渠道 #12", rows[0].ChannelName)
 }
 
 func TestGetLogFilterOptionsUsesConfiguredPricingGroups(t *testing.T) {

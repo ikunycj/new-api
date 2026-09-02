@@ -33,6 +33,7 @@ import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
 import { getAdminConsoleCacheTrend } from '@/features/admin-console/api'
 import { buildCacheTrendChartValues } from '@/features/admin-console/cache-trend'
+import { formatChannelDisplayName } from '@/features/admin-console/channel-display'
 import { getPricingGroups } from '@/features/channels/api'
 import { processChartData } from '@/features/dashboard/lib'
 import type { DashboardMetric, QuotaDataItem } from '@/features/dashboard/types'
@@ -76,7 +77,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     !props.loading &&
     props.startTimestamp !== undefined &&
     props.endTimestamp !== undefined
-  const timezoneOffset = -new Date().getTimezoneOffset()
+  const timezoneOffset = new Date().getTimezoneOffset()
   const cacheTrendQuery = useQuery({
     queryKey: [
       'admin-console-cache-trend',
@@ -141,9 +142,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
 
     return props.data.map((item) => ({
       ...item,
-      model_name:
-        item.channel_name?.trim() ||
-        (item.channel_id ? `渠道 #${item.channel_id}` : '未记录渠道'),
+      model_name: formatChannelDisplayName(item.channel_name, item.channel_id),
     }))
   }, [pricingGroupNames, props.data, props.dimension])
   const pricingGroupsFailed =

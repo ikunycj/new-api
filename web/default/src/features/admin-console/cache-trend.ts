@@ -1,6 +1,7 @@
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import { formatChartTime, type TimeGranularity } from '@/lib/time'
 
+import { formatChannelDisplayName } from './channel-display'
 import type { AdminConsoleCacheTrendPoint } from './types'
 
 export interface CacheTrendChartValue {
@@ -47,7 +48,10 @@ export function buildCacheTrendChartValues(
 
   const rates = new Map<string, number>()
   for (const point of cacheTrendPoints) {
-    const model = point.name?.trim()
+    const model =
+      point.channel_id !== undefined
+        ? formatChannelDisplayName(point.name, point.channel_id)
+        : point.name?.trim()
     const timestamp = Number(point.timestamp)
     if (!model || !models.has(model) || !Number.isFinite(timestamp)) continue
 

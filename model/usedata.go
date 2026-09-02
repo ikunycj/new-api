@@ -239,13 +239,7 @@ func fillQuotaDataChannelNames(rows []*QuotaData) error {
 		}
 	}
 	for _, row := range rows {
-		if name := channelNameByID[row.ChannelID]; name != "" {
-			row.ChannelName = name
-			continue
-		}
-		if row.ChannelID > 0 {
-			row.ChannelName = fmt.Sprintf("channel-%d", row.ChannelID)
-		}
+		row.ChannelName = formatChannelDisplayName(row.ChannelID, channelNameByID[row.ChannelID])
 	}
 	return nil
 }

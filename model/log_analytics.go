@@ -313,14 +313,7 @@ func getLogCacheTrendByChannel(filters LogCacheTrendFilters, bucketExpression st
 	for _, row := range rows {
 		point := cacheTrendPointFromMetrics(row.logCacheTrendMetricRow)
 		point.ChannelID = row.ChannelID
-		point.Name = channelNames[row.ChannelID]
-		if point.Name == "" {
-			if row.ChannelID == 0 {
-				point.Name = "未记录渠道"
-			} else {
-				point.Name = fmt.Sprintf("渠道 #%d", row.ChannelID)
-			}
-		}
+		point.Name = formatChannelDisplayName(row.ChannelID, channelNames[row.ChannelID])
 		points = append(points, point)
 	}
 	return points, nil

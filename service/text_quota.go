@@ -85,10 +85,10 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 }
 
 // CacheStatsInputTokens returns the reliable input-token denominator used by
-// cache analytics. OpenAI-compatible responses may expose cache details while
-// leaving the normalized input_tokens field empty, in which case prompt_tokens
-// is the full input total. Claude prompt_tokens has different semantics and is
-// intentionally excluded from this fallback.
+// cache analytics. OpenAI-compatible and native Gemini responses may expose
+// cache details while leaving the normalized input_tokens field empty, in which
+// case prompt_tokens is the full input total. Claude prompt_tokens has
+// different semantics and is intentionally excluded from this fallback.
 func CacheStatsInputTokens(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) (int, bool) {
 	return cacheStatsInputTokens(relayInfo, effectiveBillingUsage(usage))
 }
@@ -114,7 +114,7 @@ func cacheStatsInputTokens(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) (
 		return 0, false
 	}
 	switch relayInfo.GetFinalRequestRelayFormat() {
-	case types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses:
+	case types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses, types.RelayFormatGemini:
 		return usage.PromptTokens, true
 	default:
 		return 0, false
