@@ -1593,52 +1593,60 @@ func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endA
 }
 
 const affiliateUserOverrideConfiguredCondition = `(
-	affiliate_user_overrides.enabled IS NOT NULL OR
 	affiliate_user_overrides.inviter_reward_quota IS NOT NULL OR
 	affiliate_user_overrides.invitee_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.registration_reward_trigger IS NOT NULL OR
-	affiliate_user_overrides.reward_mode IS NOT NULL OR
-	affiliate_user_overrides.cashback_frequency IS NOT NULL OR
 	affiliate_user_overrides.reward_rate_bps IS NOT NULL OR
 	affiliate_user_overrides.fixed_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.unlimited_reward IS NOT NULL OR
 	affiliate_user_overrides.maximum_reward_quota IS NOT NULL OR
 	affiliate_user_overrides.minimum_top_up_cents IS NOT NULL OR
-	affiliate_user_overrides.hold_seconds IS NOT NULL OR
-	affiliate_user_overrides.minimum_transfer_quota IS NOT NULL OR
-	affiliate_user_overrides.show_invitee_top_ups IS NOT NULL
+	affiliate_user_overrides.hold_seconds IS NOT NULL
 )`
 
 func hasAffiliateUserOverrideValues(override *AffiliateUserOverride) bool {
 	if override == nil {
 		return false
 	}
-	return override.Enabled != nil ||
-		override.InviterRewardQuota != nil ||
+	return override.InviterRewardQuota != nil ||
 		override.InviteeRewardQuota != nil ||
-		override.RegistrationRewardTrigger != nil ||
-		override.RewardMode != nil ||
-		override.CashbackFrequency != nil ||
 		override.RewardRateBps != nil ||
 		override.FixedRewardQuota != nil ||
-		override.UnlimitedReward != nil ||
 		override.MaximumRewardQuota != nil ||
 		override.MinimumTopUpCents != nil ||
-		override.HoldSeconds != nil ||
+		override.HoldSeconds != nil
+}
+
+// User-specific strategies may only override fields in the global
+// configuration section. Preferences and rule fields remain global-only.
+func hasAffiliateUserOverrideDisallowedValues(override *AffiliateUserOverride) bool {
+	if override == nil {
+		return false
+	}
+	return override.Enabled != nil ||
+		override.RegistrationRewardTrigger != nil ||
+		override.CashbackFrequency != nil ||
+		override.RewardMode != nil ||
+		override.UnlimitedReward != nil ||
 		override.MinimumTransferQuota != nil ||
 		override.ShowInviteeTopUps != nil
 }
 
 func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUserOverride) (*AffiliateUserOverrideView, error) {
 	changeReason := strings.TrimSpace(override.ChangeReason)
-	if userID <= 0 || adminUserID <= 0 || changeReason == "" || len(changeReason) > 500 || !hasAffiliateUserOverrideValues(&override) {
+	if userID <= 0 || adminUserID <= 0 || len(changeReason) > 500 ||
+		hasAffiliateUserOverrideDisallowedValues(&override) ||
+		!hasAffiliateUserOverrideValues(&override) {
+		return nil, ErrAffiliateRuleInvalid
+	}
+	global := globalAffiliateRule()
+	if (global.RewardMode == operation_setting.AffiliateRewardModePercentage && override.FixedRewardQuota != nil) ||
+		(global.RewardMode == operation_setting.AffiliateRewardModeFixed && override.RewardRateBps != nil) {
 		return nil, ErrAffiliateRuleInvalid
 	}
 	override.UserID = userID
 	override.ID = 0
 	override.UpdatedBy = adminUserID
 	override.ChangeReason = changeReason
-	rule := applyAffiliateOverride(globalAffiliateRule(), &override)
+	rule := applyAffiliateOverride(global, &override)
 	if err := validateAffiliateRule(rule); err != nil {
 		return nil, err
 	}

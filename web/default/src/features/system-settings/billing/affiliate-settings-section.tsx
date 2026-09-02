@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, RotateCcw, Search } from 'lucide-react'
 import {
-  Fragment,
   useEffect,
+  useMemo,
   useState,
   type FormEvent,
   type ReactNode,
@@ -28,17 +28,6 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import {
@@ -67,12 +56,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import {
-  formatQuotaAsCNY,
-  formatTimestampToDate,
-  parseQuotaFromCNY,
-  quotaUnitsToCNY,
-} from '@/lib/format'
+import { parseQuotaFromCNY, quotaUnitsToCNY } from '@/lib/format'
 
 import {
   getAffiliateSettings,
@@ -119,22 +103,260 @@ type RuleDraft = {
   showInviteeTopUps: boolean
 }
 
-const ruleFieldKeys: RuleFieldKey[] = [
-  'enabled',
+type AffiliateConfigDraft = {
+  inviterReward: string
+  inviteeReward: string
+  rewardValue: string
+  minimumTopUp: string
+  maximumReward: string
+  holdDays: string
+}
+
+const affiliateConfigFieldKeys = [
   'inviter_reward_quota',
   'invitee_reward_quota',
-  'registration_reward_trigger',
-  'reward_mode',
-  'cashback_frequency',
-  'reward_rate_bps',
-  'fixed_reward_quota',
-  'unlimited_reward',
-  'maximum_reward_quota',
+  'reward_value',
   'minimum_topup_cents',
+  'maximum_reward_quota',
   'hold_seconds',
-  'minimum_transfer_quota',
-  'show_invitee_topups',
-]
+] as const
+
+type AffiliateConfigFieldKey = (typeof affiliateConfigFieldKeys)[number]
+
+const affiliateConfigDraftKeys: Record<
+  AffiliateConfigFieldKey,
+  keyof AffiliateConfigDraft
+> = {
+  inviter_reward_quota: 'inviterReward',
+  invitee_reward_quota: 'inviteeReward',
+  reward_value: 'rewardValue',
+  minimum_topup_cents: 'minimumTopUp',
+  maximum_reward_quota: 'maximumReward',
+  hold_seconds: 'holdDays',
+}
+
+type AffiliateConfigFollowing = Record<AffiliateConfigFieldKey, boolean>
+
+type AffiliateUserRowDraft = {
+  config: AffiliateConfigDraft
+  following: AffiliateConfigFollowing
+  note: string
+}
+
+function settingsToConfigDraft(
+  settings: AffiliateSettings & { reward_mode: AffiliateRewardMode }
+): AffiliateConfigDraft {
+  return {
+    inviterReward: String(quotaUnitsToCNY(settings.inviter_reward_quota)),
+    inviteeReward: String(quotaUnitsToCNY(settings.invitee_reward_quota)),
+    rewardValue:
+      settings.reward_mode === 'percentage'
+        ? String(settings.reward_rate_bps / 100)
+        : String(quotaUnitsToCNY(settings.fixed_reward_quota)),
+    minimumTopUp: String(settings.minimum_topup_cents / 100),
+    maximumReward: String(quotaUnitsToCNY(settings.maximum_reward_quota)),
+    holdDays: String(settings.hold_seconds / SECONDS_PER_DAY),
+  }
+}
+
+function buildAffiliateConfigOverride(
+  draft: AffiliateConfigDraft,
+  rewardMode: AffiliateRewardMode,
+  unlimitedReward: boolean,
+  following: AffiliateConfigFollowing,
+  note: string
+): AffiliateUserOverride | null {
+  const hasOverrides = affiliateConfigFieldKeys.some((key) => !following[key])
+  if (!hasOverrides) return null
+
+  const rawValues: Record<AffiliateConfigFieldKey, string> = {
+    inviter_reward_quota: draft.inviterReward,
+    invitee_reward_quota: draft.inviteeReward,
+    reward_value: draft.rewardValue,
+    minimum_topup_cents: draft.minimumTopUp,
+    maximum_reward_quota: draft.maximumReward,
+    hold_seconds: draft.holdDays,
+  }
+  const draftValues: Record<AffiliateConfigFieldKey, number | null> = {
+    inviter_reward_quota: following.inviter_reward_quota
+      ? null
+      : Number(draft.inviterReward),
+    invitee_reward_quota: following.invitee_reward_quota
+      ? null
+      : Number(draft.inviteeReward),
+    reward_value: following.reward_value ? null : Number(draft.rewardValue),
+    minimum_topup_cents: following.minimum_topup_cents
+      ? null
+      : Number(draft.minimumTopUp),
+    maximum_reward_quota: following.maximum_reward_quota
+      ? null
+      : Number(draft.maximumReward),
+    hold_seconds: following.hold_seconds ? null : Number(draft.holdDays),
+  }
+  const activeValues = affiliateConfigFieldKeys
+    .map((key) => draftValues[key])
+    .filter((value): value is number => value !== null)
+  const hasBlankValue = affiliateConfigFieldKeys.some((key) => {
+    return !following[key] && rawValues[key].trim() === ''
+  })
+  const rewardValue = draftValues.reward_value
+  const maximumReward = draftValues.maximum_reward_quota
+  const holdDays = draftValues.hold_seconds
+  if (
+    hasBlankValue ||
+    activeValues.some((value) => !Number.isFinite(value) || value < 0) ||
+    (rewardValue !== null &&
+      rewardMode === 'percentage' &&
+      rewardValue > 100) ||
+    (maximumReward !== null && !unlimitedReward && maximumReward <= 0) ||
+    (holdDays !== null &&
+      (!Number.isInteger(holdDays) || holdDays < 0 || holdDays > 365))
+  ) {
+    return null
+  }
+  return {
+    enabled: null,
+    inviter_reward_quota:
+      draftValues.inviter_reward_quota === null
+        ? null
+        : parseQuotaFromCNY(draftValues.inviter_reward_quota),
+    invitee_reward_quota:
+      draftValues.invitee_reward_quota === null
+        ? null
+        : parseQuotaFromCNY(draftValues.invitee_reward_quota),
+    registration_reward_trigger: null,
+    reward_mode: null,
+    cashback_frequency: null,
+    reward_rate_bps:
+      rewardMode === 'percentage' && rewardValue !== null
+        ? Math.round(rewardValue * 100)
+        : null,
+    fixed_reward_quota:
+      rewardMode === 'fixed' && rewardValue !== null
+        ? parseQuotaFromCNY(rewardValue)
+        : null,
+    unlimited_reward: null,
+    maximum_reward_quota:
+      maximumReward === null ? null : parseQuotaFromCNY(maximumReward),
+    minimum_topup_cents:
+      draftValues.minimum_topup_cents === null
+        ? null
+        : Math.round(draftValues.minimum_topup_cents * 100),
+    hold_seconds: holdDays === null ? null : holdDays * SECONDS_PER_DAY,
+    minimum_transfer_quota: null,
+    show_invitee_topups: null,
+    change_reason: note.trim(),
+  }
+}
+
+function getAffiliateConfigFollowing(
+  view: AffiliateUserOverrideView
+): AffiliateConfigFollowing {
+  const override = view.override
+  const rewardMode = view.global_rule.reward_mode
+  return {
+    inviter_reward_quota: override?.inviter_reward_quota == null,
+    invitee_reward_quota: override?.invitee_reward_quota == null,
+    reward_value:
+      rewardMode === 'percentage'
+        ? override?.reward_rate_bps == null
+        : override?.fixed_reward_quota == null,
+    minimum_topup_cents: override?.minimum_topup_cents == null,
+    maximum_reward_quota: override?.maximum_reward_quota == null,
+    hold_seconds: override?.hold_seconds == null,
+  }
+}
+
+function affiliateViewToRowDraft(
+  view: AffiliateUserOverrideView
+): AffiliateUserRowDraft {
+  return {
+    config: settingsToConfigDraft(view.effective_rule),
+    following: getAffiliateConfigFollowing(view),
+    note: view.override?.change_reason ?? '',
+  }
+}
+
+function affiliateViewToGlobalRowDraft(
+  view: AffiliateUserOverrideView
+): AffiliateUserRowDraft {
+  return {
+    config: settingsToConfigDraft(view.global_rule),
+    following: {
+      inviter_reward_quota: true,
+      invitee_reward_quota: true,
+      reward_value: true,
+      minimum_topup_cents: true,
+      maximum_reward_quota: true,
+      hold_seconds: true,
+    },
+    note: '',
+  }
+}
+
+function hasAffiliateConfigurationOverride(
+  view: AffiliateUserOverrideView
+): boolean {
+  const override = view.override
+  return Boolean(
+    override &&
+    (override.inviter_reward_quota != null ||
+      override.invitee_reward_quota != null ||
+      override.reward_rate_bps != null ||
+      override.fixed_reward_quota != null ||
+      override.maximum_reward_quota != null ||
+      override.minimum_topup_cents != null ||
+      override.hold_seconds != null)
+  )
+}
+
+interface AffiliateConfigTableCellProps {
+  value: string
+  following: boolean
+  unit: string
+  label: string
+  inputProps?: {
+    min?: number
+    max?: number
+    step?: number | string
+  }
+  disabled: boolean
+  onValueChange: (value: string) => void
+  onFollowingChange: (following: boolean) => void
+}
+
+function AffiliateConfigTableCell(props: AffiliateConfigTableCellProps) {
+  const { t } = useTranslation()
+  return (
+    <TableCell className='align-top'>
+      <div className='grid min-w-36 gap-1.5'>
+        <label className='text-muted-foreground flex items-center gap-1 text-xs'>
+          <Switch
+            size='sm'
+            checked={props.following}
+            onCheckedChange={props.onFollowingChange}
+            disabled={props.disabled}
+            aria-label={`${props.label}: ${t('Follow global')}`}
+          />
+          <span>{t('Follow global')}</span>
+        </label>
+        <InputGroup>
+          <InputGroupInput
+            type='number'
+            value={props.value}
+            onChange={(event) => props.onValueChange(event.target.value)}
+            disabled={props.disabled || props.following}
+            aria-label={props.label}
+            {...props.inputProps}
+          />
+          <InputGroupAddon align='inline-end'>
+            <InputGroupText>{props.unit}</InputGroupText>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
+    </TableCell>
+  )
+}
 
 function settingsToDraft(settings: AffiliateSettings): RuleDraft {
   return {
@@ -673,14 +895,14 @@ function PersonalizedAffiliateSettings() {
   const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
-  const [editingUserId, setEditingUserId] = useState<number | null>(null)
-  const [draft, setDraft] = useState<RuleDraft>()
-  const [following, setFollowing] = useState<Record<RuleFieldKey, boolean>>()
-  const [changeReason, setChangeReason] = useState('')
-  const [pendingSave, setPendingSave] = useState<{
-    userId: number
-    override: AffiliateUserOverride
-  } | null>(null)
+  const [rowDrafts, setRowDrafts] = useState<
+    Record<number, AffiliateUserRowDraft>
+  >({})
+  const globalSettingsQuery = useQuery({
+    queryKey: ['admin', 'affiliate', 'settings'],
+    queryFn: getAffiliateSettings,
+    select: (response) => response.data,
+  })
   const query = useQuery({
     queryKey: ['admin', 'affiliate', 'user-overrides', keyword, page],
     queryFn: () =>
@@ -696,31 +918,68 @@ function PersonalizedAffiliateSettings() {
       },
   })
 
-  const items = query.data?.items ?? []
+  const items = useMemo(() => query.data?.items ?? [], [query.data])
   const total = query.data?.total ?? 0
+  const rewardMode =
+    globalSettingsQuery.data?.reward_mode ??
+    items[0]?.global_rule.reward_mode ??
+    'percentage'
 
-  function getOverriddenKeys(view: AffiliateUserOverrideView): RuleFieldKey[] {
-    if (!view.override) return []
-    return ruleFieldKeys.filter((key) => view.override?.[key] != null)
-  }
-
-  function openEditor(view: AffiliateUserOverrideView) {
-    const nextFollowing = {} as Record<RuleFieldKey, boolean>
-    for (const key of ruleFieldKeys) {
-      nextFollowing[key] = view.override?.[key] == null
+  useEffect(() => {
+    if (!query.data) return
+    const next: Record<number, AffiliateUserRowDraft> = {}
+    for (const view of items) {
+      next[view.user_id] = affiliateViewToRowDraft(view)
     }
-    setEditingUserId(view.user_id)
-    setDraft(settingsToDraft(view.effective_rule))
-    setFollowing(nextFollowing)
-    setChangeReason('')
+    setRowDrafts(next)
+  }, [items, query.data])
+
+  function updateRowConfig(
+    view: AffiliateUserOverrideView,
+    key: AffiliateConfigFieldKey,
+    value: string
+  ) {
+    const draftKey = affiliateConfigDraftKeys[key]
+    setRowDrafts((current) => {
+      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
+      return {
+        ...current,
+        [view.user_id]: {
+          ...row,
+          config: { ...row.config, [draftKey]: value },
+          following: { ...row.following, [key]: false },
+        },
+      }
+    })
   }
 
-  function closeEditor() {
-    setEditingUserId(null)
-    setDraft(undefined)
-    setFollowing(undefined)
-    setChangeReason('')
-    setPendingSave(null)
+  function updateRowFollowing(
+    view: AffiliateUserOverrideView,
+    key: AffiliateConfigFieldKey,
+    following: boolean
+  ) {
+    const draftKey = affiliateConfigDraftKeys[key]
+    const globalConfig = settingsToConfigDraft(view.global_rule)
+    setRowDrafts((current) => {
+      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
+      return {
+        ...current,
+        [view.user_id]: {
+          ...row,
+          config: following
+            ? { ...row.config, [draftKey]: globalConfig[draftKey] }
+            : row.config,
+          following: { ...row.following, [key]: following },
+        },
+      }
+    })
+  }
+
+  function updateRowNote(view: AffiliateUserOverrideView, note: string) {
+    setRowDrafts((current) => {
+      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
+      return { ...current, [view.user_id]: { ...row, note } }
+    })
   }
 
   const saveMutation = useMutation({
@@ -728,13 +987,17 @@ function PersonalizedAffiliateSettings() {
       userId: number
       override: AffiliateUserOverride
     }) => updateAffiliateUserOverride(request.userId, request.override),
-    onSuccess: async (response) => {
+    onSuccess: async (response, request) => {
       if (!response.success || !response.data) {
         toast.error(response.message || t('Failed to save settings'))
         return
       }
+      const savedView = response.data
+      setRowDrafts((current) => ({
+        ...current,
+        [request.userId]: affiliateViewToRowDraft(savedView),
+      }))
       toast.success(t('User-specific cashback settings saved'))
-      closeEditor()
       await queryClient.invalidateQueries({
         queryKey: ['admin', 'affiliate', 'user-overrides'],
       })
@@ -746,13 +1009,19 @@ function PersonalizedAffiliateSettings() {
 
   const resetMutation = useMutation({
     mutationFn: (userId: number) => deleteAffiliateUserOverride(userId),
-    onSuccess: async (response) => {
+    onSuccess: async (response, userId) => {
       if (!response.success) {
         toast.error(response.message || t('Failed to reset settings'))
         return
       }
+      const view = items.find((item) => item.user_id === userId)
+      if (view) {
+        setRowDrafts((current) => ({
+          ...current,
+          [userId]: affiliateViewToGlobalRowDraft(view),
+        }))
+      }
       toast.success(t('User now follows global cashback settings'))
-      closeEditor()
       await queryClient.invalidateQueries({
         queryKey: ['admin', 'affiliate', 'user-overrides'],
       })
@@ -762,103 +1031,20 @@ function PersonalizedAffiliateSettings() {
     },
   })
 
-  function buildOverride(): AffiliateUserOverride | null {
-    if (!draft || !following || editingUserId === null) return null
-    const settings = draftToSettings(draft)
-    const overriddenKeys = ruleFieldKeys.filter((key) => !following[key])
-    if (!settings || overriddenKeys.length === 0 || !changeReason.trim()) {
-      return null
+  function saveRow(view: AffiliateUserOverrideView) {
+    const row = rowDrafts[view.user_id] ?? affiliateViewToRowDraft(view)
+    const override = buildAffiliateConfigOverride(
+      row.config,
+      view.global_rule.reward_mode,
+      view.global_rule.unlimited_reward,
+      row.following,
+      row.note
+    )
+    if (!override) {
+      toast.error(t('Check the cashback settings and try again'))
+      return
     }
-    return {
-      enabled: following.enabled ? null : settings.enabled,
-      inviter_reward_quota: following.inviter_reward_quota
-        ? null
-        : settings.inviter_reward_quota,
-      invitee_reward_quota: following.invitee_reward_quota
-        ? null
-        : settings.invitee_reward_quota,
-      registration_reward_trigger: following.registration_reward_trigger
-        ? null
-        : settings.registration_reward_trigger,
-      reward_mode: following.reward_mode ? null : settings.reward_mode,
-      cashback_frequency: following.cashback_frequency
-        ? null
-        : settings.cashback_frequency,
-      reward_rate_bps: following.reward_rate_bps
-        ? null
-        : settings.reward_rate_bps,
-      fixed_reward_quota: following.fixed_reward_quota
-        ? null
-        : settings.fixed_reward_quota,
-      unlimited_reward: following.unlimited_reward
-        ? null
-        : settings.unlimited_reward,
-      maximum_reward_quota: following.maximum_reward_quota
-        ? null
-        : settings.maximum_reward_quota,
-      minimum_topup_cents: following.minimum_topup_cents
-        ? null
-        : settings.minimum_topup_cents,
-      hold_seconds: following.hold_seconds ? null : settings.hold_seconds,
-      minimum_transfer_quota: following.minimum_transfer_quota
-        ? null
-        : settings.minimum_transfer_quota,
-      show_invitee_topups: following.show_invitee_topups
-        ? null
-        : settings.show_invitee_topups,
-      change_reason: changeReason.trim(),
-    }
-  }
-
-  const fieldLabels: Record<RuleFieldKey, string> = {
-    enabled: t('Enable referral cashback'),
-    inviter_reward_quota: t('Inviter reward'),
-    invitee_reward_quota: t('Invitee reward'),
-    registration_reward_trigger: t('Registration reward timing'),
-    reward_mode: t('Cashback method'),
-    cashback_frequency: t('Cashback frequency'),
-    reward_rate_bps: t('Cashback rate'),
-    fixed_reward_quota: t('Fixed cashback'),
-    unlimited_reward: t('Unlimited cashback per invitee'),
-    maximum_reward_quota: t('Maximum cashback per invitee'),
-    minimum_topup_cents: t('First qualifying cumulative top-up'),
-    hold_seconds: t('Hold period'),
-    minimum_transfer_quota: t('Minimum balance transfer'),
-    show_invitee_topups: t('Allow invitee top-up records'),
-  }
-
-  function formatValue(key: RuleFieldKey, value: unknown): string {
-    if (value === null || value === undefined) return '-'
-    switch (key) {
-      case 'enabled':
-      case 'unlimited_reward':
-      case 'show_invitee_topups':
-        return t(value ? 'Enabled' : 'Disabled')
-      case 'registration_reward_trigger':
-        return value === 'first_qualified_topup'
-          ? t('After first qualification')
-          : t('After registration')
-      case 'reward_mode':
-        return value === 'fixed' ? t('Fixed amount') : t('Percentage')
-      case 'cashback_frequency':
-        return value === 'every_topup'
-          ? t('Every top-up')
-          : t('First qualification only')
-      case 'reward_rate_bps':
-        return `${Number(value) / 100}%`
-      case 'minimum_topup_cents':
-        return `${(Number(value) / 100).toFixed(2)} ${t('CNY')}`
-      case 'hold_seconds':
-        return `${Number(value) / SECONDS_PER_DAY} ${t('Days')}`
-      case 'inviter_reward_quota':
-      case 'invitee_reward_quota':
-      case 'fixed_reward_quota':
-      case 'maximum_reward_quota':
-      case 'minimum_transfer_quota':
-        return formatQuotaAsCNY(Number(value))
-      default:
-        return String(value)
-    }
+    saveMutation.mutate({ userId: view.user_id, override })
   }
 
   const totalPages = Math.max(
@@ -887,18 +1073,34 @@ function PersonalizedAffiliateSettings() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('User')}</TableHead>
-              <TableHead>{t('Email')}</TableHead>
-              <TableHead>{t('Configuration')}</TableHead>
-              <TableHead>{t('Last modified at')}</TableHead>
-              <TableHead>{t('Change reason')}</TableHead>
-              <TableHead className='text-right'>{t('Action')}</TableHead>
+              <TableHead className='min-w-44'>{t('User')}</TableHead>
+              <TableHead className='min-w-52'>{t('Email')}</TableHead>
+              <TableHead className='min-w-44'>{t('Inviter reward')}</TableHead>
+              <TableHead className='min-w-44'>{t('Invitee reward')}</TableHead>
+              <TableHead className='min-w-44'>
+                {rewardMode === 'fixed'
+                  ? t('Fixed cashback')
+                  : t('Cashback rate')}
+              </TableHead>
+              <TableHead className='min-w-48'>
+                {t('First qualifying cumulative top-up')}
+              </TableHead>
+              <TableHead className='min-w-48'>
+                {t('Maximum cashback per invitee')}
+              </TableHead>
+              <TableHead className='min-w-36'>{t('Hold period')}</TableHead>
+              <TableHead className='min-w-52'>
+                {t('Note')} ({t('Optional')})
+              </TableHead>
+              <TableHead className='min-w-44 text-right'>
+                {t('Action')}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className='h-36 text-center'>
+                <TableCell colSpan={10} className='h-36 text-center'>
                   <div className='mx-auto flex max-w-md flex-col items-center gap-1'>
                     <p className='font-medium'>
                       {keyword ? t('No matching users') : t('No users')}
@@ -913,184 +1115,182 @@ function PersonalizedAffiliateSettings() {
               </TableRow>
             ) : null}
             {items.map((view) => {
-              const overriddenKeys = getOverriddenKeys(view)
-              const override = view.override
-              const customized = overriddenKeys.length > 0
-              const isEditing = editingUserId === view.user_id
+              const row =
+                rowDrafts[view.user_id] ?? affiliateViewToRowDraft(view)
+              const customized = hasAffiliateConfigurationOverride(view)
+              const hasOverride = Boolean(view.override)
               const rowClassName =
                 keyword && !customized
                   ? 'bg-muted/30 text-muted-foreground hover:bg-muted/40'
                   : undefined
+              const disabled = saveMutation.isPending || resetMutation.isPending
               return (
-                <Fragment key={view.user_id}>
-                  <TableRow aria-expanded={isEditing} className={rowClassName}>
-                    <TableCell className='min-w-44 align-top font-medium'>
-                      <div>{view.username}</div>
-                      <div className='text-muted-foreground text-xs'>
-                        #{view.user_id}
-                      </div>
-                    </TableCell>
-                    <TableCell className='min-w-52 align-top'>
-                      {view.email || '-'}
-                    </TableCell>
-                    <TableCell className='max-w-[42rem] min-w-[24rem] align-top'>
-                      <div className='flex flex-wrap gap-1.5'>
-                        <Badge variant={customized ? 'default' : 'outline'}>
-                          {customized ? t('Customized') : t('Follows global')}
-                        </Badge>
-                        {overriddenKeys.map((key) => (
-                          <Badge
-                            key={key}
-                            variant='outline'
-                            className='max-w-full text-left whitespace-normal'
-                          >
-                            {fieldLabels[key]}:{' '}
-                            {formatValue(key, override?.[key])}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className='min-w-44 align-top'>
-                      <div>
-                        {customized
-                          ? formatTimestampToDate(override?.updated_at ?? 0)
-                          : '-'}
-                      </div>
-                      <div className='text-muted-foreground mt-1 text-xs'>
-                        {customized
-                          ? `${view.updated_by_username || t('User')} #${override?.updated_by ?? '-'}`
-                          : t('No personalized settings')}
-                      </div>
-                    </TableCell>
-                    <TableCell className='max-w-80 min-w-56 align-top whitespace-normal'>
-                      <span className='wrap-break-word'>
-                        {customized ? override?.change_reason || '-' : '-'}
-                      </span>
-                    </TableCell>
-                    <TableCell className='min-w-28 text-right align-top'>
+                <TableRow key={view.user_id} className={rowClassName}>
+                  <TableCell className='align-top font-medium'>
+                    <div>{view.username}</div>
+                    <div className='text-muted-foreground text-xs'>
+                      #{view.user_id}
+                    </div>
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    {view.email || '-'}
+                  </TableCell>
+                  <AffiliateConfigTableCell
+                    value={row.config.inviterReward}
+                    following={row.following.inviter_reward_quota}
+                    unit={t('CNY')}
+                    label={t('Inviter reward')}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'inviter_reward_quota', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(
+                        view,
+                        'inviter_reward_quota',
+                        following
+                      )
+                    }
+                  />
+                  <AffiliateConfigTableCell
+                    value={row.config.inviteeReward}
+                    following={row.following.invitee_reward_quota}
+                    unit={t('CNY')}
+                    label={t('Invitee reward')}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'invitee_reward_quota', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(
+                        view,
+                        'invitee_reward_quota',
+                        following
+                      )
+                    }
+                  />
+                  <AffiliateConfigTableCell
+                    value={row.config.rewardValue}
+                    following={row.following.reward_value}
+                    unit={
+                      view.global_rule.reward_mode === 'percentage'
+                        ? '%'
+                        : t('CNY')
+                    }
+                    label={
+                      view.global_rule.reward_mode === 'percentage'
+                        ? t('Cashback rate')
+                        : t('Fixed cashback')
+                    }
+                    inputProps={
+                      view.global_rule.reward_mode === 'percentage'
+                        ? { min: 0, max: 100, step: '0.01' }
+                        : { min: 0, step: '0.01' }
+                    }
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'reward_value', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(view, 'reward_value', following)
+                    }
+                  />
+                  <AffiliateConfigTableCell
+                    value={row.config.minimumTopUp}
+                    following={row.following.minimum_topup_cents}
+                    unit={t('CNY')}
+                    label={t('First qualifying cumulative top-up')}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'minimum_topup_cents', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(view, 'minimum_topup_cents', following)
+                    }
+                  />
+                  <AffiliateConfigTableCell
+                    value={row.config.maximumReward}
+                    following={row.following.maximum_reward_quota}
+                    unit={t('CNY')}
+                    label={t('Maximum cashback per invitee')}
+                    inputProps={{
+                      min: view.global_rule.unlimited_reward ? 0 : 0.01,
+                      step: '0.01',
+                    }}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'maximum_reward_quota', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(
+                        view,
+                        'maximum_reward_quota',
+                        following
+                      )
+                    }
+                  />
+                  <AffiliateConfigTableCell
+                    value={row.config.holdDays}
+                    following={row.following.hold_seconds}
+                    unit={t('Days')}
+                    label={t('Hold period')}
+                    inputProps={{ min: 0, max: 365, step: 1 }}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      updateRowConfig(view, 'hold_seconds', value)
+                    }
+                    onFollowingChange={(following) =>
+                      updateRowFollowing(view, 'hold_seconds', following)
+                    }
+                  />
+                  <TableCell className='align-top'>
+                    <Textarea
+                      aria-label={`${t('Note')} (${t('Optional')})`}
+                      className='min-h-16 min-w-48 resize-y'
+                      maxLength={500}
+                      value={row.note}
+                      placeholder={`${t('Note')} (${t('Optional')})`}
+                      onChange={(event) =>
+                        updateRowNote(view, event.target.value)
+                      }
+                      disabled={disabled}
+                    />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <div className='flex flex-wrap justify-end gap-2'>
                       <Button
                         type='button'
                         size='sm'
-                        variant={isEditing ? 'secondary' : 'outline'}
-                        onClick={() =>
-                          isEditing ? closeEditor() : openEditor(view)
+                        disabled={
+                          disabled ||
+                          affiliateConfigFieldKeys.every(
+                            (key) => row.following[key]
+                          )
                         }
+                        onClick={() => saveRow(view)}
                       >
-                        {isEditing ? t('Close') : t('Configure')}
+                        {saveMutation.isPending ? (
+                          <Spinner data-icon='inline-start' />
+                        ) : null}
+                        {t('Save')}
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                  {isEditing && draft && following ? (
-                    <TableRow className='bg-muted/10'>
-                      <TableCell colSpan={6} className='p-0'>
-                        <div className='grid gap-5 border-t px-4 py-5'>
-                          <div className='flex flex-wrap items-start justify-between gap-3'>
-                            <div>
-                              <h3 className='text-sm font-semibold'>
-                                {t('Configure {{username}}', {
-                                  username: view.username,
-                                })}
-                              </h3>
-                              <p className='text-muted-foreground mt-1 text-xs'>
-                                {t(
-                                  'Choose which fields follow global settings and which fields use this user-specific strategy.'
-                                )}
-                              </p>
-                            </div>
-                            {customized ? (
-                              <Badge variant='outline'>
-                                {t('{{count}} customized fields', {
-                                  count: overriddenKeys.length,
-                                })}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <RuleEditor
-                            draft={draft}
-                            onChange={setDraft}
-                            following={following}
-                            onFollowingChange={(key, next) =>
-                              setFollowing({ ...following, [key]: next })
-                            }
-                            disabled={
-                              saveMutation.isPending || resetMutation.isPending
-                            }
-                            grouped
-                          />
-                          <div className='grid gap-3 border-t pt-4'>
-                            <Field>
-                              <FieldLabel
-                                htmlFor={`affiliate-change-reason-${view.user_id}`}
-                              >
-                                {t('Change reason')}
-                              </FieldLabel>
-                              <Textarea
-                                id={`affiliate-change-reason-${view.user_id}`}
-                                value={changeReason}
-                                maxLength={500}
-                                onChange={(event) =>
-                                  setChangeReason(event.target.value)
-                                }
-                                placeholder={t('Required for audit history')}
-                                disabled={
-                                  saveMutation.isPending ||
-                                  resetMutation.isPending
-                                }
-                              />
-                            </Field>
-                            <div className='flex flex-wrap justify-end gap-2'>
-                              {customized ? (
-                                <Button
-                                  type='button'
-                                  variant='outline'
-                                  disabled={
-                                    saveMutation.isPending ||
-                                    resetMutation.isPending
-                                  }
-                                  onClick={() =>
-                                    resetMutation.mutate(view.user_id)
-                                  }
-                                >
-                                  <RotateCcw data-icon='inline-start' />
-                                  {t('Follow all global settings')}
-                                </Button>
-                              ) : null}
-                              <Button
-                                type='button'
-                                disabled={
-                                  saveMutation.isPending ||
-                                  resetMutation.isPending ||
-                                  !changeReason.trim() ||
-                                  ruleFieldKeys.every((key) => following[key])
-                                }
-                                onClick={() => {
-                                  const request = buildOverride()
-                                  if (!request) {
-                                    toast.error(
-                                      t(
-                                        'Check the cashback settings and try again'
-                                      )
-                                    )
-                                    return
-                                  }
-                                  setPendingSave({
-                                    userId: view.user_id,
-                                    override: request,
-                                  })
-                                }}
-                              >
-                                {saveMutation.isPending ? (
-                                  <Spinner data-icon='inline-start' />
-                                ) : null}
-                                {t('Save user-specific settings')}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </Fragment>
+                      {hasOverride ? (
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='outline'
+                          disabled={disabled}
+                          onClick={() => resetMutation.mutate(view.user_id)}
+                          aria-label={t('Follow all global settings')}
+                          title={t('Follow all global settings')}
+                        >
+                          <RotateCcw data-icon='inline-start' />
+                          {t('Reset')}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                </TableRow>
               )
             })}
           </TableBody>
@@ -1109,10 +1309,7 @@ function PersonalizedAffiliateSettings() {
                 size='sm'
                 className='size-8 p-0'
                 disabled={page <= 1}
-                onClick={() => {
-                  closeEditor()
-                  setPage((current) => current - 1)
-                }}
+                onClick={() => setPage((current) => current - 1)}
                 aria-label={t('Previous page')}
                 title={t('Previous page')}
               >
@@ -1127,10 +1324,7 @@ function PersonalizedAffiliateSettings() {
                 size='sm'
                 className='size-8 p-0'
                 disabled={page >= totalPages}
-                onClick={() => {
-                  closeEditor()
-                  setPage((current) => current + 1)
-                }}
+                onClick={() => setPage((current) => current + 1)}
                 aria-label={t('Next page')}
                 title={t('Next page')}
               >
@@ -1149,7 +1343,6 @@ function PersonalizedAffiliateSettings() {
         className='max-w-xl'
         onSubmit={(event) => {
           event.preventDefault()
-          closeEditor()
           setPage(1)
           setKeyword(searchInput.trim())
         }}
@@ -1175,47 +1368,6 @@ function PersonalizedAffiliateSettings() {
       </form>
 
       {results}
-
-      <AlertDialog
-        open={pendingSave !== null}
-        onOpenChange={(open) => {
-          if (!open && !saveMutation.isPending) setPendingSave(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('Apply user-specific settings?')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className='flex flex-wrap gap-1.5'>
-            {pendingSave
-              ? ruleFieldKeys
-                  .filter((key) => pendingSave.override[key] != null)
-                  .map((key) => (
-                    <Badge key={key} variant='secondary'>
-                      {fieldLabels[key]}
-                    </Badge>
-                  ))
-              : null}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (pendingSave) saveMutation.mutate(pendingSave)
-              }}
-            >
-              {t('Confirm and save')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

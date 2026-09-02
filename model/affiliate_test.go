@@ -377,12 +377,14 @@ func TestAffiliateUserOverrideSearchSupportsCustomizedAndUncustomizedUsers(t *te
 	configureAffiliateTest(t, nil)
 	inviter, invitee := createAffiliateUsers(t, "")
 	rate := int64(5000)
+	legacyRewardMode := operation_setting.AffiliateRewardModeFixed
 	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
 		RewardRateBps: &rate,
 		ChangeReason:  "partner agreement",
 	})
 	createAffiliateUserOverride(t, invitee.Id, inviter.Id, AffiliateUserOverride{
-		ChangeReason: "legacy empty override",
+		RewardMode:   &legacyRewardMode,
+		ChangeReason: "legacy rule override",
 	})
 
 	items, total, err := SearchAffiliateUserOverrides("", 0, 20)
@@ -418,7 +420,7 @@ func TestAffiliateUserOverrideSaveAndDelete(t *testing.T) {
 	configureAffiliateTest(t, nil)
 	inviter, _ := createAffiliateUsers(t, "")
 	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
-		ChangeReason: "empty override",
+		ChangeReason: "   ",
 	})
 	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
 	require.ErrorIs(t, DeleteAffiliateUserOverride(0), ErrAffiliateRuleInvalid)
@@ -426,18 +428,78 @@ func TestAffiliateUserOverrideSaveAndDelete(t *testing.T) {
 	rate := int64(5000)
 	view, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
 		RewardRateBps: &rate,
-		ChangeReason:  "partner agreement",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, view.Override)
 	require.NotNil(t, view.Override.RewardRateBps)
 	assert.Equal(t, rate, *view.Override.RewardRateBps)
+	assert.Empty(t, view.Override.ChangeReason)
 
 	require.NoError(t, DeleteAffiliateUserOverride(inviter.Id))
 	view, err = GetAffiliateUserOverrideView(inviter.Id)
 	require.NoError(t, err)
 	assert.Nil(t, view.Override)
 	assert.Equal(t, "global", view.EffectiveRule.Source)
+}
+
+func TestAffiliateUserOverrideSaveRejectsPreferencesAndRules(t *testing.T) {
+	truncateTables(t)
+	configureAffiliateTest(t, nil)
+	inviter, _ := createAffiliateUsers(t, "")
+	rate := int64(5000)
+
+	enabled := true
+	registrationTrigger := operation_setting.AffiliateRegistrationTriggerRegistrationSuccess
+	cashbackFrequency := operation_setting.AffiliateCashbackFrequencyEveryTopUp
+	rewardMode := operation_setting.AffiliateRewardModeFixed
+	unlimited := true
+	minimumTransfer := int64(common.QuotaPerUnit)
+	showInviteeTopUps := true
+	tests := []struct {
+		name   string
+		mutate func(*AffiliateUserOverride)
+	}{
+		{name: "enabled", mutate: func(override *AffiliateUserOverride) { override.Enabled = &enabled }},
+		{name: "registration reward trigger", mutate: func(override *AffiliateUserOverride) {
+			override.RegistrationRewardTrigger = &registrationTrigger
+		}},
+		{name: "cashback frequency", mutate: func(override *AffiliateUserOverride) {
+			override.CashbackFrequency = &cashbackFrequency
+		}},
+		{name: "reward mode", mutate: func(override *AffiliateUserOverride) {
+			override.RewardMode = &rewardMode
+		}},
+		{name: "unlimited reward", mutate: func(override *AffiliateUserOverride) {
+			override.UnlimitedReward = &unlimited
+		}},
+		{name: "minimum transfer", mutate: func(override *AffiliateUserOverride) {
+			override.MinimumTransferQuota = &minimumTransfer
+		}},
+		{name: "show invitee top ups", mutate: func(override *AffiliateUserOverride) {
+			override.ShowInviteeTopUps = &showInviteeTopUps
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			override := AffiliateUserOverride{RewardRateBps: &rate}
+			test.mutate(&override)
+			_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, override)
+			require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+		})
+	}
+
+	fixedReward := int64(common.QuotaPerUnit)
+	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		FixedRewardQuota: &fixedReward,
+	})
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+
+	setting := operation_setting.GetAffiliateSetting()
+	setting.RewardMode = operation_setting.AffiliateRewardModeFixed
+	_, err = SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		RewardRateBps: &rate,
+	})
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
 }
 
 func TestAffiliateAdminCompletedTopUpIsExcluded(t *testing.T) {
