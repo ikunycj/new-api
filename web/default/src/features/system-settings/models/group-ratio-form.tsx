@@ -29,6 +29,7 @@ import { GroupRatioVisualEditor } from './group-ratio-visual-editor'
 type GroupFormValues = {
   GroupRatio: string
   PricingGroupEnabled: string
+  PricingGroupRemark: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
   PricingGroupRoutingStrategy: string
@@ -52,6 +53,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   const [
     groupRatio,
     pricingGroupEnabled,
+    pricingGroupRemark,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy,
@@ -60,6 +62,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
     name: [
       'GroupRatio',
       'PricingGroupEnabled',
+      'PricingGroupRemark',
       'PricingGroupOrder',
       'PricingGroupRetryPolicy',
       'PricingGroupRoutingStrategy',
@@ -92,6 +95,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       <GroupRatioVisualEditor
         groupRatio={groupRatio}
         pricingGroupEnabled={pricingGroupEnabled}
+        pricingGroupRemark={pricingGroupRemark}
         pricingGroupOrder={pricingGroupOrder}
         pricingGroupRetryPolicy={pricingGroupRetryPolicy}
         pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}

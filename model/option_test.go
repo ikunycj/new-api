@@ -14,6 +14,7 @@ func preservePricingGroupConfiguration(t *testing.T) {
 	var configuration ratio_setting.PricingGroupConfiguration
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.GroupRatio2JSONString(), &configuration.GroupRatios))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupEnabled2JSONString(), &configuration.GroupEnabled))
+	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRemark2JSONString(), &configuration.GroupRemarks))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupOrder2JSONString(), &configuration.GroupOrder))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRetryPolicy2JSONString(), &configuration.RetryPolicies))
 	var routingConfiguration ratio_setting.PricingGroupRoutingConfiguration
@@ -107,7 +108,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 
 	var stored []Option
 	require.NoError(t, DB.Where(commonKeyCol+" IN ?", pricingGroupOptionKeys).Find(&stored).Error)
-	require.Len(t, stored, 5)
+	require.Len(t, stored, 6)
 	var retryPolicyValue string
 	var enabledValue string
 	for _, option := range stored {
@@ -153,6 +154,25 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 	require.NoError(t, DB.Where(commonKeyCol+" = ?", "PricingGroupRoutingStrategy").First(&stored).Error)
 	assert.Contains(t, stored.Value, "enterprise")
 	assert.Contains(t, stored.Value, "group_bindings")
+}
+
+func TestUpdatePricingGroupConfigurationPersistsRemarks(t *testing.T) {
+	truncateTables(t)
+	preservePricingGroupConfiguration(t)
+
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		`{"alpha":1,"beta":2}`,
+		`{"alpha":true,"beta":true}`,
+		`["alpha","beta"]`,
+		`{"alpha":{"mode":"active_channels"},"beta":{"mode":"active_channels"}}`,
+		`{}`,
+		`{"alpha":"企业套餐","beta":"备用套餐"}`,
+	))
+
+	assert.Equal(t, "企业套餐", ratio_setting.GetPricingGroupRemark("alpha"))
+	var stored Option
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", pricingGroupRemarkOptionKey).First(&stored).Error)
+	assert.JSONEq(t, `{"alpha":"企业套餐","beta":"备用套餐"}`, stored.Value)
 }
 
 func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {

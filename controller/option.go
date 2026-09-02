@@ -109,11 +109,12 @@ type OptionUpdateRequest struct {
 }
 
 type pricingGroupConfigurationUpdateRequest struct {
-	GroupRatio                  string `json:"group_ratio"`
-	PricingGroupEnabled         string `json:"pricing_group_enabled"`
-	PricingGroupOrder           string `json:"pricing_group_order"`
-	PricingGroupRetryPolicy     string `json:"pricing_group_retry_policy"`
-	PricingGroupRoutingStrategy string `json:"pricing_group_routing_strategy"`
+	GroupRatio                  string  `json:"group_ratio"`
+	PricingGroupEnabled         string  `json:"pricing_group_enabled"`
+	PricingGroupOrder           string  `json:"pricing_group_order"`
+	PricingGroupRetryPolicy     string  `json:"pricing_group_retry_policy"`
+	PricingGroupRoutingStrategy string  `json:"pricing_group_routing_strategy"`
+	PricingGroupRemark          *string `json:"pricing_group_remark"`
 }
 
 // PricingGroupRoutingStrategy CRUD is intentionally represented by the same
@@ -127,12 +128,17 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 		common.ApiErrorMsg(c, "无效的参数")
 		return
 	}
+	var remarkArgs []string
+	if request.PricingGroupRemark != nil {
+		remarkArgs = []string{*request.PricingGroupRemark}
+	}
 	if err := model.UpdatePricingGroupConfiguration(
 		request.GroupRatio,
 		request.PricingGroupEnabled,
 		request.PricingGroupOrder,
 		request.PricingGroupRetryPolicy,
 		request.PricingGroupRoutingStrategy,
+		remarkArgs...,
 	); err != nil {
 		common.ApiError(c, err)
 		return
@@ -167,7 +173,7 @@ func UpdateOption(c *gin.Context) {
 		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
 		return
 	}
-	if option.Key == "GroupRatio" || option.Key == "PricingGroupEnabled" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" {
+	if option.Key == "GroupRatio" || option.Key == "PricingGroupEnabled" || option.Key == "PricingGroupRemark" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" {
 		common.ApiErrorMsg(c, "定价分组配置必须统一保存")
 		return
 	}

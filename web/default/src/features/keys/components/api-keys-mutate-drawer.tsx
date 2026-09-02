@@ -128,7 +128,7 @@ export function ApiKeysMutateDrawer({
         .map(([key, info]) => ({
           value: key,
           label: key,
-          desc: info.desc || key,
+          desc: info.remark || info.desc || key,
           ratio: info.ratio,
         })),
     [groupsRaw]

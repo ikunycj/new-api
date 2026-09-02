@@ -1,6 +1,7 @@
 package ratio_setting
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,6 +51,37 @@ func TestPricingGroupRetryPolicyValidationAndNormalization(t *testing.T) {
 	} {
 		require.Error(t, UpdatePricingGroupRetryPolicyByJSONString(invalid), invalid)
 	}
+}
+
+func TestPricingGroupRemarkRoundTripAndValidation(t *testing.T) {
+	previousRatios := GroupRatio2JSONString()
+	previousRemarks := PricingGroupRemark2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, UpdatePricingGroupRemarkByJSONString(previousRemarks))
+	})
+
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"alpha":1,"beta":2}`))
+	require.NoError(t, UpdatePricingGroupRemarkByJSONString(`{"alpha":"企业套餐","removed":"旧备注"}`))
+
+	assert.Equal(t, "企业套餐", GetPricingGroupRemark("alpha"))
+	assert.Empty(t, GetPricingGroupRemark("beta"))
+	assert.NotContains(t, GetPricingGroupRemarkCopy(), "removed")
+	assert.JSONEq(t, `{"alpha":"企业套餐"}`, PricingGroupRemark2JSONString())
+
+	_, err := ParsePricingGroupConfiguration(
+		`{"alpha":1}`,
+		`{"alpha":true}`,
+		`["alpha"]`,
+		`{"alpha":{"mode":"active_channels"}}`,
+		`{}`,
+		`{"alpha":"备注"}`,
+	)
+	require.NoError(t, err)
+
+	require.Error(t, UpdatePricingGroupRemarkByJSONString(
+		`{"alpha":"`+strings.Repeat("a", MaxPricingGroupRemarkLength+1)+`"}`,
+	))
 }
 
 func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {

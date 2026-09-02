@@ -130,10 +130,12 @@ func GetUserGroups(c *gin.Context) {
 	pricingGroups := service.GetUserGroupPricingGroups(userGroup)
 	for order, groupName := range ratio_setting.GetPricingGroupOrder() {
 		if _, ok := pricingGroups[groupName]; ok {
+			remark := ratio_setting.GetPricingGroupRemark(groupName)
 			usableGroups[groupName] = map[string]interface{}{
-				"ratio": ratio_setting.GetGroupRatio(groupName),
-				"desc":  groupName,
-				"order": order,
+				"ratio":  ratio_setting.GetGroupRatio(groupName),
+				"desc":   groupName,
+				"remark": remark,
+				"order":  order,
 			}
 		}
 	}

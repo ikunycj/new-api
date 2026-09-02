@@ -45,6 +45,7 @@ export type PricingGroupConfigurationRequest = {
   pricing_group_order: string
   pricing_group_retry_policy: string
   pricing_group_routing_strategy: string
+  pricing_group_remark: string
 }
 
 export type ConfirmPaymentComplianceResponse = {
@@ -274,6 +275,7 @@ export type BillingSettings = {
   'tool_price_setting.prices': string
   GroupRatio: string
   PricingGroupEnabled: string
+  PricingGroupRemark: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
   PricingGroupRoutingStrategy: string
