@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -11,6 +11,7 @@ import {
 } from '@/features/failover/api'
 import type { BillingGroupRoute } from '@/features/failover/types'
 
+import { safeJsonParse } from '../utils/json-parser'
 import {
   buildGroupPricingSnapshots,
   getToBGroupNames,
@@ -62,8 +63,28 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       ),
     [configQuery.data?.routes]
   )
+  const routeGroupNameList = useMemo(
+    () => [...routeGroupNames],
+    [routeGroupNames]
+  )
   const groupRatio = props.form.watch('GroupRatio')
   const userUsableGroups = props.form.watch('UserUsableGroups')
+  useEffect(() => {
+    const ratioMap = safeJsonParse<Record<string, number>>(groupRatio, {
+      fallback: {},
+      silent: true,
+    })
+    const missingRouteGroups = routeGroupNameList.filter(
+      (name) => !Object.hasOwn(ratioMap, name)
+    )
+    if (missingRouteGroups.length === 0) return
+    const nextRatioMap = { ...ratioMap }
+    for (const name of missingRouteGroups) nextRatioMap[name] = 1
+    props.form.setValue('GroupRatio', JSON.stringify(nextRatioMap, null, 2), {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }, [groupRatio, props.form, routeGroupNameList])
   const groups = useMemo(
     () => buildGroupPricingSnapshots(groupRatio, userUsableGroups),
     [groupRatio, userUsableGroups]
@@ -227,6 +248,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
           form={props.form}
           onSave={props.onSave}
           isSaving={props.isSaving}
+          additionalGroupNames={routeGroupNameList}
           groupTypeByName={groupTypeByName}
           onGroupTypeChange={handleGroupTypeChange}
           onGroupRename={handleGroupRename}

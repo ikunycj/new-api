@@ -79,6 +79,7 @@ import { safeJsonParse } from '../utils/json-parser'
 type GroupRatioVisualEditorProps = {
   groupRatio: string
   userUsableGroups: string
+  additionalGroupNames?: readonly string[]
   groupGroupRatio: string
   autoGroups: string
   groupSpecialUsableGroup: string
@@ -159,11 +160,16 @@ function parseNestedRatioMap(
 
 function buildGroupPricingRows(
   groupRatio: string,
-  userUsableGroups: string
+  userUsableGroups: string,
+  additionalGroupNames: readonly string[] = []
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const usableMap = parseUsableMap(userUsableGroups)
-  const names = new Set(Object.keys(ratioMap))
+  const names = new Set([
+    ...Object.keys(ratioMap),
+    ...Object.keys(usableMap),
+    ...additionalGroupNames,
+  ])
 
   return [...names].map((name) => ({
     _id: createGroupPricingId(),
@@ -264,6 +270,7 @@ function GroupNameSelect(props: GroupNameSelectProps) {
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
   userUsableGroups,
+  additionalGroupNames = [],
   groupGroupRatio,
   autoGroups,
   groupSpecialUsableGroup,
@@ -294,12 +301,16 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   const registry = useMemo<RegistryEntry[]>(() => {
     const ratioMap = parseRatioMap(groupRatio)
     const usableMap = parseUsableMap(userUsableGroups)
-    const names = new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])
+    const names = new Set([
+      ...Object.keys(ratioMap),
+      ...Object.keys(usableMap),
+      ...additionalGroupNames,
+    ])
     return [...names].map((name) => ({
       name,
       ratio: normalizeRatio(ratioMap[name]),
     }))
-  }, [groupRatio, userUsableGroups])
+  }, [additionalGroupNames, groupRatio, userUsableGroups])
 
   const registryNames = useMemo(
     () => registry.map((entry) => entry.name),
@@ -351,6 +362,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       <GroupPricingTable
         groupRatio={groupRatio}
         userUsableGroups={userUsableGroups}
+        additionalGroupNames={additionalGroupNames}
         metricsByName={metricsByName}
         metricsLoading={metricsQuery.isLoading}
         onChange={onChange}
@@ -451,6 +463,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 type GroupPricingTableProps = {
   groupRatio: string
   userUsableGroups: string
+  additionalGroupNames: readonly string[]
   metricsByName: ReadonlyMap<string, PricingGroupMetrics>
   metricsLoading: boolean
   onChange: (field: string, value: string) => void
@@ -463,6 +476,7 @@ type GroupPricingTableProps = {
 function GroupPricingTable({
   groupRatio,
   userUsableGroups,
+  additionalGroupNames,
   metricsByName,
   metricsLoading,
   onChange,
@@ -480,7 +494,11 @@ function GroupPricingTable({
     nextType: 'toB' | 'toC'
   } | null>(null)
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
+    buildGroupPricingRows(
+      groupRatio,
+      userUsableGroups,
+      additionalGroupNames
+    ).map((row) => ({
       ...row,
       groupType: groupTypeByName?.get(row.name) ?? row.groupType,
     }))
@@ -502,12 +520,16 @@ function GroupPricingTable({
         })
         return typeChanged ? syncedRows : currentRows
       }
-      return buildGroupPricingRows(groupRatio, userUsableGroups).map((row) => ({
+      return buildGroupPricingRows(
+        groupRatio,
+        userUsableGroups,
+        additionalGroupNames
+      ).map((row) => ({
         ...row,
         groupType: groupTypeByName?.get(row.name) ?? row.groupType,
       }))
     })
-  }, [groupRatio, userUsableGroups, groupTypeByName])
+  }, [additionalGroupNames, groupRatio, userUsableGroups, groupTypeByName])
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {

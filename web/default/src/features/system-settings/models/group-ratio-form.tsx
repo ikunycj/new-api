@@ -75,6 +75,7 @@ type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
+  additionalGroupNames?: readonly string[]
   groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
   onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
   onGroupRename?: (previousName: string, nextName: string) => void
@@ -84,6 +85,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   onSave,
   isSaving,
+  additionalGroupNames = [],
   groupTypeByName,
   onGroupTypeChange,
   onGroupRename,
@@ -119,6 +121,10 @@ export const GroupRatioForm = memo(function GroupRatioForm({
     )
     return [...new Set([...Object.keys(ratioMap), ...Object.keys(usableMap)])]
   }, [watchedGroupRatio, watchedUserUsableGroups])
+  const allGroupNames = useMemo(
+    () => [...new Set([...groupNames, ...additionalGroupNames])],
+    [additionalGroupNames, groupNames]
+  )
 
   return (
     <div className='space-y-6'>
@@ -164,6 +170,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               groupGroupRatio={form.watch('GroupGroupRatio')}
               autoGroups={form.watch('AutoGroups')}
               groupSpecialUsableGroup={form.watch('GroupSpecialUsableGroup')}
+              additionalGroupNames={additionalGroupNames}
               onChange={(field, value) =>
                 handleFieldChange(field as keyof GroupFormValues, value)
               }
@@ -174,7 +181,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
 
             <GroupSpecialUsableRulesEditor
               value={form.watch('GroupSpecialUsableGroup')}
-              groupOptions={groupNames}
+              groupOptions={allGroupNames}
               onChange={(value) =>
                 handleFieldChange('GroupSpecialUsableGroup', value)
               }
