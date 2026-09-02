@@ -888,7 +888,7 @@ export function AffiliateSettingsSection() {
   return (
     <SettingsSection title={t('Referral Cashback')}>
       <Tabs defaultValue='global'>
-        <TabsList className='grid w-full max-w-2xl grid-cols-3'>
+        <TabsList className='grid w-full max-w-2xl grid-cols-3 group-data-horizontal/tabs:h-auto'>
           <TabsTrigger
             value='global'
             className='h-auto min-h-9 py-2 text-center leading-tight whitespace-normal'
