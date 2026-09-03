@@ -30,7 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota, formatTimestamp } from '@/lib/format'
+import { formatQuota } from '@/lib/format'
 
 import {
   USER_STATUS,
@@ -41,6 +41,7 @@ import {
 import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { UserQuotaCell } from './user-quota-cell'
+import { UserTimeCell } from './user-time-cell'
 
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
@@ -304,11 +305,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Created At'),
       cell: ({ row }) => {
         const ts = row.getValue('created_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
+        return <UserTimeCell timestamp={ts} ip={row.original.created_ip} />
       },
       size: 180,
       meta: { mobileHidden: true },
@@ -318,25 +315,17 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Last Login'),
       cell: ({ row }) => {
         const ts = row.getValue('last_login_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
+        return <UserTimeCell timestamp={ts} ip={row.original.last_login_ip} />
       },
       size: 180,
       meta: { mobileHidden: true },
     },
     {
       accessorKey: 'last_used_at',
-      header: '最后使用',
+      header: t('Last Used'),
       cell: ({ row }) => {
         const ts = row.getValue('last_used_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
+        return <UserTimeCell timestamp={ts} ip={row.original.last_used_ip} />
       },
       size: 180,
       meta: { mobileHidden: true },

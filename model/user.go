@@ -71,8 +71,11 @@ type User struct {
 	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer    string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt         int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	CreatedIP         string                     `json:"created_ip,omitempty" gorm:"column:created_ip;type:varchar(45)"`
 	LastLoginAt       int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	LastLoginIP       string                     `json:"last_login_ip,omitempty" gorm:"column:last_login_ip;type:varchar(45)"`
 	LastUsedAt        int64                      `json:"last_used_at" gorm:"default:0;column:last_used_at"`
+	LastUsedIP        string                     `json:"last_used_ip,omitempty" gorm:"column:last_used_ip;type:varchar(45)"`
 	OnboardingVersion *int                       `json:"-" gorm:"column:onboarding_version;type:int"`
 	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
@@ -676,7 +679,12 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if newUser.Username == "" {
 		return ErrUsernameEmpty
 	}
-	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count", "last_used_at").Updates(newUser).Error; err != nil {
+	if err = tx.Model(&current).Omit(
+		"quota", "used_quota", "request_count",
+		"created_at", "created_ip",
+		"last_login_at", "last_login_ip",
+		"last_used_at", "last_used_ip",
+	).Updates(newUser).Error; err != nil {
 		return err
 	}
 	return tx.First(user, user.Id).Error
@@ -1172,8 +1180,37 @@ func GetRootUser() (user *User) {
 }
 
 func UpdateUserLastLoginAt(id int) {
-	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", common.GetTimestamp()).Error; err != nil {
+	UpdateUserLastLoginAtWithIP(id, "")
+}
+
+// UpdateUserLastLoginAtWithIP records the successful login timestamp and, when
+// available, the client IP that produced it. Keeping the legacy timestamp-only
+// wrapper avoids changing callers that do not have an HTTP request context.
+func UpdateUserLastLoginAtWithIP(id int, ip string) {
+	if DB == nil || id == 0 {
+		return
+	}
+	updates := map[string]interface{}{
+		"last_login_at": common.GetTimestamp(),
+	}
+	if ip = strings.TrimSpace(ip); ip != "" {
+		updates["last_login_ip"] = ip
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		common.SysLog("failed to update user last_login_at: " + err.Error())
+	}
+}
+
+// UpdateUserLastUsedIP records the client IP for the latest settled usage.
+// Usage timestamps and quota accounting are updated by their existing paths;
+// this helper only fills the accompanying audit field when an IP is known.
+func UpdateUserLastUsedIP(id int, ip string) {
+	ip = strings.TrimSpace(ip)
+	if DB == nil || id == 0 || ip == "" {
+		return
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_used_ip", ip).Error; err != nil {
+		common.SysLog("failed to update user last_used_ip: " + err.Error())
 	}
 }
 

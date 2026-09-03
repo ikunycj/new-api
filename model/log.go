@@ -217,6 +217,106 @@ func FillUsersLastUsedAt(users []*User) error {
 	return nil
 }
 
+// FillUsersRecentIPs fills missing login and usage IPs from the latest
+// corresponding audit records. Empty log IPs remain empty instead of falling
+// back to an older record, because that would misrepresent the latest request.
+func FillUsersRecentIPs(users []*User) error {
+	userIDs := make([]int, 0, len(users))
+	loginMissing := make([]int, 0, len(users))
+	usedMissing := make([]int, 0, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		userIDs = append(userIDs, user.Id)
+		if strings.TrimSpace(user.LastLoginIP) == "" {
+			loginMissing = append(loginMissing, user.Id)
+		}
+		if strings.TrimSpace(user.LastUsedIP) == "" {
+			usedMissing = append(usedMissing, user.Id)
+		}
+	}
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	loginIPs, err := latestUserLogIPs(loginMissing, LogTypeLogin)
+	if err != nil {
+		return err
+	}
+	usedIPs, err := latestUserLogIPs(usedMissing, LogTypeConsume)
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		if strings.TrimSpace(user.LastLoginIP) == "" {
+			user.LastLoginIP = loginIPs[user.Id]
+		}
+		if strings.TrimSpace(user.LastUsedIP) == "" {
+			user.LastUsedIP = usedIPs[user.Id]
+		}
+	}
+	return nil
+}
+
+func latestUserLogIPs(userIDs []int, logType int) (map[int]string, error) {
+	result := make(map[int]string, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	var latestRows []struct {
+		UserID   int   `gorm:"column:user_id"`
+		LatestAt int64 `gorm:"column:latest_at"`
+	}
+	if err := LOG_DB.Model(&Log{}).
+		Select("user_id, MAX(created_at) AS latest_at").
+		Where("user_id IN ? AND type = ?", userIDs, logType).
+		Group("user_id").
+		Scan(&latestRows).Error; err != nil {
+		return nil, err
+	}
+	if len(latestRows) == 0 {
+		return result, nil
+	}
+
+	latestAt := make([]int64, 0, len(latestRows))
+	for _, row := range latestRows {
+		latestAt = append(latestAt, row.LatestAt)
+	}
+	var rows []struct {
+		UserID    int    `gorm:"column:user_id"`
+		CreatedAt int64  `gorm:"column:created_at"`
+		ID        int    `gorm:"column:id"`
+		IP        string `gorm:"column:ip"`
+	}
+	if err := LOG_DB.Model(&Log{}).
+		Select("user_id, created_at, id, ip").
+		Where("user_id IN ? AND type = ? AND created_at IN ?", userIDs, logType, latestAt).
+		Order("created_at DESC").
+		Order("id DESC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	latestByUser := make(map[int]int64, len(latestRows))
+	for _, row := range latestRows {
+		latestByUser[row.UserID] = row.LatestAt
+	}
+	for _, row := range rows {
+		if latestByUser[row.UserID] != row.CreatedAt {
+			continue
+		}
+		if _, exists := result[row.UserID]; exists {
+			continue
+		}
+		result[row.UserID] = strings.TrimSpace(row.IP)
+	}
+	return result, nil
+}
+
 func clickHouseLogOrder(prefix string) string {
 	return prefix + "created_at desc, " + prefix + "request_id desc"
 }
@@ -447,6 +547,9 @@ type RecordConsumeLogParams struct {
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	if c != nil {
+		UpdateUserLastUsedIP(userId, c.ClientIP())
+	}
 	if !common.LogConsumeEnabled {
 		return
 	}

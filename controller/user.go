@@ -141,7 +141,7 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
-	model.UpdateUserLastLoginAt(user.Id)
+	model.UpdateUserLastLoginAtWithIP(user.Id, c.ClientIP())
 	onboardingStatus := user.OnboardingStatus()
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
@@ -246,6 +246,7 @@ func Register(c *gin.Context) {
 		DisplayName:       user.Username,
 		InviterId:         inviterId,
 		Role:              common.RoleCommonUser, // 明确设置角色为普通用户
+		CreatedIP:         c.ClientIP(),
 		OnboardingVersion: model.NewUserOnboardingVersion(),
 	}
 	if common.EmailVerificationEnabled {
@@ -309,6 +310,9 @@ func GetAllUsers(c *gin.Context) {
 	if err := model.FillUsersLastUsedAt(users); err != nil {
 		common.SysLog("failed to fill users last_used_at: " + err.Error())
 	}
+	if err := model.FillUsersRecentIPs(users); err != nil {
+		common.SysLog("failed to fill users recent IPs: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -340,6 +344,9 @@ func SearchUsers(c *gin.Context) {
 	}
 	if err := model.FillUsersLastUsedAt(users); err != nil {
 		common.SysLog("failed to fill users last_used_at: " + err.Error())
+	}
+	if err := model.FillUsersRecentIPs(users); err != nil {
+		common.SysLog("failed to fill users recent IPs: " + err.Error())
 	}
 
 	pageInfo.SetTotal(int(total))
@@ -999,6 +1006,7 @@ func CreateUser(c *gin.Context) {
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
 		Group:       user.Group,
+		CreatedIP:   c.ClientIP(),
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {

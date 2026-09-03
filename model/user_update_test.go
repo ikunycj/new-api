@@ -41,6 +41,10 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 		Quota:        1000,
 		UsedQuota:    20,
 		RequestCount: 3,
+		CreatedIP:    "198.51.100.1",
+		LastLoginAt:  100,
+		LastLoginIP:  "198.51.100.2",
+		LastUsedIP:   "198.51.100.3",
 	}
 	require.NoError(t, DB.Create(&user).Error)
 
@@ -55,6 +59,10 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 	}).Error)
 
 	staleUser.DisplayName = "after"
+	staleUser.CreatedIP = "203.0.113.10"
+	staleUser.LastLoginAt = 200
+	staleUser.LastLoginIP = "203.0.113.11"
+	staleUser.LastUsedIP = "203.0.113.12"
 	require.NoError(t, staleUser.Update(false))
 
 	var got User
@@ -64,6 +72,10 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 	assert.Equal(t, 420, got.UsedQuota)
 	assert.Equal(t, 4, got.RequestCount)
 	assert.Equal(t, int64(1234567890), got.LastUsedAt)
+	assert.Equal(t, "198.51.100.1", got.CreatedIP)
+	assert.Equal(t, int64(100), got.LastLoginAt)
+	assert.Equal(t, "198.51.100.2", got.LastLoginIP)
+	assert.Equal(t, "198.51.100.3", got.LastUsedIP)
 }
 
 func TestUpdateUserUsedQuotaAndRequestCountRecordsLastUsedAt(t *testing.T) {
@@ -87,6 +99,28 @@ func TestUpdateUserUsedQuotaAndRequestCountRecordsLastUsedAt(t *testing.T) {
 	assert.Equal(t, 1, got.RequestCount)
 	assert.GreaterOrEqual(t, got.LastUsedAt, beforeUpdate)
 	assert.LessOrEqual(t, got.LastUsedAt, afterUpdate)
+}
+
+func TestUpdateUserLastLoginAtWithIPRecordsTimestampAndIP(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Id:       4,
+		Username: "login-user",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, DB.Create(&user).Error)
+
+	beforeUpdate := common.GetTimestamp()
+	UpdateUserLastLoginAtWithIP(user.Id, "198.51.100.42")
+	afterUpdate := common.GetTimestamp()
+
+	var got User
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	assert.GreaterOrEqual(t, got.LastLoginAt, beforeUpdate)
+	assert.LessOrEqual(t, got.LastLoginAt, afterUpdate)
+	assert.Equal(t, "198.51.100.42", got.LastLoginIP)
 }
 
 func TestFillUsersLastUsedAtUsesLatestConsumeLogAsFallback(t *testing.T) {

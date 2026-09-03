@@ -95,6 +95,7 @@ func WeChatAuth(c *gin.Context) {
 			user.DisplayName = "WeChat User"
 			user.Role = common.RoleCommonUser
 			user.Status = common.UserStatusEnabled
+			user.CreatedIP = c.ClientIP()
 			user.OnboardingVersion = model.NewUserOnboardingVersion()
 
 			if err := user.Insert(0); err != nil {
