@@ -23,7 +23,7 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
 import type { ApiKey, ApiKeyFormData } from '../types'
 
-export const MAX_GROUP_CANDIDATES = 8
+export const MAX_GROUP_CANDIDATES = 16
 export const MAX_GROUP_RETRY_TIMES = 100
 
 // ============================================================================

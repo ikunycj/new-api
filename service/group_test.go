@@ -1,9 +1,11 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,6 +41,32 @@ func TestValidateTokenGroupCandidates(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.messagePart)
 		})
 	}
+}
+
+func TestValidateTokenGroupCandidatesAllowsMaximum(t *testing.T) {
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousEnabled))
+	})
+
+	ratios := make(map[string]float64, MaxTokenGroupCandidates)
+	groups := make([]string, 0, MaxTokenGroupCandidates)
+	for index := 0; index < MaxTokenGroupCandidates; index++ {
+		group := fmt.Sprintf("boundary-group-%d", index)
+		groups = append(groups, group)
+		ratios[group] = 1
+	}
+	ratioJSON, err := common.Marshal(ratios)
+	require.NoError(t, err)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(string(ratioJSON)))
+
+	require.NoError(t, ValidateTokenGroupCandidates("default", groups))
+	tooMany := append(append([]string(nil), groups...), "boundary-group-overflow")
+	err = ValidateTokenGroupCandidates("default", tooMany)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "不能超过 16 个")
 }
 
 func TestValidateTokenGroupAutoRequiresVirtualPermission(t *testing.T) {

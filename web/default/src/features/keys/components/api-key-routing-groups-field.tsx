@@ -419,10 +419,8 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
             />
           }
         >
-          <span className='min-w-0 flex-1 truncate text-left text-xs'>
-            {props.value
-              .map((group) => optionByValue.get(group)?.label ?? group)
-              .join(', ')}
+          <span className='text-muted-foreground min-w-0 flex-1 truncate text-left text-xs'>
+            {t('Search and add groups')}
           </span>
           <span className='flex shrink-0 items-center gap-2'>
             <Badge variant='secondary'>

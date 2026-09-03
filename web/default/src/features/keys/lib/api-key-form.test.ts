@@ -90,6 +90,28 @@ describe('API key routing form mapping', () => {
     )
   })
 
+  test('allows up to sixteen model billing groups', () => {
+    const maximumGroups = Array.from(
+      { length: 16 },
+      (_, index) => `group-${index}`
+    )
+    const accepted = getApiKeyFormSchema(identityT).safeParse(
+      formValues(maximumGroups)
+    )
+    assert.equal(accepted.success, true)
+
+    const rejected = getApiKeyFormSchema(identityT).safeParse(
+      formValues([...maximumGroups, 'group-16'])
+    )
+    assert.equal(rejected.success, false)
+    if (rejected.success) return
+
+    const groupIssue = rejected.error.issues.find(
+      (issue) => issue.path[0] === 'group_candidates'
+    )
+    assert.equal(groupIssue?.message, 'Select no more than {{count}} groups')
+  })
+
   test('starts new keys without a default group or retry configuration', () => {
     const defaults = getApiKeyFormDefaultValues()
 

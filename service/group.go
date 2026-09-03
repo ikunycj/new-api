@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	MaxTokenGroupCandidates = 8
+	MaxTokenGroupCandidates = 16
 	MaxTokenGroupNameLength = 64
 	MaxTokenGroupRetryTimes = 100
 )
