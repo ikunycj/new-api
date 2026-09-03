@@ -6,6 +6,7 @@ import "sync/atomic"
 type PerformanceMonitorConfig struct {
 	Enabled         bool
 	CPUThreshold    int
+	IOWaitThreshold int
 	MemoryThreshold int
 	DiskThreshold   int
 }
@@ -17,6 +18,7 @@ func init() {
 	performanceMonitorConfig.Store(PerformanceMonitorConfig{
 		Enabled:         true,
 		CPUThreshold:    90,
+		IOWaitThreshold: 95,
 		MemoryThreshold: 90,
 		DiskThreshold:   90,
 	})

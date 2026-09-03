@@ -53,6 +53,12 @@ func checkSystemPerformance() *types.NewAPIError {
 			"system_cpu_overloaded", http.StatusServiceUnavailable)
 	}
 
+	if config.IOWaitThreshold > 0 && int(status.CPUWaitPercent) > config.IOWaitThreshold {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("system io wait overloaded (current: %.1f%%, threshold: %d%%)", status.CPUWaitPercent, config.IOWaitThreshold),
+			"system_io_wait_overloaded", http.StatusServiceUnavailable)
+	}
+
 	// 检查内存
 	if config.MemoryThreshold > 0 && int(status.MemoryUsage) > config.MemoryThreshold {
 		return types.NewErrorWithStatusCode(

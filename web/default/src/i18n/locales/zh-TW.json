@@ -2750,6 +2750,7 @@
     "I have read and understood the above compliance reminder": "我已閱讀並理解上述合規提醒",
     "I have read and understood the above compliance reminder, acknowledge the related legal risks, and confirm that I bear legal responsibility arising from deployment, operation, and charging behavior.": "我已閱讀並理解上述合規提醒，確認相關法律風險，並確認承擔因部署、運營和收費行為產生的法律責任。",
     "I understand that disabling 2FA will remove all protection and backup codes": "我理解停用 2FA 將移除所有保護和備份代碼",
+    "I/O Wait Threshold (%)": "I/O Wait Threshold (%)",
     "Icon": "圖標",
     "Icon file must be 100 KB or smaller": "圖標檔案必須小於等於 100 KB",
     "Icon identifier (e.g. github, gitlab)": "圖標標識符（例如 github、gitlab）",

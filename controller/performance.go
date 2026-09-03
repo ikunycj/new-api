@@ -18,6 +18,10 @@ import (
 
 // PerformanceStats 性能统计信息
 type PerformanceStats struct {
+	// CPUUsage is CPU compute utilization excluding I/O wait.
+	CPUUsage float64 `json:"cpu_usage"`
+	// CPUWaitPercent is the portion of time spent waiting on disk I/O.
+	CPUWaitPercent float64 `json:"cpu_iowait"`
 	// 缓存统计
 	CacheStats common.DiskCacheStats `json:"cache_stats"`
 	// 系统内存统计
@@ -73,6 +77,8 @@ type PerformanceConfig struct {
 	MonitorEnabled bool `json:"monitor_enabled"`
 	// MonitorCPUThreshold CPU 使用率阈值（%）
 	MonitorCPUThreshold int `json:"monitor_cpu_threshold"`
+	// MonitorIOWaitThreshold 磁盘 I/O 等待阈值（%）
+	MonitorIOWaitThreshold int `json:"monitor_iowait_threshold"`
 	// MonitorMemoryThreshold 内存使用率阈值（%）
 	MonitorMemoryThreshold int `json:"monitor_memory_threshold"`
 	// MonitorDiskThreshold 磁盘使用率阈值（%）
@@ -103,6 +109,7 @@ func GetPerformanceStats(c *gin.Context) {
 		IsRunningInContainer:   common.IsRunningInContainer(),
 		MonitorEnabled:         monitorConfig.Enabled,
 		MonitorCPUThreshold:    monitorConfig.CPUThreshold,
+		MonitorIOWaitThreshold: monitorConfig.IOWaitThreshold,
 		MonitorMemoryThreshold: monitorConfig.MemoryThreshold,
 		MonitorDiskThreshold:   monitorConfig.DiskThreshold,
 	}
@@ -120,7 +127,9 @@ func GetPerformanceStats(c *gin.Context) {
 	diskSpaceInfo = common.GetDiskSpaceInfo()
 
 	stats := PerformanceStats{
-		CacheStats: cacheStats,
+		CPUUsage:       systemStatus.CPUUsage,
+		CPUWaitPercent: systemStatus.CPUWaitPercent,
+		CacheStats:     cacheStats,
 		MemoryStats: MemoryStats{
 			Alloc:        memStats.Alloc,
 			TotalAlloc:   memStats.TotalAlloc,

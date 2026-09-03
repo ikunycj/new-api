@@ -505,6 +505,7 @@ export type OperationsSettings = {
   'performance_setting.disk_cache_path': string
   'performance_setting.monitor_enabled': boolean
   'performance_setting.monitor_cpu_threshold': number
+  'performance_setting.monitor_iowait_threshold': number
   'performance_setting.monitor_memory_threshold': number
   'performance_setting.monitor_disk_threshold': number
   'perf_metrics_setting.enabled': boolean
