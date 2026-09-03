@@ -346,6 +346,11 @@ function CommonLogsCard<TData>({
           <SummaryField cell={cells.get('user')} />
         )}
         <SummaryField
+          label={t('IP Address')}
+          cell={cells.get('ip')}
+          valueClassName='font-mono'
+        />
+        <SummaryField
           cell={cells.get('token_name')}
           valueClassName='[&_.flex-col]:max-w-none [&_.flex-col>*:not(:first-child)]:text-[11px] [&_.flex-col>*:not(:first-child)]:leading-none'
         />

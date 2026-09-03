@@ -555,6 +555,36 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         },
       },
       {
+        accessorKey: 'ip',
+        header: t('IP Address'),
+        cell: function IpCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const ip = row.original.ip
+
+          if (!ip) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[140px] truncate font-mono text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? ip : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && ip.length > 18 && (
+                  <TooltipContent className='font-mono'>{ip}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 140,
+      },
+      {
         accessorKey: 'remark',
         header: t('Remark'),
         cell: function RemarkCell({ row }) {
