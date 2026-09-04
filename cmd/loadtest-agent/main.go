@@ -60,6 +60,7 @@ type loadTestTask struct {
 	Model             string                `json:"model"`
 	Endpoint          string                `json:"endpoint"`
 	Prompt            string                `json:"prompt"`
+	MaxOutputTokens   int                   `json:"max_output_tokens"`
 	PromptCache       bool                  `json:"prompt_cache"`
 	StreamMode        bool                  `json:"stream_mode"`
 	MockEnabled       bool                  `json:"mock_enabled"`
@@ -482,6 +483,7 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 		"ALLTOKEN_MODEL="+task.Model,
 		"ALLTOKEN_ENDPOINT="+task.Endpoint,
 		"ALLTOKEN_PROMPT="+task.Prompt,
+		"ALLTOKEN_MAX_OUTPUT_TOKENS="+strconv.Itoa(task.MaxOutputTokens),
 		"ALLTOKEN_PROMPT_CACHE="+strconv.FormatBool(task.PromptCache),
 		"ALLTOKEN_STREAM_MODE="+strconv.FormatBool(task.StreamMode),
 		"ALLTOKEN_MOCK_ENABLED="+strconv.FormatBool(task.MockEnabled),
@@ -511,7 +513,7 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 			payload, summaryErr := readK6Summary(summaryPath, task.RequestsPerSecond)
 			if summaryErr == nil && task.ExpectedWorkers <= 1 {
 				payload.TokenStatsSource = "agent_response"
-				if stats, ok := reconcileTokenStats(context.Background(), config, task.RunID, payload.Successes); ok {
+				if stats, ok := reconcileTokenStats(ctx, config, task.RunID, payload.Successes); ok {
 					payload.InputTokens, payload.OutputTokens = stats.InputTokens, stats.OutputTokens
 					payload.CacheReadTokens, payload.CacheWriteTokens = stats.CacheReadTokens, stats.CacheWriteTokens
 					payload.TokenStatsSource = "server_logs"
@@ -545,13 +547,20 @@ func reconcileTokenStats(ctx context.Context, config agentConfig, runID string, 
 		return serverTokenStats{}, false
 	}
 	endpoint := config.ServerURL + "/api/loadtest-agent/runs/" + url.PathEscape(runID) + "/token-stats"
-	for attempt := 0; attempt < 15; attempt++ {
+	for attempt := 0; attempt < 5; attempt++ {
 		var response apiResponse[serverTokenStats]
 		if err := requestJSON(ctx, http.MethodGet, endpoint, config.Secret, nil, &response); err == nil && response.Success && response.Data.Requests >= successes {
 			return response.Data, true
 		}
-		if attempt < 14 {
-			time.Sleep(time.Second)
+		if attempt < 4 {
+			delay := time.Duration(100*(1<<attempt)) * time.Millisecond
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return serverTokenStats{}, false
+			case <-timer.C:
+			}
 		}
 	}
 	return serverTokenStats{}, false
@@ -858,6 +867,7 @@ const apiKey = open(__ENV.ALLTOKEN_API_KEY_FILE).trim();
 const target = __ENV.ALLTOKEN_TARGET_URL.replace(/\/+$/, '');
 const endpoint = __ENV.ALLTOKEN_ENDPOINT;
 const streamMode = __ENV.ALLTOKEN_STREAM_MODE === 'true' && endpoint !== 'openai-response-compact';
+const maxOutputTokens = Math.max(1, Number(__ENV.ALLTOKEN_MAX_OUTPUT_TOKENS || 256));
 const durationSeconds = Number(__ENV.ALLTOKEN_DURATION_SECONDS);
 const targetRPS = Number(__ENV.ALLTOKEN_RPS);
 const concurrency = Number(__ENV.ALLTOKEN_CONCURRENCY);
@@ -928,12 +938,12 @@ export default function () {
   }
   let body;
   if (endpoint === 'anthropic') {
-    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
+    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: maxOutputTokens, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
     if (promptCache) {
       body.system = [{ type: 'text', text: cachePrefix, cache_control: { type: 'ephemeral' } }];
     }
   } else if (endpoint === 'openai') {
-    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, temperature: 0, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
+    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: maxOutputTokens, temperature: 0, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
     if (promptCache) {
       body.messages = [{ role: 'system', content: cachePrefix }, { role: 'user', content: __ENV.ALLTOKEN_PROMPT }];
     }
@@ -945,7 +955,7 @@ export default function () {
         : [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }],
     };
     if (endpoint === 'openai-response') {
-      body.max_output_tokens = 32;
+      body.max_output_tokens = maxOutputTokens;
       body.stream = streamMode;
     }
   }

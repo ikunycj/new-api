@@ -19,6 +19,8 @@ func GetLoadTestConfig(c *gin.Context) {
 			"max_rps":              settings.MaxRPS,
 			"min_concurrency":      1,
 			"max_concurrency":      settings.MaxConcurrency,
+			"min_output_tokens":    1,
+			"max_output_tokens":    settings.MaxOutputTokens,
 		},
 	})
 }

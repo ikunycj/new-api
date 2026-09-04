@@ -517,6 +517,7 @@ export type OperationsSettings = {
   'loadtest_setting.max_duration_seconds': number
   'loadtest_setting.max_rps': number
   'loadtest_setting.max_concurrency': number
+  'loadtest_setting.max_output_tokens': number
 }
 
 export type SecuritySettings = {

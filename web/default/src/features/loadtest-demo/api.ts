@@ -38,6 +38,7 @@ export const LOAD_TEST_DEFAULT_CONCURRENCY = 10
 export const LOAD_TEST_MIN_CONCURRENCY = 1
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
+export const LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS = 256
 export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
 export const LOAD_TEST_TIMEOUT_MS = 120_000
 const LOAD_TEST_CACHE_PREFIX = Array.from(
@@ -80,7 +81,8 @@ export function buildLoadTestRequestBody(
   prompt: string,
   promptCache: boolean,
   endpoint: LoadTestEndpoint,
-  streamMode = false
+  streamMode = false,
+  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
 ): Record<string, unknown> {
   const streaming = streamMode && supportsLoadTestStreaming(endpoint)
   const isResponsesEndpoint =
@@ -98,7 +100,7 @@ export function buildLoadTestRequestBody(
       }
     : {
         model,
-        max_tokens: 32,
+        max_tokens: maxOutputTokens,
         messages: [{ role: 'user', content: prompt }],
       }
 
@@ -126,7 +128,7 @@ export function buildLoadTestRequestBody(
       ]
     }
   } else if (endpoint === 'openai-response') {
-    requestBody.max_output_tokens = 32
+    requestBody.max_output_tokens = maxOutputTokens
     requestBody.stream = streaming
   }
 
@@ -218,6 +220,8 @@ export type LoadTestLimits = {
   max_rps: number
   min_concurrency: number
   max_concurrency: number
+  min_output_tokens: number
+  max_output_tokens: number
 }
 
 export type LoadTestAgent = {
@@ -323,6 +327,7 @@ export type LoadTestAgentRun = {
   duration_seconds: number
   requests_per_second: number
   concurrency: number
+  max_output_tokens: number
   agent_managed: boolean
   status: LoadTestAgentRunStatus
   sent: number
@@ -366,6 +371,7 @@ export type CreateLoadTestAgentRun = {
   duration_seconds: number
   requests_per_second: number
   concurrency: number
+  max_output_tokens: number
 }
 
 export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
@@ -375,6 +381,8 @@ export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
   max_rps: LOAD_TEST_MAX_RPS,
   min_concurrency: LOAD_TEST_MIN_CONCURRENCY,
   max_concurrency: LOAD_TEST_MAX_CONCURRENCY,
+  min_output_tokens: 1,
+  max_output_tokens: LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
 }
 
 export async function getLoadTestLimits(): Promise<LoadTestLimits> {
@@ -797,7 +805,8 @@ export async function sendLoadTestRequest(
   signal?: AbortSignal,
   providerOverride?: LoadTestProvider,
   endpointOverride?: LoadTestEndpoint,
-  streamMode = false
+  streamMode = false,
+  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
   const controller = new AbortController()
@@ -819,7 +828,8 @@ export async function sendLoadTestRequest(
       prompt,
       promptCache,
       endpoint,
-      requestUsesStreaming
+      requestUsesStreaming,
+      maxOutputTokens
     )
     const endpointPath = getLoadTestEndpointPath(endpoint)
     const headers: Record<string, string> = {

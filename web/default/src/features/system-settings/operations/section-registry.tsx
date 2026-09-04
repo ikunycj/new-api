@@ -142,6 +142,8 @@ const OPERATIONS_SECTIONS = [
             settings['loadtest_setting.max_rps'] ?? 20,
           'loadtest_setting.max_concurrency':
             settings['loadtest_setting.max_concurrency'] ?? 10,
+          'loadtest_setting.max_output_tokens':
+            settings['loadtest_setting.max_output_tokens'] ?? 256,
         }}
       />
     ),

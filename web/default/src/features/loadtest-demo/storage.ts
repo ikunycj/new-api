@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-import { LOAD_TEST_DEFAULT_CONCURRENCY, LOAD_TEST_DEFAULT_PROMPT } from './api'
+import {
+  LOAD_TEST_DEFAULT_CONCURRENCY,
+  LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  LOAD_TEST_DEFAULT_PROMPT,
+} from './api'
 
 const LOAD_TEST_RESULTS_VERSION = 2
 const LOAD_TEST_RESULTS_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -69,6 +73,11 @@ const persistedRunSchema = z.object({
     .int()
     .positive()
     .default(LOAD_TEST_DEFAULT_CONCURRENCY),
+  maxOutputTokens: z
+    .number()
+    .int()
+    .positive()
+    .default(LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS),
   prompt: z.string().default(LOAD_TEST_DEFAULT_PROMPT),
   promptCache: z.boolean().default(false),
   streamMode: z.boolean().default(false),
@@ -130,6 +139,7 @@ export function loadPersistedLoadTestRuns(
           durationSeconds: 0,
           requestsPerSecond: 0,
           concurrency: LOAD_TEST_DEFAULT_CONCURRENCY,
+          maxOutputTokens: LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
           prompt: LOAD_TEST_DEFAULT_PROMPT,
           promptCache: false,
           streamMode: false,

@@ -43,6 +43,7 @@ const loadTestSchema = z.object({
     max_duration_seconds: z.coerce.number().int().min(5).max(3600),
     max_rps: z.coerce.number().int().min(1).max(10000),
     max_concurrency: z.coerce.number().int().min(1).max(10000),
+    max_output_tokens: z.coerce.number().int().min(1).max(8192),
   }),
 })
 
@@ -53,6 +54,7 @@ type LoadTestSettingsDefaults = {
   'loadtest_setting.max_duration_seconds': number
   'loadtest_setting.max_rps': number
   'loadtest_setting.max_concurrency': number
+  'loadtest_setting.max_output_tokens': number
 }
 
 type Props = { defaultValues: LoadTestSettingsDefaults }
@@ -66,6 +68,7 @@ function buildDefaults(
         defaultValues['loadtest_setting.max_duration_seconds'],
       max_rps: defaultValues['loadtest_setting.max_rps'],
       max_concurrency: defaultValues['loadtest_setting.max_concurrency'],
+      max_output_tokens: defaultValues['loadtest_setting.max_output_tokens'],
     },
   }
 }
@@ -97,6 +100,10 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
         'loadtest_setting.max_concurrency',
         values.loadtest_setting.max_concurrency,
       ],
+      [
+        'loadtest_setting.max_output_tokens',
+        values.loadtest_setting.max_output_tokens,
+      ],
     ] as const
     for (const [key, value] of updates) {
       await updateOption.mutateAsync({ key, value })
@@ -116,7 +123,7 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
               'These limits apply to every load-test demo run.'
             )}
           </p>
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
+          <div className='grid grid-cols-1 gap-4 md:grid-cols-4'>
             <FormField
               control={form.control}
               name='loadtest_setting.max_duration_seconds'
@@ -178,6 +185,31 @@ export function LoadTestSettingsSection({ defaultValues }: Props) {
                   </FormControl>
                   <p className='text-muted-foreground text-xs'>
                     {t('Allowed range: 1-10000 concurrent requests')}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='loadtest_setting.max_output_tokens'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Max output tokens')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={1}
+                      max={8192}
+                      step={1}
+                      {...safeNumberFieldProps(field)}
+                    />
+                  </FormControl>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Allowed range: {{min}}-{{max}} tokens', {
+                      min: 1,
+                      max: 8192,
+                    })}
                   </p>
                   <FormMessage />
                 </FormItem>

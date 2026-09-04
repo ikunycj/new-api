@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 )
 
@@ -88,6 +89,7 @@ type LoadTestRun struct {
 	DurationSeconds   int                   `json:"duration_seconds" gorm:"not null"`
 	RequestsPerSecond int                   `json:"requests_per_second" gorm:"not null"`
 	Concurrency       int                   `json:"concurrency" gorm:"not null"`
+	MaxOutputTokens   int                   `json:"max_output_tokens" gorm:"not null;default:256"`
 	AgentManaged      bool                  `json:"agent_managed" gorm:"index"`
 	Status            LoadTestRunStatus     `json:"status" gorm:"type:varchar(32);index;not null"`
 	Sent              int64                 `json:"sent" gorm:"bigint"`
@@ -392,6 +394,9 @@ func CreateLoadTestRun(run *LoadTestRun) error {
 	run.Status = LoadTestRunQueued
 	if run.ExecutionMode == "" {
 		run.ExecutionMode = LoadTestExecutionSingle
+	}
+	if run.MaxOutputTokens < 1 {
+		run.MaxOutputTokens = operation_setting.LoadTestDefaultMaxOutputTokens
 	}
 	run.CreatedAt = now
 	run.UpdatedAt = now
