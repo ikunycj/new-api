@@ -75,6 +75,7 @@ export const channelSchema = z.object({
   total_tokens: z.number().default(0),
   daily_cost_usd: z.number().default(0),
   total_cost_usd: z.number().default(0),
+  priority_score: z.number().nullish(),
   force_priority: z.boolean().nullish(),
   force_priority_scope: z
     .enum(['group', 'cross_group'])
@@ -331,6 +332,7 @@ export type ChannelSortBy =
   | 'balance'
   | 'response_time'
   | 'test_time'
+  | 'priority'
 
 export type ChannelSortOrder = 'asc' | 'desc'
 

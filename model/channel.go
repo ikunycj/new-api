@@ -44,33 +44,34 @@ type Channel struct {
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
-	StatusCodeMapping                *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	AutoBan                          *int    `json:"auto_ban" gorm:"default:0"`
-	AutoProbeEnabled                 *bool   `json:"auto_probe_enabled"`
-	ProbeIntervalSeconds             int     `json:"probe_interval_seconds"`
-	AutoDisabledProbeIntervalSeconds int     `json:"auto_disabled_probe_interval_seconds"`
-	ProbeFailureAutoBan              *bool   `json:"probe_failure_auto_ban"`
-	ProbeSuccessAutoEnable           *bool   `json:"probe_success_auto_enable"`
-	UpstreamMaxRetries               *int    `json:"upstream_max_retries"`
-	MaxConcurrency                   *int    `json:"max_concurrency"`
-	CurrentConcurrency               int     `json:"current_concurrency" gorm:"-"`
-	PriceMultiplier                  float64 `json:"price_multiplier"`
-	PriceMultiplierMode              string  `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
-	DailyTokens                      int64   `json:"daily_tokens" gorm:"-"`
-	TotalTokens                      int64   `json:"total_tokens" gorm:"-"`
-	DailyCostUSD                     float64 `json:"daily_cost_usd" gorm:"-"`
-	TotalCostUSD                     float64 `json:"total_cost_usd" gorm:"-"`
-	ForcePriority                    *bool   `json:"force_priority"`
-	ForcePriorityScope               string  `json:"force_priority_scope" gorm:"type:varchar(16)"`
-	PreviousDayProbeSuccessRate      float64 `json:"previous_day_probe_success_rate" gorm:"-"`
-	PreviousDayProbeSampleCount      int     `json:"-" gorm:"-"`
-	PreviousDayAverageTTFTMs         float64 `json:"previous_day_average_ttft_ms" gorm:"-"`
-	OtherInfo                        string  `json:"other_info"`
-	Tag                              *string `json:"tag" gorm:"index"`
-	Setting                          *string `json:"setting" gorm:"type:text"` // 渠道额外设置
-	ParamOverride                    *string `json:"param_override" gorm:"type:text"`
-	HeaderOverride                   *string `json:"header_override" gorm:"type:text"`
-	Remark                           *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	StatusCodeMapping                *string  `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
+	AutoBan                          *int     `json:"auto_ban" gorm:"default:0"`
+	AutoProbeEnabled                 *bool    `json:"auto_probe_enabled"`
+	ProbeIntervalSeconds             int      `json:"probe_interval_seconds"`
+	AutoDisabledProbeIntervalSeconds int      `json:"auto_disabled_probe_interval_seconds"`
+	ProbeFailureAutoBan              *bool    `json:"probe_failure_auto_ban"`
+	ProbeSuccessAutoEnable           *bool    `json:"probe_success_auto_enable"`
+	UpstreamMaxRetries               *int     `json:"upstream_max_retries"`
+	MaxConcurrency                   *int     `json:"max_concurrency"`
+	CurrentConcurrency               int      `json:"current_concurrency" gorm:"-"`
+	PriceMultiplier                  float64  `json:"price_multiplier"`
+	PriceMultiplierMode              string   `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	DailyTokens                      int64    `json:"daily_tokens" gorm:"-"`
+	TotalTokens                      int64    `json:"total_tokens" gorm:"-"`
+	DailyCostUSD                     float64  `json:"daily_cost_usd" gorm:"-"`
+	TotalCostUSD                     float64  `json:"total_cost_usd" gorm:"-"`
+	ForcePriority                    *bool    `json:"force_priority"`
+	ForcePriorityScope               string   `json:"force_priority_scope" gorm:"type:varchar(16)"`
+	PreviousDayProbeSuccessRate      float64  `json:"previous_day_probe_success_rate" gorm:"-"`
+	PreviousDayProbeSampleCount      int      `json:"-" gorm:"-"`
+	PreviousDayAverageTTFTMs         float64  `json:"previous_day_average_ttft_ms" gorm:"-"`
+	PriorityScore                    *float64 `json:"priority_score,omitempty" gorm:"-"`
+	OtherInfo                        string   `json:"other_info"`
+	Tag                              *string  `json:"tag" gorm:"index"`
+	Setting                          *string  `json:"setting" gorm:"type:text"` // 渠道额外设置
+	ParamOverride                    *string  `json:"param_override" gorm:"type:text"`
+	HeaderOverride                   *string  `json:"header_override" gorm:"type:text"`
+	Remark                           *string  `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -122,9 +123,13 @@ var channelSortColumns = map[string]string{
 func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) ChannelSortOptions {
 	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
 	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
-	if _, ok := channelSortColumns[normalizedSortBy]; !ok {
-		normalizedSortBy = ""
-		normalizedSortOrder = ""
+	if normalizedSortBy != "priority" {
+		if _, ok := channelSortColumns[normalizedSortBy]; !ok {
+			normalizedSortBy = ""
+			normalizedSortOrder = ""
+		} else if normalizedSortOrder != "asc" {
+			normalizedSortOrder = "desc"
+		}
 	} else if normalizedSortOrder != "asc" {
 		normalizedSortOrder = "desc"
 	}
@@ -137,6 +142,11 @@ func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) Channel
 }
 
 func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
+	if options.SortBy == "priority" {
+		// Priority is calculated from runtime routing metrics in the controller.
+		// Keep the database order deterministic until the in-memory sort runs.
+		return query.Order(clause.OrderByColumn{Column: clause.Column{Name: "id"}, Desc: true})
+	}
 	if columnName, ok := channelSortColumns[options.SortBy]; ok {
 		return query.Order(clause.OrderByColumn{
 			Column: clause.Column{Name: columnName},

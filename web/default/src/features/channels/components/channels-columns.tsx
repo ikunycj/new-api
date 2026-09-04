@@ -973,6 +973,26 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
+      // Runtime priority score (calculated only for a selected group)
+      {
+        accessorKey: 'priority_score',
+        header: '优先级得分',
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const score = row.original.priority_score
+          if (score == null || !Number.isFinite(score)) {
+            return <span className='text-muted-foreground text-xs'>-</span>
+          }
+          return (
+            <span className='text-xs tabular-nums'>
+              {Math.min(100, Math.max(0, score)).toFixed(1)} / 100
+            </span>
+          )
+        },
+        size: 110,
+        enableSorting: false,
+      },
+
       // Today's and lifetime recorded consume cost
       {
         accessorKey: 'daily_cost_usd',

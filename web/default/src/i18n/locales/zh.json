@@ -6078,6 +6078,8 @@
     "Failed to save settings": "保存设置失败",
     "No personalized settings": "未设置个性化配置",
     "{{count}} customized fields": "已个性化 {{count}} 个字段",
-    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新规则将应用于该用户的后续奖励事件。已生成的奖励和解冻时间不会重新计算。"
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新规则将应用于该用户的后续奖励事件。已生成的奖励和解冻时间不会重新计算。",
+    "Priority: High to Low": "优先级：从高到低",
+    "Priority: Low to High": "优先级：从低到高"
   }
 }

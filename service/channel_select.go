@@ -13,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
@@ -64,7 +63,6 @@ type RetryParam struct {
 
 type dynamicChannelCandidate struct {
 	channel         *model.Channel
-	modelName       string
 	group           string
 	groupIndex      int
 	routeConfigured bool
@@ -79,8 +77,6 @@ type dynamicChannelCandidate struct {
 
 const (
 	dynamicScoreTolerance      = 5.0
-	dynamicPriceTolerance      = 0.03
-	dynamicPricePenaltyCap     = 0.20
 	dynamicAvailabilityPrior   = 0.95
 	dynamicAvailabilitySamples = 100.0
 	// A channel without a valid previous-day TTFT sample receives a neutral
@@ -951,7 +947,6 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 			}
 			candidate := dynamicChannelCandidate{
 				channel:         channel,
-				modelName:       p.ModelName,
 				group:           group,
 				groupIndex:      groupIndex,
 				routeConfigured: configured,
@@ -1050,7 +1045,7 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 		}
 		filtered[index] = candidates
 		for _, candidate := range candidates {
-			if price := channelComparableCost(candidate); price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) && price < globalMinPrice {
+			if price := channelPriceMultiplier(candidate); price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) && price < globalMinPrice {
 				globalMinPrice = price
 			}
 			if ttft := dynamicChannelTTFT(candidate.channel); ttft > 0 && ttft < globalMinTTFT {
@@ -1382,23 +1377,19 @@ func dynamicCandidateFeatures(candidate dynamicChannelCandidate, minPrice float6
 	if candidate.channel == nil {
 		return 0, 0, 0
 	}
-	price := channelComparableCost(candidate)
+	price := channelPriceMultiplier(candidate)
 	priceScore := 1.0
 	if math.IsInf(minPrice, 1) || math.IsNaN(minPrice) {
-		// A missing price baseline means no candidate has a usable configured
-		// price. Keep price neutral and let availability/load decide.
+		// A missing baseline means there is no usable price to compare. Keep the
+		// price feature neutral and let the other features decide.
 		priceScore = 1
-	} else if minPrice <= 0 {
-		// Zero is a valid explicitly free model price. It is the best possible
-		// price, while every positive price receives the maximum penalty.
-		if price > 0 {
-			priceScore = 0
-		}
-	} else if price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
-		priceGap := price/minPrice - 1
-		if priceGap > dynamicPriceTolerance {
-			priceScore = 1 - math.Min(1, math.Max(0, (priceGap-dynamicPriceTolerance)/(dynamicPricePenaltyCap-dynamicPriceTolerance)))
-		}
+	} else if minPrice > 0 && price > 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
+		// Price is a cost. Normalize directly against the cheapest candidate;
+		// no tolerance band or piecewise penalty is applied.
+		priceScore = math.Min(1, math.Max(0, minPrice/price))
+	} else {
+		// Invalid/non-positive values cannot receive a favorable price score.
+		priceScore = 0
 	}
 	return priceScore, dynamicAvailabilityScore(candidate.channel), 1 - dynamicCandidateUtilization(candidate)
 }
@@ -1526,7 +1517,7 @@ func annotateDynamicCandidateScores(candidates []dynamicChannelCandidate) {
 	for _, indices := range byGroup {
 		minPrice := math.Inf(1)
 		for _, index := range indices {
-			price := channelComparableCost(candidates[index])
+			price := channelPriceMultiplier(candidates[index])
 			if price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) && price < minPrice {
 				minPrice = price
 			}
@@ -1723,10 +1714,10 @@ func dynamicCandidateLess(left, right dynamicChannelCandidate) bool {
 			return left.score > right.score
 		}
 	}
-	leftCost := channelComparableCost(left)
-	rightCost := channelComparableCost(right)
-	if leftCost != rightCost {
-		return leftCost < rightCost
+	leftPrice := channelPriceMultiplier(left)
+	rightPrice := channelPriceMultiplier(right)
+	if leftPrice != rightPrice {
+		return leftPrice < rightPrice
 	}
 	leftAvailability := dynamicAvailabilityScore(left.channel)
 	rightAvailability := dynamicAvailabilityScore(right.channel)
@@ -1776,74 +1767,14 @@ func weightedDynamicCandidateIndex(candidates []dynamicChannelCandidate, randomW
 	return len(candidates) - 1
 }
 
-func channelComparableCost(candidate dynamicChannelCandidate) float64 {
+// channelPriceMultiplier is the only price feature used by dynamic priority.
+// Billing model prices, model mappings, currency conversion, and route cost
+// factors remain separate concerns and must not affect channel ordering.
+func channelPriceMultiplier(candidate dynamicChannelCandidate) float64 {
 	if candidate.channel == nil {
 		return math.Inf(1)
 	}
-	cost := candidate.channel.GetPriceMultiplier()
-	// Billing uses the requested/origin model. A channel mapping changes the
-	// upstream payload, but it must not silently change the model price used to
-	// rank candidates. Only fall back to the mapped name when the requested
-	// model has no configured price or ratio.
-	if modelFactor, configured := configuredModelCost(candidate.modelName, candidate.channel); configured {
-		cost *= modelFactor
-	}
-	if candidate.channel.GetPriceMultiplierMode() == model.ChannelPriceMultiplierModeCNY {
-		rate := operation_setting.GetBillingUSDToCNYRate()
-		if rate > 0 {
-			cost /= rate
-		}
-	}
-	return cost * normalizeRouteCostFactor(candidate.routeCostFactor)
-}
-
-func configuredModelCost(requested string, channel *model.Channel) (float64, bool) {
-	names := make([]string, 0, 2)
-	requested = strings.TrimSpace(requested)
-	if requested != "" {
-		names = append(names, requested)
-	}
-	if mapped := mappedRoutingModelName(channel, requested); mapped != "" && mapped != requested {
-		names = append(names, mapped)
-	}
-	for _, name := range names {
-		if price, ok := ratio_setting.GetModelPrice(name, false); ok && price >= 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
-			return price, true
-		}
-		if ratio, ok, _ := ratio_setting.GetModelRatio(name); ok && ratio >= 0 && !math.IsNaN(ratio) && !math.IsInf(ratio, 0) {
-			return ratio, true
-		}
-	}
-	return 1, false
-}
-
-func mappedRoutingModelName(channel *model.Channel, requested string) string {
-	requested = strings.TrimSpace(requested)
-	if channel == nil || requested == "" {
-		return requested
-	}
-	raw := strings.TrimSpace(channel.GetModelMapping())
-	if raw == "" || raw == "{}" {
-		return requested
-	}
-	mapping := make(map[string]string)
-	if err := common.UnmarshalJsonStr(raw, &mapping); err != nil {
-		return requested
-	}
-	current := requested
-	visited := map[string]struct{}{current: {}}
-	for range mapping {
-		next := strings.TrimSpace(mapping[current])
-		if next == "" {
-			break
-		}
-		if _, seen := visited[next]; seen {
-			break
-		}
-		visited[next] = struct{}{}
-		current = next
-	}
-	return current
+	return candidate.channel.GetPriceMultiplier()
 }
 
 func normalizeRouteCostFactor(value float64) float64 {

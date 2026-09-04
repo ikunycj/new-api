@@ -95,6 +95,7 @@ function ChannelCardComponent({
     response_time: t('Response'),
     test_time: t('Last Tested'),
     price_multiplier: t('Channel price multiplier'),
+    priority_score: '优先级得分',
     test_model: t('Test Model'),
     upstream_max_retries: t('Retry Times'),
     max_concurrency: '并发',
@@ -114,6 +115,7 @@ function ChannelCardComponent({
   const tokenUsageCell = renderCell('daily_tokens')
   const responseCell = renderCell('response_time')
   const priceMultiplierCell = renderCell('price_multiplier')
+  const priorityScoreCell = renderCell('priority_score')
   const testModelCell = renderCell('test_model')
   const upstreamMaxRetriesCell = renderCell('upstream_max_retries')
   const concurrencyCell = renderCell('max_concurrency')
@@ -187,6 +189,9 @@ function ChannelCardComponent({
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.price_multiplier}>
               {priceMultiplierCell}
+            </ChannelMetric>
+            <ChannelMetric label={fieldLabels.priority_score}>
+              {priorityScoreCell}
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.upstream_max_retries}>
               {upstreamMaxRetriesCell}

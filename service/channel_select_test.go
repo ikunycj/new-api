@@ -6,7 +6,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -556,18 +555,14 @@ func TestDynamicCandidateRanking(t *testing.T) {
 		))
 	})
 
-	t.Run("CNY and USD prices are comparable", func(t *testing.T) {
-		previousRate := operation_setting.BillingUSDToCNYRate
-		operation_setting.BillingUSDToCNYRate = 7.2
-		t.Cleanup(func() { operation_setting.BillingUSDToCNYRate = previousRate })
-
+	t.Run("price multiplier is compared without currency conversion", func(t *testing.T) {
 		cny := *base
 		cny.Id = 2
 		cny.PriceMultiplier = 6
 		cny.PriceMultiplierMode = model.ChannelPriceMultiplierModeCNY
 		assert.True(t, dynamicCandidateLess(
-			dynamicChannelCandidate{channel: &cny},
 			dynamicChannelCandidate{channel: base},
+			dynamicChannelCandidate{channel: &cny},
 		))
 	})
 
@@ -847,69 +842,67 @@ func TestDynamicRoutingUsesTTFTWeightAndNeutralMissingSamples(t *testing.T) {
 	assert.InDelta(t, 75, groupScore, 0.0001)
 }
 
-func TestDynamicRoutingUsesRouteCostFactor(t *testing.T) {
-	cheap := &model.Channel{Id: 94001, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}
-	expensive := &model.Channel{Id: 94002, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100}
-	cheapCandidate := dynamicChannelCandidate{channel: cheap, routeConfigured: true, routeCostFactor: 0.5}
-	expensiveCandidate := dynamicChannelCandidate{channel: expensive, routeConfigured: true, routeCostFactor: 2}
-	assert.True(t, dynamicCandidateLess(cheapCandidate, expensiveCandidate))
-	assert.Less(t, channelComparableCost(cheapCandidate), channelComparableCost(expensiveCandidate))
+func TestDynamicPriorityScoreUsesNormalizedPriceMultiplier(t *testing.T) {
+	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
+	candidates := []dynamicChannelCandidate{
+		{
+			channel: &model.Channel{
+				Id:                          94001,
+				PriceMultiplier:             0.10,
+				PreviousDayProbeSuccessRate: 95,
+				PreviousDayProbeSampleCount: 100,
+			},
+			group:           "plus",
+			routingStrategy: strategy,
+		},
+		{
+			channel: &model.Channel{
+				Id:                          94002,
+				PriceMultiplier:             0.11,
+				PreviousDayProbeSuccessRate: 95,
+				PreviousDayProbeSampleCount: 100,
+			},
+			group:           "plus",
+			routingStrategy: strategy,
+		},
+		{
+			channel: &model.Channel{
+				Id:                          94003,
+				PriceMultiplier:             0.14,
+				PreviousDayProbeSuccessRate: 95,
+				PreviousDayProbeSampleCount: 100,
+			},
+			group:           "plus",
+			routingStrategy: strategy,
+		},
+	}
+
+	annotateDynamicCandidateScores(candidates)
+	assert.InDelta(t, 98.0000, candidates[0].score, 0.0001)
+	assert.InDelta(t, 94.3636, candidates[1].score, 0.0001)
+	assert.InDelta(t, 86.5714, candidates[2].score, 0.0001)
+
+	ranked := rankDynamicCandidateOrder(candidates)
+	require.Len(t, ranked, 3)
+	assert.Equal(t, 94001, ranked[0].channel.Id)
+	assert.Equal(t, 94002, ranked[1].channel.Id)
+	assert.Equal(t, 94003, ranked[2].channel.Id)
 }
 
-func TestMappedRoutingModelNameFollowsChannelMappingChain(t *testing.T) {
-	mapping := `{"requested":"provider-model","provider-model":"provider-model-v2"}`
-	channel := &model.Channel{ModelMapping: &mapping}
-
-	assert.Equal(t, "provider-model-v2", mappedRoutingModelName(channel, "requested"))
-	assert.Equal(t, "unmapped", mappedRoutingModelName(channel, "unmapped"))
-}
-
-func TestDynamicRoutingUsesRequestedModelPriceBeforeMappedModel(t *testing.T) {
-	savedPrices := ratio_setting.ModelPrice2JSONString()
-	savedRatios := ratio_setting.ModelRatio2JSONString()
-	t.Cleanup(func() {
-		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(savedPrices))
-		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
-	})
-	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"requested-routing-model":2,"mapped-routing-model":0.1}`))
-	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{}`))
-
-	mapping := `{"requested-routing-model":"mapped-routing-model"}`
-	candidate := dynamicChannelCandidate{
-		channel:         &model.Channel{Id: 94031, PriceMultiplier: 1},
-		modelName:       "requested-routing-model",
-		routeCostFactor: 1,
+func TestDynamicPriorityIgnoresRouteCostFactor(t *testing.T) {
+	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
+	cheapRoute := dynamicChannelCandidate{
+		channel:         &model.Channel{Id: 94004, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100},
+		routeCostFactor: 0.5,
 	}
-	candidate.channel.ModelMapping = &mapping
-
-	assert.InDelta(t, 2, channelComparableCost(candidate), 0.0001)
-}
-
-func TestDynamicRoutingTreatsExplicitZeroModelPriceAsFree(t *testing.T) {
-	savedPrices := ratio_setting.ModelPrice2JSONString()
-	savedRatios := ratio_setting.ModelRatio2JSONString()
-	t.Cleanup(func() {
-		require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(savedPrices))
-		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(savedRatios))
-	})
-	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"free-routing-model":0,"paid-routing-model":1}`))
-	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{}`))
-
-	free := dynamicChannelCandidate{
-		channel:   &model.Channel{Id: 94032, PriceMultiplier: 1},
-		modelName: "free-routing-model",
+	expensiveRoute := dynamicChannelCandidate{
+		channel:         &model.Channel{Id: 94005, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100},
+		routeCostFactor: 2,
 	}
-	paid := dynamicChannelCandidate{
-		channel:   &model.Channel{Id: 94033, PriceMultiplier: 1},
-		modelName: "paid-routing-model",
-	}
-	minPrice := channelComparableCost(free)
-	freePriceScore, _, _ := dynamicCandidateFeatures(free, minPrice)
-	paidPriceScore, _, _ := dynamicCandidateFeatures(paid, minPrice)
 
-	assert.Equal(t, float64(0), minPrice)
-	assert.Equal(t, float64(1), freePriceScore)
-	assert.Equal(t, float64(0), paidPriceScore)
+	cheapScore := dynamicCandidateScore(cheapRoute, 1, strategy)
+	expensiveScore := dynamicCandidateScore(expensiveRoute, 1, strategy)
+	assert.InDelta(t, cheapScore, expensiveScore, 0.0001)
 }
 
 func TestDynamicRoutingSkipsOpenCircuitBeforeScoring(t *testing.T) {

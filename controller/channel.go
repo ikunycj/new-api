@@ -173,6 +173,17 @@ func enrichChannelUsage(channels []*model.Channel) {
 	}
 }
 
+func enrichChannelRuntimeMetrics(channels []*model.Channel) {
+	for _, channel := range channels {
+		clearChannelInfo(channel)
+	}
+	enrichLastChannelTestTimes(channels)
+	enrichPreviousDayProbeRates(channels)
+	enrichPreviousDayAverageTTFTs(channels)
+	enrichCurrentChannelConcurrency(channels)
+	enrichChannelUsage(channels)
+}
+
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
 	if statusFilter == common.ChannelStatusEnabled {
 		return query.Where("status = ?", common.ChannelStatusEnabled)
@@ -193,6 +204,37 @@ func buildChannelListQuery(group string, statusFilter int, typeFilter int) *gorm
 	return query
 }
 
+// loadChannelPriorityReference loads every channel in the selected billing
+// group (and optional model filter). The result list may be paginated or
+// narrowed by name/type/status, but the score baseline must remain complete.
+func loadChannelPriorityReference(group string, modelName string) ([]*model.Channel, error) {
+	group = model.NormalizeChannelGroupFilter(group)
+	if group == "" {
+		return nil, nil
+	}
+	channels, err := model.SearchChannels("", group, modelName, false)
+	if err != nil {
+		return nil, err
+	}
+	enrichChannelRuntimeMetrics(channels)
+	return channels, nil
+}
+
+func channelPageSlice(channels []*model.Channel, page int, pageSize int) []*model.Channel {
+	if page < 1 || pageSize <= 0 || len(channels) == 0 {
+		return channels[:0]
+	}
+	start := (page - 1) * pageSize
+	if start < 0 || start >= len(channels) {
+		return channels[len(channels):]
+	}
+	end := start + pageSize
+	if end < start || end > len(channels) {
+		end = len(channels)
+	}
+	return channels[start:end]
+}
+
 func GetAllChannels(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	channelData := make([]*model.Channel, 0)
@@ -209,6 +251,17 @@ func GetAllChannels(c *gin.Context) {
 	if typeStr != "" {
 		if t, err := strconv.Atoi(typeStr); err == nil {
 			typeFilter = t
+		}
+	}
+	prioritySort := sortOptions.SortBy == "priority" && groupFilter != ""
+	var priorityReference []*model.Channel
+	if groupFilter != "" {
+		var err error
+		priorityReference, err = loadChannelPriorityReference(groupFilter, "")
+		if err != nil {
+			common.SysError("failed to load channel priority reference: " + err.Error())
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+			return
 		}
 	}
 
@@ -240,6 +293,9 @@ func GetAllChannels(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取标签渠道失败，请稍后重试"})
 				return
 			}
+			if prioritySort {
+				service.SortChannelsByPriority(tagChannels, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
+			}
 			channelData = append(channelData, tagChannels...)
 		}
 	} else {
@@ -249,11 +305,11 @@ func GetAllChannels(c *gin.Context) {
 			return
 		}
 
-		err := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter)).
-			Limit(pageInfo.GetPageSize()).
-			Offset(pageInfo.GetStartIdx()).
-			Omit("key").
-			Find(&channelData).Error
+		query := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter)).Omit("key")
+		if !prioritySort {
+			query = query.Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx())
+		}
+		err := query.Find(&channelData).Error
 		if err != nil {
 			common.SysError("failed to get channels: " + err.Error())
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
@@ -261,14 +317,14 @@ func GetAllChannels(c *gin.Context) {
 		}
 	}
 
-	for _, datum := range channelData {
-		clearChannelInfo(datum)
+	if prioritySort && !enableTagMode {
+		service.SortChannelsByPriority(channelData, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
+		channelData = channelPageSlice(channelData, pageInfo.GetPage(), pageInfo.GetPageSize())
 	}
-	enrichLastChannelTestTimes(channelData)
-	enrichPreviousDayProbeRates(channelData)
-	enrichPreviousDayAverageTTFTs(channelData)
-	enrichCurrentChannelConcurrency(channelData)
-	enrichChannelUsage(channelData)
+	enrichChannelRuntimeMetrics(channelData)
+	if !prioritySort && groupFilter != "" {
+		service.CalculateChannelPriorityScores(channelData, priorityReference, groupFilter)
+	}
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -369,12 +425,24 @@ func FixChannelsAbilities(c *gin.Context) {
 func SearchChannels(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
+	groupFilter := model.NormalizeChannelGroupFilter(group)
 	modelKeyword := c.Query("model")
 	statusParam := c.Query("status")
 	statusFilter := parseStatusFilter(statusParam)
 	idSort, _ := strconv.ParseBool(c.Query("id_sort"))
 	sortOptions := model.NewChannelSortOptions(c.Query("sort_by"), c.Query("sort_order"), idSort)
+	prioritySort := sortOptions.SortBy == "priority" && groupFilter != ""
 	enableTagMode, _ := strconv.ParseBool(c.Query("tag_mode"))
+	var priorityReference []*model.Channel
+	if groupFilter != "" {
+		var err error
+		priorityReference, err = loadChannelPriorityReference(groupFilter, modelKeyword)
+		if err != nil {
+			common.SysLog("failed to load channel priority reference: " + err.Error())
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+			return
+		}
+	}
 	channelData := make([]*model.Channel, 0)
 	if enableTagMode {
 		tags, err := model.SearchTags(keyword, group, modelKeyword, idSort)
@@ -397,6 +465,9 @@ func SearchChannels(c *gin.Context) {
 						"message": err.Error(),
 					})
 					return
+				}
+				if prioritySort {
+					service.SortChannelsByPriority(tagChannels, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
 				}
 				channelData = append(channelData, tagChannels...)
 			}
@@ -461,25 +532,15 @@ func SearchChannels(c *gin.Context) {
 	}
 
 	total := len(channelData)
-	startIdx := (page - 1) * pageSize
-	if startIdx > total {
-		startIdx = total
-	}
-	endIdx := startIdx + pageSize
-	if endIdx > total {
-		endIdx = total
-	}
 
-	pagedData := channelData[startIdx:endIdx]
-
-	for _, datum := range pagedData {
-		clearChannelInfo(datum)
+	if prioritySort && !enableTagMode {
+		service.SortChannelsByPriority(channelData, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
 	}
-	enrichLastChannelTestTimes(pagedData)
-	enrichPreviousDayProbeRates(pagedData)
-	enrichPreviousDayAverageTTFTs(pagedData)
-	enrichCurrentChannelConcurrency(pagedData)
-	enrichChannelUsage(pagedData)
+	pagedData := channelPageSlice(channelData, page, pageSize)
+	enrichChannelRuntimeMetrics(pagedData)
+	if !prioritySort && groupFilter != "" {
+		service.CalculateChannelPriorityScores(pagedData, priorityReference, groupFilter)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

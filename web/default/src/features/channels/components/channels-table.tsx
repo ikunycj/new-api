@@ -24,7 +24,12 @@ import type {
   SortingState,
   Row,
 } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -85,6 +90,7 @@ const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'balance',
   'response_time',
   'test_time',
+  'priority',
 ])
 
 function isDisabledChannelRow(channel: Channel) {
@@ -183,6 +189,17 @@ export function ChannelsTable() {
 
   // Determine whether to use search or regular list API
   const shouldSearch = Boolean(globalFilter?.trim() || modelFilter.trim())
+  const selectedGroup = groupFilter.find((value) => value !== 'all') ?? ''
+  const prioritySort = sorting[0]?.id === 'priority' ? sorting[0] : undefined
+  const prioritySortDescending = prioritySort?.desc ?? true
+  let prioritySortLabel = t('Priority')
+  if (!selectedGroup) {
+    prioritySortLabel = t('Select a group')
+  } else if (prioritySort) {
+    prioritySortLabel = prioritySortDescending
+      ? t('Priority: High to Low')
+      : t('Priority: Low to High')
+  }
 
   const sortParams = useMemo(() => {
     const activeSort = sorting[0]
@@ -439,6 +456,7 @@ export function ChannelsTable() {
         searchDebounceMs: 500,
         onReset: () => {
           resetModelFilterInput()
+          setSorting([])
         },
         additionalSearch: (
           <Input
@@ -470,6 +488,43 @@ export function ChannelsTable() {
             singleSelect: true,
           },
         ],
+        filterActions: (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant={prioritySort ? 'secondary' : 'outline'}
+                  size='sm'
+                  disabled={!selectedGroup}
+                  onClick={() => {
+                    if (!selectedGroup) return
+                    setSorting((previous) => {
+                      const activeSort = previous[0]
+                      if (activeSort?.id === 'priority') {
+                        return [{ id: 'priority', desc: !activeSort.desc }]
+                      }
+                      return [{ id: 'priority', desc: true }]
+                    })
+                    if (pagination.pageIndex > 0) {
+                      onPaginationChange({ ...pagination, pageIndex: 0 })
+                    }
+                  }}
+                  aria-label={prioritySortLabel}
+                  aria-pressed={Boolean(prioritySort)}
+                  className='gap-1.5'
+                />
+              }
+            >
+              {prioritySortDescending ? (
+                <ArrowDownWideNarrow data-icon='inline-start' aria-hidden />
+              ) : (
+                <ArrowUpNarrowWide data-icon='inline-start' aria-hidden />
+              )}
+              {prioritySortLabel}
+            </TooltipTrigger>
+            <TooltipContent>{prioritySortLabel}</TooltipContent>
+          </Tooltip>
+        ),
         preActions: (
           <Tooltip>
             <TooltipTrigger

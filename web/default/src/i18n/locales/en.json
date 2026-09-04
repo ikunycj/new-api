@@ -6078,6 +6078,8 @@
     "Failed to save settings": "Failed to save settings",
     "No personalized settings": "No personalized settings",
     "{{count}} customized fields": "{{count}} customized fields",
-    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated."
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.",
+    "Priority: High to Low": "Priority: High to Low",
+    "Priority: Low to High": "Priority: Low to High"
   }
 }

@@ -6078,6 +6078,8 @@
     "Failed to save settings": "設定の保存に失敗しました",
     "No personalized settings": "個別設定なし",
     "{{count}} customized fields": "{{count}} 個のカスタムフィールド",
-    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新しいルールはこのユーザーの今後の報酬イベントに適用されます。既存の報酬と解除日時は再計算されません。"
+    "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新しいルールはこのユーザーの今後の報酬イベントに適用されます。既存の報酬と解除日時は再計算されません。",
+    "Priority: High to Low": "優先度: 高い順",
+    "Priority: Low to High": "優先度: 低い順"
   }
 }

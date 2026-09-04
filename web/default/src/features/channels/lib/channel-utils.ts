@@ -642,6 +642,7 @@ export function aggregateChannelsByTag(
         models: '',
         previous_day_probe_success_rate: 0,
         previous_day_average_ttft_ms: 0,
+        priority_score: null,
         children: [],
       } as TagRow
       tagMap.set(tag, tagRow)
