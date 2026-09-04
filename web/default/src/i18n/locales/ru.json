@@ -6080,6 +6080,7 @@
     "{{count}} customized fields": "{{count}} индивидуальных полей",
     "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "Новое правило применяется к будущим событиям наград для этого пользователя. Существующие награды и сроки разблокировки не пересчитываются.",
     "Priority: High to Low": "Приоритет: от высокого к низкому",
-    "Priority: Low to High": "Приоритет: от низкого к высокому"
+    "Priority: Low to High": "Приоритет: от низкого к высокому",
+    "If you do not receive the email, please check your spam folder": "Если письмо не пришло, проверьте папку «Спам»"
   }
 }

@@ -6080,6 +6080,7 @@
     "{{count}} customized fields": "{{count}} customized fields",
     "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.",
     "Priority: High to Low": "Priority: High to Low",
-    "Priority: Low to High": "Priority: Low to High"
+    "Priority: Low to High": "Priority: Low to High",
+    "If you do not receive the email, please check your spam folder": "If you do not receive the email, please check your spam folder"
   }
 }

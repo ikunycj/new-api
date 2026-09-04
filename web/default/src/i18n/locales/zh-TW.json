@@ -6080,6 +6080,7 @@
     "{{count}} customized fields": "{{count}} 個個人化欄位",
     "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "新規則將套用至此使用者未來的獎勵事件。現有獎勵與解鎖時間不會重新計算。",
     "Priority: High to Low": "優先級：從高到低",
-    "Priority: Low to High": "優先級：從低到高"
+    "Priority: Low to High": "優先級：從低到高",
+    "If you do not receive the email, please check your spam folder": "若未收到郵件，請查看垃圾郵件匣"
   }
 }

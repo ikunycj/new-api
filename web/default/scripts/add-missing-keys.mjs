@@ -5,6 +5,8 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'If you do not receive the email, please check your spam folder':
+      'If you do not receive the email, please check your spam folder',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       'Choose which fields follow global settings and which fields use this user-specific strategy.',
     'Configure {{username}}': 'Configure {{username}}',
@@ -154,6 +156,8 @@ const newKeys = {
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
   zh: {
+    'If you do not receive the email, please check your spam folder':
+      '若未收到邮件，请查看垃圾邮箱',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       '选择跟随全局设置的字段，以及使用该用户独立策略的字段。',
     'Configure {{username}}': '配置 {{username}}',
@@ -301,6 +305,8 @@ const newKeys = {
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
   fr: {
+    'If you do not receive the email, please check your spam folder':
+      "Si vous ne recevez pas l'e-mail, veuillez vérifier votre dossier de courrier indésirable",
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       'Choisissez les champs qui suivent les paramètres globaux et ceux qui utilisent cette stratégie utilisateur.',
     'Configure {{username}}': 'Configurer {{username}}',
@@ -454,6 +460,8 @@ const newKeys = {
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
   ja: {
+    'If you do not receive the email, please check your spam folder':
+      'メールが届かない場合は、迷惑メールフォルダーをご確認ください',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       'グローバル設定に従うフィールドと、このユーザー固有の戦略を使うフィールドを選択します。',
     'Configure {{username}}': '{{username}} を設定',
@@ -603,6 +611,8 @@ const newKeys = {
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
   ru: {
+    'If you do not receive the email, please check your spam folder':
+      'Если письмо не пришло, проверьте папку «Спам»',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       'Выберите поля, которые следуют глобальным настройкам, и поля для этой индивидуальной стратегии.',
     'Configure {{username}}': 'Настроить {{username}}',
@@ -754,6 +764,8 @@ const newKeys = {
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
   vi: {
+    'If you do not receive the email, please check your spam folder':
+      'Nếu bạn chưa nhận được email, hãy kiểm tra thư mục spam',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       'Chọn các trường theo cài đặt chung và các trường dùng chiến lược riêng cho người dùng này.',
     'Configure {{username}}': 'Cấu hình {{username}}',
@@ -904,6 +916,8 @@ const newKeys = {
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
   'zh-TW': {
+    'If you do not receive the email, please check your spam folder':
+      '若未收到郵件，請查看垃圾郵件匣',
     'Choose which fields follow global settings and which fields use this user-specific strategy.':
       '選擇跟隨全域設定的欄位，以及使用此使用者專屬策略的欄位。',
     'Configure {{username}}': '設定 {{username}}',

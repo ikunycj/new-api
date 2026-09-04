@@ -6080,6 +6080,7 @@
     "{{count}} customized fields": "{{count}} champs personnalisés",
     "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "La nouvelle règle s’applique aux futurs événements de récompense de cet utilisateur. Les récompenses et dates de déblocage existantes ne seront pas recalculées.",
     "Priority: High to Low": "Priorité : du plus élevé au plus bas",
-    "Priority: Low to High": "Priorité : du plus bas au plus élevé"
+    "Priority: Low to High": "Priorité : du plus bas au plus élevé",
+    "If you do not receive the email, please check your spam folder": "Si vous ne recevez pas l'e-mail, veuillez vérifier votre dossier de courrier indésirable"
   }
 }

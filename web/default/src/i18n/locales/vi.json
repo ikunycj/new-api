@@ -6080,6 +6080,7 @@
     "{{count}} customized fields": "{{count}} trường được tùy chỉnh",
     "The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.": "Quy tắc mới áp dụng cho các sự kiện thưởng trong tương lai của người dùng này. Phần thưởng và thời gian mở khóa hiện có sẽ không được tính lại.",
     "Priority: High to Low": "Ưu tiên: Cao đến thấp",
-    "Priority: Low to High": "Ưu tiên: Thấp đến cao"
+    "Priority: Low to High": "Ưu tiên: Thấp đến cao",
+    "If you do not receive the email, please check your spam folder": "Nếu bạn chưa nhận được email, hãy kiểm tra thư mục spam"
   }
 }

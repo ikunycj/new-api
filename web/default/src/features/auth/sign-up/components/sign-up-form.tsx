@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -337,6 +338,11 @@ export function SignUpForm({
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription className='text-muted-foreground text-xs'>
+                    {t(
+                      'If you do not receive the email, please check your spam folder'
+                    )}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
