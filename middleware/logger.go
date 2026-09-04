@@ -26,6 +26,9 @@ func SetUpLogger(server *gin.Engine) {
 		if tag == "" {
 			tag = "web"
 		}
+		if !common.ShouldLogAccessRequest(param.StatusCode, param.Latency.Milliseconds(), requestID, param.Path) {
+			return ""
+		}
 		return fmt.Sprintf("[GIN] %s | %s | %s | %3d | %13v | %15s | %7s %s\n",
 			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
 			tag,

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -416,6 +417,10 @@ type Event struct {
 
 func LogEvent(ctx context.Context, event Event) {
 	event.Provider = normalizeProvider(event.Provider)
+	if event.Event == "request_finished" &&
+		!common.ShouldLogAccessRequest(event.Status, event.DurationMS, event.RequestID, event.Route) {
+		return
+	}
 	encoded, err := json.Marshal(event)
 	if err != nil {
 		return
