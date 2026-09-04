@@ -3,22 +3,37 @@ import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
 const profile = __ENV.LOAD_PROFILE || 'smoke';
+const loadTestConfig = JSON.parse(open(__ENV.LOADTEST_CONFIG_FILE || '/config/loadtest.config.json'));
+const workloadConfig = loadTestConfig.workload || {};
+const thresholdConfig = loadTestConfig.thresholds || {};
+const mockConfig = loadTestConfig.mock || {};
+const profileConfig = workloadConfig.profiles || {};
+const pacingConfig = workloadConfig.pacing || {};
+const requestConfig = workloadConfig.request || {};
 const baseURL = normalizeBaseURL(__ENV.BASE_URL || 'http://new-api:3000');
-const loadTestModel = __ENV.LOADTEST_MODEL || 'gpt-3.5-turbo';
-const userCount = numberEnv('LOADTEST_USERS', 1000);
+const loadTestModel = __ENV.LOADTEST_MODEL || workloadConfig.model || 'gpt-3.5-turbo';
+const userCount = numberEnv('LOADTEST_USERS', workloadConfig.users || 1000);
 const loadTestTokens = tokenListEnv('LOADTEST_TOKENS');
 const failoverMode = __ENV.FAILOVER_MODE || 'balanced';
 const mockControlA = normalizeBaseURL(__ENV.MOCK_CONTROL_A || 'http://mock-upstream:8080');
 const mockControlB = normalizeBaseURL(__ENV.MOCK_CONTROL_B || 'http://mock-upstream-b:8080');
 const mockControlC = normalizeBaseURL(__ENV.MOCK_CONTROL_C || 'http://mock-upstream-c:8080');
-const smokeDuration = __ENV.SMOKE_DURATION || '1m';
-const smokeVUs = numberEnv('SMOKE_VUS', 10);
-const burstMaxDuration = __ENV.BURST_MAX_DURATION || '5m';
-const capacityRates = numberListEnv('CAPACITY_RATES', [100, 200, 300, 400, 500, 600, 700, 800]);
-const capacityRampDuration = __ENV.CAPACITY_RAMP_DURATION || '30s';
-const capacityStageDuration = __ENV.CAPACITY_STAGE_DURATION || '2m';
-const capacityPreallocatedVUs = numberEnv('CAPACITY_PREALLOCATED_VUS', 500);
-const capacityMaxVUs = numberEnv('CAPACITY_MAX_VUS', 2000);
+const smokeDuration = __ENV.SMOKE_DURATION || workloadConfig.smoke?.duration || '1m';
+const smokeVUs = numberEnv('SMOKE_VUS', workloadConfig.smoke?.vus || 10);
+const burstMaxDuration = __ENV.BURST_MAX_DURATION || workloadConfig.burst?.max_duration || '5m';
+const capacityRates = numberListEnv('CAPACITY_RATES', workloadConfig.capacity?.rates || [100, 200, 300, 400, 500, 600, 700, 800]);
+const capacityRampDuration = __ENV.CAPACITY_RAMP_DURATION || workloadConfig.capacity?.ramp_duration || '30s';
+const capacityStageDuration = __ENV.CAPACITY_STAGE_DURATION || workloadConfig.capacity?.stage_duration || '2m';
+const capacityPreallocatedVUs = numberEnv('CAPACITY_PREALLOCATED_VUS', workloadConfig.capacity?.preallocated_vus || 500);
+const capacityMaxVUs = numberEnv('CAPACITY_MAX_VUS', workloadConfig.capacity?.max_vus || 2000);
+const capacityFirstRampDuration = workloadConfig.capacity?.first_ramp_duration || '10s';
+const capacityCooldownDuration = workloadConfig.capacity?.cooldown_duration || '30s';
+const capacityGracefulStop = workloadConfig.capacity?.graceful_stop || '1m';
+const requestTimeout = workloadConfig.request_timeout || '120s';
+const modelListTimeout = workloadConfig.model_list_timeout || '30s';
+const maxOutputTokens = numberEnv('MAX_OUTPUT_TOKENS', workloadConfig.max_output_tokens || 256);
+const requestTemperature = numberValue('REQUEST_TEMPERATURE', requestConfig.temperature ?? 0);
+const requestMessage = __ENV.LOADTEST_MESSAGE || requestConfig.message || 'Return a deterministic load-test response.';
 
 const applicationErrors = new Rate('new_api_application_errors');
 const timeToFirstByte = new Trend('new_api_time_to_first_byte', true);
@@ -30,10 +45,10 @@ const totalTokens = new Counter('new_api_total_tokens');
 const usageMissing = new Rate('new_api_usage_missing');
 
 const commonThresholds = {
-  http_req_failed: ['rate<0.01'],
-  new_api_application_errors: ['rate<0.01'],
-  http_req_duration: ['p(95)<2000', 'p(99)<5000'],
-  new_api_time_to_first_byte: ['p(95)<1000'],
+  http_req_failed: [`rate<${thresholdConfig.error_rate ?? 0.01}`],
+  new_api_application_errors: [`rate<${thresholdConfig.error_rate ?? 0.01}`],
+  http_req_duration: [`p(95)<${thresholdConfig.request_p95_ms ?? 2000}`, `p(99)<${thresholdConfig.request_p99_ms ?? 5000}`],
+  new_api_time_to_first_byte: [`p(95)<${thresholdConfig.ttfb_p95_ms ?? 1000}`],
 };
 
 export const options = buildOptions(profile);
@@ -43,9 +58,9 @@ export function setup() {
     return;
   }
   const responses = http.batch([
-    ['POST', `${mockControlA}/control/reset?tokens=300`, null],
-    ['POST', `${mockControlB}/control/reset?tokens=3000`, null],
-    ['POST', `${mockControlC}/control/reset?tokens=3000`, null],
+    ['POST', `${mockControlA}/control/reset?tokens=${mockChannelTokens(1, 300)}`, null],
+    ['POST', `${mockControlB}/control/reset?tokens=${mockChannelTokens(2, 3000)}`, null],
+    ['POST', `${mockControlC}/control/reset?tokens=${mockChannelTokens(3, 3000)}`, null],
   ]);
   const reset = check(responses, {
     'mock channels reset': (items) => items.every((item) => item.status === 200),
@@ -57,22 +72,22 @@ export function setup() {
 
 export function chat() {
   makeChatRequest(false);
-  sleep(0.2 + Math.random() * 0.8);
+  sleep(randomPacing('chat_min_seconds', 0.2, 'chat_max_seconds', 1.0));
 }
 
 export function stream() {
   makeChatRequest(true);
-  sleep(0.1 + Math.random() * 0.4);
+  sleep(randomPacing('stream_min_seconds', 0.1, 'stream_max_seconds', 0.5));
 }
 
 export function modelList() {
   const response = http.get(`${baseURL}/v1/models`, {
     headers: headersForVU(),
     tags: { endpoint: 'models', stream: 'false', profile },
-    timeout: '30s',
+    timeout: modelListTimeout,
   });
   recordResponse(response, 'model list');
-  sleep(0.5 + Math.random());
+  sleep(randomPacing('model_list_min_seconds', 0.5, 'model_list_max_seconds', 1.5));
 }
 
 export function capacityChat() {
@@ -88,16 +103,16 @@ function makeChatRequest(streaming) {
     `${baseURL}/v1/chat/completions`,
     JSON.stringify({
       model: loadTestModel,
-      messages: [{ role: 'user', content: 'Return a deterministic load-test response.' }],
+      messages: [{ role: 'user', content: requestMessage }],
       stream: streaming,
       stream_options: streaming ? { include_usage: true } : undefined,
-      max_tokens: 32,
-      temperature: 0,
+      max_tokens: maxOutputTokens,
+      temperature: requestTemperature,
     }),
     {
       headers: headersForVU(),
       tags: { endpoint: 'chat_completions', stream: String(streaming), profile },
-      timeout: streaming ? '2m' : '30s',
+      timeout: requestTimeout,
     },
   );
   timeToFirstByte.add(response.timings.waiting, { stream: String(streaming), profile });
@@ -154,10 +169,19 @@ function headersForVU() {
 }
 
 function buildOptions(selectedProfile) {
+  const smoke = profileConfig.smoke || workloadConfig.smoke || {};
+  const step = profileConfig.step || {};
+  const steady = profileConfig.steady || {};
+  const spike = profileConfig.spike || {};
+  const burst = profileConfig.burst || workloadConfig.burst || {};
+  const streamProfile = profileConfig.stream || {};
+  const mixed = profileConfig.mixed || {};
+  const soak = profileConfig.soak || {};
+  const channelFailover = profileConfig.channel_failover || {};
   const profiles = {
     smoke: {
       scenarios: {
-        smoke: { executor: 'constant-vus', exec: 'chat', vus: smokeVUs, duration: smokeDuration, gracefulStop: '30s' },
+        smoke: { executor: 'constant-vus', exec: 'chat', vus: smokeVUs, duration: smokeDuration, gracefulStop: smoke.graceful_stop || '30s' },
       },
     },
     step: {
@@ -165,23 +189,15 @@ function buildOptions(selectedProfile) {
         step: {
           executor: 'ramping-vus',
           exec: 'chat',
-          startVUs: 0,
-          stages: [
-            { target: 50, duration: '2m' }, { target: 50, duration: '5m' },
-            { target: 100, duration: '1m' }, { target: 100, duration: '5m' },
-            { target: 250, duration: '1m' }, { target: 250, duration: '5m' },
-            { target: 500, duration: '1m' }, { target: 500, duration: '5m' },
-            { target: 750, duration: '1m' }, { target: 750, duration: '5m' },
-            { target: 1000, duration: '1m' }, { target: 1000, duration: '10m' },
-            { target: 0, duration: '2m' },
-          ],
-          gracefulRampDown: '30s',
+          startVUs: step.start_vus ?? 0,
+          stages: step.stages || [],
+          gracefulRampDown: step.graceful_ramp_down || '30s',
         },
       },
     },
     steady: {
       scenarios: {
-        steady: { executor: 'constant-vus', exec: 'chat', vus: 1000, duration: '30m', gracefulStop: '2m' },
+        steady: { executor: 'constant-vus', exec: 'chat', vus: steady.vus || 1000, duration: steady.duration || '30m', gracefulStop: steady.graceful_stop || '2m' },
       },
     },
     spike: {
@@ -189,14 +205,9 @@ function buildOptions(selectedProfile) {
         spike: {
           executor: 'ramping-vus',
           exec: 'chat',
-          startVUs: 0,
-          stages: [
-            { target: 50, duration: '1m' },
-            { target: 1000, duration: '10s' },
-            { target: 1000, duration: '5m' },
-            { target: 0, duration: '30s' },
-          ],
-          gracefulRampDown: '30s',
+          startVUs: spike.start_vus ?? 0,
+          stages: spike.stages || [],
+          gracefulRampDown: spike.graceful_ramp_down || '30s',
         },
       },
     },
@@ -207,33 +218,33 @@ function buildOptions(selectedProfile) {
           exec: 'chat',
           vus: userCount,
           iterations: 1,
-          maxDuration: burstMaxDuration,
+          maxDuration: burst.max_duration || burstMaxDuration,
         },
       },
     },
     stream: {
       scenarios: {
-        stream: { executor: 'constant-vus', exec: 'stream', vus: 1000, duration: '15m', gracefulStop: '2m' },
+        stream: { executor: 'constant-vus', exec: 'stream', vus: streamProfile.vus || 1000, duration: streamProfile.duration || '15m', gracefulStop: streamProfile.graceful_stop || '2m' },
       },
       thresholds: {
         ...commonThresholds,
-        http_req_duration: ['p(95)<5000', 'p(99)<10000'],
+        http_req_duration: [`p(95)<${thresholdConfig.stream_p95_ms ?? 5000}`, `p(99)<${thresholdConfig.stream_p99_ms ?? 10000}`],
       },
     },
     mixed: {
       scenarios: {
-        stream: { executor: 'constant-vus', exec: 'stream', vus: 700, duration: '20m', gracefulStop: '2m' },
-        chat: { executor: 'constant-vus', exec: 'chat', vus: 200, duration: '20m', gracefulStop: '2m' },
-        models: { executor: 'constant-vus', exec: 'modelList', vus: 100, duration: '20m', gracefulStop: '30s' },
+        stream: { executor: 'constant-vus', exec: 'stream', vus: mixed.stream_vus || 700, duration: mixed.duration || '20m', gracefulStop: mixed.graceful_stop || '2m' },
+        chat: { executor: 'constant-vus', exec: 'chat', vus: mixed.chat_vus || 200, duration: mixed.duration || '20m', gracefulStop: mixed.graceful_stop || '2m' },
+        models: { executor: 'constant-vus', exec: 'modelList', vus: mixed.model_vus || 100, duration: mixed.duration || '20m', gracefulStop: mixed.model_graceful_stop || '30s' },
       },
       thresholds: {
         ...commonThresholds,
-        'http_req_duration{stream:true}': ['p(95)<5000'],
+        'http_req_duration{stream:true}': [`p(95)<${thresholdConfig.stream_p95_ms ?? 5000}`],
       },
     },
     soak: {
       scenarios: {
-        soak: { executor: 'constant-vus', exec: 'chat', vus: 500, duration: '2h', gracefulStop: '2m' },
+        soak: { executor: 'constant-vus', exec: 'chat', vus: soak.vus || 500, duration: soak.duration || '2h', gracefulStop: soak.graceful_stop || '2m' },
       },
     },
     capacity: {
@@ -246,16 +257,16 @@ function buildOptions(selectedProfile) {
           preAllocatedVUs: capacityPreallocatedVUs,
           maxVUs: capacityMaxVUs,
           stages: capacityRates.flatMap((rate, index) => [
-            { target: rate, duration: index === 0 ? '10s' : capacityRampDuration },
+            { target: rate, duration: index === 0 ? capacityFirstRampDuration : capacityRampDuration },
             { target: rate, duration: capacityStageDuration },
-          ]).concat([{ target: 0, duration: '30s' }]),
-          gracefulStop: '1m',
+          ]).concat([{ target: 0, duration: capacityCooldownDuration }]),
+          gracefulStop: capacityGracefulStop,
         },
       },
       thresholds: {
         ...commonThresholds,
         dropped_iterations: ['count==0'],
-        new_api_usage_missing: ['rate<0.001'],
+        new_api_usage_missing: [`rate<${thresholdConfig.usage_missing_rate ?? 0.001}`],
       },
     },
     'channel-failover': {
@@ -263,9 +274,9 @@ function buildOptions(selectedProfile) {
         channelFailover: {
           executor: 'constant-vus',
           exec: 'chat',
-          vus: 5,
-          duration: '30s',
-          gracefulStop: '30s',
+          vus: channelFailover.vus || 5,
+          duration: channelFailover.duration || '30s',
+          gracefulStop: channelFailover.graceful_stop || '30s',
         },
       },
       thresholds: {
@@ -296,6 +307,23 @@ function numberEnv(name, fallback) {
   return value;
 }
 
+function numberValue(name, fallback) {
+  const value = Number(__ENV[name] ?? fallback);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be a number`);
+  }
+  return value;
+}
+
+function randomPacing(minKey, minFallback, maxKey, maxFallback) {
+  const min = Number(pacingConfig[minKey] ?? minFallback);
+  const max = Number(pacingConfig[maxKey] ?? maxFallback);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) {
+    throw new Error(`${minKey}/${maxKey} must define a valid range`);
+  }
+  return min + Math.random() * (max - min);
+}
+
 function numberListEnv(name, fallback) {
   const raw = __ENV[name];
   if (!raw) {
@@ -322,4 +350,9 @@ function tokenListEnv(name) {
 
 function normalizeBaseURL(value) {
   return value.replace(/\/+$/, '').replace(/\/v1$/, '');
+}
+
+function mockChannelTokens(id, fallback) {
+  const channel = (mockConfig.channels || []).find((item) => item.id === id);
+  return channel && Number.isInteger(channel.tokens) && channel.tokens >= 0 ? channel.tokens : fallback;
 }

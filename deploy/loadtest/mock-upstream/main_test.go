@@ -42,6 +42,28 @@ func TestResolveFailureStatus(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, resolveFailureStatus(0, len(mockFailureStatuses)))
 }
 
+func TestResolveFailureStatusUsesConfiguredStatuses(t *testing.T) {
+	statuses := []int{http.StatusBadGateway, http.StatusGatewayTimeout}
+	assert.Equal(t, http.StatusBadGateway, resolveFailureStatus(0, 0, statuses))
+	assert.Equal(t, http.StatusGatewayTimeout, resolveFailureStatus(0, 1, statuses))
+	assert.Equal(t, http.StatusServiceUnavailable, resolveFailureStatus(0, 2, statuses))
+}
+
+func TestValidateLoadTestConfigRejectsInvalidDistribution(t *testing.T) {
+	cfg := normalizeConfig(config{
+		consumeTokens: 30,
+		usage:         usageConfig{inputTokens: 10, outputTokens: 20, totalTokens: 30},
+		streamChunks:  1,
+		failureStatuses: []int{
+			http.StatusServiceUnavailable,
+		},
+		failureStatus: []failureDistribution{
+			{Status: http.StatusServiceUnavailable, Rate: 0.5},
+		},
+	})
+	assert.ErrorContains(t, validateLoadTestConfig(cfg), "sum to 1")
+}
+
 func TestLoadRequestConfigRejectsUnsafeValues(t *testing.T) {
 	tests := []struct {
 		name   string

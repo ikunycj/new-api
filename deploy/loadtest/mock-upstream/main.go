@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -16,17 +17,54 @@ import (
 )
 
 type config struct {
-	ttft           time.Duration
-	response       time.Duration
-	streamChunks   int
-	streamInterval time.Duration
-	errorRate      float64
+	ttft            time.Duration
+	response        time.Duration
+	streamChunks    int
+	streamInterval  time.Duration
+	errorRate       float64
+	consumeTokens   int64
+	usage           usageConfig
+	failureStatuses []int
+	failureStatus   []failureDistribution
+}
+
+type usageConfig struct {
+	inputTokens  int64 `json:"input_tokens"`
+	outputTokens int64 `json:"output_tokens"`
+	totalTokens  int64 `json:"total_tokens"`
+}
+
+type failureDistribution struct {
+	Status int     `json:"status"`
+	Rate   float64 `json:"rate"`
+}
+
+type loadTestFileConfig struct {
+	Mock struct {
+		ResponseUsage    usageConfig           `json:"response_usage"`
+		ConsumeTokens    int64                 `json:"consume_tokens"`
+		StreamChunks     int                   `json:"stream_chunks"`
+		StreamIntervalMS int                   `json:"stream_interval_ms"`
+		FailureStatuses  []int                 `json:"failure_statuses"`
+		Channels         []loadTestFileChannel `json:"channels"`
+	} `json:"mock"`
+}
+
+type loadTestFileChannel struct {
+	ID                  int                   `json:"id"`
+	Name                string                `json:"name"`
+	Tokens              int64                 `json:"tokens"`
+	TTFTMS              int                   `json:"ttft_ms"`
+	ResponseMS          int                   `json:"response_ms"`
+	ErrorRate           float64               `json:"error_rate"`
+	FailureDistribution []failureDistribution `json:"failure_distribution"`
 }
 
 type requestConfig struct {
-	errorRate   float64
-	errorStatus int
-	latency     time.Duration
+	errorRate     float64
+	errorStatus   int
+	latency       time.Duration
+	failureStatus []failureDistribution
 }
 
 type mockChannelConfig struct {
@@ -81,17 +119,23 @@ func main() {
 		streamChunks:   intFromEnv("STREAM_CHUNKS", 20),
 		streamInterval: durationFromMillis("STREAM_INTERVAL_MS", 50),
 		errorRate:      floatFromEnv("ERROR_RATE", 0),
+		consumeTokens:  30,
+		usage:          usageConfig{inputTokens: 10, outputTokens: 20, totalTokens: 30},
 	}
 	state := &channelState{
 		id:        intFromEnv("CHANNEL_ID", 1),
 		name:      envOrDefault("CHANNEL_NAME", "mock-channel-a"),
 		remaining: int64FromEnv("CHANNEL_TOKENS", 300),
 	}
-	if cfg.streamChunks < 1 {
-		cfg.streamChunks = 1
+	if err := applyLoadTestFileConfig(&cfg, state, os.Getenv("LOADTEST_CONFIG_FILE")); err != nil {
+		log.Fatal(err)
 	}
-	if math.IsNaN(cfg.errorRate) || math.IsInf(cfg.errorRate, 0) || cfg.errorRate < 0 || cfg.errorRate > 1 {
-		log.Fatal("ERROR_RATE must be between 0 and 1")
+	applyMockEnvironmentOverrides(&cfg, state)
+	if len(cfg.failureStatuses) == 0 {
+		cfg.failureStatuses = append([]int(nil), mockFailureStatuses[:]...)
+	}
+	if err := validateLoadTestConfig(cfg); err != nil {
+		log.Fatal(err)
 	}
 
 	mux := http.NewServeMux()
@@ -128,6 +172,7 @@ func main() {
 }
 
 func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *channelState) {
+	cfg = normalizeConfig(cfg)
 	startedAt := time.Now()
 	requests.Add(1)
 	activeRequests.Add(1)
@@ -158,11 +203,14 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 	if shouldInjectFailure(requestCfg.errorRate, rand.Float64()) {
 		errorsTotal.Add(1)
 		time.Sleep(cfg.ttft)
-		failureStatus := resolveFailureStatus(requestCfg.errorStatus, rand.IntN(len(mockFailureStatuses)))
+		failureStatus := requestCfg.errorStatus
+		if failureStatus == 0 {
+			failureStatus = resolveDistributedFailureStatus(requestCfg.failureStatus, cfg.failureStatuses, rand.Float64())
+		}
 		writeChannelError(w, state, "injected load-test failure", "mock_error", failureStatus)
 		return
 	}
-	if !state.consume(30) {
+	if !state.consume(cfg.consumeTokens) {
 		errorsTotal.Add(1)
 		writeChannelError(w, state, "mock channel is exhausted", "channel_exhausted", http.StatusServiceUnavailable)
 		return
@@ -176,16 +224,32 @@ func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *chann
 	w.Header().Set("Content-Type", "application/json")
 	switch r.URL.Path {
 	case "/v1/messages":
-		_, _ = fmt.Fprintf(w, `{"id":"msg_loadtest","type":"message","role":"assistant","model":%q,"content":[{"type":"text","text":"deterministic load-test response"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":20}}`, input.Model)
+		_, _ = fmt.Fprintf(w, `{"id":"msg_loadtest","type":"message","role":"assistant","model":%q,"content":[{"type":"text","text":"deterministic load-test response"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":%d,"output_tokens":%d}}`, input.Model, cfg.usage.inputTokens, cfg.usage.outputTokens)
 	case "/v1/responses":
-		_, _ = fmt.Fprintf(w, `{"id":"resp_loadtest","object":"response","created_at":%d,"status":"completed","model":%q,"output":[{"id":"msg_loadtest","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"deterministic load-test response","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`, time.Now().Unix(), input.Model)
+		_, _ = fmt.Fprintf(w, `{"id":"resp_loadtest","object":"response","created_at":%d,"status":"completed","model":%q,"output":[{"id":"msg_loadtest","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"deterministic load-test response","annotations":[]}]}],"usage":{"input_tokens":%d,"output_tokens":%d,"total_tokens":%d}}`, time.Now().Unix(), input.Model, cfg.usage.inputTokens, cfg.usage.outputTokens, cfg.usage.totalTokens)
 	default:
-		_, _ = fmt.Fprintf(w, `{"id":"chatcmpl-loadtest","object":"chat.completion","created":%d,"model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"deterministic load-test response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`, time.Now().Unix(), input.Model)
+		_, _ = fmt.Fprintf(w, `{"id":"chatcmpl-loadtest","object":"chat.completion","created":%d,"model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"deterministic load-test response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":%d,"completion_tokens":%d,"total_tokens":%d}}`, time.Now().Unix(), input.Model, cfg.usage.inputTokens, cfg.usage.outputTokens, cfg.usage.totalTokens)
 	}
 }
 
+func normalizeConfig(cfg config) config {
+	if cfg.consumeTokens < 1 {
+		cfg.consumeTokens = 30
+	}
+	if cfg.usage.inputTokens == 0 && cfg.usage.outputTokens == 0 && cfg.usage.totalTokens == 0 {
+		cfg.usage = usageConfig{inputTokens: 10, outputTokens: 20, totalTokens: 30}
+	}
+	if cfg.streamChunks < 1 {
+		cfg.streamChunks = 20
+	}
+	if len(cfg.failureStatuses) == 0 {
+		cfg.failureStatuses = append([]int(nil), mockFailureStatuses[:]...)
+	}
+	return cfg
+}
+
 func loadRequestConfig(header http.Header, cfg config, channelSlot int) (requestConfig, error) {
-	requestCfg := requestConfig{errorRate: cfg.errorRate, errorStatus: http.StatusServiceUnavailable}
+	requestCfg := requestConfig{errorRate: cfg.errorRate, failureStatus: cfg.failureStatus}
 	if value := strings.TrimSpace(header.Get(mockChannelsHeader)); value != "" {
 		if len(value) > maxMockChannelsBytes {
 			return requestConfig{}, fmt.Errorf("%s is too large", mockChannelsHeader)
@@ -249,14 +313,35 @@ func allowedFailureStatus(status int) bool {
 	}
 }
 
-func resolveFailureStatus(configuredStatus, randomIndex int) int {
+func resolveFailureStatus(configuredStatus, randomIndex int, statuses ...[]int) int {
 	if configuredStatus != 0 {
 		return configuredStatus
 	}
-	if randomIndex < 0 || randomIndex >= len(mockFailureStatuses) {
+	available := mockFailureStatuses[:]
+	if len(statuses) > 0 && len(statuses[0]) > 0 {
+		available = statuses[0]
+	}
+	if randomIndex < 0 || randomIndex >= len(available) {
 		return http.StatusServiceUnavailable
 	}
-	return mockFailureStatuses[randomIndex]
+	return available[randomIndex]
+}
+
+func resolveDistributedFailureStatus(distribution []failureDistribution, statuses []int, randomValue float64) int {
+	if len(distribution) == 0 {
+		if len(statuses) == 0 {
+			return http.StatusServiceUnavailable
+		}
+		return resolveFailureStatus(0, rand.IntN(len(statuses)), statuses)
+	}
+	cumulative := 0.0
+	for _, item := range distribution {
+		cumulative += item.Rate
+		if randomValue < cumulative {
+			return item.Status
+		}
+	}
+	return distribution[len(distribution)-1].Status
 }
 
 func shouldInjectFailure(rate, randomValue float64) bool {
@@ -351,9 +436,114 @@ func streamResponse(w http.ResponseWriter, cfg config) {
 		flusher.Flush()
 		time.Sleep(cfg.streamInterval)
 	}
-	_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-loadtest\",\"object\":\"chat.completion.chunk\",\"created\":%d,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"total_tokens\":30}}\n\n", time.Now().Unix())
+	_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-loadtest\",\"object\":\"chat.completion.chunk\",\"created\":%d,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":%d,\"completion_tokens\":%d,\"total_tokens\":%d}}\n\n", time.Now().Unix(), cfg.usage.inputTokens, cfg.usage.outputTokens, cfg.usage.totalTokens)
 	_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
+}
+
+func applyLoadTestFileConfig(cfg *config, state *channelState, path string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read load-test config: %w", err)
+	}
+	var fileConfig loadTestFileConfig
+	if err := json.Unmarshal(data, &fileConfig); err != nil {
+		return fmt.Errorf("parse load-test config: %w", err)
+	}
+	if fileConfig.Mock.ConsumeTokens > 0 {
+		cfg.consumeTokens = fileConfig.Mock.ConsumeTokens
+	}
+	if fileConfig.Mock.ResponseUsage.inputTokens > 0 {
+		cfg.usage = fileConfig.Mock.ResponseUsage
+	}
+	if fileConfig.Mock.StreamChunks > 0 {
+		cfg.streamChunks = fileConfig.Mock.StreamChunks
+	}
+	if fileConfig.Mock.StreamIntervalMS >= 0 {
+		cfg.streamInterval = time.Duration(fileConfig.Mock.StreamIntervalMS) * time.Millisecond
+	}
+	for _, channel := range fileConfig.Mock.Channels {
+		if channel.ID != state.id {
+			continue
+		}
+		if channel.Name != "" {
+			state.name = channel.Name
+		}
+		if channel.Tokens >= 0 {
+			state.remaining = channel.Tokens
+		}
+		if channel.TTFTMS >= 0 {
+			cfg.ttft = time.Duration(channel.TTFTMS) * time.Millisecond
+		}
+		if channel.ResponseMS >= 0 {
+			cfg.response = time.Duration(channel.ResponseMS) * time.Millisecond
+		}
+		cfg.errorRate = channel.ErrorRate
+		cfg.failureStatus = append([]failureDistribution(nil), channel.FailureDistribution...)
+		break
+	}
+	cfg.failureStatuses = append([]int(nil), fileConfig.Mock.FailureStatuses...)
+	return nil
+}
+
+func applyMockEnvironmentOverrides(cfg *config, state *channelState) {
+	if value := os.Getenv("TTFT_MS"); value != "" {
+		cfg.ttft = durationFromMillis("TTFT_MS", int(cfg.ttft/time.Millisecond))
+	}
+	if value := os.Getenv("RESPONSE_MS"); value != "" {
+		cfg.response = durationFromMillis("RESPONSE_MS", int(cfg.response/time.Millisecond))
+	}
+	if value := os.Getenv("STREAM_CHUNKS"); value != "" {
+		cfg.streamChunks = intFromEnv("STREAM_CHUNKS", cfg.streamChunks)
+	}
+	if value := os.Getenv("STREAM_INTERVAL_MS"); value != "" {
+		cfg.streamInterval = durationFromMillis("STREAM_INTERVAL_MS", int(cfg.streamInterval/time.Millisecond))
+	}
+	if value := os.Getenv("ERROR_RATE"); value != "" {
+		cfg.errorRate = floatFromEnv("ERROR_RATE", cfg.errorRate)
+	}
+	if value := os.Getenv("CHANNEL_TOKENS"); value != "" {
+		state.remaining = int64FromEnv("CHANNEL_TOKENS", state.remaining)
+	}
+	if value := strings.TrimSpace(os.Getenv("CHANNEL_NAME")); value != "" {
+		state.name = value
+	}
+}
+
+func validateLoadTestConfig(cfg config) error {
+	if cfg.consumeTokens < 1 || cfg.usage.inputTokens < 0 || cfg.usage.outputTokens < 0 || cfg.usage.totalTokens < 0 || cfg.usage.inputTokens > cfg.usage.totalTokens || cfg.usage.outputTokens > cfg.usage.totalTokens-cfg.usage.inputTokens {
+		return errors.New("load-test config has invalid usage values")
+	}
+	if cfg.streamChunks < 1 || cfg.streamInterval < 0 || cfg.ttft < 0 || cfg.response < 0 || math.IsNaN(cfg.errorRate) || math.IsInf(cfg.errorRate, 0) || cfg.errorRate < 0 || cfg.errorRate > 1 {
+		return errors.New("load-test config has invalid mock values")
+	}
+	statusSet := make(map[int]struct{}, len(cfg.failureStatuses))
+	for _, status := range cfg.failureStatuses {
+		if status == 0 || !allowedFailureStatus(status) {
+			return errors.New("load-test config has unsupported failure status")
+		}
+		statusSet[status] = struct{}{}
+	}
+	if len(statusSet) == 0 {
+		return errors.New("load-test config must define at least one failure status")
+	}
+	total := 0.0
+	for _, item := range cfg.failureStatus {
+		if math.IsNaN(item.Rate) || math.IsInf(item.Rate, 0) || item.Rate < 0 || item.Rate > 1 || item.Status == 0 {
+			return errors.New("load-test config has invalid failure distribution")
+		}
+		if _, ok := statusSet[item.Status]; !ok {
+			return errors.New("load-test config has unsupported failure status")
+		}
+		total += item.Rate
+	}
+	if len(cfg.failureStatus) > 0 && (total < 0.999999 || total > 1.000001) {
+		return errors.New("load-test failure distribution must sum to 1")
+	}
+	return nil
 }
 
 func metrics(w http.ResponseWriter, _ *http.Request) {
