@@ -50,6 +50,7 @@ const defaultOperationsSettings: OperationsSettings = {
   'performance_setting.disk_cache_path': '',
   'performance_setting.monitor_enabled': false,
   'performance_setting.monitor_cpu_threshold': 90,
+  'performance_setting.monitor_iowait_threshold': 95,
   'performance_setting.monitor_memory_threshold': 90,
   'performance_setting.monitor_disk_threshold': 95,
   'perf_metrics_setting.enabled': true,
