@@ -60,6 +60,24 @@ export type FailoverConfig = {
   routes: BillingGroupRoute[]
   route_channels: BillingGroupChannel[]
   error_mappings: UpstreamErrorMapping[]
+  circuit_defaults: ChannelCircuitPolicy
+  circuit_presets: ChannelCircuitPreset[]
+}
+
+export type ChannelCircuitPolicy = {
+  failure_threshold: number
+  window_seconds: number
+  cooldown_seconds: number
+  half_open_requests: number
+}
+
+export type ChannelCircuitPreset = {
+  key: string
+  label: string
+  failure_threshold: number
+  window_seconds: number
+  cooldown_seconds: number
+  half_open_requests: number
 }
 
 export type FailoverMonitoringSource = {

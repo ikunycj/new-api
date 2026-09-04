@@ -76,6 +76,11 @@ const MODELS_SECTIONS = [
       <RoutingReliabilitySection
         defaultValues={{
           RetryTimes: settings.RetryTimes,
+          ChannelCircuitEnabled: settings.ChannelCircuitEnabled,
+          ChannelCircuitConfig: formatJsonForEditor(
+            settings.ChannelCircuitConfig,
+            '{}'
+          ),
           ChannelDisableThreshold: settings.ChannelDisableThreshold,
           AutomaticDisableChannelEnabled:
             settings.AutomaticDisableChannelEnabled,

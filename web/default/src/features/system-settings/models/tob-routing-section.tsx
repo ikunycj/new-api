@@ -43,6 +43,8 @@ import { updateFailoverConfig } from '@/features/failover/api'
 import type {
   BillingGroupChannel,
   BillingGroupRoute,
+  ChannelCircuitPolicy,
+  ChannelCircuitPreset,
   FailoverConfig,
 } from '@/features/failover/types'
 
@@ -56,10 +58,6 @@ let nextTemporaryID = -1
 const defaultRouteSettings = {
   max_total_attempts: 4,
   total_timeout_ms: 30000,
-  circuit_failure_threshold: 5,
-  circuit_window_seconds: 60,
-  circuit_cooldown_seconds: 60,
-  circuit_half_open_requests: 1,
   profit_guard_mode: 'off' as const,
   minimum_profit_margin: 0,
 }
@@ -70,37 +68,10 @@ const defaultStrategyWeights = {
   load_weight: 20,
 }
 
-const circuitPresets = [
-  {
-    key: 'sensitive',
-    label: 'Sensitive',
-    threshold: 3,
-    window: 30,
-    cooldown: 60,
-    probes: 1,
-  },
-  {
-    key: 'standard',
-    label: 'Standard',
-    threshold: 20,
-    window: 60,
-    cooldown: 30,
-    probes: 1,
-  },
-  {
-    key: 'relaxed',
-    label: 'Relaxed',
-    threshold: 50,
-    window: 60,
-    cooldown: 30,
-    probes: 2,
-  },
-] as const
-
 const numericInputClass =
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
-function createRoute(): BillingGroupRoute {
+function createRoute(circuitDefaults: ChannelCircuitPolicy): BillingGroupRoute {
   return {
     id: nextTemporaryID--,
     billing_group: '',
@@ -110,6 +81,10 @@ function createRoute(): BillingGroupRoute {
     strategy_config: JSON.stringify({ type: 'priority' }),
     enabled: false,
     ...defaultRouteSettings,
+    circuit_failure_threshold: circuitDefaults.failure_threshold,
+    circuit_window_seconds: circuitDefaults.window_seconds,
+    circuit_cooldown_seconds: circuitDefaults.cooldown_seconds,
+    circuit_half_open_requests: circuitDefaults.half_open_requests,
     created_time: 0,
     updated_time: 0,
   }
@@ -198,6 +173,9 @@ function updateRouteStrategyWeights(
 
 type ToBRoutingSectionProps = {
   config?: FailoverConfig
+  circuitDefaults?: ChannelCircuitPolicy
+  circuitPresets?: ChannelCircuitPreset[]
+  circuitEnabled: boolean
   channels: Channel[]
   groupNames: string[]
   groupRatios: ReadonlyMap<string, number>
@@ -393,8 +371,10 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
         <div className='flex gap-2'>
           <Button
             variant='outline'
+            disabled={!props.circuitDefaults}
             onClick={() => {
-              const route = createRoute()
+              if (!props.circuitDefaults) return
+              const route = createRoute(props.circuitDefaults)
               updateConfig((current) => ({
                 ...current,
                 routes: [...current.routes, route],
@@ -722,21 +702,28 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
               </FieldSet>
             ) : null}
 
-            <FieldSet className='bg-muted/20 rounded-lg border p-4'>
+            <FieldSet
+              className='bg-muted/20 rounded-lg border p-4'
+              disabled={!props.circuitEnabled}
+            >
               <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div>
                   <FieldLegend>{t('Circuit protection')}</FieldLegend>
                   <FieldDescription>
-                    {t(
-                      'Tune when a channel is temporarily removed after repeated failures.'
-                    )}
+                    {props.circuitEnabled
+                      ? t(
+                          'Tune when a channel is temporarily removed after repeated failures.'
+                        )
+                      : `${t('Disabled')} · ${t(
+                          'Tune when a channel is temporarily removed after repeated failures.'
+                        )}`}
                   </FieldDescription>
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
                   <span className='text-muted-foreground text-xs'>
                     {t('Quick presets')}
                   </span>
-                  {circuitPresets.map((preset) => (
+                  {(props.circuitPresets ?? []).map((preset) => (
                     <Button
                       key={preset.key}
                       type='button'
@@ -744,10 +731,10 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                       size='sm'
                       onClick={() =>
                         updateRoute(routeIndex, {
-                          circuit_failure_threshold: preset.threshold,
-                          circuit_window_seconds: preset.window,
-                          circuit_cooldown_seconds: preset.cooldown,
-                          circuit_half_open_requests: preset.probes,
+                          circuit_failure_threshold: preset.failure_threshold,
+                          circuit_window_seconds: preset.window_seconds,
+                          circuit_cooldown_seconds: preset.cooldown_seconds,
+                          circuit_half_open_requests: preset.half_open_requests,
                         })
                       }
                     >

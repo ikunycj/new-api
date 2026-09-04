@@ -6426,6 +6426,8 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "Sélectionne automatiquement gpt-image-2 et génère un chaton.",
     "让 AI 帮你生成图片（多模态）": "Générez des images avec l’IA (multimodal)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Laissez Codex ou Claude Code lire les fichiers du projet, écrire du code et accomplir des tâches.",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises."
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises.",
+    "Circuit configuration (JSON)": "Configuration du circuit (JSON)",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages."
   }
 }

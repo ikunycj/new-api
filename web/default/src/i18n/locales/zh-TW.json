@@ -6426,6 +6426,8 @@
     "自动切换到 gpt-image-2，并生成一只小猫。": "自動切換到 gpt-image-2，並生成一隻小貓。",
     "让 AI 帮你生成图片（多模态）": "讓 AI 幫你生成圖片（多模態）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "讓 Codex 或 Claude Code 讀取專案檔案、編寫程式碼並完成任務。",
-    "让你自己的程序调用 AI，适合开发者和企业使用。": "讓你自己的程式呼叫 AI，適合開發者和企業使用。"
+    "让你自己的程序调用 AI，适合开发者和企业使用。": "讓你自己的程式呼叫 AI，適合開發者和企業使用。",
+    "Circuit configuration (JSON)": "熔斷設定（JSON）",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "統一設定均衡、成本優先、穩定優先模式及快速預設的預設值。"
   }
 }

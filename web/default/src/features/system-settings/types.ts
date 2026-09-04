@@ -226,6 +226,8 @@ export type ModelSettings = {
   DefaultUseAutoGroup: boolean
   'group_ratio_setting.group_special_usable_group': string
   RetryTimes: number
+  ChannelCircuitEnabled: boolean
+  ChannelCircuitConfig: string
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean

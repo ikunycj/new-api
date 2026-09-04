@@ -64,7 +64,63 @@ var channelCircuits = struct {
 	values map[string]*channelCircuit
 }{values: make(map[string]*channelCircuit)}
 
+var circuitConfigState = struct {
+	sync.Mutex
+	initialized bool
+	enabled     bool
+	version     uint64
+}{}
+
+func channelCircuitEnabled() bool {
+	enabled := common.IsChannelCircuitEnabled()
+	version := common.ChannelCircuitConfigVersion()
+
+	circuitConfigState.Lock()
+	changed := circuitConfigState.initialized &&
+		(circuitConfigState.enabled != enabled || circuitConfigState.version != version)
+	circuitConfigState.initialized = true
+	circuitConfigState.enabled = enabled
+	circuitConfigState.version = version
+	circuitConfigState.Unlock()
+	if changed {
+		clearChannelCircuitState()
+	}
+	return enabled
+}
+
+func clearChannelCircuitState() {
+	channelCircuits.Lock()
+	channelCircuits.values = make(map[string]*channelCircuit)
+	channelCircuits.Unlock()
+	observability.ResetChannelCircuitStates()
+	if !common.RedisEnabled || common.RDB == nil {
+		return
+	}
+	var cursor uint64
+	for {
+		keys, nextCursor, err := common.RDB.Scan(
+			context.Background(), cursor, "alltoken:channel:circuit:*", 128,
+		).Result()
+		if err != nil {
+			common.SysError(fmt.Sprintf("failover circuit Redis state scan failed: %v", err))
+			return
+		}
+		if len(keys) > 0 {
+			if err := common.RDB.Del(context.Background(), keys...).Err(); err != nil {
+				common.SysError(fmt.Sprintf("failover circuit Redis state cleanup failed: %v", err))
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			return
+		}
+	}
+}
+
 func ChannelCircuitAllows(channelID int, route string, policy model.RuntimeRoutingPolicy) bool {
+	if !channelCircuitEnabled() {
+		return true
+	}
 	if channelID <= 0 {
 		return true
 	}
@@ -124,6 +180,9 @@ func localChannelCircuitAllows(channelID int, route string, policy model.Runtime
 }
 
 func RecordChannelCircuitSuccess(channelID int, route string) {
+	if !channelCircuitEnabled() {
+		return
+	}
 	if channelID <= 0 {
 		return
 	}
@@ -140,6 +199,9 @@ func RecordChannelCircuitSuccess(channelID int, route string) {
 }
 
 func RecordChannelCircuitFailure(channelID int, route string, policy model.RuntimeRoutingPolicy) {
+	if !channelCircuitEnabled() {
+		return
+	}
 	if channelID <= 0 {
 		return
 	}

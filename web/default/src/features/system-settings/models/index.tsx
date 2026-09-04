@@ -64,6 +64,8 @@ const defaultModelSettings: ModelSettings = {
   DefaultUseAutoGroup: false,
   'group_ratio_setting.group_special_usable_group': '{}',
   RetryTimes: 0,
+  ChannelCircuitEnabled: false,
+  ChannelCircuitConfig: '{}',
   ChannelDisableThreshold: '',
   AutomaticDisableChannelEnabled: false,
   AutomaticEnableChannelEnabled: false,

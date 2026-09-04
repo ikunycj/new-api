@@ -2052,6 +2052,49 @@ for (const [locale, translations] of Object.entries(groupRoutingLabels)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const circuitConfigurationLabels = {
+  en: {
+    'Circuit configuration (JSON)': 'Circuit configuration (JSON)',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      'Central defaults for balanced, cost-first, stability-first, and quick presets.',
+  },
+  zh: {
+    'Circuit configuration (JSON)': '熔断配置（JSON）',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      '统一配置均衡、成本优先、稳定优先模式及快捷预设的默认值。',
+  },
+  fr: {
+    'Circuit configuration (JSON)': 'Configuration du circuit (JSON)',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      'Valeurs centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages.',
+  },
+  ja: {
+    'Circuit configuration (JSON)': 'サーキット設定（JSON）',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      'バランス、コスト優先、安定性優先、クイックプリセットの既定値を一元管理します。',
+  },
+  ru: {
+    'Circuit configuration (JSON)': 'Конфигурация цепи (JSON)',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      'Единые значения для сбалансированного режима, приоритета стоимости, стабильности и быстрых пресетов.',
+  },
+  vi: {
+    'Circuit configuration (JSON)': 'Cấu hình mạch (JSON)',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      'Giá trị tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và preset nhanh.',
+  },
+  'zh-TW': {
+    'Circuit configuration (JSON)': '熔斷設定（JSON）',
+    'Central defaults for balanced, cost-first, stability-first, and quick presets.':
+      '統一設定均衡、成本優先、穩定優先模式及快速預設的預設值。',
+  },
+}
+for (const [locale, translations] of Object.entries(
+  circuitConfigurationLabels
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

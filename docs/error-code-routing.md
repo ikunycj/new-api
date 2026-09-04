@@ -36,7 +36,60 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 - `circuit_cooldown_seconds`：渠道熔断后的冷却时间。
 - `circuit_half_open_requests`：半开状态允许的探测请求数。
 
-### 2.2 渠道顺序
+### 2.2 熔断总开关与统一配置
+
+熔断默认关闭。管理员在“系统设置 -> 模型设置 -> 路由可靠性”中通过
+`ChannelCircuitEnabled` 统一启用或关闭，不需要删除路由或渠道配置。
+
+- 关闭时，所有候选渠道跳过熔断检查，成功和失败都不会写入熔断状态或指标。
+- 开关状态或统一配置发生变化时，进程内状态、Redis 中的
+  `alltoken:channel:circuit:*` 状态以及熔断 Prometheus 指标会被清理。
+- 自动禁用、健康探测、请求重试、权重/优先级调度和利润保护不受该开关影响。
+
+所有模式默认值和快捷预设统一保存在现有 `options` 表的
+`ChannelCircuitConfig` JSON 中，结构如下：
+
+```json
+{
+  "default": {
+    "failure_threshold": 5,
+    "window_seconds": 60,
+    "cooldown_seconds": 60,
+    "half_open_requests": 1
+  },
+  "modes": {
+    "cost_first": {
+      "failure_threshold": 8,
+      "window_seconds": 60,
+      "cooldown_seconds": 60,
+      "half_open_requests": 1
+    },
+    "stability_first": {
+      "failure_threshold": 3,
+      "window_seconds": 60,
+      "cooldown_seconds": 90,
+      "half_open_requests": 1
+    }
+  },
+  "presets": [
+    {
+      "key": "standard",
+      "label": "Standard",
+      "failure_threshold": 20,
+      "window_seconds": 60,
+      "cooldown_seconds": 30,
+      "half_open_requests": 1
+    }
+  ]
+}
+```
+
+接口会拒绝缺字段、重复预设键和越界数值。数据库中没有该选项或旧值无效时，
+后端使用同结构的安全内置默认值；前端不维护第二份熔断默认配置。请求重试、总超时
+和利润保护仍使用原有路由配置，不属于该 JSON。已有路由中明确保存的单路由熔断参数
+仍优先于统一默认值，以保持历史配置兼容。
+
+### 2.3 渠道顺序
 
 每条渠道配置包含：
 
@@ -60,13 +113,13 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 1. 根据用户和 API Key 确定允许使用的计费分组。
 2. 根据计费分组、模型和请求路径过滤可用渠道。
 3. 按渠道健康状态、并发和 Weight 选择渠道；兼容优先级策略仅在定价分组显式启用时生效。
-4. 检查该渠道的熔断状态。
+4. 全局熔断开启时检查该渠道的熔断状态；关闭时直接放行。
 5. 发起请求并记录渠道尝试结果。
 6. 对可重试错误，在 `max_attempts` 和全局预算内重试当前渠道。
 7. 当前渠道达到尝试上限、被错误规则要求切换或被熔断时，选择下一渠道。
 8. 所有候选渠道或预算耗尽后，对客户端返回最终错误。
 
-渠道熔断按 `channel_id + route` 统计。Redis 可用时多个 AllToken 实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。
+渠道熔断按 `channel_id + route` 统计。Redis 可用时多个 AllToken 实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。需要紧急回退时只需关闭总开关；无需删除配置或回滚数据库。
 
 ## 4. 错误分层
 
@@ -224,6 +277,6 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 3. Weight 较高的健康渠道获得更高长期流量，不会因遗留 Channel.priority 形成硬分层。
 4. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。
 5. 错误记录包含正确的 `alltoken_code`、`channel_id` 和 `error_ref`。
-6. 渠道熔断后不再接收新请求，冷却后半开探测成功可恢复。
+6. 开启熔断后，渠道熔断时不再接收新请求，冷却后半开探测成功可恢复；关闭时渠道始终通过熔断检查。
 7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断；不再依赖 Cluster/号池指标。
 8. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。

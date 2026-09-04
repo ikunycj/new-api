@@ -11,6 +11,7 @@ import {
 } from '@/features/failover/api'
 import type { BillingGroupRoute } from '@/features/failover/types'
 
+import { getOptionValue, useSystemOptions } from '../hooks/use-system-options'
 import { safeJsonParse } from '../utils/json-parser'
 import {
   buildGroupPricingSnapshots,
@@ -42,6 +43,14 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     queryKey: ['channel-routing-config'],
     queryFn: getFailoverConfig,
   })
+  const systemOptionsQuery = useSystemOptions()
+  const circuitEnabled = useMemo(
+    () =>
+      getOptionValue(systemOptionsQuery.data?.data, {
+        ChannelCircuitEnabled: false,
+      }).ChannelCircuitEnabled,
+    [systemOptionsQuery.data?.data]
+  )
   const channelsQuery = useQuery({
     queryKey: ['channel-routing-channels'],
     queryFn: () => getChannels({ page_size: 1000, id_sort: true }),
@@ -149,6 +158,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       if (existing.group_type === type) return
       existing.group_type = type
     } else if (type === 'toB') {
+      if (!configQuery.data.circuit_defaults) return
       const route: BillingGroupRoute = {
         id: -Date.now(),
         billing_group: name,
@@ -159,10 +169,13 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
         enabled: false,
         max_total_attempts: 4,
         total_timeout_ms: 30000,
-        circuit_failure_threshold: 5,
-        circuit_window_seconds: 60,
-        circuit_cooldown_seconds: 60,
-        circuit_half_open_requests: 1,
+        circuit_failure_threshold:
+          configQuery.data.circuit_defaults.failure_threshold,
+        circuit_window_seconds: configQuery.data.circuit_defaults.window_seconds,
+        circuit_cooldown_seconds:
+          configQuery.data.circuit_defaults.cooldown_seconds,
+        circuit_half_open_requests:
+          configQuery.data.circuit_defaults.half_open_requests,
         profit_guard_mode: 'off',
         minimum_profit_margin: 0,
         created_time: 0,
@@ -257,6 +270,9 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       <TabsContent value='tob'>
         <ToBRoutingSection
           config={configQuery.data}
+          circuitDefaults={configQuery.data?.circuit_defaults}
+          circuitPresets={configQuery.data?.circuit_presets}
+          circuitEnabled={circuitEnabled}
           channels={channels}
           groupNames={groupNames}
           groupRatios={groupRatios}

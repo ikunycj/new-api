@@ -66,9 +66,50 @@ const numericString = z.string().refine((value) => {
 const channelTestModes = ['scheduled_all', 'passive_recovery'] as const
 type ChannelTestMode = (typeof channelTestModes)[number]
 
+const circuitPolicySchema = z.object({
+  failure_threshold: z.number().int().min(1).max(10000),
+  window_seconds: z.number().int().min(1).max(86400),
+  cooldown_seconds: z.number().int().min(1).max(86400),
+  half_open_requests: z.number().int().min(1).max(100),
+})
+
+const channelCircuitConfigSchema = z.object({
+  default: circuitPolicySchema,
+  modes: z.object({
+    cost_first: circuitPolicySchema,
+    stability_first: circuitPolicySchema,
+  }),
+  presets: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1),
+        label: z.string().trim().min(1),
+        failure_threshold: z.number().int().min(1).max(10000),
+        window_seconds: z.number().int().min(1).max(86400),
+        cooldown_seconds: z.number().int().min(1).max(86400),
+        half_open_requests: z.number().int().min(1).max(100),
+      })
+    )
+    .min(1)
+    .max(20),
+})
+
 const routingReliabilitySchema = z
   .object({
     RetryTimes: z.coerce.number().min(0).max(10),
+    ChannelCircuitEnabled: z.boolean(),
+    ChannelCircuitConfig: z.string().superRefine((value, ctx) => {
+      try {
+        if (!channelCircuitConfigSchema.safeParse(JSON.parse(value)).success) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Invalid JSON format or values out of allowed range',
+          })
+        }
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Invalid JSON format' })
+      }
+    }),
     ChannelDisableThreshold: numericString,
     AutomaticDisableChannelEnabled: z.boolean(),
     AutomaticEnableChannelEnabled: z.boolean(),
@@ -118,6 +159,8 @@ type RoutingReliabilityFormInput = z.input<typeof routingReliabilitySchema>
 type RoutingReliabilitySectionProps = {
   defaultValues: {
     RetryTimes: number
+    ChannelCircuitEnabled: boolean
+    ChannelCircuitConfig: string
     ChannelDisableThreshold: string
     AutomaticDisableChannelEnabled: boolean
     AutomaticEnableChannelEnabled: boolean
@@ -134,8 +177,19 @@ function normalizeLineEndings(value: string) {
   return value.replaceAll('\r\n', '\n')
 }
 
+function normalizeJsonDocument(value: string) {
+  const raw = value.trim()
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
 type NormalizedRoutingReliabilityValues = {
   RetryTimes: number
+  ChannelCircuitEnabled: boolean
+  ChannelCircuitConfig: string
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean
@@ -155,6 +209,8 @@ const buildFormDefaults = (
   defaults: RoutingReliabilitySectionProps['defaultValues']
 ): RoutingReliabilityFormInput => ({
   RetryTimes: defaults.RetryTimes ?? 0,
+  ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
+  ChannelCircuitConfig: defaults.ChannelCircuitConfig ?? '{}',
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -178,6 +234,8 @@ const normalizeDefaults = (
   defaults: RoutingReliabilitySectionProps['defaultValues']
 ): NormalizedRoutingReliabilityValues => ({
   RetryTimes: defaults.RetryTimes ?? 0,
+  ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
+  ChannelCircuitConfig: normalizeJsonDocument(defaults.ChannelCircuitConfig),
   ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -203,6 +261,8 @@ const normalizeFormValues = (
   values: RoutingReliabilityFormValues
 ): NormalizedRoutingReliabilityValues => ({
   RetryTimes: values.RetryTimes,
+  ChannelCircuitEnabled: values.ChannelCircuitEnabled,
+  ChannelCircuitConfig: normalizeJsonDocument(values.ChannelCircuitConfig),
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
@@ -289,6 +349,57 @@ export function RoutingReliabilitySection({
             onSave={form.handleSubmit(onSubmit)}
             isSaving={updateOption.isPending}
           />
+
+          <div className='flex min-w-0 flex-col gap-4'>
+            <div className='rounded-lg border bg-muted/20 p-4'>
+              <FormField
+                control={form.control}
+                name='ChannelCircuitEnabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Circuit protection')}</FormLabel>
+                      <FormDescription>
+                        {field.value ? t('Enabled') : t('Disabled')}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name='ChannelCircuitConfig'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Circuit configuration (JSON)')}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={18}
+                      className='font-mono text-xs'
+                      spellCheck={false}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Central defaults for balanced, cost-first, stability-first, and quick presets.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <Separator />
 
           <div className='flex min-w-0 flex-col gap-4'>
             <div className='flex flex-col gap-1'>
