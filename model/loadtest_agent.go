@@ -70,6 +70,7 @@ type LoadTestRun struct {
 	Endpoint          string                `json:"endpoint" gorm:"type:varchar(32);not null"`
 	Prompt            string                `json:"prompt" gorm:"type:text;not null"`
 	PromptCache       bool                  `json:"prompt_cache"`
+	StreamMode        bool                  `json:"stream_mode"`
 	MockEnabled       bool                  `json:"mock_enabled"`
 	MockFailureRate   float64               `json:"mock_failure_rate"`
 	MockFailureStatus int                   `json:"mock_failure_status"`
@@ -98,6 +99,8 @@ type LoadTestRun struct {
 	OutputTokens      int64                 `json:"output_tokens" gorm:"bigint"`
 	CacheReadTokens   int64                 `json:"cache_read_tokens" gorm:"bigint"`
 	CacheWriteTokens  int64                 `json:"cache_write_tokens" gorm:"bigint"`
+	UsageMissing      int64                 `json:"usage_missing" gorm:"bigint"`
+	TokenStatsSource  string                `json:"token_stats_source" gorm:"type:varchar(32);default:''"`
 	CurrentRPS        float64               `json:"current_rps"`
 	P50MS             float64               `json:"p50_ms"`
 	P95MS             float64               `json:"p95_ms"`
@@ -149,6 +152,8 @@ type LoadTestRunWorker struct {
 	OutputTokens        int64                   `json:"output_tokens" gorm:"bigint"`
 	CacheReadTokens     int64                   `json:"cache_read_tokens" gorm:"bigint"`
 	CacheWriteTokens    int64                   `json:"cache_write_tokens" gorm:"bigint"`
+	UsageMissing        int64                   `json:"usage_missing" gorm:"bigint"`
+	TokenStatsSource    string                  `json:"token_stats_source" gorm:"type:varchar(32);default:''"`
 	CurrentRPS          float64                 `json:"current_rps"`
 	P50MS               float64                 `json:"p50_ms"`
 	P95MS               float64                 `json:"p95_ms"`
@@ -171,6 +176,8 @@ type LoadTestRunAggregate struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
+	UsageMissing     int64
+	TokenStatsSource string
 	CurrentRPS       float64
 	P50MS            float64
 	P95MS            float64
@@ -655,14 +662,32 @@ func FinishLoadTestRunWorker(runID, workerID string, status LoadTestRunWorkerSta
 		if err != nil {
 			return err
 		}
-		return tx.Model(&LoadTestRun{}).Where("id = ? AND status IN ?", runID, []LoadTestRunStatus{LoadTestRunDispatched, LoadTestRunRunning, LoadTestRunCancelRequested}).Updates(map[string]any{
+		finalResult := tx.Model(&LoadTestRun{}).Where("id = ? AND status IN ?", runID, []LoadTestRunStatus{LoadTestRunDispatched, LoadTestRunRunning, LoadTestRunCancelRequested}).Updates(map[string]any{
 			"status": statusValue, "finished_at": common.GetTimestamp(), "updated_at": common.GetTimestamp(),
 			"sent": aggregate.Sent, "completed": aggregate.Completed, "successes": aggregate.Successes,
 			"failures": aggregate.Failures, "dropped": aggregate.Dropped, "input_tokens": aggregate.InputTokens,
 			"output_tokens": aggregate.OutputTokens, "cache_read_tokens": aggregate.CacheReadTokens,
-			"cache_write_tokens": aggregate.CacheWriteTokens, "current_rps": aggregate.CurrentRPS,
+			"cache_write_tokens": aggregate.CacheWriteTokens, "usage_missing": aggregate.UsageMissing, "token_stats_source": aggregate.TokenStatsSource, "current_rps": aggregate.CurrentRPS,
 			"p50_ms": aggregate.P50MS, "p95_ms": aggregate.P95MS, "p99_ms": aggregate.P99MS,
 			"error_counts_json": errorJSON,
+		})
+		if finalResult.Error != nil {
+			return finalResult.Error
+		}
+		if finalResult.RowsAffected == 0 || LOG_DB == nil || aggregate.Successes <= 0 {
+			return nil
+		}
+		// The consume log is authoritative for billing. Only replace worker
+		// counters when every successful request has produced a correlated log;
+		// otherwise retain the Agent response counters and expose that source.
+		stats, statsErr := GetLoadTestTokenStatsByRunID(run.UserID, run.ID)
+		if statsErr != nil || stats.Requests < aggregate.Successes {
+			return nil
+		}
+		return tx.Model(&LoadTestRun{}).Where("id = ?", runID).Updates(map[string]any{
+			"input_tokens": stats.InputTokens, "output_tokens": stats.OutputTokens,
+			"cache_read_tokens": stats.CacheReadTokens, "cache_write_tokens": stats.CacheWriteTokens,
+			"token_stats_source": "server_logs", "updated_at": common.GetTimestamp(),
 		}).Error
 	})
 }
@@ -688,6 +713,12 @@ func aggregateLoadTestRunWorkers(workers []LoadTestRunWorker) LoadTestRunAggrega
 		aggregate.OutputTokens += worker.OutputTokens
 		aggregate.CacheReadTokens += worker.CacheReadTokens
 		aggregate.CacheWriteTokens += worker.CacheWriteTokens
+		aggregate.UsageMissing += worker.UsageMissing
+		if worker.TokenStatsSource == "server_logs" {
+			aggregate.TokenStatsSource = "server_logs"
+		} else if aggregate.TokenStatsSource == "" && worker.TokenStatsSource != "" {
+			aggregate.TokenStatsSource = worker.TokenStatsSource
+		}
 		aggregate.CurrentRPS += worker.CurrentRPS
 		aggregate.P50MS = max(aggregate.P50MS, worker.P50MS)
 		aggregate.P95MS = max(aggregate.P95MS, worker.P95MS)
@@ -703,33 +734,46 @@ func aggregateLoadTestRunWorkers(workers []LoadTestRunWorker) LoadTestRunAggrega
 }
 
 func hydrateLoadTestRunAggregate(run *LoadTestRun) {
-	if run == nil || run.ExecutionMode != LoadTestExecutionShared {
+	if run == nil {
 		return
 	}
-	aggregate, err := GetLoadTestRunAggregate(run.ID)
-	if err != nil {
-		return
-	}
-	run.Sent = aggregate.Sent
-	run.Completed = aggregate.Completed
-	run.Successes = aggregate.Successes
-	run.Failures = aggregate.Failures
-	run.Dropped = aggregate.Dropped
-	run.InputTokens = aggregate.InputTokens
-	run.OutputTokens = aggregate.OutputTokens
-	run.CacheReadTokens = aggregate.CacheReadTokens
-	run.CacheWriteTokens = aggregate.CacheWriteTokens
-	run.CurrentRPS = aggregate.CurrentRPS
-	run.P50MS = aggregate.P50MS
-	run.P95MS = aggregate.P95MS
-	run.P99MS = aggregate.P99MS
-	run.ErrorCounts = aggregate.ErrorCounts
-	var workers []LoadTestRunWorker
-	if DB.Where("run_id = ?", run.ID).Order("slot asc").Find(&workers).Error == nil {
-		for index := range workers {
-			decodeLoadTestRunWorkerJSON(&workers[index])
+	if run.ExecutionMode == LoadTestExecutionShared {
+		aggregate, err := GetLoadTestRunAggregate(run.ID)
+		if err != nil {
+			return
 		}
-		run.Workers = workers
+		run.Sent = aggregate.Sent
+		run.Completed = aggregate.Completed
+		run.Successes = aggregate.Successes
+		run.Failures = aggregate.Failures
+		run.Dropped = aggregate.Dropped
+		run.InputTokens = aggregate.InputTokens
+		run.OutputTokens = aggregate.OutputTokens
+		run.CacheReadTokens = aggregate.CacheReadTokens
+		run.CacheWriteTokens = aggregate.CacheWriteTokens
+		run.UsageMissing = aggregate.UsageMissing
+		run.TokenStatsSource = aggregate.TokenStatsSource
+		run.CurrentRPS = aggregate.CurrentRPS
+		run.P50MS = aggregate.P50MS
+		run.P95MS = aggregate.P95MS
+		run.P99MS = aggregate.P99MS
+		run.ErrorCounts = aggregate.ErrorCounts
+		var workers []LoadTestRunWorker
+		if DB.Where("run_id = ?", run.ID).Order("slot asc").Find(&workers).Error == nil {
+			for index := range workers {
+				decodeLoadTestRunWorkerJSON(&workers[index])
+			}
+			run.Workers = workers
+		}
+	}
+	if LOG_DB != nil && (run.Status == LoadTestRunCompleted || run.Status == LoadTestRunFailed || run.Status == LoadTestRunCancelled) && run.Successes > 0 {
+		if stats, statsErr := GetLoadTestTokenStatsByRunID(run.UserID, run.ID); statsErr == nil && stats.Requests >= run.Successes {
+			run.InputTokens = stats.InputTokens
+			run.OutputTokens = stats.OutputTokens
+			run.CacheReadTokens = stats.CacheReadTokens
+			run.CacheWriteTokens = stats.CacheWriteTokens
+			run.TokenStatsSource = "server_logs"
+		}
 	}
 }
 
@@ -841,6 +885,35 @@ func FinishLoadTestRun(agentID, runID string, status LoadTestRunStatus, updates 
 		return errors.New("load-test run is not active")
 	}
 	return nil
+}
+
+// ReconcileLoadTestRunTokenStats replaces Agent-reported token counters with
+// authoritative consume-log totals after a terminal run, including shared
+// runs where workers only report local response counters.
+func ReconcileLoadTestRunTokenStats(runID string) error {
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return errors.New("run identifier is required")
+	}
+	var run LoadTestRun
+	if err := DB.Where("id = ?", runID).First(&run).Error; err != nil {
+		return err
+	}
+	if run.Status != LoadTestRunCompleted && run.Status != LoadTestRunFailed && run.Status != LoadTestRunCancelled {
+		return nil
+	}
+	stats, err := GetLoadTestTokenStatsByRunID(run.UserID, run.ID)
+	if err != nil {
+		return err
+	}
+	if stats.Requests < run.Successes {
+		return nil
+	}
+	return DB.Model(&LoadTestRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		"input_tokens": stats.InputTokens, "output_tokens": stats.OutputTokens,
+		"cache_read_tokens": stats.CacheReadTokens, "cache_write_tokens": stats.CacheWriteTokens,
+		"token_stats_source": "server_logs", "updated_at": common.GetTimestamp(),
+	}).Error
 }
 
 func RequestLoadTestRunCancellation(userID int, runID string) error {

@@ -14,6 +14,7 @@ const maxLoadTestStatsRequestBodyBytes = 2 << 20
 
 type loadTestStatsRequest struct {
 	RequestIDs []string `json:"request_ids"`
+	RunID      string   `json:"run_id"`
 }
 
 func GetLoadTestChannelStats(c *gin.Context) {
@@ -38,6 +39,16 @@ func GetLoadTestChannelStats(c *gin.Context) {
 	}
 	if len(request.RequestIDs) > maxLoadTestStatsRequestIDs {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "too many request_ids"})
+		return
+	}
+
+	if strings.TrimSpace(request.RunID) != "" {
+		stats, err := model.GetLoadTestChannelStatsByRunID(userID, strings.TrimSpace(request.RunID))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		common.ApiSuccess(c, stats)
 		return
 	}
 

@@ -27,7 +27,8 @@ func TestReadK6SummaryBuildsTerminalResult(t *testing.T) {
 	"alltoken_input_tokens": {"count": 1000},
 	"alltoken_output_tokens": {"count": 200},
 	"alltoken_cache_read_tokens": {"count": 600},
-	"alltoken_cache_write_tokens": {"count": 100}
+	"alltoken_cache_write_tokens": {"count": 100},
+	"alltoken_usage_missing": {"count": 4}
   }
 }`
 	path := filepath.Join(t.TempDir(), "summary.json")
@@ -45,6 +46,7 @@ func TestReadK6SummaryBuildsTerminalResult(t *testing.T) {
 	}, result.ErrorCounts)
 	assert.Equal(t, float64(400), result.P95MS)
 	assert.Equal(t, int64(600), result.CacheReadTokens)
+	assert.Equal(t, int64(4), result.UsageMissing)
 }
 
 func TestReadK6SummarySupportsLegacyValuesObject(t *testing.T) {

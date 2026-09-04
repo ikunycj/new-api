@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
@@ -430,6 +431,16 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
+	if params.Other == nil {
+		params.Other = map[string]interface{}{}
+	}
+	loadTestRunID := strings.TrimSpace(c.GetHeader(constant.MockLoadTestRunHeader))
+	if strings.HasPrefix(loadTestRunID, "loadtest_") && len(loadTestRunID) <= 64 {
+		// Keep the load-test run correlation in the consume log so an external
+		// Agent can reconcile its response usage with the server-side billing
+		// record after the run. The value is a server-generated run ID.
+		params.Other["load_test_run_id"] = loadTestRunID
+	}
 	otherStr := common.MapToJsonStr(params.Other)
 	planID := c.GetInt("subscription_plan_id")
 	planTitle := c.GetString("subscription_plan_title")
