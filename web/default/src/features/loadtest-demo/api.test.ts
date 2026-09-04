@@ -97,7 +97,7 @@ describe('load test request identity', () => {
     assert.deepEqual(JSON.parse(requestedBody), {
       model: 'o4-mini',
       input: [{ role: 'user', content: 'Describe this request.' }],
-      max_output_tokens: 32,
+      max_output_tokens: 256,
       stream: false,
     })
   })
@@ -112,7 +112,7 @@ describe('load test request identity', () => {
       ),
       {
         model: 'claude-opus-4-8',
-        max_tokens: 32,
+        max_tokens: 256,
         messages: [
           { role: 'user', content: 'Summarize the attached trajectory.' },
         ],
@@ -130,7 +130,7 @@ describe('load test request identity', () => {
       ),
       {
         model: 'gpt-5.6-sol',
-        max_tokens: 32,
+        max_tokens: 256,
         messages: [{ role: 'user', content: 'Do not add a cache prefix.' }],
         temperature: 0,
         stream: false,
@@ -149,7 +149,7 @@ describe('load test request identity', () => {
       ),
       {
         model: 'gpt-5.6-sol',
-        max_tokens: 32,
+        max_tokens: 256,
         messages: [{ role: 'user', content: 'Stream this response.' }],
         temperature: 0,
         stream: true,

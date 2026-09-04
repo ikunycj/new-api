@@ -69,6 +69,7 @@ type createLoadTestRunRequest struct {
 	DurationSeconds   int                         `json:"duration_seconds"`
 	RequestsPerSecond int                         `json:"requests_per_second"`
 	Concurrency       int                         `json:"concurrency"`
+	MaxOutputTokens   int                         `json:"max_output_tokens"`
 }
 
 type loadTestAgentPollRequest struct {
@@ -308,9 +309,13 @@ func CreateLoadTestRun(c *gin.Context) {
 		return
 	}
 	settings := operation_setting.GetLoadTestSetting()
+	if request.MaxOutputTokens == 0 {
+		request.MaxOutputTokens = operation_setting.LoadTestDefaultMaxOutputTokens
+	}
 	if request.DurationSeconds < operation_setting.LoadTestMinDurationSeconds || request.DurationSeconds > settings.MaxDurationSeconds ||
 		request.RequestsPerSecond < 1 || request.RequestsPerSecond > settings.MaxRPS ||
-		request.Concurrency < 1 || request.Concurrency > settings.MaxConcurrency {
+		request.Concurrency < 1 || request.Concurrency > settings.MaxConcurrency ||
+		request.MaxOutputTokens < 1 || request.MaxOutputTokens > settings.MaxOutputTokens {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "load-test limits exceeded"})
 		return
 	}
@@ -516,7 +521,7 @@ func PollLoadTestAgent(c *gin.Context) {
 				"command": "run",
 				"task": gin.H{
 					"run_id": run.ID, "worker_id": worker.WorkerID, "target_url": run.TargetURL, "api_key": "sk-" + token.GetFullKey(),
-					"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt,
+					"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt, "max_output_tokens": run.MaxOutputTokens,
 					"prompt_cache": run.PromptCache, "stream_mode": run.StreamMode, "duration_seconds": run.DurationSeconds,
 					"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 					"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
@@ -548,7 +553,7 @@ func PollLoadTestAgent(c *gin.Context) {
 		"command": "run",
 		"task": gin.H{
 			"run_id": run.ID, "target_url": run.TargetURL, "api_key": "sk-" + token.GetFullKey(),
-			"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt,
+			"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt, "max_output_tokens": run.MaxOutputTokens,
 			"prompt_cache": run.PromptCache, "stream_mode": run.StreamMode, "duration_seconds": run.DurationSeconds,
 			"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 			"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,

@@ -72,6 +72,7 @@ import {
   DEFAULT_LOAD_TEST_LIMITS,
   LOAD_TEST_DEFAULT_CONCURRENCY,
   LOAD_TEST_DEFAULT_PROMPT,
+  LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
   LOAD_TEST_DEFAULT_RPS,
   LOAD_TEST_MAX_PROMPT_CHARS,
   getLoadTestLimits,
@@ -112,6 +113,7 @@ type RunSnapshot = {
   durationSeconds: number
   requestsPerSecond: number
   concurrency: number
+  maxOutputTokens: number
   promptCache: boolean
   streamMode: boolean
 }
@@ -284,6 +286,11 @@ export function LoadTestDemo() {
   )
   const [concurrency, setConcurrency] = useState(
     String(persistedRun?.concurrency || LOAD_TEST_DEFAULT_CONCURRENCY)
+  )
+  const [maxOutputTokens, setMaxOutputTokens] = useState(
+    String(
+      persistedRun?.maxOutputTokens || LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
+    )
   )
   const [limits, setLimits] = useState<LoadTestLimits>(DEFAULT_LOAD_TEST_LIMITS)
   const [limitsLoading, setLimitsLoading] = useState(true)
@@ -477,6 +484,8 @@ export function LoadTestDemo() {
       requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
     const concurrencyValue =
       concurrency.trim() === '' ? Number.NaN : Number(concurrency)
+    const maxOutputTokensValue =
+      maxOutputTokens.trim() === '' ? Number.NaN : Number(maxOutputTokens)
     let selectedAgent: LoadTestAgent | null = null
     if (activeTab === 'server') selectedAgent = managedAgent
     if (activeTab === 'local') selectedAgent = localAgent
@@ -529,6 +538,19 @@ export function LoadTestDemo() {
       )
       return
     }
+    if (
+      !Number.isInteger(maxOutputTokensValue) ||
+      maxOutputTokensValue < limits.min_output_tokens ||
+      maxOutputTokensValue > limits.max_output_tokens
+    ) {
+      toast.error(
+        t('Output tokens must be between {{min}} and {{max}}.', {
+          min: limits.min_output_tokens,
+          max: limits.max_output_tokens,
+        })
+      )
+      return
+    }
     const controller = new AbortController()
     runAbortRef.current = controller
     runStartedAtRef.current = Date.now()
@@ -545,6 +567,7 @@ export function LoadTestDemo() {
       durationSeconds: durationValue,
       requestsPerSecond: rpsValue,
       concurrency: concurrencyValue,
+      maxOutputTokens: maxOutputTokensValue,
       promptCache,
       streamMode: effectiveStreamMode,
     }
@@ -596,7 +619,8 @@ export function LoadTestDemo() {
         controller.signal,
         selectedModelOption.provider,
         selectedModelOption.endpoint,
-        effectiveStreamMode
+        effectiveStreamMode,
+        maxOutputTokensValue
       ).then(recordResult)
       inFlight.add(request)
       void request.then(() => inFlight.delete(request))
@@ -633,6 +657,7 @@ export function LoadTestDemo() {
     setStatus('complete')
   }, [
     concurrency,
+    maxOutputTokens,
     durationSeconds,
     keys,
     limits,
@@ -664,6 +689,8 @@ export function LoadTestDemo() {
     requestsPerSecond.trim() === '' ? Number.NaN : Number(requestsPerSecond)
   const concurrencyValue =
     concurrency.trim() === '' ? Number.NaN : Number(concurrency)
+  const maxOutputTokensValue =
+    maxOutputTokens.trim() === '' ? Number.NaN : Number(maxOutputTokens)
   const durationMs = Number.isFinite(durationValue) ? durationValue * 1000 : 0
   const progress =
     durationMs > 0 ? Math.min(100, (elapsed / durationMs) * 100) : 0
@@ -740,6 +767,7 @@ export function LoadTestDemo() {
       durationSeconds: runSnapshot.durationSeconds,
       requestsPerSecond: runSnapshot.requestsPerSecond,
       concurrency: runSnapshot.concurrency,
+      maxOutputTokens: runSnapshot.maxOutputTokens,
       promptCache: runSnapshot.promptCache,
       streamMode: runSnapshot.streamMode,
       userCharge,
@@ -780,7 +808,10 @@ export function LoadTestDemo() {
     rpsValue <= effectiveMaxRPS &&
     Number.isInteger(concurrencyValue) &&
     concurrencyValue >= limits.min_concurrency &&
-    concurrencyValue <= effectiveMaxConcurrency
+    concurrencyValue <= effectiveMaxConcurrency &&
+    Number.isInteger(maxOutputTokensValue) &&
+    maxOutputTokensValue >= limits.min_output_tokens &&
+    maxOutputTokensValue <= limits.max_output_tokens
   const canRun =
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
@@ -840,12 +871,20 @@ export function LoadTestDemo() {
         prompt,
         promptCache,
         selectedModelMetadata.endpoint,
-        streamMode
+        streamMode,
+        maxOutputTokensValue
       ),
       null,
       2
     )
-  }, [prompt, promptCache, selectedModel, selectedModelMetadata, streamMode])
+  }, [
+    maxOutputTokensValue,
+    prompt,
+    promptCache,
+    selectedModel,
+    selectedModelMetadata,
+    streamMode,
+  ])
   const agentRequest =
     selectedKeyMetadata && selectedModelMetadata
       ? {
@@ -860,6 +899,7 @@ export function LoadTestDemo() {
           duration_seconds: durationValue,
           requests_per_second: rpsValue,
           concurrency: concurrencyValue,
+          max_output_tokens: maxOutputTokensValue,
         }
       : null
 
@@ -931,7 +971,7 @@ export function LoadTestDemo() {
               </div>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-5'>
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-6'>
                 <div className='space-y-1.5'>
                   <Label>{t('API Key')}</Label>
                   <Select
@@ -1032,6 +1072,28 @@ export function LoadTestDemo() {
                     })}
                   </p>
                 </div>
+                <div className='space-y-1.5'>
+                  <Label htmlFor='load-test-max-output-tokens'>
+                    {t('Max output tokens')}
+                  </Label>
+                  <Input
+                    id='load-test-max-output-tokens'
+                    type='number'
+                    min={limits.min_output_tokens}
+                    max={limits.max_output_tokens}
+                    step={1}
+                    value={maxOutputTokens}
+                    onChange={(event) =>
+                      setMaxOutputTokens(event.target.value)
+                    }
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Allowed range: {{min}}-{{max}} tokens', {
+                      min: limits.min_output_tokens,
+                      max: limits.max_output_tokens,
+                    })}
+                  </p>
+                </div>
               </div>
 
               <div className='bg-muted/30 space-y-2 rounded-lg border p-3 text-sm'>
@@ -1043,7 +1105,7 @@ export function LoadTestDemo() {
                     )}
                   </span>
                 </div>
-                <div className='grid gap-2 sm:grid-cols-3'>
+                <div className='grid gap-2 sm:grid-cols-4'>
                   <div>
                     <span className='text-muted-foreground'>
                       {t('Duration')}
@@ -1069,11 +1131,20 @@ export function LoadTestDemo() {
                       {limits.min_concurrency}–{effectiveMaxConcurrency}
                     </span>
                   </div>
+                  <div>
+                    <span className='text-muted-foreground'>
+                      {t('Max output tokens')}
+                    </span>{' '}
+                    <span className='tabular-nums'>
+                      {limits.min_output_tokens}–{limits.max_output_tokens}
+                    </span>
+                  </div>
                 </div>
                 <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
                   <span>
                     {t('System maximum')}: {limits.max_rps} RPS ·{' '}
-                    {limits.max_concurrency} {t('concurrent requests')}
+                    {limits.max_concurrency} {t('concurrent requests')} ·{' '}
+                    {limits.max_output_tokens} {t('Max output tokens')}
                   </span>
                   <span>
                     {t('Effective maximum')}: {effectiveMaxRPS} RPS ·{' '}

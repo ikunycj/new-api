@@ -52,6 +52,7 @@ const result: LoadTestRunResult = {
   durationSeconds: 60,
   requestsPerSecond: 2,
   concurrency: 10,
+  maxOutputTokens: 256,
   prompt: 'Return one concise sentence.',
   promptCache: false,
   streamMode: false,

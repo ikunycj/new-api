@@ -234,7 +234,7 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "loadtest_setting.max_duration_seconds", "loadtest_setting.max_rps", "loadtest_setting.max_concurrency":
+	case "loadtest_setting.max_duration_seconds", "loadtest_setting.max_rps", "loadtest_setting.max_concurrency", "loadtest_setting.max_output_tokens":
 		if err = operation_setting.ValidateLoadTestOption(option.Key, option.Value.(string)); err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
