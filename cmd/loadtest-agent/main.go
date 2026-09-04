@@ -61,6 +61,7 @@ type loadTestTask struct {
 	Endpoint          string                `json:"endpoint"`
 	Prompt            string                `json:"prompt"`
 	MaxOutputTokens   int                   `json:"max_output_tokens"`
+	RequestTimeoutSec int                   `json:"request_timeout_seconds"`
 	PromptCache       bool                  `json:"prompt_cache"`
 	StreamMode        bool                  `json:"stream_mode"`
 	MockEnabled       bool                  `json:"mock_enabled"`
@@ -422,6 +423,9 @@ func poll(ctx context.Context, config agentConfig, workerID, currentRunID string
 }
 
 func executeTask(ctx context.Context, config agentConfig, workerID string, task loadTestTask) (runErr error) {
+	if task.RequestTimeoutSec == 0 {
+		task.RequestTimeoutSec = 120
+	}
 	terminalReported := false
 	defer func() {
 		if runErr == nil || terminalReported {
@@ -484,6 +488,7 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 		"ALLTOKEN_ENDPOINT="+task.Endpoint,
 		"ALLTOKEN_PROMPT="+task.Prompt,
 		"ALLTOKEN_MAX_OUTPUT_TOKENS="+strconv.Itoa(task.MaxOutputTokens),
+		"ALLTOKEN_REQUEST_TIMEOUT_SECONDS="+strconv.Itoa(task.RequestTimeoutSec),
 		"ALLTOKEN_PROMPT_CACHE="+strconv.FormatBool(task.PromptCache),
 		"ALLTOKEN_STREAM_MODE="+strconv.FormatBool(task.StreamMode),
 		"ALLTOKEN_MOCK_ENABLED="+strconv.FormatBool(task.MockEnabled),
@@ -801,6 +806,10 @@ func validateServerURL(value string) error {
 }
 
 func validateTask(task loadTestTask) error {
+	// Older servers omit this field; keep their tasks compatible with the default.
+	if task.RequestTimeoutSec == 0 {
+		task.RequestTimeoutSec = 120
+	}
 	if strings.TrimSpace(task.RunID) == "" || len(task.RunID) > 64 || strings.TrimSpace(task.APIKey) == "" || len(task.APIKey) > 256 {
 		return errors.New("task identity or API key is invalid")
 	}
@@ -815,7 +824,7 @@ func validateTask(task loadTestTask) error {
 	if strings.TrimSpace(task.Model) == "" || len(task.Model) > 128 || strings.TrimSpace(task.Prompt) == "" || len(task.Prompt) > 8000 {
 		return errors.New("task model or prompt is invalid")
 	}
-	if task.DurationSeconds < 1 || task.RequestsPerSecond < 1 || task.Concurrency < 1 {
+	if task.DurationSeconds < 1 || task.RequestsPerSecond < 1 || task.Concurrency < 1 || task.RequestTimeoutSec < 1 || task.RequestTimeoutSec > 600 {
 		return errors.New("task load settings are invalid")
 	}
 	if task.MockEnabled {
@@ -868,6 +877,7 @@ const target = __ENV.ALLTOKEN_TARGET_URL.replace(/\/+$/, '');
 const endpoint = __ENV.ALLTOKEN_ENDPOINT;
 const streamMode = __ENV.ALLTOKEN_STREAM_MODE === 'true' && endpoint !== 'openai-response-compact';
 const maxOutputTokens = Math.max(1, Number(__ENV.ALLTOKEN_MAX_OUTPUT_TOKENS || 256));
+const requestTimeout = Math.max(1, Number(__ENV.ALLTOKEN_REQUEST_TIMEOUT_SECONDS || 120)) + 's';
 const durationSeconds = Number(__ENV.ALLTOKEN_DURATION_SECONDS);
 const targetRPS = Number(__ENV.ALLTOKEN_RPS);
 const concurrency = Number(__ENV.ALLTOKEN_CONCURRENCY);
@@ -960,7 +970,7 @@ export default function () {
     }
   }
   if (streamMode && endpoint === 'openai') body.stream_options = { include_usage: true };
-  const response = http.post(target + requestPath, JSON.stringify(body), { headers, timeout: '120s' });
+  const response = http.post(target + requestPath, JSON.stringify(body), { headers, timeout: requestTimeout });
   if (mockEnabled && response.headers['X-Alltoken-Mock-Executed'] !== 'true') {
     alltokenErrors.add(1, { code: 'mock_not_executed' });
     throw new Error('mock request was not executed by the internal mock executor');
@@ -1001,9 +1011,11 @@ export default function () {
   const cacheRead = has('cache_read_input_tokens') ? value('cache_read_input_tokens') : (Number(promptDetails.cached_tokens || inputDetails.cached_tokens || 0));
   const cacheCreation = usage.cache_creation || {};
   const cacheWrite = Number(
-    (has('cache_creation_input_tokens') ? value('cache_creation_input_tokens') : (has('cache_write_tokens') ? value('cache_write_tokens') :
-    (Number(cacheCreation.ephemeral_5m_input_tokens || 0) + Number(cacheCreation.ephemeral_1h_input_tokens || 0))
-    )
+    has('cache_creation_input_tokens')
+      ? value('cache_creation_input_tokens')
+      : has('cache_write_tokens')
+        ? value('cache_write_tokens')
+        : Number(cacheCreation.ephemeral_5m_input_tokens || 0) + Number(cacheCreation.ephemeral_1h_input_tokens || 0)
   );
   inputTokens.add(endpoint === 'anthropic' ? totalInput : Math.max(0, totalInput - cacheRead - cacheWrite));
   outputTokens.add(has('output_tokens') ? value('output_tokens') : value('completion_tokens'));
