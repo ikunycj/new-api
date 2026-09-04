@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,8 @@ func InitOptionMap() {
 	common.OptionMap["RegisterEnabled"] = strconv.FormatBool(common.RegisterEnabled)
 	common.OptionMap["AutomaticDisableChannelEnabled"] = strconv.FormatBool(common.AutomaticDisableChannelEnabled)
 	common.OptionMap["AutomaticEnableChannelEnabled"] = strconv.FormatBool(common.AutomaticEnableChannelEnabled)
+	common.OptionMap[common.ChannelCircuitEnabledOptionKey] = strconv.FormatBool(common.IsChannelCircuitEnabled())
+	common.OptionMap[ChannelCircuitConfigOptionKey] = DefaultChannelCircuitConfigJSONString()
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -253,6 +256,11 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
+	var err error
+	value, err = normalizeOptionValue(key, value)
+	if err != nil {
+		return err
+	}
 	// Save to database first
 	option := Option{
 		Key: key,
@@ -276,6 +284,13 @@ func UpdateOption(key string, value string) error {
 func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
+	}
+	for key, value := range values {
+		normalized, err := normalizeOptionValue(key, value)
+		if err != nil {
+			return err
+		}
+		values[key] = normalized
 	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		for k, v := range values {
@@ -302,9 +317,17 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	value, err = normalizeOptionValue(key, value)
+	if err != nil {
+		return err
+	}
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
+	previousValue := common.OptionMap[key]
 	common.OptionMap[key] = value
+	if key == ChannelCircuitConfigOptionKey && previousValue != value {
+		common.NotifyChannelCircuitConfigChanged()
+	}
 
 	// 检查是否是模型配置 - 使用更规范的方式处理
 	if handleConfigUpdate(key, value) {
@@ -354,6 +377,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticDisableChannelEnabled = boolValue
 		case "AutomaticEnableChannelEnabled":
 			common.AutomaticEnableChannelEnabled = boolValue
+		case common.ChannelCircuitEnabledOptionKey:
+			common.SetChannelCircuitEnabled(boolValue)
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
@@ -626,6 +651,25 @@ func updateOptionMap(key string, value string) (err error) {
 		// No additional in-memory variable to update.
 	}
 	return err
+}
+
+func normalizeOptionValue(key string, value string) (string, error) {
+	switch key {
+	case common.ChannelCircuitEnabledOptionKey:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", errors.New("ChannelCircuitEnabled must be a boolean")
+		}
+		return strconv.FormatBool(parsed), nil
+	case ChannelCircuitConfigOptionKey:
+		normalized, err := NormalizeChannelCircuitConfigJSONString(value)
+		if err != nil {
+			return "", err
+		}
+		return normalized, nil
+	default:
+		return value, nil
+	}
 }
 
 // handleConfigUpdate 处理分层配置更新，返回是否已处理

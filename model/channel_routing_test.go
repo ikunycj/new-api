@@ -3,6 +3,7 @@ package model
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -91,6 +92,49 @@ func TestGetChannelRoutingConfigNormalizesLegacyProfitGuardMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, config.Routes, 1)
 	assert.Equal(t, ProfitGuardModeOff, config.Routes[0].ProfitGuardMode)
+	assert.Equal(t, GetChannelCircuitConfig().Default, config.CircuitDefaults)
+	assert.Equal(t, GetChannelCircuitConfig().Presets, config.CircuitPresets)
+}
+
+func TestChannelCircuitConfigControlsRoutingDefaultsAndPresets(t *testing.T) {
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	previous := common.OptionMap[ChannelCircuitConfigOptionKey]
+	common.OptionMap[ChannelCircuitConfigOptionKey] = `{
+		"default":{"failure_threshold":11,"window_seconds":75,"cooldown_seconds":95,"half_open_requests":4},
+		"modes":{
+			"cost_first":{"failure_threshold":12,"window_seconds":76,"cooldown_seconds":96,"half_open_requests":5},
+			"stability_first":{"failure_threshold":13,"window_seconds":77,"cooldown_seconds":97,"half_open_requests":6}
+		},
+		"presets":[{"key":"custom","label":"Custom","failure_threshold":14,"window_seconds":78,"cooldown_seconds":98,"half_open_requests":7}]
+	}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap[ChannelCircuitConfigOptionKey] = previous
+		common.OptionMapRWMutex.Unlock()
+	})
+
+	balanced := DefaultRuntimeRoutingPolicy(RoutingModeBalanced)
+	assert.Equal(t, 4, balanced.MaxTotalAttempts)
+	assert.Equal(t, 11, balanced.CircuitFailureThreshold)
+	costFirst := DefaultRuntimeRoutingPolicy(RoutingModeCostFirst)
+	assert.Equal(t, 6, costFirst.MaxTotalAttempts)
+	assert.Equal(t, 12, costFirst.CircuitFailureThreshold)
+	stabilityFirst := DefaultRuntimeRoutingPolicy(RoutingModeStabilityFirst)
+	assert.Equal(t, 3, stabilityFirst.MaxTotalAttempts)
+	assert.Equal(t, 97, stabilityFirst.CircuitCooldownSeconds)
+	assert.Equal(t, "custom", GetChannelCircuitConfig().Presets[0].Key)
+}
+
+func TestNormalizeChannelCircuitConfigRejectsIncompleteOrOutOfRangeValues(t *testing.T) {
+	_, err := NormalizeChannelCircuitConfigJSONString(`{"default":{}}`)
+	require.EqualError(t, err, "ChannelCircuitConfig contains missing or out-of-range values")
+
+	_, err = NormalizeChannelCircuitConfigJSONString(`not-json`)
+	require.EqualError(t, err, "ChannelCircuitConfig must be valid JSON")
 }
 
 func TestSaveChannelRoutingConfigRemapsTemporaryIDs(t *testing.T) {

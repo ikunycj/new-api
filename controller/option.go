@@ -139,6 +139,24 @@ func UpdateOption(c *gin.Context) {
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
 	switch option.Key {
+	case common.ChannelCircuitEnabledOptionKey:
+		if _, parseErr := strconv.ParseBool(strings.TrimSpace(option.Value.(string))); parseErr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "ChannelCircuitEnabled must be a boolean",
+			})
+			return
+		}
+	case model.ChannelCircuitConfigOptionKey:
+		normalized, parseErr := model.NormalizeChannelCircuitConfigJSONString(option.Value.(string))
+		if parseErr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": parseErr.Error(),
+			})
+			return
+		}
+		option.Value = normalized
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)

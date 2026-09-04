@@ -5,6 +5,7 @@ import (
 	//"os"
 	//"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,6 +115,32 @@ var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
+
+const ChannelCircuitEnabledOptionKey = "ChannelCircuitEnabled"
+
+// ChannelCircuitEnabled is persisted in options and defaults to disabled.
+var channelCircuitEnabled atomic.Bool
+var channelCircuitConfigVersion atomic.Uint64
+
+func SetChannelCircuitEnabled(enabled bool) {
+	if channelCircuitEnabled.Swap(enabled) == enabled {
+		return
+	}
+	channelCircuitConfigVersion.Add(1)
+}
+
+func NotifyChannelCircuitConfigChanged() {
+	channelCircuitConfigVersion.Add(1)
+}
+
+func IsChannelCircuitEnabled() bool {
+	return channelCircuitEnabled.Load()
+}
+
+func ChannelCircuitConfigVersion() uint64 {
+	return channelCircuitConfigVersion.Load()
+}
+
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 

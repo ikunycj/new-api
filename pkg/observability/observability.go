@@ -174,6 +174,12 @@ func SetChannelCircuitState(channelID int, route string, state string) {
 	}
 }
 
+// ResetChannelCircuitStates removes stale gauges after the global circuit
+// switch changes. Enabled requests recreate current state on demand.
+func ResetChannelCircuitStates() {
+	channelCircuitState.Reset()
+}
+
 func RecordFailoverDuration(outcome, mode string, duration time.Duration) {
 	if outcome != "success" {
 		outcome = "exhausted"

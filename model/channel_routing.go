@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	RoutingModeCostFirst      = "cost_first"
-	RoutingModeBalanced       = "balanced"
-	RoutingModeStabilityFirst = "stability_first"
-	BillingGroupTypeToB       = "toB"
-	BillingGroupTypeToC       = "toC"
-	RoutingStrategyPriority   = "priority"
-	RoutingStrategyWeighted   = "weighted"
-	ProfitGuardModeOff        = "off"
-	ProfitGuardModeWarn       = "warn"
-	ProfitGuardModeEnforce    = "enforce"
+	RoutingModeCostFirst          = "cost_first"
+	RoutingModeBalanced           = "balanced"
+	RoutingModeStabilityFirst     = "stability_first"
+	BillingGroupTypeToB           = "toB"
+	BillingGroupTypeToC           = "toC"
+	RoutingStrategyPriority       = "priority"
+	RoutingStrategyWeighted       = "weighted"
+	ProfitGuardModeOff            = "off"
+	ProfitGuardModeWarn           = "warn"
+	ProfitGuardModeEnforce        = "enforce"
+	ChannelCircuitConfigOptionKey = "ChannelCircuitConfig"
 )
 
 // BillingGroupRoute owns the retry and circuit policy for one billing group.
@@ -86,9 +87,134 @@ func (UpstreamErrorMapping) TableName() string {
 }
 
 type ChannelRoutingConfig struct {
-	Routes        []BillingGroupRoute    `json:"routes"`
-	RouteChannels []BillingGroupChannel  `json:"route_channels"`
-	ErrorMappings []UpstreamErrorMapping `json:"error_mappings"`
+	Routes          []BillingGroupRoute    `json:"routes"`
+	RouteChannels   []BillingGroupChannel  `json:"route_channels"`
+	ErrorMappings   []UpstreamErrorMapping `json:"error_mappings"`
+	CircuitDefaults ChannelCircuitPolicy   `json:"circuit_defaults"`
+	CircuitPresets  []ChannelCircuitPreset `json:"circuit_presets"`
+}
+
+type ChannelCircuitPreset struct {
+	Key              string `json:"key"`
+	Label            string `json:"label"`
+	FailureThreshold int    `json:"failure_threshold"`
+	WindowSeconds    int    `json:"window_seconds"`
+	CooldownSeconds  int    `json:"cooldown_seconds"`
+	HalfOpenRequests int    `json:"half_open_requests"`
+}
+
+// ChannelCircuitConfig is stored as one JSON option. It owns only circuit
+// defaults; retry, timeout, scheduling, and profit protection remain separate.
+type ChannelCircuitConfig struct {
+	Default ChannelCircuitPolicy            `json:"default"`
+	Modes   map[string]ChannelCircuitPolicy `json:"modes"`
+	Presets []ChannelCircuitPreset          `json:"presets"`
+}
+
+type ChannelCircuitPolicy struct {
+	FailureThreshold int `json:"failure_threshold"`
+	WindowSeconds    int `json:"window_seconds"`
+	CooldownSeconds  int `json:"cooldown_seconds"`
+	HalfOpenRequests int `json:"half_open_requests"`
+}
+
+func fallbackChannelCircuitConfig() ChannelCircuitConfig {
+	return ChannelCircuitConfig{
+		Default: ChannelCircuitPolicy{
+			FailureThreshold: 5, WindowSeconds: 60, CooldownSeconds: 60, HalfOpenRequests: 1,
+		},
+		Modes: map[string]ChannelCircuitPolicy{
+			RoutingModeCostFirst: {
+				FailureThreshold: 8, WindowSeconds: 60, CooldownSeconds: 60, HalfOpenRequests: 1,
+			},
+			RoutingModeStabilityFirst: {
+				FailureThreshold: 3, WindowSeconds: 60, CooldownSeconds: 90, HalfOpenRequests: 1,
+			},
+		},
+		Presets: []ChannelCircuitPreset{
+			{Key: "sensitive", Label: "Sensitive", FailureThreshold: 3, WindowSeconds: 30, CooldownSeconds: 60, HalfOpenRequests: 1},
+			{Key: "standard", Label: "Standard", FailureThreshold: 20, WindowSeconds: 60, CooldownSeconds: 30, HalfOpenRequests: 1},
+			{Key: "relaxed", Label: "Relaxed", FailureThreshold: 50, WindowSeconds: 60, CooldownSeconds: 30, HalfOpenRequests: 2},
+		},
+	}
+}
+
+func DefaultChannelCircuitConfigJSONString() string {
+	data, err := common.Marshal(fallbackChannelCircuitConfig())
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+func validChannelCircuitPolicy(policy ChannelCircuitPolicy) bool {
+	return policy.FailureThreshold >= 1 && policy.FailureThreshold <= 10000 &&
+		policy.WindowSeconds >= 1 && policy.WindowSeconds <= 86400 &&
+		policy.CooldownSeconds >= 1 && policy.CooldownSeconds <= 86400 &&
+		policy.HalfOpenRequests >= 1 && policy.HalfOpenRequests <= 100
+}
+
+func normalizeChannelCircuitConfig(config ChannelCircuitConfig) (ChannelCircuitConfig, bool) {
+	fallback := fallbackChannelCircuitConfig()
+	if !validChannelCircuitPolicy(config.Default) {
+		return fallback, false
+	}
+	for _, mode := range []string{RoutingModeCostFirst, RoutingModeStabilityFirst} {
+		policy, ok := config.Modes[mode]
+		if !ok || !validChannelCircuitPolicy(policy) {
+			return fallback, false
+		}
+	}
+	if len(config.Presets) == 0 || len(config.Presets) > 20 {
+		return fallback, false
+	}
+	seenPresetKeys := make(map[string]struct{}, len(config.Presets))
+	for _, preset := range config.Presets {
+		key := strings.TrimSpace(preset.Key)
+		if key == "" || strings.TrimSpace(preset.Label) == "" ||
+			preset.FailureThreshold < 1 || preset.FailureThreshold > 10000 ||
+			preset.WindowSeconds < 1 || preset.WindowSeconds > 86400 ||
+			preset.CooldownSeconds < 1 || preset.CooldownSeconds > 86400 ||
+			preset.HalfOpenRequests < 1 || preset.HalfOpenRequests > 100 {
+			return fallback, false
+		}
+		if _, exists := seenPresetKeys[key]; exists {
+			return fallback, false
+		}
+		seenPresetKeys[key] = struct{}{}
+	}
+	return config, true
+}
+
+func NormalizeChannelCircuitConfigJSONString(raw string) (string, error) {
+	var config ChannelCircuitConfig
+	if err := common.Unmarshal([]byte(raw), &config); err != nil {
+		return "", errors.New("ChannelCircuitConfig must be valid JSON")
+	}
+	normalized, ok := normalizeChannelCircuitConfig(config)
+	if !ok {
+		return "", errors.New("ChannelCircuitConfig contains missing or out-of-range values")
+	}
+	data, err := common.Marshal(normalized)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func GetChannelCircuitConfig() ChannelCircuitConfig {
+	common.OptionMapRWMutex.RLock()
+	raw := common.OptionMap[ChannelCircuitConfigOptionKey]
+	common.OptionMapRWMutex.RUnlock()
+	normalizedRaw, err := NormalizeChannelCircuitConfigJSONString(raw)
+	if err != nil {
+		return fallbackChannelCircuitConfig()
+	}
+	var config ChannelCircuitConfig
+	if err := common.Unmarshal([]byte(normalizedRaw), &config); err != nil {
+		return fallbackChannelCircuitConfig()
+	}
+	return config
 }
 
 type RuntimeRoutingPolicy struct {
@@ -115,14 +241,20 @@ type RoutingStrategyConfig struct {
 }
 
 func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
+	config := GetChannelCircuitConfig()
+	defaults := config.Default
+	normalizedMode := normalizeRoutingMode(mode)
+	if modeDefaults, ok := config.Modes[normalizedMode]; ok {
+		defaults = modeDefaults
+	}
 	policy := RuntimeRoutingPolicy{
-		Mode:                    normalizeRoutingMode(mode),
+		Mode:                    normalizedMode,
 		MaxTotalAttempts:        4,
 		TotalTimeoutMs:          30000,
-		CircuitFailureThreshold: 5,
-		CircuitWindowSeconds:    60,
-		CircuitCooldownSeconds:  60,
-		CircuitHalfOpenRequests: 1,
+		CircuitFailureThreshold: defaults.FailureThreshold,
+		CircuitWindowSeconds:    defaults.WindowSeconds,
+		CircuitCooldownSeconds:  defaults.CooldownSeconds,
+		CircuitHalfOpenRequests: defaults.HalfOpenRequests,
 		ProfitGuardMode:         ProfitGuardModeOff,
 		Strategy:                RoutingStrategyPriority,
 	}
@@ -130,12 +262,9 @@ func DefaultRuntimeRoutingPolicy(mode string) RuntimeRoutingPolicy {
 	case RoutingModeCostFirst:
 		policy.MaxTotalAttempts = 6
 		policy.TotalTimeoutMs = 45000
-		policy.CircuitFailureThreshold = 8
 	case RoutingModeStabilityFirst:
 		policy.MaxTotalAttempts = 3
 		policy.TotalTimeoutMs = 20000
-		policy.CircuitFailureThreshold = 3
-		policy.CircuitCooldownSeconds = 90
 	}
 	return policy
 }
@@ -335,6 +464,9 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 		config.Routes[i].GroupType = normalizeBillingGroupType(config.Routes[i].GroupType)
 		config.Routes[i].StrategyConfig = normalizeStrategyConfigJSON(config.Routes[i].StrategyConfig)
 	}
+	circuitConfig := GetChannelCircuitConfig()
+	config.CircuitDefaults = circuitConfig.Default
+	config.CircuitPresets = circuitConfig.Presets
 	return config, nil
 }
 
