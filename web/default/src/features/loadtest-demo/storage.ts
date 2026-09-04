@@ -29,6 +29,8 @@ const runStatsSchema = z.object({
   completed: z.number().int().nonnegative(),
   failures: z.number().int().nonnegative(),
   latencies: z.array(z.number().nonnegative()),
+  firstTokenLatencies: z.array(z.number().nonnegative()).default([]),
+  outputTokensPerSecond: z.array(z.number().nonnegative()).default([]),
   successes: z.number().int().nonnegative(),
   statusCodes: z.record(z.string(), z.number().int().nonnegative()),
   errorCodes: z.record(z.string(), z.number().int().nonnegative()),
@@ -68,6 +70,8 @@ const persistedRunSchema = z.object({
     .positive()
     .default(LOAD_TEST_DEFAULT_CONCURRENCY),
   prompt: z.string().default(LOAD_TEST_DEFAULT_PROMPT),
+  promptCache: z.boolean().default(false),
+  streamMode: z.boolean().default(false),
   userCharge: z.number().nonnegative().default(0),
   stats: runStatsSchema,
   channelStats: z.array(channelStatsSchema),
@@ -127,6 +131,8 @@ export function loadPersistedLoadTestRuns(
           requestsPerSecond: 0,
           concurrency: LOAD_TEST_DEFAULT_CONCURRENCY,
           prompt: LOAD_TEST_DEFAULT_PROMPT,
+          promptCache: false,
+          streamMode: false,
           userCharge: 0,
         },
       ]

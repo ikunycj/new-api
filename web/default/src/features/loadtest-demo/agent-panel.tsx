@@ -921,6 +921,11 @@ export function AgentPanel(props: AgentPanelProps) {
                                   )}
                                 </Badge>
                               )}
+                              <Badge variant='outline'>
+                                {run.stream_mode
+                                  ? t('Streaming')
+                                  : t('Non-stream')}
+                              </Badge>
                             </div>
                             {run.mock_enabled ? (
                               <div className='space-y-1'>

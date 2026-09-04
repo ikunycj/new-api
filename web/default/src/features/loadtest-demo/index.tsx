@@ -83,6 +83,7 @@ import {
   loadLoadTestKeys,
   loadLoadTestPricing,
   sendLoadTestRequest,
+  supportsLoadTestStreaming,
   type LoadTestChannelStats,
   type LoadTestKey,
   type LoadTestAgent,
@@ -111,12 +112,16 @@ type RunSnapshot = {
   durationSeconds: number
   requestsPerSecond: number
   concurrency: number
+  promptCache: boolean
+  streamMode: boolean
 }
 
 const EMPTY_STATS: RunStats = {
   completed: 0,
   failures: 0,
   latencies: [],
+  firstTokenLatencies: [],
+  outputTokensPerSecond: [],
   successes: 0,
   statusCodes: {},
   errorCodes: {},
@@ -153,6 +158,12 @@ function accumulateResult(
     failures: current.failures + (result.success ? 0 : 1),
     successes: current.successes + (result.success ? 1 : 0),
     latencies: [...current.latencies, result.latency],
+    firstTokenLatencies: result.firstTokenLatency
+      ? [...current.firstTokenLatencies, result.firstTokenLatency]
+      : current.firstTokenLatencies,
+    outputTokensPerSecond: result.outputTokensPerSecond
+      ? [...current.outputTokensPerSecond, result.outputTokensPerSecond]
+      : current.outputTokensPerSecond,
     statusCodes: { ...current.statusCodes },
     errorCodes: { ...current.errorCodes },
     keyCounts: { ...current.keyCounts },
@@ -286,7 +297,12 @@ export function LoadTestDemo() {
   const [prompt, setPrompt] = useState(
     persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
   )
-  const [promptCache, setPromptCache] = useState(true)
+  const [promptCache, setPromptCache] = useState(
+    persistedRun?.promptCache ?? false
+  )
+  const [streamMode, setStreamMode] = useState(
+    persistedRun?.streamMode ?? false
+  )
   const [status, setStatus] = useState<RunStatus>('idle')
   const [stats, setStats] = useState<RunStats>(
     persistedRun?.stats ?? EMPTY_STATS
@@ -517,6 +533,8 @@ export function LoadTestDemo() {
     runAbortRef.current = controller
     runStartedAtRef.current = Date.now()
     const currentRunId = makeRunId()
+    const effectiveStreamMode =
+      streamMode && supportsLoadTestStreaming(selectedModelOption.endpoint)
     activeRunIdRef.current = currentRunId
     runSnapshotRef.current = {
       model: selectedModel,
@@ -527,6 +545,8 @@ export function LoadTestDemo() {
       durationSeconds: durationValue,
       requestsPerSecond: rpsValue,
       concurrency: concurrencyValue,
+      promptCache,
+      streamMode: effectiveStreamMode,
     }
     setRunId(currentRunId)
     setRunKeyName(selectedKey.name)
@@ -575,7 +595,8 @@ export function LoadTestDemo() {
         promptCache,
         controller.signal,
         selectedModelOption.provider,
-        selectedModelOption.endpoint
+        selectedModelOption.endpoint,
+        effectiveStreamMode
       ).then(recordResult)
       inFlight.add(request)
       void request.then(() => inFlight.delete(request))
@@ -626,6 +647,7 @@ export function LoadTestDemo() {
     selectedKeyValue,
     selectedModel,
     serverAddress,
+    streamMode,
     t,
   ])
 
@@ -651,6 +673,8 @@ export function LoadTestDemo() {
   )
   const p50 = percentile(stats.latencies, 0.5)
   const p95 = percentile(stats.latencies, 0.95)
+  const ttftP50 = percentile(stats.firstTokenLatencies, 0.5)
+  const outputTokensPerSecondP50 = percentile(stats.outputTokensPerSecond, 0.5)
   const cacheAttemptTokens =
     stats.inputTokens + stats.cacheReadTokens + stats.cacheWriteTokens
   const cacheHitRate = cacheAttemptTokens
@@ -716,6 +740,8 @@ export function LoadTestDemo() {
       durationSeconds: runSnapshot.durationSeconds,
       requestsPerSecond: runSnapshot.requestsPerSecond,
       concurrency: runSnapshot.concurrency,
+      promptCache: runSnapshot.promptCache,
+      streamMode: runSnapshot.streamMode,
       userCharge,
       stats,
       channelStats,
@@ -813,12 +839,13 @@ export function LoadTestDemo() {
         selectedModel,
         prompt,
         promptCache,
-        selectedModelMetadata.endpoint
+        selectedModelMetadata.endpoint,
+        streamMode
       ),
       null,
       2
     )
-  }, [prompt, promptCache, selectedModel, selectedModelMetadata])
+  }, [prompt, promptCache, selectedModel, selectedModelMetadata, streamMode])
   const agentRequest =
     selectedKeyMetadata && selectedModelMetadata
       ? {
@@ -827,6 +854,9 @@ export function LoadTestDemo() {
           endpoint: selectedModelMetadata.endpoint,
           prompt,
           prompt_cache: promptCache,
+          stream_mode:
+            streamMode &&
+            supportsLoadTestStreaming(selectedModelMetadata.endpoint),
           duration_seconds: durationValue,
           requests_per_second: rpsValue,
           concurrency: concurrencyValue,
@@ -1094,9 +1124,30 @@ export function LoadTestDemo() {
                   </p>
                 </div>
                 <Switch
+                  disabled={status === 'running'}
                   id='load-test-cache'
                   checked={promptCache}
                   onCheckedChange={setPromptCache}
+                />
+              </div>
+              <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
+                <div>
+                  <Label htmlFor='load-test-stream'>{t('Stream Mode')}</Label>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Stream tokens via Server-Sent Events')}
+                  </p>
+                </div>
+                <Switch
+                  disabled={
+                    status === 'running' ||
+                    !supportsLoadTestStreaming(selectedModelMetadata?.endpoint)
+                  }
+                  id='load-test-stream'
+                  checked={
+                    streamMode &&
+                    supportsLoadTestStreaming(selectedModelMetadata?.endpoint)
+                  }
+                  onCheckedChange={setStreamMode}
                 />
               </div>
               <div className='grid gap-4 lg:grid-cols-2'>
@@ -1241,6 +1292,8 @@ export function LoadTestDemo() {
                             <TableHead>{t('Prompt')}</TableHead>
                             <TableHead>{t('API Key')}</TableHead>
                             <TableHead>{t('Package')}</TableHead>
+                            <TableHead>{t('Stream Mode')}</TableHead>
+                            <TableHead>{t('Prompt Cache')}</TableHead>
                             <TableHead>{t('Duration')}</TableHead>
                             <TableHead>{t('Requests')}</TableHead>
                             <TableHead>{t('Success rate')}</TableHead>
@@ -1281,6 +1334,16 @@ export function LoadTestDemo() {
                                 </TableCell>
                                 <TableCell>{run.keyName || '-'}</TableCell>
                                 <TableCell>{run.packageName || '-'}</TableCell>
+                                <TableCell>
+                                  {run.streamMode
+                                    ? t('Streaming')
+                                    : t('Non-stream')}
+                                </TableCell>
+                                <TableCell>
+                                  {run.promptCache
+                                    ? t('Enabled')
+                                    : t('Disabled')}
+                                </TableCell>
                                 <TableCell>{run.durationSeconds}s</TableCell>
                                 <TableCell>{run.stats.completed}</TableCell>
                                 <TableCell>
@@ -1331,6 +1394,10 @@ export function LoadTestDemo() {
                 {t('Current run metrics')}
               </div>
               <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-7'>
+                <Metric
+                  label={t('Stream Mode')}
+                  value={streamMode ? t('Streaming') : t('Non-stream')}
+                />
                 <Metric label={t('Requests')} value={String(stats.completed)} />
                 <Metric label={t('Failed')} value={String(stats.failures)} />
                 <Metric label={t('Success rate')} value={`${successRate}%`} />
@@ -1345,6 +1412,18 @@ export function LoadTestDemo() {
                 <Metric
                   label={t('P95 latency')}
                   value={p95 ? `${p95}ms` : '-'}
+                />
+                <Metric
+                  label={t('TTFT P50')}
+                  value={ttftP50 ? `${ttftP50}ms` : '-'}
+                />
+                <Metric
+                  label={t('Sustained tokens per second')}
+                  value={
+                    outputTokensPerSecondP50
+                      ? `${outputTokensPerSecondP50.toFixed(2)} t/s`
+                      : '-'
+                  }
                 />
                 <Metric label={t('TPM')} value={currentTokensPerMinute} />
               </div>
