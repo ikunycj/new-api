@@ -40,7 +40,6 @@ export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
 export const LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS = 256
 export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
-export const LOAD_TEST_TIMEOUT_MS = 120_000
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
   (_, index) =>
@@ -222,6 +221,7 @@ export type LoadTestLimits = {
   max_concurrency: number
   min_output_tokens: number
   max_output_tokens: number
+  request_timeout_seconds: number
 }
 
 export type LoadTestAgent = {
@@ -328,6 +328,7 @@ export type LoadTestAgentRun = {
   requests_per_second: number
   concurrency: number
   max_output_tokens: number
+  request_timeout_seconds: number
   agent_managed: boolean
   status: LoadTestAgentRunStatus
   sent: number
@@ -372,6 +373,7 @@ export type CreateLoadTestAgentRun = {
   requests_per_second: number
   concurrency: number
   max_output_tokens: number
+  request_timeout_seconds?: number
 }
 
 export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
@@ -383,6 +385,7 @@ export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
   max_concurrency: LOAD_TEST_MAX_CONCURRENCY,
   min_output_tokens: 1,
   max_output_tokens: LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  request_timeout_seconds: 120,
 }
 
 export async function getLoadTestLimits(): Promise<LoadTestLimits> {
@@ -736,17 +739,24 @@ function readUsage(
       !Array.isArray(promptDetails)
         ? (promptDetails as Record<string, unknown>)
         : undefined
-    const cacheReadTokens =
-      promptDetailsRecord && Object.hasOwn(promptDetailsRecord, 'cached_tokens')
-        ? readNumberFromRecord(promptDetailsRecord, 'cached_tokens')
-        : inputDetailsRecord && Object.hasOwn(inputDetailsRecord, 'cached_tokens')
-          ? readNumberFromRecord(inputDetailsRecord, 'cached_tokens')
-          : 0
-    const cacheWriteTokens = has('cache_creation_input_tokens')
-      ? readNumber('cache_creation_input_tokens')
-      : has('cache_write_tokens')
-        ? readNumber('cache_write_tokens')
-        : 0
+    let cacheReadTokens = 0
+    if (
+      promptDetailsRecord &&
+      Object.hasOwn(promptDetailsRecord, 'cached_tokens')
+    ) {
+      cacheReadTokens = readNumberFromRecord(promptDetailsRecord, 'cached_tokens')
+    } else if (
+      inputDetailsRecord &&
+      Object.hasOwn(inputDetailsRecord, 'cached_tokens')
+    ) {
+      cacheReadTokens = readNumberFromRecord(inputDetailsRecord, 'cached_tokens')
+    }
+    let cacheWriteTokens = 0
+    if (has('cache_creation_input_tokens')) {
+      cacheWriteTokens = readNumber('cache_creation_input_tokens')
+    } else if (has('cache_write_tokens')) {
+      cacheWriteTokens = readNumber('cache_write_tokens')
+    }
     const totalInputTokens = has('input_tokens')
       ? readNumber('input_tokens')
       : readNumber('prompt_tokens')
@@ -768,12 +778,14 @@ function readUsage(
     cacheCreation && typeof cacheCreation === 'object'
       ? (cacheCreation as Record<string, unknown>)
       : undefined
-  const cacheWriteTokens = has('cache_creation_input_tokens')
-    ? readNumber('cache_creation_input_tokens')
-    : cacheCreationRecord
-      ? readNumberFromRecord(cacheCreationRecord, 'ephemeral_5m_input_tokens') +
-        readNumberFromRecord(cacheCreationRecord, 'ephemeral_1h_input_tokens')
-      : 0
+  let cacheWriteTokens = 0
+  if (has('cache_creation_input_tokens')) {
+    cacheWriteTokens = readNumber('cache_creation_input_tokens')
+  } else if (cacheCreationRecord) {
+    cacheWriteTokens =
+      readNumberFromRecord(cacheCreationRecord, 'ephemeral_5m_input_tokens') +
+      readNumberFromRecord(cacheCreationRecord, 'ephemeral_1h_input_tokens')
+  }
 
   return {
     inputTokens: readNumber('input_tokens'),
@@ -806,13 +818,14 @@ export async function sendLoadTestRequest(
   providerOverride?: LoadTestProvider,
   endpointOverride?: LoadTestEndpoint,
   streamMode = false,
-  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
+  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  requestTimeoutSeconds = 120
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
   const controller = new AbortController()
   const timeoutId = window.setTimeout(
     () => controller.abort(),
-    LOAD_TEST_TIMEOUT_MS
+    Math.max(1, requestTimeoutSeconds) * 1000
   )
   const abortRequest = () => controller.abort()
   signal?.addEventListener('abort', abortRequest, { once: true })
@@ -930,17 +943,7 @@ async function readStreamingResponse(
       if (!data || data === '[DONE]') continue
       try {
         const payload = JSON.parse(data) as Record<string, unknown>
-        const eventUsage = readUsage(
-          payload.usage
-            ? payload
-            : payload.message &&
-                typeof payload.message === 'object' &&
-                !Array.isArray(payload.message) &&
-                (payload.message as Record<string, unknown>).usage
-              ? { usage: (payload.message as Record<string, unknown>).usage }
-              : payload,
-          provider
-        )
+        const eventUsage = readStreamingEventUsage(payload, provider)
         if (eventUsage) usage = mergeLoadTestUsage(usage, eventUsage)
         if (JSON.stringify(payload).includes('delta')) {
           if (!firstTokenAt) firstTokenAt = performance.now()
@@ -960,17 +963,7 @@ async function readStreamingResponse(
     if (data && data !== '[DONE]') {
       try {
         const payload = JSON.parse(data) as Record<string, unknown>
-        const eventUsage = readUsage(
-          payload.usage
-            ? payload
-            : payload.message &&
-                typeof payload.message === 'object' &&
-                !Array.isArray(payload.message) &&
-                (payload.message as Record<string, unknown>).usage
-              ? { usage: (payload.message as Record<string, unknown>).usage }
-              : payload,
-          provider
-        )
+        const eventUsage = readStreamingEventUsage(payload, provider)
         if (eventUsage) usage = mergeLoadTestUsage(usage, eventUsage)
         if (JSON.stringify(payload).includes('delta')) {
           if (!firstTokenAt) firstTokenAt = performance.now()
@@ -992,6 +985,26 @@ async function readStreamingResponse(
       ? (outputTokens * 1000) / (latency - firstTokenLatency)
       : 0
   return { latency, firstTokenLatency, outputTokensPerSecond, usage }
+}
+
+function readStreamingEventUsage(
+  payload: Record<string, unknown>,
+  provider: LoadTestProvider
+): LoadTestUsage | undefined {
+  if (payload.usage) return readUsage(payload, provider)
+  const message = payload.message
+  if (
+    message &&
+    typeof message === 'object' &&
+    !Array.isArray(message) &&
+    (message as Record<string, unknown>).usage
+  ) {
+    return readUsage(
+      { usage: (message as Record<string, unknown>).usage },
+      provider
+    )
+  }
+  return readUsage(payload, provider)
 }
 
 function mergeLoadTestUsage(

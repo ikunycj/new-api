@@ -61,6 +61,7 @@ const defaultOperationsSettings: OperationsSettings = {
   'loadtest_setting.max_rps': 20,
   'loadtest_setting.max_concurrency': 10,
   'loadtest_setting.max_output_tokens': 256,
+  'loadtest_setting.request_timeout_seconds': 120,
 }
 
 export function OperationsSettings() {

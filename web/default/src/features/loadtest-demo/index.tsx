@@ -41,7 +41,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -94,11 +93,15 @@ import {
   type LoadTestPricing,
   type LoadTestRequestResult,
 } from './api'
+import { LoadTestConfigPanel } from './config-panel'
 import { calculateLoadTestUserCharge, getLoadTestTotalTokens } from './pricing'
 import { formatLoadTestSuccessRate } from './shared'
 import {
   clearPersistedLoadTestRuns,
+  clearPersistedLoadTestConfig,
+  loadPersistedLoadTestConfig,
   loadPersistedLoadTestRuns,
+  savePersistedLoadTestConfig,
   savePersistedLoadTestRun,
   type RunStats,
 } from './storage'
@@ -271,6 +274,7 @@ export function LoadTestDemo() {
     Record<string, LoadTestPricing | null>
   >({})
   const [persistedRun] = useState(() => persistedRuns[0] ?? null)
+  const [savedConfig] = useState(() => loadPersistedLoadTestConfig(userId))
   const [keys, setKeys] = useState<LoadTestKey[]>([])
   // Use the masked key value as the UI identity. IDs are database details and
   // can be misleading when accounts are switched in the same browser.
@@ -279,17 +283,31 @@ export function LoadTestDemo() {
   const [modelsLoading, setModelsLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState(persistedRun?.model ?? '')
   const [durationSeconds, setDurationSeconds] = useState(
-    String(persistedRun?.durationSeconds || LOAD_TEST_DEFAULT_DURATION_SECONDS)
+    String(
+      persistedRun?.durationSeconds ||
+        savedConfig?.durationSeconds ||
+        LOAD_TEST_DEFAULT_DURATION_SECONDS
+    )
   )
   const [requestsPerSecond, setRequestsPerSecond] = useState(
-    String(persistedRun?.requestsPerSecond || LOAD_TEST_DEFAULT_RPS)
+    String(
+      persistedRun?.requestsPerSecond ||
+        savedConfig?.requestsPerSecond ||
+        LOAD_TEST_DEFAULT_RPS
+    )
   )
   const [concurrency, setConcurrency] = useState(
-    String(persistedRun?.concurrency || LOAD_TEST_DEFAULT_CONCURRENCY)
+    String(
+      persistedRun?.concurrency ||
+        savedConfig?.concurrency ||
+        LOAD_TEST_DEFAULT_CONCURRENCY
+    )
   )
   const [maxOutputTokens, setMaxOutputTokens] = useState(
     String(
-      persistedRun?.maxOutputTokens || LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
+      persistedRun?.maxOutputTokens ||
+        savedConfig?.maxOutputTokens ||
+        LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
     )
   )
   const [limits, setLimits] = useState<LoadTestLimits>(DEFAULT_LOAD_TEST_LIMITS)
@@ -302,14 +320,15 @@ export function LoadTestDemo() {
   const [managedExecutionMode, setManagedExecutionMode] =
     useState<LoadTestExecutionMode>('single')
   const [prompt, setPrompt] = useState(
-    persistedRun?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
+    persistedRun?.prompt ?? savedConfig?.prompt ?? LOAD_TEST_DEFAULT_PROMPT
   )
   const [promptCache, setPromptCache] = useState(
-    persistedRun?.promptCache ?? false
+    persistedRun?.promptCache ?? savedConfig?.promptCache ?? false
   )
   const [streamMode, setStreamMode] = useState(
-    persistedRun?.streamMode ?? false
+    persistedRun?.streamMode ?? savedConfig?.streamMode ?? false
   )
+  const [configSaved, setConfigSaved] = useState(Boolean(savedConfig))
   const [status, setStatus] = useState<RunStatus>('idle')
   const [stats, setStats] = useState<RunStats>(
     persistedRun?.stats ?? EMPTY_STATS
@@ -379,6 +398,12 @@ export function LoadTestDemo() {
           return Number.isFinite(value) && value <= nextLimits.max_concurrency
             ? current
             : String(nextLimits.max_concurrency)
+        })
+        setMaxOutputTokens((current) => {
+          const value = Number(current)
+          return Number.isFinite(value) && value <= nextLimits.max_output_tokens
+            ? current
+            : String(nextLimits.max_output_tokens)
         })
       })
       .catch(() => {
@@ -620,7 +645,8 @@ export function LoadTestDemo() {
         selectedModelOption.provider,
         selectedModelOption.endpoint,
         effectiveStreamMode,
-        maxOutputTokensValue
+        maxOutputTokensValue,
+        limits.request_timeout_seconds
       ).then(recordResult)
       inFlight.add(request)
       void request.then(() => inFlight.delete(request))
@@ -812,6 +838,80 @@ export function LoadTestDemo() {
     Number.isInteger(maxOutputTokensValue) &&
     maxOutputTokensValue >= limits.min_output_tokens &&
     maxOutputTokensValue <= limits.max_output_tokens
+  const saveConfig = useCallback(() => {
+    if (!hasValidLoadSettings || !prompt.trim()) {
+      toast.error(t('Configuration validation failed'))
+      return
+    }
+    savePersistedLoadTestConfig(userId, {
+      durationSeconds: durationValue,
+      requestsPerSecond: rpsValue,
+      concurrency: concurrencyValue,
+      maxOutputTokens: maxOutputTokensValue,
+      prompt,
+      promptCache,
+      streamMode,
+    })
+    setConfigSaved(true)
+    toast.success(t('Saved successfully'))
+  }, [
+    concurrencyValue,
+    durationValue,
+    hasValidLoadSettings,
+    maxOutputTokensValue,
+    prompt,
+    promptCache,
+    rpsValue,
+    streamMode,
+    t,
+    userId,
+  ])
+  const resetConfig = useCallback(() => {
+    clearPersistedLoadTestConfig(userId)
+    setDurationSeconds(
+      String(
+        Math.min(
+          limits.max_duration_seconds,
+          Math.max(
+            limits.min_duration_seconds,
+            LOAD_TEST_DEFAULT_DURATION_SECONDS
+          )
+        )
+      )
+    )
+    setRequestsPerSecond(
+      String(
+        Math.min(
+          limits.max_rps,
+          Math.max(limits.min_rps, LOAD_TEST_DEFAULT_RPS)
+        )
+      )
+    )
+    setConcurrency(
+      String(
+        Math.min(
+          limits.max_concurrency,
+          Math.max(limits.min_concurrency, LOAD_TEST_DEFAULT_CONCURRENCY)
+        )
+      )
+    )
+    setMaxOutputTokens(
+      String(
+        Math.min(
+          limits.max_output_tokens,
+          Math.max(
+            limits.min_output_tokens,
+            LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
+          )
+        )
+      )
+    )
+    setPrompt(LOAD_TEST_DEFAULT_PROMPT)
+    setPromptCache(false)
+    setStreamMode(false)
+    setConfigSaved(false)
+    toast.success(t('Reset'))
+  }, [limits, t, userId])
   const canRun =
     (status === 'idle' || status === 'complete') &&
     selectedKeyValue !== '' &&
@@ -900,6 +1000,7 @@ export function LoadTestDemo() {
           requests_per_second: rpsValue,
           concurrency: concurrencyValue,
           max_output_tokens: maxOutputTokensValue,
+          request_timeout_seconds: limits.request_timeout_seconds,
         }
       : null
 
@@ -951,6 +1052,47 @@ export function LoadTestDemo() {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='mx-auto w-full max-w-5xl space-y-4'>
+          <LoadTestConfigPanel
+            disabled={status === 'running' || limitsLoading}
+            limits={{
+              maxConcurrency: effectiveMaxConcurrency,
+              maxDurationSeconds: limits.max_duration_seconds,
+              maxOutputTokens: limits.max_output_tokens,
+              maxRps: effectiveMaxRPS,
+              minConcurrency: limits.min_concurrency,
+              minDurationSeconds: limits.min_duration_seconds,
+              minOutputTokens: limits.min_output_tokens,
+              minRps: limits.min_rps,
+            }}
+            onConcurrencyChange={(value) => {
+              setConfigSaved(false)
+              setConcurrency(value)
+            }}
+            onDurationChange={(value) => {
+              setConfigSaved(false)
+              setDurationSeconds(value)
+            }}
+            onMaxOutputTokensChange={(value) => {
+              setConfigSaved(false)
+              setMaxOutputTokens(value)
+            }}
+            onReset={resetConfig}
+            onSave={saveConfig}
+            onRequestsPerSecondChange={(value) => {
+              setConfigSaved(false)
+              setRequestsPerSecond(value)
+            }}
+            saved={configSaved}
+            values={{
+              concurrency,
+              durationSeconds,
+              maxOutputTokens,
+              promptCache,
+              requestTimeoutSeconds: limits.request_timeout_seconds,
+              requestsPerSecond,
+              streamMode,
+            }}
+          />
           <Card>
             <CardHeader>
               <div className='flex items-start justify-between gap-3'>
@@ -971,7 +1113,7 @@ export function LoadTestDemo() {
               </div>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-6'>
+              <div className='grid gap-3 sm:grid-cols-2'>
                 <div className='space-y-1.5'>
                   <Label>{t('API Key')}</Label>
                   <Select
@@ -1011,88 +1153,6 @@ export function LoadTestDemo() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className='space-y-1.5'>
-                  <Label htmlFor='load-test-duration'>{t('Duration')}</Label>
-                  <Input
-                    id='load-test-duration'
-                    type='number'
-                    min={limits.min_duration_seconds}
-                    max={limits.max_duration_seconds}
-                    step={1}
-                    value={durationSeconds}
-                    onChange={(event) => setDurationSeconds(event.target.value)}
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: {{min}}-{{max}} seconds', {
-                      min: limits.min_duration_seconds,
-                      max: limits.max_duration_seconds,
-                    })}
-                  </p>
-                </div>
-                <div className='space-y-1.5'>
-                  <Label htmlFor='load-test-rps'>
-                    {t('Requests per second')}
-                  </Label>
-                  <Input
-                    id='load-test-rps'
-                    type='number'
-                    min={limits.min_rps}
-                    max={effectiveMaxRPS}
-                    step={1}
-                    value={requestsPerSecond}
-                    onChange={(event) =>
-                      setRequestsPerSecond(event.target.value)
-                    }
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: {{min}}-{{max}} RPS', {
-                      min: limits.min_rps,
-                      max: effectiveMaxRPS,
-                    })}
-                  </p>
-                </div>
-                <div className='space-y-1.5'>
-                  <Label htmlFor='load-test-concurrency'>
-                    {t('Maximum concurrency')}
-                  </Label>
-                  <Input
-                    id='load-test-concurrency'
-                    type='number'
-                    min={limits.min_concurrency}
-                    max={effectiveMaxConcurrency}
-                    step={1}
-                    value={concurrency}
-                    onChange={(event) => setConcurrency(event.target.value)}
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: {{min}}-{{max}} concurrent requests', {
-                      min: limits.min_concurrency,
-                      max: effectiveMaxConcurrency,
-                    })}
-                  </p>
-                </div>
-                <div className='space-y-1.5'>
-                  <Label htmlFor='load-test-max-output-tokens'>
-                    {t('Max output tokens')}
-                  </Label>
-                  <Input
-                    id='load-test-max-output-tokens'
-                    type='number'
-                    min={limits.min_output_tokens}
-                    max={limits.max_output_tokens}
-                    step={1}
-                    value={maxOutputTokens}
-                    onChange={(event) =>
-                      setMaxOutputTokens(event.target.value)
-                    }
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Allowed range: {{min}}-{{max}} tokens', {
-                      min: limits.min_output_tokens,
-                      max: limits.max_output_tokens,
-                    })}
-                  </p>
                 </div>
               </div>
 
@@ -1198,7 +1258,10 @@ export function LoadTestDemo() {
                   disabled={status === 'running'}
                   id='load-test-cache'
                   checked={promptCache}
-                  onCheckedChange={setPromptCache}
+                  onCheckedChange={(checked) => {
+                    setConfigSaved(false)
+                    setPromptCache(checked)
+                  }}
                 />
               </div>
               <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
@@ -1209,16 +1272,13 @@ export function LoadTestDemo() {
                   </p>
                 </div>
                 <Switch
-                  disabled={
-                    status === 'running' ||
-                    !supportsLoadTestStreaming(selectedModelMetadata?.endpoint)
-                  }
+                  disabled={status === 'running'}
                   id='load-test-stream'
-                  checked={
-                    streamMode &&
-                    supportsLoadTestStreaming(selectedModelMetadata?.endpoint)
-                  }
-                  onCheckedChange={setStreamMode}
+                  checked={streamMode}
+                  onCheckedChange={(checked) => {
+                    setConfigSaved(false)
+                    setStreamMode(checked)
+                  }}
                 />
               </div>
               <div className='grid gap-4 lg:grid-cols-2'>
@@ -1235,7 +1295,10 @@ export function LoadTestDemo() {
                     disabled={status === 'running'}
                     id='load-test-prompt'
                     maxLength={LOAD_TEST_MAX_PROMPT_CHARS}
-                    onChange={(event) => setPrompt(event.target.value)}
+                    onChange={(event) => {
+                      setConfigSaved(false)
+                      setPrompt(event.target.value)
+                    }}
                     value={prompt}
                   />
                 </div>

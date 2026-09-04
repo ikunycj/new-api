@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { LoadTestDemo } from '@/features/loadtest-demo'
+import { normalizeAccountGroup } from '@/features/users/constants'
 import { getSelf } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -41,8 +42,7 @@ export const Route = createFileRoute('/_authenticated/loadtest-demo/')({
     const user = useAuthStore.getState().auth.user
     if (
       !user ||
-      (user.role < ROLE.ADMIN &&
-        !['vip', 'enterprise'].includes((user.group ?? '').toLowerCase()))
+      (user.role < ROLE.ADMIN && normalizeAccountGroup(user.group) !== 'vip')
     ) {
       throw redirect({ to: '/403' })
     }
