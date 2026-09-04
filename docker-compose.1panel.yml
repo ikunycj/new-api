@@ -16,6 +16,11 @@ services:
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     ports:
       - "${APP_PORT:-3000}:3000"
       - "127.0.0.1:${METRICS_HOST_PORT:-8006}:${METRICS_PORT:-8006}"
@@ -36,6 +41,7 @@ services:
       SESSION_COOKIE_TRUSTED_URL: ${SESSION_COOKIE_TRUSTED_URL:-}
       TZ: ${TZ:-Asia/Shanghai}
       ERROR_LOG_ENABLED: ${ERROR_LOG_ENABLED:-true}
+      ACCESS_LOG_SUCCESS_SAMPLE_RATE: ${ACCESS_LOG_SUCCESS_SAMPLE_RATE:-1}
       BATCH_UPDATE_ENABLED: ${BATCH_UPDATE_ENABLED:-true}
       NODE_NAME: ${NODE_NAME:-new-api-node-1}
       NODE_TYPE: ${NODE_TYPE:-master}
