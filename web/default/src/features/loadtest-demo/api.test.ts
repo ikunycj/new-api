@@ -24,6 +24,7 @@ import {
   getLoadTestApiBaseUrl,
   getLoadTestModels,
   sendLoadTestRequest,
+  supportsLoadTestStreaming,
   type LoadTestKey,
 } from './api'
 
@@ -117,6 +118,183 @@ describe('load test request identity', () => {
         ],
       }
     )
+  })
+
+  test('omits prompt-cache input when the cache switch is off', () => {
+    assert.deepEqual(
+      buildLoadTestRequestBody(
+        'gpt-5.6-sol',
+        'Do not add a cache prefix.',
+        false,
+        'openai'
+      ),
+      {
+        model: 'gpt-5.6-sol',
+        max_tokens: 32,
+        messages: [{ role: 'user', content: 'Do not add a cache prefix.' }],
+        temperature: 0,
+        stream: false,
+      }
+    )
+  })
+
+  test('requests usage in OpenAI streaming responses', () => {
+    assert.deepEqual(
+      buildLoadTestRequestBody(
+        'gpt-5.6-sol',
+        'Stream this response.',
+        false,
+        'openai',
+        true
+      ),
+      {
+        model: 'gpt-5.6-sol',
+        max_tokens: 32,
+        messages: [{ role: 'user', content: 'Stream this response.' }],
+        temperature: 0,
+        stream: true,
+        stream_options: { include_usage: true },
+      }
+    )
+  })
+
+  test('does not mark responses compaction as streaming', () => {
+    assert.equal(supportsLoadTestStreaming('openai-response-compact'), false)
+    assert.deepEqual(
+      buildLoadTestRequestBody(
+        'gpt-5.6-sol-compact',
+        'Compact this response.',
+        false,
+        'openai-response-compact',
+        true
+      ),
+      {
+        model: 'gpt-5.6-sol-compact',
+        input: [{ role: 'user', content: 'Compact this response.' }],
+        stream: false,
+      }
+    )
+  })
+
+  test('reads streaming SSE responses and reports TTFT and output speed', async () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { clearTimeout, setTimeout },
+    })
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"OK"}}]}\n\n'
+          )
+        )
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"usage":{"prompt_tokens":4,"completion_tokens":2}}\n\ndata: [DONE]\n\n'
+          )
+        )
+        controller.close()
+      },
+    })
+    globalThis.fetch = (async () =>
+      new Response(stream, { status: 200 })) as typeof fetch
+
+    const result = await sendLoadTestRequest(
+      'https://api.example.com',
+      { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
+      'gpt-5.6-sol',
+      'load-test-run',
+      'Stream this.',
+      false,
+      undefined,
+      'openai',
+      'openai',
+      true
+    )
+
+    assert.equal(result.success, true)
+    assert.equal(result.usage?.outputTokens, 2)
+    assert.ok((result.firstTokenLatency ?? 0) >= 0)
+    assert.ok((result.outputTokensPerSecond ?? 0) >= 0)
+  })
+
+  test('preserves explicit zero usage fields instead of falling back', async () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { clearTimeout, setTimeout },
+    })
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          usage: {
+            input_tokens: 0,
+            prompt_tokens: 99,
+            output_tokens: 0,
+            completion_tokens: 88,
+          },
+        }),
+        { status: 200 }
+      )) as typeof fetch
+
+    const result = await sendLoadTestRequest(
+      'https://api.example.com',
+      { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
+      'gpt-5.6-sol',
+      'load-test-run',
+      'Zero usage.',
+      false
+    )
+
+    assert.deepEqual(result.usage, {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  test('merges split Anthropic streaming usage events', async () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { clearTimeout, setTimeout },
+    })
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'event: message_start\ndata: {"message":{"usage":{"input_tokens":17}}}\n\n'
+          )
+        )
+        controller.enqueue(
+          new TextEncoder().encode(
+            'event: message_delta\ndata: {"usage":{"output_tokens":3}}\n\n'
+          )
+        )
+        controller.close()
+      },
+    })
+    globalThis.fetch = (async () =>
+      new Response(stream, { status: 200 })) as typeof fetch
+
+    const result = await sendLoadTestRequest(
+      'https://api.example.com',
+      { name: 'test-key', secret: 'test-secret' } as LoadTestKey,
+      'claude-opus-4-8',
+      'load-test-run',
+      'Stream this.',
+      false,
+      undefined,
+      'claude',
+      'anthropic',
+      true
+    )
+
+    assert.deepEqual(result.usage, {
+      inputTokens: 17,
+      outputTokens: 3,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
   })
 })
 

@@ -53,12 +53,16 @@ const result: LoadTestRunResult = {
   requestsPerSecond: 2,
   concurrency: 10,
   prompt: 'Return one concise sentence.',
+  promptCache: false,
+  streamMode: false,
   userCharge: 0.2,
   requestIds: ['request-1'],
   stats: {
     completed: 1,
     failures: 0,
     latencies: [120],
+    firstTokenLatencies: [],
+    outputTokensPerSecond: [],
     successes: 1,
     statusCodes: { '200': 1 },
     errorCodes: {},
@@ -105,6 +109,8 @@ describe('load test result storage', () => {
       savedAt: 1_000_000,
       completedAt: 1_000_000,
       ...result,
+      promptCache: false,
+      streamMode: false,
     })
     assert.equal(loadPersistedLoadTestRun(43), null)
   })
