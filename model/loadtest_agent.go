@@ -90,6 +90,7 @@ type LoadTestRun struct {
 	RequestsPerSecond int                   `json:"requests_per_second" gorm:"not null"`
 	Concurrency       int                   `json:"concurrency" gorm:"not null"`
 	MaxOutputTokens   int                   `json:"max_output_tokens" gorm:"not null;default:256"`
+	RequestTimeoutSec int                   `json:"request_timeout_seconds" gorm:"not null;default:120"`
 	AgentManaged      bool                  `json:"agent_managed" gorm:"index"`
 	Status            LoadTestRunStatus     `json:"status" gorm:"type:varchar(32);index;not null"`
 	Sent              int64                 `json:"sent" gorm:"bigint"`
@@ -397,6 +398,9 @@ func CreateLoadTestRun(run *LoadTestRun) error {
 	}
 	if run.MaxOutputTokens < 1 {
 		run.MaxOutputTokens = operation_setting.LoadTestDefaultMaxOutputTokens
+	}
+	if run.RequestTimeoutSec < 1 {
+		run.RequestTimeoutSec = operation_setting.LoadTestDefaultRequestTimeoutSec
 	}
 	run.CreatedAt = now
 	run.UpdatedAt = now

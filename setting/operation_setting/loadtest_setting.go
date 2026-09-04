@@ -18,6 +18,8 @@ const (
 	LoadTestHardMaxConcurrency        = 10_000
 	LoadTestDefaultMaxOutputTokens    = 256
 	LoadTestHardMaxOutputTokens       = 8192
+	LoadTestDefaultRequestTimeoutSec  = 120
+	LoadTestHardRequestTimeoutSec     = 600
 )
 
 type LoadTestSetting struct {
@@ -25,6 +27,7 @@ type LoadTestSetting struct {
 	MaxRPS             int `json:"max_rps"`
 	MaxConcurrency     int `json:"max_concurrency"`
 	MaxOutputTokens    int `json:"max_output_tokens"`
+	RequestTimeoutSec  int `json:"request_timeout_seconds"`
 }
 
 var loadTestSetting = LoadTestSetting{
@@ -32,6 +35,7 @@ var loadTestSetting = LoadTestSetting{
 	MaxRPS:             LoadTestDefaultMaxRPS,
 	MaxConcurrency:     LoadTestDefaultMaxConcurrency,
 	MaxOutputTokens:    LoadTestDefaultMaxOutputTokens,
+	RequestTimeoutSec:  LoadTestDefaultRequestTimeoutSec,
 }
 
 func init() {
@@ -64,6 +68,12 @@ func GetLoadTestSetting() LoadTestSetting {
 	if setting.MaxOutputTokens > LoadTestHardMaxOutputTokens {
 		setting.MaxOutputTokens = LoadTestHardMaxOutputTokens
 	}
+	if setting.RequestTimeoutSec < 1 {
+		setting.RequestTimeoutSec = 1
+	}
+	if setting.RequestTimeoutSec > LoadTestHardRequestTimeoutSec {
+		setting.RequestTimeoutSec = LoadTestHardRequestTimeoutSec
+	}
 	return setting
 }
 
@@ -78,6 +88,8 @@ func ValidateLoadTestOption(key, value string) error {
 		min, max = 1, LoadTestHardMaxConcurrency
 	case "loadtest_setting.max_output_tokens":
 		min, max = 1, LoadTestHardMaxOutputTokens
+	case "loadtest_setting.request_timeout_seconds":
+		min, max = 1, LoadTestHardRequestTimeoutSec
 	default:
 		return nil
 	}
