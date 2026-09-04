@@ -2750,6 +2750,7 @@
     "I have read and understood the above compliance reminder": "上記のコンプライアンス注意事項を読み、理解しました",
     "I have read and understood the above compliance reminder, acknowledge the related legal risks, and confirm that I bear legal responsibility arising from deployment, operation, and charging behavior.": "上記のコンプライアンス注意事項を読み理解し、関連する法的リスクを認識したうえで、デプロイ、運用、課金行為に起因する法的責任を負うことを確認します。",
     "I understand that disabling 2FA will remove all protection and backup codes": "2FA を無効にすると、すべての保護とバックアップコードが削除されることを理解しています",
+    "I/O Wait Threshold (%)": "I/O 待機閾値 (%)",
     "Icon": "アイコン",
     "Icon file must be 100 KB or smaller": "アイコンファイルは100KB以下である必要があります",
     "Icon identifier (e.g. github, gitlab)": "アイコン識別子 (例: github, gitlab)",

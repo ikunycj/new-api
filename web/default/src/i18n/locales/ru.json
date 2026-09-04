@@ -2750,6 +2750,7 @@
     "I have read and understood the above compliance reminder": "Я прочитал и понял приведенное выше напоминание о соответствии",
     "I have read and understood the above compliance reminder, acknowledge the related legal risks, and confirm that I bear legal responsibility arising from deployment, operation, and charging behavior.": "Я прочитал и понял приведенное выше напоминание о соответствии, признаю связанные правовые риски и подтверждаю, что несу юридическую ответственность за развертывание, эксплуатацию и взимание платы.",
     "I understand that disabling 2FA will remove all protection and backup codes": "Я понимаю, что отключение 2FA удалит всю защиту и резервные коды",
+    "I/O Wait Threshold (%)": "Порог ожидания I/O (%)",
     "Icon": "Значок",
     "Icon file must be 100 KB or smaller": "Файл иконки должен быть не более 100 КБ",
     "Icon identifier (e.g. github, gitlab)": "Идентификатор иконки (например, github, gitlab)",
