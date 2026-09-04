@@ -24,7 +24,7 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const agentVersion = "0.5.0"
+const agentVersion = "0.6.0"
 
 var agentHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
@@ -61,6 +61,7 @@ type loadTestTask struct {
 	Endpoint          string                `json:"endpoint"`
 	Prompt            string                `json:"prompt"`
 	PromptCache       bool                  `json:"prompt_cache"`
+	StreamMode        bool                  `json:"stream_mode"`
 	MockEnabled       bool                  `json:"mock_enabled"`
 	MockFailureRate   float64               `json:"mock_failure_rate"`
 	MockFailureStatus int                   `json:"mock_failure_status"`
@@ -116,6 +117,8 @@ type progressPayload struct {
 }
 
 type finishPayload struct {
+	TokenStatsSource string           `json:"token_stats_source"`
+	UsageMissing     int64            `json:"usage_missing"`
 	WorkerID         string           `json:"worker_id,omitempty"`
 	Status           string           `json:"status"`
 	Sent             int64            `json:"sent"`
@@ -133,6 +136,15 @@ type finishPayload struct {
 	P99MS            float64          `json:"p99_ms"`
 	ErrorCounts      map[string]int64 `json:"error_counts"`
 	ErrorMessage     string           `json:"error_message"`
+}
+
+type serverTokenStats struct {
+	Requests         int64 `json:"requests"`
+	InputTokens      int64 `json:"input_tokens"`
+	InputTokensTotal int64 `json:"input_tokens_total"`
+	OutputTokens     int64 `json:"output_tokens"`
+	CacheReadTokens  int64 `json:"cache_read_tokens"`
+	CacheWriteTokens int64 `json:"cache_write_tokens"`
 }
 
 type k6Metric struct {
@@ -471,6 +483,7 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 		"ALLTOKEN_ENDPOINT="+task.Endpoint,
 		"ALLTOKEN_PROMPT="+task.Prompt,
 		"ALLTOKEN_PROMPT_CACHE="+strconv.FormatBool(task.PromptCache),
+		"ALLTOKEN_STREAM_MODE="+strconv.FormatBool(task.StreamMode),
 		"ALLTOKEN_MOCK_ENABLED="+strconv.FormatBool(task.MockEnabled),
 		"ALLTOKEN_MOCK_FAILURE_RATE="+strconv.FormatFloat(task.MockFailureRate, 'f', -1, 64),
 		"ALLTOKEN_MOCK_FAILURE_STATUS="+strconv.Itoa(task.MockFailureStatus),
@@ -496,6 +509,14 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 			_ = postProgress(context.Background(), config, workerID, task.RunID, progressPayload{CurrentRPS: float64(task.RequestsPerSecond)})
 		case commandErr := <-done:
 			payload, summaryErr := readK6Summary(summaryPath, task.RequestsPerSecond)
+			if summaryErr == nil && task.ExpectedWorkers <= 1 {
+				payload.TokenStatsSource = "agent_response"
+				if stats, ok := reconcileTokenStats(context.Background(), config, task.RunID, payload.Successes); ok {
+					payload.InputTokens, payload.OutputTokens = stats.InputTokens, stats.OutputTokens
+					payload.CacheReadTokens, payload.CacheWriteTokens = stats.CacheReadTokens, stats.CacheWriteTokens
+					payload.TokenStatsSource = "server_logs"
+				}
+			}
 			payload.ErrorMessage = ""
 			payload.Status = "completed"
 			if errors.Is(ctx.Err(), context.Canceled) {
@@ -517,6 +538,23 @@ func executeTask(ctx context.Context, config agentConfig, workerID string, task 
 			return nil
 		}
 	}
+}
+
+func reconcileTokenStats(ctx context.Context, config agentConfig, runID string, successes int64) (serverTokenStats, bool) {
+	if successes <= 0 {
+		return serverTokenStats{}, false
+	}
+	endpoint := config.ServerURL + "/api/loadtest-agent/runs/" + url.PathEscape(runID) + "/token-stats"
+	for attempt := 0; attempt < 15; attempt++ {
+		var response apiResponse[serverTokenStats]
+		if err := requestJSON(ctx, http.MethodGet, endpoint, config.Secret, nil, &response); err == nil && response.Success && response.Data.Requests >= successes {
+			return response.Data, true
+		}
+		if attempt < 14 {
+			time.Sleep(time.Second)
+		}
+	}
+	return serverTokenStats{}, false
 }
 
 // preflightMock performs one guarded request before k6 starts. It verifies
@@ -629,9 +667,11 @@ func readK6Summary(path string, configuredRPS int) (finishPayload, error) {
 		Sent: completed + count("dropped_iterations"), Completed: completed, Successes: successes,
 		Failures: failed, Dropped: count("dropped_iterations"), CurrentRPS: float64(configuredRPS),
 		P50MS: metric("http_req_duration", "med"), P95MS: metric("http_req_duration", "p(95)"),
-		P99MS: metric("http_req_duration", "p(99)"), InputTokens: count("alltoken_input_tokens"),
+		P99MS:        metric("http_req_duration", "p(99)"),
+		InputTokens:  count("alltoken_input_tokens"),
 		OutputTokens: count("alltoken_output_tokens"), CacheReadTokens: count("alltoken_cache_read_tokens"),
 		CacheWriteTokens: count("alltoken_cache_write_tokens"), ErrorCounts: errorCounts,
+		UsageMissing: count("alltoken_usage_missing"),
 	}, nil
 }
 
@@ -817,6 +857,7 @@ http.setResponseCallback(http.expectedStatuses(200));
 const apiKey = open(__ENV.ALLTOKEN_API_KEY_FILE).trim();
 const target = __ENV.ALLTOKEN_TARGET_URL.replace(/\/+$/, '');
 const endpoint = __ENV.ALLTOKEN_ENDPOINT;
+const streamMode = __ENV.ALLTOKEN_STREAM_MODE === 'true' && endpoint !== 'openai-response-compact';
 const durationSeconds = Number(__ENV.ALLTOKEN_DURATION_SECONDS);
 const targetRPS = Number(__ENV.ALLTOKEN_RPS);
 const concurrency = Number(__ENV.ALLTOKEN_CONCURRENCY);
@@ -828,6 +869,7 @@ const cachePrefix = Array.from(
   (_, index) => 'Stable load-test context section ' + (index + 1) + ': keep this deterministic prefix unchanged so provider prompt caching can reuse it across requests. The demo measures gateway routing and usage reporting only.'
 ).join('\n');
 const inputTokens = new Counter('alltoken_input_tokens');
+const usageMissing = new Counter('alltoken_usage_missing');
 const outputTokens = new Counter('alltoken_output_tokens');
 const cacheReadTokens = new Counter('alltoken_cache_read_tokens');
 const cacheWriteTokens = new Counter('alltoken_cache_write_tokens');
@@ -886,12 +928,12 @@ export default function () {
   }
   let body;
   if (endpoint === 'anthropic') {
-    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
+    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
     if (promptCache) {
       body.system = [{ type: 'text', text: cachePrefix, cache_control: { type: 'ephemeral' } }];
     }
   } else if (endpoint === 'openai') {
-    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, temperature: 0, stream: false, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
+    body = { model: __ENV.ALLTOKEN_MODEL, max_tokens: 32, temperature: 0, stream: streamMode, messages: [{ role: 'user', content: __ENV.ALLTOKEN_PROMPT }] };
     if (promptCache) {
       body.messages = [{ role: 'system', content: cachePrefix }, { role: 'user', content: __ENV.ALLTOKEN_PROMPT }];
     }
@@ -904,9 +946,10 @@ export default function () {
     };
     if (endpoint === 'openai-response') {
       body.max_output_tokens = 32;
-      body.stream = false;
+      body.stream = streamMode;
     }
   }
+  if (streamMode && endpoint === 'openai') body.stream_options = { include_usage: true };
   const response = http.post(target + requestPath, JSON.stringify(body), { headers, timeout: '120s' });
   if (mockEnabled && response.headers['X-Alltoken-Mock-Executed'] !== 'true') {
     alltokenErrors.add(1, { code: 'mock_not_executed' });
@@ -925,18 +968,35 @@ export default function () {
     return;
   }
   let usage;
-  try { usage = response.json().usage; } catch (_) { return; }
-  const totalInput = Number(usage.input_tokens || usage.prompt_tokens || 0);
+  if (streamMode) {
+    const events = response.body.split(/\r?\n\r?\n/);
+    for (const event of events) {
+      const data = event.split(/\r?\n/).filter((line) => line.indexOf('data:') === 0)
+        .map((line) => line.slice(5).trim()).join('\n');
+      if (!data || data === '[DONE]') continue;
+      try {
+        const payload = JSON.parse(data);
+        if (payload && payload.usage) usage = Object.assign({}, usage || {}, payload.usage);
+      } catch (_) {}
+    }
+  } else {
+    try { usage = response.json().usage; } catch (_) { usageMissing.add(1); return; }
+  }
+  if (!usage || typeof usage !== 'object') { usageMissing.add(1); return; }
+  const has = (key) => Object.prototype.hasOwnProperty.call(usage, key);
+  const value = (key) => has(key) ? Number(usage[key]) : 0;
+  const totalInput = has('input_tokens') ? value('input_tokens') : value('prompt_tokens');
   const promptDetails = usage.prompt_tokens_details || {};
   const inputDetails = usage.input_tokens_details || {};
-  const cacheRead = Number(usage.cache_read_input_tokens || promptDetails.cached_tokens || inputDetails.cached_tokens || 0);
+  const cacheRead = has('cache_read_input_tokens') ? value('cache_read_input_tokens') : (Number(promptDetails.cached_tokens || inputDetails.cached_tokens || 0));
   const cacheCreation = usage.cache_creation || {};
   const cacheWrite = Number(
-    usage.cache_creation_input_tokens || usage.cache_write_tokens ||
+    (has('cache_creation_input_tokens') ? value('cache_creation_input_tokens') : (has('cache_write_tokens') ? value('cache_write_tokens') :
     (Number(cacheCreation.ephemeral_5m_input_tokens || 0) + Number(cacheCreation.ephemeral_1h_input_tokens || 0))
+    )
   );
   inputTokens.add(endpoint === 'anthropic' ? totalInput : Math.max(0, totalInput - cacheRead - cacheWrite));
-  outputTokens.add(Number(usage.output_tokens || usage.completion_tokens || 0));
+  outputTokens.add(has('output_tokens') ? value('output_tokens') : value('completion_tokens'));
   cacheReadTokens.add(cacheRead);
   cacheWriteTokens.add(cacheWrite);
 }

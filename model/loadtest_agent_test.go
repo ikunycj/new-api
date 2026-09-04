@@ -15,9 +15,9 @@ func setupLoadTestAgentDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&LoadTestAgent{}, &LoadTestRun{}, &LoadTestRunWorker{}))
-	previousDB := DB
-	DB = db
-	t.Cleanup(func() { DB = previousDB })
+	previousDB, previousLogDB := DB, LOG_DB
+	DB, LOG_DB = db, nil
+	t.Cleanup(func() { DB, LOG_DB = previousDB, previousLogDB })
 	return db
 }
 
@@ -107,6 +107,46 @@ func TestSharedLoadTestRunAggregatesWorkerProgressOnlyOnce(t *testing.T) {
 	assert.Equal(t, int64(94), aggregate.Successes)
 	assert.Equal(t, int64(4), aggregate.Failures)
 	assert.Equal(t, int64(2), aggregate.Dropped)
+}
+
+func TestSharedLoadTestRunReconcilesFinalTokensFromConsumeLogs(t *testing.T) {
+	db := setupLoadTestAgentDB(t)
+	require.NoError(t, db.AutoMigrate(&Log{}))
+	previousLogDB := LOG_DB
+	LOG_DB = db
+	t.Cleanup(func() { LOG_DB = previousLogDB })
+
+	run := &LoadTestRun{
+		UserID: 7, AgentID: "agent-shared", TokenID: 11, KeyName: "stable",
+		PackageName: "stable", Model: "gpt-test", Endpoint: "openai", Prompt: "OK",
+		TargetURL: "https://example.com", DurationSeconds: 30, RequestsPerSecond: 10,
+		Concurrency: 4, ExecutionMode: LoadTestExecutionShared, ExpectedWorkers: 2,
+	}
+	require.NoError(t, CreateLoadTestRun(run))
+	_, err := ClaimLoadTestRunForWorker(run.AgentID, "worker-a")
+	require.NoError(t, err)
+	_, err = ClaimLoadTestRunForWorker(run.AgentID, "worker-b")
+	require.NoError(t, err)
+
+	other, err := common.Marshal(map[string]any{"load_test_run_id": run.ID})
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&[]Log{
+		{UserId: 7, Type: LogTypeConsume, Other: string(other), PromptTokens: 12, InputTokensTotal: 20, CompletionTokens: 3, CacheReadTokens: 8},
+		{UserId: 7, Type: LogTypeConsume, Other: string(other), PromptTokens: 10, InputTokensTotal: 10, CompletionTokens: 2, CacheWriteTokens: 5},
+	}).Error)
+	finish := map[string]any{"sent": int64(1), "completed": int64(1), "successes": int64(1), "failures": int64(0), "input_tokens": int64(999), "output_tokens": int64(999)}
+	require.NoError(t, FinishLoadTestRunWorker(run.ID, "worker-a", LoadTestRunWorkerCompleted, finish))
+	finish["worker_id"] = "worker-b"
+	require.NoError(t, FinishLoadTestRunWorker(run.ID, "worker-b", LoadTestRunWorkerCompleted, finish))
+
+	stored, err := GetLoadTestRun(7, run.ID)
+	require.NoError(t, err)
+	require.Equal(t, LoadTestRunCompleted, stored.Status)
+	require.Equal(t, int64(22), stored.InputTokens)
+	require.Equal(t, int64(5), stored.OutputTokens)
+	require.Equal(t, int64(8), stored.CacheReadTokens)
+	require.Equal(t, int64(5), stored.CacheWriteTokens)
+	require.Equal(t, "server_logs", stored.TokenStatsSource)
 }
 
 func TestSharedLoadTestRunMarksStaleWorkerAsFailed(t *testing.T) {

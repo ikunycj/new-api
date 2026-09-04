@@ -47,6 +47,13 @@ func TestValidLoadTestWorkerID(t *testing.T) {
 	assert.False(t, validLoadTestWorkerID(strings.Repeat("w", 97)))
 }
 
+func TestLoadTestAgentSupportsVersion(t *testing.T) {
+	assert.True(t, loadTestAgentSupportsVersion("0.6.0", "0.6.0"))
+	assert.True(t, loadTestAgentSupportsVersion("0.7.1", "0.6.0"))
+	assert.False(t, loadTestAgentSupportsVersion("0.5.9", "0.6.0"))
+	assert.False(t, loadTestAgentSupportsVersion("invalid", "0.6.0"))
+}
+
 func TestValidateLoadTestMockSettings(t *testing.T) {
 	managed := &model.LoadTestAgent{Managed: true, Version: loadTestMockAgentVersion}
 	require.NoError(t, validateLoadTestMockSettings(managed, createLoadTestRunRequest{
