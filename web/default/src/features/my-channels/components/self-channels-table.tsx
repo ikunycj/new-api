@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
-import { StatusBadge } from '@/components/status-badge'
+import { StatusBadge, StatusBadgeList } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { TruncatedText } from '@/components/truncated-text'
 import { Input } from '@/components/ui/input'
@@ -164,8 +164,6 @@ function SelfChannelCard(props: { channel: SelfChannel }) {
   const typeLabel = t(getChannelTypeLabel(channel.type))
   const groups = parseGroupsList(channel.group)
   const models = parseModelsList(channel.models)
-  const visibleModels = models.slice(0, 8)
-  const hiddenModelCount = Math.max(0, models.length - visibleModels.length)
 
   return (
     <div className='flex min-w-0 flex-col gap-3 rounded-xl border bg-(--table-row) p-4'>
@@ -194,28 +192,21 @@ function SelfChannelCard(props: { channel: SelfChannel }) {
 
       <div className='grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2'>
         <SelfChannelMetric label={t('Models')}>
-          {models.length > 0 ? (
-            <div className='flex flex-wrap justify-end gap-1'>
-              {visibleModels.map((model) => (
-                <StatusBadge
-                  key={model}
-                  label={model}
-                  autoColor={model}
-                  size='sm'
-                  className='max-w-44 font-mono'
-                />
-              ))}
-              {hiddenModelCount > 0 && (
-                <StatusBadge
-                  label={`+${hiddenModelCount}`}
-                  variant='neutral'
-                  copyable={false}
-                />
-              )}
-            </div>
-          ) : (
-            <span className='text-muted-foreground'>-</span>
-          )}
+          <StatusBadgeList
+            items={models}
+            max={3}
+            className='justify-end'
+            moreLabel={(count) => t('+{{count}} more', { count })}
+            renderItem={(model) => (
+              <StatusBadge
+                label={model}
+                autoColor={model}
+                size='sm'
+                copyable={false}
+                className='max-w-28 font-mono'
+              />
+            )}
+          />
         </SelfChannelMetric>
         <SelfChannelMetric label={t('Groups')}>
           <div className='flex flex-wrap justify-end gap-1'>
