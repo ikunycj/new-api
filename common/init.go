@@ -109,6 +109,8 @@ func InitEnv() {
 	BatchUpdateInterval = GetEnvOrDefault("BATCH_UPDATE_INTERVAL", 5)
 	RelayTimeout = GetEnvOrDefault("RELAY_TIMEOUT", 0)
 	RelayIdleConnTimeout = GetEnvOrDefault("RELAY_IDLE_CONN_TIMEOUT", 90)
+	StreamClientWriteTimeout = GetEnvOrDefault("STREAM_CLIENT_WRITE_TIMEOUT", 30)
+	ShutdownTimeoutSeconds = GetEnvOrDefault("SHUTDOWN_TIMEOUT_SECONDS", 120)
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 

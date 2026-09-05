@@ -910,7 +910,7 @@
     "CC Switch is the fastest setup path. It imports the API key, selected model, and Codex service endpoint without editing TOML by hand.": "CC Switch là cách thiết lập nhanh nhất. Công cụ nhập khóa API, mô hình và điểm cuối Codex mà không cần sửa TOML thủ công.",
     "CC Switch one-click import": "Nhập CC Switch một chạm",
     "Centered": "Căn giữa",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Giá trị mặc định tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và các preset nhanh.",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Giá trị tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và preset nhanh.",
     "Chain": "Chuỗi",
     "Change": "Thay đổi",
     "Change language": "Đổi ngôn ngữ",
@@ -6437,8 +6437,6 @@
     "让 AI 帮你生成图片（多模态）": "Tạo ảnh bằng AI (đa phương thức)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
-    "Circuit configuration (JSON)": "Cấu hình mạch (JSON)",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Giá trị tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và preset nhanh.",
     "Route rate limits": "Giới hạn tốc độ tuyến đường",
     "These limits are counted by client IP and apply before authentication.": "Các giới hạn này được tính theo IP máy khách và áp dụng trước khi xác thực.",
     "Global API rate limiting": "Giới hạn tốc độ API toàn cục",
@@ -6448,6 +6446,14 @@
     "Critical route rate limiting": "Giới hạn tốc độ tuyến quan trọng",
     "Applies to login, registration, password reset, and OAuth routes.": "Áp dụng cho các tuyến đăng nhập, đăng ký, đặt lại mật khẩu và OAuth.",
     "Rate limit window (seconds)": "Cửa sổ giới hạn tốc độ (giây)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429."
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429.",
+    "Timeouts": "Thời gian chờ",
+    "Upstream total timeout (seconds)": "Thời gian chờ tổng của upstream (giây)",
+    "Streaming idle timeout (seconds)": "Thời gian chờ không hoạt động của luồng (giây)",
+    "Upstream idle connection timeout (seconds)": "Thời gian chờ kết nối upstream nhàn rỗi (giây)",
+    "Client write timeout (seconds)": "Thời gian chờ ghi cho máy khách (giây)",
+    "Shutdown grace period (seconds)": "Thời gian chờ tắt máy (giây)",
+    "0 means unlimited.": "0 có nghĩa là không giới hạn.",
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý."
   }
 }

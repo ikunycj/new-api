@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -41,6 +42,26 @@ func isPositiveOptionValue(value string) bool {
 	}
 	floatValue, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 	return err == nil && floatValue > 0
+}
+
+func validateTimeoutOption(key, value string) error {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("%s must be an integer", key)
+	}
+	min, max := 1, 3600
+	switch key {
+	case "RelayTimeout", "RelayIdleConnTimeout":
+		min = 0
+	case "StreamClientWriteTimeout":
+		max = 600
+	case "ShutdownTimeoutSeconds":
+		max = 900
+	}
+	if n < min || n > max {
+		return fmt.Errorf("%s must be between %d and %d", key, min, max)
+	}
+	return nil
 }
 
 func collectModelNamesFromOptionValue(raw string, modelNames map[string]struct{}) {
@@ -262,12 +283,17 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "loadtest_setting.max_duration_seconds", "loadtest_setting.max_rps", "loadtest_setting.max_concurrency", "loadtest_setting.max_output_tokens":
+	case "loadtest_setting.max_duration_seconds", "loadtest_setting.max_rps", "loadtest_setting.max_concurrency", "loadtest_setting.max_output_tokens", "loadtest_setting.request_timeout_seconds":
 		if err = operation_setting.ValidateLoadTestOption(option.Key, option.Value.(string)); err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": err.Error(),
 			})
+			return
+		}
+	case "RelayTimeout", "StreamingTimeout", "RelayIdleConnTimeout", "StreamClientWriteTimeout", "ShutdownTimeoutSeconds":
+		if err = validateTimeoutOption(option.Key, option.Value.(string)); err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 			return
 		}
 	case "ImageRatio":
@@ -374,6 +400,9 @@ func UpdateOption(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if option.Key == "RelayTimeout" || option.Key == "RelayIdleConnTimeout" {
+		service.InitHttpClient()
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]interface{}{

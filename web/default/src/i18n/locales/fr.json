@@ -910,7 +910,7 @@
     "CC Switch is the fastest setup path. It imports the API key, selected model, and Codex service endpoint without editing TOML by hand.": "CC Switch est la méthode la plus rapide. Il importe la clé API, le modèle et le point de terminaison Codex sans modifier TOML manuellement.",
     "CC Switch one-click import": "Import CC Switch en un clic",
     "Centered": "Centré",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs par défaut centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages rapides.",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages.",
     "Chain": "Chaîne",
     "Change": "Modifier",
     "Change language": "Changer de langue",
@@ -6437,8 +6437,6 @@
     "让 AI 帮你生成图片（多模态）": "Générez des images avec l’IA (multimodal)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Laissez Codex ou Claude Code lire les fichiers du projet, écrire du code et accomplir des tâches.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises.",
-    "Circuit configuration (JSON)": "Configuration du circuit (JSON)",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages.",
     "Route rate limits": "Limites de debit des routes",
     "These limits are counted by client IP and apply before authentication.": "Ces limites sont comptees par adresse IP cliente et s'appliquent avant l'authentification.",
     "Global API rate limiting": "Limitation globale du debit de l'API",
@@ -6448,6 +6446,14 @@
     "Critical route rate limiting": "Limitation du debit des routes critiques",
     "Applies to login, registration, password reset, and OAuth routes.": "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
     "Rate limit window (seconds)": "Fenetre de limitation (secondes)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429."
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429.",
+    "Timeouts": "Délais d’expiration",
+    "Upstream total timeout (seconds)": "Délai total amont (secondes)",
+    "Streaming idle timeout (seconds)": "Délai d’inactivité du streaming (secondes)",
+    "Upstream idle connection timeout (seconds)": "Délai de connexion inactive amont (secondes)",
+    "Client write timeout (seconds)": "Délai d’écriture client (secondes)",
+    "Shutdown grace period (seconds)": "Délai de grâce à l’arrêt (secondes)",
+    "0 means unlimited.": "0 signifie illimité.",
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte."
   }
 }

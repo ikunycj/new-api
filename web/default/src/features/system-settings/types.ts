@@ -484,6 +484,11 @@ export type AffiliateAdjustmentResponse = {
 }
 
 export type OperationsSettings = {
+  RelayTimeout: number
+  StreamingTimeout: number
+  RelayIdleConnTimeout: number
+  StreamClientWriteTimeout: number
+  ShutdownTimeoutSeconds: number
   DefaultCollapseSidebar: boolean
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean

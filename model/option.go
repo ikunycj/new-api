@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -190,6 +191,11 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
+	common.OptionMap["RelayTimeout"] = strconv.Itoa(common.RelayTimeout)
+	common.OptionMap["StreamingTimeout"] = strconv.Itoa(constant.StreamingTimeout)
+	common.OptionMap["RelayIdleConnTimeout"] = strconv.Itoa(common.RelayIdleConnTimeout)
+	common.OptionMap["StreamClientWriteTimeout"] = strconv.Itoa(common.StreamClientWriteTimeout)
+	common.OptionMap["ShutdownTimeoutSeconds"] = strconv.Itoa(common.ShutdownTimeoutSeconds)
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
@@ -453,6 +459,18 @@ func updateOptionMap(key string, value string) (err error) {
 		case "ExposeRatioEnabled":
 			ratio_setting.SetExposeRatioEnabled(boolValue)
 		}
+	}
+	switch key {
+	case "RelayTimeout":
+		common.RelayTimeout, _ = strconv.Atoi(value)
+	case "StreamingTimeout":
+		constant.StreamingTimeout, _ = strconv.Atoi(value)
+	case "RelayIdleConnTimeout":
+		common.RelayIdleConnTimeout, _ = strconv.Atoi(value)
+	case "StreamClientWriteTimeout":
+		common.StreamClientWriteTimeout, _ = strconv.Atoi(value)
+	case "ShutdownTimeoutSeconds":
+		common.ShutdownTimeoutSeconds, _ = strconv.Atoi(value)
 	}
 	switch key {
 	case "EmailDomainWhitelist":
