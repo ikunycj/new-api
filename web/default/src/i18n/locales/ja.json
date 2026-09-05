@@ -6482,6 +6482,9 @@
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。"
     "Available channels": "利用可能なチャンネル",
     "Read-only view of channels available to your user group.": "ユーザーグループで利用できるチャンネルを読み取り専用で表示します。",
-    "No available channels": "利用可能なチャンネルはありません"
+    "No available channels": "利用可能なチャンネルはありません",
+    "ToB Display URL": "ToB 表示 URL",
+    "Optional URL shown to ToB/VIP users": "ToB/VIP ユーザーに表示する任意の URL",
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP ユーザーには実際のアップストリーム URL の代わりにこの URL を表示します。空欄の場合はベース URL を使用します。"
   }
 }

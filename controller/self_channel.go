@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ type selfChannelView struct {
 	Remark       *string `json:"remark"`
 	MaskedKey    string  `json:"masked_key,omitempty"`
 	Key          string  `json:"-"`
+	Settings     string  `json:"-"`
 	Group        string  `json:"group"`
 	Status       int     `json:"status"`
 }
@@ -44,6 +46,20 @@ func maskSelfChannelKey(channel *model.Channel) string {
 		return fmt.Sprintf("%d keys: %s, %s, …", len(maskedKeys), maskedKeys[0], maskedKeys[1])
 	}
 	return fmt.Sprintf("%d keys: %s", len(maskedKeys), strings.Join(maskedKeys, ", "))
+}
+
+func selfChannelDisplayURL(channel selfChannelView) *string {
+	if strings.TrimSpace(channel.Settings) == "" {
+		return channel.BaseURL
+	}
+	settings := dto.ChannelOtherSettings{}
+	if err := common.UnmarshalJsonStr(channel.Settings, &settings); err != nil {
+		return channel.BaseURL
+	}
+	if displayURL := strings.TrimSpace(settings.TobDisplayURL); displayURL != "" {
+		return &displayURL
+	}
+	return channel.BaseURL
 }
 
 func requireToBUser(c *gin.Context) (*model.User, bool) {
@@ -73,7 +89,7 @@ func GetSelfChannels(c *gin.Context) {
 		}
 	}
 	var channels []selfChannelView
-	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "key", "base_url", "models", "test_model", "model_mapping", "remark", "group", "status").Order("id desc").Find(&channels).Error; err != nil {
+	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "key", "base_url", "models", "test_model", "model_mapping", "remark", "group", "status", "settings").Order("id desc").Find(&channels).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -81,6 +97,8 @@ func GetSelfChannels(c *gin.Context) {
 	for _, channel := range channels {
 		channel.MaskedKey = maskSelfChannelKey(&model.Channel{Key: channel.Key})
 		channel.Key = ""
+		channel.BaseURL = selfChannelDisplayURL(channel)
+		channel.Settings = ""
 		for _, group := range strings.Split(channel.Group, ",") {
 			if _, allowed := allowedGroups[strings.TrimSpace(group)]; allowed {
 				filtered = append(filtered, channel)

@@ -6482,6 +6482,9 @@
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "此处控制模型请求速率限制。路由速率限制可在下方配置，仍可能返回 429。"
     "Available channels": "可用渠道",
     "Read-only view of channels available to your user group.": "这里只读展示当前用户分组可用的渠道。",
-    "No available channels": "暂无可用渠道"
+    "No available channels": "暂无可用渠道",
+    "ToB Display URL": "ToB 展示 URL",
+    "Optional URL shown to ToB/VIP users": "可选，仅展示给 ToB/VIP 用户的 URL",
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP 用户将看到此 URL，而不是实际上游地址。留空则使用基础 URL。"
   }
 }

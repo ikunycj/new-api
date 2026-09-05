@@ -6482,6 +6482,9 @@
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429."
     "Available channels": "Доступные каналы",
     "Read-only view of channels available to your user group.": "Каналы, доступные вашей группе пользователей, доступны только для чтения.",
-    "No available channels": "Нет доступных каналов"
+    "No available channels": "Нет доступных каналов",
+    "ToB Display URL": "URL для отображения ToB",
+    "Optional URL shown to ToB/VIP users": "Необязательный URL для пользователей ToB/VIP",
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Пользователи ToB/VIP увидят этот URL вместо фактического URL upstream. Оставьте пустым, чтобы использовать базовый URL."
   }
 }

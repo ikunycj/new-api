@@ -6482,6 +6482,9 @@
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429."
     "Available channels": "Các kênh khả dụng",
     "Read-only view of channels available to your user group.": "Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.",
-    "No available channels": "Không có kênh khả dụng"
+    "No available channels": "Không có kênh khả dụng",
+    "ToB Display URL": "URL hiển thị ToB",
+    "Optional URL shown to ToB/VIP users": "URL tùy chọn hiển thị cho người dùng ToB/VIP",
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Người dùng ToB/VIP sẽ thấy URL này thay cho URL upstream thực tế. Để trống để dùng Base URL."
   }
 }

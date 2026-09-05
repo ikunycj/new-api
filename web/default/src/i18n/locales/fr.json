@@ -6482,6 +6482,9 @@
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429."
     "Available channels": "Canaux disponibles",
     "Read-only view of channels available to your user group.": "Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.",
-    "No available channels": "Aucun canal disponible"
+    "No available channels": "Aucun canal disponible",
+    "ToB Display URL": "URL affichée aux clients ToB",
+    "Optional URL shown to ToB/VIP users": "URL facultative affichée aux utilisateurs ToB/VIP",
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Les utilisateurs ToB/VIP voient cette URL à la place de l'URL amont réelle. Laissez vide pour utiliser l'URL de base."
   }
 }
