@@ -1,0 +1,7 @@
+{
+  "Alertmanager": "Alertmanager",
+  "Cluster": "Cluster",
+  "Grafana": "Grafana",
+  "Prometheus": "Prometheus",
+  "Prompt Cache": "Prompt Cache"
+}

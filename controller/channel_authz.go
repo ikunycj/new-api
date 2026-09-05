@@ -82,7 +82,6 @@ var channelOperationalFields = map[string]struct{}{
 // channelReadOnlyFields lists server-managed/accounting fields that the general
 // channel edit endpoint must ignore even if a client sends them.
 var channelReadOnlyFields = map[string]struct{}{
-	"owner_user_id":                   {},
 	"created_time":                    {},
 	"test_time":                       {},
 	"response_time":                   {},

@@ -6480,5 +6480,8 @@
     "Applies to login, registration, password reset, and OAuth routes.": "Applies to login, registration, password reset, and OAuth routes.",
     "Rate limit window (seconds)": "Rate limit window (seconds)",
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "This controls model request rate limiting. Route rate limits are configured below and may still return 429."
+    "Available channels": "Available channels",
+    "Read-only view of channels available to your user group.": "Read-only view of channels available to your user group.",
+    "No available channels": "No available channels"
   }
 }

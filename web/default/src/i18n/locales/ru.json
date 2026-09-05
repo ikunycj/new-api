@@ -914,7 +914,7 @@
     "CC Switch is the fastest setup path. It imports the API key, selected model, and Codex service endpoint without editing TOML by hand.": "CC Switch — самый быстрый способ. Он импортирует API-ключ, модель и адрес Codex без ручного редактирования TOML.",
     "CC Switch one-click import": "Импорт в CC Switch одним нажатием",
     "Centered": "По центру",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Единые значения по умолчанию для сбалансированного режима, приоритета стоимости, приоритета стабильности и быстрых пресетов.",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Единые значения для сбалансированного режима, приоритета стоимости, стабильности и быстрых пресетов.",
     "Chain": "Цепочка",
     "Change": "Изменить",
     "Change language": "Изменить язык",
@@ -6480,5 +6480,8 @@
     "Applies to login, registration, password reset, and OAuth routes.": "Применяется к маршрутам входа, регистрации, сброса пароля и OAuth.",
     "Rate limit window (seconds)": "Окно ограничения частоты (секунды)",
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429."
+    "Available channels": "Доступные каналы",
+    "Read-only view of channels available to your user group.": "Каналы, доступные вашей группе пользователей, доступны только для чтения.",
+    "No available channels": "Нет доступных каналов"
   }
 }

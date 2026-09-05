@@ -914,7 +914,7 @@
     "CC Switch is the fastest setup path. It imports the API key, selected model, and Codex service endpoint without editing TOML by hand.": "CC Switch est la méthode la plus rapide. Il importe la clé API, le modèle et le point de terminaison Codex sans modifier TOML manuellement.",
     "CC Switch one-click import": "Import CC Switch en un clic",
     "Centered": "Centré",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs par défaut centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages rapides.",
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Valeurs centralisées pour les modes équilibré, coût prioritaire, stabilité prioritaire et les préréglages.",
     "Chain": "Chaîne",
     "Change": "Modifier",
     "Change language": "Changer de langue",
@@ -6480,5 +6480,8 @@
     "Applies to login, registration, password reset, and OAuth routes.": "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
     "Rate limit window (seconds)": "Fenetre de limitation (secondes)",
     "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429."
+    "Available channels": "Canaux disponibles",
+    "Read-only view of channels available to your user group.": "Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.",
+    "No available channels": "Aucun canal disponible"
   }
 }

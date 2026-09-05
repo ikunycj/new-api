@@ -23,7 +23,6 @@ import (
 
 type Channel struct {
 	Id                 int     `json:"id"`
-	OwnerUserId        int     `json:"owner_user_id" gorm:"index;default:0"`
 	Type               int     `json:"type" gorm:"default:0"`
 	Key                string  `json:"key" gorm:"not null"`
 	OpenAIOrganization *string `json:"openai_organization"`
