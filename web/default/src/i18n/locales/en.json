@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "Client write timeout (seconds)",
     "Shutdown grace period (seconds)": "Shutdown grace period (seconds)",
     "0 means unlimited.": "0 means unlimited.",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration."
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.",
     "Available channels": "Available channels",
     "Read-only view of channels available to your user group.": "Read-only view of channels available to your user group.",
     "No available channels": "No available channels",

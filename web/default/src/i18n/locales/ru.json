@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "Тайм-аут записи клиенту (секунды)",
     "Shutdown grace period (seconds)": "Период ожидания при завершении (секунды)",
     "0 means unlimited.": "0 означает отсутствие ограничения.",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста."
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста.",
     "Available channels": "Доступные каналы",
     "Read-only view of channels available to your user group.": "Каналы, доступные вашей группе пользователей, доступны только для чтения.",
     "No available channels": "Нет доступных каналов",

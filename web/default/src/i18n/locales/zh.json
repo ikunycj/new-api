@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "客户端写超时（秒）",
     "Shutdown grace period (seconds)": "服务关闭等待时间（秒）",
     "0 means unlimited.": "0 表示不限制。",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "修改会立即应用于新请求。网关代理超时仍由主机配置管理。"
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "修改会立即应用于新请求。网关代理超时仍由主机配置管理。",
     "Available channels": "可用渠道",
     "Read-only view of channels available to your user group.": "这里只读展示当前用户分组可用的渠道。",
     "No available channels": "暂无可用渠道",

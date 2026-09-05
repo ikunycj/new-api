@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "Délai d’écriture client (secondes)",
     "Shutdown grace period (seconds)": "Délai de grâce à l’arrêt (secondes)",
     "0 means unlimited.": "0 signifie illimité.",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte."
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte.",
     "Available channels": "Canaux disponibles",
     "Read-only view of channels available to your user group.": "Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.",
     "No available channels": "Aucun canal disponible",

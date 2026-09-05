@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "Thời gian chờ ghi cho máy khách (giây)",
     "Shutdown grace period (seconds)": "Thời gian chờ tắt máy (giây)",
     "0 means unlimited.": "0 có nghĩa là không giới hạn.",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý."
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý.",
     "Available channels": "Các kênh khả dụng",
     "Read-only view of channels available to your user group.": "Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.",
     "No available channels": "Không có kênh khả dụng",

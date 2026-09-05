@@ -6485,7 +6485,7 @@
     "Client write timeout (seconds)": "クライアント書き込みタイムアウト（秒）",
     "Shutdown grace period (seconds)": "シャットダウン猶予時間（秒）",
     "0 means unlimited.": "0 は無制限を意味します。",
-    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。"
+    "Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.": "変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。",
     "Available channels": "利用可能なチャンネル",
     "Read-only view of channels available to your user group.": "ユーザーグループで利用できるチャンネルを読み取り専用で表示します。",
     "No available channels": "利用可能なチャンネルはありません",
