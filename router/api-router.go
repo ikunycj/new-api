@@ -117,6 +117,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self/channels", controller.GetSelfChannels)
 				selfRoute.GET("/self/channels/:id", controller.GetSelfChannel)
+				selfRoute.GET("/self/channels/:id/test", controller.TestSelfChannel)
 				selfRoute.GET("/self", controller.GetSelf)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), controller.UpdateSelf)

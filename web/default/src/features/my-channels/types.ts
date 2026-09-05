@@ -4,6 +4,7 @@ export type SelfChannel = {
   name: string
   base_url?: string | null
   models: string
+  test_model?: string | null
   model_mapping?: string | null
   remark?: string | null
   group: string

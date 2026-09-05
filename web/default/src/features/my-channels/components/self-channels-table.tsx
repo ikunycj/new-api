@@ -1,3 +1,4 @@
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -6,6 +7,7 @@ import { ProviderBadge } from '@/components/provider-badge'
 import { StatusBadge, StatusBadgeList } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { TruncatedText } from '@/components/truncated-text'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Sheet,
@@ -22,6 +24,8 @@ import {
   parseGroupsList,
   parseModelsList,
 } from '../../channels/lib'
+import { formatResponseTime } from '../../channels/lib/channel-utils'
+import { testSelfChannel } from '../api'
 import type { SelfChannel } from '../types'
 
 type SelfChannelsTableProps = {
@@ -45,6 +49,11 @@ function SelfChannelDetailsSheet(props: {
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
+  const [testState, setTestState] = useState<
+    'idle' | 'testing' | 'success' | 'error'
+  >('idle')
+  const [testResponseTime, setTestResponseTime] = useState<number>()
+  const [testError, setTestError] = useState('')
   const channel = props.channel
   if (!channel) return null
 
@@ -55,6 +64,41 @@ function SelfChannelDetailsSheet(props: {
   const typeLabel = t(getChannelTypeLabel(channel.type))
   const models = parseModelsList(channel.models)
   const groups = parseGroupsList(channel.group)
+  let testIcon: ReactNode = null
+  if (testState === 'testing') testIcon = <Loader2 className='animate-spin' />
+  if (testState === 'success') testIcon = <CheckCircle2 />
+  if (testState === 'error') testIcon = <XCircle />
+  const testLabel =
+    testState === 'testing' ? t('Testing...') : t('Test Channel Connection')
+
+  const handleTest = async () => {
+    setTestState('testing')
+    setTestResponseTime(undefined)
+    setTestError('')
+    try {
+      const response = await testSelfChannel(channel.id, {
+        model: channel.test_model || models[0],
+      })
+      const responseTime =
+        response.data?.response_time ??
+        (typeof response.time === 'number' ? response.time * 1000 : undefined)
+      setTestResponseTime(responseTime)
+      if (response.success) {
+        setTestState('success')
+        return
+      }
+      setTestError(response.message || t('Failed to test channel'))
+      setTestState('error')
+    } catch (error: unknown) {
+      const responseError = error as {
+        response?: { data?: { message?: string } }
+      }
+      setTestError(
+        responseError.response?.data?.message || t('Failed to test channel')
+      )
+      setTestState('error')
+    }
+  }
 
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
@@ -105,11 +149,33 @@ function SelfChannelDetailsSheet(props: {
           </div>
 
           <div className='rounded-lg border p-4'>
-            <div className='mb-3 text-base font-semibold'>{t('API URL')}</div>
+            <div className='flex items-center justify-between gap-3'>
+              <div className='text-base font-semibold'>{t('API URL')}</div>
+              <Button
+                type='button'
+                size='sm'
+                variant='outline'
+                disabled={testState === 'testing'}
+                onClick={handleTest}
+              >
+                {testIcon}
+                {testLabel}
+              </Button>
+            </div>
             <TruncatedText
               text={channel.base_url || t('Default endpoint')}
-              className='max-w-full'
+              className='mt-2 max-w-full'
             />
+            {testState === 'success' && (
+              <p className='text-success mt-2 text-xs'>
+                {t('{{target}} test succeeded', { target: channel.name })}
+                {testResponseTime != null &&
+                  ` · ${formatResponseTime(testResponseTime, t)}`}
+              </p>
+            )}
+            {testState === 'error' && (
+              <p className='text-destructive mt-2 text-xs'>{testError}</p>
+            )}
           </div>
 
           <div className='rounded-lg border p-4'>
