@@ -1,5 +1,5 @@
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GroupBadge } from '@/components/group-badge'
@@ -9,6 +9,13 @@ import { TableId } from '@/components/table-id'
 import { TruncatedText } from '@/components/truncated-text'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Sheet,
   SheetContent,
@@ -54,7 +61,20 @@ function SelfChannelDetailsSheet(props: {
   >('idle')
   const [testResponseTime, setTestResponseTime] = useState<number>()
   const [testError, setTestError] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
   const channel = props.channel
+  const channelId = channel?.id
+  const channelTestModel = channel?.test_model
+  const channelModels = channel?.models
+  const models = parseModelsList(channel?.models ?? '')
+
+  useEffect(() => {
+    const availableModels = parseModelsList(channelModels ?? '')
+    setSelectedModel(channelTestModel || availableModels[0] || '')
+    setTestState('idle')
+    setTestResponseTime(undefined)
+    setTestError('')
+  }, [channelId, channelTestModel, channelModels])
   if (!channel) return null
 
   const status =
@@ -62,7 +82,6 @@ function SelfChannelDetailsSheet(props: {
       channel.status as keyof typeof CHANNEL_STATUS_CONFIG
     ] || CHANNEL_STATUS_CONFIG[0]
   const typeLabel = t(getChannelTypeLabel(channel.type))
-  const models = parseModelsList(channel.models)
   const groups = parseGroupsList(channel.group)
   let testIcon: ReactNode = null
   if (testState === 'testing') testIcon = <Loader2 className='animate-spin' />
@@ -77,7 +96,7 @@ function SelfChannelDetailsSheet(props: {
     setTestError('')
     try {
       const response = await testSelfChannel(channel.id, {
-        model: channel.test_model || models[0],
+        model: selectedModel || undefined,
       })
       const responseTime =
         response.data?.response_time ??
@@ -166,6 +185,26 @@ function SelfChannelDetailsSheet(props: {
               text={channel.base_url || t('Default endpoint')}
               className='mt-2 max-w-full'
             />
+            <div className='mt-3 flex items-center gap-2'>
+              <span className='text-muted-foreground shrink-0 text-xs'>
+                {t('Model to use for testing')}
+              </span>
+              <Select
+                value={selectedModel}
+                onValueChange={(value) => value && setSelectedModel(value)}
+              >
+                <SelectTrigger size='sm' className='min-w-0 flex-1'>
+                  <SelectValue placeholder={t('Model')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model} value={model}>
+                      <span className='font-mono'>{model}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {testState === 'success' && (
               <p className='text-success mt-2 text-xs'>
                 {t('{{target}} test succeeded', { target: channel.name })}
