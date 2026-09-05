@@ -7,6 +7,7 @@ export type SelfChannel = {
   test_model?: string | null
   model_mapping?: string | null
   remark?: string | null
+  masked_key?: string
   group: string
   status: number
 }

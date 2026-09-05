@@ -176,6 +176,17 @@ function SelfChannelDetailsSheet(props: {
               />
             </div>
 
+            {channel.masked_key && (
+              <div className='rounded-lg border p-4'>
+                <div className='mb-2 text-base font-semibold'>
+                  {t('API Key')}
+                </div>
+                <code className='bg-muted/50 block rounded-md px-3 py-2 text-xs break-all'>
+                  {channel.masked_key}
+                </code>
+              </div>
+            )}
+
             <div className='bg-muted/20 rounded-lg border p-4'>
               <div className='mb-3 flex items-center justify-between gap-3'>
                 <div>

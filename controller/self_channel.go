@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,8 +22,28 @@ type selfChannelView struct {
 	TestModel    *string `json:"test_model"`
 	ModelMapping *string `json:"model_mapping"`
 	Remark       *string `json:"remark"`
+	MaskedKey    string  `json:"masked_key,omitempty"`
+	Key          string  `json:"-"`
 	Group        string  `json:"group"`
 	Status       int     `json:"status"`
+}
+
+func maskSelfChannelKey(channel *model.Channel) string {
+	keys := channel.GetKeys()
+	if len(keys) == 0 {
+		return ""
+	}
+	maskedKeys := make([]string, len(keys))
+	for i, key := range keys {
+		maskedKeys[i] = model.MaskTokenKey(strings.TrimSpace(key))
+	}
+	if len(maskedKeys) == 1 {
+		return maskedKeys[0]
+	}
+	if len(maskedKeys) > 3 {
+		return fmt.Sprintf("%d keys: %s, %s, …", len(maskedKeys), maskedKeys[0], maskedKeys[1])
+	}
+	return fmt.Sprintf("%d keys: %s", len(maskedKeys), strings.Join(maskedKeys, ", "))
 }
 
 func requireToBUser(c *gin.Context) (*model.User, bool) {
@@ -52,12 +73,14 @@ func GetSelfChannels(c *gin.Context) {
 		}
 	}
 	var channels []selfChannelView
-	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "base_url", "models", "test_model", "model_mapping", "remark", "group", "status").Order("id desc").Find(&channels).Error; err != nil {
+	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "key", "base_url", "models", "test_model", "model_mapping", "remark", "group", "status").Order("id desc").Find(&channels).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	filtered := make([]selfChannelView, 0, len(channels))
 	for _, channel := range channels {
+		channel.MaskedKey = maskSelfChannelKey(&model.Channel{Key: channel.Key})
+		channel.Key = ""
 		for _, group := range strings.Split(channel.Group, ",") {
 			if _, allowed := allowedGroups[strings.TrimSpace(group)]; allowed {
 				filtered = append(filtered, channel)
