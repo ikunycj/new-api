@@ -31,7 +31,7 @@ const (
 	// unconditional wg.Wait() in cleanup can always finish. Without it, a slow
 	// but connected client (full TCP buffer, no server WriteTimeout) could hang
 	// the handler forever.
-	streamWriteTimeout = 30 * time.Second
+	defaultStreamWriteTimeout = 30 * time.Second
 )
 
 func getScannerBufferSize() int {
@@ -99,7 +99,11 @@ func ExtendWriteDeadline(c *gin.Context) {
 	if c == nil || c.Writer == nil {
 		return
 	}
-	_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(streamWriteTimeout))
+	writeTimeout := time.Duration(common.StreamClientWriteTimeout) * time.Second
+	if writeTimeout <= 0 {
+		writeTimeout = defaultStreamWriteTimeout
+	}
+	_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(writeTimeout))
 }
 
 func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string, sr *StreamResult)) {
