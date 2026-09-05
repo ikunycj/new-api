@@ -6479,7 +6479,7 @@
     "Critical route rate limiting": "Giới hạn tốc độ tuyến quan trọng",
     "Applies to login, registration, password reset, and OAuth routes.": "Áp dụng cho các tuyến đăng nhập, đăng ký, đặt lại mật khẩu và OAuth.",
     "Rate limit window (seconds)": "Cửa sổ giới hạn tốc độ (giây)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429."
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429.",
     "Available channels": "Các kênh khả dụng",
     "Read-only view of channels available to your user group.": "Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.",
     "No available channels": "Không có kênh khả dụng",

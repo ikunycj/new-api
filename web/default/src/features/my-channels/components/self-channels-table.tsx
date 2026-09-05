@@ -85,6 +85,7 @@ function SelfChannelDetailsSheet(props: {
   >('idle')
   const [testResponseTime, setTestResponseTime] = useState<number>()
   const [testError, setTestError] = useState('')
+  const [testErrorCode, setTestErrorCode] = useState('')
   const [selectedModel, setSelectedModel] = useState('')
   const channel = props.channel
   const channelId = channel?.id
@@ -106,6 +107,7 @@ function SelfChannelDetailsSheet(props: {
     setTestState('idle')
     setTestResponseTime(undefined)
     setTestError('')
+    setTestErrorCode('')
   }, [channelId, channelType, channelTestModel, channelModels])
   if (!channel) return null
 
@@ -126,6 +128,7 @@ function SelfChannelDetailsSheet(props: {
     setTestState('testing')
     setTestResponseTime(undefined)
     setTestError('')
+    setTestErrorCode('')
     try {
       const response = await testSelfChannel(channel.id, {
         model: selectedModel || undefined,
@@ -139,14 +142,16 @@ function SelfChannelDetailsSheet(props: {
         return
       }
       setTestError(response.message || t('Failed to test channel'))
+      setTestErrorCode(response.error_code || '')
       setTestState('error')
     } catch (error: unknown) {
       const responseError = error as {
-        response?: { data?: { message?: string } }
+        response?: { data?: { message?: string; error_code?: string } }
       }
       setTestError(
         responseError.response?.data?.message || t('Failed to test channel')
       )
+      setTestErrorCode(responseError.response?.data?.error_code || '')
       setTestState('error')
     }
   }
@@ -284,7 +289,10 @@ function SelfChannelDetailsSheet(props: {
               {testState === 'error' && (
                 <div className='border-destructive/30 bg-destructive/5 text-destructive mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs'>
                   <XCircle className='mt-0.5 size-4 shrink-0' />
-                  <span>{testError}</span>
+                  <span>
+                    {testError}
+                    {testErrorCode && ` (${testErrorCode})`}
+                  </span>
                 </div>
               )}
             </div>

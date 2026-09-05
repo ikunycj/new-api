@@ -6479,7 +6479,7 @@
     "Critical route rate limiting": "重要ルートのレート制限",
     "Applies to login, registration, password reset, and OAuth routes.": "ログイン、登録、パスワードリセット、OAuth ルートに適用されます。",
     "Rate limit window (seconds)": "レート制限の時間枠（秒）",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。"
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。",
     "Available channels": "利用可能なチャンネル",
     "Read-only view of channels available to your user group.": "ユーザーグループで利用できるチャンネルを読み取り専用で表示します。",
     "No available channels": "利用可能なチャンネルはありません",

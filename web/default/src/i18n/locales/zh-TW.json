@@ -6479,7 +6479,7 @@
     "Critical route rate limiting": "關鍵路由速率限制",
     "Applies to login, registration, password reset, and OAuth routes.": "適用於登入、註冊、重設密碼和 OAuth 路由。",
     "Rate limit window (seconds)": "速率限制時間視窗（秒）",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "此處控制模型請求速率限制。路由速率限制可在下方設定，仍可能回傳 429。"
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "此處控制模型請求速率限制。路由速率限制可在下方設定，仍可能回傳 429。",
     "Available channels": "Available channels",
     "Read-only view of channels available to your user group.": "Read-only view of channels available to your user group.",
     "No available channels": "No available channels"

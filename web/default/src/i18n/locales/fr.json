@@ -6479,7 +6479,7 @@
     "Critical route rate limiting": "Limitation du debit des routes critiques",
     "Applies to login, registration, password reset, and OAuth routes.": "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
     "Rate limit window (seconds)": "Fenetre de limitation (secondes)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429."
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429.",
     "Available channels": "Canaux disponibles",
     "Read-only view of channels available to your user group.": "Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.",
     "No available channels": "Aucun canal disponible",

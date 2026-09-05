@@ -6479,7 +6479,7 @@
     "Critical route rate limiting": "Ограничение частоты критических маршрутов",
     "Applies to login, registration, password reset, and OAuth routes.": "Применяется к маршрутам входа, регистрации, сброса пароля и OAuth.",
     "Rate limit window (seconds)": "Окно ограничения частоты (секунды)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429."
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429.",
     "Available channels": "Доступные каналы",
     "Read-only view of channels available to your user group.": "Каналы, доступные вашей группе пользователей, доступны только для чтения.",
     "No available channels": "Нет доступных каналов",
