@@ -518,6 +518,7 @@ export type OperationsSettings = {
   'loadtest_setting.max_rps': number
   'loadtest_setting.max_concurrency': number
   'loadtest_setting.max_output_tokens': number
+  'loadtest_setting.request_timeout_seconds': number
 }
 
 export type SecuritySettings = {
@@ -526,6 +527,15 @@ export type SecuritySettings = {
   ModelRequestRateLimitSuccessCount: number
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
+  GlobalApiRateLimitEnabled: boolean
+  GlobalApiRateLimitNum: number
+  GlobalApiRateLimitDuration: number
+  GlobalWebRateLimitEnabled: boolean
+  GlobalWebRateLimitNum: number
+  GlobalWebRateLimitDuration: number
+  CriticalRateLimitEnabled: boolean
+  CriticalRateLimitNum: number
+  CriticalRateLimitDuration: number
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
   SensitiveWords: string

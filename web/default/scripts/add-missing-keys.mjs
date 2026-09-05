@@ -886,8 +886,7 @@ const newKeys = {
     'Inbound endpoints': '入站端點',
     Loading: '載入中',
     Load: '負載',
-    'Dynamic strategy weights must total 100%':
-      '動態策略權重總和必須為 100%',
+    'Dynamic strategy weights must total 100%': '動態策略權重總和必須為 100%',
     Models: '模型',
     'No cost entries': '暫無成本帳期',
     'Record cost': '輸入成本',
@@ -2092,6 +2091,129 @@ const circuitConfigurationLabels = {
 for (const [locale, translations] of Object.entries(
   circuitConfigurationLabels
 )) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const routeRateLimitKeys = {
+  en: {
+    'Route rate limits': 'Route rate limits',
+    'These limits are counted by client IP and apply before authentication.':
+      'These limits are counted by client IP and apply before authentication.',
+    'Global API rate limiting': 'Global API rate limiting',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Applies to dashboard and /api routes, not model relay requests.',
+    'Global web rate limiting': 'Global web rate limiting',
+    'Applies to web pages and static assets.':
+      'Applies to web pages and static assets.',
+    'Critical route rate limiting': 'Critical route rate limiting',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Applies to login, registration, password reset, and OAuth routes.',
+    'Rate limit window (seconds)': 'Rate limit window (seconds)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'This controls model request rate limiting. Route rate limits are configured below and may still return 429.',
+  },
+  zh: {
+    'Route rate limits': '路由速率限制',
+    'These limits are counted by client IP and apply before authentication.':
+      '这些限制按客户端 IP 计数，并在身份验证前生效。',
+    'Global API rate limiting': '全局 API 速率限制',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      '适用于控制台和 /api 路由，不适用于模型转发请求。',
+    'Global web rate limiting': '全局 Web 速率限制',
+    'Applies to web pages and static assets.': '适用于网页和静态资源。',
+    'Critical route rate limiting': '关键路由速率限制',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      '适用于登录、注册、重置密码和 OAuth 路由。',
+    'Rate limit window (seconds)': '速率限制时间窗口（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      '此处控制模型请求速率限制。路由速率限制可在下方配置，仍可能返回 429。',
+  },
+  fr: {
+    'Route rate limits': 'Limites de debit des routes',
+    'These limits are counted by client IP and apply before authentication.':
+      "Ces limites sont comptees par adresse IP cliente et s'appliquent avant l'authentification.",
+    'Global API rate limiting': "Limitation globale du debit de l'API",
+    'Applies to dashboard and /api routes, not model relay requests.':
+      "S'applique au tableau de bord et aux routes /api, pas aux requetes relais de modeles.",
+    'Global web rate limiting': 'Limitation globale du debit Web',
+    'Applies to web pages and static assets.':
+      'S’applique aux pages Web et aux ressources statiques.',
+    'Critical route rate limiting': 'Limitation du debit des routes critiques',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
+    'Rate limit window (seconds)': 'Fenetre de limitation (secondes)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429.',
+  },
+  ja: {
+    'Route rate limits': 'ルートのレート制限',
+    'These limits are counted by client IP and apply before authentication.':
+      'これらの制限はクライアント IP ごとにカウントされ、認証前に適用されます。',
+    'Global API rate limiting': 'グローバル API レート制限',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'ダッシュボードと /api ルートに適用され、モデル中継リクエストには適用されません。',
+    'Global web rate limiting': 'グローバル Web レート制限',
+    'Applies to web pages and static assets.':
+      'Web ページと静的アセットに適用されます。',
+    'Critical route rate limiting': '重要ルートのレート制限',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'ログイン、登録、パスワードリセット、OAuth ルートに適用されます。',
+    'Rate limit window (seconds)': 'レート制限の時間枠（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。',
+  },
+  ru: {
+    'Route rate limits': 'Ограничения частоты маршрутов',
+    'These limits are counted by client IP and apply before authentication.':
+      'Эти ограничения считаются по IP-адресу клиента и применяются до аутентификации.',
+    'Global API rate limiting': 'Глобальное ограничение частоты API',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Применяется к панели управления и маршрутам /api, но не к запросам проксирования моделей.',
+    'Global web rate limiting': 'Глобальное ограничение частоты Web',
+    'Applies to web pages and static assets.':
+      'Применяется к веб-страницам и статическим ресурсам.',
+    'Critical route rate limiting': 'Ограничение частоты критических маршрутов',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Применяется к маршрутам входа, регистрации, сброса пароля и OAuth.',
+    'Rate limit window (seconds)': 'Окно ограничения частоты (секунды)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429.',
+  },
+  vi: {
+    'Route rate limits': 'Giới hạn tốc độ tuyến đường',
+    'These limits are counted by client IP and apply before authentication.':
+      'Các giới hạn này được tính theo IP máy khách và áp dụng trước khi xác thực.',
+    'Global API rate limiting': 'Giới hạn tốc độ API toàn cục',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Áp dụng cho bảng điều khiển và các tuyến /api, không áp dụng cho yêu cầu chuyển tiếp mô hình.',
+    'Global web rate limiting': 'Giới hạn tốc độ Web toàn cục',
+    'Applies to web pages and static assets.':
+      'Áp dụng cho trang web và tài nguyên tĩnh.',
+    'Critical route rate limiting': 'Giới hạn tốc độ tuyến quan trọng',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Áp dụng cho các tuyến đăng nhập, đăng ký, đặt lại mật khẩu và OAuth.',
+    'Rate limit window (seconds)': 'Cửa sổ giới hạn tốc độ (giây)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429.',
+  },
+  'zh-TW': {
+    'Route rate limits': '路由速率限制',
+    'These limits are counted by client IP and apply before authentication.':
+      '這些限制會依用戶端 IP 計數，並在驗證前套用。',
+    'Global API rate limiting': '全域 API 速率限制',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      '適用於控制台和 /api 路由，不適用於模型轉發請求。',
+    'Global web rate limiting': '全域 Web 速率限制',
+    'Applies to web pages and static assets.': '適用於網頁和靜態資源。',
+    'Critical route rate limiting': '關鍵路由速率限制',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      '適用於登入、註冊、重設密碼和 OAuth 路由。',
+    'Rate limit window (seconds)': '速率限制時間視窗（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      '此處控制模型請求速率限制。路由速率限制可在下方設定，仍可能回傳 429。',
+  },
+}
+for (const [locale, translations] of Object.entries(routeRateLimitKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

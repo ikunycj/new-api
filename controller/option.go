@@ -157,6 +157,16 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 		option.Value = normalized
+	case "GlobalApiRateLimitEnabled", "GlobalApiRateLimitNum", "GlobalApiRateLimitDuration",
+		"GlobalWebRateLimitEnabled", "GlobalWebRateLimitNum", "GlobalWebRateLimitDuration",
+		"CriticalRateLimitEnabled", "CriticalRateLimitNum", "CriticalRateLimitDuration":
+		if err = setting.CheckRouteRateLimitOption(option.Key, option.Value.(string)); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)

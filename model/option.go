@@ -143,6 +143,15 @@ func InitOptionMap() {
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
 	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
+	common.OptionMap["GlobalApiRateLimitEnabled"] = strconv.FormatBool(common.GlobalApiRateLimitEnable)
+	common.OptionMap["GlobalApiRateLimitNum"] = strconv.Itoa(common.GlobalApiRateLimitNum)
+	common.OptionMap["GlobalApiRateLimitDuration"] = strconv.FormatInt(common.GlobalApiRateLimitDuration, 10)
+	common.OptionMap["GlobalWebRateLimitEnabled"] = strconv.FormatBool(common.GlobalWebRateLimitEnable)
+	common.OptionMap["GlobalWebRateLimitNum"] = strconv.Itoa(common.GlobalWebRateLimitNum)
+	common.OptionMap["GlobalWebRateLimitDuration"] = strconv.FormatInt(common.GlobalWebRateLimitDuration, 10)
+	common.OptionMap["CriticalRateLimitEnabled"] = strconv.FormatBool(common.CriticalRateLimitEnable)
+	common.OptionMap["CriticalRateLimitNum"] = strconv.Itoa(common.CriticalRateLimitNum)
+	common.OptionMap["CriticalRateLimitDuration"] = strconv.FormatInt(common.CriticalRateLimitDuration, 10)
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
 	common.OptionMap["ModelPrice"] = ratio_setting.ModelPrice2JSONString()
 	common.OptionMap["PreferredModels"] = `["gpt-5.6-sol","claude-fable-5"]`
@@ -421,6 +430,12 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.CheckSensitiveOnPromptEnabled = boolValue
 		case "ModelRequestRateLimitEnabled":
 			setting.ModelRequestRateLimitEnabled = boolValue
+		case "GlobalApiRateLimitEnabled":
+			common.GlobalApiRateLimitEnable = boolValue
+		case "GlobalWebRateLimitEnabled":
+			common.GlobalWebRateLimitEnable = boolValue
+		case "CriticalRateLimitEnabled":
+			common.CriticalRateLimitEnable = boolValue
 		case "StopOnSensitiveEnabled":
 			setting.StopOnSensitiveEnabled = boolValue
 		case "SMTPSSLEnabled":
@@ -593,6 +608,18 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.ModelRequestRateLimitSuccessCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
+	case "GlobalApiRateLimitNum":
+		common.GlobalApiRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalApiRateLimitDuration":
+		common.GlobalApiRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "GlobalWebRateLimitNum":
+		common.GlobalWebRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalWebRateLimitDuration":
+		common.GlobalWebRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "CriticalRateLimitNum":
+		common.CriticalRateLimitNum, _ = strconv.Atoi(value)
+	case "CriticalRateLimitDuration":
+		common.CriticalRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
 	case "RetryTimes":
 		common.RetryTimes, _ = strconv.Atoi(value)
 	case "DataExportInterval":
