@@ -4,7 +4,7 @@
 
 Treat `rpc error`, BuildKit EOF, or a vanished Docker connection as a host incident, not a source-code build error, until proven otherwise.
 
-The recorded failure transferred only about 21 MB of context but spent roughly five minutes doing so. The build then ended in EOF. `dmesg` showed the OOM killer terminated `dockerd`, whose RSS was about 1.1 GiB, on a host with roughly 1.8 GiB RAM.
+The recorded `alltokenapi` failure transferred only about 21 MB of context but spent roughly five minutes doing so. The build then ended in EOF. `dmesg` showed the OOM killer terminated `dockerd`, whose RSS was about 1.1 GiB, on a host with roughly 1.8 GiB RAM. This is why production builds always run on the workstation; do not apply that historical capacity figure to the separate `ikun.love` host.
 
 Collect evidence before changing anything:
 
@@ -18,7 +18,7 @@ journalctl -u docker --since '-30 min' --no-pager | tail -n 200
 dmesg -T | grep -Ei 'out of memory|oom|killed process' | tail -n 50
 ```
 
-Do not retry the remote build. Move to the local binary build path.
+Do not retry the remote build. Move to the local binary build path. The `ikun.love` Compose file is an isolated stack, so a release must still use `--no-build --no-deps` and leave its PostgreSQL, Redis, network, and volumes intact.
 
 ## Docker restarted and the app failed first
 
@@ -27,8 +27,8 @@ An OOM-triggered Docker restart can briefly restart the app, PostgreSQL, and Red
 Recover in dependency order:
 
 1. Confirm Docker is stable and not still restarting.
-2. Wait for `1Panel-postgresql-2LOJ` to become healthy.
-3. Confirm `1Panel-redis-pDR8` is running.
+2. Wait for the selected target's PostgreSQL container to become healthy (`1Panel-postgresql-2LOJ` for `alltokenapi`, `ikun-new-api-postgres` for `ikun.love`).
+3. Confirm the selected target's Redis container is running (`1Panel-redis-pDR8` for `alltokenapi`, `ikun-new-api-redis` for `ikun.love`).
 4. Start or recreate only `new-api` if it did not recover automatically.
 5. Verify local `/api/status`, then public status.
 
@@ -36,7 +36,7 @@ Do not recreate either data service and do not run `docker compose down`.
 
 ## Candidate fails local health
 
-The deploy script automatically retags the preserved rollback image as `new-api:local` and recreates only the app service. After rollback, verify:
+The deploy script automatically retags the preserved rollback image as the selected live image tag (`new-api:local` for the default stack, `new-api:ikun` for `ikun.love`) and recreates only the app service. After rollback, verify:
 
 ```bash
 docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
@@ -56,7 +56,7 @@ Do not immediately rebuild or roll back. Inspect the reverse-proxy path separate
 
 ```bash
 curl -v http://127.0.0.1:3000/api/status
-curl -v https://alltokenapi.com/api/status
+curl -v https://<selected-domain>/api/status
 ```
 
 Check OpenResty routing, TLS, and upstream connectivity. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.

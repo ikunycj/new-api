@@ -1,4 +1,4 @@
 interface:
   display_name: "Deploy new-api"
-  short_description: "Deploy the latest new-api master safely"
-  default_prompt: "Use $deploy-new-api to select a host, verify the latest origin/master, and safely deploy new-api on the existing 1Panel stack."
+  short_description: "Deploy a verified new-api branch safely"
+  default_prompt: "Use $deploy-new-api to select aliyun, alltokenapi, or ikun.love, verify the host's latest release branch, and safely deploy new-api on the existing Compose stack."

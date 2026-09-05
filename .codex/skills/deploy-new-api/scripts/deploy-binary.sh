@@ -13,6 +13,8 @@ Options:
                           (default: docker-compose.1panel.yml)
   --env-file PATH         Env file relative to deploy dir (default: .env)
   --image-tag TAG         Live image tag (default: new-api:local)
+  --project-name NAME     Compose project name (optional)
+  --network NAME          Expected app network (optional)
   --service NAME          Compose service (default: new-api)
   --container NAME        App container (default: new-api)
   --postgres NAME         Existing PostgreSQL container
@@ -33,6 +35,8 @@ DEPLOY_DIR='/opt/new-api'
 COMPOSE_FILE='docker-compose.1panel.yml'
 ENV_FILE='.env'
 IMAGE_TAG='new-api:local'
+PROJECT_NAME=''
+NETWORK=''
 SERVICE='new-api'
 CONTAINER='new-api'
 POSTGRES='1Panel-postgresql-2LOJ'
@@ -52,6 +56,8 @@ while (($#)); do
     --compose-file) COMPOSE_FILE=${2:?missing value}; shift 2 ;;
     --env-file) ENV_FILE=${2:?missing value}; shift 2 ;;
     --image-tag) IMAGE_TAG=${2:?missing value}; shift 2 ;;
+    --project-name) PROJECT_NAME=${2:?missing value}; shift 2 ;;
+    --network) NETWORK=${2:?missing value}; shift 2 ;;
     --service) SERVICE=${2:?missing value}; shift 2 ;;
     --container) CONTAINER=${2:?missing value}; shift 2 ;;
     --postgres) POSTGRES=${2:?missing value}; shift 2 ;;
@@ -77,6 +83,8 @@ done
 [[ $COMMIT =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'Commit must be a full 40-character SHA' >&2; exit 2; }
 [[ $RELEASE =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Release contains unsafe characters' >&2; exit 2; }
 [[ $TIMEOUT =~ ^[0-9]+$ ]] && ((TIMEOUT >= 10 && TIMEOUT <= 900)) || { echo 'Timeout must be 10..900 seconds' >&2; exit 2; }
+[[ -z $PROJECT_NAME || $PROJECT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo 'Project name contains unsafe characters' >&2; exit 2; }
+[[ -z $NETWORK || $NETWORK =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo 'Network name contains unsafe characters' >&2; exit 2; }
 
 for command_name in docker curl sha256sum stat tar; do
   command -v "$command_name" >/dev/null || { echo "Missing command: $command_name" >&2; exit 1; }
@@ -89,6 +97,42 @@ cd "$DEPLOY_DIR"
 [[ -f $ARCHIVE ]] || { echo "Missing archive: $ARCHIVE" >&2; exit 1; }
 env_mode=$(stat -c '%a' "$ENV_FILE")
 [[ $env_mode == 600 ]] || { echo "Refusing to deploy: $ENV_FILE mode is $env_mode, expected 600" >&2; exit 1; }
+
+compose_args=(--env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+if [[ -n $PROJECT_NAME ]]; then
+  compose_args+=(--project-name "$PROJECT_NAME")
+fi
+docker compose "${compose_args[@]}" config --quiet
+compose_services=$(docker compose "${compose_args[@]}" config --services)
+grep -Fxq "$SERVICE" <<<"$compose_services" || {
+  echo "Compose service is not defined: $SERVICE" >&2
+  exit 1
+}
+compose_images=$(docker compose "${compose_args[@]}" config --images)
+grep -Fxq "$IMAGE_TAG" <<<"$compose_images" || {
+  echo "Compose does not resolve the expected app image: $IMAGE_TAG" >&2
+  exit 1
+}
+if [[ -n $PROJECT_NAME ]]; then
+  current_project=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)
+  [[ $current_project == "$PROJECT_NAME" ]] || {
+    echo "Existing app container belongs to project ${current_project:-missing}, expected $PROJECT_NAME" >&2
+    exit 1
+  }
+fi
+current_image=$(docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || true)
+[[ $current_image == "$IMAGE_TAG" ]] || {
+  echo "Existing app container uses ${current_image:-missing}, expected $IMAGE_TAG" >&2
+  exit 1
+}
+if [[ -n $NETWORK ]]; then
+  docker network inspect "$NETWORK" >/dev/null || { echo "Missing expected network: $NETWORK" >&2; exit 1; }
+  current_networks=$(docker inspect "$CONTAINER" --format '{{json .NetworkSettings.Networks}}' 2>/dev/null || true)
+  grep -Fq "\"$NETWORK\"" <<<"$current_networks" || {
+    echo "Existing app container is not attached to expected network: $NETWORK" >&2
+    exit 1
+  }
+fi
 
 actual_archive_sha=$(sha256sum "$ARCHIVE" | awk '{print tolower($1)}')
 [[ $actual_archive_sha == ${ARCHIVE_SHA,,} ]] || { echo 'Archive SHA-256 mismatch' >&2; exit 1; }
@@ -133,14 +177,32 @@ docker create --name "$TEMP_CONTAINER" "$IMAGE_TAG" >/dev/null
 docker cp "$NEW_BINARY" "$TEMP_CONTAINER:/new-api"
 docker commit \
   --change "LABEL org.opencontainers.image.revision=$COMMIT" \
-  --change "LABEL com.alltokenapi.release=$RELEASE" \
+  --change "LABEL com.new-api.release=$RELEASE" \
   "$TEMP_CONTAINER" "$CANDIDATE_TAG" >/dev/null
 docker rm "$TEMP_CONTAINER" >/dev/null
 docker run --rm --entrypoint /new-api "$CANDIDATE_TAG" --help >/dev/null
 
 compose_recreate() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
+  docker compose "${compose_args[@]}" \
     up -d --no-build --no-deps --force-recreate "$SERVICE"
+}
+
+assert_runtime_topology() {
+  local actual_name actual_image actual_networks
+  actual_name=$(docker inspect "$CONTAINER" --format '{{.Name}}' | sed 's#^/##')
+  actual_image=$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')
+  [[ $actual_name == "$CONTAINER" ]] || { echo "Unexpected app container: $actual_name" >&2; return 1; }
+  [[ $actual_image == "$IMAGE_TAG" ]] || { echo "Unexpected app image: $actual_image" >&2; return 1; }
+  if [[ -n $PROJECT_NAME ]]; then
+    [[ $(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project"}}') == "$PROJECT_NAME" ]] || {
+      echo "Unexpected Compose project for $CONTAINER" >&2
+      return 1
+    }
+  fi
+  if [[ -n $NETWORK ]]; then
+    actual_networks=$(docker inspect "$CONTAINER" --format '{{json .NetworkSettings.Networks}}')
+    grep -Fq "\"$NETWORK\"" <<<"$actual_networks" || { echo "Unexpected app network" >&2; return 1; }
+  fi
 }
 
 wait_for_local_health() {
@@ -170,6 +232,10 @@ if ! compose_recreate; then
   rollback
   exit 1
 fi
+if ! assert_runtime_topology; then
+  rollback
+  exit 1
+fi
 if ! wait_for_local_health; then
   docker logs --tail 200 "$CONTAINER" >&2 || true
   rollback
@@ -185,15 +251,15 @@ runtime_sha=$(sha256sum "$runtime_tmp" | awk '{print tolower($1)}')
   exit 1
 }
 
-printf '%s\n' "$COMMIT" > .deploy-commit
-printf '%s\n' "$RELEASE" > .deploy-release
-
 if [[ -n $PUBLIC_URL ]]; then
   curl -fsS "$PUBLIC_URL" >/dev/null || {
     echo "Local deployment is healthy, but public check failed: $PUBLIC_URL" >&2
     exit 1
   }
 fi
+
+printf '%s\n' "$COMMIT" > .deploy-commit
+printf '%s\n' "$RELEASE" > .deploy-release
 
 new_image_id=$(docker image inspect "$IMAGE_TAG" --format '{{.Id}}')
 echo "release=$RELEASE"

@@ -12,7 +12,7 @@
 
 ## 1. Gate and baseline
 
-First ask: `部署到 aliyun（开发）还是 alltokenapi（生产）？` Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. For `alltokenapi`, confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, and capture a read-only server baseline from `production-topology.md`.
+First confirm the target: `aliyun` (development), `alltokenapi` (production), or `ikun.love` (production). Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. Set `$releaseBranch` from the target table (`master` for the existing targets, `ikun.love` for `ikun.love`). For either production target, confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, verify live DNS, and capture a read-only server baseline from `production-topology.md`.
 
 Check workstation tools:
 
@@ -27,29 +27,29 @@ tar --version
 
 Re-read `Dockerfile` before every release. Match its Go version and build experiment rather than trusting an old note. The successful 2026-07-21 build used Go 1.26.1, `GOEXPERIMENT=greenteagc`, Linux amd64, and `CGO_ENABLED=0`.
 
-## 2. Verify the latest master
+## 2. Verify the latest target branch
 
-Deploy only the latest `origin/master`. Do not package the current dirty directory and do not deploy the current feature branch, another branch, tag, or arbitrary commit. Preserve unrelated dirty files in the user's current worktree.
+Deploy only the latest `origin/$releaseBranch`. Do not package the current dirty directory and do not deploy another branch, tag, or arbitrary commit. Preserve unrelated dirty files in the user's current worktree.
 
 Fetch the remote tracking ref, then compare the local branch, fetched tracking ref, and a live remote query:
 
 ```powershell
 git status --short --branch
-git fetch origin master
-$localMaster = git rev-parse --verify refs/heads/master
-$fetchedMaster = git rev-parse --verify refs/remotes/origin/master
-$remoteMasterLine = git ls-remote origin refs/heads/master
-if ($LASTEXITCODE -ne 0 -or -not $remoteMasterLine) { throw 'Cannot verify origin/master' }
-$remoteMaster = ($remoteMasterLine -split '\s+')[0]
-if ($localMaster -ne $fetchedMaster -or $localMaster -ne $remoteMaster) {
-    throw "master mismatch: local=$localMaster fetched=$fetchedMaster remote=$remoteMaster"
+git fetch origin "$releaseBranch"
+$localBranch = git rev-parse --verify "refs/heads/$releaseBranch"
+$fetchedBranch = git rev-parse --verify "refs/remotes/origin/$releaseBranch"
+$remoteBranchLine = git ls-remote origin "refs/heads/$releaseBranch"
+if ($LASTEXITCODE -ne 0 -or -not $remoteBranchLine) { throw "Cannot verify origin/$releaseBranch" }
+$remoteBranch = ($remoteBranchLine -split '\s+')[0]
+if ($localBranch -ne $fetchedBranch -or $localBranch -ne $remoteBranch) {
+    throw "$releaseBranch mismatch: local=$localBranch fetched=$fetchedBranch remote=$remoteBranch"
 }
-$releaseCommit = $localMaster
+$releaseCommit = $localBranch
 ```
 
-If local `master` is missing, ahead, or behind, stop. Update it to exactly match `origin/master`, then rerun the full check. Do not silently force-move a branch or substitute `origin/master` while reporting that local and remote match.
+If the local target branch is missing, ahead, or behind, stop. Update it to exactly match its remote branch, then rerun the full check. Do not silently force-move a branch or substitute another branch while reporting that the target matches.
 
-If GitHub HTTPS repeatedly times out, use the workstation's GitHub key over SSH port 443 without changing `origin`, then fetch and query the same `master` ref:
+If GitHub HTTPS repeatedly times out, use the workstation's GitHub key over SSH port 443 without changing `origin`, then fetch and query the same `$releaseBranch` ref:
 
 ```powershell
 $env:GIT_SSH_COMMAND = 'ssh -i C:/Users/86139/.ssh/id_ed25519_github -o IdentitiesOnly=yes -o HostKeyAlias=github.com -p 443'
@@ -59,8 +59,8 @@ if ($originUrl -match '^https://github\.com/(.+?)(?:\.git)?$') {
 } else {
     $sshRemote = $originUrl
 }
-git fetch $sshRemote master:refs/remotes/origin/master
-git ls-remote $sshRemote refs/heads/master
+git fetch $sshRemote "${releaseBranch}:refs/remotes/origin/${releaseBranch}"
+git ls-remote $sshRemote "refs/heads/$releaseBranch"
 Remove-Item Env:GIT_SSH_COMMAND
 ```
 
@@ -68,7 +68,7 @@ Use this only as a fallback and still require all three SHAs to match.
 
 ## 3. Build on the workstation
 
-Run `scripts/build-release.ps1 -Commit $releaseCommit`. Its important invariants are:
+Run `scripts/build-release.ps1 -Branch $releaseBranch -Commit $releaseCommit` on Windows or `scripts/build-release.sh --branch "$releaseBranch" --commit "$releaseCommit"` on macOS/Linux. Its important invariants are:
 
 - Create a detached worktree from the commit, not from working-tree files.
 - Put the worktree on the same drive as the repository. A `C:` worktree linked to `F:` dependencies caused Rspack font paths such as `F:Project...` and failed the build.
@@ -121,8 +121,10 @@ bash ./deploy-binary.sh \
   --binary-sha <binary-sha256> \
   --commit <full-commit-sha> \
   --release <short-sha>-v1 \
-  --public-url https://alltokenapi.com/api/status
+  --public-url https://<selected-domain>/api/status
 ```
+
+For `ikun.love`, add `--image-tag new-api:ikun --project-name ikun-new-api --network ikun-new-api-network --container ikun-new-api --postgres ikun-new-api-postgres --redis ikun-new-api-redis`.
 
 The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so PostgreSQL and Redis are not recreated.
 
@@ -133,17 +135,19 @@ For remote multiline logic outside the script, encode the text locally as UTF-8/
 Do not stop at `docker ps`. Verify all of the following:
 
 ```bash
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
-docker image inspect new-api:local --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
-docker cp new-api:/new-api /tmp/new-api.runtime
+docker inspect <selected-container> --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
+docker image inspect <selected-image-tag> --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
+docker cp <selected-container>:/new-api /tmp/new-api.runtime
 sha256sum /tmp/new-api.runtime
 rm -f /tmp/new-api.runtime
-docker inspect 1Panel-postgresql-2LOJ --format '{{.State.Status}} {{.State.Health.Status}}'
-docker inspect 1Panel-redis-pDR8 --format '{{.State.Status}}'
+docker inspect <selected-postgres> --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+docker inspect <selected-redis> --format '{{.State.Status}}'
 curl -fsS http://127.0.0.1:3000/api/status
-curl -fsS https://alltokenapi.com/api/status
-curl -fsS -o /dev/null -w '%{http_code}\n' https://alltokenapi.com/pricing
+curl -fsS https://<selected-domain>/api/status
+curl -fsS -o /dev/null -w '%{http_code}\n' https://<selected-domain>/pricing
 ```
+
+For `ikun.love`, substitute `ikun-new-api`, `new-api:ikun`, `ikun-new-api-postgres`, and `ikun-new-api-redis`; also verify the app is attached to `ikun-new-api-network` and the Compose project is `ikun-new-api`. Use a GET request for `/api/status` (the public endpoint does not guarantee a successful HEAD response).
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.
 
