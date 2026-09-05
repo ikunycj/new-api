@@ -133,7 +133,7 @@ docker create --name "$TEMP_CONTAINER" "$IMAGE_TAG" >/dev/null
 docker cp "$NEW_BINARY" "$TEMP_CONTAINER:/new-api"
 docker commit \
   --change "LABEL org.opencontainers.image.revision=$COMMIT" \
-  --change "LABEL com.alltokenapi.release=$RELEASE" \
+  --change "LABEL com.new-api.release=$RELEASE" \
   "$TEMP_CONTAINER" "$CANDIDATE_TAG" >/dev/null
 docker rm "$TEMP_CONTAINER" >/dev/null
 docker run --rm --entrypoint /new-api "$CANDIDATE_TAG" --help >/dev/null

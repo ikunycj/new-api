@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Repository = 'F:\Project\My-Project\new-api',
-    [string]$Commit = 'master',
+    [string]$Branch = 'master',
+    [string]$Commit = '',
     [string]$OutputDirectory = '',
     [switch]$KeepWorktree,
     [switch]$ForceRebuild,
@@ -60,26 +61,32 @@ $repoRoot = (Resolve-Path -LiteralPath $Repository).Path
 if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'go.mod'))) {
     throw "Not a new-api repository: $repoRoot"
 }
+if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or
+    $Branch.Contains('..') -or $Branch.Contains('//') -or
+    $Branch.EndsWith('/') -or $Branch.EndsWith('.') -or
+    $Branch.EndsWith('.lock') -or $Branch.Contains('@{')) {
+    throw "Invalid release branch name: $Branch"
+}
 
 Invoke-Native -Command 'git' -Arguments @(
     '-C', $repoRoot, 'fetch', 'origin',
-    '+refs/heads/master:refs/remotes/origin/master'
+    "+refs/heads/$($Branch):refs/remotes/origin/$($Branch)"
 ) -WorkingDirectory $repoRoot
-$localMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/heads/master'
+$localBranch = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', "refs/heads/$($Branch)"
 ) -WorkingDirectory $repoRoot
-$fetchedMaster = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'rev-parse', '--verify', 'refs/remotes/origin/master'
+$fetchedBranch = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'rev-parse', '--verify', "refs/remotes/origin/$($Branch)"
 ) -WorkingDirectory $repoRoot
-$remoteMasterLine = Invoke-NativeCapture -Command 'git' -Arguments @(
-    '-C', $repoRoot, 'ls-remote', 'origin', 'refs/heads/master'
+$remoteBranchLine = Invoke-NativeCapture -Command 'git' -Arguments @(
+    '-C', $repoRoot, 'ls-remote', 'origin', "refs/heads/$($Branch)"
 ) -WorkingDirectory $repoRoot
-if ($remoteMasterLine -notmatch '(?m)^([0-9a-f]{40})\s+refs/heads/master$') {
-    throw "Could not verify live origin/master: $remoteMasterLine"
+if ($remoteBranchLine -notmatch "(?m)^([0-9a-f]{40})\s+refs/heads/$([regex]::Escape($Branch))$") {
+    throw "Could not verify live origin/$Branch`: $remoteBranchLine"
 }
-$remoteMaster = $Matches[1]
-if ($localMaster -ne $fetchedMaster -or $localMaster -ne $remoteMaster) {
-    throw "master mismatch: local=$localMaster fetched=$fetchedMaster remote=$remoteMaster"
+$remoteBranch = $Matches[1]
+if ($localBranch -ne $fetchedBranch -or $localBranch -ne $remoteBranch) {
+    throw "$Branch mismatch: local=$localBranch fetched=$fetchedBranch remote=$remoteBranch"
 }
 
 $buildScriptSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -88,12 +95,13 @@ if ($bunVersion -notmatch '^\d+\.\d+\.\d+') {
     throw "Could not parse Bun version: $bunVersion"
 }
 
-$commitSha = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'rev-parse', "${Commit}^{commit}") -WorkingDirectory $repoRoot
+$commitSpec = if ([string]::IsNullOrWhiteSpace($Commit)) { $remoteBranch } else { $Commit }
+$commitSha = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'rev-parse', "${commitSpec}^{commit}") -WorkingDirectory $repoRoot
 if ($commitSha -notmatch '^[0-9a-f]{40}$') {
     throw "Could not resolve a single commit: $commitSha"
 }
-if ($commitSha -ne $remoteMaster) {
-    throw "Only the latest origin/master may be built: requested=$commitSha master=$remoteMaster"
+if ($commitSha -ne $remoteBranch) {
+    throw "Only the latest origin/$Branch may be built: requested=$commitSha branch=$remoteBranch"
 }
 
 $dockerfile = Invoke-NativeCapture -Command 'git' -Arguments @('-C', $repoRoot, 'show', "${commitSha}:Dockerfile") -WorkingDirectory $repoRoot
@@ -145,6 +153,7 @@ $artifactExists = (Test-Path -LiteralPath $artifactDirectory) -or (Test-Path -Li
 if ($ValidateOnly) {
     [pscustomobject]@{
         Repository = $repoRoot
+        Branch = $Branch
         Commit = $commitSha
         Worktree = $worktree
         WorktreeExists = $worktreeExists
