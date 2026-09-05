@@ -39,6 +39,30 @@ type SelfChannelsTableProps = {
   channels: SelfChannel[]
 }
 
+const OPENAI_CHANNEL_TYPES = new Set([1])
+
+function isOpenAIModel(model: string): boolean {
+  return /^(gpt-|o[134](?:-|$)|chatgpt-|text-|dall-e|whisper|tts-|codex|sora-)/i.test(
+    model
+  )
+}
+
+function isClaudeModel(model: string): boolean {
+  return /^(claude(?:-|$)|anthropic\/)/i.test(model)
+}
+
+function getChannelModels(channel: { type: number; models: string }): string[] {
+  const models = parseModelsList(channel.models)
+  const isOpenAIChannel = OPENAI_CHANNEL_TYPES.has(channel.type)
+  const isClaudeChannel = channel.type === 14
+  if (!isOpenAIChannel && !isClaudeChannel) return models
+
+  const matches = models.filter((model) =>
+    isOpenAIChannel ? isOpenAIModel(model) : isClaudeModel(model)
+  )
+  return matches.length > 0 ? matches : models
+}
+
 function SelfChannelMetric(props: { label: string; children: ReactNode }) {
   return (
     <div className='flex min-w-0 items-start justify-between gap-3'>
@@ -64,17 +88,25 @@ function SelfChannelDetailsSheet(props: {
   const [selectedModel, setSelectedModel] = useState('')
   const channel = props.channel
   const channelId = channel?.id
+  const channelType = channel?.type
   const channelTestModel = channel?.test_model
   const channelModels = channel?.models
-  const models = parseModelsList(channel?.models ?? '')
+  const models = channel ? getChannelModels(channel) : []
 
   useEffect(() => {
-    const availableModels = parseModelsList(channelModels ?? '')
-    setSelectedModel(channelTestModel || availableModels[0] || '')
+    const availableModels = getChannelModels({
+      type: channelType ?? 0,
+      models: channelModels ?? '',
+    })
+    setSelectedModel(
+      channelTestModel && availableModels.includes(channelTestModel)
+        ? channelTestModel
+        : availableModels[0] || ''
+    )
     setTestState('idle')
     setTestResponseTime(undefined)
     setTestError('')
-  }, [channelId, channelTestModel, channelModels])
+  }, [channelId, channelType, channelTestModel, channelModels])
   if (!channel) return null
 
   const status =
@@ -309,7 +341,7 @@ function SelfChannelCard(props: { channel: SelfChannel }) {
     ] || CHANNEL_STATUS_CONFIG[0]
   const typeLabel = t(getChannelTypeLabel(channel.type))
   const groups = parseGroupsList(channel.group)
-  const models = parseModelsList(channel.models)
+  const models = getChannelModels(channel)
 
   return (
     <div className='flex min-w-0 flex-col gap-3 rounded-xl border bg-(--table-row) p-4'>
