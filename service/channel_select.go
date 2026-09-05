@@ -26,11 +26,7 @@ type RetryParam struct {
 	TokenGroup  string
 	ModelName   string
 	RequestPath string
-	// CircuitRoute is the stable route key used by the circuit breaker. It is
-	// separate from RequestPath because a request URL can include a version or
-	// provider-specific suffix while the Gin route pattern remains stable.
-	CircuitRoute string
-	Retry        *int
+	Retry       *int
 	// AllowDisabledPricingGroups is reserved for administrator diagnostics
 	// that must probe a configured group without reopening it to user traffic.
 	AllowDisabledPricingGroups bool
@@ -500,9 +496,9 @@ func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
 
 // activeRetryChannelCount returns the number of channels that could actually
 // receive a request right now. Retry budgets using "active channels" must not
-// count a channel with no usable credential, a full concurrency slot, an open
-// circuit, a provider excluded by the current failure, or a zero-weight route
-// entry. Attempted channels are intentionally not excluded here: the budget is
+// count a channel with no usable credential, a full concurrency slot, a provider
+// excluded by the current failure, or a zero-weight route entry. Attempted
+// channels are intentionally not excluded here: the budget is
 // a group-wide upper bound, while candidate selection owns per-request
 // exclusions.
 func (p *RetryParam) activeRetryChannelCount(group string) (int, error) {
@@ -522,16 +518,12 @@ func (p *RetryParam) activeRetryChannelCount(group string) (int, error) {
 			}
 		}
 	}
-	route := p.circuitRoute()
 	count := 0
 	for _, channel := range channels {
 		if channel == nil || !channel.HasEnabledKey() || p.isProviderExcluded(channel.Type) {
 			continue
 		}
 		if CurrentChannelConcurrency(channel.Id) >= channel.GetMaxConcurrency() {
-			continue
-		}
-		if route != "" && ChannelCircuitIsOpen(channel.Id, route) {
 			continue
 		}
 		if routeConfigured {
@@ -710,16 +702,6 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 }
 
 func (p *RetryParam) RuntimePolicy() model.RuntimeRoutingPolicy { return p.loadPolicy() }
-
-func (p *RetryParam) circuitRoute() string {
-	if p == nil {
-		return ""
-	}
-	if route := strings.TrimSpace(p.CircuitRoute); route != "" {
-		return route
-	}
-	return strings.TrimSpace(p.RequestPath)
-}
 
 func (p *RetryParam) RouteConfigured() bool {
 	p.loadPolicy()
@@ -937,9 +919,6 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 				continue
 			}
 			if CurrentChannelConcurrency(channel.Id) >= channel.GetMaxConcurrency() {
-				continue
-			}
-			if route := p.circuitRoute(); route != "" && ChannelCircuitIsOpen(channel.Id, route) {
 				continue
 			}
 			if previousGroup, attempted := p.channelGroups[channel.Id]; attempted && previousGroup != group {

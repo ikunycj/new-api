@@ -37,7 +37,7 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 	for _, channel := range channels {
 		require.NoError(t, model.DB.Create(&model.Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id, Enabled: true, Weight: weight}).Error)
 	}
-	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000, CircuitFailureThreshold: 5, CircuitWindowSeconds: 60, CircuitCooldownSeconds: 60, CircuitHalfOpenRequests: 1}
+	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000}
 	require.NoError(t, model.DB.Create(&route).Error)
 	require.NoError(t, model.DB.Create(&[]model.BillingGroupChannel{
 		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 1, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
@@ -243,16 +243,12 @@ func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
 		Where("id = ?", 81).
 		Update("max_total_attempts", 2).Error)
 	economyRoute := model.BillingGroupRoute{
-		Id:                      82,
-		BillingGroup:            "economy",
-		Name:                    "Economy",
-		Enabled:                 true,
-		MaxTotalAttempts:        1,
-		TotalTimeoutMs:          30000,
-		CircuitFailureThreshold: 5,
-		CircuitWindowSeconds:    60,
-		CircuitCooldownSeconds:  60,
-		CircuitHalfOpenRequests: 1,
+		Id:               82,
+		BillingGroup:     "economy",
+		Name:             "Economy",
+		Enabled:          true,
+		MaxTotalAttempts: 1,
+		TotalTimeoutMs:   30000,
 	}
 	require.NoError(t, model.DB.Create(&economyRoute).Error)
 	require.NoError(t, model.DB.Create(&model.BillingGroupChannel{
@@ -903,36 +899,6 @@ func TestDynamicPriorityIgnoresRouteCostFactor(t *testing.T) {
 	cheapScore := dynamicCandidateScore(cheapRoute, 1, strategy)
 	expensiveScore := dynamicCandidateScore(expensiveRoute, 1, strategy)
 	assert.InDelta(t, cheapScore, expensiveScore, 0.0001)
-}
-
-func TestDynamicRoutingSkipsOpenCircuitBeforeScoring(t *testing.T) {
-	channelID := 94003
-	policy := model.DefaultRuntimeRoutingPolicy()
-	route := "/test/dynamic-routing"
-	RecordChannelCircuitSuccess(channelID, route)
-	policy.CircuitFailureThreshold = 1
-	RecordChannelCircuitFailure(channelID, route, policy)
-	assert.True(t, ChannelCircuitIsOpen(channelID, route))
-	t.Cleanup(func() { RecordChannelCircuitSuccess(channelID, route) })
-
-	assert.True(t, ChannelCircuitIsOpen(channelID, route))
-}
-
-func TestSelectorFiltersOpenCircuitCandidate(t *testing.T) {
-	channels := setupChannelRoute(t)
-	policy := model.DefaultRuntimeRoutingPolicy()
-	policy.CircuitFailureThreshold = 1
-	route := "/v1/dynamic-circuit"
-	RecordChannelCircuitSuccess(channels[0].Id, route)
-	RecordChannelCircuitFailure(channels[0].Id, route, policy)
-	t.Cleanup(func() { RecordChannelCircuitSuccess(channels[0].Id, route) })
-
-	ctx, _ := gin.CreateTestContext(nil)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test", RequestPath: route}
-	selected, _, err := CacheGetRandomSatisfiedChannel(param)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	assert.Equal(t, channels[1].Id, selected.Id)
 }
 
 func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {

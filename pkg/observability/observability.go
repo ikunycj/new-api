@@ -85,10 +85,6 @@ var (
 		Namespace: "new_api", Subsystem: "routing", Name: "auth_failures_total",
 		Help: "Gateway authentication failures by bounded reason and route.",
 	}, []string{"reason", "route", "status"})
-	channelCircuitState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "new_api", Subsystem: "routing", Name: "channel_circuit_state",
-		Help: "Channel circuit state represented as one hot state labels.",
-	}, []string{"channel_id", "route", "state"})
 	failoverDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "new_api", Subsystem: "routing", Name: "failover_duration_seconds",
 		Help:    "Time spent before a successful failover or final exhaustion.",
@@ -102,7 +98,7 @@ func Collectors() []prometheus.Collector {
 		relayRequests, relayRequestDuration, relayAttempts, relayAttemptDuration,
 		relayRetries, relayInFlight, relayClientCancellations,
 		errorEvents, channelRequests, channelSwitches,
-		finalErrors, authFailures, channelCircuitState, failoverDuration,
+		finalErrors, authFailures, failoverDuration,
 	}
 }
 
@@ -134,23 +130,6 @@ func RecordChannelRequest(channelID int, outcome string) {
 
 func RecordChannelSwitch(fromChannel, toChannel int) {
 	channelSwitches.WithLabelValues(strconv.Itoa(fromChannel), strconv.Itoa(toChannel)).Inc()
-}
-
-func SetChannelCircuitState(channelID int, route string, state string) {
-	if state != "open" && state != "half_open" {
-		state = "closed"
-	}
-	channel := strconv.Itoa(channelID)
-	if route == "" {
-		route = "unknown"
-	}
-	for _, candidate := range []string{"closed", "open", "half_open"} {
-		value := float64(0)
-		if candidate == state {
-			value = 1
-		}
-		channelCircuitState.WithLabelValues(channel, route, candidate).Set(value)
-	}
 }
 
 func RecordFailoverDuration(outcome string, duration time.Duration) {

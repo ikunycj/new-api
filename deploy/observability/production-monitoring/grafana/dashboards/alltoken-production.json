@@ -121,8 +121,7 @@
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
         { "expr": "sum by (from_channel, to_channel) (increase(new_api_routing_channel_switch_total{from_channel=~\"$channel\"}[5m]) or increase(new_api_routing_channel_switch_total{to_channel=~\"$channel\"}[5m]))", "legendFormat": "CH{{from_channel}} -> CH{{to_channel}}", "refId": "A" },
-        { "expr": "sum by (channel_id, outcome) (increase(new_api_routing_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" },
-        { "expr": "new_api_routing_channel_circuit_state{channel_id=~\"$channel\",state=~\"open|half_open\"} == 1", "legendFormat": "CH{{channel_id}} / {{state}}", "refId": "C" }
+        { "expr": "sum by (channel_id, outcome) (increase(new_api_routing_channel_requests_total{channel_id=~\"$channel\"}[5m]))", "legendFormat": "CH{{channel_id}} / {{outcome}}", "refId": "B" }
       ],
       "title": "Channel routing activity (5m)",
       "type": "timeseries"

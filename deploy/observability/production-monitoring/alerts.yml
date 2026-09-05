@@ -49,15 +49,6 @@ groups:
           summary: AllToken retry ratio exceeds 25%
           description: One or more upstream channels are unstable or exhausted.
 
-      - alert: AllTokenChannelCircuitOpen
-        expr: new_api_routing_channel_circuit_state{state="open"} == 1
-        for: 30s
-        labels:
-          severity: critical
-        annotations:
-          summary: Channel {{ $labels.channel_id }} circuit is open
-          description: New requests are being routed to another eligible channel.
-
       - alert: AllTokenFailoverSurge
         expr: sum(rate(new_api_routing_channel_switch_total[2m])) > 1
         for: 30s

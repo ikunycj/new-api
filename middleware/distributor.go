@@ -120,12 +120,11 @@ func Distribute() func(c *gin.Context) {
 				}
 
 				channel, selectGroup, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
-					Ctx:          c,
-					ModelName:    modelRequest.Model,
-					TokenGroup:   usingGroup,
-					RequestPath:  c.Request.URL.Path,
-					CircuitRoute: c.FullPath(),
-					Retry:        common.GetPointer(0),
+					Ctx:         c,
+					ModelName:   modelRequest.Model,
+					TokenGroup:  usingGroup,
+					RequestPath: c.Request.URL.Path,
+					Retry:       common.GetPointer(0),
 				})
 				if err != nil {
 					showGroup := usingGroup
@@ -152,24 +151,18 @@ func Distribute() func(c *gin.Context) {
 						model.IsChannelEnabledForGroupModel(selectGroup, modelRequest.Model, preferred.Id) {
 						// Affinity is a stability hint, not a hard routing rule. It
 						// must not bypass a selected force layer, an exhausted
-						// channel, a circuit, or a zero-weight route entry.
+						// channel, or a zero-weight route entry.
 						if (!channel.IsForcePriority() || preferred.Id == channel.Id) &&
 							preferred.HasEnabledKey() &&
 							service.CurrentChannelConcurrency(preferred.Id) < preferred.GetMaxConcurrency() {
-							route := c.FullPath()
-							if route == "" {
-								route = c.Request.URL.Path
-							}
-							if !service.ChannelCircuitIsOpen(preferred.Id, route) {
-								_, entries, configured := model.ResolveBillingGroupRoute(selectGroup)
-								if !configured || affinityRouteEntryAllows(entries, preferred) {
-									if preferred.Id != channel.Id {
-										service.CancelPendingRoutingSelection(c)
-									}
-									channel = preferred
-									affinityUsable = true
-									service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
+							_, entries, configured := model.ResolveBillingGroupRoute(selectGroup)
+							if !configured || affinityRouteEntryAllows(entries, preferred) {
+								if preferred.Id != channel.Id {
+									service.CancelPendingRoutingSelection(c)
 								}
+								channel = preferred
+								affinityUsable = true
+								service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
 							}
 						}
 					}

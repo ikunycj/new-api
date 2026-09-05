@@ -8,13 +8,6 @@ route:
   group_interval: 30s
   repeat_interval: 15m
 
-inhibit_rules:
-  - source_matchers:
-      - alertname="AllTokenChannelCircuitOpen"
-    target_matchers:
-      - alertname="AllTokenMockChannelExhausted"
-    equal: [channel_id]
-
 receivers:
   - name: local-alert-sink
     webhook_configs:

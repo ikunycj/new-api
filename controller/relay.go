@@ -236,12 +236,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:          c,
-		TokenGroup:   relayInfo.TokenGroup,
-		ModelName:    relayInfo.OriginModelName,
-		RequestPath:  c.Request.URL.Path,
-		CircuitRoute: c.FullPath(),
-		Retry:        common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 	defer retryParam.CancelRoutingSelection()
 	relayInfo.RetryIndex = 0
@@ -261,23 +260,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		// The distributor seeds the first channel on the Gin context. Initialize
-		// dynamic metadata before local routing guards so a rejected first
-		// candidate does not get selected repeatedly on the next loop.
+		// dynamic metadata before the upstream handler runs.
 		relayInfo.InitChannelMeta(c)
-		policy := retryParam.RuntimePolicy()
-		route := c.FullPath()
-		if route == "" && c.Request != nil {
-			route = c.Request.URL.Path
-		}
-		if !service.ChannelCircuitAllows(channel.Id, route, policy) {
-			retryParam.ExcludeChannel(channel.Id)
-			if retryParam.HasNextRetry() && retryParam.AdvanceRetry() {
-				continue
-			}
-			newAPIError = types.NewErrorWithStatusCode(errors.New("all candidate channel circuits are open"), types.ErrorCodeUpstreamExhausted, http.StatusServiceUnavailable)
-			newAPIError.SetChannelLocation(channel.Id, channel.Name)
-			break
-		}
 		provider := observability.ProviderOther
 		finalProvider = provider
 		finalChannelID = channel.Id
@@ -350,11 +334,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			switch newAPIError.FailureScope() {
 			case "credential", "channel":
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
-				service.RecordChannelCircuitFailure(channel.Id, route, policy)
 			case "provider":
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
 				retryParam.ExcludeProvider(channel.Type)
-				service.RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			attemptClass = observability.ErrorClass(newAPIError, contextErr)
 			upstreamStatus = newAPIError.StatusCode
@@ -401,7 +383,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		})
 
 		if newAPIError == nil {
-			service.RecordChannelCircuitSuccess(channel.Id, route)
 			observability.RecordChannelRequest(channel.Id, "success")
 			if failoverOccurred {
 				observability.RecordFailoverDuration("success", time.Since(requestStartedAt))
@@ -868,12 +849,11 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:          c,
-		TokenGroup:   relayInfo.TokenGroup,
-		ModelName:    relayInfo.OriginModelName,
-		RequestPath:  c.Request.URL.Path,
-		CircuitRoute: c.FullPath(),
-		Retry:        common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 	defer retryParam.CancelRoutingSelection()
 	lockedChannel, hasLockedChannel := relayInfo.LockedChannel.(*model.Channel)
@@ -904,22 +884,6 @@ func RelayTask(c *gin.Context) {
 				break
 			}
 		}
-		if hasLockedChannel {
-			relayInfo.InitChannelMeta(c)
-			policy := retryParam.RuntimePolicy()
-			route := retryParam.CircuitRoute
-			if route == "" {
-				route = c.FullPath()
-				if route == "" && c.Request != nil {
-					route = c.Request.URL.Path
-				}
-			}
-			if !service.ChannelCircuitAllows(channel.Id, route, policy) {
-				taskErr = service.TaskErrorWrapperLocal(fmt.Errorf("channel circuit is open"), "channel_circuit_open", http.StatusServiceUnavailable)
-				break
-			}
-		}
-
 		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {

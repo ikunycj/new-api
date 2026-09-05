@@ -109,12 +109,11 @@ ON CONFLICT ("group", model, channel_id) DO UPDATE SET
 
 INSERT INTO billing_group_routes (
   billing_group, name, enabled, max_total_attempts, total_timeout_ms,
-  circuit_failure_threshold, circuit_window_seconds, circuit_cooldown_seconds,
-  circuit_half_open_requests, created_time, updated_time
+  created_time, updated_time
 )
 VALUES (
   'default', 'Default load-test route', true, 4, 10000,
-  3, 30, 30, 1, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
+  extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
 )
 ON CONFLICT (billing_group) DO UPDATE SET
   name = EXCLUDED.name,

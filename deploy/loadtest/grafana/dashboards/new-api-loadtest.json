@@ -191,10 +191,9 @@
       "fieldConfig": {"defaults": {"unit": "ops", "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}}, "overrides": []}
     },
     {
-      "id": 27, "type": "timeseries", "title": "Channel switches and circuit state", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 90},
+      "id": 27, "type": "timeseries", "title": "Channel switches", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 90},
       "targets": [
-        {"refId": "A", "expr": "sum by (from_channel, to_channel) (rate(new_api_routing_channel_switch_total[1m]))", "legendFormat": "CH{{from_channel}} to CH{{to_channel}}"},
-        {"refId": "B", "expr": "new_api_routing_channel_circuit_state{state=~\"open|half_open\"}", "legendFormat": "CH{{channel_id}} {{state}}"}
+        {"refId": "A", "expr": "sum by (from_channel, to_channel) (rate(new_api_routing_channel_switch_total[1m]))", "legendFormat": "CH{{from_channel}} to CH{{to_channel}}"}
       ],
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 12}}, "overrides": []}
     },
@@ -213,7 +212,7 @@
     },
     {
       "id": 30, "type": "table", "title": "Failover alerts", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 98},
-      "targets": [{"refId": "A", "expr": "ALERTS{alertname=~\"AllTokenChannelCircuitOpen|AllTokenUpstreamExhausted|AllTokenMockChannelTokensLow|AllTokenMockChannelExhausted|AllTokenFailoverSurge\"}", "format": "table", "instant": true}],
+      "targets": [{"refId": "A", "expr": "ALERTS{alertname=~\"AllTokenUpstreamExhausted|AllTokenMockChannelTokensLow|AllTokenMockChannelExhausted|AllTokenFailoverSurge\"}", "format": "table", "instant": true}],
       "fieldConfig": {"defaults": {}, "overrides": []},
       "options": {"showHeader": true}
     }

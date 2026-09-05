@@ -11,7 +11,7 @@
 - **用户**：登录账号与 API Key 的所有者。
 - **用户分组**：复用 `users.group`；当前默认用户分组目录只包含 `default`。
 - **计费分组**：API Key 授权的计费与模型能力边界，复用 Token、Ability 和 Channel 已有的 `group`。
-- **渠道**：一个可独立请求、计费、重试、熔断和监控的上游入口。
+- **渠道**：一个可独立请求、计费、重试和监控的上游入口。
 
 上游系统内部是否存在账号池属于上游实现细节；网关收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
 
@@ -25,10 +25,6 @@
 
 - `max_total_attempts`：一次客户端请求允许的全部上游尝试数。
 - `total_timeout_ms`：整个渠道切换过程的时间预算，不是单个模型响应超时。
-- `circuit_failure_threshold`：窗口内触发渠道熔断的失败数。
-- `circuit_window_seconds`：熔断统计窗口。
-- `circuit_cooldown_seconds`：渠道熔断后的冷却时间。
-- `circuit_half_open_requests`：半开状态允许的探测请求数。
 
 ### 2.2 渠道顺序
 
@@ -45,7 +41,7 @@
 
 渠道必须属于同一个计费分组并支持请求模型。普通渠道不再按 `priority` 形成硬层级；只有启用强制优先的渠道才按作用域和数值层级先于动态评分，层内再按策略和权重选择。
 
-系统在完整能力候选集中先执行权限、能力、凭证、熔断和并发硬过滤，再按定价分组配置的价格优先、均衡或稳定策略计算有效价格、昨日可用性和当前负载。`priority` 不再形成普通渠道的硬层级；强制优先渠道仍按其作用域和数值层级先于动态评分。候选池内才应用 `weight` 做平滑公平分流。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生，并先选定价分组再选渠道。
+系统在完整能力候选集中先执行权限、能力、凭证和并发硬过滤，再按定价分组配置的价格优先、均衡或稳定策略计算有效价格、昨日可用性和当前负载。`priority` 不再形成普通渠道的硬层级；强制优先渠道仍按其作用域和数值层级先于动态评分。候选池内才应用 `weight` 做平滑公平分流。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生，并先选定价分组再选渠道。
 
 ## 3. 切流过程
 
@@ -54,13 +50,13 @@
 1. 根据用户和 API Key 确定允许使用的计费分组。
 2. 根据计费分组、模型和请求路径过滤可用渠道。
 3. 先在跨组场景选择定价分组，再在组内按动态策略建立近似最高分候选池。
-4. 在真正发送前原子预占并发名额，并再次确认熔断状态。
+4. 在真正发送前原子预占并发名额。
 5. 发起请求并记录渠道尝试结果。
 6. 对可重试错误，在 `max_attempts` 和全局预算内重新计算剩余候选。
-7. 当前渠道达到尝试上限、被错误规则要求切换或被熔断时，选择下一渠道。
+7. 当前渠道达到尝试上限或被错误规则要求切换时，选择下一渠道。
 8. 所有候选渠道或预算耗尽后，对客户端返回最终错误。
 
-渠道熔断按 `channel_id + route` 统计。Redis 可用时多个网关实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。
+渠道失败按 `channel_id` 记录。请求参数错误、内容策略错误和客户端主动取消不应触发渠道切换。
 
 ## 4. 错误分层
 
@@ -186,7 +182,6 @@ SCCDDD
 ```text
 new_api_routing_channel_requests_total{channel_id,outcome}
 new_api_routing_channel_switch_total{from_channel,to_channel}
-new_api_routing_channel_circuit_state{channel_id,route,state}
 new_api_routing_error_events_total{event_kind,stable_code,category,channel_id}
 new_api_routing_final_errors_total{stable_code,category,channel_id}
 new_api_routing_failover_duration_seconds{outcome}
@@ -196,12 +191,11 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 
 - 各渠道请求量与失败率。
 - 渠道之间的切换次数。
-- 打开/半开的渠道熔断器。
 - 按渠道和六位错误码聚合的错误量。
 - 最终对外成功率、P95 延迟和耗尽错误。
 - 数据库、Redis、ECS 和应用资源指标。
 
-核心告警包括渠道熔断、渠道切换激增、最终错误率过高和所有候选渠道耗尽。Alertmanager 按 `channel_id` 聚合告警。
+核心告警包括渠道切换激增、最终错误率过高和所有候选渠道耗尽。Alertmanager 按 `channel_id` 聚合告警。
 
 ## 7. 数据迁移与回滚
 
@@ -219,6 +213,5 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 2. 高优先级渠道成功时不会访问后续渠道。
 3. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。
 4. 错误记录包含正确的 `stable_code`、`channel_id` 和 `error_ref`。
-5. 渠道熔断后不再接收新请求，冷却后半开探测成功可恢复。
-6. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断。
-7. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。
+5. Grafana 能按 `channel_id` 看到请求、失败和切换。
+6. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。

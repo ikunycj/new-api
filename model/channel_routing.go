@@ -11,22 +11,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// BillingGroupRoute owns the retry and circuit policy for one billing group.
+// BillingGroupRoute owns the retry policy for one billing group.
 // The billing group is the existing group used by tokens, abilities, and
 // channels, and routes directly to channels.
 type BillingGroupRoute struct {
-	Id                      int    `json:"id"`
-	BillingGroup            string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
-	Name                    string `json:"name" gorm:"type:varchar(128)"`
-	Enabled                 bool   `json:"enabled" gorm:"index"`
-	MaxTotalAttempts        int    `json:"max_total_attempts"`
-	TotalTimeoutMs          int    `json:"total_timeout_ms"`
-	CircuitFailureThreshold int    `json:"circuit_failure_threshold"`
-	CircuitWindowSeconds    int    `json:"circuit_window_seconds"`
-	CircuitCooldownSeconds  int    `json:"circuit_cooldown_seconds"`
-	CircuitHalfOpenRequests int    `json:"circuit_half_open_requests"`
-	CreatedTime             int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime             int64  `json:"updated_time" gorm:"bigint"`
+	Id               int    `json:"id"`
+	BillingGroup     string `json:"billing_group" gorm:"type:varchar(64);uniqueIndex"`
+	Name             string `json:"name" gorm:"type:varchar(128)"`
+	Enabled          bool   `json:"enabled" gorm:"index"`
+	MaxTotalAttempts int    `json:"max_total_attempts"`
+	TotalTimeoutMs   int    `json:"total_timeout_ms"`
+	CreatedTime      int64  `json:"created_time" gorm:"bigint"`
+	UpdatedTime      int64  `json:"updated_time" gorm:"bigint"`
 }
 
 // BillingGroupChannel stores the stable route order and the long-term weight
@@ -71,24 +67,16 @@ type ChannelRoutingConfig struct {
 }
 
 type RuntimeRoutingPolicy struct {
-	MaxTotalAttempts        int
-	TotalTimeoutMs          int
-	CircuitFailureThreshold int
-	CircuitWindowSeconds    int
-	CircuitCooldownSeconds  int
-	CircuitHalfOpenRequests int
-	RoutingStrategy         ratio_setting.PricingGroupRoutingStrategy
+	MaxTotalAttempts int
+	TotalTimeoutMs   int
+	RoutingStrategy  ratio_setting.PricingGroupRoutingStrategy
 }
 
 func DefaultRuntimeRoutingPolicy() RuntimeRoutingPolicy {
 	return RuntimeRoutingPolicy{
-		MaxTotalAttempts:        4,
-		TotalTimeoutMs:          30000,
-		CircuitFailureThreshold: 5,
-		CircuitWindowSeconds:    60,
-		CircuitCooldownSeconds:  60,
-		CircuitHalfOpenRequests: 1,
-		RoutingStrategy:         ratio_setting.DefaultPricingGroupRoutingStrategy(),
+		MaxTotalAttempts: 4,
+		TotalTimeoutMs:   30000,
+		RoutingStrategy:  ratio_setting.DefaultPricingGroupRoutingStrategy(),
 	}
 }
 
@@ -152,18 +140,6 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	}
 	if route.TotalTimeoutMs > 0 {
 		policy.TotalTimeoutMs = route.TotalTimeoutMs
-	}
-	if route.CircuitFailureThreshold > 0 {
-		policy.CircuitFailureThreshold = route.CircuitFailureThreshold
-	}
-	if route.CircuitWindowSeconds > 0 {
-		policy.CircuitWindowSeconds = route.CircuitWindowSeconds
-	}
-	if route.CircuitCooldownSeconds > 0 {
-		policy.CircuitCooldownSeconds = route.CircuitCooldownSeconds
-	}
-	if route.CircuitHalfOpenRequests > 0 {
-		policy.CircuitHalfOpenRequests = route.CircuitHalfOpenRequests
 	}
 	if strategy, exists := ratio_setting.GetPricingGroupRoutingStrategy(billingGroup); exists {
 		policy.RoutingStrategy = strategy
@@ -387,18 +363,6 @@ func applyRouteDefaults(route *BillingGroupRoute) {
 	}
 	if route.TotalTimeoutMs <= 0 {
 		route.TotalTimeoutMs = defaults.TotalTimeoutMs
-	}
-	if route.CircuitFailureThreshold <= 0 {
-		route.CircuitFailureThreshold = defaults.CircuitFailureThreshold
-	}
-	if route.CircuitWindowSeconds <= 0 {
-		route.CircuitWindowSeconds = defaults.CircuitWindowSeconds
-	}
-	if route.CircuitCooldownSeconds <= 0 {
-		route.CircuitCooldownSeconds = defaults.CircuitCooldownSeconds
-	}
-	if route.CircuitHalfOpenRequests <= 0 {
-		route.CircuitHalfOpenRequests = defaults.CircuitHalfOpenRequests
 	}
 }
 

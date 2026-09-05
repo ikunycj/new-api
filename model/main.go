@@ -278,6 +278,9 @@ func migrateDB() error {
 	if err := resetChannelMonitorSchema(); err != nil {
 		return err
 	}
+	if err := removeLegacyBillingGroupCircuitColumns(); err != nil {
+		return err
+	}
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
@@ -355,6 +358,9 @@ func migrateDBFast() error {
 		return err
 	}
 	if err := resetChannelMonitorSchema(); err != nil {
+		return err
+	}
+	if err := removeLegacyBillingGroupCircuitColumns(); err != nil {
 		return err
 	}
 	var wg sync.WaitGroup
@@ -615,6 +621,27 @@ func removeLegacyUserClassificationColumn() error {
 	}
 	if err := migrator.DropColumn(legacy, "user_type"); err != nil {
 		return fmt.Errorf("remove legacy users.user_type column: %w", err)
+	}
+	return nil
+}
+
+func removeLegacyBillingGroupCircuitColumns() error {
+	if DB == nil || !DB.Migrator().HasTable(&BillingGroupRoute{}) {
+		return nil
+	}
+	migrator := DB.Migrator()
+	for _, column := range []string{
+		"circuit_failure_threshold",
+		"circuit_window_seconds",
+		"circuit_cooldown_seconds",
+		"circuit_half_open_requests",
+	} {
+		if !migrator.HasColumn(&BillingGroupRoute{}, column) {
+			continue
+		}
+		if err := migrator.DropColumn(&BillingGroupRoute{}, column); err != nil {
+			return fmt.Errorf("remove legacy billing group circuit column %s: %w", column, err)
+		}
 	}
 	return nil
 }

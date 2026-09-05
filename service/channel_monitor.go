@@ -347,12 +347,6 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 				lastErr = fmt.Errorf("no enabled channel for pricing group %q and model %q", monitor.PricingGroup, monitor.TestModel)
 				break
 			}
-			policy := retryParam.RuntimePolicy()
-			route := retryParam.circuitRoute()
-			if route != "" && !ChannelCircuitAllows(channel.Id, route, policy) {
-				retryParam.ExcludeChannel(channel.Id)
-				continue
-			}
 			if !TryAcquireChannelConcurrency(channel.Id, channel.GetMaxConcurrency()) {
 				retryParam.ExcludeChannel(channel.Id)
 				continue
@@ -363,14 +357,8 @@ func runChannelMonitorCheck(parent context.Context, monitor *model.ChannelMonito
 			}()
 			retryParam.MarkChannelAttempted(channel.Id)
 			if lastErr == nil {
-				if route != "" {
-					RecordChannelCircuitSuccess(channel.Id, route)
-				}
 				result.Success = true
 				break
-			}
-			if route != "" {
-				RecordChannelCircuitFailure(channel.Id, route, policy)
 			}
 			retryParam.ExcludeChannel(channel.Id)
 		}
