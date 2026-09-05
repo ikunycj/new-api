@@ -167,54 +167,84 @@ function SelfChannelDetailsSheet(props: {
             </div>
           </div>
 
-          <div className='rounded-lg border p-4'>
-            <div className='flex items-center justify-between gap-3'>
-              <div className='text-base font-semibold'>{t('API URL')}</div>
-              <Button
-                type='button'
-                size='sm'
-                variant='outline'
-                disabled={testState === 'testing'}
-                onClick={handleTest}
-              >
-                {testIcon}
-                {testLabel}
-              </Button>
+          <div className='space-y-3'>
+            <div className='rounded-lg border p-4'>
+              <div className='mb-2 text-base font-semibold'>{t('API URL')}</div>
+              <TruncatedText
+                text={channel.base_url || t('Default endpoint')}
+                className='max-w-full'
+              />
             </div>
-            <TruncatedText
-              text={channel.base_url || t('Default endpoint')}
-              className='mt-2 max-w-full'
-            />
-            <div className='mt-3 flex items-center gap-2'>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {t('Model to use for testing')}
-              </span>
-              <Select
-                value={selectedModel}
-                onValueChange={(value) => value && setSelectedModel(value)}
-              >
-                <SelectTrigger size='sm' className='min-w-0 flex-1'>
-                  <SelectValue placeholder={t('Model')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      <span className='font-mono'>{model}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            <div className='bg-muted/20 rounded-lg border p-4'>
+              <div className='mb-3 flex items-center justify-between gap-3'>
+                <div>
+                  <div className='text-base font-semibold'>
+                    {t('Test Channel Connection')}
+                  </div>
+                  <div className='text-muted-foreground mt-1 text-xs'>
+                    {t('Model to use for testing')}
+                  </div>
+                </div>
+                {testState === 'success' && (
+                  <StatusBadge
+                    label={t('Success')}
+                    variant='success'
+                    copyable={false}
+                  />
+                )}
+                {testState === 'error' && (
+                  <StatusBadge
+                    label={t('Failed')}
+                    variant='danger'
+                    copyable={false}
+                  />
+                )}
+              </div>
+              <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+                <Select
+                  value={selectedModel}
+                  onValueChange={(value) => value && setSelectedModel(value)}
+                >
+                  <SelectTrigger size='sm' className='min-w-0 flex-1'>
+                    <SelectValue placeholder={t('Model')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        <span className='font-mono'>{model}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type='button'
+                  size='sm'
+                  className='shrink-0 sm:min-w-36'
+                  disabled={testState === 'testing'}
+                  onClick={handleTest}
+                >
+                  {testIcon}
+                  {testLabel}
+                </Button>
+              </div>
+              {testState === 'success' && (
+                <div className='border-success/30 bg-success/5 text-success mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-xs'>
+                  <CheckCircle2 className='size-4 shrink-0' />
+                  <span>
+                    {t('{{target}} test succeeded', { target: channel.name })}
+                    {testResponseTime != null &&
+                      ` · ${formatResponseTime(testResponseTime, t)}`}
+                  </span>
+                </div>
+              )}
+              {testState === 'error' && (
+                <div className='border-destructive/30 bg-destructive/5 text-destructive mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs'>
+                  <XCircle className='mt-0.5 size-4 shrink-0' />
+                  <span>{testError}</span>
+                </div>
+              )}
             </div>
-            {testState === 'success' && (
-              <p className='text-success mt-2 text-xs'>
-                {t('{{target}} test succeeded', { target: channel.name })}
-                {testResponseTime != null &&
-                  ` · ${formatResponseTime(testResponseTime, t)}`}
-              </p>
-            )}
-            {testState === 'error' && (
-              <p className='text-destructive mt-2 text-xs'>{testError}</p>
-            )}
           </div>
 
           <div className='rounded-lg border p-4'>
