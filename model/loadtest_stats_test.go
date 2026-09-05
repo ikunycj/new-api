@@ -55,3 +55,34 @@ func TestGetLoadTestChannelStatsAggregatesUserLogsByChannel(t *testing.T) {
 	require.Equal(t, int64(1), stats[1].Requests)
 	require.InDelta(t, 1.1, stats[1].CostFactor, 0.0001)
 }
+
+func TestGetLoadTestTokenStatsByRunIDUsesCorrelatedConsumeLogs(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&Log{}))
+	previousDB, previousLogDB := DB, LOG_DB
+	DB, LOG_DB = db, db
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	t.Cleanup(func() {
+		DB, LOG_DB = previousDB, previousLogDB
+		common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	})
+
+	runID := "loadtest_token-stats"
+	other, err := common.Marshal(map[string]any{"load_test_run_id": runID})
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&[]Log{
+		{UserId: 7, Type: LogTypeConsume, Other: string(other), PromptTokens: 120, InputTokensTotal: 150, CompletionTokens: 9, CacheReadTokens: 30, CacheWriteTokens: 0},
+		{UserId: 7, Type: LogTypeConsume, Other: string(other), PromptTokens: 80, InputTokensTotal: 80, CompletionTokens: 4, CacheReadTokens: 0, CacheWriteTokens: 20},
+		{UserId: 8, Type: LogTypeConsume, Other: string(other), PromptTokens: 999, CompletionTokens: 999},
+	}).Error)
+
+	stats, err := GetLoadTestTokenStatsByRunID(7, runID)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), stats.Requests)
+	require.Equal(t, int64(200), stats.InputTokens)
+	require.Equal(t, int64(230), stats.InputTokensTotal)
+	require.Equal(t, int64(13), stats.OutputTokens)
+	require.Equal(t, int64(30), stats.CacheReadTokens)
+	require.Equal(t, int64(20), stats.CacheWriteTokens)
+}

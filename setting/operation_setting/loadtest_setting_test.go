@@ -17,6 +17,7 @@ func TestValidateLoadTestOption(t *testing.T) {
 		{name: "duration lower bound", key: "loadtest_setting.max_duration_seconds", value: "5"},
 		{name: "rps upper bound", key: "loadtest_setting.max_rps", value: "10000"},
 		{name: "concurrency upper bound", key: "loadtest_setting.max_concurrency", value: "10000"},
+		{name: "output tokens upper bound", key: "loadtest_setting.max_output_tokens", value: "8192"},
 		{name: "rps too large", key: "loadtest_setting.max_rps", value: "10001", wantErr: true},
 		{name: "rps not integer", key: "loadtest_setting.max_rps", value: "2.5", wantErr: true},
 		{name: "concurrency zero", key: "loadtest_setting.max_concurrency", value: "0", wantErr: true},
@@ -47,4 +48,13 @@ func TestGetLoadTestSettingClampsInvalidRuntimeValues(t *testing.T) {
 	assert.Equal(t, LoadTestHardMaxDurationSeconds, got.MaxDurationSeconds)
 	assert.Equal(t, 1, got.MaxRPS)
 	assert.Equal(t, 1, got.MaxConcurrency)
+}
+
+func TestGetLoadTestSettingClampsOutputTokens(t *testing.T) {
+	original := loadTestSetting
+	t.Cleanup(func() { loadTestSetting = original })
+	loadTestSetting.MaxOutputTokens = 0
+	assert.Equal(t, 1, GetLoadTestSetting().MaxOutputTokens)
+	loadTestSetting.MaxOutputTokens = LoadTestHardMaxOutputTokens + 1
+	assert.Equal(t, LoadTestHardMaxOutputTokens, GetLoadTestSetting().MaxOutputTokens)
 }

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { isAxiosError } from 'axios'
+
 import {
   fetchTokenKeysBatch,
   getApiKeys,
@@ -37,8 +38,8 @@ export const LOAD_TEST_DEFAULT_CONCURRENCY = 10
 export const LOAD_TEST_MIN_CONCURRENCY = 1
 export const LOAD_TEST_MAX_CONCURRENCY = 10
 export const LOAD_TEST_DEFAULT_PROMPT = 'Reply with OK.'
+export const LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS = 256
 export const LOAD_TEST_MAX_PROMPT_CHARS = 8000
-export const LOAD_TEST_TIMEOUT_MS = 120_000
 const LOAD_TEST_CACHE_PREFIX = Array.from(
   { length: 48 },
   (_, index) =>
@@ -59,6 +60,12 @@ export type LoadTestModel = {
   endpoint: LoadTestEndpoint
 }
 
+export function supportsLoadTestStreaming(
+  endpoint: LoadTestEndpoint | undefined
+) {
+  return endpoint !== undefined && endpoint !== 'openai-response-compact'
+}
+
 export function getLoadTestEndpointPath(endpoint: LoadTestEndpoint): string {
   return {
     anthropic: '/v1/messages',
@@ -72,8 +79,11 @@ export function buildLoadTestRequestBody(
   model: string,
   prompt: string,
   promptCache: boolean,
-  endpoint: LoadTestEndpoint
+  endpoint: LoadTestEndpoint,
+  streamMode = false,
+  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
 ): Record<string, unknown> {
+  const streaming = streamMode && supportsLoadTestStreaming(endpoint)
   const isResponsesEndpoint =
     endpoint === 'openai-response' || endpoint === 'openai-response-compact'
   const requestBody: Record<string, unknown> = isResponsesEndpoint
@@ -85,14 +95,16 @@ export function buildLoadTestRequestBody(
               { role: 'user', content: prompt },
             ]
           : [{ role: 'user', content: prompt }],
+        stream: streaming,
       }
     : {
         model,
-        max_tokens: 32,
+        max_tokens: maxOutputTokens,
         messages: [{ role: 'user', content: prompt }],
       }
 
   if (endpoint === 'anthropic') {
+    if (streaming) requestBody.stream = true
     if (promptCache) {
       requestBody.system = [
         {
@@ -104,7 +116,10 @@ export function buildLoadTestRequestBody(
     }
   } else if (endpoint === 'openai') {
     requestBody.temperature = 0
-    requestBody.stream = false
+    requestBody.stream = streaming
+    if (streaming) {
+      requestBody.stream_options = { include_usage: true }
+    }
     if (promptCache) {
       requestBody.messages = [
         { role: 'system', content: LOAD_TEST_CACHE_PREFIX },
@@ -112,8 +127,8 @@ export function buildLoadTestRequestBody(
       ]
     }
   } else if (endpoint === 'openai-response') {
-    requestBody.max_output_tokens = 32
-    requestBody.stream = false
+    requestBody.max_output_tokens = maxOutputTokens
+    requestBody.stream = streaming
   }
 
   return requestBody
@@ -179,6 +194,8 @@ export type LoadTestRequestResult = {
   errorCode?: string
   requestId?: string
   usage?: LoadTestUsage
+  firstTokenLatency?: number
+  outputTokensPerSecond?: number
   success: boolean
 }
 
@@ -202,6 +219,9 @@ export type LoadTestLimits = {
   max_rps: number
   min_concurrency: number
   max_concurrency: number
+  min_output_tokens: number
+  max_output_tokens: number
+  request_timeout_seconds: number
 }
 
 export type LoadTestAgent = {
@@ -259,6 +279,12 @@ export type LoadTestRunWorker = {
   successes: number
   failures: number
   dropped: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  usage_missing: number
+  token_stats_source: string
   current_rps: number
   p50_ms: number
   p95_ms: number
@@ -291,6 +317,7 @@ export type LoadTestAgentRun = {
   endpoint: LoadTestEndpoint
   prompt: string
   prompt_cache: boolean
+  stream_mode: boolean
   mock_enabled: boolean
   mock_failure_rate: number
   mock_failure_status: number
@@ -300,6 +327,8 @@ export type LoadTestAgentRun = {
   duration_seconds: number
   requests_per_second: number
   concurrency: number
+  max_output_tokens: number
+  request_timeout_seconds: number
   agent_managed: boolean
   status: LoadTestAgentRunStatus
   sent: number
@@ -311,6 +340,8 @@ export type LoadTestAgentRun = {
   output_tokens: number
   cache_read_tokens: number
   cache_write_tokens: number
+  usage_missing: number
+  token_stats_source: string
   current_rps: number
   p50_ms: number
   p95_ms: number
@@ -332,6 +363,7 @@ export type CreateLoadTestAgentRun = {
   endpoint: LoadTestEndpoint
   prompt: string
   prompt_cache: boolean
+  stream_mode: boolean
   mock_enabled?: boolean
   mock_failure_rate?: number
   mock_failure_status?: number
@@ -340,6 +372,8 @@ export type CreateLoadTestAgentRun = {
   duration_seconds: number
   requests_per_second: number
   concurrency: number
+  max_output_tokens: number
+  request_timeout_seconds?: number
 }
 
 export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
@@ -349,6 +383,9 @@ export const DEFAULT_LOAD_TEST_LIMITS: LoadTestLimits = {
   max_rps: LOAD_TEST_MAX_RPS,
   min_concurrency: LOAD_TEST_MIN_CONCURRENCY,
   max_concurrency: LOAD_TEST_MAX_CONCURRENCY,
+  min_output_tokens: 1,
+  max_output_tokens: LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  request_timeout_seconds: 120,
 }
 
 export async function getLoadTestLimits(): Promise<LoadTestLimits> {
@@ -674,6 +711,7 @@ function readUsage(
   }
 
   const record = usage as Record<string, unknown>
+  const has = (key: string) => Object.hasOwn(record, key)
   const readNumber = (key: string) => {
     const value = record[key]
     if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
@@ -701,25 +739,35 @@ function readUsage(
       !Array.isArray(promptDetails)
         ? (promptDetails as Record<string, unknown>)
         : undefined
-    const cacheReadTokens =
-      (promptDetailsRecord
-        ? readNumberFromRecord(promptDetailsRecord, 'cached_tokens')
-        : 0) ||
-      (inputDetailsRecord
-        ? readNumberFromRecord(inputDetailsRecord, 'cached_tokens')
-        : 0)
-    const cacheWriteTokens =
-      readNumber('cache_creation_input_tokens') ||
-      readNumber('cache_write_tokens')
-    const totalInputTokens =
-      readNumber('prompt_tokens') || readNumber('input_tokens')
+    let cacheReadTokens = 0
+    if (
+      promptDetailsRecord &&
+      Object.hasOwn(promptDetailsRecord, 'cached_tokens')
+    ) {
+      cacheReadTokens = readNumberFromRecord(promptDetailsRecord, 'cached_tokens')
+    } else if (
+      inputDetailsRecord &&
+      Object.hasOwn(inputDetailsRecord, 'cached_tokens')
+    ) {
+      cacheReadTokens = readNumberFromRecord(inputDetailsRecord, 'cached_tokens')
+    }
+    let cacheWriteTokens = 0
+    if (has('cache_creation_input_tokens')) {
+      cacheWriteTokens = readNumber('cache_creation_input_tokens')
+    } else if (has('cache_write_tokens')) {
+      cacheWriteTokens = readNumber('cache_write_tokens')
+    }
+    const totalInputTokens = has('input_tokens')
+      ? readNumber('input_tokens')
+      : readNumber('prompt_tokens')
     return {
       inputTokens: Math.max(
         0,
         totalInputTokens - cacheReadTokens - cacheWriteTokens
       ),
-      outputTokens:
-        readNumber('completion_tokens') || readNumber('output_tokens'),
+      outputTokens: has('output_tokens')
+        ? readNumber('output_tokens')
+        : readNumber('completion_tokens'),
       cacheReadTokens,
       cacheWriteTokens,
     }
@@ -730,12 +778,14 @@ function readUsage(
     cacheCreation && typeof cacheCreation === 'object'
       ? (cacheCreation as Record<string, unknown>)
       : undefined
-  const cacheWriteTokens =
-    readNumber('cache_creation_input_tokens') ||
-    (cacheCreationRecord
-      ? readNumberFromRecord(cacheCreationRecord, 'ephemeral_5m_input_tokens') +
-        readNumberFromRecord(cacheCreationRecord, 'ephemeral_1h_input_tokens')
-      : 0)
+  let cacheWriteTokens = 0
+  if (has('cache_creation_input_tokens')) {
+    cacheWriteTokens = readNumber('cache_creation_input_tokens')
+  } else if (cacheCreationRecord) {
+    cacheWriteTokens =
+      readNumberFromRecord(cacheCreationRecord, 'ephemeral_5m_input_tokens') +
+      readNumberFromRecord(cacheCreationRecord, 'ephemeral_1h_input_tokens')
+  }
 
   return {
     inputTokens: readNumber('input_tokens'),
@@ -766,13 +816,16 @@ export async function sendLoadTestRequest(
   promptCache: boolean,
   signal?: AbortSignal,
   providerOverride?: LoadTestProvider,
-  endpointOverride?: LoadTestEndpoint
+  endpointOverride?: LoadTestEndpoint,
+  streamMode = false,
+  maxOutputTokens = LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  requestTimeoutSeconds = 120
 ): Promise<LoadTestRequestResult> {
   const startedAt = performance.now()
   const controller = new AbortController()
   const timeoutId = window.setTimeout(
     () => controller.abort(),
-    LOAD_TEST_TIMEOUT_MS
+    Math.max(1, requestTimeoutSeconds) * 1000
   )
   const abortRequest = () => controller.abort()
   signal?.addEventListener('abort', abortRequest, { once: true })
@@ -781,15 +834,19 @@ export async function sendLoadTestRequest(
     const provider = providerOverride ?? getLoadTestProvider(model)
     const endpoint =
       endpointOverride ?? (provider === 'claude' ? 'anthropic' : 'openai')
+    const requestUsesStreaming =
+      streamMode && supportsLoadTestStreaming(endpoint)
     const requestBody = buildLoadTestRequestBody(
       model,
       prompt,
       promptCache,
-      endpoint
+      endpoint,
+      requestUsesStreaming,
+      maxOutputTokens
     )
     const endpointPath = getLoadTestEndpointPath(endpoint)
     const headers: Record<string, string> = {
-      Accept: 'application/json',
+      Accept: requestUsesStreaming ? 'text/event-stream' : 'application/json',
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.secret}`,
       'X-Load-Test-ID': runId,
@@ -809,6 +866,23 @@ export async function sendLoadTestRequest(
         signal: controller.signal,
       }
     )
+    if (requestUsesStreaming && response.ok && response.body) {
+      const streamed = await readStreamingResponse(
+        response,
+        provider,
+        startedAt
+      )
+      return {
+        keyName: apiKey.name,
+        latency: streamed.latency,
+        status: response.status,
+        requestId: readRequestId(response),
+        usage: streamed.usage,
+        firstTokenLatency: streamed.firstTokenLatency,
+        outputTokensPerSecond: streamed.outputTokensPerSecond,
+        success: true,
+      }
+    }
     const payload = await response.json().catch(() => null)
     return {
       keyName: apiKey.name,
@@ -831,5 +905,124 @@ export async function sendLoadTestRequest(
   } finally {
     window.clearTimeout(timeoutId)
     signal?.removeEventListener('abort', abortRequest)
+  }
+}
+
+async function readStreamingResponse(
+  response: Response,
+  provider: LoadTestProvider,
+  startedAt: number
+): Promise<{
+  latency: number
+  firstTokenLatency: number
+  outputTokensPerSecond: number
+  usage?: LoadTestUsage
+}> {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    return { latency: 0, firstTokenLatency: 0, outputTokensPerSecond: 0 }
+  }
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let firstTokenAt = 0
+  let outputTokenEstimate = 0
+  let usage: LoadTestUsage | undefined
+  let done = false
+  while (!done) {
+    const chunk = await reader.read()
+    done = chunk.done
+    if (chunk.value) buffer += decoder.decode(chunk.value, { stream: !done })
+    const events = buffer.split(/\r?\n\r?\n/)
+    buffer = events.pop() ?? ''
+    for (const event of events) {
+      const data = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .join('\n')
+      if (!data || data === '[DONE]') continue
+      try {
+        const payload = JSON.parse(data) as Record<string, unknown>
+        const eventUsage = readStreamingEventUsage(payload, provider)
+        if (eventUsage) usage = mergeLoadTestUsage(usage, eventUsage)
+        if (JSON.stringify(payload).includes('delta')) {
+          if (!firstTokenAt) firstTokenAt = performance.now()
+          outputTokenEstimate += 1
+        }
+      } catch {
+        // Ignore provider keep-alives and non-JSON SSE lines.
+      }
+    }
+  }
+  if (buffer.trim()) {
+    const data = buffer
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .join('\n')
+    if (data && data !== '[DONE]') {
+      try {
+        const payload = JSON.parse(data) as Record<string, unknown>
+        const eventUsage = readStreamingEventUsage(payload, provider)
+        if (eventUsage) usage = mergeLoadTestUsage(usage, eventUsage)
+        if (JSON.stringify(payload).includes('delta')) {
+          if (!firstTokenAt) firstTokenAt = performance.now()
+          outputTokenEstimate += 1
+        }
+      } catch {
+        // Ignore an incomplete provider keep-alive at end of stream.
+      }
+    }
+  }
+  const finishedAt = performance.now()
+  const latency = Math.max(1, Math.round(finishedAt - startedAt))
+  const firstTokenLatency = firstTokenAt
+    ? Math.max(1, Math.round(firstTokenAt - startedAt))
+    : latency
+  const outputTokens = usage?.outputTokens ?? outputTokenEstimate
+  const outputTokensPerSecond =
+    outputTokens > 0 && latency > firstTokenLatency
+      ? (outputTokens * 1000) / (latency - firstTokenLatency)
+      : 0
+  return { latency, firstTokenLatency, outputTokensPerSecond, usage }
+}
+
+function readStreamingEventUsage(
+  payload: Record<string, unknown>,
+  provider: LoadTestProvider
+): LoadTestUsage | undefined {
+  if (payload.usage) return readUsage(payload, provider)
+  const message = payload.message
+  if (
+    message &&
+    typeof message === 'object' &&
+    !Array.isArray(message) &&
+    (message as Record<string, unknown>).usage
+  ) {
+    return readUsage(
+      { usage: (message as Record<string, unknown>).usage },
+      provider
+    )
+  }
+  return readUsage(payload, provider)
+}
+
+function mergeLoadTestUsage(
+  previous: LoadTestUsage | undefined,
+  next: LoadTestUsage
+): LoadTestUsage {
+  if (!previous) return next
+  return {
+    inputTokens: next.inputTokens > 0 ? next.inputTokens : previous.inputTokens,
+    outputTokens:
+      next.outputTokens > 0 ? next.outputTokens : previous.outputTokens,
+    cacheReadTokens:
+      next.cacheReadTokens > 0
+        ? next.cacheReadTokens
+        : previous.cacheReadTokens,
+    cacheWriteTokens:
+      next.cacheWriteTokens > 0
+        ? next.cacheWriteTokens
+        : previous.cacheWriteTokens,
   }
 }

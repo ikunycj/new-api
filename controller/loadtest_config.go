@@ -13,12 +13,15 @@ func GetLoadTestConfig(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"min_duration_seconds": operation_setting.LoadTestMinDurationSeconds,
-			"max_duration_seconds": settings.MaxDurationSeconds,
-			"min_rps":              1,
-			"max_rps":              settings.MaxRPS,
-			"min_concurrency":      1,
-			"max_concurrency":      settings.MaxConcurrency,
+			"min_duration_seconds":    operation_setting.LoadTestMinDurationSeconds,
+			"max_duration_seconds":    settings.MaxDurationSeconds,
+			"min_rps":                 1,
+			"max_rps":                 settings.MaxRPS,
+			"min_concurrency":         1,
+			"max_concurrency":         settings.MaxConcurrency,
+			"min_output_tokens":       1,
+			"max_output_tokens":       settings.MaxOutputTokens,
+			"request_timeout_seconds": settings.RequestTimeoutSec,
 		},
 	})
 }

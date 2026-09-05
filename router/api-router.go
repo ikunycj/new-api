@@ -55,6 +55,7 @@ func SetApiRouter(router *gin.Engine) {
 			loadTestAgentRoute.POST("/poll", controller.PollLoadTestAgent)
 			loadTestAgentRoute.POST("/runs/:id/progress", controller.UpdateLoadTestRunProgress)
 			loadTestAgentRoute.POST("/runs/:id/complete", controller.FinishLoadTestRun)
+			loadTestAgentRoute.GET("/runs/:id/token-stats", controller.GetLoadTestAgentTokenStats)
 		}
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)

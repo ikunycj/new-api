@@ -28,6 +28,7 @@ const (
 	loadTestMaxMockLatencyMS   = 120000
 	loadTestMockChannelCount   = 3
 	loadTestMockAgentVersion   = "0.5.0"
+	loadTestStreamAgentVersion = "0.6.0"
 	loadTestSharedMinWorkers   = 2
 	loadTestSharedMaxWorkers   = 256
 )
@@ -59,6 +60,7 @@ type createLoadTestRunRequest struct {
 	Endpoint          string                      `json:"endpoint"`
 	Prompt            string                      `json:"prompt"`
 	PromptCache       bool                        `json:"prompt_cache"`
+	StreamMode        bool                        `json:"stream_mode"`
 	MockEnabled       bool                        `json:"mock_enabled"`
 	MockFailureRate   float64                     `json:"mock_failure_rate"`
 	MockFailureStatus int                         `json:"mock_failure_status"`
@@ -67,6 +69,8 @@ type createLoadTestRunRequest struct {
 	DurationSeconds   int                         `json:"duration_seconds"`
 	RequestsPerSecond int                         `json:"requests_per_second"`
 	Concurrency       int                         `json:"concurrency"`
+	MaxOutputTokens   int                         `json:"max_output_tokens"`
+	RequestTimeoutSec int                         `json:"request_timeout_seconds"`
 }
 
 type loadTestAgentPollRequest struct {
@@ -112,6 +116,8 @@ type finishLoadTestRunRequest struct {
 	OutputTokens     int64                   `json:"output_tokens"`
 	CacheReadTokens  int64                   `json:"cache_read_tokens"`
 	CacheWriteTokens int64                   `json:"cache_write_tokens"`
+	UsageMissing     int64                   `json:"usage_missing"`
+	TokenStatsSource string                  `json:"token_stats_source"`
 	CurrentRPS       float64                 `json:"current_rps"`
 	P50MS            float64                 `json:"p50_ms"`
 	P95MS            float64                 `json:"p95_ms"`
@@ -304,9 +310,17 @@ func CreateLoadTestRun(c *gin.Context) {
 		return
 	}
 	settings := operation_setting.GetLoadTestSetting()
+	if request.MaxOutputTokens == 0 {
+		request.MaxOutputTokens = operation_setting.LoadTestDefaultMaxOutputTokens
+	}
+	if request.RequestTimeoutSec == 0 {
+		request.RequestTimeoutSec = settings.RequestTimeoutSec
+	}
 	if request.DurationSeconds < operation_setting.LoadTestMinDurationSeconds || request.DurationSeconds > settings.MaxDurationSeconds ||
 		request.RequestsPerSecond < 1 || request.RequestsPerSecond > settings.MaxRPS ||
-		request.Concurrency < 1 || request.Concurrency > settings.MaxConcurrency {
+		request.Concurrency < 1 || request.Concurrency > settings.MaxConcurrency ||
+		request.MaxOutputTokens < 1 || request.MaxOutputTokens > settings.MaxOutputTokens ||
+		request.RequestTimeoutSec < 1 || request.RequestTimeoutSec > settings.RequestTimeoutSec {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "load-test limits exceeded"})
 		return
 	}
@@ -320,6 +334,9 @@ func CreateLoadTestRun(c *gin.Context) {
 	if _, ok := loadTestEndpoints[request.Endpoint]; !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "unsupported load-test endpoint"})
 		return
+	}
+	if request.Endpoint == "openai-response-compact" {
+		request.StreamMode = false
 	}
 	agent, err := model.GetUsableLoadTestAgent(c.GetInt("id"), request.AgentID)
 	if err != nil {
@@ -335,6 +352,10 @@ func CreateLoadTestRun(c *gin.Context) {
 	}
 	if err := validateLoadTestExecutionSettings(agent, request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if request.StreamMode && request.Endpoint != "openai-response-compact" && !loadTestAgentSupportsVersion(agent.Version, loadTestStreamAgentVersion) {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": fmt.Sprintf("server load-test agent must be updated to version %s or newer for stream mode", loadTestStreamAgentVersion)})
 		return
 	}
 	if request.ExecutionMode == model.LoadTestExecutionSingle {
@@ -377,13 +398,14 @@ func CreateLoadTestRun(c *gin.Context) {
 	run := &model.LoadTestRun{
 		UserID: c.GetInt("id"), AgentID: agent.ID, TokenID: token.Id,
 		KeyName: token.Name, PackageName: packageName, Model: request.Model,
-		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache, AgentManaged: agent.Managed,
+		Endpoint: request.Endpoint, Prompt: request.Prompt, PromptCache: request.PromptCache, StreamMode: request.StreamMode, AgentManaged: agent.Managed,
 		ExecutionMode: request.ExecutionMode, ExpectedWorkers: request.ExpectedWorkers,
 		MockEnabled: request.MockEnabled, MockFailureRate: request.MockFailureRate,
 		MockFailureStatus: request.MockFailureStatus, MockLatencyMS: request.MockLatencyMS,
 		MockChannelsJSON: mockChannelsJSON, MockChannels: request.MockChannels,
 		TargetURL: targetURL, DurationSeconds: request.DurationSeconds,
 		RequestsPerSecond: request.RequestsPerSecond, Concurrency: request.Concurrency,
+		RequestTimeoutSec: request.RequestTimeoutSec,
 	}
 	if err := model.CreateLoadTestRun(run); err != nil {
 		common.ApiError(c, err)
@@ -505,8 +527,8 @@ func PollLoadTestAgent(c *gin.Context) {
 				"command": "run",
 				"task": gin.H{
 					"run_id": run.ID, "worker_id": worker.WorkerID, "target_url": run.TargetURL, "api_key": "sk-" + token.GetFullKey(),
-					"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt,
-					"prompt_cache": run.PromptCache, "duration_seconds": run.DurationSeconds,
+					"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt, "max_output_tokens": run.MaxOutputTokens, "request_timeout_seconds": run.RequestTimeoutSec,
+					"prompt_cache": run.PromptCache, "stream_mode": run.StreamMode, "duration_seconds": run.DurationSeconds,
 					"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 					"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
 					"mock_channels":       run.MockChannels,
@@ -537,8 +559,8 @@ func PollLoadTestAgent(c *gin.Context) {
 		"command": "run",
 		"task": gin.H{
 			"run_id": run.ID, "target_url": run.TargetURL, "api_key": "sk-" + token.GetFullKey(),
-			"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt,
-			"prompt_cache": run.PromptCache, "duration_seconds": run.DurationSeconds,
+			"model": run.Model, "endpoint": run.Endpoint, "prompt": run.Prompt, "max_output_tokens": run.MaxOutputTokens, "request_timeout_seconds": run.RequestTimeoutSec,
+			"prompt_cache": run.PromptCache, "stream_mode": run.StreamMode, "duration_seconds": run.DurationSeconds,
 			"mock_enabled": run.MockEnabled, "mock_failure_rate": run.MockFailureRate,
 			"mock_failure_status": run.MockFailureStatus, "mock_latency_ms": run.MockLatencyMS,
 			"mock_channels":       run.MockChannels,
@@ -611,17 +633,31 @@ func validLoadTestMockFailureStatus(status int) bool {
 }
 
 func loadTestAgentSupportsMockChannels(version string) bool {
+	return loadTestAgentSupportsVersion(version, loadTestMockAgentVersion)
+}
+
+func loadTestAgentSupportsVersion(version, minimum string) bool {
 	parts := strings.Split(strings.TrimSpace(version), ".")
-	if len(parts) != 3 {
+	minimumParts := strings.Split(strings.TrimSpace(minimum), ".")
+	if len(parts) != 3 || len(minimumParts) != 3 {
 		return false
 	}
 	major, majorErr := strconv.Atoi(parts[0])
 	minor, minorErr := strconv.Atoi(parts[1])
 	patch, patchErr := strconv.Atoi(parts[2])
-	if majorErr != nil || minorErr != nil || patchErr != nil || major < 0 || minor < 0 || patch < 0 {
+	minimumMajor, minimumMajorErr := strconv.Atoi(minimumParts[0])
+	minimumMinor, minimumMinorErr := strconv.Atoi(minimumParts[1])
+	minimumPatch, minimumPatchErr := strconv.Atoi(minimumParts[2])
+	if majorErr != nil || minorErr != nil || patchErr != nil || minimumMajorErr != nil || minimumMinorErr != nil || minimumPatchErr != nil || major < 0 || minor < 0 || patch < 0 || minimumMajor < 0 || minimumMinor < 0 || minimumPatch < 0 {
 		return false
 	}
-	return major > 0 || minor > 4 || (minor == 4 && patch >= 0)
+	if major != minimumMajor {
+		return major > minimumMajor
+	}
+	if minor != minimumMinor {
+		return minor > minimumMinor
+	}
+	return patch >= minimumPatch
 }
 
 func validateLoadTestMockToken(token *model.Token, modelName, endpoint string) error {
@@ -758,7 +794,8 @@ func FinishLoadTestRun(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid completion payload"})
 		return
 	}
-	if len(request.ErrorMessage) > loadTestMaxErrorMessage || request.InputTokens < 0 || request.OutputTokens < 0 || request.CacheReadTokens < 0 || request.CacheWriteTokens < 0 ||
+	if len(request.ErrorMessage) > loadTestMaxErrorMessage || request.InputTokens < 0 || request.OutputTokens < 0 || request.CacheReadTokens < 0 || request.CacheWriteTokens < 0 || request.UsageMissing < 0 ||
+		(request.TokenStatsSource != "" && request.TokenStatsSource != "server_logs" && request.TokenStatsSource != "agent_response" && request.TokenStatsSource != "unavailable") ||
 		!validLoadTestProgress(request.Sent, request.Completed, request.Successes, request.Failures, request.Dropped, request.CurrentRPS, request.P50MS, request.P95MS, request.P99MS, request.ErrorCounts) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid completion values"})
 		return
@@ -789,7 +826,7 @@ func FinishLoadTestRun(c *gin.Context) {
 			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
 			"failures": request.Failures, "dropped": request.Dropped, "input_tokens": request.InputTokens,
 			"output_tokens": request.OutputTokens, "cache_read_tokens": request.CacheReadTokens,
-			"cache_write_tokens": request.CacheWriteTokens, "current_rps": request.CurrentRPS,
+			"cache_write_tokens": request.CacheWriteTokens, "usage_missing": request.UsageMissing, "token_stats_source": request.TokenStatsSource, "current_rps": request.CurrentRPS,
 			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
 			"error_counts_json": errorJSON, "error_message": strings.TrimSpace(request.ErrorMessage),
 		})
@@ -798,7 +835,7 @@ func FinishLoadTestRun(c *gin.Context) {
 			"sent": request.Sent, "completed": request.Completed, "successes": request.Successes,
 			"failures": request.Failures, "dropped": request.Dropped, "input_tokens": request.InputTokens,
 			"output_tokens": request.OutputTokens, "cache_read_tokens": request.CacheReadTokens,
-			"cache_write_tokens": request.CacheWriteTokens, "current_rps": request.CurrentRPS,
+			"cache_write_tokens": request.CacheWriteTokens, "usage_missing": request.UsageMissing, "token_stats_source": request.TokenStatsSource, "current_rps": request.CurrentRPS,
 			"p50_ms": request.P50MS, "p95_ms": request.P95MS, "p99_ms": request.P99MS,
 			"error_counts_json": errorJSON, "error_message": strings.TrimSpace(request.ErrorMessage),
 		})
@@ -808,6 +845,24 @@ func FinishLoadTestRun(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+func GetLoadTestAgentTokenStats(c *gin.Context) {
+	agent, ok := authenticateLoadTestAgentRequest(c)
+	if !ok {
+		return
+	}
+	run, err := model.GetLoadTestRunByID(c.Param("id"))
+	if err != nil || run.AgentID != agent.ID {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "load-test run not found"})
+		return
+	}
+	stats, err := model.GetLoadTestTokenStatsByRunID(run.UserID, run.ID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stats)
 }
 
 func authenticateLoadTestAgentRequest(c *gin.Context) (*model.LoadTestAgent, bool) {

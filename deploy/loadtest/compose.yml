@@ -34,16 +34,12 @@ services:
     build:
       context: ./mock-upstream
     environment:
+      LOADTEST_CONFIG_FILE: /config/loadtest.config.json
       CHANNEL_ID: "1"
-      CHANNEL_NAME: mock-channel-a
-      CHANNEL_TOKENS: ${MOCK_A_CHANNEL_TOKENS:-1000000000}
-      TTFT_MS: ${MOCK_TTFT_MS:-100}
-      RESPONSE_MS: ${MOCK_RESPONSE_MS:-500}
-      STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}
-      STREAM_INTERVAL_MS: ${MOCK_STREAM_INTERVAL_MS:-50}
-      ERROR_RATE: ${MOCK_ERROR_RATE:-0}
     ports:
       - "127.0.0.1:${LOADTEST_MOCK_PORT:-18080}:8080"
+    volumes:
+      - ./loadtest.config.json:/config/loadtest.config.json:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
       interval: 3s
@@ -55,16 +51,12 @@ services:
     build:
       context: ./mock-upstream
     environment:
+      LOADTEST_CONFIG_FILE: /config/loadtest.config.json
       CHANNEL_ID: "2"
-      CHANNEL_NAME: mock-channel-b
-      CHANNEL_TOKENS: ${MOCK_B_CHANNEL_TOKENS:-1000000000}
-      TTFT_MS: ${MOCK_B_TTFT_MS:-120}
-      RESPONSE_MS: ${MOCK_B_RESPONSE_MS:-550}
-      STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}
-      STREAM_INTERVAL_MS: ${MOCK_STREAM_INTERVAL_MS:-50}
-      ERROR_RATE: ${MOCK_B_ERROR_RATE:-0}
     ports:
       - "127.0.0.1:${LOADTEST_MOCK_B_PORT:-18081}:8080"
+    volumes:
+      - ./loadtest.config.json:/config/loadtest.config.json:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
       interval: 3s
@@ -76,16 +68,12 @@ services:
     build:
       context: ./mock-upstream
     environment:
+      LOADTEST_CONFIG_FILE: /config/loadtest.config.json
       CHANNEL_ID: "3"
-      CHANNEL_NAME: mock-channel-c
-      CHANNEL_TOKENS: ${MOCK_C_CHANNEL_TOKENS:-1000000000}
-      TTFT_MS: ${MOCK_C_TTFT_MS:-140}
-      RESPONSE_MS: ${MOCK_C_RESPONSE_MS:-600}
-      STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-20}
-      STREAM_INTERVAL_MS: ${MOCK_STREAM_INTERVAL_MS:-50}
-      ERROR_RATE: ${MOCK_C_ERROR_RATE:-0}
     ports:
       - "127.0.0.1:${LOADTEST_MOCK_C_PORT:-18082}:8080"
+    volumes:
+      - ./loadtest.config.json:/config/loadtest.config.json:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
       interval: 3s
@@ -277,23 +265,14 @@ services:
     image: grafana/k6:0.57.0
     profiles: ["runner"]
     environment:
+      LOADTEST_CONFIG_FILE: /config/loadtest.config.json
       BASE_URL: ${BASE_URL:-http://new-api:3000}
-      LOADTEST_MODEL: ${LOADTEST_MODEL:-gpt-3.5-turbo}
       LOAD_PROFILE: ${LOAD_PROFILE:-smoke}
-      LOADTEST_USERS: ${LOADTEST_USERS:-1000}
       LOADTEST_TOKENS: ${LOADTEST_TOKENS:-}
       FAILOVER_MODE: ${FAILOVER_MODE:-balanced}
       MOCK_CONTROL_A: http://mock-upstream:8080
       MOCK_CONTROL_B: http://mock-upstream-b:8080
       MOCK_CONTROL_C: http://mock-upstream-c:8080
-      SMOKE_DURATION: ${SMOKE_DURATION:-1m}
-      SMOKE_VUS: ${SMOKE_VUS:-10}
-      BURST_MAX_DURATION: ${BURST_MAX_DURATION:-5m}
-      CAPACITY_RATES: ${CAPACITY_RATES:-100,200,300,400,500,600,700,800}
-      CAPACITY_RAMP_DURATION: ${CAPACITY_RAMP_DURATION:-30s}
-      CAPACITY_STAGE_DURATION: ${CAPACITY_STAGE_DURATION:-2m}
-      CAPACITY_PREALLOCATED_VUS: ${CAPACITY_PREALLOCATED_VUS:-500}
-      CAPACITY_MAX_VUS: ${CAPACITY_MAX_VUS:-2000}
       K6_PROMETHEUS_RW_SERVER_URL: ${K6_PROMETHEUS_RW_SERVER_URL:-http://prometheus:9090/api/v1/write}
       K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,max
     ulimits:
@@ -301,6 +280,7 @@ services:
         soft: 65535
         hard: 65535
     volumes:
+      - ./loadtest.config.json:/config/loadtest.config.json:ro
       - ./k6:/scripts:ro
       - ./results:/results
     command: ["run", "--out", "experimental-prometheus-rw", "--summary-export", "/results/summary.json", "/scripts/load.js"]

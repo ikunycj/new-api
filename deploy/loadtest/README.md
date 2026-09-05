@@ -51,11 +51,13 @@ The authenticated AllToken admin page at `/failover` includes the same current m
 
 The default is `smoke`. Results are written to `results/summary.json`. The k6 container publishes its metrics to Prometheus through remote write, so the Grafana panel can correlate load with server and dependency metrics.
 
+All workload, pacing, profile stages, request defaults, thresholds, mock usage, channel latency, token balances, and failure distributions are kept in [`loadtest.config.json`](loadtest.config.json). Edit that file to change the test workload; `compose.yml` mounts the same read-only file into k6 and all three mock channels. Environment variables in `.env` remain available for one-off overrides such as the target URL, profile, token list, and host ports.
+
 The `capacity` profile uses an arrival-rate executor instead of VUs as the target. It holds each rate from `CAPACITY_RATES` after a short ramp and records input, output, and total Token TPS from the upstream `usage` response. The default mock returns 10 prompt and 20 completion tokens per successful request, so output Token TPS should be approximately `successful RPS * 20`. The highest valid step is the last rate with no dropped iterations, error rate below 1%, latency within the configured thresholds, and no sustained database or Redis pool alerts.
 
 ### Deterministic channel failover
 
-Each successful mock response consumes exactly 30 tokens. Channel A is exposed on port `18080` and Channel B on `18081`. Channel A has a deliberately small balance so traffic switches directly to Channel B after exhaustion:
+The default mock response usage and channel consumption are configured in `loadtest.config.json` (currently 10 input + 20 output usage and 30 consumed channel tokens). Channel A is exposed on port `18080` and Channel B on `18081`. Channel balances, fixed latency, error rates, and failure-status distributions can be changed per channel in the same file:
 
 ```sh
 curl -X POST 'http://localhost:18080/control/reset?tokens=300'

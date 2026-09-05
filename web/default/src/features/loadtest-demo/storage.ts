@@ -18,17 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-import { LOAD_TEST_DEFAULT_CONCURRENCY, LOAD_TEST_DEFAULT_PROMPT } from './api'
+import {
+  LOAD_TEST_DEFAULT_CONCURRENCY,
+  LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
+  LOAD_TEST_DEFAULT_PROMPT,
+} from './api'
 
 const LOAD_TEST_RESULTS_VERSION = 2
 const LOAD_TEST_RESULTS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const LOAD_TEST_RESULTS_KEY_PREFIX = 'new-api:loadtest-demo:result:v1'
+const LOAD_TEST_CONFIG_VERSION = 1
+const LOAD_TEST_CONFIG_KEY_PREFIX = 'new-api:loadtest-demo:config:v1'
 const MAX_PERSISTED_RUNS = 50
 
 const runStatsSchema = z.object({
   completed: z.number().int().nonnegative(),
   failures: z.number().int().nonnegative(),
   latencies: z.array(z.number().nonnegative()),
+  firstTokenLatencies: z.array(z.number().nonnegative()).default([]),
+  outputTokensPerSecond: z.array(z.number().nonnegative()).default([]),
   successes: z.number().int().nonnegative(),
   statusCodes: z.record(z.string(), z.number().int().nonnegative()),
   errorCodes: z.record(z.string(), z.number().int().nonnegative()),
@@ -67,7 +75,14 @@ const persistedRunSchema = z.object({
     .int()
     .positive()
     .default(LOAD_TEST_DEFAULT_CONCURRENCY),
+  maxOutputTokens: z
+    .number()
+    .int()
+    .positive()
+    .default(LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS),
   prompt: z.string().default(LOAD_TEST_DEFAULT_PROMPT),
+  promptCache: z.boolean().default(false),
+  streamMode: z.boolean().default(false),
   userCharge: z.number().nonnegative().default(0),
   stats: runStatsSchema,
   channelStats: z.array(channelStatsSchema),
@@ -91,15 +106,73 @@ const persistedRunsSchema = z.object({
   runs: z.array(persistedRunSchema),
 })
 
+const persistedConfigSchema = z.object({
+  version: z.literal(LOAD_TEST_CONFIG_VERSION),
+  durationSeconds: z.number().finite().positive(),
+  requestsPerSecond: z.number().finite().positive(),
+  concurrency: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive(),
+  prompt: z.string(),
+  promptCache: z.boolean(),
+  streamMode: z.boolean(),
+})
+
 export type RunStats = z.infer<typeof runStatsSchema>
 export type LoadTestRunResult = Omit<
   z.infer<typeof persistedRunSchema>,
   'version' | 'savedAt' | 'completedAt'
 >
 export type PersistedLoadTestRun = z.infer<typeof persistedRunSchema>
+export type PersistedLoadTestConfig = z.infer<typeof persistedConfigSchema>
 
 function storageKey(userId: number) {
   return `${LOAD_TEST_RESULTS_KEY_PREFIX}:${userId}`
+}
+
+function configStorageKey(userId: number) {
+  return `${LOAD_TEST_CONFIG_KEY_PREFIX}:${userId}`
+}
+
+export function loadPersistedLoadTestConfig(
+  userId: number | undefined
+): PersistedLoadTestConfig | null {
+  if (typeof window === 'undefined' || !userId) return null
+
+  try {
+    const raw = window.localStorage.getItem(configStorageKey(userId))
+    if (!raw) return null
+    const parsed = persistedConfigSchema.safeParse(JSON.parse(raw))
+    return parsed.success ? parsed.data : null
+  } catch {
+    window.localStorage.removeItem(configStorageKey(userId))
+    return null
+  }
+}
+
+export function savePersistedLoadTestConfig(
+  userId: number | undefined,
+  config: Omit<PersistedLoadTestConfig, 'version'>
+): void {
+  if (typeof window === 'undefined' || !userId) return
+
+  try {
+    window.localStorage.setItem(
+      configStorageKey(userId),
+      JSON.stringify({ version: LOAD_TEST_CONFIG_VERSION, ...config })
+    )
+  } catch {
+    // Storage failures must not interrupt an active load test.
+  }
+}
+
+export function clearPersistedLoadTestConfig(userId: number | undefined): void {
+  if (typeof window === 'undefined' || !userId) return
+
+  try {
+    window.localStorage.removeItem(configStorageKey(userId))
+  } catch {
+    // Storage failures must not interrupt an active load test.
+  }
 }
 
 export function loadPersistedLoadTestRuns(
@@ -126,7 +199,10 @@ export function loadPersistedLoadTestRuns(
           durationSeconds: 0,
           requestsPerSecond: 0,
           concurrency: LOAD_TEST_DEFAULT_CONCURRENCY,
+          maxOutputTokens: LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS,
           prompt: LOAD_TEST_DEFAULT_PROMPT,
+          promptCache: false,
+          streamMode: false,
           userCharge: 0,
         },
       ]
