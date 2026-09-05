@@ -63,6 +63,8 @@ export function useSidebarView(): ResolvedSidebarView {
             (item.requiredRole === undefined || role >= item.requiredRole) &&
             (!item.requiresLoadTestAccess ||
               role >= ROLE.ADMIN ||
+              ['vip', 'enterprise'].includes((userGroup ?? '').toLowerCase())) &&
+            (!item.requiresToBAccess ||
               ['vip', 'enterprise'].includes((userGroup ?? '').toLowerCase()))
         )
         return items.length === group.items.length ? group : { ...group, items }

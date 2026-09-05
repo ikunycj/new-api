@@ -66,6 +66,9 @@ func InitChannelCache() {
 		newGroup2model2channels[group] = make(map[string][]int)
 	}
 	for _, channel := range channels {
+		if channel.OwnerUserId > 0 {
+			continue
+		}
 		if channel.Status != common.ChannelStatusEnabled {
 			continue // skip disabled channels
 		}
