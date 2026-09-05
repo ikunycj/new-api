@@ -59,7 +59,7 @@ if ($originUrl -match '^https://github\.com/(.+?)(?:\.git)?$') {
 } else {
     $sshRemote = $originUrl
 }
-git fetch $sshRemote "$releaseBranch:refs/remotes/origin/$releaseBranch"
+git fetch $sshRemote "${releaseBranch}:refs/remotes/origin/${releaseBranch}"
 git ls-remote $sshRemote "refs/heads/$releaseBranch"
 Remove-Item Env:GIT_SSH_COMMAND
 ```
@@ -124,7 +124,7 @@ bash ./deploy-binary.sh \
   --public-url https://<selected-domain>/api/status
 ```
 
-For `ikun.love`, add `--image-tag new-api:ikun --container ikun-new-api --postgres ikun-new-api-postgres --redis ikun-new-api-redis`.
+For `ikun.love`, add `--image-tag new-api:ikun --project-name ikun-new-api --network ikun-new-api-network --container ikun-new-api --postgres ikun-new-api-postgres --redis ikun-new-api-redis`.
 
 The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so PostgreSQL and Redis are not recreated.
 
@@ -135,17 +135,19 @@ For remote multiline logic outside the script, encode the text locally as UTF-8/
 Do not stop at `docker ps`. Verify all of the following:
 
 ```bash
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
+docker inspect <selected-container> --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
 docker image inspect <selected-image-tag> --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
-docker cp new-api:/new-api /tmp/new-api.runtime
+docker cp <selected-container>:/new-api /tmp/new-api.runtime
 sha256sum /tmp/new-api.runtime
 rm -f /tmp/new-api.runtime
-docker inspect 1Panel-postgresql-2LOJ --format '{{.State.Status}} {{.State.Health.Status}}'
-docker inspect 1Panel-redis-pDR8 --format '{{.State.Status}}'
+docker inspect <selected-postgres> --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+docker inspect <selected-redis> --format '{{.State.Status}}'
 curl -fsS http://127.0.0.1:3000/api/status
 curl -fsS https://<selected-domain>/api/status
 curl -fsS -o /dev/null -w '%{http_code}\n' https://<selected-domain>/pricing
 ```
+
+For `ikun.love`, substitute `ikun-new-api`, `new-api:ikun`, `ikun-new-api-postgres`, and `ikun-new-api-redis`; also verify the app is attached to `ikun-new-api-network` and the Compose project is `ikun-new-api`. Use a GET request for `/api/status` (the public endpoint does not guarantee a successful HEAD response).
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.
 

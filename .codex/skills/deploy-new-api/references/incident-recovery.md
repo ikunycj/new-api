@@ -4,7 +4,7 @@
 
 Treat `rpc error`, BuildKit EOF, or a vanished Docker connection as a host incident, not a source-code build error, until proven otherwise.
 
-The recorded failure transferred only about 21 MB of context but spent roughly five minutes doing so. The build then ended in EOF. `dmesg` showed the OOM killer terminated `dockerd`, whose RSS was about 1.1 GiB, on a host with roughly 1.8 GiB RAM.
+The recorded `alltokenapi` failure transferred only about 21 MB of context but spent roughly five minutes doing so. The build then ended in EOF. `dmesg` showed the OOM killer terminated `dockerd`, whose RSS was about 1.1 GiB, on a host with roughly 1.8 GiB RAM. This is why production builds always run on the workstation; do not apply that historical capacity figure to the separate `ikun.love` host.
 
 Collect evidence before changing anything:
 
@@ -18,7 +18,7 @@ journalctl -u docker --since '-30 min' --no-pager | tail -n 200
 dmesg -T | grep -Ei 'out of memory|oom|killed process' | tail -n 50
 ```
 
-Do not retry the remote build. Move to the local binary build path.
+Do not retry the remote build. Move to the local binary build path. The `ikun.love` Compose file is an isolated stack, so a release must still use `--no-build --no-deps` and leave its PostgreSQL, Redis, network, and volumes intact.
 
 ## Docker restarted and the app failed first
 

@@ -70,7 +70,7 @@ $repoRoot = git rev-parse --show-toplevel
 On macOS/Linux, use the equivalent shell script:
 
 ```bash
-bash .codex/skills/deploy-new-api/scripts/build-release.sh \\
+bash .codex/skills/deploy-new-api/scripts/build-release.sh \
   --branch ikun.love --commit <verified-ikun.love-sha>
 ```
 
@@ -83,11 +83,12 @@ bash deploy-binary.sh --help
 For `ikun.love`, pass the live topology explicitly:
 
 ```bash
-bash deploy-binary.sh \\
-  --archive ./<archive-name> --archive-sha <archive-sha256> \\
-  --binary-sha <binary-sha256> --commit <full-commit-sha> \\
-  --release <short-sha>-v1 --image-tag new-api:ikun \\
-  --container ikun-new-api --postgres ikun-new-api-postgres \\
+bash deploy-binary.sh \
+  --archive ./<archive-name> --archive-sha <archive-sha256> \
+  --binary-sha <binary-sha256> --commit <full-commit-sha> \
+  --release <short-sha>-v1 --image-tag new-api:ikun \
+  --project-name ikun-new-api --network ikun-new-api-network \
+  --container ikun-new-api --postgres ikun-new-api-postgres \
   --redis ikun-new-api-redis --public-url https://ikun.love/api/status
 ```
 

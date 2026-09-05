@@ -52,7 +52,7 @@ The live inspection on 2026-09-05 found the following topology. Re-check it befo
 | PostgreSQL | `ikun-new-api-postgres` | Must be running and healthy before switching the app. |
 | Redis | `ikun-new-api-redis` | Must be running before switching the app. |
 
-The host has roughly 1.8 GiB RAM plus swap. Do not build the frontend, Go binary, or Docker multi-stage image there.
+The `alltokenapi` host has roughly 1.8 GiB RAM plus swap. Do not build the frontend, Go binary, or Docker multi-stage image there. The `ikun.love` host is a separate dedicated stack; its observed capacity is not a deployment default, and the same no-remote-build policy still applies.
 
 ## Last successful release record
 
