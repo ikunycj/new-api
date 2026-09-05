@@ -29,6 +29,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': 'Shutdown grace period (seconds)',
     '0 means unlimited.': '0 means unlimited.',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.',
+    'Available channels': 'Available channels',
+    'Read-only view of channels available to your user group.': 'Read-only view of channels available to your user group.',
+    'No available channels': 'No available channels',
     'Group Management': 'Group Management',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Channels are attempted in order; each channel can simulate failures and latency.',
@@ -183,6 +186,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': '服务关闭等待时间（秒）',
     '0 means unlimited.': '0 表示不限制。',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '修改会立即应用于新请求。网关代理超时仍由主机配置管理。',
+    'Available channels': '可用渠道',
+    'Read-only view of channels available to your user group.': '这里只读展示当前用户分组可用的渠道。',
+    'No available channels': '暂无可用渠道',
     'Group Management': '分组管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       '渠道将按顺序尝试；每个渠道可以模拟失败和延迟。',
@@ -335,6 +341,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': 'Délai de grâce à l’arrêt (secondes)',
     '0 means unlimited.': '0 signifie illimité.',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte.',
+    'Available channels': 'Canaux disponibles',
+    'Read-only view of channels available to your user group.': 'Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.',
+    'No available channels': 'Aucun canal disponible',
     'Group Management': 'Gestion des groupes',
     'Local load-test agent': 'Agent de test de charge local',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -470,6 +479,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': 'シャットダウン猶予時間（秒）',
     '0 means unlimited.': '0 は無制限を意味します。',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。',
+    'Available channels': '利用可能なチャンネル',
+    'Read-only view of channels available to your user group.': 'ユーザーグループで利用できるチャンネルを読み取り専用で表示します。',
+    'No available channels': '利用可能なチャンネルはありません',
     'Group Management': 'グループ管理',
     'Local load-test agent': 'ローカル負荷テスト Agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -605,6 +617,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': 'Период ожидания при завершении (секунды)',
     '0 means unlimited.': '0 означает отсутствие ограничения.',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста.',
+    'Available channels': 'Доступные каналы',
+    'Read-only view of channels available to your user group.': 'Каналы, доступные вашей группе пользователей, доступны только для чтения.',
+    'No available channels': 'Нет доступных каналов',
     'Group Management': 'Управление группами',
     'Local load-test agent': 'Локальный агент нагрузочного теста',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -740,6 +755,9 @@ const newKeys = {
     'Shutdown grace period (seconds)': 'Thời gian chờ tắt máy (giây)',
     '0 means unlimited.': '0 có nghĩa là không giới hạn.',
     'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý.',
+    'Available channels': 'Các kênh khả dụng',
+    'Read-only view of channels available to your user group.': 'Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.',
+    'No available channels': 'Không có kênh khả dụng',
     'Group Management': 'Quản lý nhóm',
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
     'Run high-volume tests outside the browser and keep results linked to this account.':

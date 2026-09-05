@@ -133,6 +133,7 @@ export const channelFormSchema = z
     name: z.string().min(1, ERROR_MESSAGES.REQUIRED_NAME),
     type: z.number().min(0, ERROR_MESSAGES.REQUIRED_TYPE),
     base_url: z.string().optional(),
+    tob_display_url: z.string().optional(),
     key: z.string(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
@@ -314,6 +315,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   name: '',
   type: 1,
   base_url: '',
+  tob_display_url: '',
   key: '',
   openai_organization: '',
   models: '',
@@ -412,7 +414,8 @@ export function transformChannelToFormDefaults(
         mock_load_test: parsed.mock_load_test === true,
         auto_disable_keywords: parsed.auto_disable_keywords || '',
         auto_disable_status_codes: parsed.auto_disable_status_codes || '',
-        auto_disable_response_time_ms: Number(parsed.auto_disable_response_time_ms) || 0,
+        auto_disable_response_time_ms:
+          Number(parsed.auto_disable_response_time_ms) || 0,
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -422,6 +425,7 @@ export function transformChannelToFormDefaults(
 
   // Parse type-specific settings from settings field
   let vertexKeyType: 'json' | 'api_key' = 'json'
+  let tobDisplayUrl = ''
   let azureResponsesVersion = ''
   let isEnterpriseAccount = false
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
@@ -441,6 +445,7 @@ export function transformChannelToFormDefaults(
   if (channel.settings) {
     try {
       const parsed = JSON.parse(channel.settings)
+      tobDisplayUrl = parsed.tob_display_url || ''
       vertexKeyType = parsed.vertex_key_type || 'json'
       azureResponsesVersion = parsed.azure_responses_version || ''
       isEnterpriseAccount = parsed.openrouter_enterprise === true
@@ -475,6 +480,7 @@ export function transformChannelToFormDefaults(
     name: channel.name || '',
     type: channel.type,
     base_url: channel.base_url || '',
+    tob_display_url: tobDisplayUrl,
     key: '', // Never populate key from backend for security
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
@@ -568,6 +574,12 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
       // eslint-disable-next-line no-console
       console.error('Failed to parse existing settings:', error)
     }
+  }
+
+  if (formData.tob_display_url?.trim()) {
+    settingsObj.tob_display_url = normalizeBaseUrl(formData.tob_display_url)
+  } else {
+    delete settingsObj.tob_display_url
   }
 
   // Add vertex_key_type for Vertex AI channels (type 41)

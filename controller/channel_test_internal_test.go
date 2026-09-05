@@ -1,10 +1,13 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -16,6 +19,59 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSelfChannelDisplayURLOnlyChangesToBView(t *testing.T) {
+	baseURL := "https://upstream.example.com/v1"
+	displayURL := "https://customer.example.com/api"
+
+	t.Run("configured display URL", func(t *testing.T) {
+		settings, err := json.Marshal(map[string]string{"tob_display_url": displayURL})
+		require.NoError(t, err)
+		view := selfChannelView{
+			BaseURL:  &baseURL,
+			Settings: string(settings),
+		}
+
+		got := selfChannelDisplayURL(view)
+		require.NotNil(t, got)
+		require.Equal(t, displayURL, *got)
+		require.Equal(t, baseURL, *view.BaseURL, "the view helper must not mutate the real channel URL")
+	})
+
+	t.Run("empty or invalid display URL falls back to upstream URL", func(t *testing.T) {
+		for _, settings := range []string{
+			`{"tob_display_url":""}`,
+			`{"tob_display_url":"   "}`,
+			`not-json`,
+		} {
+			view := selfChannelView{BaseURL: &baseURL, Settings: settings}
+			got := selfChannelDisplayURL(view)
+			require.NotNil(t, got)
+			require.Equal(t, baseURL, *got)
+		}
+	})
+}
+
+func TestRespondChannelTestIncludesSameErrorCodeForAllCallers(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	errorCode := types.ErrorCodeBadResponse
+	result := testResult{
+		localErr:    types.NewError(errors.New("upstream failed"), errorCode),
+		newAPIError: types.NewError(errors.New("upstream failed"), errorCode),
+	}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+
+	respondChannelTest(ctx, result, time.Now())
+
+	var response struct {
+		Success   bool            `json:"success"`
+		ErrorCode types.ErrorCode `json:"error_code"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.False(t, response.Success)
+	require.Equal(t, errorCode, response.ErrorCode)
+}
 
 func TestSettleTestQuotaUsesTieredBilling(t *testing.T) {
 	info := &relaycommon.RelayInfo{

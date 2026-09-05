@@ -2765,6 +2765,30 @@ export function ChannelMutateDrawer({
                               />
                             )}
 
+                            <FormField
+                              control={form.control}
+                              name='tob_display_url'
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('ToB Display URL')}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      placeholder={t(
+                                        'Optional URL shown to ToB/VIP users'
+                                      )}
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    {t(
+                                      'ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.'
+                                    )}
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
                             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
                               <FormField
                                 control={form.control}
