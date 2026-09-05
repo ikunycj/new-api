@@ -35,6 +35,7 @@ type BaseNavItem = {
    */
   requiredRole?: number
   requiresLoadTestAccess?: boolean
+  requiresToBAccess?: boolean
 }
 
 /**

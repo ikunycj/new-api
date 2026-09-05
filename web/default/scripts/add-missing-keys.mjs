@@ -21,6 +21,9 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Available channels': 'Available channels',
+    'Read-only view of channels available to your user group.': 'Read-only view of channels available to your user group.',
+    'No available channels': 'No available channels',
     'Group Management': 'Group Management',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Channels are attempted in order; each channel can simulate failures and latency.',
@@ -167,6 +170,9 @@ const newKeys = {
     'Call Logs': 'Call Logs',
   },
   zh: {
+    'Available channels': '可用渠道',
+    'Read-only view of channels available to your user group.': '这里只读展示当前用户分组可用的渠道。',
+    'No available channels': '暂无可用渠道',
     'Group Management': '分组管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       '渠道将按顺序尝试；每个渠道可以模拟失败和延迟。',
@@ -311,6 +317,9 @@ const newKeys = {
     'Call Logs': '调用日志',
   },
   fr: {
+    'Available channels': 'Canaux disponibles',
+    'Read-only view of channels available to your user group.': 'Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.',
+    'No available channels': 'Aucun canal disponible',
     'Group Management': 'Gestion des groupes',
     'Local load-test agent': 'Agent de test de charge local',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -438,6 +447,9 @@ const newKeys = {
     'Call Logs': 'Journaux d’appels',
   },
   ja: {
+    'Available channels': '利用可能なチャンネル',
+    'Read-only view of channels available to your user group.': 'ユーザーグループで利用できるチャンネルを読み取り専用で表示します。',
+    'No available channels': '利用可能なチャンネルはありません',
     'Group Management': 'グループ管理',
     'Local load-test agent': 'ローカル負荷テスト Agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -565,6 +577,9 @@ const newKeys = {
     'Call Logs': '呼び出しログ',
   },
   ru: {
+    'Available channels': 'Доступные каналы',
+    'Read-only view of channels available to your user group.': 'Каналы, доступные вашей группе пользователей, доступны только для чтения.',
+    'No available channels': 'Нет доступных каналов',
     'Group Management': 'Управление группами',
     'Local load-test agent': 'Локальный агент нагрузочного теста',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -692,6 +707,9 @@ const newKeys = {
     'Call Logs': 'Журналы вызовов',
   },
   vi: {
+    'Available channels': 'Các kênh khả dụng',
+    'Read-only view of channels available to your user group.': 'Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.',
+    'No available channels': 'Không có kênh khả dụng',
     'Group Management': 'Quản lý nhóm',
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
     'Run high-volume tests outside the browser and keep results linked to this account.':

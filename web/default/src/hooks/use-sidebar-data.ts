@@ -127,6 +127,12 @@ export function useSidebarData(): SidebarData {
             url: '/profile',
             icon: User,
           },
+          {
+            title: t('My Channels'),
+            url: '/my-channels',
+            icon: Radio,
+            requiresToBAccess: true,
+          },
         ],
       },
       {
