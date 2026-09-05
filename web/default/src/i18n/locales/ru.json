@@ -6438,6 +6438,16 @@
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Позвольте Codex или Claude Code читать файлы проекта, писать код и выполнять задачи.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Позволяет вашему приложению обращаться к ИИ. Подходит разработчикам и компаниям.",
     "Circuit configuration (JSON)": "Конфигурация цепи (JSON)",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Единые значения для сбалансированного режима, приоритета стоимости, стабильности и быстрых пресетов."
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Единые значения для сбалансированного режима, приоритета стоимости, стабильности и быстрых пресетов.",
+    "Route rate limits": "Ограничения частоты маршрутов",
+    "These limits are counted by client IP and apply before authentication.": "Эти ограничения считаются по IP-адресу клиента и применяются до аутентификации.",
+    "Global API rate limiting": "Глобальное ограничение частоты API",
+    "Applies to dashboard and /api routes, not model relay requests.": "Применяется к панели управления и маршрутам /api, но не к запросам проксирования моделей.",
+    "Global web rate limiting": "Глобальное ограничение частоты Web",
+    "Applies to web pages and static assets.": "Применяется к веб-страницам и статическим ресурсам.",
+    "Critical route rate limiting": "Ограничение частоты критических маршрутов",
+    "Applies to login, registration, password reset, and OAuth routes.": "Применяется к маршрутам входа, регистрации, сброса пароля и OAuth.",
+    "Rate limit window (seconds)": "Окно ограничения частоты (секунды)",
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429."
   }
 }

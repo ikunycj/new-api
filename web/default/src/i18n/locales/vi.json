@@ -6438,6 +6438,16 @@
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Cho phép Codex hoặc Claude Code đọc tệp dự án, viết mã và hoàn thành nhiệm vụ.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Cho phép ứng dụng của bạn gọi AI, phù hợp cho nhà phát triển và doanh nghiệp.",
     "Circuit configuration (JSON)": "Cấu hình mạch (JSON)",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Giá trị tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và preset nhanh."
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Giá trị tập trung cho chế độ cân bằng, ưu tiên chi phí, ưu tiên ổn định và preset nhanh.",
+    "Route rate limits": "Giới hạn tốc độ tuyến đường",
+    "These limits are counted by client IP and apply before authentication.": "Các giới hạn này được tính theo IP máy khách và áp dụng trước khi xác thực.",
+    "Global API rate limiting": "Giới hạn tốc độ API toàn cục",
+    "Applies to dashboard and /api routes, not model relay requests.": "Áp dụng cho bảng điều khiển và các tuyến /api, không áp dụng cho yêu cầu chuyển tiếp mô hình.",
+    "Global web rate limiting": "Giới hạn tốc độ Web toàn cục",
+    "Applies to web pages and static assets.": "Áp dụng cho trang web và tài nguyên tĩnh.",
+    "Critical route rate limiting": "Giới hạn tốc độ tuyến quan trọng",
+    "Applies to login, registration, password reset, and OAuth routes.": "Áp dụng cho các tuyến đăng nhập, đăng ký, đặt lại mật khẩu và OAuth.",
+    "Rate limit window (seconds)": "Cửa sổ giới hạn tốc độ (giây)",
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429."
   }
 }

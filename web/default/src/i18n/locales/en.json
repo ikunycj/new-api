@@ -6438,6 +6438,16 @@
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Let Codex or Claude Code read project files, write code, and complete tasks.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Let your own application call AI, suitable for developers and businesses.",
     "Circuit configuration (JSON)": "Circuit configuration (JSON)",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Central defaults for balanced, cost-first, stability-first, and quick presets."
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "Central defaults for balanced, cost-first, stability-first, and quick presets.",
+    "Route rate limits": "Route rate limits",
+    "These limits are counted by client IP and apply before authentication.": "These limits are counted by client IP and apply before authentication.",
+    "Global API rate limiting": "Global API rate limiting",
+    "Applies to dashboard and /api routes, not model relay requests.": "Applies to dashboard and /api routes, not model relay requests.",
+    "Global web rate limiting": "Global web rate limiting",
+    "Applies to web pages and static assets.": "Applies to web pages and static assets.",
+    "Critical route rate limiting": "Critical route rate limiting",
+    "Applies to login, registration, password reset, and OAuth routes.": "Applies to login, registration, password reset, and OAuth routes.",
+    "Rate limit window (seconds)": "Rate limit window (seconds)",
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "This controls model request rate limiting. Route rate limits are configured below and may still return 429."
   }
 }

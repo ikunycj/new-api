@@ -6438,6 +6438,16 @@
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Codex または Claude Code にプロジェクトファイルを読ませ、コード作成やタスク実行を任せます。",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "自作プログラムから AI を呼び出します。開発者や企業向けです。",
     "Circuit configuration (JSON)": "サーキット設定（JSON）",
-    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "バランス、コスト優先、安定性優先、クイックプリセットの既定値を一元管理します。"
+    "Central defaults for balanced, cost-first, stability-first, and quick presets.": "バランス、コスト優先、安定性優先、クイックプリセットの既定値を一元管理します。",
+    "Route rate limits": "ルートのレート制限",
+    "These limits are counted by client IP and apply before authentication.": "これらの制限はクライアント IP ごとにカウントされ、認証前に適用されます。",
+    "Global API rate limiting": "グローバル API レート制限",
+    "Applies to dashboard and /api routes, not model relay requests.": "ダッシュボードと /api ルートに適用され、モデル中継リクエストには適用されません。",
+    "Global web rate limiting": "グローバル Web レート制限",
+    "Applies to web pages and static assets.": "Web ページと静的アセットに適用されます。",
+    "Critical route rate limiting": "重要ルートのレート制限",
+    "Applies to login, registration, password reset, and OAuth routes.": "ログイン、登録、パスワードリセット、OAuth ルートに適用されます。",
+    "Rate limit window (seconds)": "レート制限の時間枠（秒）",
+    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。"
   }
 }
