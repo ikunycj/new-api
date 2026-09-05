@@ -11,16 +11,15 @@ import (
 )
 
 type selfChannelView struct {
-	Id int `json:"id"`
-	Type int `json:"type"`
-	Name string `json:"name"`
-	BaseURL *string `json:"base_url"`
-	Models string `json:"models"`
+	Id           int     `json:"id"`
+	Type         int     `json:"type"`
+	Name         string  `json:"name"`
+	BaseURL      *string `json:"base_url"`
+	Models       string  `json:"models"`
 	ModelMapping *string `json:"model_mapping"`
-	OpenAIOrganization *string `json:"openai_organization"`
-	Remark *string `json:"remark"`
-	Group string `json:"group"`
-	Status int `json:"status"`
+	Remark       *string `json:"remark"`
+	Group        string  `json:"group"`
+	Status       int     `json:"status"`
 }
 
 func requireToBUser(c *gin.Context) (*model.User, bool) {
@@ -34,20 +33,33 @@ func requireToBUser(c *gin.Context) (*model.User, bool) {
 
 func GetSelfChannels(c *gin.Context) {
 	user, ok := requireToBUser(c)
-	if !ok { return }
+	if !ok {
+		return
+	}
 	usableGroups := service.GetUserUsableGroups(user.Group)
 	pricingGroups, err := model.GetPricingGroupNames()
-	if err != nil { common.ApiError(c, err); return }
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	allowedGroups := make(map[string]struct{})
 	for _, group := range pricingGroups {
-		if _, usable := usableGroups[group]; usable && model.IsBillingGroupToB(group) { allowedGroups[group] = struct{}{} }
+		if _, usable := usableGroups[group]; usable && model.IsBillingGroupToB(group) {
+			allowedGroups[group] = struct{}{}
+		}
 	}
 	var channels []selfChannelView
-	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "base_url", "models", "model_mapping", "openai_organization", "remark", "group", "status").Order("id desc").Find(&channels).Error; err != nil { common.ApiError(c, err); return }
+	if err = model.DB.Model(&model.Channel{}).Select("id", "type", "name", "base_url", "models", "model_mapping", "remark", "group", "status").Order("id desc").Find(&channels).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	filtered := make([]selfChannelView, 0, len(channels))
 	for _, channel := range channels {
 		for _, group := range strings.Split(channel.Group, ",") {
-			if _, allowed := allowedGroups[strings.TrimSpace(group)]; allowed { filtered = append(filtered, channel); break }
+			if _, allowed := allowedGroups[strings.TrimSpace(group)]; allowed {
+				filtered = append(filtered, channel)
+				break
+			}
 		}
 	}
 	common.ApiSuccess(c, filtered)
