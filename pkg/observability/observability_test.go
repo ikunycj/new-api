@@ -1,13 +1,16 @@
 package observability
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -123,4 +126,48 @@ func TestRecordAuthFailureUsesBoundedLabels(t *testing.T) {
 		}
 	}
 	t.Fatal("alltoken_auth_failures_total metric was not gathered")
+}
+
+func TestLogEventSkipsStructuredLogsWhenMonitoringIsDisabled(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	previousEventLogEnabled := common.ObservabilityEventLogEnabled
+	previousWriter := gin.DefaultWriter
+	common.MonitoringEnabled = false
+	common.ObservabilityEventLogEnabled = true
+	t.Cleanup(func() {
+		common.MonitoringEnabled = previousMonitoringEnabled
+		common.ObservabilityEventLogEnabled = previousEventLogEnabled
+		gin.DefaultWriter = previousWriter
+	})
+
+	var output bytes.Buffer
+	gin.DefaultWriter = &output
+	LogEvent(context.Background(), Event{
+		Event:      "request_finished",
+		Provider:   ProviderOther,
+		Route:      "/v1/responses",
+		Status:     200,
+		DurationMS: 10,
+	})
+
+	assert.Empty(t, output.String())
+}
+
+func TestLogEventSkipsStructuredLogsWhenEventLoggingIsDisabled(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	previousEventLogEnabled := common.ObservabilityEventLogEnabled
+	previousWriter := gin.DefaultWriter
+	common.MonitoringEnabled = true
+	common.ObservabilityEventLogEnabled = false
+	t.Cleanup(func() {
+		common.MonitoringEnabled = previousMonitoringEnabled
+		common.ObservabilityEventLogEnabled = previousEventLogEnabled
+		gin.DefaultWriter = previousWriter
+	})
+
+	var output bytes.Buffer
+	gin.DefaultWriter = &output
+	LogEvent(context.Background(), Event{Event: "upstream_attempt", Provider: ProviderOther})
+
+	assert.Empty(t, output.String())
 }

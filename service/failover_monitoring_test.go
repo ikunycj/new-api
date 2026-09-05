@@ -15,6 +15,10 @@ import (
 )
 
 func TestGetFailoverMonitoringSnapshotAggregatesMetricsAndAlerts(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = true
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			http.Error(w, "missing authorization", http.StatusUnauthorized)
@@ -76,6 +80,10 @@ func TestGetFailoverMonitoringSnapshotAggregatesMetricsAndAlerts(t *testing.T) {
 }
 
 func TestGetFailoverMonitoringSnapshotCachesRepeatedRefreshes(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = true
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
 	var prometheusRequests atomic.Int32
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		prometheusRequests.Add(1)
@@ -105,6 +113,10 @@ func TestGetFailoverMonitoringSnapshotCachesRepeatedRefreshes(t *testing.T) {
 }
 
 func TestGetFailoverMonitoringSnapshotReportsMissingConfiguration(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = true
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
 	for _, name := range []string{
 		"FAILOVER_PROMETHEUS_URL",
 		"FAILOVER_ALERTMANAGER_URL",
@@ -128,6 +140,10 @@ func TestGetFailoverMonitoringSnapshotReportsMissingConfiguration(t *testing.T) 
 }
 
 func TestGetFailoverMonitoringSnapshotReturnsChannelAlerts(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = true
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("query")
 		expectedQueries := map[string]struct{}{
@@ -173,6 +189,10 @@ func TestGetFailoverMonitoringSnapshotReturnsChannelAlerts(t *testing.T) {
 }
 
 func TestGetFailoverMonitoringSnapshotRejectsNonFiniteMetrics(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = true
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		value := "1"
 		if strings.Contains(r.URL.Query().Get("query"), "histogram_quantile") {
@@ -195,4 +215,31 @@ func TestGetFailoverMonitoringSnapshotRejectsNonFiniteMetrics(t *testing.T) {
 	assert.Equal(t, "1 metric queries failed", snapshot.Sources[0].Message)
 	_, err := common.Marshal(snapshot)
 	require.NoError(t, err)
+}
+
+func TestGetFailoverMonitoringSnapshotDisabledSkipsMonitoringSources(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = false
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("FAILOVER_PROMETHEUS_URL", server.URL)
+	t.Setenv("FAILOVER_ALERTMANAGER_URL", server.URL)
+	t.Setenv("FAILOVER_GRAFANA_PUBLIC_URL", server.URL)
+
+	snapshot := GetFailoverMonitoringSnapshot(context.Background())
+
+	assert.False(t, snapshot.Enabled)
+	assert.Equal(t, "disabled", snapshot.Status)
+	assert.Zero(t, requests.Load())
+	require.Len(t, snapshot.Sources, 3)
+	for _, source := range snapshot.Sources {
+		assert.Equal(t, "disabled", source.Status)
+		assert.Equal(t, "monitoring disabled", source.Message)
+	}
 }

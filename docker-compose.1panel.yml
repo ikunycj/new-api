@@ -45,6 +45,11 @@ services:
       BATCH_UPDATE_ENABLED: ${BATCH_UPDATE_ENABLED:-true}
       NODE_NAME: ${NODE_NAME:-new-api-node-1}
       NODE_TYPE: ${NODE_TYPE:-master}
+      # Set MONITORING_ENABLED=false to stop application metrics and the
+      # Prometheus/Alertmanager/Grafana integration. Nginx logs and channel
+      # probes are independent and remain enabled.
+      MONITORING_ENABLED: ${MONITORING_ENABLED:-true}
+      OBSERVABILITY_EVENT_LOG_ENABLED: ${OBSERVABILITY_EVENT_LOG_ENABLED:-true}
       ENABLE_METRICS: ${ENABLE_METRICS:-true}
       METRICS_PORT: ${METRICS_PORT:-8006}
       METRICS_BIND_ADDRESS: ${METRICS_BIND_ADDRESS:-0.0.0.0}

@@ -23,6 +23,10 @@ func GetFailoverMonitoring(c *gin.Context) {
 }
 
 func GetFailoverGrafanaAuth(c *gin.Context) {
+	if !common.MonitoringEnabled {
+		c.Status(http.StatusNotFound)
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
