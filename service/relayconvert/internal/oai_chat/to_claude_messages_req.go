@@ -209,6 +209,17 @@ func OpenAIChatRequestToClaudeMessages(c *gin.Context, textRequest dto.GeneralOp
 		}
 	}
 
+	// Preserve an explicitly supplied Claude-style thinking object when an
+	// OpenAI-compatible request is converted to the Anthropic Messages format.
+	// This includes thinking.display, which controls adaptive-thinking summaries.
+	if len(textRequest.THINKING) > 0 && string(textRequest.THINKING) != "null" {
+		var thinking dto.Thinking
+		if err := common.Unmarshal(textRequest.THINKING, &thinking); err != nil {
+			return nil, fmt.Errorf("invalid thinking: %w", err)
+		}
+		claudeRequest.Thinking = &thinking
+	}
+
 	if textRequest.Stop != nil {
 		switch stop := textRequest.Stop.(type) {
 		case string:

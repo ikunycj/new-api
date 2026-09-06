@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -372,4 +373,30 @@ func TestOpenAIChatRequestToClaudeMessages_ClaudeOpus48ThinkingUsesAdaptiveHighE
 	require.Nil(t, claudeRequest.Temperature)
 	require.Nil(t, claudeRequest.TopP)
 	require.Nil(t, claudeRequest.TopK)
+}
+
+func TestOpenAIChatRequestToClaudeMessages_PreservesExplicitThinkingDisplay(t *testing.T) {
+	request := dto.GeneralOpenAIRequest{
+		Model:    "claude-opus-4-8",
+		THINKING: json.RawMessage(`{"type":"adaptive","display":"summarized"}`),
+		Messages: []dto.Message{{Role: "user", Content: "Explain why the sky is blue."}},
+	}
+
+	claudeRequest, err := relayconvert.OpenAIChatRequestToClaudeMessages(nil, request)
+	require.NoError(t, err)
+	require.NotNil(t, claudeRequest.Thinking)
+	assert.Equal(t, "adaptive", claudeRequest.Thinking.Type)
+	assert.Equal(t, "summarized", claudeRequest.Thinking.Display)
+}
+
+func TestOpenAIChatRequestToClaudeMessages_RejectsInvalidThinking(t *testing.T) {
+	request := dto.GeneralOpenAIRequest{
+		Model:    "claude-opus-4-8",
+		THINKING: json.RawMessage(`{"type":`),
+		Messages: []dto.Message{{Role: "user", Content: "Explain why the sky is blue."}},
+	}
+
+	_, err := relayconvert.OpenAIChatRequestToClaudeMessages(nil, request)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid thinking")
 }
