@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -58,10 +58,6 @@ export function BillingGroupPricingSection({
   )
   const form = useForm<GroupPricingValues>({ defaultValues: values })
 
-  useEffect(() => {
-    form.reset(values)
-  }, [form, values])
-
   const save = useCallback(
     async (nextValues: GroupPricingValues) => {
       const updates: Array<[string, string | boolean]> = [
@@ -75,11 +71,18 @@ export function BillingGroupPricingSection({
           nextValues.GroupSpecialUsableGroup,
         ],
       ]
-      for (const [key, value] of updates) {
-        await updateOption.mutateAsync({ key, value })
+      for (const [index, [key, value]] of updates.entries()) {
+        const isLastUpdate = index === updates.length - 1
+        await updateOption.mutateAsync({
+          key,
+          value,
+          refreshSystemOptions: isLastUpdate,
+          showSuccessToast: isLastUpdate,
+        })
       }
+      form.reset(nextValues)
     },
-    [updateOption]
+    [form, updateOption]
   )
 
   return (

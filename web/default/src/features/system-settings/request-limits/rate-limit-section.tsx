@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Code2, Palette } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type Control } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
@@ -78,12 +78,109 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine(isValidJSON, {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    GlobalApiRateLimitEnabled: z.boolean(),
+    GlobalApiRateLimitNum: z.number().int().min(1).max(100000000),
+    GlobalApiRateLimitDuration: z.number().int().min(1).max(100000000),
+    GlobalWebRateLimitEnabled: z.boolean(),
+    GlobalWebRateLimitNum: z.number().int().min(1).max(100000000),
+    GlobalWebRateLimitDuration: z.number().int().min(1).max(100000000),
+    CriticalRateLimitEnabled: z.boolean(),
+    CriticalRateLimitNum: z.number().int().min(1).max(100000000),
+    CriticalRateLimitDuration: z.number().int().min(1).max(100000000),
   })
 
 type RateLimitFormValues = z.infer<ReturnType<typeof createRateLimitSchema>>
 
 type RateLimitSectionProps = {
   defaultValues: RateLimitFormValues
+}
+
+type RouteRateLimitFieldsProps = {
+  control: Control<RateLimitFormValues>
+  enabledName:
+    | 'GlobalApiRateLimitEnabled'
+    | 'GlobalWebRateLimitEnabled'
+    | 'CriticalRateLimitEnabled'
+  countName:
+    | 'GlobalApiRateLimitNum'
+    | 'GlobalWebRateLimitNum'
+    | 'CriticalRateLimitNum'
+  durationName:
+    | 'GlobalApiRateLimitDuration'
+    | 'GlobalWebRateLimitDuration'
+    | 'CriticalRateLimitDuration'
+  label: string
+  description: string
+}
+
+function RouteRateLimitFields(props: RouteRateLimitFieldsProps) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='space-y-4'>
+      <FormField
+        control={props.control}
+        name={props.enabledName}
+        render={({ field }) => (
+          <SettingsSwitchItem>
+            <SettingsSwitchContent>
+              <FormLabel>{t(props.label)}</FormLabel>
+              <FormDescription>{t(props.description)}</FormDescription>
+            </SettingsSwitchContent>
+            <FormControl>
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </SettingsSwitchItem>
+        )}
+      />
+      <div className='grid gap-4 md:grid-cols-2'>
+        <FormField
+          control={props.control}
+          name={props.countName}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Max requests per period')}</FormLabel>
+              <FormControl>
+                <Input
+                  type='number'
+                  min={1}
+                  max={100000000}
+                  step={1}
+                  {...field}
+                  onChange={(e) =>
+                    field.onChange(Number.parseInt(e.target.value) || 1)
+                  }
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={props.control}
+          name={props.durationName}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Rate limit window (seconds)')}</FormLabel>
+              <FormControl>
+                <Input
+                  type='number'
+                  min={1}
+                  max={100000000}
+                  step={1}
+                  {...field}
+                  onChange={(e) =>
+                    field.onChange(Number.parseInt(e.target.value) || 1)
+                  }
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  )
 }
 
 export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
@@ -132,7 +229,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormLabel>{t('Enable rate limiting')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.'
+                      'This controls model request rate limiting. Route rate limits are configured below and may still return 429.'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -312,6 +409,43 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               </FormItem>
             )}
           />
+
+          <div className='border-border space-y-5 border-t pt-6'>
+            <div className='space-y-1'>
+              <h4 className='text-sm font-semibold'>
+                {t('Route rate limits')}
+              </h4>
+              <p className='text-muted-foreground text-sm'>
+                {t(
+                  'These limits are counted by client IP and apply before authentication.'
+                )}
+              </p>
+            </div>
+            <RouteRateLimitFields
+              control={form.control}
+              enabledName='GlobalApiRateLimitEnabled'
+              countName='GlobalApiRateLimitNum'
+              durationName='GlobalApiRateLimitDuration'
+              label='Global API rate limiting'
+              description='Applies to dashboard and /api routes, not model relay requests.'
+            />
+            <RouteRateLimitFields
+              control={form.control}
+              enabledName='GlobalWebRateLimitEnabled'
+              countName='GlobalWebRateLimitNum'
+              durationName='GlobalWebRateLimitDuration'
+              label='Global web rate limiting'
+              description='Applies to web pages and static assets.'
+            />
+            <RouteRateLimitFields
+              control={form.control}
+              enabledName='CriticalRateLimitEnabled'
+              countName='CriticalRateLimitNum'
+              durationName='CriticalRateLimitDuration'
+              label='Critical route rate limiting'
+              description='Applies to login, registration, password reset, and OAuth routes.'
+            />
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

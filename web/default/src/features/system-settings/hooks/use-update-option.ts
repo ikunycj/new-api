@@ -23,6 +23,12 @@ import { toast } from 'sonner'
 import { updateSystemOption } from '../api'
 import type { UpdateOptionRequest } from '../types'
 
+type UpdateOptionMutationRequest = UpdateOptionRequest & {
+  /** Allow callers that save several options to refresh the query once. */
+  refreshSystemOptions?: boolean
+  showSuccessToast?: boolean
+}
+
 // Configuration keys that require status refresh
 const STATUS_RELATED_KEYS = new Set([
   'HeaderNavModules',
@@ -44,11 +50,16 @@ export function useUpdateOption() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (request: UpdateOptionRequest) => updateSystemOption(request),
+    mutationFn: ({
+      refreshSystemOptions: _refreshSystemOptions,
+      showSuccessToast: _showSuccessToast,
+      ...request
+    }: UpdateOptionMutationRequest) => updateSystemOption(request),
     onSuccess: (data, variables) => {
       if (data.success) {
-        // Always refresh system-options
-        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        if (variables.refreshSystemOptions !== false) {
+          queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        }
 
         // If updating frontend-display-related config, also refresh status
         if (STATUS_RELATED_KEYS.has(variables.key)) {
@@ -60,7 +71,9 @@ export function useUpdateOption() {
           }
         }
 
-        toast.success(i18next.t('Setting updated successfully'))
+        if (variables.showSuccessToast !== false) {
+          toast.success(i18next.t('Setting updated successfully'))
+        }
       } else {
         toast.error(data.message || i18next.t('Failed to update setting'))
       }

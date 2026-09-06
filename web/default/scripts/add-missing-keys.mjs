@@ -21,6 +21,17 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    Timeouts: 'Timeouts',
+    'Upstream total timeout (seconds)': 'Upstream total timeout (seconds)',
+    'Streaming idle timeout (seconds)': 'Streaming idle timeout (seconds)',
+    'Upstream idle connection timeout (seconds)': 'Upstream idle connection timeout (seconds)',
+    'Client write timeout (seconds)': 'Client write timeout (seconds)',
+    'Shutdown grace period (seconds)': 'Shutdown grace period (seconds)',
+    '0 means unlimited.': '0 means unlimited.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.',
+    'Available channels': 'Available channels',
+    'Read-only view of channels available to your user group.': 'Read-only view of channels available to your user group.',
+    'No available channels': 'No available channels',
     'Group Management': 'Group Management',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Channels are attempted in order; each channel can simulate failures and latency.',
@@ -167,6 +178,17 @@ const newKeys = {
     'Call Logs': 'Call Logs',
   },
   zh: {
+    Timeouts: '超时配置',
+    'Upstream total timeout (seconds)': '上游总超时（秒）',
+    'Streaming idle timeout (seconds)': '流式无响应超时（秒）',
+    'Upstream idle connection timeout (seconds)': '上游连接空闲超时（秒）',
+    'Client write timeout (seconds)': '客户端写超时（秒）',
+    'Shutdown grace period (seconds)': '服务关闭等待时间（秒）',
+    '0 means unlimited.': '0 表示不限制。',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '修改会立即应用于新请求。网关代理超时仍由主机配置管理。',
+    'Available channels': '可用渠道',
+    'Read-only view of channels available to your user group.': '这里只读展示当前用户分组可用的渠道。',
+    'No available channels': '暂无可用渠道',
     'Group Management': '分组管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       '渠道将按顺序尝试；每个渠道可以模拟失败和延迟。',
@@ -311,6 +333,17 @@ const newKeys = {
     'Call Logs': '调用日志',
   },
   fr: {
+    Timeouts: 'Délais d’expiration',
+    'Upstream total timeout (seconds)': 'Délai total amont (secondes)',
+    'Streaming idle timeout (seconds)': 'Délai d’inactivité du streaming (secondes)',
+    'Upstream idle connection timeout (seconds)': 'Délai de connexion inactive amont (secondes)',
+    'Client write timeout (seconds)': 'Délai d’écriture client (secondes)',
+    'Shutdown grace period (seconds)': 'Délai de grâce à l’arrêt (secondes)',
+    '0 means unlimited.': '0 signifie illimité.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte.',
+    'Available channels': 'Canaux disponibles',
+    'Read-only view of channels available to your user group.': 'Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.',
+    'No available channels': 'Aucun canal disponible',
     'Group Management': 'Gestion des groupes',
     'Local load-test agent': 'Agent de test de charge local',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -438,6 +471,17 @@ const newKeys = {
     'Call Logs': 'Journaux d’appels',
   },
   ja: {
+    Timeouts: 'タイムアウト',
+    'Upstream total timeout (seconds)': '上流の合計タイムアウト（秒）',
+    'Streaming idle timeout (seconds)': 'ストリーミング無通信タイムアウト（秒）',
+    'Upstream idle connection timeout (seconds)': '上流アイドル接続タイムアウト（秒）',
+    'Client write timeout (seconds)': 'クライアント書き込みタイムアウト（秒）',
+    'Shutdown grace period (seconds)': 'シャットダウン猶予時間（秒）',
+    '0 means unlimited.': '0 は無制限を意味します。',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。',
+    'Available channels': '利用可能なチャンネル',
+    'Read-only view of channels available to your user group.': 'ユーザーグループで利用できるチャンネルを読み取り専用で表示します。',
+    'No available channels': '利用可能なチャンネルはありません',
     'Group Management': 'グループ管理',
     'Local load-test agent': 'ローカル負荷テスト Agent',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -565,6 +609,17 @@ const newKeys = {
     'Call Logs': '呼び出しログ',
   },
   ru: {
+    Timeouts: 'Тайм-ауты',
+    'Upstream total timeout (seconds)': 'Общий тайм-аут восходящего сервиса (секунды)',
+    'Streaming idle timeout (seconds)': 'Тайм-аут простоя потоковой передачи (секунды)',
+    'Upstream idle connection timeout (seconds)': 'Тайм-аут бездействующего соединения с восходящим сервисом (секунды)',
+    'Client write timeout (seconds)': 'Тайм-аут записи клиенту (секунды)',
+    'Shutdown grace period (seconds)': 'Период ожидания при завершении (секунды)',
+    '0 means unlimited.': '0 означает отсутствие ограничения.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста.',
+    'Available channels': 'Доступные каналы',
+    'Read-only view of channels available to your user group.': 'Каналы, доступные вашей группе пользователей, доступны только для чтения.',
+    'No available channels': 'Нет доступных каналов',
     'Group Management': 'Управление группами',
     'Local load-test agent': 'Локальный агент нагрузочного теста',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -692,6 +747,17 @@ const newKeys = {
     'Call Logs': 'Журналы вызовов',
   },
   vi: {
+    Timeouts: 'Thời gian chờ',
+    'Upstream total timeout (seconds)': 'Thời gian chờ tổng của upstream (giây)',
+    'Streaming idle timeout (seconds)': 'Thời gian chờ không hoạt động của luồng (giây)',
+    'Upstream idle connection timeout (seconds)': 'Thời gian chờ kết nối upstream nhàn rỗi (giây)',
+    'Client write timeout (seconds)': 'Thời gian chờ ghi cho máy khách (giây)',
+    'Shutdown grace period (seconds)': 'Thời gian chờ tắt máy (giây)',
+    '0 means unlimited.': '0 có nghĩa là không giới hạn.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý.',
+    'Available channels': 'Các kênh khả dụng',
+    'Read-only view of channels available to your user group.': 'Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.',
+    'No available channels': 'Không có kênh khả dụng',
     'Group Management': 'Quản lý nhóm',
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
     'Run high-volume tests outside the browser and keep results linked to this account.':
@@ -886,8 +952,7 @@ const newKeys = {
     'Inbound endpoints': '入站端點',
     Loading: '載入中',
     Load: '負載',
-    'Dynamic strategy weights must total 100%':
-      '動態策略權重總和必須為 100%',
+    'Dynamic strategy weights must total 100%': '動態策略權重總和必須為 100%',
     Models: '模型',
     'No cost entries': '暫無成本帳期',
     'Record cost': '輸入成本',
@@ -2092,6 +2157,129 @@ const circuitConfigurationLabels = {
 for (const [locale, translations] of Object.entries(
   circuitConfigurationLabels
 )) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const routeRateLimitKeys = {
+  en: {
+    'Route rate limits': 'Route rate limits',
+    'These limits are counted by client IP and apply before authentication.':
+      'These limits are counted by client IP and apply before authentication.',
+    'Global API rate limiting': 'Global API rate limiting',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Applies to dashboard and /api routes, not model relay requests.',
+    'Global web rate limiting': 'Global web rate limiting',
+    'Applies to web pages and static assets.':
+      'Applies to web pages and static assets.',
+    'Critical route rate limiting': 'Critical route rate limiting',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Applies to login, registration, password reset, and OAuth routes.',
+    'Rate limit window (seconds)': 'Rate limit window (seconds)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'This controls model request rate limiting. Route rate limits are configured below and may still return 429.',
+  },
+  zh: {
+    'Route rate limits': '路由速率限制',
+    'These limits are counted by client IP and apply before authentication.':
+      '这些限制按客户端 IP 计数，并在身份验证前生效。',
+    'Global API rate limiting': '全局 API 速率限制',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      '适用于控制台和 /api 路由，不适用于模型转发请求。',
+    'Global web rate limiting': '全局 Web 速率限制',
+    'Applies to web pages and static assets.': '适用于网页和静态资源。',
+    'Critical route rate limiting': '关键路由速率限制',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      '适用于登录、注册、重置密码和 OAuth 路由。',
+    'Rate limit window (seconds)': '速率限制时间窗口（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      '此处控制模型请求速率限制。路由速率限制可在下方配置，仍可能返回 429。',
+  },
+  fr: {
+    'Route rate limits': 'Limites de debit des routes',
+    'These limits are counted by client IP and apply before authentication.':
+      "Ces limites sont comptees par adresse IP cliente et s'appliquent avant l'authentification.",
+    'Global API rate limiting': "Limitation globale du debit de l'API",
+    'Applies to dashboard and /api routes, not model relay requests.':
+      "S'applique au tableau de bord et aux routes /api, pas aux requetes relais de modeles.",
+    'Global web rate limiting': 'Limitation globale du debit Web',
+    'Applies to web pages and static assets.':
+      'S’applique aux pages Web et aux ressources statiques.',
+    'Critical route rate limiting': 'Limitation du debit des routes critiques',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
+    'Rate limit window (seconds)': 'Fenetre de limitation (secondes)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429.',
+  },
+  ja: {
+    'Route rate limits': 'ルートのレート制限',
+    'These limits are counted by client IP and apply before authentication.':
+      'これらの制限はクライアント IP ごとにカウントされ、認証前に適用されます。',
+    'Global API rate limiting': 'グローバル API レート制限',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'ダッシュボードと /api ルートに適用され、モデル中継リクエストには適用されません。',
+    'Global web rate limiting': 'グローバル Web レート制限',
+    'Applies to web pages and static assets.':
+      'Web ページと静的アセットに適用されます。',
+    'Critical route rate limiting': '重要ルートのレート制限',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'ログイン、登録、パスワードリセット、OAuth ルートに適用されます。',
+    'Rate limit window (seconds)': 'レート制限の時間枠（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。',
+  },
+  ru: {
+    'Route rate limits': 'Ограничения частоты маршрутов',
+    'These limits are counted by client IP and apply before authentication.':
+      'Эти ограничения считаются по IP-адресу клиента и применяются до аутентификации.',
+    'Global API rate limiting': 'Глобальное ограничение частоты API',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Применяется к панели управления и маршрутам /api, но не к запросам проксирования моделей.',
+    'Global web rate limiting': 'Глобальное ограничение частоты Web',
+    'Applies to web pages and static assets.':
+      'Применяется к веб-страницам и статическим ресурсам.',
+    'Critical route rate limiting': 'Ограничение частоты критических маршрутов',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Применяется к маршрутам входа, регистрации, сброса пароля и OAuth.',
+    'Rate limit window (seconds)': 'Окно ограничения частоты (секунды)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Здесь настраивается ограничение частоты запросов к моделям. Ограничения маршрутов задаются ниже и по-прежнему могут возвращать 429.',
+  },
+  vi: {
+    'Route rate limits': 'Giới hạn tốc độ tuyến đường',
+    'These limits are counted by client IP and apply before authentication.':
+      'Các giới hạn này được tính theo IP máy khách và áp dụng trước khi xác thực.',
+    'Global API rate limiting': 'Giới hạn tốc độ API toàn cục',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      'Áp dụng cho bảng điều khiển và các tuyến /api, không áp dụng cho yêu cầu chuyển tiếp mô hình.',
+    'Global web rate limiting': 'Giới hạn tốc độ Web toàn cục',
+    'Applies to web pages and static assets.':
+      'Áp dụng cho trang web và tài nguyên tĩnh.',
+    'Critical route rate limiting': 'Giới hạn tốc độ tuyến quan trọng',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      'Áp dụng cho các tuyến đăng nhập, đăng ký, đặt lại mật khẩu và OAuth.',
+    'Rate limit window (seconds)': 'Cửa sổ giới hạn tốc độ (giây)',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      'Mục này kiểm soát giới hạn tốc độ yêu cầu mô hình. Giới hạn tuyến đường được cấu hình bên dưới và vẫn có thể trả về 429.',
+  },
+  'zh-TW': {
+    'Route rate limits': '路由速率限制',
+    'These limits are counted by client IP and apply before authentication.':
+      '這些限制會依用戶端 IP 計數，並在驗證前套用。',
+    'Global API rate limiting': '全域 API 速率限制',
+    'Applies to dashboard and /api routes, not model relay requests.':
+      '適用於控制台和 /api 路由，不適用於模型轉發請求。',
+    'Global web rate limiting': '全域 Web 速率限制',
+    'Applies to web pages and static assets.': '適用於網頁和靜態資源。',
+    'Critical route rate limiting': '關鍵路由速率限制',
+    'Applies to login, registration, password reset, and OAuth routes.':
+      '適用於登入、註冊、重設密碼和 OAuth 路由。',
+    'Rate limit window (seconds)': '速率限制時間視窗（秒）',
+    'This controls model request rate limiting. Route rate limits are configured below and may still return 429.':
+      '此處控制模型請求速率限制。路由速率限制可在下方設定，仍可能回傳 429。',
+  },
+}
+for (const [locale, translations] of Object.entries(routeRateLimitKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

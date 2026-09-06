@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
@@ -15,6 +17,28 @@ var ModelRequestRateLimitCount = 0
 var ModelRequestRateLimitSuccessCount = 1000
 var ModelRequestRateLimitGroup = map[string][2]int{}
 var ModelRequestRateLimitMutex sync.RWMutex
+
+const maxRouteRateLimitValue = 100000000
+
+func CheckRouteRateLimitOption(key string, value string) error {
+	switch key {
+	case "GlobalApiRateLimitEnabled", "GlobalWebRateLimitEnabled", "CriticalRateLimitEnabled":
+		if _, err := strconv.ParseBool(strings.TrimSpace(value)); err != nil {
+			return fmt.Errorf("%s must be a boolean", key)
+		}
+	case "GlobalApiRateLimitNum", "GlobalWebRateLimitNum", "CriticalRateLimitNum":
+		parsed, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || parsed < 1 || parsed > maxRouteRateLimitValue {
+			return fmt.Errorf("%s must be between 1 and %d", key, maxRouteRateLimitValue)
+		}
+	case "GlobalApiRateLimitDuration", "GlobalWebRateLimitDuration", "CriticalRateLimitDuration":
+		parsed, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || parsed < 1 || parsed > maxRouteRateLimitValue {
+			return fmt.Errorf("%s must be between 1 and %d seconds", key, maxRouteRateLimitValue)
+		}
+	}
+	return nil
+}
 
 func ModelRequestRateLimitGroup2JSONString() string {
 	ModelRequestRateLimitMutex.RLock()

@@ -26,6 +26,7 @@ import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { LoadTestSettingsSection } from './loadtest-settings-section'
+import { TimeoutSettingsSection } from './timeout-settings-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -149,6 +150,11 @@ const OPERATIONS_SECTIONS = [
         }}
       />
     ),
+  },
+  {
+    id: 'timeouts',
+    titleKey: 'Timeouts',
+    build: (settings: OperationsSettings) => <TimeoutSettingsSection defaultValues={{ RelayTimeout: settings.RelayTimeout, StreamingTimeout: settings.StreamingTimeout, RelayIdleConnTimeout: settings.RelayIdleConnTimeout, StreamClientWriteTimeout: settings.StreamClientWriteTimeout, ShutdownTimeoutSeconds: settings.ShutdownTimeoutSeconds }} />,
   },
   {
     id: 'update-checker',

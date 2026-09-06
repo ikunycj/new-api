@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -143,6 +144,15 @@ func InitOptionMap() {
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
 	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
+	common.OptionMap["GlobalApiRateLimitEnabled"] = strconv.FormatBool(common.GlobalApiRateLimitEnable)
+	common.OptionMap["GlobalApiRateLimitNum"] = strconv.Itoa(common.GlobalApiRateLimitNum)
+	common.OptionMap["GlobalApiRateLimitDuration"] = strconv.FormatInt(common.GlobalApiRateLimitDuration, 10)
+	common.OptionMap["GlobalWebRateLimitEnabled"] = strconv.FormatBool(common.GlobalWebRateLimitEnable)
+	common.OptionMap["GlobalWebRateLimitNum"] = strconv.Itoa(common.GlobalWebRateLimitNum)
+	common.OptionMap["GlobalWebRateLimitDuration"] = strconv.FormatInt(common.GlobalWebRateLimitDuration, 10)
+	common.OptionMap["CriticalRateLimitEnabled"] = strconv.FormatBool(common.CriticalRateLimitEnable)
+	common.OptionMap["CriticalRateLimitNum"] = strconv.Itoa(common.CriticalRateLimitNum)
+	common.OptionMap["CriticalRateLimitDuration"] = strconv.FormatInt(common.CriticalRateLimitDuration, 10)
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
 	common.OptionMap["ModelPrice"] = ratio_setting.ModelPrice2JSONString()
 	common.OptionMap["PreferredModels"] = `["gpt-5.6-sol","claude-fable-5"]`
@@ -181,6 +191,11 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
+	common.OptionMap["RelayTimeout"] = strconv.Itoa(common.RelayTimeout)
+	common.OptionMap["StreamingTimeout"] = strconv.Itoa(constant.StreamingTimeout)
+	common.OptionMap["RelayIdleConnTimeout"] = strconv.Itoa(common.RelayIdleConnTimeout)
+	common.OptionMap["StreamClientWriteTimeout"] = strconv.Itoa(common.StreamClientWriteTimeout)
+	common.OptionMap["ShutdownTimeoutSeconds"] = strconv.Itoa(common.ShutdownTimeoutSeconds)
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
@@ -421,6 +436,12 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.CheckSensitiveOnPromptEnabled = boolValue
 		case "ModelRequestRateLimitEnabled":
 			setting.ModelRequestRateLimitEnabled = boolValue
+		case "GlobalApiRateLimitEnabled":
+			common.GlobalApiRateLimitEnable = boolValue
+		case "GlobalWebRateLimitEnabled":
+			common.GlobalWebRateLimitEnable = boolValue
+		case "CriticalRateLimitEnabled":
+			common.CriticalRateLimitEnable = boolValue
 		case "StopOnSensitiveEnabled":
 			setting.StopOnSensitiveEnabled = boolValue
 		case "SMTPSSLEnabled":
@@ -438,6 +459,18 @@ func updateOptionMap(key string, value string) (err error) {
 		case "ExposeRatioEnabled":
 			ratio_setting.SetExposeRatioEnabled(boolValue)
 		}
+	}
+	switch key {
+	case "RelayTimeout":
+		common.RelayTimeout, _ = strconv.Atoi(value)
+	case "StreamingTimeout":
+		constant.StreamingTimeout, _ = strconv.Atoi(value)
+	case "RelayIdleConnTimeout":
+		common.RelayIdleConnTimeout, _ = strconv.Atoi(value)
+	case "StreamClientWriteTimeout":
+		common.StreamClientWriteTimeout, _ = strconv.Atoi(value)
+	case "ShutdownTimeoutSeconds":
+		common.ShutdownTimeoutSeconds, _ = strconv.Atoi(value)
 	}
 	switch key {
 	case "EmailDomainWhitelist":
@@ -593,6 +626,18 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.ModelRequestRateLimitSuccessCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
+	case "GlobalApiRateLimitNum":
+		common.GlobalApiRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalApiRateLimitDuration":
+		common.GlobalApiRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "GlobalWebRateLimitNum":
+		common.GlobalWebRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalWebRateLimitDuration":
+		common.GlobalWebRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "CriticalRateLimitNum":
+		common.CriticalRateLimitNum, _ = strconv.Atoi(value)
+	case "CriticalRateLimitDuration":
+		common.CriticalRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
 	case "RetryTimes":
 		common.RetryTimes, _ = strconv.Atoi(value)
 	case "DataExportInterval":

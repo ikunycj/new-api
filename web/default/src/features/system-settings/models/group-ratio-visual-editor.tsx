@@ -284,8 +284,10 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   const metricsQuery = useQuery({
     queryKey: ['pricing-group-metrics'],
     queryFn: getPricingGroupMetrics,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
+    // These metrics are informational and should not cause the editable table
+    // to redraw every few seconds while the user is changing values.
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   })
   const metricsByName = useMemo(
     () =>
@@ -487,6 +489,11 @@ function GroupPricingTable({
 }: GroupPricingTableProps) {
   const nameBeforeEdit = useRef(new Map<string, string>())
   const { t } = useTranslation()
+  const routingGroupNames = useMemo(
+    () =>
+      new Set(additionalGroupNames.map((name) => name.trim()).filter(Boolean)),
+    [additionalGroupNames]
+  )
   const [pendingTypeChange, setPendingTypeChange] = useState<{
     id: string
     name: string
@@ -863,6 +870,14 @@ function GroupPricingTable({
                       variant='ghost'
                       size='sm'
                       onClick={() => removeRow(row._id)}
+                      disabled={routingGroupNames.has(row.name.trim())}
+                      title={
+                        routingGroupNames.has(row.name.trim())
+                          ? t(
+                              'Groups with channel routing are ToB; other billing groups are ToC.'
+                            )
+                          : t('Delete')
+                      }
                       aria-label={t('Delete')}
                     >
                       <Trash2 className='h-4 w-4' />

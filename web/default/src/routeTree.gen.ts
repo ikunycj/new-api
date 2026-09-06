@@ -52,6 +52,7 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedLoadtestDemoIndexRouteImport } from './routes/_authenticated/loadtest-demo/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
+import { Route as AuthenticatedMyChannelsIndexRouteImport } from './routes/_authenticated/my-channels/index'
 import { Route as AuthenticatedOperationsLoadtestRouteImport } from './routes/_authenticated/operations/loadtest'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
@@ -323,6 +324,12 @@ const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
     path: '/models/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMyChannelsIndexRoute =
+  AuthenticatedMyChannelsIndexRouteImport.update({
+    id: '/my-channels/',
+    path: '/my-channels/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOperationsLoadtestRoute =
@@ -612,6 +619,7 @@ export interface FileRoutesByFullPath {
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
+  '/my-channels/': typeof AuthenticatedMyChannelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -697,6 +705,7 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/loadtest-demo': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
+  '/my-channels': typeof AuthenticatedMyChannelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -786,6 +795,7 @@ export interface FileRoutesById {
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
+  '/_authenticated/my-channels/': typeof AuthenticatedMyChannelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -874,6 +884,7 @@ export interface FileRouteTypes {
     | '/keys/'
     | '/loadtest-demo/'
     | '/models/'
+    | '/my-channels/'
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
@@ -959,6 +970,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/loadtest-demo'
     | '/models'
+    | '/my-channels'
     | '/playground'
     | '/profile'
     | '/redemption-codes'
@@ -1047,6 +1059,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/'
     | '/_authenticated/loadtest-demo/'
     | '/_authenticated/models/'
+    | '/_authenticated/my-channels/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
@@ -1428,6 +1441,13 @@ declare module '@tanstack/react-router' {
       path: '/models/$section'
       fullPath: '/models/$section'
       preLoaderRoute: typeof AuthenticatedModelsSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-channels/': {
+      id: '/_authenticated/my-channels/'
+      path: '/my-channels'
+      fullPath: '/my-channels/'
+      preLoaderRoute: typeof AuthenticatedMyChannelsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/operations/loadtest': {
@@ -1839,6 +1859,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedLoadtestDemoIndexRoute: typeof AuthenticatedLoadtestDemoIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
+  AuthenticatedMyChannelsIndexRoute: typeof AuthenticatedMyChannelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
@@ -1873,6 +1894,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedLoadtestDemoIndexRoute: AuthenticatedLoadtestDemoIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
+  AuthenticatedMyChannelsIndexRoute: AuthenticatedMyChannelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:

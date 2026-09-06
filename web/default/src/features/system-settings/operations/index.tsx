@@ -62,6 +62,8 @@ const defaultOperationsSettings: OperationsSettings = {
   'loadtest_setting.max_concurrency': 10,
   'loadtest_setting.max_output_tokens': 256,
   'loadtest_setting.request_timeout_seconds': 120,
+  RelayTimeout: 0, StreamingTimeout: 300, RelayIdleConnTimeout: 90,
+  StreamClientWriteTimeout: 30, ShutdownTimeoutSeconds: 120,
 }
 
 export function OperationsSettings() {
