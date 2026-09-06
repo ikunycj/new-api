@@ -78,6 +78,14 @@ var EmailLoginAuthServerList = []string{
 var DebugEnabled bool
 var MemoryCacheEnabled bool
 
+// MonitoringEnabled controls optional metrics and monitoring integrations.
+// Channel probes and routing logic intentionally do not depend on this flag.
+var MonitoringEnabled = true
+
+// ObservabilityEventLogEnabled controls structured monitoring events written
+// to the application log. Regular application and Nginx logs are unaffected.
+var ObservabilityEventLogEnabled = true
+
 var LogConsumeEnabled = true
 
 var TLSInsecureSkipVerify bool

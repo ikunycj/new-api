@@ -82,7 +82,13 @@ export type ChannelCircuitPreset = {
 
 export type FailoverMonitoringSource = {
   name: 'prometheus' | 'alertmanager' | 'grafana'
-  status: 'healthy' | 'degraded' | 'unavailable' | 'not_configured' | 'pending'
+  status:
+    | 'healthy'
+    | 'degraded'
+    | 'unavailable'
+    | 'not_configured'
+    | 'pending'
+    | 'disabled'
   message?: string
 }
 
@@ -110,6 +116,8 @@ export type FailoverMonitoringAlert = {
 }
 
 export type FailoverMonitoringSnapshot = {
+  enabled: boolean
+  status: 'enabled' | 'disabled'
   updated_at: number
   window: string
   metrics: FailoverMonitoringMetrics

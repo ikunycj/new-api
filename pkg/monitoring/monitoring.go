@@ -108,6 +108,10 @@ func (channelInfoCollector) Collect(metrics chan<- prometheus.Metric) {
 // is used instead of the raw URL, so user-controlled path values never become labels.
 func HTTPMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if !common.MonitoringEnabled {
+			c.Next()
+			return
+		}
 		startedAt := time.Now()
 		httpInFlight.Inc()
 		defer httpInFlight.Dec()
@@ -196,7 +200,7 @@ func NewRegistry() (*prometheus.Registry, error) {
 }
 
 func Start() (*http.Server, error) {
-	if os.Getenv("ENABLE_METRICS") != "true" {
+	if !common.MonitoringEnabled || os.Getenv("ENABLE_METRICS") != "true" {
 		return nil, nil
 	}
 	registry, err := NewRegistry()

@@ -95,6 +95,49 @@ func TestHTTPMiddlewareUsesRouteTemplate(t *testing.T) {
 	assert.True(t, found)
 }
 
+func TestHTTPMiddlewareSkipsMetricsWhenMonitoringDisabled(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = false
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(HTTPMiddleware())
+	engine.GET("/monitoring-disabled/:id", func(c *gin.Context) {
+		c.String(http.StatusNoContent, "")
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/monitoring-disabled/unique", nil)
+	engine.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() != "new_api_http_requests_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				assert.NotEqual(t, "/monitoring-disabled/:id", label.GetValue())
+			}
+		}
+	}
+}
+
+func TestStartSkipsMetricsListenerWhenMonitoringDisabled(t *testing.T) {
+	previousMonitoringEnabled := common.MonitoringEnabled
+	common.MonitoringEnabled = false
+	t.Cleanup(func() { common.MonitoringEnabled = previousMonitoringEnabled })
+
+	server, err := Start()
+	require.NoError(t, err)
+	assert.Nil(t, server)
+}
+
 func TestRegistryExposesEveryConfiguredChannel(t *testing.T) {
 	previousDB := model.DB
 	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

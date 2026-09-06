@@ -116,6 +116,9 @@ func Collectors() []prometheus.Collector {
 }
 
 func RecordProfitGuardDecision(mode, decision string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if mode != "warn" && mode != "enforce" {
 		return
 	}
@@ -128,6 +131,9 @@ func RecordProfitGuardDecision(mode, decision string) {
 }
 
 func RecordAuthFailure(route, reason string, status int) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if route == "" {
 		route = "unmatched"
 	}
@@ -135,6 +141,9 @@ func RecordAuthFailure(route, reason string, status int) {
 }
 
 func RecordErrorEvent(eventKind string, apiErr *types.NewAPIError) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if apiErr == nil {
 		return
 	}
@@ -147,6 +156,9 @@ func RecordErrorEvent(eventKind string, apiErr *types.NewAPIError) {
 }
 
 func RecordChannelRequest(channelID int, outcome string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if outcome != "success" {
 		outcome = "error"
 	}
@@ -154,10 +166,16 @@ func RecordChannelRequest(channelID int, outcome string) {
 }
 
 func RecordChannelSwitch(fromChannel, toChannel int, mode string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	channelSwitches.WithLabelValues(strconv.Itoa(fromChannel), strconv.Itoa(toChannel), normalizeMode(mode)).Inc()
 }
 
 func SetChannelCircuitState(channelID int, route string, state string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if state != "open" && state != "half_open" {
 		state = "closed"
 	}
@@ -181,6 +199,9 @@ func ResetChannelCircuitStates() {
 }
 
 func RecordFailoverDuration(outcome, mode string, duration time.Duration) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if outcome != "success" {
 		outcome = "exhausted"
 	}
@@ -307,6 +328,9 @@ func statusLabel(status int) string {
 }
 
 func RecordRequest(provider string, channelID int, errorClass string, status int, duration time.Duration) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	provider = normalizeProvider(provider)
 	errorClass = normalizeErrorClass(errorClass)
 	outcome := Outcome(errorClass)
@@ -316,6 +340,9 @@ func RecordRequest(provider string, channelID int, errorClass string, status int
 }
 
 func RecordAttempt(provider string, channelID int, errorClass string, status int, duration time.Duration) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	provider = normalizeProvider(provider)
 	errorClass = normalizeErrorClass(errorClass)
 	outcome := Outcome(errorClass)
@@ -325,10 +352,16 @@ func RecordAttempt(provider string, channelID int, errorClass string, status int
 }
 
 func RecordRetry(provider string, channelID int, reason string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	relayRetries.WithLabelValues(normalizeProvider(provider), channelLabel(channelID), normalizeReason(reason)).Inc()
 }
 
 func IncInFlight(provider string, channelID int) func() {
+	if !common.MonitoringEnabled {
+		return func() {}
+	}
 	provider = normalizeProvider(provider)
 	channel := channelLabel(channelID)
 	relayInFlight.WithLabelValues(provider, channel).Inc()
@@ -336,6 +369,9 @@ func IncInFlight(provider string, channelID int) func() {
 }
 
 func RecordClientCancellation(provider string, channelID int, phase string) {
+	if !common.MonitoringEnabled {
+		return
+	}
 	if phase != "before_upstream" && phase != "upstream" && phase != "response" {
 		phase = "unknown"
 	}
@@ -422,6 +458,9 @@ type Event struct {
 }
 
 func LogEvent(ctx context.Context, event Event) {
+	if !common.MonitoringEnabled || !common.ObservabilityEventLogEnabled {
+		return
+	}
 	event.Provider = normalizeProvider(event.Provider)
 	if event.Event == "request_finished" &&
 		!common.ShouldLogAccessRequest(event.Status, event.DurationMS, event.RequestID, event.Route) {

@@ -83,6 +83,8 @@ func InitEnv() {
 
 	// Initialize variables from constants.go that were using environment variables
 	DebugEnabled = os.Getenv("DEBUG") == "true"
+	MonitoringEnabled = GetEnvOrDefaultBool("MONITORING_ENABLED", true)
+	ObservabilityEventLogEnabled = GetEnvOrDefaultBool("OBSERVABILITY_EVENT_LOG_ENABLED", true)
 	SetAccessLogSuccessSampleRate(parseFloatEnv("ACCESS_LOG_SUCCESS_SAMPLE_RATE", 1))
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"

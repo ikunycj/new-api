@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Plus, Save, Trash2 } from 'lucide-react'
+import { CircleOff, ExternalLink, Plus, Save, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -84,7 +84,8 @@ export function FailoverConfiguration() {
   const monitoringQuery = useQuery({
     queryKey: ['channel-routing-monitoring'],
     queryFn: getFailoverMonitoring,
-    refetchInterval: 10000,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'disabled' ? false : 10000,
   })
   const channelsQuery = useQuery({
     queryKey: ['channel-routing-channels'],
@@ -99,6 +100,9 @@ export function FailoverConfiguration() {
     [channels]
   )
   const config = draft ?? configQuery.data
+  const monitoringDisabled = monitoringQuery.data?.status === 'disabled'
+  const monitoringUnavailable = monitoringQuery.isError
+  const monitoringLoading = monitoringQuery.isPending
   const saveMutation = useMutation({
     mutationFn: updateFailoverConfig,
     onSuccess: async () => {
@@ -312,7 +316,8 @@ export function FailoverConfiguration() {
                 {t('Live channel routing health and failover metrics')}
               </p>
             </div>
-            {monitoringQuery.data?.grafana_url ? (
+            {monitoringQuery.data?.status !== 'disabled' &&
+            monitoringQuery.data?.grafana_url ? (
               <Button
                 variant='outline'
                 render={
@@ -325,29 +330,77 @@ export function FailoverConfiguration() {
               >
                 <ExternalLink className='size-4' /> {t('Open Grafana')}
               </Button>
-            ) : null}
+              ) : null}
           </div>
-          <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-            {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
-              ([label, value]) => (
-                <div key={label} className='border-b py-3'>
-                  <div className='text-muted-foreground text-sm'>{label}</div>
-                  <div className='mt-1 text-xl font-semibold'>{value}</div>
+          {monitoringDisabled && (
+            <div className='space-y-4 border p-4'>
+              <div className='flex items-start gap-3'>
+                <CircleOff className='mt-0.5 size-5 shrink-0 text-muted-foreground' />
+                <div className='space-y-1'>
+                  <div className='font-medium'>{t('Monitoring disabled')}</div>
+                  <p className='text-muted-foreground text-sm'>
+                    {t('Prometheus, Alertmanager, Grafana, metrics listener, and structured event logs are disabled.')}
+                  </p>
                 </div>
-              )
-            )}
-          </div>
-          <div className='mt-6 space-y-2'>
-            {monitoringQuery.data?.alerts.map((alert) => (
-              <div key={alert.fingerprint} className='border-b py-3 text-sm'>
-                <div className='font-medium'>
-                  {alert.name}
-                  {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
-                </div>
-                <div className='text-muted-foreground'>{alert.summary}</div>
               </div>
-            ))}
-          </div>
+              <div className='grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3'>
+                {[
+                  [t('Prometheus'), t('Disabled')],
+                  [t('Alertmanager'), t('Disabled')],
+                  [t('Grafana'), t('Disabled')],
+                  [t('Metrics listener'), t('Disabled')],
+                  [t('Structured event logs'), t('Disabled')],
+                  [t('Nginx logs'), t('Retained')],
+                  [t('Channel probes'), t('Still running')],
+                ].map(([label, value]) => (
+                  <div key={label} className='border-b py-2'>
+                    <div className='text-muted-foreground'>{label}</div>
+                    <div className='font-medium'>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!monitoringDisabled && monitoringUnavailable && (
+            <div className='border p-4 text-sm'>
+              <div className='font-medium'>{t('Monitoring data unavailable')}</div>
+              <div className='text-muted-foreground'>
+                {t('The monitoring status endpoint could not be reached.')}
+              </div>
+            </div>
+          )}
+          {!monitoringDisabled && !monitoringUnavailable && monitoringLoading && (
+            <div className='border p-4 text-sm text-muted-foreground'>
+              {t('Loading')}
+            </div>
+          )}
+          {!monitoringDisabled &&
+            !monitoringUnavailable &&
+            !monitoringLoading && (
+            <>
+              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
+                  ([label, value]) => (
+                    <div key={label} className='border-b py-3'>
+                      <div className='text-muted-foreground text-sm'>{label}</div>
+                      <div className='mt-1 text-xl font-semibold'>{value}</div>
+                    </div>
+                  )
+                )}
+              </div>
+              <div className='mt-6 space-y-2'>
+                {monitoringQuery.data?.alerts.map((alert) => (
+                  <div key={alert.fingerprint} className='border-b py-3 text-sm'>
+                    <div className='font-medium'>
+                      {alert.name}
+                      {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
+                    </div>
+                    <div className='text-muted-foreground'>{alert.summary}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>

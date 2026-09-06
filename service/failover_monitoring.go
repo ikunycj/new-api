@@ -58,6 +58,8 @@ type FailoverMonitoringAlert struct {
 }
 
 type FailoverMonitoringSnapshot struct {
+	Enabled    bool                       `json:"enabled"`
+	Status     string                     `json:"status"`
 	UpdatedAt  int64                      `json:"updated_at"`
 	Window     string                     `json:"window"`
 	Metrics    FailoverMonitoringMetrics  `json:"metrics"`
@@ -110,6 +112,9 @@ type alertmanagerAlert struct {
 
 func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapshot {
 	config := failoverMonitoringConfigFromEnv()
+	if !common.MonitoringEnabled {
+		return disabledFailoverMonitoringSnapshot()
+	}
 	cacheKey := failoverMonitoringCacheKey(config)
 	now := time.Now()
 	failoverMonitoringCache.Lock()
@@ -142,6 +147,8 @@ func GetFailoverMonitoringSnapshot(ctx context.Context) FailoverMonitoringSnapsh
 
 func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitoringConfig) FailoverMonitoringSnapshot {
 	snapshot := FailoverMonitoringSnapshot{
+		Enabled:   true,
+		Status:    "enabled",
 		UpdatedAt: time.Now().UnixMilli(),
 		Window:    failoverMonitoringWindow,
 		Alerts:    []FailoverMonitoringAlert{},
@@ -171,6 +178,21 @@ func getFailoverMonitoringSnapshot(ctx context.Context, config failoverMonitorin
 	}
 
 	return snapshot
+}
+
+func disabledFailoverMonitoringSnapshot() FailoverMonitoringSnapshot {
+	return FailoverMonitoringSnapshot{
+		Enabled:   false,
+		Status:    "disabled",
+		UpdatedAt: time.Now().UnixMilli(),
+		Window:    failoverMonitoringWindow,
+		Alerts:    []FailoverMonitoringAlert{},
+		Sources: []FailoverMonitoringSource{
+			{Name: "prometheus", Status: "disabled", Message: "monitoring disabled"},
+			{Name: "alertmanager", Status: "disabled", Message: "monitoring disabled"},
+			{Name: "grafana", Status: "disabled", Message: "monitoring disabled"},
+		},
+	}
 }
 
 func failoverMonitoringCacheKey(config failoverMonitoringConfig) string {
