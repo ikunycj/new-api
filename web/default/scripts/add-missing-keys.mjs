@@ -1003,8 +1003,12 @@ const groupPricingWorkspaceKeys = {
     'Error mappings saved': 'Error mappings saved',
     'Group pricing': 'Group pricing',
     'Group type': 'Group type',
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      'Updated billing group {{billing_group}} customer type to {{group_type}}',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       'Groups with channel routing are ToB; other billing groups are ToC.',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      'Delete the routing configuration for this group first, then save before deleting the pricing group.',
     'No billing groups configured': 'No billing groups configured',
     'Manage channel error mappings and monitor channel health.':
       'Manage channel error mappings and monitor channel health.',
@@ -1045,8 +1049,12 @@ const groupPricingWorkspaceKeys = {
     'Error mappings saved': '错误映射已保存',
     'Group pricing': '分组定价',
     'Group type': '分组类型',
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      '已将计费分组 {{billing_group}} 的客户类型更新为 {{group_type}}',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       '包含渠道路由的分组为 ToB，其余计费分组为 ToC。',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      '请先删除该分组的路由配置并保存，然后再删除定价分组。',
     'No billing groups configured': '暂无计费分组配置',
     'Manage channel error mappings and monitor channel health.':
       '管理渠道错误映射并监控渠道健康状态。',
@@ -1086,8 +1094,12 @@ const groupPricingWorkspaceKeys = {
     'Error mappings saved': '錯誤映射已儲存',
     'Group pricing': '分組定價',
     'Group type': '分組類型',
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      '已將計費分組 {{billing_group}} 的客戶類型更新為 {{group_type}}',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       '包含渠道路由的分組為 ToB，其餘計費分組為 ToC。',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      '請先刪除此分組的路由設定並儲存，再刪除定價分組。',
     'No billing groups configured': '尚未設定計費分組',
     'Manage channel error mappings and monitor channel health.':
       '管理渠道錯誤映射並監控渠道健康狀態。',
@@ -1108,6 +1120,8 @@ const groupPricingWorkspaceKeys = {
       '每秒請求數必須介於 {{min}} 到 {{max}} 之間。',
   },
   fr: {
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      'Type de client du groupe de facturation {{billing_group}} mis à jour en {{group_type}}',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Les canaux sont essayés dans l’ordre ; chacun peut simuler des échecs et une latence.',
     'Mock channel latency is invalid':
@@ -1140,6 +1154,8 @@ const groupPricingWorkspaceKeys = {
     'Group type': 'Type de groupe',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       'Les groupes avec routage de canaux sont ToB ; les autres groupes de facturation sont ToC.',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      'Supprimez d’abord la configuration de routage de ce groupe et enregistrez-la avant de supprimer le groupe tarifaire.',
     'No billing groups configured': 'Aucun groupe de facturation configuré',
     'Manage channel error mappings and monitor channel health.':
       'Gérez les erreurs des canaux et surveillez leur état.',
@@ -1161,6 +1177,8 @@ const groupPricingWorkspaceKeys = {
       'Le nombre de requêtes par seconde doit être compris entre {{min}} et {{max}}.',
   },
   ja: {
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      '請求グループ {{billing_group}} の顧客タイプを {{group_type}} に更新しました',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'チャネルは順番に試行され、それぞれで失敗と遅延をシミュレートできます。',
     'Mock channel latency is invalid': 'Mock チャネルの遅延が無効です。',
@@ -1192,6 +1210,8 @@ const groupPricingWorkspaceKeys = {
     'Group type': 'グループ種別',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       'チャネルルーティングがあるグループは ToB、それ以外の課金グループは ToC です。',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      '料金グループを削除する前に、このグループのルーティング設定を削除して保存してください。',
     'No billing groups configured': '課金グループが設定されていません',
     'Manage channel error mappings and monitor channel health.':
       'チャネルのエラーマッピングと稼働状態を管理します。',
@@ -1213,6 +1233,8 @@ const groupPricingWorkspaceKeys = {
       '1 秒あたりのリクエスト数は {{min}} から {{max}} の間で指定してください。',
   },
   ru: {
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      'Тип клиента расчетной группы {{billing_group}} обновлен на {{group_type}}',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Каналы проверяются по порядку; для каждого можно смоделировать ошибки и задержку.',
     'Mock channel latency is invalid': 'Недопустимая задержка Mock-канала.',
@@ -1244,6 +1266,8 @@ const groupPricingWorkspaceKeys = {
     'Group type': 'Тип группы',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       'Группы с маршрутизацией каналов относятся к ToB, остальные группы биллинга — к ToC.',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      'Сначала удалите конфигурацию маршрутизации этой группы и сохраните изменения, затем удаляйте тарифную группу.',
     'No billing groups configured': 'Группы биллинга не настроены',
     'Manage channel error mappings and monitor channel health.':
       'Управляйте сопоставлениями ошибок и состоянием каналов.',
@@ -1265,6 +1289,8 @@ const groupPricingWorkspaceKeys = {
       'Число запросов в секунду должно быть от {{min}} до {{max}}.',
   },
   vi: {
+    'Updated billing group {{billing_group}} customer type to {{group_type}}':
+      'Đã cập nhật loại khách hàng của nhóm thanh toán {{billing_group}} thành {{group_type}}',
     'Channels are attempted in order; each channel can simulate failures and latency.':
       'Các kênh được thử theo thứ tự; mỗi kênh có thể mô phỏng lỗi và độ trễ.',
     'Mock channel latency is invalid': 'Độ trễ của kênh mô phỏng không hợp lệ.',
@@ -1296,6 +1322,8 @@ const groupPricingWorkspaceKeys = {
     'Group type': 'Loại nhóm',
     'Groups with channel routing are ToB; other billing groups are ToC.':
       'Nhóm có định tuyến kênh là ToB; các nhóm thanh toán khác là ToC.',
+    'Delete the routing configuration for this group first, then save before deleting the pricing group.':
+      'Trước tiên hãy xóa cấu hình định tuyến của nhóm này và lưu lại, sau đó mới xóa nhóm tính phí.',
     'No billing groups configured': 'Chưa cấu hình nhóm thanh toán',
     'Manage channel error mappings and monitor channel health.':
       'Quản lý ánh xạ lỗi và theo dõi tình trạng kênh.',

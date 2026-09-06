@@ -2,14 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getChannels } from '@/features/channels/api'
 import {
   getFailoverConfig,
+  updateBillingGroupType,
   updateFailoverConfig,
 } from '@/features/failover/api'
-import type { BillingGroupRoute } from '@/features/failover/types'
 
 import { getOptionValue, useSystemOptions } from '../hooks/use-system-options'
 import { safeJsonParse } from '../utils/json-parser'
@@ -61,6 +62,16 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
   )
   const toBGroupNames = useMemo(
     () => getToBGroupNames(configQuery.data?.routes ?? []),
+    [configQuery.data?.routes]
+  )
+  const routeByGroupName = useMemo(
+    () =>
+      new Map(
+        (configQuery.data?.routes ?? []).map((route) => [
+          route.billing_group.trim(),
+          route,
+        ])
+      ),
     [configQuery.data?.routes]
   )
   const routeGroupNames = useMemo(
@@ -146,7 +157,36 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       ),
     [classifiedGroups, groupTypes, optimisticGroupTypes]
   )
+  const displayGroupTypes = useMemo(
+    () =>
+      new Map(
+        classifiedGroups.map((group) => [
+          group.name,
+          groupTypeByName.get(group.name) === 'toB' ? 'ToB' : 'ToC',
+        ])
+      ),
+    [classifiedGroups, groupTypeByName]
+  )
   const groupTypeMutation = useMutation({
+    mutationFn: ({
+      billingGroup,
+      groupType,
+    }: {
+      billingGroup: string
+      groupType: 'toB' | 'toC'
+    }) => updateBillingGroupType(billingGroup, groupType),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['channel-routing-config'],
+      })
+      setOptimisticGroupTypes(new Map())
+    },
+    onError: (error: Error) => {
+      setOptimisticGroupTypes(new Map())
+      toast.error(error.message)
+    },
+  })
+  const routeConfigMutation = useMutation({
     mutationFn: updateFailoverConfig,
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -154,72 +194,58 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       })
       setOptimisticGroupTypes(new Map())
     },
-    onError: () => {
+    onError: (error: Error) => {
       setOptimisticGroupTypes(new Map())
+      toast.error(error.message)
     },
   })
+  const isGroupTypeMutationPending =
+    groupTypeMutation.isPending || routeConfigMutation.isPending
   const handleGroupTypeChange = (name: string, type: 'toB' | 'toC') => {
-    if (!name || !configQuery.data || groupTypeMutation.isPending) return
-    const routes = structuredClone(configQuery.data.routes)
-    const existing = routes.find((route) => route.billing_group === name)
-    if (existing) {
-      if (existing.group_type === type) return
-      existing.group_type = type
-    } else if (type === 'toB') {
-      if (!configQuery.data.circuit_defaults) return
-      const route: BillingGroupRoute = {
-        id: -Date.now(),
-        billing_group: name,
-        name,
-        mode: 'balanced',
-        group_type: type,
-        strategy_config: JSON.stringify({ type: 'priority' }),
-        enabled: false,
-        max_total_attempts: 4,
-        total_timeout_ms: 30000,
-        circuit_failure_threshold:
-          configQuery.data.circuit_defaults.failure_threshold,
-        circuit_window_seconds:
-          configQuery.data.circuit_defaults.window_seconds,
-        circuit_cooldown_seconds:
-          configQuery.data.circuit_defaults.cooldown_seconds,
-        circuit_half_open_requests:
-          configQuery.data.circuit_defaults.half_open_requests,
-        profit_guard_mode: 'off',
-        minimum_profit_margin: 0,
-        created_time: 0,
-        updated_time: 0,
-      }
-      routes.push(route)
-    } else {
+    if (!name || !configQuery.data || isGroupTypeMutationPending) {
       return
     }
-    setOptimisticGroupTypes(new Map([[name, type]]))
-    groupTypeMutation.mutate({ ...configQuery.data, routes })
+    const existing = routeByGroupName.get(name.trim())
+    if (existing) {
+      if (existing.group_type === type) return
+      setOptimisticGroupTypes(new Map([[name.trim(), type]]))
+      groupTypeMutation.mutate({ billingGroup: name.trim(), groupType: type })
+      return
+    }
+
+    if (type !== 'toB') return
+    setOptimisticGroupTypes(new Map([[name.trim(), type]]))
+    groupTypeMutation.mutate({ billingGroup: name.trim(), groupType: type })
   }
   const handleGroupRename = (previousName: string, nextName: string) => {
+    const normalizedPreviousName = previousName.trim()
+    const normalizedNextName = nextName.trim()
     if (
-      !previousName ||
-      !nextName ||
-      previousName === nextName ||
+      !normalizedPreviousName ||
+      !normalizedNextName ||
+      normalizedPreviousName === normalizedNextName ||
       !configQuery.data ||
-      groupTypeMutation.isPending
+      isGroupTypeMutationPending
     ) {
       return
     }
     const routes = structuredClone(configQuery.data.routes)
     const route = routes.find(
-      (candidate) => candidate.billing_group === previousName
+      (candidate) => candidate.billing_group.trim() === normalizedPreviousName
     )
     if (
       !route ||
-      routes.some((candidate) => candidate.billing_group === nextName)
+      routes.some(
+        (candidate) =>
+          candidate !== route &&
+          candidate.billing_group.trim() === normalizedNextName
+      )
     ) {
       return
     }
-    route.billing_group = nextName
-    route.name = nextName
-    groupTypeMutation.mutate({ ...configQuery.data, routes })
+    route.billing_group = normalizedNextName
+    route.name = normalizedNextName
+    routeConfigMutation.mutate({ ...configQuery.data, routes })
   }
 
   return (
@@ -252,7 +278,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
                   <tr key={group.name} className='border-t'>
                     <td className='px-3 py-2'>{group.name}</td>
                     <td className='px-3 py-2'>
-                      {t(groupTypes.get(group.name) ?? 'ToC')}
+                      {t(displayGroupTypes.get(group.name) ?? 'ToC')}
                     </td>
                   </tr>
                 ))}

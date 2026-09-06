@@ -70,6 +70,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getPricingGroupMetrics } from '@/features/channel-monitors/api'
 import type { PricingGroupMetrics } from '@/features/channel-monitors/types'
 import { formatQuota } from '@/lib/format'
@@ -866,22 +872,40 @@ function GroupPricingTable({
                     >
                       <Info className='h-4 w-4' />
                     </Button>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => removeRow(row._id)}
-                      disabled={routingGroupNames.has(row.name.trim())}
-                      title={
-                        routingGroupNames.has(row.name.trim())
-                          ? t(
-                              'Groups with channel routing are ToB; other billing groups are ToC.'
-                            )
-                          : t('Delete')
-                      }
-                      aria-label={t('Delete')}
-                    >
-                      <Trash2 className='h-4 w-4' />
-                    </Button>
+                    {routingGroupNames.has(row.name.trim()) ? (
+                      <TooltipProvider delay={100}>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={<span className='inline-flex' />}
+                          >
+                            <span className='inline-flex' title={t('Delete')}>
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                disabled
+                                aria-label={t('Delete')}
+                              >
+                                <Trash2 className='h-4 w-4' />
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className='max-w-xs'>
+                            {t(
+                              'Delete the routing configuration for this group first, then save before deleting the pricing group.'
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => removeRow(row._id)}
+                        aria-label={t('Delete')}
+                      >
+                        <Trash2 className='h-4 w-4' />
+                      </Button>
+                    )}
                   </div>
                 ),
               },

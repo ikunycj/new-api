@@ -6468,16 +6468,6 @@
     "让 AI 帮你生成图片（多模态）": "AI で画像を生成（マルチモーダル）",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Codex または Claude Code にプロジェクトファイルを読ませ、コード作成やタスク実行を任せます。",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "自作プログラムから AI を呼び出します。開発者や企業向けです。",
-    "Route rate limits": "ルートのレート制限",
-    "These limits are counted by client IP and apply before authentication.": "これらの制限はクライアント IP ごとにカウントされ、認証前に適用されます。",
-    "Global API rate limiting": "グローバル API レート制限",
-    "Applies to dashboard and /api routes, not model relay requests.": "ダッシュボードと /api ルートに適用され、モデル中継リクエストには適用されません。",
-    "Global web rate limiting": "グローバル Web レート制限",
-    "Applies to web pages and static assets.": "Web ページと静的アセットに適用されます。",
-    "Critical route rate limiting": "重要ルートのレート制限",
-    "Applies to login, registration, password reset, and OAuth routes.": "ログイン、登録、パスワードリセット、OAuth ルートに適用されます。",
-    "Rate limit window (seconds)": "レート制限の時間枠（秒）",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "これはモデルリクエストのレート制限を制御します。ルートのレート制限は以下で設定でき、引き続き 429 が返る場合があります。",
     "Timeouts": "タイムアウト",
     "Upstream total timeout (seconds)": "上流の合計タイムアウト（秒）",
     "Streaming idle timeout (seconds)": "ストリーミング無通信タイムアウト（秒）",
@@ -6491,6 +6481,8 @@
     "No available channels": "利用可能なチャンネルはありません",
     "ToB Display URL": "ToB 表示 URL",
     "Optional URL shown to ToB/VIP users": "ToB/VIP ユーザーに表示する任意の URL",
-    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP ユーザーには実際のアップストリーム URL の代わりにこの URL を表示します。空欄の場合はベース URL を使用します。"
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP ユーザーには実際のアップストリーム URL の代わりにこの URL を表示します。空欄の場合はベース URL を使用します。",
+    "Updated billing group {{billing_group}} customer type to {{group_type}}": "請求グループ {{billing_group}} の顧客タイプを {{group_type}} に更新しました",
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "料金グループを削除する前に、このグループのルーティング設定を削除して保存してください。"
   }
 }

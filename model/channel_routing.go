@@ -724,6 +724,50 @@ func normalizeBillingGroupType(groupType string) string {
 	return BillingGroupTypeToB
 }
 
+// UpdateBillingGroupType changes only the customer scope of one billing group.
+// A missing route is created disabled so a pricing-only group can be promoted
+// to ToB without submitting the complete routing configuration.
+func UpdateBillingGroupType(billingGroup, groupType string) error {
+	billingGroup = strings.TrimSpace(billingGroup)
+	groupType = strings.TrimSpace(groupType)
+	if billingGroup == "" {
+		return errors.New("billing_group is required")
+	}
+	if !strings.EqualFold(groupType, BillingGroupTypeToB) &&
+		!strings.EqualFold(groupType, BillingGroupTypeToC) {
+		return errors.New("group_type must be toB or toC")
+	}
+	normalizedGroupType := normalizeBillingGroupType(groupType)
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var route BillingGroupRoute
+		err := tx.Where("billing_group = ?", billingGroup).First(&route).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			route = BillingGroupRoute{
+				BillingGroup:    billingGroup,
+				Name:            billingGroup,
+				Mode:            RoutingModeBalanced,
+				GroupType:       normalizedGroupType,
+				StrategyConfig:  marshalRoutingStrategyConfig(RoutingStrategyConfig{Type: RoutingStrategyPriority}),
+				Enabled:         false,
+				ProfitGuardMode: ProfitGuardModeOff,
+				CreatedTime:     common.GetTimestamp(),
+				UpdatedTime:     common.GetTimestamp(),
+			}
+			applyRouteDefaults(&route)
+			return tx.Create(&route).Error
+		}
+		if err != nil {
+			return err
+		}
+
+		return tx.Model(&route).Updates(map[string]any{
+			"group_type":   normalizedGroupType,
+			"updated_time": common.GetTimestamp(),
+		}).Error
+	})
+}
+
 func parseRoutingStrategyConfig(raw string) RoutingStrategyConfig {
 	config := RoutingStrategyConfig{Type: RoutingStrategyPriority}
 	if strings.TrimSpace(raw) != "" {

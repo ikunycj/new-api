@@ -1,6 +1,12 @@
-import { api } from '@/lib/api'
+import { isAxiosError } from 'axios'
 
-import type { FailoverConfig, FailoverMonitoringSnapshot } from './types'
+import { api, type ApiRequestConfig } from '@/lib/api'
+
+import type {
+  BillingGroupType,
+  FailoverConfig,
+  FailoverMonitoringSnapshot,
+} from './types'
 
 type ApiResponse<T> = {
   success: boolean
@@ -25,6 +31,34 @@ export async function updateFailoverConfig(
     '/api/channel/failover/config',
     config
   )
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+}
+
+export async function updateBillingGroupType(
+  billingGroup: string,
+  groupType: BillingGroupType
+): Promise<void> {
+  let response
+  try {
+    response = await api.patch<ApiResponse<null>>(
+      '/api/channel/failover/config/group-type',
+      {
+        billing_group: billingGroup,
+        group_type: groupType,
+      },
+      {
+        skipBusinessError: true,
+        skipErrorHandler: true,
+      } satisfies ApiRequestConfig
+    )
+  } catch (error) {
+    if (isAxiosError<ApiResponse<null>>(error)) {
+      throw new Error(error.response?.data.message || 'Request failed')
+    }
+    throw error
+  }
   if (!response.data.success) {
     throw new Error(response.data.message || 'Request failed')
   }
