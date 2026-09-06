@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -132,15 +132,19 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       ),
     [classifiedGroups, toBGroupNames]
   )
+  const [optimisticGroupTypes, setOptimisticGroupTypes] = useState(
+    () => new Map<string, 'toB' | 'toC'>()
+  )
   const groupTypeByName = useMemo(
     (): ReadonlyMap<string, 'toB' | 'toC'> =>
       new Map<string, 'toB' | 'toC'>(
         classifiedGroups.map((group) => [
           group.name,
-          (groupTypes.get(group.name) ?? 'ToC') === 'ToB' ? 'toB' : 'toC',
+          optimisticGroupTypes.get(group.name) ??
+            ((groupTypes.get(group.name) ?? 'ToC') === 'ToB' ? 'toB' : 'toC'),
         ])
       ),
-    [classifiedGroups, groupTypes]
+    [classifiedGroups, groupTypes, optimisticGroupTypes]
   )
   const groupTypeMutation = useMutation({
     mutationFn: updateFailoverConfig,
@@ -148,6 +152,10 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       await queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
       })
+      setOptimisticGroupTypes(new Map())
+    },
+    onError: () => {
+      setOptimisticGroupTypes(new Map())
     },
   })
   const handleGroupTypeChange = (name: string, type: 'toB' | 'toC') => {
@@ -186,6 +194,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     } else {
       return
     }
+    setOptimisticGroupTypes(new Map([[name, type]]))
     groupTypeMutation.mutate({ ...configQuery.data, routes })
   }
   const handleGroupRename = (previousName: string, nextName: string) => {
