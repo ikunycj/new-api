@@ -6468,16 +6468,6 @@
     "让 AI 帮你生成图片（多模态）": "Générez des images avec l’IA (multimodal)",
     "让 Codex 或 Claude Code 读取项目文件、编写代码并完成任务。": "Laissez Codex ou Claude Code lire les fichiers du projet, écrire du code et accomplir des tâches.",
     "让你自己的程序调用 AI，适合开发者和企业使用。": "Permettez à votre application d’appeler l’IA, pour les développeurs et les entreprises.",
-    "Route rate limits": "Limites de debit des routes",
-    "These limits are counted by client IP and apply before authentication.": "Ces limites sont comptees par adresse IP cliente et s'appliquent avant l'authentification.",
-    "Global API rate limiting": "Limitation globale du debit de l'API",
-    "Applies to dashboard and /api routes, not model relay requests.": "S'applique au tableau de bord et aux routes /api, pas aux requetes relais de modeles.",
-    "Global web rate limiting": "Limitation globale du debit Web",
-    "Applies to web pages and static assets.": "S’applique aux pages Web et aux ressources statiques.",
-    "Critical route rate limiting": "Limitation du debit des routes critiques",
-    "Applies to login, registration, password reset, and OAuth routes.": "S'applique aux routes de connexion, inscription, reinitialisation de mot de passe et OAuth.",
-    "Rate limit window (seconds)": "Fenetre de limitation (secondes)",
-    "This controls model request rate limiting. Route rate limits are configured below and may still return 429.": "Ceci controle la limitation des requetes de modele. Les limites des routes se configurent ci-dessous et peuvent toujours renvoyer 429.",
     "Timeouts": "Délais d’expiration",
     "Upstream total timeout (seconds)": "Délai total amont (secondes)",
     "Streaming idle timeout (seconds)": "Délai d’inactivité du streaming (secondes)",
@@ -6491,6 +6481,8 @@
     "No available channels": "Aucun canal disponible",
     "ToB Display URL": "URL affichée aux clients ToB",
     "Optional URL shown to ToB/VIP users": "URL facultative affichée aux utilisateurs ToB/VIP",
-    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Les utilisateurs ToB/VIP voient cette URL à la place de l'URL amont réelle. Laissez vide pour utiliser l'URL de base."
+    "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Les utilisateurs ToB/VIP voient cette URL à la place de l'URL amont réelle. Laissez vide pour utiliser l'URL de base.",
+    "Updated billing group {{billing_group}} customer type to {{group_type}}": "Type de client du groupe de facturation {{billing_group}} mis à jour en {{group_type}}",
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Supprimez d’abord la configuration de routage de ce groupe et enregistrez-la avant de supprimer le groupe tarifaire."
   }
 }

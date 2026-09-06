@@ -215,6 +215,55 @@ func TestGetBillingGroupTypesUsesRouteMembershipIncludingDisabledRoutes(t *testi
 	}))
 }
 
+func TestUpdateBillingGroupTypeChangesOnlyGroupType(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Mode: RoutingModeStabilityFirst,
+		GroupType: BillingGroupTypeToB, Enabled: true, MaxTotalAttempts: 7,
+	}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Enabled: true,
+	}).Error)
+
+	require.NoError(t, UpdateBillingGroupType(" claude ", BillingGroupTypeToC))
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, BillingGroupTypeToC, route.GroupType)
+	assert.Equal(t, "Claude", route.Name)
+	assert.Equal(t, RoutingModeStabilityFirst, route.Mode)
+	assert.True(t, route.Enabled)
+	assert.Equal(t, 7, route.MaxTotalAttempts)
+	var channelCount int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Where("billing_group_route_id = ?", 9).Count(&channelCount).Error)
+	assert.Equal(t, int64(1), channelCount)
+}
+
+func TestUpdateBillingGroupTypeCreatesDisabledRouteForPricingGroup(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, UpdateBillingGroupType("enterprise", BillingGroupTypeToB))
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.Where("billing_group = ?", "enterprise").First(&route).Error)
+	assert.Equal(t, BillingGroupTypeToB, route.GroupType)
+	assert.Equal(t, "enterprise", route.Name)
+	assert.False(t, route.Enabled)
+	assert.Equal(t, RoutingModeBalanced, route.Mode)
+	assert.NotEmpty(t, route.StrategyConfig)
+}
+
+func TestUpdateBillingGroupTypeRejectsInvalidType(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", GroupType: BillingGroupTypeToB}).Error)
+
+	err := UpdateBillingGroupType("claude", "invalid")
+	require.EqualError(t, err, "group_type must be toB or toC")
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, BillingGroupTypeToB, route.GroupType)
+}
+
 func TestSaveChannelRoutingConfigRejectsChannelOutsideBillingGroup(t *testing.T) {
 	setupChannelRoutingTables(t)
 	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Pro", Group: "default"}).Error)
