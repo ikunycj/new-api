@@ -171,7 +171,8 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
         total_timeout_ms: 30000,
         circuit_failure_threshold:
           configQuery.data.circuit_defaults.failure_threshold,
-        circuit_window_seconds: configQuery.data.circuit_defaults.window_seconds,
+        circuit_window_seconds:
+          configQuery.data.circuit_defaults.window_seconds,
         circuit_cooldown_seconds:
           configQuery.data.circuit_defaults.cooldown_seconds,
         circuit_half_open_requests:
