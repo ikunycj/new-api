@@ -60,6 +60,22 @@ export function ApiKeyUsageCell(props: { apiKey: ApiKey }) {
         tokens={props.apiKey.total_tokens}
         locale={locale}
       />
+      <div className='flex min-w-0 items-baseline whitespace-nowrap'>
+        <span className='text-muted-foreground shrink-0'>
+          {t('Current concurrency')}:{' '}
+        </span>
+        <span
+          className={
+            props.apiKey.concurrency_degraded
+              ? 'text-warning font-medium tabular-nums'
+              : 'font-medium tabular-nums'
+          }
+        >
+          {props.apiKey.concurrency_degraded
+            ? t('Unavailable')
+            : props.apiKey.current_concurrency}
+        </span>
+      </div>
     </div>
   )
 }

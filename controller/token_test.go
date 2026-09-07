@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -35,13 +36,15 @@ type tokenPageResponse struct {
 }
 
 type tokenResponseItem struct {
-	ID              int            `json:"id"`
-	Name            string         `json:"name"`
-	Key             string         `json:"key"`
-	Status          int            `json:"status"`
-	Group           string         `json:"group"`
-	GroupCandidates []string       `json:"group_candidates"`
-	GroupRetryTimes map[string]int `json:"group_retry_times"`
+	ID                  int            `json:"id"`
+	Name                string         `json:"name"`
+	Key                 string         `json:"key"`
+	Status              int            `json:"status"`
+	Group               string         `json:"group"`
+	GroupCandidates     []string       `json:"group_candidates"`
+	GroupRetryTimes     map[string]int `json:"group_retry_times"`
+	CurrentConcurrency  int            `json:"current_concurrency"`
+	ConcurrencyDegraded bool           `json:"concurrency_degraded"`
 }
 
 type tokenKeyResponse struct {
@@ -450,6 +453,28 @@ func TestSearchTokensMasksKeyInResponse(t *testing.T) {
 	if strings.Contains(recorder.Body.String(), token.Key) {
 		t.Fatalf("search response leaked raw token key: %s", recorder.Body.String())
 	}
+}
+
+func TestGetAllTokensIncludesCurrentConcurrencyPerApiKey(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	token := seedToken(t, db, 1, "active-token", "active1234token5678")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/?p=1&size=10", nil, 1)
+	common.SetContextKey(ctx, constant.ContextKeyTokenId, token.Id)
+	finish := service.BeginPricingGroupActivity(ctx, "default", 1, "concurrency-test")
+	t.Cleanup(finish)
+
+	GetAllTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Items[0].CurrentConcurrency)
+	assert.False(t, page.Items[0].ConcurrencyDegraded)
+
+	finish()
 }
 
 func TestGetTokenMasksKeyInResponse(t *testing.T) {

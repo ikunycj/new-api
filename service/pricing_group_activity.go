@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -20,6 +21,7 @@ const (
 	pricingGroupActivityRedisTimeout = 500 * time.Millisecond
 	pricingGroupActivityKeyPrefix    = "routing:pricing-group:activity:"
 	pricingUserActivityKeyPrefix     = "routing:pricing-user:activity:"
+	pricingTokenActivityKeyPrefix    = "routing:pricing-token:activity:"
 	pricingGroupActivityContextKey   = "pricing_group_activity_session"
 )
 
@@ -37,6 +39,7 @@ type pricingGroupActivityRedisOperation struct {
 	group      string
 	member     string
 	userID     int
+	tokenID    int
 	expiresAt  int64
 	remove     bool
 	removeUser bool
@@ -47,6 +50,7 @@ type pricingGroupActivitySession struct {
 	group      string
 	member     string
 	userID     int
+	tokenID    int
 	done       chan struct{}
 	heartbeat  sync.WaitGroup
 	finishOnce sync.Once
@@ -57,9 +61,11 @@ var localPricingGroupActivity = struct {
 	sync.Mutex
 	groups map[string]map[string]pricingGroupActivityEntry
 	users  map[int]map[string]pricingGroupActivityEntry
+	tokens map[int]map[string]pricingGroupActivityEntry
 }{
 	groups: make(map[string]map[string]pricingGroupActivityEntry),
 	users:  make(map[int]map[string]pricingGroupActivityEntry),
+	tokens: make(map[int]map[string]pricingGroupActivityEntry),
 }
 
 var (
@@ -74,6 +80,10 @@ func pricingGroupActivityRedisKey(group string) string {
 
 func pricingUserActivityRedisKey(userID int) string {
 	return pricingUserActivityKeyPrefix + strconv.Itoa(userID)
+}
+
+func pricingTokenActivityRedisKey(tokenID int) string {
+	return pricingTokenActivityKeyPrefix + strconv.Itoa(tokenID)
 }
 
 func refreshLocalPricingGroupActivity(group, member string, userID int, expiresAt int64) {
@@ -118,6 +128,33 @@ func removeLocalPricingUserActivity(userID int, member string) {
 	}
 }
 
+func refreshLocalPricingTokenActivity(tokenID int, member string, userID int, expiresAt int64) {
+	if tokenID <= 0 {
+		return
+	}
+	localPricingGroupActivity.Lock()
+	defer localPricingGroupActivity.Unlock()
+	entries := localPricingGroupActivity.tokens[tokenID]
+	if entries == nil {
+		entries = make(map[string]pricingGroupActivityEntry)
+		localPricingGroupActivity.tokens[tokenID] = entries
+	}
+	entries[member] = pricingGroupActivityEntry{userID: userID, expiresAt: expiresAt}
+}
+
+func removeLocalPricingTokenActivity(tokenID int, member string) {
+	if tokenID <= 0 {
+		return
+	}
+	localPricingGroupActivity.Lock()
+	defer localPricingGroupActivity.Unlock()
+	entries := localPricingGroupActivity.tokens[tokenID]
+	delete(entries, member)
+	if len(entries) == 0 {
+		delete(localPricingGroupActivity.tokens, tokenID)
+	}
+}
+
 func enqueuePricingGroupActivityRedisOperation(operation pricingGroupActivityRedisOperation) {
 	if !common.RedisEnabled || common.RDB == nil {
 		return
@@ -134,6 +171,7 @@ func runPricingGroupActivityRedisWriter() {
 	for first := range pricingGroupActivityRedisOperations {
 		pendingGroups := make(map[string]pricingGroupActivityRedisOperation)
 		pendingUsers := make(map[string]pricingGroupActivityRedisOperation)
+		pendingTokens := make(map[string]pricingGroupActivityRedisOperation)
 		queue := []pricingGroupActivityRedisOperation{first}
 		for len(queue) < 512 {
 			select {
@@ -150,6 +188,9 @@ func runPricingGroupActivityRedisWriter() {
 			}
 			if operation.userID > 0 && (!operation.remove || operation.removeUser) {
 				pendingUsers[strconv.Itoa(operation.userID)+"\x00"+operation.member] = operation
+			}
+			if operation.tokenID > 0 && (!operation.remove || operation.removeUser) {
+				pendingTokens[strconv.Itoa(operation.tokenID)+"\x00"+operation.member] = operation
 			}
 		}
 		if !common.RedisEnabled || common.RDB == nil {
@@ -171,6 +212,18 @@ func runPricingGroupActivityRedisWriter() {
 		}
 		for _, operation := range pendingUsers {
 			key := pricingUserActivityRedisKey(operation.userID)
+			if operation.removeUser {
+				pipeline.ZRem(ctx, key, operation.member)
+			} else {
+				pipeline.ZAdd(ctx, key, &redis.Z{
+					Score:  float64(operation.expiresAt),
+					Member: operation.member,
+				})
+				pipeline.Expire(ctx, key, 2*pricingGroupActivityLease)
+			}
+		}
+		for _, operation := range pendingTokens {
+			key := pricingTokenActivityRedisKey(operation.tokenID)
 			if operation.removeUser {
 				pipeline.ZRem(ctx, key, operation.member)
 			} else {
@@ -203,8 +256,9 @@ func (session *pricingGroupActivitySession) refreshLocked() {
 		entries[session.member] = pricingGroupActivityEntry{userID: session.userID, expiresAt: expiresAt}
 		localPricingGroupActivity.Unlock()
 	}
+	refreshLocalPricingTokenActivity(session.tokenID, session.member, session.userID, expiresAt)
 	enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-		group: session.group, member: session.member, userID: session.userID, expiresAt: expiresAt,
+		group: session.group, member: session.member, userID: session.userID, tokenID: session.tokenID, expiresAt: expiresAt,
 	})
 }
 
@@ -224,7 +278,7 @@ func (session *pricingGroupActivitySession) move(group string) {
 	if session.group != "" {
 		removeLocalPricingGroupActivity(session.group, session.member)
 		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-			group: session.group, member: session.member, userID: session.userID, remove: true,
+			group: session.group, member: session.member, userID: session.userID, tokenID: session.tokenID, remove: true,
 		})
 	}
 	session.group = group
@@ -240,15 +294,17 @@ func (session *pricingGroupActivitySession) finish() {
 		session.finished = true
 		if session.group == "" {
 			removeLocalPricingUserActivity(session.userID, session.member)
+			removeLocalPricingTokenActivity(session.tokenID, session.member)
 			enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-				member: session.member, userID: session.userID, remove: true, removeUser: true,
+				member: session.member, userID: session.userID, tokenID: session.tokenID, remove: true, removeUser: true,
 			})
 			return
 		}
 		removeLocalPricingGroupActivity(session.group, session.member)
 		removeLocalPricingUserActivity(session.userID, session.member)
+		removeLocalPricingTokenActivity(session.tokenID, session.member)
 		enqueuePricingGroupActivityRedisOperation(pricingGroupActivityRedisOperation{
-			group: session.group, member: session.member, userID: session.userID, remove: true, removeUser: true,
+			group: session.group, member: session.member, userID: session.userID, tokenID: session.tokenID, remove: true, removeUser: true,
 		})
 	})
 }
@@ -266,11 +322,16 @@ func BeginPricingGroupActivity(ctx *gin.Context, group string, userID int, reque
 	if requestID == "" {
 		requestID = common.NewRequestId()
 	}
+	tokenID := 0
+	if ctx != nil {
+		tokenID = common.GetContextKeyInt(ctx, constant.ContextKeyTokenId)
+	}
 	session := &pricingGroupActivitySession{
-		group:  group,
-		member: strconv.Itoa(userID) + "|" + common.NodeName + "|" + requestID,
-		userID: userID,
-		done:   make(chan struct{}),
+		group:   group,
+		member:  strconv.Itoa(userID) + "|" + common.NodeName + "|" + requestID,
+		userID:  userID,
+		tokenID: tokenID,
+		done:    make(chan struct{}),
 	}
 	if ctx != nil {
 		ctx.Set(pricingGroupActivityContextKey, session)
@@ -448,6 +509,78 @@ func collectPricingUserActivity(userID int) (map[string]struct{}, bool) {
 	return activeMembers, redisDegraded
 }
 
+// collectPricingTokenActivity reads active request members for each API key.
+// The local index is merged with one Redis pipeline so a page of API keys does
+// not issue one round trip per key.
+func collectPricingTokenActivity(tokenIDs []int) (map[int]map[string]struct{}, bool) {
+	activeMembersByToken := make(map[int]map[string]struct{}, len(tokenIDs))
+	uniqueTokenIDs := make([]int, 0, len(tokenIDs))
+	seen := make(map[int]struct{}, len(tokenIDs))
+	for _, tokenID := range tokenIDs {
+		if tokenID <= 0 {
+			continue
+		}
+		if _, exists := seen[tokenID]; exists {
+			continue
+		}
+		seen[tokenID] = struct{}{}
+		uniqueTokenIDs = append(uniqueTokenIDs, tokenID)
+		activeMembersByToken[tokenID] = make(map[string]struct{})
+	}
+	if len(uniqueTokenIDs) == 0 {
+		return activeMembersByToken, false
+	}
+
+	now := time.Now().UnixMilli()
+	localPricingGroupActivity.Lock()
+	for _, tokenID := range uniqueTokenIDs {
+		entries := localPricingGroupActivity.tokens[tokenID]
+		for member, entry := range entries {
+			if entry.expiresAt <= now {
+				delete(entries, member)
+				continue
+			}
+			activeMembersByToken[tokenID][member] = struct{}{}
+		}
+		if len(entries) == 0 {
+			delete(localPricingGroupActivity.tokens, tokenID)
+		}
+	}
+	localPricingGroupActivity.Unlock()
+
+	redisDegraded := common.RedisEnabled && common.RDB == nil
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
+		pipeline := common.RDB.Pipeline()
+		commands := make(map[int]*redis.StringSliceCmd, len(uniqueTokenIDs))
+		for _, tokenID := range uniqueTokenIDs {
+			key := pricingTokenActivityRedisKey(tokenID)
+			pipeline.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10))
+			commands[tokenID] = pipeline.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+				Min: strconv.FormatInt(now+1, 10),
+				Max: "+inf",
+			})
+		}
+		_, err := pipeline.Exec(ctx)
+		cancel()
+		if err != nil {
+			redisDegraded = true
+		} else {
+			for tokenID, command := range commands {
+				members, commandErr := command.Result()
+				if commandErr != nil {
+					redisDegraded = true
+					continue
+				}
+				for _, member := range members {
+					activeMembersByToken[tokenID][member] = struct{}{}
+				}
+			}
+		}
+	}
+	return activeMembersByToken, redisDegraded
+}
+
 // GetUserInFlightRequests returns the number of active relay requests owned
 // by one user. It uses the dedicated user index and does not scan groups.
 func GetUserInFlightRequests(userID int) (count int, degraded bool) {
@@ -456,6 +589,17 @@ func GetUserInFlightRequests(userID int) (count int, degraded bool) {
 	}
 	activeMembers, degraded := collectPricingUserActivity(userID)
 	return len(activeMembers), degraded
+}
+
+// GetTokenInFlightRequests returns the active request count for each requested
+// API key. The boolean is true when Redis could not provide a cross-node view.
+func GetTokenInFlightRequests(tokenIDs []int) (map[int]int, bool) {
+	activeMembersByToken, degraded := collectPricingTokenActivity(tokenIDs)
+	counts := make(map[int]int, len(activeMembersByToken))
+	for tokenID, members := range activeMembersByToken {
+		counts[tokenID] = len(members)
+	}
+	return counts, degraded
 }
 
 func GetTotalPricingGroupConnections(groups []string) int {

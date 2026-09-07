@@ -25,12 +25,14 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
-	GroupCandidates []string       `json:"group_candidates"`
-	GroupRetryTimes map[string]int `json:"group_retry_times"`
-	DailyTokens     int64          `json:"daily_tokens"`
-	TotalTokens     int64          `json:"total_tokens"`
-	DailyQuota      int64          `json:"daily_quota"`
-	TotalQuota      int64          `json:"total_quota"`
+	GroupCandidates     []string       `json:"group_candidates"`
+	GroupRetryTimes     map[string]int `json:"group_retry_times"`
+	DailyTokens         int64          `json:"daily_tokens"`
+	TotalTokens         int64          `json:"total_tokens"`
+	DailyQuota          int64          `json:"daily_quota"`
+	TotalQuota          int64          `json:"total_quota"`
+	CurrentConcurrency  int            `json:"current_concurrency"`
+	ConcurrencyDegraded bool           `json:"concurrency_degraded"`
 }
 
 func tokenConcreteGroups(token *model.Token) ([]string, error) {
@@ -86,9 +88,9 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	return maskedTokens
 }
 
-// enrichTokenUsage adds usage metrics to already-authorized, masked responses.
-// Log availability should not make the API key list unusable, so failures are
-// logged and the response keeps its zero values.
+// enrichTokenUsage adds usage and in-flight request metrics to already-authorized,
+// masked responses. Log availability should not make the API key list unusable,
+// so failures are logged and the response keeps its zero values.
 func enrichTokenUsage(responses []*tokenResponse) {
 	tokenIDs := make([]int, 0, len(responses))
 	for _, response := range responses {
@@ -103,17 +105,26 @@ func enrichTokenUsage(responses []*tokenResponse) {
 	usageByToken, err := model.GetTokenUsageMetricsAt(tokenIDs, time.Now())
 	if err != nil {
 		common.SysLog("failed to load token usage: " + err.Error())
-		return
+	} else {
+		for _, response := range responses {
+			if response == nil || response.Token == nil {
+				continue
+			}
+			usage := usageByToken[response.Id]
+			response.DailyTokens = usage.DailyTokens
+			response.TotalTokens = usage.TotalTokens
+			response.DailyQuota = usage.DailyQuota
+			response.TotalQuota = usage.TotalQuota
+		}
 	}
+
+	concurrencyByToken, concurrencyDegraded := service.GetTokenInFlightRequests(tokenIDs)
 	for _, response := range responses {
 		if response == nil || response.Token == nil {
 			continue
 		}
-		usage := usageByToken[response.Id]
-		response.DailyTokens = usage.DailyTokens
-		response.TotalTokens = usage.TotalTokens
-		response.DailyQuota = usage.DailyQuota
-		response.TotalQuota = usage.TotalQuota
+		response.CurrentConcurrency = concurrencyByToken[response.Id]
+		response.ConcurrencyDegraded = concurrencyDegraded
 	}
 }
 

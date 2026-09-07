@@ -67,6 +67,8 @@ function apiKey(overrides: Partial<ApiKey>): ApiKey {
     total_tokens: 0,
     daily_quota: 0,
     total_quota: 0,
+    current_concurrency: 0,
+    concurrency_degraded: false,
     model_limits_enabled: false,
     model_limits: '',
     allow_ips: '',

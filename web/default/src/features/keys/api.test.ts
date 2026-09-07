@@ -99,6 +99,8 @@ describe('API key management', () => {
     assert.equal(apiKey.total_tokens, 0)
     assert.equal(apiKey.daily_quota, 0)
     assert.equal(apiKey.total_quota, 0)
+    assert.equal(apiKey.current_concurrency, 0)
+    assert.equal(apiKey.concurrency_degraded, false)
   })
 
   test('preserves API key usage metrics from list responses', async () => {
@@ -118,6 +120,8 @@ describe('API key management', () => {
               total_tokens: 2_110_000_000,
               daily_quota: 3_000_000,
               total_quota: 76_000_000,
+              current_concurrency: 2,
+              concurrency_degraded: false,
               unlimited_quota: false,
               expired_time: -1,
               created_time: 1,
@@ -146,6 +150,8 @@ describe('API key management', () => {
     assert.equal(apiKey.total_tokens, 2_110_000_000)
     assert.equal(apiKey.daily_quota, 3_000_000)
     assert.equal(apiKey.total_quota, 76_000_000)
+    assert.equal(apiKey.current_concurrency, 2)
+    assert.equal(apiKey.concurrency_degraded, false)
   })
 })
 
