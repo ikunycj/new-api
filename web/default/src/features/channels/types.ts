@@ -47,6 +47,7 @@ export const channelSchema = z.object({
   test_time: z.number(),
   last_test_time: z.number().default(0),
   last_test_is_auto: z.boolean().default(false),
+  last_test_ttft_ms: z.number().default(0),
   response_time: z.number(), // in milliseconds
   base_url: z.string().nullish(),
   other: z.string().default(''),
@@ -204,6 +205,7 @@ export interface ChannelTestResponse {
   time?: number
   data?: {
     response_time?: number
+    ttft_ms?: number
     error?: string
   }
 }

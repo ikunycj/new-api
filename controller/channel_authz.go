@@ -169,6 +169,7 @@ var channelReadOnlyFields = map[string]struct{}{
 	"test_time":                       {},
 	"last_test_time":                  {},
 	"last_test_is_auto":               {},
+	"last_test_ttft_ms":               {},
 	"response_time":                   {},
 	"balance":                         {},
 	"balance_updated_time":            {},
@@ -195,6 +196,9 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	}
 	if _, ok := requestData["last_test_is_auto"]; ok {
 		channel.LastTestIsAuto = false
+	}
+	if _, ok := requestData["last_test_ttft_ms"]; ok {
+		channel.LastTestTTFTMs = 0
 	}
 	if _, ok := requestData["response_time"]; ok {
 		channel.ResponseTime = 0

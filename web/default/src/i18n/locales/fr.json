@@ -6082,6 +6082,9 @@
     "Priority: Low to High": "Priorité : du plus bas au plus élevé",
     "If you do not receive the email, please check your spam folder": "Si vous ne recevez pas l'e-mail, veuillez vérifier votre dossier de courrier indésirable",
     "Cumulative:": "Cumulé :",
-    "Today:": "Aujourd'hui :"
+    "Today:": "Aujourd'hui :",
+    "TTFT": "TTFT",
+    "Recent test": "Dernier test",
+    "Yesterday average": "Moyenne d’hier"
   }
 }

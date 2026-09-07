@@ -6082,6 +6082,9 @@
     "Priority: Low to High": "優先級：從低到高",
     "If you do not receive the email, please check your spam folder": "若未收到郵件，請查看垃圾郵件匣",
     "Cumulative:": "累計：",
-    "Today:": "今日："
+    "Today:": "今日：",
+    "TTFT": "TTFT",
+    "Recent test": "最近測試",
+    "Yesterday average": "昨日平均"
   }
 }

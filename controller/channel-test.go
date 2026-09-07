@@ -37,12 +37,37 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	ttftMs      int64
 }
 
 const (
-	modelTestTokenName    = "模型测试"
-	channelProbeTokenName = "渠道探测"
+	modelTestTokenName    = model.ChannelTestTokenName
+	channelProbeTokenName = model.ChannelProbeTokenName
 )
+
+type testResponseBody struct {
+	io.ReadCloser
+	info *relaycommon.RelayInfo
+}
+
+func (body *testResponseBody) Read(p []byte) (int, error) {
+	n, err := body.ReadCloser.Read(p)
+	if n > 0 && body.info != nil {
+		body.info.SetFirstResponseTime()
+	}
+	return n, err
+}
+
+func testTTFTMilliseconds(info *relaycommon.RelayInfo) int64 {
+	if info == nil || !info.HasSendResponse() {
+		return 0
+	}
+	ttftMs := info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
+	if ttftMs <= 0 {
+		return 0
+	}
+	return ttftMs
+}
 
 func supportsChannelTest(channelType int) bool {
 	switch channelType {
@@ -499,6 +524,9 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 			}
 		}
 	}
+	if !isStream && httpResp != nil && httpResp.Body != nil {
+		httpResp.Body = &testResponseBody{ReadCloser: httpResp.Body, info: info}
+	}
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
 		return testResult{
@@ -561,6 +589,7 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
+		ttftMs:      testTTFTMilliseconds(info),
 	}
 }
 
@@ -955,6 +984,10 @@ func TestChannel(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"time":    consumedTime,
+		"data": gin.H{
+			"response_time": milliseconds,
+			"ttft_ms":       result.ttftMs,
+		},
 	})
 }
 

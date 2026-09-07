@@ -75,6 +75,14 @@ function getChannelTestResponseTime(
   return undefined
 }
 
+function getChannelTestTTFT(response: ChannelTestResponse): number | undefined {
+  const ttftMs = response.data?.ttft_ms
+  if (typeof ttftMs === 'number' && Number.isFinite(ttftMs) && ttftMs > 0) {
+    return ttftMs
+  }
+  return undefined
+}
+
 function formatChannelTestDuration(responseTime?: number): string | undefined {
   if (responseTime === undefined) return undefined
 
@@ -291,7 +299,8 @@ export async function handleTestChannel(
     success: boolean,
     responseTime?: number,
     error?: string,
-    errorCode?: string
+    errorCode?: string,
+    ttftMs?: number
   ) => void
 ): Promise<void> {
   const payload =
@@ -308,6 +317,7 @@ export async function handleTestChannel(
   try {
     const response = await testChannel(id, payload)
     const responseTime = getChannelTestResponseTime(response)
+    const ttftMs = getChannelTestTTFT(response)
     const duration = formatChannelTestDuration(responseTime)
     const target = getChannelTestLabel(options)
     if (response.success) {
@@ -323,7 +333,7 @@ export async function handleTestChannel(
             : undefined
         )
       }
-      onTestComplete?.(true, responseTime)
+      onTestComplete?.(true, responseTime, undefined, undefined, ttftMs)
     } else {
       const errorMsg = response.message || i18next.t(ERROR_MESSAGES.TEST_FAILED)
       if (!options?.silent) {
@@ -333,7 +343,13 @@ export async function handleTestChannel(
             : errorMsg,
         })
       }
-      onTestComplete?.(false, responseTime, errorMsg, response.error_code)
+      onTestComplete?.(
+        false,
+        responseTime,
+        errorMsg,
+        response.error_code,
+        ttftMs
+      )
     }
   } catch (_error: unknown) {
     const err = _error as { response?: { data?: { message?: string } } }

@@ -6082,6 +6082,9 @@
     "Priority: Low to High": "Приоритет: от низкого к высокому",
     "If you do not receive the email, please check your spam folder": "Если письмо не пришло, проверьте папку «Спам»",
     "Cumulative:": "Накоплено:",
-    "Today:": "Сегодня:"
+    "Today:": "Сегодня:",
+    "TTFT": "TTFT",
+    "Recent test": "Последний тест",
+    "Yesterday average": "Среднее за вчера"
   }
 }

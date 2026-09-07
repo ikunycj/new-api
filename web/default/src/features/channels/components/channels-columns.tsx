@@ -1036,20 +1036,32 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
-      // Previous-day average time to first token
+      // Recent test and previous-day average time to first token
       {
-        accessorKey: 'previous_day_average_ttft_ms',
-        header: t('Previous-day average TTFT'),
+        accessorKey: 'last_test_ttft_ms',
+        header: t('TTFT'),
         cell: ({ row }) => {
-          const ttft = row.getValue('previous_day_average_ttft_ms') as number
-          if (!Number.isFinite(ttft) || ttft <= 0) {
+          const formatTTFT = (value: number) =>
+            Number.isFinite(value) && value > 0 ? `${Math.round(value)}ms` : '-'
+          const recentTest = formatTTFT(row.original.last_test_ttft_ms)
+          const yesterdayAverage = formatTTFT(
+            row.original.previous_day_average_ttft_ms
+          )
+          if (recentTest === '-' && yesterdayAverage === '-') {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
           return (
-            <span className='text-xs tabular-nums'>{Math.round(ttft)} ms</span>
+            <div className='flex flex-col items-start gap-0.5 text-xs leading-tight tabular-nums'>
+              <span className='whitespace-nowrap'>
+                {t('Recent test')}: {recentTest}
+              </span>
+              <span className='text-muted-foreground whitespace-nowrap'>
+                {t('Yesterday average')}: {yesterdayAverage}
+              </span>
+            </div>
           )
         },
-        size: 155,
+        size: 175,
         enableSorting: false,
       },
 

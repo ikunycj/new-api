@@ -118,6 +118,7 @@ type TestStatus = 'idle' | 'testing' | 'success' | 'error'
 type TestResult = {
   status: TestStatus
   responseTime?: number
+  ttftMs?: number
   completedAt?: number
   error?: string
   errorCode?: string
@@ -135,6 +136,7 @@ type ChannelTestCachePatch = {
   testTime: number
   lastTestTime: number
   lastTestIsAuto: boolean
+  lastTestTTFTMs?: number
 }
 
 type LatestChannelTestCachePatch = {
@@ -146,18 +148,23 @@ type ChannelListCache = GetChannelsResponse | SearchChannelsResponse
 
 function createChannelTestCachePatch(
   responseTime?: number,
-  completedAt = Date.now()
+  completedAt = Date.now(),
+  ttftMs?: number
 ): ChannelTestCachePatch | undefined {
   if (typeof responseTime !== 'number' || !Number.isFinite(responseTime)) {
     return undefined
   }
 
-  return {
+  const patch: ChannelTestCachePatch = {
     responseTime,
     testTime: Math.floor(completedAt / 1000),
     lastTestTime: Math.floor(completedAt / 1000),
     lastTestIsAuto: false,
   }
+  if (typeof ttftMs === 'number' && Number.isFinite(ttftMs) && ttftMs > 0) {
+    patch.lastTestTTFTMs = ttftMs
+  }
+  return patch
 }
 
 function getLatestChannelTestCachePatch(
@@ -168,7 +175,8 @@ function getLatestChannelTestCachePatch(
       const completedAt = result.completedAt ?? 0
       const patch = createChannelTestCachePatch(
         result.responseTime,
-        completedAt
+        completedAt,
+        result.ttftMs
       )
       if (!patch) return latestPatch
       if (!latestPatch || completedAt >= latestPatch.completedAt) {
@@ -519,6 +527,9 @@ function ChannelTestDialogContent({
               test_time: patch.testTime,
               last_test_time: patch.lastTestTime,
               last_test_is_auto: patch.lastTestIsAuto,
+              ...(patch.lastTestTTFTMs !== undefined
+                ? { last_test_ttft_ms: patch.lastTestTTFTMs }
+                : {}),
             }
           })
 
@@ -570,11 +581,12 @@ function ChannelTestDialogContent({
             stream: effectiveStreamTest || undefined,
             silent,
           },
-          (success, responseTime, error, errorCode) => {
+          (success, responseTime, error, errorCode, ttftMs) => {
             const completedAt = Date.now()
             finalResult = {
               status: success ? 'success' : 'error',
               responseTime,
+              ttftMs,
               completedAt,
               error,
               errorCode,
@@ -595,7 +607,8 @@ function ChannelTestDialogContent({
           refreshChannelLists(
             createChannelTestCachePatch(
               finalResult?.responseTime,
-              finalResult?.completedAt
+              finalResult?.completedAt,
+              finalResult?.ttftMs
             )
           )
         }

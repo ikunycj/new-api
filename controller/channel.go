@@ -139,6 +139,29 @@ func enrichLastChannelTestTimes(channels []*model.Channel) {
 	}
 }
 
+func enrichLastChannelTestTTFTs(channels []*model.Channel) {
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		channel.LastTestTTFTMs = 0
+		if channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	ttfts, err := model.GetLatestChannelTestTTFTs(ids)
+	if err != nil {
+		common.SysLog("failed to load latest channel test TTFTs: " + err.Error())
+		return
+	}
+	for _, channel := range channels {
+		if channel != nil {
+			channel.LastTestTTFTMs = ttfts[channel.Id]
+		}
+	}
+}
+
 func enrichCurrentChannelConcurrency(channels []*model.Channel) {
 	for _, channel := range channels {
 		if channel != nil {
@@ -178,6 +201,7 @@ func enrichChannelRuntimeMetrics(channels []*model.Channel) {
 		clearChannelInfo(channel)
 	}
 	enrichLastChannelTestTimes(channels)
+	enrichLastChannelTestTTFTs(channels)
 	enrichPreviousDayProbeRates(channels)
 	enrichPreviousDayAverageTTFTs(channels)
 	enrichCurrentChannelConcurrency(channels)
@@ -568,6 +592,7 @@ func GetChannel(c *gin.Context) {
 	if channel != nil {
 		clearChannelInfo(channel)
 		enrichLastChannelTestTimes([]*model.Channel{channel})
+		enrichLastChannelTestTTFTs([]*model.Channel{channel})
 		enrichPreviousDayProbeRates([]*model.Channel{channel})
 		enrichPreviousDayAverageTTFTs([]*model.Channel{channel})
 		enrichCurrentChannelConcurrency([]*model.Channel{channel})

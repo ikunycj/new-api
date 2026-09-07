@@ -637,6 +637,7 @@ export function aggregateChannelsByTag(
         test_time: 0,
         last_test_time: 0,
         last_test_is_auto: false,
+        last_test_ttft_ms: 0,
         created_time: 0,
         balance_updated_time: 0,
         models: '',
@@ -684,6 +685,14 @@ export function aggregateChannelsByTag(
       ttftStats.sum += ttft
       ttftStats.count += 1
       tagRow.previous_day_average_ttft_ms = ttftStats.sum / ttftStats.count
+    }
+
+    const channelTestTime =
+      channel.last_test_time > 0 ? channel.last_test_time : channel.test_time
+    if (channelTestTime >= tagRow.last_test_time) {
+      tagRow.last_test_time = channelTestTime
+      tagRow.last_test_is_auto = channel.last_test_is_auto
+      tagRow.last_test_ttft_ms = channel.last_test_ttft_ms
     }
 
     // Aggregate weight (same value or null if different)

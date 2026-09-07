@@ -111,6 +111,7 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 		BalanceUpdatedTime:       55,
 		UsedQuota:                66,
 		PreviousDayAverageTTFTMs: 77,
+		LastTestTTFTMs:           88,
 		Models:                   "gpt-4o",
 		Group:                    "default",
 	}}
@@ -123,6 +124,7 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 		"balance_updated_time":         channel.BalanceUpdatedTime,
 		"used_quota":                   channel.UsedQuota,
 		"previous_day_average_ttft_ms": channel.PreviousDayAverageTTFTMs,
+		"last_test_ttft_ms":            channel.LastTestTTFTMs,
 		"models":                       channel.Models,
 		"group":                        channel.Group,
 	})
@@ -134,6 +136,7 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 	assert.Zero(t, channel.BalanceUpdatedTime)
 	assert.Zero(t, channel.UsedQuota)
 	assert.Zero(t, channel.PreviousDayAverageTTFTMs)
+	assert.Zero(t, channel.LastTestTTFTMs)
 	assert.Equal(t, "gpt-4o", channel.Models)
 	assert.Equal(t, "default", channel.Group)
 }

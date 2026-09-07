@@ -100,7 +100,7 @@ function ChannelCardComponent({
     upstream_max_retries: t('Retry Times'),
     max_concurrency: '并发',
     previous_day_probe_success_rate: t('Previous-day probe success rate'),
-    previous_day_average_ttft_ms: t('Previous-day average TTFT'),
+    last_test_ttft_ms: t('TTFT'),
   }
 
   const groups = parseGroupsList(row.original.group ?? '')
@@ -123,7 +123,7 @@ function ChannelCardComponent({
   const previousDayProbeSuccessRateCell = renderCell(
     'previous_day_probe_success_rate'
   )
-  const previousDayAverageTTFTCell = renderCell('previous_day_average_ttft_ms')
+  const lastTestTTFTCell = renderCell('last_test_ttft_ms')
 
   // In card view the enable/disable state is already conveyed by the inline
   // power toggle, so the plain "Enabled"/"Disabled" badge is redundant. Keep
@@ -168,8 +168,8 @@ function ChannelCardComponent({
             <ChannelMetric label={fieldLabels.previous_day_probe_success_rate}>
               {previousDayProbeSuccessRateCell}
             </ChannelMetric>
-            <ChannelMetric label={fieldLabels.previous_day_average_ttft_ms}>
-              {previousDayAverageTTFTCell}
+            <ChannelMetric label={fieldLabels.last_test_ttft_ms}>
+              {lastTestTTFTCell}
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.test_time}>
               {testCell}

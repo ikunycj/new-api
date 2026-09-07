@@ -6082,6 +6082,9 @@
     "Priority: Low to High": "優先度: 低い順",
     "If you do not receive the email, please check your spam folder": "メールが届かない場合は、迷惑メールフォルダーをご確認ください",
     "Cumulative:": "累計：",
-    "Today:": "今日："
+    "Today:": "今日：",
+    "TTFT": "TTFT",
+    "Recent test": "最新テスト",
+    "Yesterday average": "昨日の平均"
   }
 }

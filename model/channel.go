@@ -34,6 +34,7 @@ type Channel struct {
 	TestTime           int64   `json:"test_time" gorm:"bigint"`
 	LastTestTime       int64   `json:"last_test_time" gorm:"-"`
 	LastTestIsAuto     bool    `json:"last_test_is_auto" gorm:"-"`
+	LastTestTTFTMs     float64 `json:"last_test_ttft_ms" gorm:"-"`
 	ResponseTime       int     `json:"response_time"` // in milliseconds
 	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
 	Other              string  `json:"other"`
