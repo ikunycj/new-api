@@ -83,6 +83,10 @@ const CHANNEL_DISABLED_ROW_DESKTOP =
   '[--data-table-card-bg:var(--table-channel-disabled)] hover:[--data-table-card-bg:var(--table-channel-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)] hover:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-disabled)] [&>td]:![background-color:var(--table-channel-disabled)] hover:[&>td]:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-disabled)]'
 const CHANNEL_DISABLED_ROW_MOBILE =
   '[--data-table-card-bg:var(--table-channel-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)]'
+const CHANNEL_AUTO_DISABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-auto-disabled)] hover:[--data-table-card-bg:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)] hover:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-auto-disabled)] [&>td]:![background-color:var(--table-channel-auto-disabled)] hover:[&>td]:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-auto-disabled)]'
+const CHANNEL_AUTO_DISABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-auto-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)]'
 
 const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'id',
@@ -549,6 +553,11 @@ export function ChannelsTable() {
       getRowClassName={(row, { isMobile }) => {
         if (isTagAggregateRow(row.original)) {
           return undefined
+        }
+        if (row.original.status === CHANNEL_STATUS.AUTO_DISABLED) {
+          return isMobile
+            ? CHANNEL_AUTO_DISABLED_ROW_MOBILE
+            : CHANNEL_AUTO_DISABLED_ROW_DESKTOP
         }
         if (isDisabledChannelRow(row.original)) {
           return isMobile
