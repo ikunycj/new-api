@@ -3,8 +3,8 @@ Copyright (C) 2023-2026 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
+published by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,15 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import * as z from 'zod'
 
-import { StatusBadge } from '@/components/status-badge'
+import { MultiSelect, type Option } from '@/components/multi-select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -38,7 +37,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+import { getChannels } from '@/features/channels/api'
+import { CHANNEL_TYPE_OPTIONS } from '@/features/channels/constants'
 
 import {
   SettingsForm,
@@ -48,159 +48,116 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
-
-const thinkingBlacklistExample = JSON.stringify(
-  ['moonshotai/kimi-k2-thinking', 'kimi-k2-thinking'],
-  null,
-  2
-)
-
-const preferredModelsExample = JSON.stringify(
-  ['gpt-5.6-sol', 'claude-fable-5'],
-  null,
-  2
-)
-
-const chatToResponsesPolicyExample = JSON.stringify(
-  {
-    enabled: true,
-    all_channels: false,
-    channel_ids: [1, 2],
-    model_patterns: ['^gpt-4o.*$', '^gpt-5.*$'],
-  },
-  null,
-  2
-)
-
-const chatToResponsesPolicyAllChannelsExample = JSON.stringify(
-  {
-    enabled: true,
-    all_channels: true,
-    model_patterns: ['^gpt-4o.*$', '^gpt-5.*$'],
-  },
-  null,
-  2
-)
-
-const jsonString = z.string().refine((value) => {
-  const trimmed = value.trim()
-  if (!trimmed) return true
-  try {
-    JSON.parse(trimmed)
-    return true
-  } catch {
-    return false
-  }
-}, 'Invalid JSON format')
-
-const preferredModelsJson = jsonString.refine((value) => {
-  if (!value.trim()) return true
-  try {
-    const parsed = JSON.parse(value)
-    return (
-      Array.isArray(parsed) &&
-      parsed.every((model) => typeof model === 'string' && model.trim() !== '')
-    )
-  } catch {
-    return false
-  }
-}, 'Preferred models must be a JSON string array')
-
-const schema = z.object({
-  global: z.object({
-    pass_through_request_enabled: z.boolean(),
-    thinking_model_blacklist: jsonString,
-    chat_completions_to_responses_policy: jsonString,
-  }),
-  PreferredModels: preferredModelsJson,
-  general_setting: z.object({
-    ping_interval_enabled: z.boolean(),
-    ping_interval_seconds: z.coerce.number().min(1),
-  }),
-})
-
-type GlobalModelSettingsFormValues = z.output<typeof schema>
-type GlobalModelSettingsFormInput = z.input<typeof schema>
-
-type FlatGlobalModelSettings = {
-  'global.pass_through_request_enabled': boolean
-  'global.thinking_model_blacklist': string
-  'global.chat_completions_to_responses_policy': string
-  PreferredModels: string
-  'general_setting.ping_interval_enabled': boolean
-  'general_setting.ping_interval_seconds': number
-}
-
-const flattenGlobalValues = (
-  values: GlobalModelSettingsFormValues
-): FlatGlobalModelSettings => ({
-  'global.pass_through_request_enabled':
-    values.global.pass_through_request_enabled,
-  'global.thinking_model_blacklist': normalizeJsonText(
-    values.global.thinking_model_blacklist,
-    '[]'
-  ),
-  'global.chat_completions_to_responses_policy': normalizeJsonText(
-    values.global.chat_completions_to_responses_policy,
-    '{}'
-  ),
-  PreferredModels: normalizeJsonText(values.PreferredModels, '[]'),
-  'general_setting.ping_interval_enabled':
-    values.general_setting.ping_interval_enabled,
-  'general_setting.ping_interval_seconds':
-    values.general_setting.ping_interval_seconds,
-})
-
-function normalizeJsonText(value: string, fallback: string) {
-  const trimmed = (value ?? '').toString().trim()
-  return trimmed ? trimmed : fallback
-}
+import {
+  GlobalPolicyEditor,
+  PreferredModelsEditor,
+} from './global-settings-fields'
+import {
+  canonicalizeGlobalModelSettings,
+  globalModelSettingsFormSchema,
+  parseGlobalModelSettings,
+  serializeGlobalModelSettings,
+  type GlobalModelSettingsFormInput,
+  type GlobalModelSettingsFormValues,
+  type GlobalModelSettingsRawValues,
+} from './global-settings-form'
 
 type GlobalSettingsCardProps = {
-  defaultValues: GlobalModelSettingsFormValues
+  defaultValues: GlobalModelSettingsRawValues
 }
 
-export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
+function appendUnknownOptions(
+  options: Option[],
+  values: string[],
+  label: (value: string) => string
+): Option[] {
+  const known = new Set(options.map((option) => option.value))
+  const unknown = values
+    .filter((value) => !known.has(value))
+    .map((value) => ({ value, label: label(value) }))
+  return [...options, ...unknown]
+}
+
+export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const defaultPassThrough =
+    props.defaultValues['global.pass_through_request_enabled']
+  const defaultThinkingBlacklist =
+    props.defaultValues['global.thinking_model_blacklist']
+  const defaultResponsePolicy =
+    props.defaultValues['global.chat_completions_to_responses_policy']
+  const defaultPreferredModels = props.defaultValues.PreferredModels
+  const defaultPingEnabled =
+    props.defaultValues['general_setting.ping_interval_enabled']
+  const defaultPingInterval =
+    props.defaultValues['general_setting.ping_interval_seconds']
+  const parsedDefaults = useMemo(
+    () =>
+      parseGlobalModelSettings({
+        'global.pass_through_request_enabled': defaultPassThrough,
+        'global.thinking_model_blacklist': defaultThinkingBlacklist,
+        'global.chat_completions_to_responses_policy': defaultResponsePolicy,
+        PreferredModels: defaultPreferredModels,
+        'general_setting.ping_interval_enabled': defaultPingEnabled,
+        'general_setting.ping_interval_seconds': defaultPingInterval,
+      }),
+    [
+      defaultPassThrough,
+      defaultThinkingBlacklist,
+      defaultResponsePolicy,
+      defaultPreferredModels,
+      defaultPingEnabled,
+      defaultPingInterval,
+    ]
+  )
 
   const form = useForm<
     GlobalModelSettingsFormInput,
     unknown,
     GlobalModelSettingsFormValues
   >({
-    resolver: zodResolver(schema),
-    defaultValues: defaultValues as GlobalModelSettingsFormInput,
+    resolver: zodResolver(globalModelSettingsFormSchema),
+    defaultValues: parsedDefaults,
   })
 
   useEffect(() => {
-    form.reset(defaultValues as GlobalModelSettingsFormInput)
-  }, [defaultValues, form])
+    form.reset(parsedDefaults)
+  }, [form, parsedDefaults])
+
+  const channelsQuery = useQuery({
+    queryKey: ['global-settings-channels'],
+    queryFn: () => getChannels({ p: 1, page_size: 100, id_sort: true }),
+  })
+  const channelItems = channelsQuery.data?.data?.items
+  const channels = useMemo(() => channelItems ?? [], [channelItems])
+  const channelOptions = useMemo(
+    () =>
+      channels.map((channel) => ({
+        value: String(channel.id),
+        label: `${channel.name} (#${channel.id})`,
+      })),
+    [channels]
+  )
+  const channelTypeOptions = useMemo(
+    () =>
+      CHANNEL_TYPE_OPTIONS.map((option) => ({
+        value: String(option.value),
+        label: t(option.label),
+      })),
+    [t]
+  )
 
   const pingEnabled = form.watch('general_setting.ping_interval_enabled')
 
-  const formatJsonField = (
-    field:
-      | 'global.thinking_model_blacklist'
-      | 'global.chat_completions_to_responses_policy'
-      | 'PreferredModels'
-  ) => {
-    const raw = form.getValues(field)
-    if (!raw || !raw.trim()) return
-    try {
-      const formatted = JSON.stringify(JSON.parse(raw), null, 2)
-      form.setValue(field, formatted, { shouldDirty: true })
-    } catch {
-      toast.error(t('Invalid JSON format'))
-    }
-  }
-
   const onSubmit = async (values: GlobalModelSettingsFormValues) => {
-    const flattenedDefaults = flattenGlobalValues(defaultValues)
-    const flattenedValues = flattenGlobalValues(values)
+    const flattenedDefaults = canonicalizeGlobalModelSettings(
+      props.defaultValues
+    )
+    const flattenedValues = serializeGlobalModelSettings(values)
     const updates = Object.entries(flattenedValues).filter(
       ([key, value]) =>
-        value !== flattenedDefaults[key as keyof FlatGlobalModelSettings]
+        value !== flattenedDefaults[key as keyof GlobalModelSettingsRawValues]
     )
 
     if (updates.length === 0) {
@@ -209,10 +166,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
     }
 
     for (const [key, value] of updates) {
-      await updateOption.mutateAsync({
-        key,
-        value,
-      })
+      await updateOption.mutateAsync({ key, value })
     }
   }
 
@@ -224,186 +178,141 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
             onSave={form.handleSubmit(onSubmit)}
             isSaving={updateOption.isPending}
           />
-          <FormField
-            control={form.control}
-            name='global.pass_through_request_enabled'
-            render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Enable Request Passthrough')}</FormLabel>
+
+          <div className='space-y-6 lg:col-span-2'>
+            <FormField
+              control={form.control}
+              name='global.pass_through_request_enabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Enable Request Passthrough')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='global.thinking_model_blacklist'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Models that skip thinking suffix processing')}
+                  </FormLabel>
+                  <FormControl>
+                    <MultiSelect
+                      selected={field.value}
+                      options={[]}
+                      onChange={field.onChange}
+                      allowCreate
+                      placeholder={t('Add a model name')}
+                      createLabel={t('Add model "{{value}}"')}
+                      emptyText={t('No models added')}
+                    />
+                  </FormControl>
                   <FormDescription>
                     {t(
-                      'Forward requests directly to upstream providers without any post-processing.'
+                      'Models listed here will not automatically append or remove -thinking / -nothinking suffixes.'
                     )}
                   </FormDescription>
-                </SettingsSwitchContent>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-              </SettingsSwitchItem>
-            )}
-          />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name='global.thinking_model_blacklist'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  {t('Models that skip thinking suffix processing')}
-                </FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={4}
-                    placeholder={`${t('Example:')}\n${thinkingBlacklistExample}`}
-                    {...field}
-                    onChange={(event) => field.onChange(event.target.value)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t(
-                    'Models listed here will not automatically append or remove -thinking / -nothinking suffixes.'
-                  )}
-                </FormDescription>
-                <div className='flex flex-wrap gap-2'>
-                  <Button
-                    type='button'
-                    variant='outline'
-                    size='sm'
-                    onClick={() =>
-                      formatJsonField('global.thinking_model_blacklist')
-                    }
-                  >
-                    {t('Format JSON')}
-                  </Button>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name='PreferredModels'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Preferred Models')}</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={4}
-                    placeholder={`${t('Example:')}\n${preferredModelsExample}`}
-                    {...field}
-                    onChange={(event) => field.onChange(event.target.value)}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {t(
-                    'Models are checked in this order when selecting a default model. Use a JSON string array.'
-                  )}
-                </FormDescription>
-                <div className='flex flex-wrap gap-2'>
-                  <Button
-                    type='button'
-                    variant='outline'
-                    size='sm'
-                    onClick={() => formatJsonField('PreferredModels')}
-                  >
-                    {t('Format JSON')}
-                  </Button>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <Separator />
-
-          <div className='space-y-4'>
-            <div className='flex items-center gap-2'>
-              <h3 className='text-base font-semibold'>
-                {t('ChatCompletions -> Responses Compatibility')}
-              </h3>
-              <StatusBadge
-                label={t('Preview')}
-                variant='neutral'
-                copyable={false}
-              />
-            </div>
-
-            <Alert>
-              <AlertTitle>{t('Warning')}</AlertTitle>
-              <AlertDescription>
-                {t(
-                  'This feature is experimental. Configuration format and behavior may change.'
-                )}
-              </AlertDescription>
-            </Alert>
+            <FormField
+              control={form.control}
+              name='PreferredModels'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Preferred Models')}</FormLabel>
+                  <FormControl>
+                    <PreferredModelsEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder={t('Enter a model name')}
+                      emptyLabel={t(
+                        'No preferred models. The default order will be used.'
+                      )}
+                      deleteAriaLabel={(model) =>
+                        t('Delete {{value}}', { value: model })
+                      }
+                      dragAriaLabel={(model) =>
+                        t('Drag to reorder {{group}}', { group: model })
+                      }
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Models are tried in this order when selecting a default model. Add one model per row.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
               name='global.chat_completions_to_responses_policy'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Policy JSON')}</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={8}
-                      placeholder={`${t('Example (specific channels):')}\n${chatToResponsesPolicyExample}\n\n${t('Example (all channels):')}\n${chatToResponsesPolicyAllChannelsExample}`}
-                      {...field}
-                      onChange={(event) => field.onChange(event.target.value)}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Empty value will be saved as {}.')}
-                  </FormDescription>
-                  <div className='flex flex-wrap gap-2'>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        form.setValue(
-                          'global.chat_completions_to_responses_policy',
-                          chatToResponsesPolicyExample,
-                          { shouldDirty: true }
-                        )
-                      }
-                    >
-                      {t('Fill example (specific channels)')}
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        form.setValue(
-                          'global.chat_completions_to_responses_policy',
-                          chatToResponsesPolicyAllChannelsExample,
-                          { shouldDirty: true }
-                        )
-                      }
-                    >
-                      {t('Fill example (all channels)')}
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        formatJsonField(
-                          'global.chat_completions_to_responses_policy'
-                        )
-                      }
-                    >
-                      {t('Format JSON')}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                const selectedChannelIds = field.value.channel_ids.map(String)
+                const selectedChannelTypes =
+                  field.value.channel_types.map(String)
+                const channelOptionsWithLegacy = appendUnknownOptions(
+                  channelOptions,
+                  selectedChannelIds,
+                  (value) => t('Channel #{{id}}', { id: value })
+                )
+                const channelTypeOptionsWithLegacy = appendUnknownOptions(
+                  channelTypeOptions,
+                  selectedChannelTypes,
+                  (value) => t('Channel type #{{id}}', { id: value })
+                )
+
+                return (
+                  <FormItem className='gap-4'>
+                    <FormLabel>
+                      {t('ChatCompletions -> Responses Compatibility')}
+                    </FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Convert selected Chat Completions requests to the Responses API without editing a policy object.'
+                      )}
+                    </FormDescription>
+                    <Alert>
+                      <AlertTitle>{t('Warning')}</AlertTitle>
+                      <AlertDescription>
+                        {t(
+                          'This feature is experimental. The client request must still match the selected upstream protocol.'
+                        )}
+                      </AlertDescription>
+                    </Alert>
+
+                    <FormControl>
+                      <GlobalPolicyEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                        channelOptions={channelOptionsWithLegacy}
+                        channelTypeOptions={channelTypeOptionsWithLegacy}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )
+              }}
             />
           </div>
 

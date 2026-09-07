@@ -26,16 +26,6 @@ import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
-function formatJsonForEditor(value: string, fallback: string) {
-  const raw = (value ?? '').toString().trim()
-  if (!raw) return fallback
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return fallback
-  }
-}
-
 const MODELS_SECTIONS = [
   {
     id: 'global',
@@ -43,25 +33,17 @@ const MODELS_SECTIONS = [
     build: (settings: ModelSettings) => (
       <GlobalSettingsCard
         defaultValues={{
-          global: {
-            pass_through_request_enabled:
-              settings['global.pass_through_request_enabled'],
-            thinking_model_blacklist: formatJsonForEditor(
-              settings['global.thinking_model_blacklist'],
-              '[]'
-            ),
-            chat_completions_to_responses_policy: formatJsonForEditor(
-              settings['global.chat_completions_to_responses_policy'],
-              '{}'
-            ),
-          },
-          general_setting: {
-            ping_interval_enabled:
-              settings['general_setting.ping_interval_enabled'],
-            ping_interval_seconds:
-              settings['general_setting.ping_interval_seconds'],
-          },
-          PreferredModels: formatJsonForEditor(settings.PreferredModels, '[]'),
+          'global.pass_through_request_enabled':
+            settings['global.pass_through_request_enabled'],
+          'global.thinking_model_blacklist':
+            settings['global.thinking_model_blacklist'],
+          'global.chat_completions_to_responses_policy':
+            settings['global.chat_completions_to_responses_policy'],
+          PreferredModels: settings.PreferredModels,
+          'general_setting.ping_interval_enabled':
+            settings['general_setting.ping_interval_enabled'],
+          'general_setting.ping_interval_seconds':
+            settings['general_setting.ping_interval_seconds'],
         }}
       />
     ),
