@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -26,6 +27,10 @@ type tokenResponse struct {
 	*model.Token
 	GroupCandidates []string       `json:"group_candidates"`
 	GroupRetryTimes map[string]int `json:"group_retry_times"`
+	DailyTokens     int64          `json:"daily_tokens"`
+	TotalTokens     int64          `json:"total_tokens"`
+	DailyQuota      int64          `json:"daily_quota"`
+	TotalQuota      int64          `json:"total_quota"`
 }
 
 func tokenConcreteGroups(token *model.Token) ([]string, error) {
@@ -79,6 +84,37 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
 	}
 	return maskedTokens
+}
+
+// enrichTokenUsage adds usage metrics to already-authorized, masked responses.
+// Log availability should not make the API key list unusable, so failures are
+// logged and the response keeps its zero values.
+func enrichTokenUsage(responses []*tokenResponse) {
+	tokenIDs := make([]int, 0, len(responses))
+	for _, response := range responses {
+		if response != nil && response.Token != nil && response.Id > 0 {
+			tokenIDs = append(tokenIDs, response.Id)
+		}
+	}
+	if len(tokenIDs) == 0 {
+		return
+	}
+
+	usageByToken, err := model.GetTokenUsageMetricsAt(tokenIDs, time.Now())
+	if err != nil {
+		common.SysLog("failed to load token usage: " + err.Error())
+		return
+	}
+	for _, response := range responses {
+		if response == nil || response.Token == nil {
+			continue
+		}
+		usage := usageByToken[response.Id]
+		response.DailyTokens = usage.DailyTokens
+		response.TotalTokens = usage.TotalTokens
+		response.DailyQuota = usage.DailyQuota
+		response.TotalQuota = usage.TotalQuota
+	}
 }
 
 func getTokenUserGroup(c *gin.Context) (string, error) {
@@ -164,7 +200,9 @@ func GetAllTokens(c *gin.Context) {
 	}
 	total, _ := model.CountUserTokens(userId)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	responses := buildMaskedTokenResponses(tokens)
+	enrichTokenUsage(responses)
+	pageInfo.SetItems(responses)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -182,7 +220,9 @@ func SearchTokens(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	responses := buildMaskedTokenResponses(tokens)
+	enrichTokenUsage(responses)
+	pageInfo.SetItems(responses)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -198,7 +238,9 @@ func GetToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, buildMaskedTokenResponse(token))
+	response := buildMaskedTokenResponse(token)
+	enrichTokenUsage([]*tokenResponse{response})
+	common.ApiSuccess(c, response)
 }
 
 func GetTokenKey(c *gin.Context) {
@@ -462,10 +504,12 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	response := buildMaskedTokenResponse(cleanToken)
+	enrichTokenUsage([]*tokenResponse{response})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    buildMaskedTokenResponse(cleanToken),
+		"data":    response,
 	})
 }
 

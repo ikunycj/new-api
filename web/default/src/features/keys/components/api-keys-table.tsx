@@ -61,6 +61,7 @@ import {
   ERROR_MESSAGES,
 } from '../constants'
 import type { ApiKey } from '../types'
+import { ApiKeyUsageCell } from './api-key-usage-cell'
 import { ApiKeyCell } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
 import { useApiKeys } from './api-keys-provider'
@@ -96,6 +97,10 @@ function ApiKeysMobileSkeleton() {
             <Skeleton className='h-8 w-16' />
           </div>
           <Skeleton className='h-3 w-28' />
+          <div className='flex flex-col gap-1.5 border-t pt-2'>
+            <Skeleton className='ml-auto h-3 w-40' />
+            <Skeleton className='ml-auto h-3 w-44' />
+          </div>
         </div>
       ))}
     </div>
@@ -189,6 +194,10 @@ function ApiKeysMobileList({
                   </span>
                 </span>
               )}
+            </div>
+
+            <div className='border-border/60 flex justify-end border-t pt-2'>
+              <ApiKeyUsageCell apiKey={apiKey} />
             </div>
           </div>
         )

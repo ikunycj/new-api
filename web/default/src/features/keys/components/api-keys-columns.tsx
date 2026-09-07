@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils'
 import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
 import { ApiKeyTimestampCell } from './api-key-timestamp-cell'
+import { ApiKeyUsageCell } from './api-key-usage-cell'
 import {
   ApiKeyCell,
   ModelLimitsCell,
@@ -195,6 +196,14 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         )
       },
       size: 170,
+    },
+    {
+      id: 'usage',
+      accessorKey: 'daily_quota',
+      header: t('Usage'),
+      cell: ({ row }) => <ApiKeyUsageCell apiKey={row.original} />,
+      enableSorting: false,
+      size: 210,
     },
     {
       accessorKey: 'group',

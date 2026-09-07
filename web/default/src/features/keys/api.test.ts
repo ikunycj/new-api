@@ -95,6 +95,57 @@ describe('API key management', () => {
     assert.deepEqual(apiKey.group_retry_times, {})
     assert.equal(apiKey.group, 'default')
     assert.equal(apiKey.cross_group_retry, false)
+    assert.equal(apiKey.daily_tokens, 0)
+    assert.equal(apiKey.total_tokens, 0)
+    assert.equal(apiKey.daily_quota, 0)
+    assert.equal(apiKey.total_quota, 0)
+  })
+
+  test('preserves API key usage metrics from list responses', async () => {
+    api.get = (async () => ({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: 2,
+              name: 'Metered key',
+              key: 'sk-metered',
+              status: 1,
+              remain_quota: 100,
+              used_quota: 200,
+              daily_tokens: 34_670_000,
+              total_tokens: 2_110_000_000,
+              daily_quota: 3_000_000,
+              total_quota: 76_000_000,
+              unlimited_quota: false,
+              expired_time: -1,
+              created_time: 1,
+              accessed_time: 1,
+              group: 'default',
+              group_candidates: ['default'],
+              group_retry_times: {},
+              cross_group_retry: false,
+              model_limits_enabled: false,
+              model_limits: '',
+              allow_ips: '',
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 10,
+        },
+      },
+    })) as typeof api.get
+
+    const result = await getApiKeys()
+    const apiKey = result.data?.items[0]
+
+    assert.ok(apiKey)
+    assert.equal(apiKey.daily_tokens, 34_670_000)
+    assert.equal(apiKey.total_tokens, 2_110_000_000)
+    assert.equal(apiKey.daily_quota, 3_000_000)
+    assert.equal(apiKey.total_quota, 76_000_000)
   })
 })
 
