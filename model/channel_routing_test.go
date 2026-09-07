@@ -36,7 +36,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	config := &ChannelRoutingConfig{
 		Routes: []BillingGroupRoute{{
 			Id: 17, BillingGroup: " claude ", Name: " Claude ", Mode: RoutingModeStabilityFirst, Enabled: true,
-			ProfitGuardMode: ProfitGuardModeWarn, MinimumProfitMargin: 12.5,
+			MaxTotalAttempts: 2, ProfitGuardMode: ProfitGuardModeWarn, MinimumProfitMargin: 12.5,
 		}},
 		RouteChannels: []BillingGroupChannel{
 			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
@@ -68,6 +68,77 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	var oldCount int64
 	require.NoError(t, DB.Model(&BillingGroupRoute{}).Where("id = ?", 9).Count(&oldCount).Error)
 	assert.Zero(t, oldCount)
+}
+
+func TestSaveBillingGroupRoutePreservesExplicitTotalAttemptBudget(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true,
+		MaxTotalAttempts: 2, RetryPolicy: `{"rate_limit_action":"switch_channel","upstream_action":"retry_channel"}`,
+	}).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupChannel{
+		{BillingGroupRouteId: 9, ChannelId: 38, Priority: 2, MaxAttempts: 3, Enabled: true, CostFactor: 1},
+		{BillingGroupRouteId: 9, ChannelId: 40, Priority: 1, MaxAttempts: 3, Enabled: true, CostFactor: 1},
+	}).Error)
+
+	route := BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true,
+		MaxTotalAttempts: 2, RetryPolicy: `{"rate_limit_action":"switch_channel","upstream_action":"retry_channel"}`,
+	}
+	require.NoError(t, SaveBillingGroupRoute(&route))
+
+	InitChannelRoutingCache()
+	policy, _, ok := ResolveBillingGroupRoute("claude")
+	require.True(t, ok)
+	assert.Equal(t, 2, policy.MaxTotalAttempts)
+	assert.Equal(t, "retry_channel", policy.RetryAction("upstream", 502, "switch_channel"))
+	assert.Equal(t, "retry_channel", policy.RetryAction("network", 504, "switch_channel"))
+}
+
+func TestScopedRouteSaveAndLegacyBindingDeletion(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 38, Name: "Claude", Group: "claude"},
+		{Id: 40, Name: "Other", Group: "other"},
+	}).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupRoute{
+		{Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true},
+		{Id: 10, BillingGroup: "other", Name: "Other", Enabled: true},
+	}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		BillingGroupRouteId: 9, ChannelId: 40, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	route := BillingGroupRoute{Id: 10, BillingGroup: "other", Name: "Other route", Enabled: true, MaxTotalAttempts: 7}
+	require.NoError(t, SaveBillingGroupRoute(&route))
+	assert.Equal(t, 7, route.MaxTotalAttempts)
+
+	legacy := BillingGroupChannel{BillingGroupRouteId: 9, ChannelId: 40, Priority: 1, MaxAttempts: 2, Enabled: true, CostFactor: 1}
+	err := SaveBillingGroupRouteChannel(9, &legacy)
+	require.EqualError(t, err, "route channel does not belong to its billing group; delete the legacy binding or add the channel to the billing group first")
+	require.NoError(t, DeleteBillingGroupRouteChannel(9, 40))
+}
+
+func TestFullConfigSaveAllowsUnchangedLegacyBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 40, Name: "Other", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true,
+	}).Error)
+	legacy := BillingGroupChannel{
+		Id: 7, BillingGroupRouteId: 9, ChannelId: 40, Priority: 1,
+		MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}
+	require.NoError(t, DB.Create(&legacy).Error)
+
+	require.NoError(t, SaveChannelRoutingConfig(&ChannelRoutingConfig{
+		Routes:        []BillingGroupRoute{{Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 2}},
+		RouteChannels: []BillingGroupChannel{legacy},
+	}))
+
+	var saved BillingGroupRoute
+	require.NoError(t, DB.First(&saved, 9).Error)
+	assert.Equal(t, 2, saved.MaxTotalAttempts)
 }
 
 func TestSaveChannelRoutingConfigRejectsInvalidMinimumProfitMargin(t *testing.T) {

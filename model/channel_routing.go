@@ -39,6 +39,7 @@ type BillingGroupRoute struct {
 	// StrategyConfig keeps the strategy and its tunables in one extensible JSON
 	// document. The default is the legacy priority ordering.
 	StrategyConfig          string  `json:"strategy_config" gorm:"type:text"`
+	RetryPolicy             string  `json:"retry_policy" gorm:"type:text"`
 	Enabled                 bool    `json:"enabled" gorm:"index"`
 	MaxTotalAttempts        int     `json:"max_total_attempts"`
 	TotalTimeoutMs          int     `json:"total_timeout_ms"`
@@ -229,6 +230,52 @@ type RuntimeRoutingPolicy struct {
 	MinimumProfitMargin     float64
 	Strategy                string
 	StrategyConfig          RoutingStrategyConfig
+	RetryPolicy             RouteRetryPolicy
+}
+
+type RouteRetryPolicy struct {
+	RateLimitAction string `json:"rate_limit_action"`
+	UpstreamAction  string `json:"upstream_action"`
+}
+
+func validateRouteRetryPolicy(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var policy RouteRetryPolicy
+	if err := common.Unmarshal([]byte(raw), &policy); err != nil {
+		return errors.New("retry_policy must be valid JSON")
+	}
+	for _, action := range []string{policy.RateLimitAction, policy.UpstreamAction} {
+		if strings.TrimSpace(action) != "" && normalizeRouteRetryAction(action) == "" {
+			return errors.New("retry_policy contains an invalid action")
+		}
+	}
+	return nil
+}
+
+func normalizeRouteRetryAction(action string) string {
+	switch strings.TrimSpace(action) {
+	case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
+		return strings.TrimSpace(action)
+	default:
+		return ""
+	}
+}
+
+func normalizeRouteRetryPolicy(raw string) string {
+	policy := RouteRetryPolicy{}
+	if strings.TrimSpace(raw) != "" {
+		_ = common.Unmarshal([]byte(raw), &policy)
+	}
+	for _, action := range []*string{&policy.RateLimitAction, &policy.UpstreamAction} {
+		*action = normalizeRouteRetryAction(*action)
+	}
+	data, err := common.Marshal(policy)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 // RoutingStrategyConfig is intentionally a single JSON object so future
@@ -363,6 +410,7 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	policy := DefaultRuntimeRoutingPolicy(route.Mode)
 	policy.StrategyConfig = parseRoutingStrategyConfig(route.StrategyConfig)
 	policy.Strategy = policy.StrategyConfig.Type
+	_ = common.Unmarshal([]byte(normalizeRouteRetryPolicy(route.RetryPolicy)), &policy.RetryPolicy)
 	if route.MaxTotalAttempts > 0 {
 		policy.MaxTotalAttempts = route.MaxTotalAttempts
 	}
@@ -388,6 +436,20 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	}
 	channels := append([]BillingGroupChannel(nil), channelRoutingLookup.value.routeChannels[route.Id]...)
 	return policy, channels, true
+}
+
+func (p RuntimeRoutingPolicy) RetryAction(category string, statusCode int, fallback string) string {
+	var action string
+	switch {
+	case strings.TrimSpace(category) == "rate_limit" || statusCode == 429:
+		action = p.RetryPolicy.RateLimitAction
+	case strings.TrimSpace(category) == "upstream" || statusCode >= 500:
+		action = p.RetryPolicy.UpstreamAction
+	}
+	if action == "" {
+		return fallback
+	}
+	return action
 }
 
 func ResolveChannelCostFactor(billingGroup string, channelID int) float64 {
@@ -463,6 +525,7 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 		config.Routes[i].ProfitGuardMode = normalizeProfitGuardMode(config.Routes[i].ProfitGuardMode)
 		config.Routes[i].GroupType = normalizeBillingGroupType(config.Routes[i].GroupType)
 		config.Routes[i].StrategyConfig = normalizeStrategyConfigJSON(config.Routes[i].StrategyConfig)
+		config.Routes[i].RetryPolicy = normalizeRouteRetryPolicy(config.Routes[i].RetryPolicy)
 	}
 	circuitConfig := GetChannelCircuitConfig()
 	config.CircuitDefaults = circuitConfig.Default
@@ -495,6 +558,10 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 				route.StrategyConfig = normalizeStrategyConfigJSON(route.StrategyConfig)
 			}
 			route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
+			if err := validateRouteRetryPolicy(route.RetryPolicy); err != nil {
+				return err
+			}
+			route.RetryPolicy = normalizeRouteRetryPolicy(route.RetryPolicy)
 			if route.BillingGroup == "" {
 				return errors.New("billing_group is required")
 			}
@@ -569,9 +636,24 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 				channelsByID[channel.Id] = channel
 			}
 		}
+		persistedRouteChannels := make(map[int]BillingGroupChannel)
+		persistedEntryIDs := make([]int, 0, len(config.RouteChannels))
+		for _, entry := range config.RouteChannels {
+			if entry.Id > 0 {
+				persistedEntryIDs = append(persistedEntryIDs, entry.Id)
+			}
+		}
+		if len(persistedEntryIDs) > 0 {
+			var entries []BillingGroupChannel
+			if err := tx.Where("id IN ?", persistedEntryIDs).Find(&entries).Error; err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				persistedRouteChannels[entry.Id] = entry
+			}
+		}
 		seenRouteChannels := make(map[[2]int]struct{}, len(config.RouteChannels))
 		enabledChannelsByRoute := make(map[int]int, len(config.Routes))
-		totalAttemptsByRoute := make(map[int]int, len(config.Routes))
 		for i := range config.RouteChannels {
 			entry := &config.RouteChannels[i]
 			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 ||
@@ -605,11 +687,13 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 				}
 			}
 			if !belongsToGroup {
-				return errors.New("route channel does not belong to its billing group")
+				persisted, exists := persistedRouteChannels[entry.Id]
+				if !exists || persisted.BillingGroupRouteId != entry.BillingGroupRouteId || persisted.ChannelId != entry.ChannelId {
+					return errors.New("route channel does not belong to its billing group")
+				}
 			}
 			if entry.Enabled {
 				enabledChannelsByRoute[entry.BillingGroupRouteId]++
-				totalAttemptsByRoute[entry.BillingGroupRouteId] += entry.MaxAttempts
 			}
 			if err := tx.Save(entry).Error; err != nil {
 				return err
@@ -618,12 +702,6 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 		}
 		for i := range config.Routes {
 			route := &config.Routes[i]
-			if attempts := totalAttemptsByRoute[route.Id]; attempts > 0 {
-				route.MaxTotalAttempts = attempts
-				if err := tx.Model(route).Update("max_total_attempts", attempts).Error; err != nil {
-					return err
-				}
-			}
 			if route.Enabled && enabledChannelsByRoute[route.Id] == 0 {
 				return errors.New("enabled billing group route requires an enabled channel")
 			}
@@ -671,6 +749,157 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			return err
 		}
 		return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
+	})
+}
+
+// SaveBillingGroupRoute updates only one route. It intentionally does not
+// inspect sibling routes or channel bindings, so an unrelated legacy binding
+// cannot prevent an operator from updating this route's retry policy.
+func SaveBillingGroupRoute(route *BillingGroupRoute) error {
+	if route == nil {
+		return errors.New("billing group route is required")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		route.BillingGroup = strings.TrimSpace(route.BillingGroup)
+		route.Name = strings.TrimSpace(route.Name)
+		route.Mode = normalizeRoutingMode(route.Mode)
+		route.GroupType = normalizeBillingGroupType(route.GroupType)
+		route.StrategyConfig = normalizeStrategyConfigJSON(route.StrategyConfig)
+		if err := validateRouteRetryPolicy(route.RetryPolicy); err != nil {
+			return err
+		}
+		route.RetryPolicy = normalizeRouteRetryPolicy(route.RetryPolicy)
+		route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
+		if route.BillingGroup == "" {
+			return errors.New("billing_group is required")
+		}
+		if route.Name == "" {
+			route.Name = route.BillingGroup
+		}
+		if route.MinimumProfitMargin < 0 || route.MinimumProfitMargin >= 100 ||
+			math.IsNaN(route.MinimumProfitMargin) || math.IsInf(route.MinimumProfitMargin, 0) {
+			return errors.New("minimum_profit_margin must be between 0 and 100")
+		}
+		applyRouteDefaults(route)
+		if route.Id <= 0 {
+			route.Id = 0
+			return tx.Create(route).Error
+		}
+
+		var existing BillingGroupRoute
+		if err := tx.First(&existing, route.Id).Error; err != nil {
+			return err
+		}
+		if existing.BillingGroup != route.BillingGroup {
+			return errors.New("billing_group cannot be changed after a route is created")
+		}
+		existing.Name = route.Name
+		existing.Mode = route.Mode
+		existing.GroupType = route.GroupType
+		existing.StrategyConfig = route.StrategyConfig
+		existing.RetryPolicy = route.RetryPolicy
+		existing.Enabled = route.Enabled
+		existing.MaxTotalAttempts = route.MaxTotalAttempts
+		existing.TotalTimeoutMs = route.TotalTimeoutMs
+		existing.CircuitFailureThreshold = route.CircuitFailureThreshold
+		existing.CircuitWindowSeconds = route.CircuitWindowSeconds
+		existing.CircuitCooldownSeconds = route.CircuitCooldownSeconds
+		existing.CircuitHalfOpenRequests = route.CircuitHalfOpenRequests
+		existing.ProfitGuardMode = route.ProfitGuardMode
+		existing.MinimumProfitMargin = route.MinimumProfitMargin
+		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		*route = existing
+		return nil
+	})
+}
+
+// SaveBillingGroupRouteChannel validates an individual binding. Existing
+// legacy bindings that no longer match the channel group remain deletable, but
+// cannot silently be edited into a different invalid state.
+func SaveBillingGroupRouteChannel(routeID int, entry *BillingGroupChannel) error {
+	if routeID <= 0 || entry == nil {
+		return errors.New("route channel is required")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var route BillingGroupRoute
+		if err := tx.First(&route, routeID).Error; err != nil {
+			return err
+		}
+		if entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 ||
+			math.IsNaN(entry.CostFactor) || math.IsInf(entry.CostFactor, 0) {
+			return errors.New("route channel contains invalid values")
+		}
+		var channel Channel
+		if err := tx.First(&channel, entry.ChannelId).Error; err != nil {
+			return err
+		}
+		belongsToGroup := false
+		for _, group := range strings.Split(channel.Group, ",") {
+			if strings.TrimSpace(group) == route.BillingGroup {
+				belongsToGroup = true
+				break
+			}
+		}
+		if !belongsToGroup {
+			return errors.New("route channel does not belong to its billing group; delete the legacy binding or add the channel to the billing group first")
+		}
+		entry.BillingGroupRouteId = routeID
+		if entry.Id > 0 {
+			var existing BillingGroupChannel
+			if err := tx.First(&existing, entry.Id).Error; err != nil {
+				return err
+			}
+			if existing.BillingGroupRouteId != routeID || existing.ChannelId != entry.ChannelId {
+				return errors.New("route channel binding cannot be moved")
+			}
+		}
+		if parseRoutingStrategyConfig(route.StrategyConfig).Type == RoutingStrategyPriority {
+			entry.Weight = 0
+		} else if entry.Weight < 0 {
+			return errors.New("route channel weight must be non-negative")
+		}
+		if entry.Priority < 1 {
+			entry.Priority = 1
+		}
+		if entry.Id <= 0 {
+			entry.Id = 0
+		}
+		return tx.Save(entry).Error
+	})
+}
+
+func DeleteBillingGroupRouteChannel(routeID int, channelID int) error {
+	if routeID <= 0 || channelID <= 0 {
+		return errors.New("route channel is required")
+	}
+	result := DB.Where("billing_group_route_id = ? AND channel_id = ?", routeID, channelID).Delete(&BillingGroupChannel{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func DeleteBillingGroupRoute(routeID int) error {
+	if routeID <= 0 {
+		return errors.New("billing group route is required")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("billing_group_route_id = ?", routeID).Delete(&BillingGroupChannel{}).Error; err != nil {
+			return err
+		}
+		result := tx.Delete(&BillingGroupRoute{}, routeID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	})
 }
 

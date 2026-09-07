@@ -284,6 +284,15 @@ func (e *NewAPIError) SetClassification(alltokenCode int, category string, failu
 	e.SetRetryable(retryable)
 }
 
+func (e *NewAPIError) SetErrorAction(action string) {
+	if e == nil || strings.TrimSpace(action) == "" {
+		return
+	}
+	definition := classifyError(e)
+	definition.Action = strings.TrimSpace(action)
+	e.classification = &definition
+}
+
 func (e *NewAPIError) AlltokenCode() int {
 	return classifyError(e).Code
 }

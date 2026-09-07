@@ -6483,6 +6483,13 @@
     "Optional URL shown to ToB/VIP users": "Необязательный URL для пользователей ToB/VIP",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Пользователи ToB/VIP увидят этот URL вместо фактического URL upstream. Оставьте пустым, чтобы использовать базовый URL.",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "Тип клиента расчетной группы {{billing_group}} обновлен на {{group_type}}",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Сначала удалите конфигурацию маршрутизации этой группы и сохраните изменения, затем удаляйте тарифную группу."
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Сначала удалите конфигурацию маршрутизации этой группы и сохраните изменения, затем удаляйте тарифную группу.",
+    "429 action": "Действие для 429",
+    "5xx action": "Действие для 5xx",
+    "switch_channel": "Сменить канал",
+    "retry_channel": "Повторить канал",
+    "retry_later": "Повторить позже",
+    "abort": "Прервать",
+    "Use global error mapping": "Использовать глобальное сопоставление"
   }
 }

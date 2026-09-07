@@ -6483,6 +6483,13 @@
     "Optional URL shown to ToB/VIP users": "Optional URL shown to ToB/VIP users",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "Updated billing group {{billing_group}} customer type to {{group_type}}",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Delete the routing configuration for this group first, then save before deleting the pricing group."
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Delete the routing configuration for this group first, then save before deleting the pricing group.",
+    "429 action": "429 action",
+    "5xx action": "5xx action",
+    "switch_channel": "Switch channel",
+    "retry_channel": "Retry channel",
+    "retry_later": "Retry later",
+    "abort": "Abort",
+    "Use global error mapping": "Use global error mapping"
   }
 }

@@ -232,6 +232,17 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 
 func (p *RetryParam) RuntimePolicy() model.RuntimeRoutingPolicy { return p.loadPolicy() }
 
+// RetryAction resolves a configured route's explicit policy after the global
+// mapping has classified the upstream error. Routes without a policy retain
+// the mapping action for backwards compatibility.
+func (p *RetryParam) RetryAction(category string, statusCode int, fallback string) string {
+	policy := p.loadPolicy()
+	if !p.routeConfigured {
+		return fallback
+	}
+	return policy.RetryAction(category, statusCode, fallback)
+}
+
 func (p *RetryParam) RouteConfigured() bool {
 	p.loadPolicy()
 	return p.routeConfigured

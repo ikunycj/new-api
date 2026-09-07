@@ -371,8 +371,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
 			newAPIError.SetChannelLocation(channel.Id, channel.Name)
 			if mapping, ok := model.MatchUpstreamErrorMapping(channel.Id, channel.Type, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
-				newAPIError.SetClassification(mapping.AlltokenCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
+				newAPIError.SetClassification(
+					mapping.AlltokenCode,
+					mapping.Category,
+					mapping.FailureScope,
+					mapping.Action,
+					mapping.Retryable,
+				)
 			}
+			newAPIError.SetErrorAction(retryParam.RetryAction(
+				newAPIError.ErrorCategory(),
+				newAPIError.StatusCode,
+				newAPIError.ErrorAction(),
+			))
 			observability.RecordErrorEvent("upstream_attempt", newAPIError)
 			observability.RecordChannelRequest(channel.Id, "error")
 			if newAPIError.FailureScope() == "channel" || newAPIError.FailureScope() == "provider" {
@@ -585,11 +596,11 @@ func isFailoverEligible(c *gin.Context, err *types.NewAPIError) bool {
 	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
+	if action := err.ErrorAction(); action == "none" || action == "abort" || action == "manual" {
+		return false
+	}
 	if err.HasRetryable() {
 		return err.IsRetryable()
-	}
-	if action := err.ErrorAction(); action == "none" || action == "abort" {
-		return false
 	}
 	if types.IsChannelError(err) {
 		return true
@@ -700,16 +711,23 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		return false
 	}
-	if types.IsChannelError(openaiErr) {
-		return true
+	if _, ok := c.Get("specific_channel_id"); ok {
+		return false
+	}
+	if scope := openaiErr.FailureScope(); scope == "channel" || scope == "provider" {
+		switch openaiErr.ErrorAction() {
+		case "none", "retry_later", "abort", "manual":
+			return false
+		case "retry_channel", "switch_channel":
+			return retryTimes > 0
+		default:
+			return retryTimes > 0
+		}
 	}
 	if types.IsSkipRetryError(openaiErr) {
 		return false
 	}
 	if retryTimes <= 0 {
-		return false
-	}
-	if _, ok := c.Get("specific_channel_id"); ok {
 		return false
 	}
 	if openaiErr.HasRetryable() {

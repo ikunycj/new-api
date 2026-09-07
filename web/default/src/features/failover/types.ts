@@ -11,6 +11,11 @@ export type RoutingAction =
   | 'abort'
   | 'manual'
 
+export type RouteRetryPolicy = {
+  rate_limit_action: RoutingAction | ''
+  upstream_action: RoutingAction | ''
+}
+
 export type BillingGroupRoute = {
   id: number
   billing_group: string
@@ -18,6 +23,7 @@ export type BillingGroupRoute = {
   mode: RoutingMode
   group_type: BillingGroupType
   strategy_config: string
+  retry_policy: string
   enabled: boolean
   max_total_attempts: number
   total_timeout_ms: number

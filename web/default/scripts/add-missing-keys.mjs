@@ -2311,6 +2311,66 @@ for (const [locale, translations] of Object.entries(routeRateLimitKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const routeRetryKeys = {
+  en: {
+    '429 action': '429 action',
+    '5xx action': '5xx action',
+    'Use global error mapping': 'Use global error mapping',
+    switch_channel: 'Switch channel',
+    retry_channel: 'Retry channel',
+    retry_later: 'Retry later',
+    abort: 'Abort',
+  },
+  zh: {
+    '429 action': '429 动作',
+    '5xx action': '5xx 动作',
+    'Use global error mapping': '使用全局错误映射',
+    switch_channel: '切换渠道',
+    retry_channel: '重试当前渠道',
+    retry_later: '稍后重试',
+    abort: '终止',
+  },
+  fr: {
+    '429 action': 'Action 429',
+    '5xx action': 'Action 5xx',
+    'Use global error mapping': 'Utiliser le mappage global',
+    switch_channel: 'Changer de canal',
+    retry_channel: 'Réessayer le canal',
+    retry_later: 'Réessayer plus tard',
+    abort: 'Abandonner',
+  },
+  ja: {
+    '429 action': '429 アクション',
+    '5xx action': '5xx アクション',
+    'Use global error mapping': 'グローバルエラーマッピングを使用',
+    switch_channel: 'チャネルを切り替え',
+    retry_channel: 'チャネルを再試行',
+    retry_later: '後で再試行',
+    abort: '中止',
+  },
+  ru: {
+    '429 action': 'Действие для 429',
+    '5xx action': 'Действие для 5xx',
+    'Use global error mapping': 'Использовать глобальное сопоставление',
+    switch_channel: 'Сменить канал',
+    retry_channel: 'Повторить канал',
+    retry_later: 'Повторить позже',
+    abort: 'Прервать',
+  },
+  vi: {
+    '429 action': 'Hành động 429',
+    '5xx action': 'Hành động 5xx',
+    'Use global error mapping': 'Dùng ánh xạ lỗi toàn cục',
+    switch_channel: 'Chuyển kênh',
+    retry_channel: 'Thử lại kênh',
+    retry_later: 'Thử lại sau',
+    abort: 'Hủy',
+  },
+}
+for (const [locale, translations] of Object.entries(routeRetryKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 for (const locale of Object.keys(newKeys)) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))

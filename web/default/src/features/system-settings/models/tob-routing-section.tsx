@@ -39,13 +39,21 @@ import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 import type { Channel } from '@/features/channels/types'
-import { updateFailoverConfig } from '@/features/failover/api'
+import {
+  createBillingGroupRoute,
+  deleteBillingGroupRoute,
+  deleteBillingGroupRouteChannel,
+  saveBillingGroupRouteChannel,
+  updateBillingGroupRoute,
+} from '@/features/failover/api'
 import type {
   BillingGroupChannel,
   BillingGroupRoute,
   ChannelCircuitPolicy,
   ChannelCircuitPreset,
   FailoverConfig,
+  RouteRetryPolicy,
+  RoutingAction,
 } from '@/features/failover/types'
 
 import {
@@ -60,6 +68,10 @@ const defaultRouteSettings = {
   total_timeout_ms: 30000,
   profit_guard_mode: 'off' as const,
   minimum_profit_margin: 0,
+  retry_policy: JSON.stringify({
+    rate_limit_action: 'switch_channel',
+    upstream_action: 'switch_channel',
+  }),
 }
 
 const defaultStrategyWeights = {
@@ -155,6 +167,55 @@ function setRouteStrategy(
   }
 }
 
+function getRouteRetryPolicy(route: BillingGroupRoute): RouteRetryPolicy {
+  try {
+    const policy = JSON.parse(
+      route.retry_policy || '{}'
+    ) as Partial<RouteRetryPolicy>
+    const isAction = (value: unknown): value is RoutingAction =>
+      [
+        'none',
+        'retry_channel',
+        'switch_channel',
+        'retry_later',
+        'abort',
+        'manual',
+      ].includes(String(value))
+    return {
+      rate_limit_action: isAction(policy.rate_limit_action)
+        ? policy.rate_limit_action
+        : '',
+      upstream_action: isAction(policy.upstream_action)
+        ? policy.upstream_action
+        : '',
+    }
+  } catch {
+    return { rate_limit_action: '', upstream_action: '' }
+  }
+}
+
+function setRouteRetryPolicy(
+  route: BillingGroupRoute,
+  patch: Partial<RouteRetryPolicy>
+): Partial<BillingGroupRoute> {
+  return {
+    retry_policy: JSON.stringify({ ...getRouteRetryPolicy(route), ...patch }),
+  }
+}
+
+function routeChannelChanged(
+  current: BillingGroupChannel,
+  original: BillingGroupChannel
+) {
+  return (
+    current.priority !== original.priority ||
+    current.weight !== original.weight ||
+    current.max_attempts !== original.max_attempts ||
+    current.enabled !== original.enabled ||
+    current.cost_factor !== original.cost_factor
+  )
+}
+
 function updateRouteStrategyWeights(
   route: BillingGroupRoute,
   patch: Partial<Omit<RouteStrategyConfig, 'type'>>
@@ -196,11 +257,74 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
     config?.routes.find((route) => route.id === selectedRouteID) ??
     config?.routes[0]
   const saveMutation = useMutation({
-    mutationFn: updateFailoverConfig,
-    onSuccess: async () => {
+    mutationFn: async ({
+      nextConfig,
+      routeID,
+    }: {
+      nextConfig: FailoverConfig
+      routeID?: number
+    }) => {
+      const originalConfig = props.config
+      const currentRouteIDs = new Set(
+        nextConfig.routes.map((route) => route.id)
+      )
+      for (const route of originalConfig?.routes ?? []) {
+        if (route.id > 0 && !currentRouteIDs.has(route.id)) {
+          await deleteBillingGroupRoute(route.id)
+        }
+      }
+
+      const persistedRouteIDs = new Map<number, number>()
+      for (const route of nextConfig.routes) {
+        const savedRoute =
+          route.id < 0
+            ? await createBillingGroupRoute({ ...route, id: 0, enabled: false })
+            : await updateBillingGroupRoute(route)
+        persistedRouteIDs.set(route.id, savedRoute.id)
+      }
+
+      for (const route of nextConfig.routes) {
+        const persistedRouteID = persistedRouteIDs.get(route.id)
+        if (!persistedRouteID) continue
+        const originalEntries = (originalConfig?.route_channels ?? []).filter(
+          (entry) => entry.billing_group_route_id === route.id
+        )
+        const nextEntries = nextConfig.route_channels.filter(
+          (entry) => entry.billing_group_route_id === route.id
+        )
+        const nextChannelIDs = new Set(
+          nextEntries.map((entry) => entry.channel_id)
+        )
+        for (const entry of originalEntries) {
+          if (!nextChannelIDs.has(entry.channel_id)) {
+            await deleteBillingGroupRouteChannel(
+              persistedRouteID,
+              entry.channel_id
+            )
+          }
+        }
+        for (const entry of nextEntries) {
+          const original = originalEntries.find(
+            (candidate) => candidate.channel_id === entry.channel_id
+          )
+          if (!original || routeChannelChanged(entry, original)) {
+            await saveBillingGroupRouteChannel({
+              ...entry,
+              id: original?.id ?? 0,
+              billing_group_route_id: persistedRouteID,
+            })
+          }
+        }
+        if (route.id < 0 && route.enabled) {
+          await updateBillingGroupRoute({ ...route, id: persistedRouteID })
+        }
+      }
+      return routeID == null ? undefined : persistedRouteIDs.get(routeID)
+    },
+    onSuccess: async (savedRouteID) => {
       toast.success(t('Channel routing saved'))
       setDraft(null)
-      setSelectedRouteID(null)
+      setSelectedRouteID(savedRouteID ?? null)
       await queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
       })
@@ -340,7 +464,10 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       toast.error(t('Dynamic strategy weights must total 100%'))
       return
     }
-    saveMutation.mutate(structuredClone(config))
+    saveMutation.mutate({
+      nextConfig: structuredClone(config),
+      routeID: selectedRoute?.id,
+    })
   }
 
   if (props.isLoading || !config) {
@@ -594,6 +721,63 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                       })
                     }
                   />
+                </Field>
+                <Field>
+                  <FieldLabel>{t('429 action')}</FieldLabel>
+                  <NativeSelect
+                    value={getRouteRetryPolicy(route).rate_limit_action}
+                    onChange={(event) =>
+                      updateRoute(
+                        routeIndex,
+                        setRouteRetryPolicy(route, {
+                          rate_limit_action: event.target
+                            .value as RoutingAction,
+                        })
+                      )
+                    }
+                  >
+                    <NativeSelectOption value=''>
+                      {t('Use global error mapping')}
+                    </NativeSelectOption>
+                    {[
+                      'switch_channel',
+                      'retry_channel',
+                      'retry_later',
+                      'abort',
+                    ].map((action) => (
+                      <NativeSelectOption key={action} value={action}>
+                        {t(action)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel>{t('5xx action')}</FieldLabel>
+                  <NativeSelect
+                    value={getRouteRetryPolicy(route).upstream_action}
+                    onChange={(event) =>
+                      updateRoute(
+                        routeIndex,
+                        setRouteRetryPolicy(route, {
+                          upstream_action: event.target.value as RoutingAction,
+                        })
+                      )
+                    }
+                  >
+                    <NativeSelectOption value=''>
+                      {t('Use global error mapping')}
+                    </NativeSelectOption>
+                    {[
+                      'switch_channel',
+                      'retry_channel',
+                      'retry_later',
+                      'abort',
+                    ].map((action) => (
+                      <NativeSelectOption key={action} value={action}>
+                        {t(action)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                 </Field>
               </FieldGroup>
             </FieldSet>
