@@ -257,10 +257,24 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
   })
   const deleteMutation = useMutation({
     mutationFn: deleteBillingGroupRoute,
-    onSuccess: () =>
-      queryClient.invalidateQueries({
+    onSuccess: (_data, routeID) => {
+      queryClient.setQueryData<FailoverConfig>(
+        ['channel-routing-config'],
+        (current) => {
+          if (!current) return current
+          return {
+            ...current,
+            routes: current.routes.filter((route) => route.id !== routeID),
+            route_channels: current.route_channels.filter(
+              (entry) => entry.billing_group_route_id !== routeID
+            ),
+          }
+        }
+      )
+      return queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
-      }),
+      })
+    },
   })
   const cleanupMutation = useMutation({
     mutationFn: cleanupStaleBillingGroupRoutes,
@@ -449,7 +463,18 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
     mutationInFlightRef.current = true
     try {
       await deleteMutation.mutateAsync(routeID)
-      setDraft(null)
+
+      setDraft((currentDraft) => {
+        const current = currentDraft ?? props.config
+        if (!current) return currentDraft
+        return {
+          ...current,
+          routes: current.routes.filter((route) => route.id !== routeID),
+          route_channels: current.route_channels.filter(
+            (entry) => entry.billing_group_route_id !== routeID
+          ),
+        }
+      })
       setSelectedRouteID(null)
       toast.success(t('Billing group route deleted'))
     } catch (error) {

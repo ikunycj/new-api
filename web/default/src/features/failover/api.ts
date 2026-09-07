@@ -21,9 +21,14 @@ type ApiResponse<T> = {
 
 function normalizeRequestError(error: unknown): Error {
   if (isAxiosError<ApiResponse<unknown>>(error)) {
-    return new Error(
-      error.response?.data?.message || error.message || 'Request failed'
-    )
+    const responseData = error.response?.data
+    let responseMessage: string | undefined
+    if (typeof responseData === 'string') {
+      responseMessage = responseData
+    } else if (responseData && typeof responseData === 'object') {
+      responseMessage = (responseData as ApiResponse<unknown>).message
+    }
+    return new Error(responseMessage || error.message || 'Request failed')
   }
   return error instanceof Error ? error : new Error('Request failed')
 }

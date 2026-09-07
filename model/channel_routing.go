@@ -803,7 +803,14 @@ func DeleteBillingGroupRoute(routeID int) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var route BillingGroupRoute
 		if err := lockForUpdate(tx).First(&route, routeID).Error; err != nil {
-			return err
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			// A stale page can submit a route that another save or delete
+			// already removed. Treat that state as deleted and still remove
+			// any historical bindings left behind for the old id.
+			return tx.Where("billing_group_route_id = ?", routeID).
+				Delete(&BillingGroupChannel{}).Error
 		}
 		if err := tx.Where("billing_group_route_id = ?", routeID).Delete(&BillingGroupChannel{}).Error; err != nil {
 			return err

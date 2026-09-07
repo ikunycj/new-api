@@ -588,6 +588,17 @@ func TestDeleteBillingGroupRouteAndCleanupRejectNegativeRouteID(t *testing.T) {
 	require.EqualError(t, err, "billing group route id must be non-negative")
 }
 
+func TestDeleteBillingGroupRouteIsIdempotentForStaleRouteID(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38,
+	}).Error)
+
+	require.NoError(t, DeleteBillingGroupRoute(9))
+	assert.ErrorIs(t, DB.First(&BillingGroupRoute{}, 9).Error, gorm.ErrRecordNotFound)
+	assert.ErrorIs(t, DB.First(&BillingGroupChannel{}, 1).Error, gorm.ErrRecordNotFound)
+}
+
 func TestCleanupStaleBillingGroupRoutesRemovesOrphansAndDisablesEmptyRoutes(t *testing.T) {
 	setupChannelRoutingTables(t)
 	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
