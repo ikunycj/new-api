@@ -10,6 +10,7 @@ import type {
   FailoverConfig,
   FailoverMonitoringSnapshot,
   StaleRouteCleanupResult,
+  UpstreamErrorMapping,
 } from './types'
 
 type ApiResponse<T> = {
@@ -46,6 +47,27 @@ export async function updateFailoverConfig(
     response = await api.put<ApiResponse<null>>(
       '/api/channel/failover/config',
       config,
+      {
+        skipBusinessError: true,
+        skipErrorHandler: true,
+      } satisfies ApiRequestConfig
+    )
+  } catch (error) {
+    throw normalizeRequestError(error)
+  }
+  if (!response.data.success) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+}
+
+export async function updateFailoverErrorMappings(
+  errorMappings: UpstreamErrorMapping[]
+): Promise<void> {
+  let response
+  try {
+    response = await api.put<ApiResponse<null>>(
+      '/api/channel/failover/config/error-mappings',
+      { error_mappings: errorMappings },
       {
         skipBusinessError: true,
         skipErrorHandler: true,

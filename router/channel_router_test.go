@@ -23,6 +23,13 @@ func TestChannelStatusRoutesUseOperatePermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodPatch, "/failover/config/group-type", authz.ChannelWrite, controller.UpdateBillingGroupType)
 }
 
+func TestFailoverMutationRoutesUseChannelWritePermission(t *testing.T) {
+	assertChannelRoutePermission(t, http.MethodPut, "/failover/config/error-mappings", authz.ChannelWrite, controller.UpdateFailoverErrorMappings)
+	assertChannelRoutePermission(t, http.MethodPut, "/failover/config/route", authz.ChannelWrite, controller.UpdateFailoverRoute)
+	assertChannelRoutePermission(t, http.MethodDelete, "/failover/config/route/:id", authz.ChannelWrite, controller.DeleteFailoverRoute)
+	assertChannelRoutePermission(t, http.MethodPost, "/failover/config/cleanup-stale", authz.ChannelWrite, controller.CleanupStaleFailoverRoutes)
+}
+
 func TestChannelDeleteRoutesUseSensitiveWritePermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodDelete, "/:id", authz.ChannelSensitiveWrite, controller.DeleteChannel)
 	assertChannelRoutePermission(t, http.MethodPost, "/batch", authz.ChannelSensitiveWrite, controller.DeleteChannelBatch)

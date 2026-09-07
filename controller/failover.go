@@ -51,6 +51,30 @@ func UpdateFailoverConfig(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+type updateFailoverErrorMappingsRequest struct {
+	ErrorMappings []model.UpstreamErrorMapping `json:"error_mappings"`
+}
+
+// UpdateFailoverErrorMappings updates only the error mapping editor state.
+// Keeping this payload separate from the legacy full-config endpoint prevents
+// a stale monitoring page from replacing newer route and channel edits.
+func UpdateFailoverErrorMappings(c *gin.Context) {
+	request := &updateFailoverErrorMappingsRequest{}
+	if err := c.ShouldBindJSON(request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if err := model.SaveUpstreamErrorMappings(request.ErrorMappings); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	model.InitChannelCache()
+	recordManageAudit(c, "channel_routing.error_mappings.update", map[string]interface{}{
+		"error_mappings": len(request.ErrorMappings),
+	})
+	common.ApiSuccess(c, nil)
+}
+
 // UpdateFailoverRoute saves one billing-group route and its channel bindings
 // without replacing unrelated routes in the configuration.
 func UpdateFailoverRoute(c *gin.Context) {

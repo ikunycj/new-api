@@ -101,6 +101,38 @@ func TestSaveBillingGroupRoutePreservesExplicitTotalAttemptBudget(t *testing.T) 
 	assert.Equal(t, "retry_channel", policy.RetryAction("network", 504, "switch_channel"))
 }
 
+func TestSaveUpstreamErrorMappingsPreservesRoutesAndBindings(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 7,
+	}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 2, Enabled: true, CostFactor: 1,
+	}).Error)
+	require.NoError(t, DB.Create(&[]UpstreamErrorMapping{
+		{Id: 1, RawCode: "rate_limit", StatusCode: 429, AlltokenCode: 204001, Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true},
+		{Id: 2, RawCode: "overloaded", StatusCode: 503, AlltokenCode: 205004, Category: "upstream", FailureScope: "provider", Action: "retry_later", Retryable: true, Enabled: true},
+	}).Error)
+
+	mappings := []UpstreamErrorMapping{{
+		Id: 1, RawCode: " RATE_LIMIT ", StatusCode: 429, AlltokenCode: 204001,
+		Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true,
+	}}
+	require.NoError(t, SaveUpstreamErrorMappings(mappings))
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, 7, route.MaxTotalAttempts)
+	var binding BillingGroupChannel
+	require.NoError(t, DB.First(&binding, 1).Error)
+	assert.Equal(t, 2, binding.MaxAttempts)
+	var savedMapping UpstreamErrorMapping
+	require.NoError(t, DB.First(&savedMapping, 1).Error)
+	assert.Equal(t, "rate_limit", savedMapping.RawCode)
+	assert.ErrorIs(t, DB.First(&UpstreamErrorMapping{}, 2).Error, gorm.ErrRecordNotFound)
+}
+
 func TestSaveChannelRoutingConfigRejectsInvalidMinimumProfitMargin(t *testing.T) {
 	setupChannelRoutingTables(t)
 

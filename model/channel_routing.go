@@ -642,7 +642,7 @@ func SaveBillingGroupRouteConfig(config *BillingGroupRouteConfig) error {
 		var previousRoute BillingGroupRoute
 		routeExisted := false
 		if clientRouteID > 0 {
-			if err := tx.First(&previousRoute, clientRouteID).Error; err != nil {
+			if err := lockForUpdate(tx).First(&previousRoute, clientRouteID).Error; err != nil {
 				return err
 			}
 			routeExisted = true
@@ -677,7 +677,10 @@ func SaveBillingGroupRouteConfig(config *BillingGroupRouteConfig) error {
 		}
 
 		var existingEntries []BillingGroupChannel
-		if err := tx.Where("billing_group_route_id = ?", config.Route.Id).Find(&existingEntries).Error; err != nil {
+		if err := lockForUpdate(tx).
+			Where("billing_group_route_id = ?", config.Route.Id).
+			Order("id ASC").
+			Find(&existingEntries).Error; err != nil {
 			return err
 		}
 		existingByID := make(map[int]BillingGroupChannel, len(existingEntries))
@@ -799,7 +802,7 @@ func DeleteBillingGroupRoute(routeID int) error {
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var route BillingGroupRoute
-		if err := tx.First(&route, routeID).Error; err != nil {
+		if err := lockForUpdate(tx).First(&route, routeID).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("billing_group_route_id = ?", routeID).Delete(&BillingGroupChannel{}).Error; err != nil {
@@ -837,7 +840,7 @@ func CleanupStaleBillingGroupRoutes(routeID int) (StaleRouteCleanupResult, error
 		}
 
 		var routes []BillingGroupRoute
-		query := tx.Order("id ASC")
+		query := lockForUpdate(tx).Order("id ASC")
 		if routeID > 0 {
 			query = query.Where("id = ?", routeID)
 		}
@@ -889,7 +892,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var persistedRoutes []BillingGroupRoute
-		if err := tx.Find(&persistedRoutes).Error; err != nil {
+		if err := lockForUpdate(tx).Order("id ASC").Find(&persistedRoutes).Error; err != nil {
 			return err
 		}
 		routesByID := make(map[int]BillingGroupRoute, len(persistedRoutes))
@@ -897,7 +900,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			routesByID[route.Id] = route
 		}
 		var persistedEntries []BillingGroupChannel
-		if err := tx.Find(&persistedEntries).Error; err != nil {
+		if err := lockForUpdate(tx).Order("id ASC").Find(&persistedEntries).Error; err != nil {
 			return err
 		}
 		entriesByID := make(map[int]BillingGroupChannel, len(persistedEntries))
@@ -1080,41 +1083,6 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			}
 		}
 
-		mappingIDs := make([]int, 0, len(config.ErrorMappings))
-		for i := range config.ErrorMappings {
-			mapping := &config.ErrorMappings[i]
-			if mapping.Id < 0 {
-				mapping.Id = 0
-			}
-			mapping.RawCode = strings.ToLower(strings.TrimSpace(mapping.RawCode))
-			mapping.Category = strings.TrimSpace(mapping.Category)
-			mapping.FailureScope = strings.TrimSpace(mapping.FailureScope)
-			mapping.Action = strings.TrimSpace(mapping.Action)
-			if mapping.AlltokenCode < 100000 || mapping.AlltokenCode > 999999 {
-				return errors.New("error mapping alltoken_code must be a six-digit number")
-			}
-			if mapping.StatusCode != 0 && (mapping.StatusCode < 100 || mapping.StatusCode > 599) {
-				return errors.New("error mapping status_code must be 0 or a valid HTTP status")
-			}
-			if mapping.RawCode == "" && mapping.StatusCode == 0 {
-				return errors.New("error mapping requires raw_code or status_code")
-			}
-			switch mapping.FailureScope {
-			case "request", "credential", "channel", "provider":
-			default:
-				return errors.New("error mapping failure_scope is invalid")
-			}
-			switch mapping.Action {
-			case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
-			default:
-				return errors.New("error mapping action is invalid")
-			}
-			if err := tx.Save(mapping).Error; err != nil {
-				return err
-			}
-			mappingIDs = append(mappingIDs, mapping.Id)
-		}
-
 		if err := deleteMissingRows(tx, &BillingGroupChannel{}, "id", channelIDs); err != nil {
 			return err
 		}
@@ -1122,8 +1090,60 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 		if err := deleteMissingRows(tx, &BillingGroupRoute{}, "id", routeIDs); err != nil {
 			return err
 		}
-		return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
+		return saveUpstreamErrorMappings(tx, config.ErrorMappings)
 	})
+}
+
+// SaveUpstreamErrorMappings replaces only the provider error translation
+// rules. Route and route-channel rows are intentionally outside this write so
+// a stale monitoring tab cannot overwrite newer routing edits.
+func SaveUpstreamErrorMappings(mappings []UpstreamErrorMapping) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		return saveUpstreamErrorMappings(tx, mappings)
+	})
+}
+
+func saveUpstreamErrorMappings(tx *gorm.DB, mappings []UpstreamErrorMapping) error {
+	var persistedMappings []UpstreamErrorMapping
+	if err := lockForUpdate(tx).Order("id ASC").Find(&persistedMappings).Error; err != nil {
+		return err
+	}
+
+	mappingIDs := make([]int, 0, len(mappings))
+	for i := range mappings {
+		mapping := &mappings[i]
+		if mapping.Id < 0 {
+			mapping.Id = 0
+		}
+		mapping.RawCode = strings.ToLower(strings.TrimSpace(mapping.RawCode))
+		mapping.Category = strings.TrimSpace(mapping.Category)
+		mapping.FailureScope = strings.TrimSpace(mapping.FailureScope)
+		mapping.Action = strings.TrimSpace(mapping.Action)
+		if mapping.AlltokenCode < 100000 || mapping.AlltokenCode > 999999 {
+			return errors.New("error mapping alltoken_code must be a six-digit number")
+		}
+		if mapping.StatusCode != 0 && (mapping.StatusCode < 100 || mapping.StatusCode > 599) {
+			return errors.New("error mapping status_code must be 0 or a valid HTTP status")
+		}
+		if mapping.RawCode == "" && mapping.StatusCode == 0 {
+			return errors.New("error mapping requires raw_code or status_code")
+		}
+		switch mapping.FailureScope {
+		case "request", "credential", "channel", "provider":
+		default:
+			return errors.New("error mapping failure_scope is invalid")
+		}
+		switch mapping.Action {
+		case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
+		default:
+			return errors.New("error mapping action is invalid")
+		}
+		if err := tx.Save(mapping).Error; err != nil {
+			return err
+		}
+		mappingIDs = append(mappingIDs, mapping.Id)
+	}
+	return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
 }
 
 func deleteMissingRows(tx *gorm.DB, value any, column string, ids []int) error {
@@ -1193,7 +1213,7 @@ func UpdateBillingGroupType(billingGroup, groupType string) error {
 
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var route BillingGroupRoute
-		err := tx.Where("billing_group = ?", billingGroup).First(&route).Error
+		err := lockForUpdate(tx).Where("billing_group = ?", billingGroup).First(&route).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			route = BillingGroupRoute{
 				BillingGroup:    billingGroup,
