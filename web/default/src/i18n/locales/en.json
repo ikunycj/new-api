@@ -6490,6 +6490,10 @@
     "retry_channel": "Retry channel",
     "retry_later": "Retry later",
     "abort": "Abort",
-    "Use global error mapping": "Use global error mapping"
+    "Use global error mapping": "Use global error mapping",
+    "Save route": "Save route",
+    "Clean stale bindings": "Clean stale bindings",
+    "Billing group route deleted": "Billing group route deleted",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "Removed {{removed}} stale route bindings and disabled {{disabled}} routes."
   }
 }

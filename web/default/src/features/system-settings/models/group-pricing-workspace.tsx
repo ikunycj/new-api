@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -8,9 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getChannels } from '@/features/channels/api'
 import {
   getFailoverConfig,
+  updateBillingGroupRoute,
   updateBillingGroupType,
-  updateFailoverConfig,
 } from '@/features/failover/api'
+import type {
+  BillingGroupChannel,
+  BillingGroupRoute,
+} from '@/features/failover/types'
 
 import { getOptionValue, useSystemOptions } from '../hooks/use-system-options'
 import { safeJsonParse } from '../utils/json-parser'
@@ -146,6 +150,7 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
   const [optimisticGroupTypes, setOptimisticGroupTypes] = useState(
     () => new Map<string, 'toB' | 'toC'>()
   )
+  const groupMutationInFlightRef = useRef(false)
   const groupTypeByName = useMemo(
     (): ReadonlyMap<string, 'toB' | 'toC'> =>
       new Map<string, 'toB' | 'toC'>(
@@ -183,11 +188,20 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     },
     onError: (error: Error) => {
       setOptimisticGroupTypes(new Map())
-      toast.error(error.message)
+      toast.error(error.message || t('Request failed'))
+    },
+    onSettled: () => {
+      groupMutationInFlightRef.current = false
     },
   })
   const routeConfigMutation = useMutation({
-    mutationFn: updateFailoverConfig,
+    mutationFn: ({
+      route,
+      routeChannels,
+    }: {
+      route: BillingGroupRoute
+      routeChannels: BillingGroupChannel[]
+    }) => updateBillingGroupRoute(route, routeChannels),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
@@ -196,24 +210,34 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     },
     onError: (error: Error) => {
       setOptimisticGroupTypes(new Map())
-      toast.error(error.message)
+      toast.error(error.message || t('Request failed'))
+    },
+    onSettled: () => {
+      groupMutationInFlightRef.current = false
     },
   })
   const isGroupTypeMutationPending =
     groupTypeMutation.isPending || routeConfigMutation.isPending
   const handleGroupTypeChange = (name: string, type: 'toB' | 'toC') => {
-    if (!name || !configQuery.data || isGroupTypeMutationPending) {
+    if (
+      !name ||
+      !configQuery.data ||
+      isGroupTypeMutationPending ||
+      groupMutationInFlightRef.current
+    ) {
       return
     }
     const existing = routeByGroupName.get(name.trim())
     if (existing) {
       if (existing.group_type === type) return
+      groupMutationInFlightRef.current = true
       setOptimisticGroupTypes(new Map([[name.trim(), type]]))
       groupTypeMutation.mutate({ billingGroup: name.trim(), groupType: type })
       return
     }
 
     if (type !== 'toB') return
+    groupMutationInFlightRef.current = true
     setOptimisticGroupTypes(new Map([[name.trim(), type]]))
     groupTypeMutation.mutate({ billingGroup: name.trim(), groupType: type })
   }
@@ -225,17 +249,17 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
       !normalizedNextName ||
       normalizedPreviousName === normalizedNextName ||
       !configQuery.data ||
-      isGroupTypeMutationPending
+      isGroupTypeMutationPending ||
+      groupMutationInFlightRef.current
     ) {
       return
     }
-    const routes = structuredClone(configQuery.data.routes)
-    const route = routes.find(
+    const route = structuredClone(configQuery.data.routes).find(
       (candidate) => candidate.billing_group.trim() === normalizedPreviousName
     )
     if (
       !route ||
-      routes.some(
+      configQuery.data.routes.some(
         (candidate) =>
           candidate !== route &&
           candidate.billing_group.trim() === normalizedNextName
@@ -245,7 +269,13 @@ export function GroupPricingWorkspace(props: GroupPricingWorkspaceProps) {
     }
     route.billing_group = normalizedNextName
     route.name = normalizedNextName
-    routeConfigMutation.mutate({ ...configQuery.data, routes })
+    groupMutationInFlightRef.current = true
+    routeConfigMutation.mutate({
+      route,
+      routeChannels: configQuery.data.route_channels.filter(
+        (entry) => entry.billing_group_route_id === route.id
+      ),
+    })
   }
 
   return (

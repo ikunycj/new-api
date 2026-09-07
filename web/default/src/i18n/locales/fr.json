@@ -6490,6 +6490,10 @@
     "retry_channel": "Réessayer le canal",
     "retry_later": "Réessayer plus tard",
     "abort": "Abandonner",
-    "Use global error mapping": "Utiliser le mappage global"
+    "Use global error mapping": "Utiliser le mappage global",
+    "Save route": "Enregistrer la route",
+    "Clean stale bindings": "Nettoyer les liaisons obsolètes",
+    "Billing group route deleted": "Route de groupe de facturation supprimée",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "{{removed}} liaisons obsolètes supprimées et {{disabled}} routes désactivées."
   }
 }

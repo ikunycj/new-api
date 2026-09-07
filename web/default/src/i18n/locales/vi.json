@@ -6490,6 +6490,10 @@
     "retry_channel": "Thử lại kênh",
     "retry_later": "Thử lại sau",
     "abort": "Hủy",
-    "Use global error mapping": "Dùng ánh xạ lỗi toàn cục"
+    "Use global error mapping": "Dùng ánh xạ lỗi toàn cục",
+    "Save route": "Lưu tuyến",
+    "Clean stale bindings": "Dọn liên kết cũ",
+    "Billing group route deleted": "Đã xóa tuyến nhóm thanh toán",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "Đã xóa {{removed}} liên kết tuyến cũ và vô hiệu hóa {{disabled}} tuyến."
   }
 }

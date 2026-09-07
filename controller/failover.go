@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -49,99 +51,83 @@ func UpdateFailoverConfig(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
-func CreateBillingGroupRoute(c *gin.Context) {
-	route := &model.BillingGroupRoute{}
-	if err := c.ShouldBindJSON(route); err != nil {
-		common.ApiError(c, err)
+// UpdateFailoverRoute saves one billing-group route and its channel bindings
+// without replacing unrelated routes in the configuration.
+func UpdateFailoverRoute(c *gin.Context) {
+	config := &model.BillingGroupRouteConfig{}
+	if err := c.ShouldBindJSON(config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	route.Id = 0
-	if err := model.SaveBillingGroupRoute(route); err != nil {
+	if err := model.SaveBillingGroupRouteConfig(config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	model.InitChannelCache()
-	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{"operation": "route_create", "route_id": route.Id, "billing_group": route.BillingGroup})
-	common.ApiSuccess(c, route)
+	recordManageAudit(c, "channel_routing.route.save", map[string]interface{}{
+		"route_id":      config.Route.Id,
+		"billing_group": config.Route.BillingGroup,
+		"channels":      len(config.RouteChannels),
+	})
+	common.ApiSuccess(c, config)
 }
 
-func UpdateBillingGroupRoute(c *gin.Context) {
-	routeID, err := strconv.Atoi(c.Param("route_id"))
-	if err != nil || routeID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid route id"})
-		return
-	}
-	route := &model.BillingGroupRoute{}
-	if err := c.ShouldBindJSON(route); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	route.Id = routeID
-	if err := model.SaveBillingGroupRoute(route); err != nil {
+// DeleteFailoverRoute removes a route and all of its channel bindings.
+func DeleteFailoverRoute(c *gin.Context) {
+	routeID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
-		return
-	}
-	model.InitChannelCache()
-	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{"operation": "route_update", "route_id": route.Id, "billing_group": route.BillingGroup})
-	common.ApiSuccess(c, route)
-}
-
-func DeleteBillingGroupRoute(c *gin.Context) {
-	routeID, err := strconv.Atoi(c.Param("route_id"))
-	if err != nil || routeID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid route id"})
 		return
 	}
 	if err := model.DeleteBillingGroupRoute(routeID); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	model.InitChannelCache()
-	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{"operation": "route_delete", "route_id": routeID})
-	common.ApiSuccess(c, nil)
-}
-
-func SaveBillingGroupRouteChannel(c *gin.Context) {
-	routeID, err := strconv.Atoi(c.Param("route_id"))
-	if err != nil || routeID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid route id"})
-		return
-	}
-	entry := &model.BillingGroupChannel{}
-	if err := c.ShouldBindJSON(entry); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if pathChannelID := c.Param("channel_id"); pathChannelID != "" {
-		channelID, parseErr := strconv.Atoi(pathChannelID)
-		if parseErr != nil || channelID <= 0 || channelID != entry.ChannelId {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "route channel path does not match request body"})
-			return
-		}
-	}
-	if err := model.SaveBillingGroupRouteChannel(routeID, entry); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	model.InitChannelCache()
-	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{"operation": "route_channel_save", "route_id": routeID, "channel_id": entry.ChannelId})
-	common.ApiSuccess(c, entry)
+	recordManageAudit(c, "channel_routing.route.delete", map[string]interface{}{"route_id": routeID})
+	common.ApiSuccess(c, nil)
 }
 
-func DeleteBillingGroupRouteChannel(c *gin.Context) {
-	routeID, routeErr := strconv.Atoi(c.Param("route_id"))
-	channelID, channelErr := strconv.Atoi(c.Param("channel_id"))
-	if routeErr != nil || channelErr != nil || routeID <= 0 || channelID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid route channel id"})
+type cleanupStaleBillingGroupRoutesRequest struct {
+	RouteID int `json:"route_id"`
+}
+
+// CleanupStaleFailoverRoutes removes historical route-channel bindings that
+// reference deleted channels or channels no longer in the route's group.
+// A route_id can be supplied to limit cleanup to one route; zero cleans all.
+func CleanupStaleFailoverRoutes(c *gin.Context) {
+	request := cleanupStaleBillingGroupRoutesRequest{}
+	if err := c.ShouldBindJSON(&request); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	if err := model.DeleteBillingGroupRouteChannel(routeID, channelID); err != nil {
-		common.ApiError(c, err)
+	if routeID := c.Query("route_id"); routeID != "" {
+		parsed, err := strconv.Atoi(routeID)
+		if err != nil || parsed < 0 {
+			if err == nil {
+				err = errors.New("route_id must be non-negative")
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		request.RouteID = parsed
+	}
+	if request.RouteID < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "route_id must be non-negative"})
+		return
+	}
+	result, err := model.CleanupStaleBillingGroupRoutes(request.RouteID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	model.InitChannelCache()
-	recordManageAudit(c, "channel_routing.config.update", map[string]interface{}{"operation": "route_channel_delete", "route_id": routeID, "channel_id": channelID})
-	common.ApiSuccess(c, nil)
+	recordManageAudit(c, "channel_routing.route.cleanup_stale", map[string]interface{}{
+		"route_id":               request.RouteID,
+		"removed_route_channels": result.RemovedRouteChannels,
+		"disabled_routes":        result.DisabledRoutes,
+	})
+	common.ApiSuccess(c, result)
 }
 
 type billingGroupTypeUpdateRequest struct {

@@ -6490,6 +6490,10 @@
     "retry_channel": "Повторить канал",
     "retry_later": "Повторить позже",
     "abort": "Прервать",
-    "Use global error mapping": "Использовать глобальное сопоставление"
+    "Use global error mapping": "Использовать глобальное сопоставление",
+    "Save route": "Сохранить маршрут",
+    "Clean stale bindings": "Очистить устаревшие связи",
+    "Billing group route deleted": "Маршрут группы биллинга удалён",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "Удалено устаревших связей: {{removed}}, отключено маршрутов: {{disabled}}."
   }
 }

@@ -70,6 +70,16 @@ export type FailoverConfig = {
   circuit_presets: ChannelCircuitPreset[]
 }
 
+export type BillingGroupRouteConfig = {
+  route: BillingGroupRoute
+  route_channels: BillingGroupChannel[]
+}
+
+export type StaleRouteCleanupResult = {
+  removed_route_channels: number
+  disabled_routes: number
+}
+
 export type ChannelCircuitPolicy = {
   failure_threshold: number
   window_seconds: number

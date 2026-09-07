@@ -6490,6 +6490,10 @@
     "retry_channel": "重试当前渠道",
     "retry_later": "稍后重试",
     "abort": "终止",
-    "Use global error mapping": "使用全局错误映射"
+    "Use global error mapping": "使用全局错误映射",
+    "Save route": "保存路由",
+    "Clean stale bindings": "清理陈旧关联",
+    "Billing group route deleted": "计费分组路由已删除",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "已删除 {{removed}} 条陈旧路由关联，并停用 {{disabled}} 条路由。"
   }
 }

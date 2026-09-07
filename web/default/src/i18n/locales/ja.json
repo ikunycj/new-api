@@ -6490,6 +6490,10 @@
     "retry_channel": "チャネルを再試行",
     "retry_later": "後で再試行",
     "abort": "中止",
-    "Use global error mapping": "グローバルエラーマッピングを使用"
+    "Use global error mapping": "グローバルエラーマッピングを使用",
+    "Save route": "ルートを保存",
+    "Clean stale bindings": "古い関連付けを整理",
+    "Billing group route deleted": "請求グループのルートを削除しました",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "古いルート関連付けを{{removed}}件削除し、{{disabled}}件のルートを無効化しました。"
   }
 }
