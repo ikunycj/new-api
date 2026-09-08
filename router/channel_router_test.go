@@ -110,3 +110,9 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 	}
 	t.Fatalf("route %s %s not found", method, path)
 }
+
+// Channel health is read-only telemetry and must never require write access,
+// but it still exposes per-channel operational data and stays behind auth.
+func TestChannelHealthRouteUsesReadPermission(t *testing.T) {
+	assertChannelRoutePermission(t, http.MethodGet, "/failover/health", authz.ChannelRead, controller.GetChannelHealth)
+}
