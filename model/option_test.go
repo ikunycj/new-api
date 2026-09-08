@@ -14,6 +14,7 @@ func preservePricingGroupConfiguration(t *testing.T) {
 	var configuration ratio_setting.PricingGroupConfiguration
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.GroupRatio2JSONString(), &configuration.GroupRatios))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupEnabled2JSONString(), &configuration.GroupEnabled))
+	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupDisplayName2JSONString(), &configuration.GroupDisplayNames))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRemark2JSONString(), &configuration.GroupRemarks))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupOrder2JSONString(), &configuration.GroupOrder))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRetryPolicy2JSONString(), &configuration.RetryPolicies))
@@ -108,7 +109,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 
 	var stored []Option
 	require.NoError(t, DB.Where(commonKeyCol+" IN ?", pricingGroupOptionKeys).Find(&stored).Error)
-	require.Len(t, stored, 6)
+	require.Len(t, stored, 7)
 	var retryPolicyValue string
 	var enabledValue string
 	for _, option := range stored {
@@ -126,6 +127,30 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 		Mode:       ratio_setting.PricingGroupRetryModeActiveChannels,
 		RetryTimes: 0,
 	}, persisted["beta"])
+}
+
+func TestUpdatePricingGroupConfigurationPersistsDisplayNames(t *testing.T) {
+	truncateTables(t)
+	preservePricingGroupConfiguration(t)
+
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		`{"alpha":1,"beta":2}`,
+		`{"alpha":true,"beta":true}`,
+		`["alpha","beta"]`,
+		`{"alpha":{"mode":"active_channels"},"beta":{"mode":"active_channels"}}`,
+		`{}`,
+		`{}`,
+		`{"alpha":"企业套餐","beta":"  "}`,
+	))
+
+	assert.Equal(t, "企业套餐", ratio_setting.GetPricingGroupDisplayName("alpha"))
+	assert.Equal(t, "企业套餐", ratio_setting.GetPricingGroupDisplayNameOrName("alpha"))
+	assert.Empty(t, ratio_setting.GetPricingGroupDisplayName("beta"))
+	assert.Equal(t, "beta", ratio_setting.GetPricingGroupDisplayNameOrName("beta"))
+
+	var stored Option
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", pricingGroupDisplayNameOptionKey).First(&stored).Error)
+	assert.JSONEq(t, `{"alpha":"企业套餐"}`, stored.Value)
 }
 
 func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) {

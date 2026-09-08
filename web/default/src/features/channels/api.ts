@@ -653,6 +653,7 @@ export async function getPricingGroups(): Promise<{
   success: boolean
   message?: string
   data?: string[]
+  display_names?: Record<string, string>
 }> {
   const res = await api.get('/api/group/pricing-groups')
   return res.data

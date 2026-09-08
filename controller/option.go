@@ -111,6 +111,7 @@ type OptionUpdateRequest struct {
 type pricingGroupConfigurationUpdateRequest struct {
 	GroupRatio                  string  `json:"group_ratio"`
 	PricingGroupEnabled         string  `json:"pricing_group_enabled"`
+	PricingGroupDisplayName     *string `json:"pricing_group_display_name"`
 	PricingGroupOrder           string  `json:"pricing_group_order"`
 	PricingGroupRetryPolicy     string  `json:"pricing_group_retry_policy"`
 	PricingGroupRoutingStrategy string  `json:"pricing_group_routing_strategy"`
@@ -128,9 +129,17 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 		common.ApiErrorMsg(c, "无效的参数")
 		return
 	}
-	var remarkArgs []string
-	if request.PricingGroupRemark != nil {
-		remarkArgs = []string{*request.PricingGroupRemark}
+	var optionalJSON []string
+	if request.PricingGroupRemark != nil || request.PricingGroupDisplayName != nil {
+		remarkJSON := ratio_setting.PricingGroupRemark2JSONString()
+		if request.PricingGroupRemark != nil {
+			remarkJSON = *request.PricingGroupRemark
+		}
+		displayNameJSON := ratio_setting.PricingGroupDisplayName2JSONString()
+		if request.PricingGroupDisplayName != nil {
+			displayNameJSON = *request.PricingGroupDisplayName
+		}
+		optionalJSON = []string{remarkJSON, displayNameJSON}
 	}
 	if err := model.UpdatePricingGroupConfiguration(
 		request.GroupRatio,
@@ -138,7 +147,7 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 		request.PricingGroupOrder,
 		request.PricingGroupRetryPolicy,
 		request.PricingGroupRoutingStrategy,
-		remarkArgs...,
+		optionalJSON...,
 	); err != nil {
 		common.ApiError(c, err)
 		return

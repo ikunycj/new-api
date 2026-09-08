@@ -96,7 +96,7 @@ export async function getUserGroups(): Promise<GroupOption[]> {
         (right.order ?? Number.MAX_SAFE_INTEGER)
     )
     .map(([group, info]) => ({
-      label: group,
+      label: info.desc || group,
       value: group,
       ratio: info.ratio,
       desc: info.desc,

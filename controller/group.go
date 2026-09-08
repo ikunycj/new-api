@@ -48,7 +48,16 @@ func GetPricingGroups(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": groups})
+	displayNames := make(map[string]string, len(groups))
+	for _, group := range groups {
+		displayNames[group] = ratio_setting.GetPricingGroupDisplayNameOrName(group)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       "",
+		"data":          groups,
+		"display_names": displayNames,
+	})
 }
 
 func GetManagedUserGroups(c *gin.Context) {
@@ -133,7 +142,7 @@ func GetUserGroups(c *gin.Context) {
 			remark := ratio_setting.GetPricingGroupRemark(groupName)
 			usableGroups[groupName] = map[string]interface{}{
 				"ratio":  ratio_setting.GetGroupRatio(groupName),
-				"desc":   groupName,
+				"desc":   ratio_setting.GetPricingGroupDisplayNameOrName(groupName),
 				"remark": remark,
 				"order":  order,
 			}

@@ -121,3 +121,18 @@ export async function getPricingGroupNames(): Promise<string[]> {
   )
   return requireData(response.data)
 }
+
+export async function getPricingGroupCatalog(): Promise<{
+  names: string[]
+  displayNames: Record<string, string>
+}> {
+  const res = await api.get<{
+    success: boolean
+    data?: string[]
+    display_names?: Record<string, string>
+  }>('/api/group/pricing-groups')
+  return {
+    names: res.data.data ?? [],
+    displayNames: res.data.display_names ?? {},
+  }
+}

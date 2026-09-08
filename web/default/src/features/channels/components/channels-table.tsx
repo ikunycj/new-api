@@ -239,7 +239,7 @@ export function ChannelsTable() {
   const groupOptions = useMemo(
     () =>
       (groupsData?.data || []).map((g) => ({
-        label: g,
+        label: groupsData?.display_names?.[g] || g,
         value: g,
       })),
     [groupsData]

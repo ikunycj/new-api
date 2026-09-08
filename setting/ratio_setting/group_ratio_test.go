@@ -84,6 +84,32 @@ func TestPricingGroupRemarkRoundTripAndValidation(t *testing.T) {
 	))
 }
 
+func TestPricingGroupDisplayNameRoundTripAndFallback(t *testing.T) {
+	previousRatios := GroupRatio2JSONString()
+	previousDisplayNames := PricingGroupDisplayName2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, UpdatePricingGroupDisplayNameByJSONString(previousDisplayNames))
+	})
+
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"alpha":1,"beta":2}`))
+	require.NoError(t, UpdatePricingGroupDisplayNameByJSONString(
+		`{"alpha":" 企业套餐 ","beta":"   ","removed":"旧名称"}`,
+	))
+
+	assert.Equal(t, "企业套餐", GetPricingGroupDisplayName("alpha"))
+	assert.Equal(t, "企业套餐", GetPricingGroupDisplayNameOrName("alpha"))
+	assert.Empty(t, GetPricingGroupDisplayName("beta"))
+	assert.Equal(t, "beta", GetPricingGroupDisplayNameOrName("beta"))
+	assert.Equal(t, "beta", GetPricingGroupDisplayNameOrName(" beta "))
+	assert.NotContains(t, GetPricingGroupDisplayNameCopy(), "removed")
+	assert.JSONEq(t, `{"alpha":"企业套餐"}`, PricingGroupDisplayName2JSONString())
+
+	require.Error(t, UpdatePricingGroupDisplayNameByJSONString(
+		`{"alpha":"`+strings.Repeat("a", MaxPricingGroupDisplayNameLength+1)+`"}`,
+	))
+}
+
 func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	configuration, err := ParsePricingGroupConfiguration(
 		`{"alpha":1,"beta":2}`,

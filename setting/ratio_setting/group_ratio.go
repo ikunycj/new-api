@@ -31,6 +31,9 @@ const (
 	// MaxPricingGroupRemarkLength bounds administrator-provided text returned
 	// to users when they select a group for an API key.
 	MaxPricingGroupRemarkLength = 255
+	// MaxPricingGroupDisplayNameLength bounds the optional administrator-facing
+	// label. The persisted group key remains the stable internal identity.
+	MaxPricingGroupDisplayNameLength = 255
 )
 
 type PricingGroupRetryPolicy struct {
@@ -109,6 +112,7 @@ func DefaultPricingGroupRoutingStrategies() map[string]PricingGroupRoutingStrate
 type PricingGroupConfiguration struct {
 	GroupRatios             map[string]float64
 	GroupEnabled            map[string]bool
+	GroupDisplayNames       map[string]string
 	GroupRemarks            map[string]string
 	GroupOrder              []string
 	RetryPolicies           map[string]PricingGroupRetryPolicy
@@ -128,6 +132,7 @@ type pricingGroupSnapshot struct {
 
 var pricingGroupSnapshotValue atomic.Pointer[pricingGroupSnapshot]
 var pricingGroupSnapshotUpdateMutex sync.Mutex
+var pricingGroupDisplayNamesValue atomic.Value
 
 type groupRatioConfigValue struct{}
 type pricingGroupRemarkConfigValue struct{}
@@ -144,6 +149,7 @@ type GroupRatioSetting struct {
 var groupRatioSetting GroupRatioSetting
 
 func init() {
+	pricingGroupDisplayNamesValue.Store(map[string]string{})
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		defaultGroupRatio,
 		defaultPricingGroupEnabled(defaultGroupRatio),
@@ -310,6 +316,65 @@ func GetPricingGroupRemarkCopy() map[string]string {
 	}
 	return result
 }
+
+// GetPricingGroupDisplayName returns the configured administrator-facing label
+// for a pricing group. An empty result means that the internal key should be
+// used as the display value.
+func GetPricingGroupDisplayName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	displayNames, _ := pricingGroupDisplayNamesValue.Load().(map[string]string)
+	return displayNames[name]
+}
+
+// GetPricingGroupDisplayNameOrName resolves the display label while preserving
+// the existing group key as the fallback for old configurations.
+func GetPricingGroupDisplayNameOrName(name string) string {
+	name = strings.TrimSpace(name)
+	if displayName := GetPricingGroupDisplayName(name); displayName != "" {
+		return displayName
+	}
+	return name
+}
+
+// GetPricingGroupDisplayNameCopy returns an independent copy of all configured
+// pricing-group display labels.
+func GetPricingGroupDisplayNameCopy() map[string]string {
+	displayNames, _ := pricingGroupDisplayNamesValue.Load().(map[string]string)
+	result := make(map[string]string, len(displayNames))
+	for group, displayName := range displayNames {
+		result[group] = displayName
+	}
+	return result
+}
+
+func PricingGroupDisplayName2JSONString() string {
+	data, err := common.Marshal(GetPricingGroupDisplayNameCopy())
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// UpdatePricingGroupDisplayNameByJSONString validates and applies the optional
+// display-name mapping. Empty/whitespace values are omitted so reads naturally
+// fall back to the stable internal group key.
+func UpdatePricingGroupDisplayNameByJSONString(jsonStr string) error {
+	displayNames, err := parsePricingGroupDisplayNames(
+		jsonStr,
+		currentPricingGroupSnapshot().groupRatios,
+	)
+	if err != nil {
+		return err
+	}
+	pricingGroupSnapshotUpdateMutex.Lock()
+	defer pricingGroupSnapshotUpdateMutex.Unlock()
+	pricingGroupDisplayNamesValue.Store(displayNames)
+	return nil
+}
+
 func PricingGroupRemark2JSONString() string {
 	data, err := common.Marshal(currentPricingGroupSnapshot().groupRemarks)
 	if err != nil {
@@ -403,6 +468,13 @@ func UpdateGroupRatioByJSONString(jsonStr string) error {
 		}
 		enabled[group] = groupEnabled
 	}
+	displayNames, err := normalizePricingGroupDisplayNames(
+		GetPricingGroupDisplayNameCopy(),
+		ratios,
+	)
+	if err != nil {
+		return err
+	}
 	pricingGroupSnapshotValue.Store(newPricingGroupSnapshot(
 		ratios,
 		enabled,
@@ -412,6 +484,7 @@ func UpdateGroupRatioByJSONString(jsonStr string) error {
 		snapshot.routingStrategies,
 		snapshot.routingStrategyBindings,
 	))
+	pricingGroupDisplayNamesValue.Store(displayNames)
 	return nil
 }
 
@@ -575,9 +648,15 @@ func ApplyPricingGroupConfiguration(configuration *PricingGroupConfiguration) {
 		configuration.RoutingStrategies,
 		configuration.RoutingStrategyBindings,
 	))
+	if displayNames, err := normalizePricingGroupDisplayNames(
+		configuration.GroupDisplayNames,
+		configuration.GroupRatios,
+	); err == nil {
+		pricingGroupDisplayNamesValue.Store(displayNames)
+	}
 }
 
-func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, pricingGroupRemarkJSON ...string) (*PricingGroupConfiguration, error) {
+func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, optionalJSON ...string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
 	if err != nil {
 		return nil, err
@@ -616,11 +695,12 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrder
 	if err != nil {
 		return nil, err
 	}
-	remarkJSON := "{}"
-	if len(pricingGroupRemarkJSON) > 0 {
-		remarkJSON = pricingGroupRemarkJSON[0]
-	}
+	remarkJSON, displayNameJSON := pricingGroupOptionalJSON(optionalJSON)
 	remarks, err := parsePricingGroupRemarks(remarkJSON, ratioMap)
+	if err != nil {
+		return nil, err
+	}
+	displayNames, err := parsePricingGroupDisplayNames(displayNameJSON, ratioMap)
 	if err != nil {
 		return nil, err
 	}
@@ -628,6 +708,7 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrder
 	return &PricingGroupConfiguration{
 		GroupRatios:             ratioMap,
 		GroupEnabled:            enabledMap,
+		GroupDisplayNames:       displayNames,
 		GroupRemarks:            remarks,
 		GroupOrder:              order,
 		RetryPolicies:           retryPolicies,
@@ -641,7 +722,7 @@ func ParsePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrder
 // group to enabled. An absent routing configuration is initialized to the
 // built-in catalog; a non-empty value must use the current catalog/bindings
 // shape and is never interpreted as the retired per-group strategy map.
-func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, pricingGroupRemarkJSON ...string) (*PricingGroupConfiguration, error) {
+func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, optionalJSON ...string) (*PricingGroupConfiguration, error) {
 	ratioMap, err := parseGroupRatios(groupRatioJSON)
 	if err != nil {
 		return nil, err
@@ -679,11 +760,12 @@ func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, g
 	if err != nil {
 		return nil, err
 	}
-	remarkJSON := "{}"
-	if len(pricingGroupRemarkJSON) > 0 {
-		remarkJSON = pricingGroupRemarkJSON[0]
-	}
+	remarkJSON, displayNameJSON := pricingGroupOptionalJSON(optionalJSON)
 	remarks, err := parsePricingGroupRemarks(remarkJSON, ratioMap)
+	if err != nil {
+		return nil, err
+	}
+	displayNames, err := parsePricingGroupDisplayNames(displayNameJSON, ratioMap)
 	if err != nil {
 		return nil, err
 	}
@@ -701,6 +783,7 @@ func ParsePersistedPricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, g
 	return &PricingGroupConfiguration{
 		GroupRatios:             snapshot.groupRatios,
 		GroupEnabled:            snapshot.groupEnabled,
+		GroupDisplayNames:       displayNames,
 		GroupRemarks:            snapshot.groupRemarks,
 		GroupOrder:              snapshot.groupOrder,
 		RetryPolicies:           snapshot.retryPolicies,
@@ -763,6 +846,57 @@ func parsePricingGroupRemarks(jsonStr string, ratios map[string]float64) (map[st
 		remarks[group] = remark
 	}
 	return remarks, nil
+}
+
+func pricingGroupOptionalJSON(optionalJSON []string) (string, string) {
+	remarkJSON := "{}"
+	displayNameJSON := "{}"
+	if len(optionalJSON) > 0 && strings.TrimSpace(optionalJSON[0]) != "" {
+		remarkJSON = optionalJSON[0]
+	}
+	if len(optionalJSON) > 1 && strings.TrimSpace(optionalJSON[1]) != "" {
+		displayNameJSON = optionalJSON[1]
+	}
+	return remarkJSON, displayNameJSON
+}
+
+func parsePricingGroupDisplayNames(jsonStr string, ratios map[string]float64) (map[string]string, error) {
+	trimmed := strings.TrimSpace(jsonStr)
+	if trimmed == "" || trimmed == "null" {
+		return map[string]string{}, nil
+	}
+	var raw map[string]string
+	if err := common.UnmarshalJsonStr(jsonStr, &raw); err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return nil, errors.New("定价分组显示名称必须是 JSON 对象")
+	}
+	return normalizePricingGroupDisplayNames(raw, ratios)
+}
+
+func normalizePricingGroupDisplayNames(raw map[string]string, ratios map[string]float64) (map[string]string, error) {
+	result := make(map[string]string, len(raw))
+	for group, displayName := range raw {
+		if group == "" || group != strings.TrimSpace(group) {
+			return nil, errors.New("定价分组显示名称包含无效的分组名")
+		}
+		// Stale entries are ignored when a group has been removed, matching the
+		// existing remark-map compatibility behavior.
+		if ratios != nil {
+			if _, exists := ratios[group]; !exists {
+				continue
+			}
+		}
+		displayName = strings.TrimSpace(displayName)
+		if utf8.RuneCountInString(displayName) > MaxPricingGroupDisplayNameLength {
+			return nil, errors.New("定价分组显示名称不能超过 255 个字符: " + group)
+		}
+		if displayName != "" {
+			result[group] = displayName
+		}
+	}
+	return result, nil
 }
 
 func defaultPricingGroupRetryPolicies(ratios map[string]float64) map[string]PricingGroupRetryPolicy {

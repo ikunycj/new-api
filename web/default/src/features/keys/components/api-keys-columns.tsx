@@ -54,29 +54,36 @@ function getQuotaProgressColor(percentage: number): string {
   return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
-function useGroupRatios(): Record<string, number> {
+function useGroupCatalog(): {
+  ratios: Record<string, number>
+  labels: Record<string, string>
+} {
   const { data } = useQuery({
     queryKey: ['user-groups'],
     queryFn: getUserGroups,
     staleTime: 0,
     select: (res) => {
-      if (!res.success || !res.data) return {}
+      if (!res.success || !res.data) return { ratios: {}, labels: {} }
       const ratios: Record<string, number> = {}
+      const labels: Record<string, string> = {}
       for (const [group, info] of Object.entries(res.data)) {
+        labels[group] = info.desc || group
         if (typeof info.ratio === 'number') {
           ratios[group] = info.ratio
         }
       }
-      return ratios
+      return { ratios, labels }
     },
   })
 
-  return data ?? {}
+  return data ?? { ratios: {}, labels: {} }
 }
 
 export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   const { t, i18n } = useTranslation()
-  const groupRatios = useGroupRatios()
+  const groupCatalog = useGroupCatalog()
+  const groupRatios = groupCatalog.ratios
+  const groupLabels = groupCatalog.labels
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
   const staleAccessThreshold = dayjs(now).subtract(3, 'month').valueOf()
@@ -230,7 +237,11 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
               <TooltipContent className='max-w-sm'>
                 <div className='flex flex-col gap-1.5 text-xs'>
                   <span className='font-medium'>{t('Group order')}</span>
-                  <span>{groupCandidates.join(' -> ')}</span>
+                  <span>
+                    {groupCandidates
+                      .map((candidate) => groupLabels[candidate] || candidate)
+                      .join(' -> ')}
+                  </span>
                   <span>
                     {t('This order is managed by the API Key creator')}
                   </span>
@@ -255,6 +266,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
             >
               <GroupBadge
                 group={selectedGroup}
+                label={groupLabels[selectedGroup]}
                 ratio={groupRatios[selectedGroup]}
               />
             </TruncatedCell>
@@ -296,7 +308,11 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
             tooltipContent={group || '-'}
             tooltipClassName='break-all'
           >
-            <GroupBadge group={group} ratio={ratio} />
+            <GroupBadge
+              group={group}
+              label={groupLabels[group]}
+              ratio={ratio}
+            />
           </TruncatedCell>
         )
       },

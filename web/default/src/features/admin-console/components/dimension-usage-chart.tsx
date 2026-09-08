@@ -123,12 +123,18 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     void updateTheme()
   }, [resolvedTheme])
 
+  const pricingGroupLabels = useMemo(() => {
+    if (!pricingGroupsQuery.data?.success) return new Map<string, string>()
+    return new Map(
+      (pricingGroupsQuery.data.data ?? []).map((group) => [
+        group,
+        pricingGroupsQuery.data?.display_names?.[group] || group,
+      ])
+    )
+  }, [pricingGroupsQuery.data])
   const pricingGroupNames = useMemo(
-    () =>
-      pricingGroupsQuery.data?.success
-        ? (pricingGroupsQuery.data.data ?? [])
-        : [],
-    [pricingGroupsQuery.data]
+    () => [...pricingGroupLabels.keys()],
+    [pricingGroupLabels]
   )
   const dimensionData = useMemo(() => {
     if (props.dimension === 'group') {
@@ -136,7 +142,12 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
       return props.data.flatMap((item) => {
         const pricingGroup = item.use_group?.trim()
         if (!pricingGroup || !pricingGroupSet.has(pricingGroup)) return []
-        return [{ ...item, model_name: pricingGroup }]
+        return [
+          {
+            ...item,
+            model_name: pricingGroupLabels.get(pricingGroup) || pricingGroup,
+          },
+        ]
       })
     }
 
@@ -144,7 +155,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
       ...item,
       model_name: formatChannelDisplayName(item.channel_name, item.channel_id),
     }))
-  }, [pricingGroupNames, props.data, props.dimension])
+  }, [pricingGroupLabels, pricingGroupNames, props.data, props.dimension])
   const pricingGroupsFailed =
     props.dimension === 'group' &&
     (pricingGroupsQuery.isError || pricingGroupsQuery.data?.success === false)
@@ -176,9 +187,19 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     if (props.dimension !== 'group') return points
     if (!pricingGroupsQuery.data?.success) return []
     const pricingGroupSet = new Set(pricingGroupNames)
-    return points.filter((point) => pricingGroupSet.has(point.name.trim()))
+    return points.flatMap((point) => {
+      const groupName = point.name.trim()
+      if (!pricingGroupSet.has(groupName)) return []
+      return [
+        {
+          ...point,
+          name: pricingGroupLabels.get(groupName) || groupName,
+        },
+      ]
+    })
   }, [
     cacheTrendQuery.data,
+    pricingGroupLabels,
     pricingGroupNames,
     pricingGroupsQuery.data?.success,
     props.dimension,

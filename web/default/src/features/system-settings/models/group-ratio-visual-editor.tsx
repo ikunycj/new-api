@@ -86,6 +86,7 @@ import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
 type GroupRatioVisualEditorProps = {
   groupRatio: string
   pricingGroupEnabled: string
+  pricingGroupDisplayName: string
   pricingGroupRemark: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
@@ -97,7 +98,11 @@ type GroupRatioVisualEditorProps = {
 
 type GroupPricingRow = {
   _id: string
+  // Existing group keys are the persisted identity used by channels, tokens,
+  // abilities, and historical logs. New rows keep this empty until saved.
+  identityName: string
   name: string
+  displayName: string
   remark: string
   enabled: boolean
   ratio: string
@@ -217,6 +222,25 @@ function parsePricingGroupRemark(
     if (allowedNames && !allowedNames.has(groupName)) continue
     if (typeof remark === 'string') {
       result[groupName] = remark
+    }
+  }
+  return result
+}
+
+function parsePricingGroupDisplayName(
+  value: string,
+  groupNames?: readonly string[]
+): Record<string, string> {
+  const parsed = safeJsonParse<Record<string, unknown>>(value, {
+    fallback: {},
+    silent: true,
+  })
+  const allowedNames = groupNames ? new Set(groupNames) : null
+  const result: Record<string, string> = {}
+  for (const [groupName, displayName] of Object.entries(parsed)) {
+    if (allowedNames && !allowedNames.has(groupName)) continue
+    if (typeof displayName === 'string' && displayName.trim() !== '') {
+      result[groupName] = displayName
     }
   }
   return result
@@ -436,6 +460,7 @@ function getOrderedGroupNames(
 function buildGroupPricingRows(
   groupRatio: string,
   pricingGroupEnabled: string,
+  pricingGroupDisplayName: string,
   pricingGroupRemark: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
@@ -451,6 +476,10 @@ function buildGroupPricingRows(
     pricingGroupRemark,
     orderedNames
   )
+  const displayNamesByName = parsePricingGroupDisplayName(
+    pricingGroupDisplayName,
+    orderedNames
+  )
   const retryPolicies = parsePricingGroupRetryPolicy(pricingGroupRetryPolicy)
 
   return orderedNames.map((name) => {
@@ -460,7 +489,9 @@ function buildGroupPricingRows(
     }
     return {
       _id: createGroupPricingId(),
+      identityName: name,
       name,
+      displayName: displayNamesByName[name] ?? '',
       remark: remarksByName[name] ?? '',
       enabled: enabledByName[name],
       ratio: String(normalizeRatio(ratioMap[name])),
@@ -477,6 +508,7 @@ function serializeGroupPricingState(
 ) {
   const groupRatio: Record<string, number> = {}
   const pricingGroupEnabled: Record<string, boolean> = {}
+  const pricingGroupDisplayName: Record<string, string> = {}
   const pricingGroupRemark: Record<string, string> = {}
   const pricingGroupOrder: string[] = []
   const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
@@ -497,11 +529,13 @@ function serializeGroupPricingState(
   }
 
   for (const row of rows) {
-    const name = row.name.trim()
+    const name = (row.identityName.trim() || row.name).trim()
     if (!name) continue
     if (!(name in groupRatio)) pricingGroupOrder.push(name)
     groupRatio[name] = normalizeRatio(row.ratio)
     pricingGroupEnabled[name] = row.enabled
+    const displayName = row.displayName.trim()
+    if (displayName) pricingGroupDisplayName[name] = displayName
     const remark = row.remark.trim()
     if (remark) pricingGroupRemark[name] = remark
     pricingGroupRetryPolicy[name] = {
@@ -515,6 +549,7 @@ function serializeGroupPricingState(
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
     PricingGroupEnabled: JSON.stringify(pricingGroupEnabled, null, 2),
+    PricingGroupDisplayName: JSON.stringify(pricingGroupDisplayName, null, 2),
     PricingGroupRemark: JSON.stringify(pricingGroupRemark, null, 2),
     PricingGroupOrder: JSON.stringify(pricingGroupOrder),
     PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
@@ -544,6 +579,10 @@ function groupPricingSignature(
       serialized.PricingGroupEnabled,
       rows.map((row) => row.name.trim()).filter(Boolean)
     ),
+    displayNames: parsePricingGroupDisplayName(
+      serialized.PricingGroupDisplayName,
+      rows.map((row) => row.name.trim()).filter(Boolean)
+    ),
     remarks: parsePricingGroupRemark(
       serialized.PricingGroupRemark,
       rows.map((row) => row.name.trim()).filter(Boolean)
@@ -559,6 +598,7 @@ function groupPricingSignature(
 function sourceGroupPricingSignature(
   groupRatio: string,
   pricingGroupEnabled: string,
+  pricingGroupDisplayName: string,
   pricingGroupRemark: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
@@ -582,6 +622,7 @@ function sourceGroupPricingSignature(
   return JSON.stringify({
     ratios: parseRatioMap(groupRatio),
     enabled: parsePricingGroupEnabled(pricingGroupEnabled, names),
+    displayNames: parsePricingGroupDisplayName(pricingGroupDisplayName, names),
     remarks: parsePricingGroupRemark(pricingGroupRemark, names),
     order: names,
     retryPolicies,
@@ -599,6 +640,7 @@ function findPricingGroupMonitor(
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
   pricingGroupEnabled,
+  pricingGroupDisplayName,
   pricingGroupRemark,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
@@ -611,6 +653,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
     <GroupPricingTable
       groupRatio={groupRatio}
       pricingGroupEnabled={pricingGroupEnabled}
+      pricingGroupDisplayName={pricingGroupDisplayName}
       pricingGroupRemark={pricingGroupRemark}
       pricingGroupOrder={pricingGroupOrder}
       pricingGroupRetryPolicy={pricingGroupRetryPolicy}
@@ -625,6 +668,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 type GroupPricingTableProps = {
   groupRatio: string
   pricingGroupEnabled: string
+  pricingGroupDisplayName: string
   pricingGroupRemark: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
@@ -637,6 +681,7 @@ type GroupPricingTableProps = {
 function GroupPricingTable({
   groupRatio,
   pricingGroupEnabled,
+  pricingGroupDisplayName,
   pricingGroupRemark,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
@@ -658,6 +703,7 @@ function GroupPricingTable({
         rows: buildGroupPricingRows(
           groupRatio,
           pricingGroupEnabled,
+          pricingGroupDisplayName,
           pricingGroupRemark,
           pricingGroupOrder,
           pricingGroupRetryPolicy,
@@ -679,6 +725,7 @@ function GroupPricingTable({
   const incomingSignature = sourceGroupPricingSignature(
     groupRatio,
     pricingGroupEnabled,
+    pricingGroupDisplayName,
     pricingGroupRemark,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
@@ -694,6 +741,7 @@ function GroupPricingTable({
       rows: buildGroupPricingRows(
         groupRatio,
         pricingGroupEnabled,
+        pricingGroupDisplayName,
         pricingGroupRemark,
         pricingGroupOrder,
         pricingGroupRetryPolicy,
@@ -704,6 +752,7 @@ function GroupPricingTable({
   }, [
     groupRatio,
     pricingGroupEnabled,
+    pricingGroupDisplayName,
     pricingGroupRemark,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
@@ -801,6 +850,7 @@ function GroupPricingTable({
       const serialized = serializeGroupPricingState(nextRows, nextStrategies)
       onChange('GroupRatio', serialized.GroupRatio)
       onChange('PricingGroupEnabled', serialized.PricingGroupEnabled)
+      onChange('PricingGroupDisplayName', serialized.PricingGroupDisplayName)
       onChange('PricingGroupRemark', serialized.PricingGroupRemark)
       onChange('PricingGroupOrder', serialized.PricingGroupOrder)
       onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
@@ -817,6 +867,7 @@ function GroupPricingTable({
       id: string,
       field:
         | 'name'
+        | 'displayName'
         | 'remark'
         | 'enabled'
         | 'ratio'
@@ -825,12 +876,13 @@ function GroupPricingTable({
         | 'strategyId',
       value: string | boolean
     ) => {
-      emitState(
-        currentRows.map((row) =>
-          row._id === id ? { ...row, [field]: value } : row
-        ),
-        currentStrategies
-      )
+      const nextRows = currentRows.map((row) => {
+        if (row._id !== id) return row
+        if (field === 'name' && row.identityName.trim() !== '') return row
+        return { ...row, [field]: value }
+      })
+      if (nextRows.every((row, index) => row === currentRows[index])) return
+      emitState(nextRows, currentStrategies)
     },
     [currentRows, currentStrategies, emitState]
   )
@@ -848,7 +900,9 @@ function GroupPricingTable({
         ...currentRows,
         {
           _id: createGroupPricingId(),
+          identityName: '',
           name,
+          displayName: '',
           remark: '',
           enabled: true,
           ratio: '1',
@@ -1054,7 +1108,7 @@ function GroupPricingTable({
           <div className='space-y-3'>
             <StaticDataTable
               className='w-full'
-              tableClassName='w-max min-w-[98rem] table-fixed'
+              tableClassName='w-max min-w-[106rem] table-fixed'
               data={currentRows}
               getRowKey={(row) => row._id}
               emptyClassName='text-muted-foreground h-20 text-sm'
@@ -1104,6 +1158,12 @@ function GroupPricingTable({
                     return (
                       <Input
                         value={row.name}
+                        disabled={row.identityName.trim() !== ''}
+                        title={
+                          row.identityName.trim() !== ''
+                            ? t('Group name cannot be changed when editing.')
+                            : undefined
+                        }
                         onChange={(event) =>
                           updateRow(row._id, 'name', event.target.value)
                         }
@@ -1114,6 +1174,23 @@ function GroupPricingTable({
                       />
                     )
                   },
+                },
+                {
+                  id: 'displayName',
+                  header: t('Display name'),
+                  className: 'w-44',
+                  cellClassName: 'w-44',
+                  cell: (row) => (
+                    <Input
+                      value={row.displayName}
+                      placeholder={row.name}
+                      maxLength={255}
+                      aria-label={`${row.name || '未命名分组'}显示名称`}
+                      onChange={(event) =>
+                        updateRow(row._id, 'displayName', event.target.value)
+                      }
+                    />
+                  ),
                 },
                 {
                   id: 'remark',
@@ -1649,7 +1726,14 @@ type GroupDetailSheetProps = {
   monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
   onChange: (
-    field: 'name' | 'remark' | 'enabled' | 'ratio' | 'retryMode' | 'retryTimes',
+    field:
+      | 'name'
+      | 'displayName'
+      | 'remark'
+      | 'enabled'
+      | 'ratio'
+      | 'retryMode'
+      | 'retryTimes',
     value: string | boolean
   ) => void
   isPersisted: boolean
@@ -1659,6 +1743,7 @@ type GroupDetailSheetProps = {
 function GroupDetailSheet(props: GroupDetailSheetProps) {
   const { t } = useTranslation()
   const name = props.row?.name ?? ''
+  const displayName = props.row?.displayName.trim() || name.trim()
 
   return (
     <Sheet open={props.row !== null} onOpenChange={props.onOpenChange}>
@@ -1667,7 +1752,7 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
         className={sideDrawerContentClassName('sm:max-w-lg')}
       >
         <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>编辑{name ? `：${name.trim()}` : ''}</SheetTitle>
+          <SheetTitle>编辑{displayName ? `：${displayName}` : ''}</SheetTitle>
           <SheetDescription>
             修改分组状态、备注、倍率、重试策略和监控功能。
           </SheetDescription>
@@ -1696,8 +1781,28 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
               <Input
                 id='group-detail-name'
                 value={props.row.name}
+                disabled={props.row.identityName.trim() !== ''}
+                title={
+                  props.row.identityName.trim() !== ''
+                    ? t('Group name cannot be changed when editing.')
+                    : undefined
+                }
                 aria-invalid={props.nameInvalid}
                 onChange={(event) => props.onChange('name', event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-display-name'>
+                {t('Display name')}
+              </Label>
+              <Input
+                id='group-detail-display-name'
+                value={props.row.displayName}
+                placeholder={name.trim()}
+                maxLength={255}
+                onChange={(event) =>
+                  props.onChange('displayName', event.target.value)
+                }
               />
             </div>
             <div className='space-y-2'>

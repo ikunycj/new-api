@@ -75,7 +75,7 @@ export function TagBatchEditDialog({
     const allGroups = new Set([...groupsData.data, ...groups])
     return [...allGroups].map((group) => ({
       value: group,
-      label: group,
+      label: groupsData.display_names?.[group] || group,
     }))
   }, [groupsData, groups])
 
