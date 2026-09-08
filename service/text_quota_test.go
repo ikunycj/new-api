@@ -847,3 +847,139 @@ func TestCalculateTextQuotaSummaryFixedPriceAppliesImageCountOnceAndAllowsOverri
 	summary = calculateTextQuotaSummary(ctx, relayInfo, usage)
 	require.Equal(t, 120000, summary.Quota)
 }
+
+func TestCalculateTextQuotaSummaryBillsFullyCachedClaudePromptWithoutOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:             types.RelayFormatClaude,
+		FinalRequestRelayFormat: types.RelayFormatClaude,
+		OriginModelName:         "claude-fable-5-1",
+		PriceData: types.PriceData{
+			ModelRatio:         1,
+			CompletionRatio:    5,
+			CacheRatio:         0.1,
+			CacheCreationRatio: 1.25,
+			GroupRatioInfo:     types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+
+	// Anthropic reports input_tokens exclusive of cache, so a prompt served
+	// entirely from the cache reports 0 there. Pairing that with output_tokens=0
+	// (refusal or truncated tool call) must still bill the cache read.
+	usage := &dto.Usage{
+		BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{
+			InputTokens:              0,
+			CacheReadInputTokens:     50000,
+			CacheCreationInputTokens: 0,
+			OutputTokens:             0,
+		}),
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, effectiveBillingUsage(usage))
+
+	require.True(t, summary.IsClaudeUsageSemantic)
+	require.Equal(t, 0, summary.PromptTokens)
+	require.Equal(t, 0, summary.CompletionTokens)
+	require.Equal(t, 50000, summary.CacheTokens)
+	require.Equal(t, 50000, summary.TotalTokens, "cache read alone must count as billable volume")
+	require.Equal(t, 5000, summary.Quota, "50000 cache read tokens at cache ratio 0.1")
+}
+
+func TestCalculateTextQuotaSummaryBillsCacheWriteOnlyClaudeResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:             types.RelayFormatClaude,
+		FinalRequestRelayFormat: types.RelayFormatClaude,
+		OriginModelName:         "claude-fable-5-1",
+		PriceData: types.PriceData{
+			ModelRatio:           1,
+			CompletionRatio:      5,
+			CacheRatio:           0.1,
+			CacheCreationRatio:   1.25,
+			CacheCreation5mRatio: 1.25,
+			CacheCreation1hRatio: 2,
+			GroupRatioInfo:       types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+
+	usage := &dto.Usage{
+		BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{
+			InputTokens:              0,
+			CacheCreationInputTokens: 1000,
+			OutputTokens:             0,
+			CacheCreation: &dto.ClaudeCacheCreationUsage{
+				Ephemeral5mInputTokens: 600,
+				Ephemeral1hInputTokens: 400,
+			},
+		}),
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, effectiveBillingUsage(usage))
+
+	require.Equal(t, 1000, summary.TotalTokens, "cache write alone must count as billable volume")
+	require.Equal(t, 1550, summary.Quota, "600*1.25 + 400*2")
+}
+
+func TestCalculateTextQuotaSummaryKeepsZeroTotalWhenUpstreamReportedNothing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:             types.RelayFormatClaude,
+		FinalRequestRelayFormat: types.RelayFormatClaude,
+		OriginModelName:         "claude-fable-5-1",
+		PriceData: types.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 5,
+			CacheRatio:      0.1,
+			GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+
+	// A genuinely empty usage (upstream timeout, dropped body) must stay unbilled
+	// so the caller still refunds the pre-consumed quota.
+	summary := calculateTextQuotaSummary(ctx, relayInfo, effectiveBillingUsage(&dto.Usage{
+		BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{}),
+	}))
+
+	require.Equal(t, 0, summary.TotalTokens)
+	require.Equal(t, 0, summary.Quota)
+}
+
+func TestCalculateTextQuotaSummaryDoesNotDoubleCountOpenAICachedTokensInTotal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:             types.RelayFormatOpenAI,
+		FinalRequestRelayFormat: types.RelayFormatOpenAI,
+		OriginModelName:         "gpt-4o",
+		PriceData: types.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 1,
+			CacheRatio:      0.5,
+			GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+
+	// OpenAI's prompt_tokens already includes cached_tokens, so the billable
+	// total must not add the cache counters on top.
+	summary := calculateTextQuotaSummary(ctx, relayInfo, &dto.Usage{
+		PromptTokens:     4387,
+		CompletionTokens: 5,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 3840,
+		},
+	})
+
+	require.False(t, summary.IsClaudeUsageSemantic)
+	require.Equal(t, 4392, summary.TotalTokens)
+}

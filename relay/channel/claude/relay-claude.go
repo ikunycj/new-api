@@ -131,9 +131,6 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 }
 
 func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
-	if claudeInfo.Usage.PromptTokens == 0 {
-		//上游出错
-	}
 	if claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done {
 		if common.DebugEnabled {
 			common.SysLog("claude response usage is not complete, maybe upstream error")
@@ -144,7 +141,12 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 			(!claudeInfo.Done && fallback.CompletionTokens > claudeInfo.Usage.CompletionTokens) {
 			claudeInfo.Usage.CompletionTokens = fallback.CompletionTokens
 		}
-		if claudeInfo.Usage.PromptTokens == 0 {
+		// input_tokens=0 是合法的 Anthropic 语义：整段 prompt 命中缓存时输入量全部
+		// 落在 cache_read/cache_creation 上。只有在上游连缓存字段都没给的时候才回退
+		// 到本地估算，否则会在真·全缓存命中的请求上凭空造出一份输入量。
+		if claudeInfo.Usage.PromptTokens == 0 &&
+			claudeInfo.Usage.PromptTokensDetails.CachedTokens == 0 &&
+			claudeInfo.Usage.PromptTokensDetails.CacheCreationTokensTotal() == 0 {
 			claudeInfo.Usage.PromptTokens = fallback.PromptTokens
 		}
 		claudeInfo.Usage.TotalTokens = claudeInfo.Usage.PromptTokens + claudeInfo.Usage.CompletionTokens

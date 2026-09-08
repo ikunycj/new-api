@@ -671,12 +671,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
         const other = parseLogOther(log.other)
 
-        const promptTokens = log.prompt_tokens || 0
-        const completionTokens = log.completion_tokens || 0
-        if (promptTokens === 0 && completionTokens === 0) {
-          return <span className='text-muted-foreground text-xs'>-</span>
-        }
-
         const cacheReadTokens = other?.cache_tokens || 0
         const cacheWrite5m = other?.cache_creation_tokens_5m || 0
         const cacheWrite1h = other?.cache_creation_tokens_1h || 0
@@ -684,6 +678,23 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const cacheWriteTokens = hasSplitCache
           ? cacheWrite5m + cacheWrite1h
           : other?.cache_creation_tokens || 0
+
+        // Anthropic reports prompt_tokens exclusive of cache, so a fully cached
+        // prompt logs 0 there while the volume sits in the cache counters. Prefer
+        // the normalized input total whenever the backend marked it reliable.
+        const promptTokens =
+          log.cache_stats_available && log.input_tokens_total > 0
+            ? log.input_tokens_total
+            : log.prompt_tokens || 0
+        const completionTokens = log.completion_tokens || 0
+        if (
+          promptTokens === 0 &&
+          completionTokens === 0 &&
+          cacheReadTokens === 0 &&
+          cacheWriteTokens === 0
+        ) {
+          return <span className='text-muted-foreground text-xs'>-</span>
+        }
 
         return (
           <div className='flex flex-col gap-0.5'>
