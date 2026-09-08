@@ -6483,6 +6483,17 @@
     "Optional URL shown to ToB/VIP users": "URL tùy chọn hiển thị cho người dùng ToB/VIP",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Người dùng ToB/VIP sẽ thấy URL này thay cho URL upstream thực tế. Để trống để dùng Base URL.",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "Đã cập nhật loại khách hàng của nhóm thanh toán {{billing_group}} thành {{group_type}}",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Trước tiên hãy xóa cấu hình định tuyến của nhóm này và lưu lại, sau đó mới xóa nhóm tính phí."
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Trước tiên hãy xóa cấu hình định tuyến của nhóm này và lưu lại, sau đó mới xóa nhóm tính phí.",
+    "429 action": "Hành động 429",
+    "5xx action": "Hành động 5xx",
+    "switch_channel": "Chuyển kênh",
+    "retry_channel": "Thử lại kênh",
+    "retry_later": "Thử lại sau",
+    "abort": "Hủy",
+    "Use global error mapping": "Dùng ánh xạ lỗi toàn cục",
+    "Save route": "Lưu tuyến",
+    "Clean stale bindings": "Dọn liên kết cũ",
+    "Billing group route deleted": "Đã xóa tuyến nhóm thanh toán",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "Đã xóa {{removed}} liên kết tuyến cũ và vô hiệu hóa {{disabled}} tuyến."
   }
 }

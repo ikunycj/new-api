@@ -127,6 +127,35 @@ func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
 	assert.False(t, isFailoverEligible(ctx, err))
 }
 
+func TestShouldRetryHonorsChannelErrorAction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	for _, action := range []string{"none", "retry_later", "abort", "manual"} {
+		err := types.WithOpenAIError(types.OpenAIError{
+			Message: "upstream failure",
+			Code:    "server_error",
+			Source:  types.ErrorSourceChannel,
+		}, http.StatusBadGateway)
+		err.SetClassification(205002, "upstream", "channel", action, true)
+		assert.False(t, shouldRetry(ctx, err, 1), action)
+		if action == "none" || action == "abort" || action == "manual" {
+			assert.False(t, isFailoverEligible(ctx, err), action)
+		}
+	}
+
+	for _, action := range []string{"retry_channel", "switch_channel"} {
+		err := types.WithOpenAIError(types.OpenAIError{
+			Message: "upstream failure",
+			Code:    "server_error",
+			Source:  types.ErrorSourceChannel,
+		}, http.StatusBadGateway)
+		err.SetClassification(205002, "upstream", "channel", action, true)
+		assert.True(t, shouldRetry(ctx, err, 1), action)
+		assert.False(t, shouldRetry(ctx, err, 0), action)
+	}
+}
+
 func TestShouldRetryDoesNotFailoverAllTokenClientErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())

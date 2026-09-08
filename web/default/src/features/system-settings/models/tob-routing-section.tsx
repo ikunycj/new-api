@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, Save, Trash2, Wrench } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -39,13 +39,19 @@ import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 import type { Channel } from '@/features/channels/types'
-import { updateFailoverConfig } from '@/features/failover/api'
+import {
+  cleanupStaleBillingGroupRoutes,
+  deleteBillingGroupRoute,
+  updateBillingGroupRoute,
+} from '@/features/failover/api'
 import type {
   BillingGroupChannel,
   BillingGroupRoute,
   ChannelCircuitPolicy,
   ChannelCircuitPreset,
   FailoverConfig,
+  RouteRetryPolicy,
+  RoutingAction,
 } from '@/features/failover/types'
 
 import {
@@ -60,6 +66,10 @@ const defaultRouteSettings = {
   total_timeout_ms: 30000,
   profit_guard_mode: 'off' as const,
   minimum_profit_margin: 0,
+  retry_policy: JSON.stringify({
+    rate_limit_action: 'switch_channel',
+    upstream_action: 'switch_channel',
+  }),
 }
 
 const defaultStrategyWeights = {
@@ -155,6 +165,42 @@ function setRouteStrategy(
   }
 }
 
+function getRouteRetryPolicy(route: BillingGroupRoute): RouteRetryPolicy {
+  try {
+    const policy = JSON.parse(
+      route.retry_policy || '{}'
+    ) as Partial<RouteRetryPolicy>
+    const isAction = (value: unknown): value is RoutingAction =>
+      [
+        'none',
+        'retry_channel',
+        'switch_channel',
+        'retry_later',
+        'abort',
+        'manual',
+      ].includes(String(value))
+    return {
+      rate_limit_action: isAction(policy.rate_limit_action)
+        ? policy.rate_limit_action
+        : '',
+      upstream_action: isAction(policy.upstream_action)
+        ? policy.upstream_action
+        : '',
+    }
+  } catch {
+    return { rate_limit_action: '', upstream_action: '' }
+  }
+}
+
+function setRouteRetryPolicy(
+  route: BillingGroupRoute,
+  patch: Partial<RouteRetryPolicy>
+): Partial<BillingGroupRoute> {
+  return {
+    retry_policy: JSON.stringify({ ...getRouteRetryPolicy(route), ...patch }),
+  }
+}
+
 function updateRouteStrategyWeights(
   route: BillingGroupRoute,
   patch: Partial<Omit<RouteStrategyConfig, 'type'>>
@@ -187,6 +233,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<FailoverConfig | null>(null)
   const [selectedRouteID, setSelectedRouteID] = useState<number | null>(null)
+  const mutationInFlightRef = useRef(false)
   const config = draft ?? props.config
   const channelByID = useMemo(
     () => new Map(props.channels.map((channel) => [channel.id, channel])),
@@ -196,23 +243,59 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
     config?.routes.find((route) => route.id === selectedRouteID) ??
     config?.routes[0]
   const saveMutation = useMutation({
-    mutationFn: updateFailoverConfig,
-    onSuccess: async () => {
-      toast.success(t('Channel routing saved'))
-      setDraft(null)
-      setSelectedRouteID(null)
-      await queryClient.invalidateQueries({
+    mutationFn: ({
+      route,
+      routeChannels,
+    }: {
+      route: BillingGroupRoute
+      routeChannels: BillingGroupChannel[]
+    }) => updateBillingGroupRoute(route, routeChannels),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['channel-routing-config'],
+      }),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: deleteBillingGroupRoute,
+    onSuccess: (_data, routeID) => {
+      queryClient.setQueryData<FailoverConfig>(
+        ['channel-routing-config'],
+        (current) => {
+          if (!current) return current
+          return {
+            ...current,
+            routes: current.routes.filter((route) => route.id !== routeID),
+            route_channels: current.route_channels.filter(
+              (entry) => entry.billing_group_route_id !== routeID
+            ),
+          }
+        }
+      )
+      return queryClient.invalidateQueries({
         queryKey: ['channel-routing-config'],
       })
     },
-    onError: (error: Error) => toast.error(error.message),
   })
+  const cleanupMutation = useMutation({
+    mutationFn: cleanupStaleBillingGroupRoutes,
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['channel-routing-config'],
+      }),
+  })
+  const isMutationPending =
+    saveMutation.isPending ||
+    deleteMutation.isPending ||
+    cleanupMutation.isPending
 
   const updateConfig = (
     updater: (current: FailoverConfig) => FailoverConfig
   ) => {
-    if (!config) return
-    setDraft(updater(structuredClone(config)))
+    if (mutationInFlightRef.current) return
+    setDraft((currentDraft) => {
+      const current = currentDraft ?? props.config
+      return current ? updater(structuredClone(current)) : currentDraft
+    })
   }
 
   const routeEntries = (route: BillingGroupRoute) =>
@@ -282,7 +365,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
           entry.billing_group_route_id === target.billing_group_route_id &&
           entry.channel_id === target.channel_id
       )
-      if (index >= 0) current.route_channels[index] = { ...target, ...patch }
+      if (index >= 0) {
+        current.route_channels[index] = {
+          ...current.route_channels[index],
+          ...patch,
+        }
+      }
       return current
     })
   }
@@ -322,10 +410,12 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
     })
   }
 
-  const saveConfig = () => {
-    if (!config) return
-    const invalidWeightedRoute = config.routes.find((route) => {
-      const strategy = getRouteStrategyConfig(route)
+  const saveRoute = async (
+    route: BillingGroupRoute,
+    routeChannels: BillingGroupChannel[]
+  ): Promise<void> => {
+    const invalidWeightedRoute = [route].find((candidate) => {
+      const strategy = getRouteStrategyConfig(candidate)
       return (
         strategy.type === 'weighted' &&
         Math.abs(
@@ -340,7 +430,89 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
       toast.error(t('Dynamic strategy weights must total 100%'))
       return
     }
-    saveMutation.mutate(structuredClone(config))
+    if (mutationInFlightRef.current) return
+
+    mutationInFlightRef.current = true
+    try {
+      const saved = await saveMutation.mutateAsync({
+        route: structuredClone(route),
+        routeChannels: structuredClone(routeChannels),
+      })
+      setDraft(null)
+      setSelectedRouteID(saved.route.id)
+      toast.success(t('Channel routing saved'))
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t('Request failed')
+      )
+    } finally {
+      mutationInFlightRef.current = false
+    }
+  }
+
+  const saveConfig = (): void => {
+    if (!selectedRoute) return
+    void saveRoute(selectedRoute, routeEntries(selectedRoute))
+  }
+
+  const deleteRoute = async (routeID: number): Promise<void> => {
+    if (mutationInFlightRef.current) return
+
+    mutationInFlightRef.current = true
+    try {
+      await deleteMutation.mutateAsync(routeID)
+
+      setDraft((currentDraft) => {
+        const current = currentDraft ?? props.config
+        if (!current) return currentDraft
+        return {
+          ...current,
+          routes: current.routes.filter((route) => route.id !== routeID),
+          route_channels: current.route_channels.filter(
+            (entry) => entry.billing_group_route_id !== routeID
+          ),
+        }
+      })
+      setSelectedRouteID(null)
+      toast.success(t('Billing group route deleted'))
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t('Request failed')
+      )
+    } finally {
+      mutationInFlightRef.current = false
+    }
+  }
+
+  const cleanupRoutes = async (): Promise<void> => {
+    if (mutationInFlightRef.current) return
+
+    mutationInFlightRef.current = true
+    try {
+      const result = await cleanupMutation.mutateAsync(undefined)
+      setDraft(null)
+      toast.success(
+        t(
+          'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.',
+          {
+            removed: result.removed_route_channels,
+            disabled: result.disabled_routes,
+          }
+        )
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t('Request failed')
+      )
+    } finally {
+      mutationInFlightRef.current = false
+    }
   }
 
   if (props.isLoading || !config) {
@@ -356,6 +528,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
             id='tob-route-select'
             className='w-full'
             value={selectedRoute?.id ?? ''}
+            disabled={isMutationPending}
             onChange={(event) => setSelectedRouteID(Number(event.target.value))}
           >
             <NativeSelectOption value=''>
@@ -371,7 +544,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
         <div className='flex gap-2'>
           <Button
             variant='outline'
-            disabled={!props.circuitDefaults}
+            disabled={!props.circuitDefaults || isMutationPending}
             onClick={() => {
               if (!props.circuitDefaults) return
               const route = createRoute(props.circuitDefaults)
@@ -387,10 +560,18 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
           </Button>
           <Button
             onClick={saveConfig}
-            disabled={!draft || saveMutation.isPending}
+            disabled={!draft || isMutationPending || !selectedRoute}
           >
             <Save className='size-4' />
-            {t('Save')}
+            {t('Save route')}
+          </Button>
+          <Button
+            variant='outline'
+            onClick={() => void cleanupRoutes()}
+            disabled={isMutationPending}
+          >
+            <Wrench className='size-4' />
+            {t('Clean stale bindings')}
           </Button>
         </div>
       </div>
@@ -504,6 +685,10 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                 size='icon'
                 title={t('Delete')}
                 onClick={() => {
+                  if (route.id > 0) {
+                    void deleteRoute(route.id)
+                    return
+                  }
                   updateConfig((current) => ({
                     ...current,
                     routes: current.routes.filter(
@@ -515,6 +700,7 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                   }))
                   setSelectedRouteID(null)
                 }}
+                disabled={isMutationPending}
               >
                 <Trash2 className='size-4' />
               </Button>
@@ -594,6 +780,63 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                       })
                     }
                   />
+                </Field>
+                <Field>
+                  <FieldLabel>{t('429 action')}</FieldLabel>
+                  <NativeSelect
+                    value={getRouteRetryPolicy(route).rate_limit_action}
+                    onChange={(event) =>
+                      updateRoute(
+                        routeIndex,
+                        setRouteRetryPolicy(route, {
+                          rate_limit_action: event.target
+                            .value as RoutingAction,
+                        })
+                      )
+                    }
+                  >
+                    <NativeSelectOption value=''>
+                      {t('Use global error mapping')}
+                    </NativeSelectOption>
+                    {[
+                      'switch_channel',
+                      'retry_channel',
+                      'retry_later',
+                      'abort',
+                    ].map((action) => (
+                      <NativeSelectOption key={action} value={action}>
+                        {t(action)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel>{t('5xx action')}</FieldLabel>
+                  <NativeSelect
+                    value={getRouteRetryPolicy(route).upstream_action}
+                    onChange={(event) =>
+                      updateRoute(
+                        routeIndex,
+                        setRouteRetryPolicy(route, {
+                          upstream_action: event.target.value as RoutingAction,
+                        })
+                      )
+                    }
+                  >
+                    <NativeSelectOption value=''>
+                      {t('Use global error mapping')}
+                    </NativeSelectOption>
+                    {[
+                      'switch_channel',
+                      'retry_channel',
+                      'retry_later',
+                      'abort',
+                    ].map((action) => (
+                      <NativeSelectOption key={action} value={action}>
+                        {t(action)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                 </Field>
               </FieldGroup>
             </FieldSet>
@@ -1023,19 +1266,38 @@ export function ToBRoutingSection(props: ToBRoutingSectionProps) {
                                     variant='ghost'
                                     size='icon'
                                     title={t('Delete')}
-                                    onClick={() =>
-                                      updateConfig((current) => ({
-                                        ...current,
-                                        route_channels:
-                                          current.route_channels.filter(
+                                    disabled={isMutationPending}
+                                    onClick={() => {
+                                      if (
+                                        !config ||
+                                        mutationInFlightRef.current
+                                      ) {
+                                        return
+                                      }
+                                      const nextConfig = structuredClone(config)
+                                      nextConfig.route_channels =
+                                        nextConfig.route_channels.filter(
+                                          (candidate) =>
+                                            candidate.billing_group_route_id !==
+                                              entry.billing_group_route_id ||
+                                            candidate.channel_id !==
+                                              entry.channel_id
+                                        )
+                                      setDraft(nextConfig)
+                                      const nextRoute = nextConfig.routes.find(
+                                        (candidate) => candidate.id === route.id
+                                      )
+                                      if (nextRoute) {
+                                        void saveRoute(
+                                          nextRoute,
+                                          nextConfig.route_channels.filter(
                                             (candidate) =>
-                                              candidate.billing_group_route_id !==
-                                                entry.billing_group_route_id ||
-                                              candidate.channel_id !==
-                                                entry.channel_id
-                                          ),
-                                      }))
-                                    }
+                                              candidate.billing_group_route_id ===
+                                              route.id
+                                          )
+                                        )
+                                      }
+                                    }}
                                   >
                                     <Trash2 className='size-4' />
                                   </Button>

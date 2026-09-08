@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -39,6 +40,7 @@ type BillingGroupRoute struct {
 	// StrategyConfig keeps the strategy and its tunables in one extensible JSON
 	// document. The default is the legacy priority ordering.
 	StrategyConfig          string  `json:"strategy_config" gorm:"type:text"`
+	RetryPolicy             string  `json:"retry_policy" gorm:"type:text"`
 	Enabled                 bool    `json:"enabled" gorm:"index"`
 	MaxTotalAttempts        int     `json:"max_total_attempts"`
 	TotalTimeoutMs          int     `json:"total_timeout_ms"`
@@ -92,6 +94,19 @@ type ChannelRoutingConfig struct {
 	ErrorMappings   []UpstreamErrorMapping `json:"error_mappings"`
 	CircuitDefaults ChannelCircuitPolicy   `json:"circuit_defaults"`
 	CircuitPresets  []ChannelCircuitPreset `json:"circuit_presets"`
+}
+
+// BillingGroupRouteConfig is the independently editable unit used by the
+// billing-group routing editor. Keeping the route and its channels together
+// makes a single route save atomic without replacing unrelated routes.
+type BillingGroupRouteConfig struct {
+	Route         BillingGroupRoute     `json:"route"`
+	RouteChannels []BillingGroupChannel `json:"route_channels"`
+}
+
+type StaleRouteCleanupResult struct {
+	RemovedRouteChannels int `json:"removed_route_channels"`
+	DisabledRoutes       int `json:"disabled_routes"`
 }
 
 type ChannelCircuitPreset struct {
@@ -229,6 +244,52 @@ type RuntimeRoutingPolicy struct {
 	MinimumProfitMargin     float64
 	Strategy                string
 	StrategyConfig          RoutingStrategyConfig
+	RetryPolicy             RouteRetryPolicy
+}
+
+type RouteRetryPolicy struct {
+	RateLimitAction string `json:"rate_limit_action"`
+	UpstreamAction  string `json:"upstream_action"`
+}
+
+func validateRouteRetryPolicy(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var policy RouteRetryPolicy
+	if err := common.Unmarshal([]byte(raw), &policy); err != nil {
+		return errors.New("retry_policy must be valid JSON")
+	}
+	for _, action := range []string{policy.RateLimitAction, policy.UpstreamAction} {
+		if strings.TrimSpace(action) != "" && normalizeRouteRetryAction(action) == "" {
+			return errors.New("retry_policy contains an invalid action")
+		}
+	}
+	return nil
+}
+
+func normalizeRouteRetryAction(action string) string {
+	switch strings.TrimSpace(action) {
+	case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
+		return strings.TrimSpace(action)
+	default:
+		return ""
+	}
+}
+
+func normalizeRouteRetryPolicy(raw string) string {
+	policy := RouteRetryPolicy{}
+	if strings.TrimSpace(raw) != "" {
+		_ = common.Unmarshal([]byte(raw), &policy)
+	}
+	for _, action := range []*string{&policy.RateLimitAction, &policy.UpstreamAction} {
+		*action = normalizeRouteRetryAction(*action)
+	}
+	data, err := common.Marshal(policy)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 // RoutingStrategyConfig is intentionally a single JSON object so future
@@ -363,6 +424,7 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	policy := DefaultRuntimeRoutingPolicy(route.Mode)
 	policy.StrategyConfig = parseRoutingStrategyConfig(route.StrategyConfig)
 	policy.Strategy = policy.StrategyConfig.Type
+	_ = common.Unmarshal([]byte(normalizeRouteRetryPolicy(route.RetryPolicy)), &policy.RetryPolicy)
 	if route.MaxTotalAttempts > 0 {
 		policy.MaxTotalAttempts = route.MaxTotalAttempts
 	}
@@ -388,6 +450,20 @@ func ResolveBillingGroupRoute(billingGroup string) (RuntimeRoutingPolicy, []Bill
 	}
 	channels := append([]BillingGroupChannel(nil), channelRoutingLookup.value.routeChannels[route.Id]...)
 	return policy, channels, true
+}
+
+func (p RuntimeRoutingPolicy) RetryAction(category string, statusCode int, fallback string) string {
+	var action string
+	switch {
+	case strings.TrimSpace(category) == "rate_limit" || statusCode == 429:
+		action = p.RetryPolicy.RateLimitAction
+	case strings.TrimSpace(category) == "upstream" || statusCode >= 500:
+		action = p.RetryPolicy.UpstreamAction
+	}
+	if action == "" {
+		return fallback
+	}
+	return action
 }
 
 func ResolveChannelCostFactor(billingGroup string, channelID int) float64 {
@@ -463,6 +539,7 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 		config.Routes[i].ProfitGuardMode = normalizeProfitGuardMode(config.Routes[i].ProfitGuardMode)
 		config.Routes[i].GroupType = normalizeBillingGroupType(config.Routes[i].GroupType)
 		config.Routes[i].StrategyConfig = normalizeStrategyConfigJSON(config.Routes[i].StrategyConfig)
+		config.Routes[i].RetryPolicy = normalizeRouteRetryPolicy(config.Routes[i].RetryPolicy)
 	}
 	circuitConfig := GetChannelCircuitConfig()
 	config.CircuitDefaults = circuitConfig.Default
@@ -470,14 +547,378 @@ func GetChannelRoutingConfig() (*ChannelRoutingConfig, error) {
 	return config, nil
 }
 
+func channelBelongsToBillingGroup(channel *Channel, billingGroup string) bool {
+	if channel == nil {
+		return false
+	}
+	for _, group := range strings.Split(channel.Group, ",") {
+		if strings.TrimSpace(group) == billingGroup {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeBillingGroupRoute(route *BillingGroupRoute) error {
+	if route == nil {
+		return errors.New("billing group route is required")
+	}
+	route.BillingGroup = strings.TrimSpace(route.BillingGroup)
+	route.Name = strings.TrimSpace(route.Name)
+	route.Mode = normalizeRoutingMode(route.Mode)
+	route.GroupType = normalizeBillingGroupType(route.GroupType)
+	if route.StrategyConfig == "" {
+		route.StrategyConfig = marshalRoutingStrategyConfig(RoutingStrategyConfig{Type: RoutingStrategyPriority})
+	} else {
+		route.StrategyConfig = normalizeStrategyConfigJSON(route.StrategyConfig)
+	}
+	if err := validateRouteRetryPolicy(route.RetryPolicy); err != nil {
+		return err
+	}
+	route.RetryPolicy = normalizeRouteRetryPolicy(route.RetryPolicy)
+	route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
+	if route.BillingGroup == "" {
+		return errors.New("billing_group is required")
+	}
+	if route.Name == "" {
+		route.Name = route.BillingGroup
+	}
+	if route.MinimumProfitMargin < 0 || route.MinimumProfitMargin >= 100 ||
+		math.IsNaN(route.MinimumProfitMargin) || math.IsInf(route.MinimumProfitMargin, 0) {
+		return errors.New("minimum_profit_margin must be between 0 and 100")
+	}
+	applyRouteDefaults(route)
+	return nil
+}
+
+func validateRouteChannelValues(entry *BillingGroupChannel) error {
+	if entry == nil || entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 ||
+		entry.MaxAttempts <= 0 || entry.CostFactor <= 0 ||
+		math.IsNaN(entry.CostFactor) || math.IsInf(entry.CostFactor, 0) {
+		return errors.New("route channel contains invalid values")
+	}
+	return nil
+}
+
+func validateRouteChannelMembership(
+	entry *BillingGroupChannel,
+	billingGroup string,
+	channel *Channel,
+) error {
+	if channel == nil {
+		return gorm.ErrRecordNotFound
+	}
+	if !channelBelongsToBillingGroup(channel, billingGroup) {
+		return fmt.Errorf(
+			"route channel does not belong to billing group %q (channel_id=%d)",
+			billingGroup,
+			entry.ChannelId,
+		)
+	}
+	return nil
+}
+
+func disableRouteWithoutEnabledChannels(tx *gorm.DB, route *BillingGroupRoute, reason string) error {
+	if !route.Enabled {
+		return nil
+	}
+	route.Enabled = false
+	if err := tx.Model(route).Update("enabled", false).Error; err != nil {
+		return err
+	}
+	common.SysLog(fmt.Sprintf("disabled billing group route %q %s", route.BillingGroup, reason))
+	return nil
+}
+
+// SaveBillingGroupRouteConfig persists one route and replaces only that
+// route's channel list. This avoids unrelated historical rows blocking a
+// small edit elsewhere in the routing page.
+func SaveBillingGroupRouteConfig(config *BillingGroupRouteConfig) error {
+	if config == nil {
+		return errors.New("billing group route config is required")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		clientRouteID := config.Route.Id
+		var previousRoute BillingGroupRoute
+		routeExisted := false
+		if clientRouteID > 0 {
+			if err := lockForUpdate(tx).First(&previousRoute, clientRouteID).Error; err != nil {
+				return err
+			}
+			routeExisted = true
+		}
+		if config.Route.Id < 0 {
+			config.Route.Id = 0
+		}
+		if err := normalizeBillingGroupRoute(&config.Route); err != nil {
+			return err
+		}
+
+		var duplicate BillingGroupRoute
+		duplicateQuery := tx.Where("billing_group = ?", config.Route.BillingGroup)
+		if config.Route.Id > 0 {
+			duplicateQuery = duplicateQuery.Where("id <> ?", config.Route.Id)
+		}
+		if err := duplicateQuery.First(&duplicate).Error; err == nil {
+			return errors.New("billing_group must be unique")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		if err := tx.Save(&config.Route).Error; err != nil {
+			return err
+		}
+		if clientRouteID != 0 && clientRouteID != config.Route.Id {
+			for i := range config.RouteChannels {
+				if config.RouteChannels[i].BillingGroupRouteId == clientRouteID {
+					config.RouteChannels[i].BillingGroupRouteId = config.Route.Id
+				}
+			}
+		}
+
+		var existingEntries []BillingGroupChannel
+		if err := lockForUpdate(tx).
+			Where("billing_group_route_id = ?", config.Route.Id).
+			Order("id ASC").
+			Find(&existingEntries).Error; err != nil {
+			return err
+		}
+		existingByID := make(map[int]BillingGroupChannel, len(existingEntries))
+		for _, entry := range existingEntries {
+			existingByID[entry.Id] = entry
+		}
+
+		channelIDs := make([]int, 0, len(config.RouteChannels))
+		seenChannelIDs := make(map[int]struct{}, len(config.RouteChannels))
+		seenEntryIDs := make(map[int]struct{}, len(config.RouteChannels))
+		enabledChannels := 0
+		keptEntries := make([]BillingGroupChannel, 0, len(config.RouteChannels))
+		strategy := parseRoutingStrategyConfig(config.Route.StrategyConfig)
+		routeRenamed := routeExisted && previousRoute.BillingGroup != config.Route.BillingGroup
+		for i := range config.RouteChannels {
+			entry := &config.RouteChannels[i]
+			if entry.Id < 0 {
+				entry.Id = 0
+			}
+			if entry.BillingGroupRouteId == clientRouteID || entry.BillingGroupRouteId == 0 {
+				entry.BillingGroupRouteId = config.Route.Id
+			}
+			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 {
+				return errors.New("route channel contains invalid values")
+			}
+			if entry.Id > 0 {
+				if _, exists := seenEntryIDs[entry.Id]; exists {
+					return errors.New("a route channel id can appear only once in a request")
+				}
+				seenEntryIDs[entry.Id] = struct{}{}
+			}
+			if entry.BillingGroupRouteId != config.Route.Id {
+				return errors.New("route channel references a different billing group route")
+			}
+			if _, exists := seenChannelIDs[entry.ChannelId]; exists {
+				return errors.New("a channel can appear only once in a billing group route")
+			}
+			seenChannelIDs[entry.ChannelId] = struct{}{}
+
+			var previous BillingGroupChannel
+			isPersistedEntry := false
+			if entry.Id > 0 {
+				var exists bool
+				previous, exists = existingByID[entry.Id]
+				if !exists {
+					return fmt.Errorf("route channel id %d does not exist for this route", entry.Id)
+				}
+				if previous.BillingGroupRouteId != config.Route.Id || previous.ChannelId != entry.ChannelId {
+					return errors.New("existing route channel cannot be reassigned; remove it and add a new channel")
+				}
+				isPersistedEntry = true
+			}
+			channel, err := findChannelForRouting(tx, entry.ChannelId)
+			if errors.Is(err, gorm.ErrRecordNotFound) && isPersistedEntry {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if isPersistedEntry && !routeRenamed && !channelBelongsToBillingGroup(channel, previousRoute.BillingGroup) {
+				continue
+			}
+			if err := validateRouteChannelValues(entry); err != nil {
+				return err
+			}
+			if err := validateRouteChannelMembership(entry, config.Route.BillingGroup, channel); err != nil {
+				return err
+			}
+			if strategy.Type == RoutingStrategyPriority {
+				entry.Weight = 0
+			} else if entry.Weight < 0 {
+				return errors.New("route channel weight must be non-negative")
+			}
+			if entry.Enabled {
+				enabledChannels++
+			}
+			if err := tx.Save(entry).Error; err != nil {
+				return err
+			}
+			channelIDs = append(channelIDs, entry.Id)
+			keptEntries = append(keptEntries, *entry)
+		}
+
+		if config.Route.Enabled && enabledChannels == 0 {
+			if !routeExisted {
+				return errors.New("enabled billing group route requires an enabled channel")
+			}
+			if err := disableRouteWithoutEnabledChannels(tx, &config.Route, "after removing its last enabled channel"); err != nil {
+				return err
+			}
+		}
+		if err := deleteMissingRowsForRoute(tx, config.Route.Id, channelIDs); err != nil {
+			return err
+		}
+		config.RouteChannels = keptEntries
+		return nil
+	})
+}
+
+func findChannelForRouting(tx *gorm.DB, channelID int) (*Channel, error) {
+	var channel Channel
+	if err := tx.First(&channel, channelID).Error; err != nil {
+		return nil, err
+	}
+	return &channel, nil
+}
+
+func deleteMissingRowsForRoute(tx *gorm.DB, routeID int, ids []int) error {
+	query := tx.Where("billing_group_route_id = ?", routeID)
+	if len(ids) > 0 {
+		query = query.Where("id NOT IN ?", ids)
+	}
+	return query.Delete(&BillingGroupChannel{}).Error
+}
+
+func DeleteBillingGroupRoute(routeID int) error {
+	if routeID <= 0 {
+		return errors.New("billing group route id must be positive")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var route BillingGroupRoute
+		if err := lockForUpdate(tx).First(&route, routeID).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			// A stale page can submit a route that another save or delete
+			// already removed. Treat that state as deleted and still remove
+			// any historical bindings left behind for the old id.
+			return tx.Where("billing_group_route_id = ?", routeID).
+				Delete(&BillingGroupChannel{}).Error
+		}
+		if err := tx.Where("billing_group_route_id = ?", routeID).Delete(&BillingGroupChannel{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&route).Error
+	})
+}
+
+// CleanupStaleBillingGroupRoutes removes route-channel rows whose channel was
+// deleted or whose channel no longer lists the route's billing group. Routes
+// left without an enabled channel are disabled so the cache cannot advertise
+// an active route that has nothing to serve.
+func CleanupStaleBillingGroupRoutes(routeID int) (StaleRouteCleanupResult, error) {
+	if routeID < 0 {
+		return StaleRouteCleanupResult{}, errors.New("billing group route id must be non-negative")
+	}
+	result := StaleRouteCleanupResult{}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if routeID == 0 {
+			nullRouteResult := tx.Where("billing_group_route_id IS NULL").Delete(&BillingGroupChannel{})
+			if nullRouteResult.Error != nil {
+				return nullRouteResult.Error
+			}
+			result.RemovedRouteChannels += int(nullRouteResult.RowsAffected)
+
+			missingRouteResult := tx.Where(
+				"billing_group_route_id NOT IN (?)",
+				tx.Model(&BillingGroupRoute{}).Select("id"),
+			).Delete(&BillingGroupChannel{})
+			if missingRouteResult.Error != nil {
+				return missingRouteResult.Error
+			}
+			result.RemovedRouteChannels += int(missingRouteResult.RowsAffected)
+		}
+
+		var routes []BillingGroupRoute
+		query := lockForUpdate(tx).Order("id ASC")
+		if routeID > 0 {
+			query = query.Where("id = ?", routeID)
+		}
+		if err := query.Find(&routes).Error; err != nil {
+			return err
+		}
+		if routeID > 0 && len(routes) == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		for _, route := range routes {
+			var entries []BillingGroupChannel
+			if err := tx.Where("billing_group_route_id = ?", route.Id).Find(&entries).Error; err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				channel, err := findChannelForRouting(tx, entry.ChannelId)
+				if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && !channelBelongsToBillingGroup(channel, route.BillingGroup)) {
+					if err := tx.Delete(&entry).Error; err != nil {
+						return err
+					}
+					result.RemovedRouteChannels++
+					continue
+				}
+				if err != nil {
+					return err
+				}
+			}
+			var enabledCount int64
+			if err := tx.Model(&BillingGroupChannel{}).
+				Where("billing_group_route_id = ? AND enabled = ?", route.Id, true).
+				Count(&enabledCount).Error; err != nil {
+				return err
+			}
+			if route.Enabled && enabledCount == 0 {
+				if err := disableRouteWithoutEnabledChannels(tx, &route, "after stale channel cleanup"); err != nil {
+					return err
+				}
+				result.DisabledRoutes++
+			}
+		}
+		return nil
+	})
+	return result, err
+}
+
 func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 	if config == nil {
 		return errors.New("channel routing config is required")
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		var persistedRoutes []BillingGroupRoute
+		if err := lockForUpdate(tx).Order("id ASC").Find(&persistedRoutes).Error; err != nil {
+			return err
+		}
+		routesByID := make(map[int]BillingGroupRoute, len(persistedRoutes))
+		for _, route := range persistedRoutes {
+			routesByID[route.Id] = route
+		}
+		var persistedEntries []BillingGroupChannel
+		if err := lockForUpdate(tx).Order("id ASC").Find(&persistedEntries).Error; err != nil {
+			return err
+		}
+		entriesByID := make(map[int]BillingGroupChannel, len(persistedEntries))
+		for _, entry := range persistedEntries {
+			entriesByID[entry.Id] = entry
+		}
+
 		routeIDs := make([]int, 0, len(config.Routes))
 		routeIDMap := make(map[int]int, len(config.Routes))
 		routeGroupByID := make(map[int]string, len(config.Routes))
+		routeExistedByID := make(map[int]bool, len(config.Routes))
 		seenGroups := make(map[string]struct{}, len(config.Routes))
 		for i := range config.Routes {
 			route := &config.Routes[i]
@@ -495,6 +936,10 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 				route.StrategyConfig = normalizeStrategyConfigJSON(route.StrategyConfig)
 			}
 			route.ProfitGuardMode = normalizeProfitGuardMode(route.ProfitGuardMode)
+			if err := validateRouteRetryPolicy(route.RetryPolicy); err != nil {
+				return err
+			}
+			route.RetryPolicy = normalizeRouteRetryPolicy(route.RetryPolicy)
 			if route.BillingGroup == "" {
 				return errors.New("billing_group is required")
 			}
@@ -516,6 +961,7 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			routeIDs = append(routeIDs, route.Id)
 			routeIDMap[clientRouteID] = route.Id
 			routeGroupByID[route.Id] = route.BillingGroup
+			_, routeExistedByID[route.Id] = routesByID[route.Id]
 		}
 
 		routeChannelIndexes := make(map[int][]int, len(config.Routes))
@@ -570,13 +1016,19 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			}
 		}
 		seenRouteChannels := make(map[[2]int]struct{}, len(config.RouteChannels))
+		seenEntryIDs := make(map[int]struct{}, len(config.RouteChannels))
 		enabledChannelsByRoute := make(map[int]int, len(config.Routes))
-		totalAttemptsByRoute := make(map[int]int, len(config.Routes))
+		keptEntries := make([]BillingGroupChannel, 0, len(config.RouteChannels))
 		for i := range config.RouteChannels {
 			entry := &config.RouteChannels[i]
-			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 || entry.MaxAttempts <= 0 || entry.CostFactor <= 0 ||
-				math.IsNaN(entry.CostFactor) || math.IsInf(entry.CostFactor, 0) {
+			if entry.BillingGroupRouteId <= 0 || entry.ChannelId <= 0 {
 				return errors.New("route channel contains invalid values")
+			}
+			if entry.Id > 0 {
+				if _, exists := seenEntryIDs[entry.Id]; exists {
+					return errors.New("a route channel id can appear only once in a request")
+				}
+				seenEntryIDs[entry.Id] = struct{}{}
 			}
 			key := [2]int{entry.BillingGroupRouteId, entry.ChannelId}
 			if _, exists := seenRouteChannels[key]; exists {
@@ -587,9 +1039,29 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			if !ok {
 				return errors.New("route channel references an unknown billing group route")
 			}
-			channel, ok := channelsByID[entry.ChannelId]
-			if !ok {
+			previous, isPersistedEntry := entriesByID[entry.Id]
+			if isPersistedEntry && (previous.BillingGroupRouteId != entry.BillingGroupRouteId || previous.ChannelId != entry.ChannelId) {
+				return errors.New("existing route channel cannot be reassigned; remove it and add a new channel")
+			}
+			channel, channelExists := channelsByID[entry.ChannelId]
+			if !channelExists {
+				if isPersistedEntry {
+					continue
+				}
 				return gorm.ErrRecordNotFound
+			}
+			if isPersistedEntry {
+				previousRoute, exists := routesByID[previous.BillingGroupRouteId]
+				if exists && previousRoute.BillingGroup == billingGroup &&
+					!channelBelongsToBillingGroup(&channel, previousRoute.BillingGroup) {
+					continue
+				}
+			}
+			if err := validateRouteChannelValues(entry); err != nil {
+				return err
+			}
+			if !channelBelongsToBillingGroup(&channel, billingGroup) {
+				return errors.New("route channel does not belong to its billing group")
 			}
 			strategy := parseRoutingStrategyConfig(routeStrategyConfig(config.Routes, entry.BillingGroupRouteId))
 			if strategy.Type == RoutingStrategyPriority {
@@ -597,81 +1069,88 @@ func SaveChannelRoutingConfig(config *ChannelRoutingConfig) error {
 			} else if entry.Weight < 0 {
 				return errors.New("route channel weight must be non-negative")
 			}
-			belongsToGroup := false
-			for _, group := range strings.Split(channel.Group, ",") {
-				if strings.TrimSpace(group) == billingGroup {
-					belongsToGroup = true
-					break
-				}
-			}
-			if !belongsToGroup {
-				return errors.New("route channel does not belong to its billing group")
-			}
 			if entry.Enabled {
 				enabledChannelsByRoute[entry.BillingGroupRouteId]++
-				totalAttemptsByRoute[entry.BillingGroupRouteId] += entry.MaxAttempts
 			}
 			if err := tx.Save(entry).Error; err != nil {
 				return err
 			}
 			channelIDs = append(channelIDs, entry.Id)
+			keptEntries = append(keptEntries, *entry)
 		}
 		for i := range config.Routes {
 			route := &config.Routes[i]
-			if attempts := totalAttemptsByRoute[route.Id]; attempts > 0 {
-				route.MaxTotalAttempts = attempts
-				if err := tx.Model(route).Update("max_total_attempts", attempts).Error; err != nil {
+			if route.Enabled && enabledChannelsByRoute[route.Id] == 0 {
+				if !routeExistedByID[route.Id] {
+					return errors.New("enabled billing group route requires an enabled channel")
+				}
+				if err := disableRouteWithoutEnabledChannels(tx, route, "after removing its last enabled channel"); err != nil {
 					return err
 				}
 			}
-			if route.Enabled && enabledChannelsByRoute[route.Id] == 0 {
-				return errors.New("enabled billing group route requires an enabled channel")
-			}
-		}
-
-		mappingIDs := make([]int, 0, len(config.ErrorMappings))
-		for i := range config.ErrorMappings {
-			mapping := &config.ErrorMappings[i]
-			if mapping.Id < 0 {
-				mapping.Id = 0
-			}
-			mapping.RawCode = strings.ToLower(strings.TrimSpace(mapping.RawCode))
-			mapping.Category = strings.TrimSpace(mapping.Category)
-			mapping.FailureScope = strings.TrimSpace(mapping.FailureScope)
-			mapping.Action = strings.TrimSpace(mapping.Action)
-			if mapping.AlltokenCode < 100000 || mapping.AlltokenCode > 999999 {
-				return errors.New("error mapping alltoken_code must be a six-digit number")
-			}
-			if mapping.StatusCode != 0 && (mapping.StatusCode < 100 || mapping.StatusCode > 599) {
-				return errors.New("error mapping status_code must be 0 or a valid HTTP status")
-			}
-			if mapping.RawCode == "" && mapping.StatusCode == 0 {
-				return errors.New("error mapping requires raw_code or status_code")
-			}
-			switch mapping.FailureScope {
-			case "request", "credential", "channel", "provider":
-			default:
-				return errors.New("error mapping failure_scope is invalid")
-			}
-			switch mapping.Action {
-			case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
-			default:
-				return errors.New("error mapping action is invalid")
-			}
-			if err := tx.Save(mapping).Error; err != nil {
-				return err
-			}
-			mappingIDs = append(mappingIDs, mapping.Id)
 		}
 
 		if err := deleteMissingRows(tx, &BillingGroupChannel{}, "id", channelIDs); err != nil {
 			return err
 		}
+		config.RouteChannels = keptEntries
 		if err := deleteMissingRows(tx, &BillingGroupRoute{}, "id", routeIDs); err != nil {
 			return err
 		}
-		return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
+		return saveUpstreamErrorMappings(tx, config.ErrorMappings)
 	})
+}
+
+// SaveUpstreamErrorMappings replaces only the provider error translation
+// rules. Route and route-channel rows are intentionally outside this write so
+// a stale monitoring tab cannot overwrite newer routing edits.
+func SaveUpstreamErrorMappings(mappings []UpstreamErrorMapping) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		return saveUpstreamErrorMappings(tx, mappings)
+	})
+}
+
+func saveUpstreamErrorMappings(tx *gorm.DB, mappings []UpstreamErrorMapping) error {
+	var persistedMappings []UpstreamErrorMapping
+	if err := lockForUpdate(tx).Order("id ASC").Find(&persistedMappings).Error; err != nil {
+		return err
+	}
+
+	mappingIDs := make([]int, 0, len(mappings))
+	for i := range mappings {
+		mapping := &mappings[i]
+		if mapping.Id < 0 {
+			mapping.Id = 0
+		}
+		mapping.RawCode = strings.ToLower(strings.TrimSpace(mapping.RawCode))
+		mapping.Category = strings.TrimSpace(mapping.Category)
+		mapping.FailureScope = strings.TrimSpace(mapping.FailureScope)
+		mapping.Action = strings.TrimSpace(mapping.Action)
+		if mapping.AlltokenCode < 100000 || mapping.AlltokenCode > 999999 {
+			return errors.New("error mapping alltoken_code must be a six-digit number")
+		}
+		if mapping.StatusCode != 0 && (mapping.StatusCode < 100 || mapping.StatusCode > 599) {
+			return errors.New("error mapping status_code must be 0 or a valid HTTP status")
+		}
+		if mapping.RawCode == "" && mapping.StatusCode == 0 {
+			return errors.New("error mapping requires raw_code or status_code")
+		}
+		switch mapping.FailureScope {
+		case "request", "credential", "channel", "provider":
+		default:
+			return errors.New("error mapping failure_scope is invalid")
+		}
+		switch mapping.Action {
+		case "none", "retry_channel", "switch_channel", "retry_later", "abort", "manual":
+		default:
+			return errors.New("error mapping action is invalid")
+		}
+		if err := tx.Save(mapping).Error; err != nil {
+			return err
+		}
+		mappingIDs = append(mappingIDs, mapping.Id)
+	}
+	return deleteMissingRows(tx, &UpstreamErrorMapping{}, "id", mappingIDs)
 }
 
 func deleteMissingRows(tx *gorm.DB, value any, column string, ids []int) error {
@@ -741,7 +1220,7 @@ func UpdateBillingGroupType(billingGroup, groupType string) error {
 
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var route BillingGroupRoute
-		err := tx.Where("billing_group = ?", billingGroup).First(&route).Error
+		err := lockForUpdate(tx).Where("billing_group = ?", billingGroup).First(&route).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			route = BillingGroupRoute{
 				BillingGroup:    billingGroup,

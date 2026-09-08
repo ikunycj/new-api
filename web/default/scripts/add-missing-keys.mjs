@@ -24,13 +24,16 @@ const newKeys = {
     Timeouts: 'Timeouts',
     'Upstream total timeout (seconds)': 'Upstream total timeout (seconds)',
     'Streaming idle timeout (seconds)': 'Streaming idle timeout (seconds)',
-    'Upstream idle connection timeout (seconds)': 'Upstream idle connection timeout (seconds)',
+    'Upstream idle connection timeout (seconds)':
+      'Upstream idle connection timeout (seconds)',
     'Client write timeout (seconds)': 'Client write timeout (seconds)',
     'Shutdown grace period (seconds)': 'Shutdown grace period (seconds)',
     '0 means unlimited.': '0 means unlimited.',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.',
     'Available channels': 'Available channels',
-    'Read-only view of channels available to your user group.': 'Read-only view of channels available to your user group.',
+    'Read-only view of channels available to your user group.':
+      'Read-only view of channels available to your user group.',
     'No available channels': 'No available channels',
     'Group Management': 'Group Management',
     'Channels are attempted in order; each channel can simulate failures and latency.':
@@ -185,9 +188,11 @@ const newKeys = {
     'Client write timeout (seconds)': '客户端写超时（秒）',
     'Shutdown grace period (seconds)': '服务关闭等待时间（秒）',
     '0 means unlimited.': '0 表示不限制。',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '修改会立即应用于新请求。网关代理超时仍由主机配置管理。',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      '修改会立即应用于新请求。网关代理超时仍由主机配置管理。',
     'Available channels': '可用渠道',
-    'Read-only view of channels available to your user group.': '这里只读展示当前用户分组可用的渠道。',
+    'Read-only view of channels available to your user group.':
+      '这里只读展示当前用户分组可用的渠道。',
     'No available channels': '暂无可用渠道',
     'Group Management': '分组管理',
     'Channels are attempted in order; each channel can simulate failures and latency.':
@@ -335,14 +340,18 @@ const newKeys = {
   fr: {
     Timeouts: 'Délais d’expiration',
     'Upstream total timeout (seconds)': 'Délai total amont (secondes)',
-    'Streaming idle timeout (seconds)': 'Délai d’inactivité du streaming (secondes)',
-    'Upstream idle connection timeout (seconds)': 'Délai de connexion inactive amont (secondes)',
+    'Streaming idle timeout (seconds)':
+      'Délai d’inactivité du streaming (secondes)',
+    'Upstream idle connection timeout (seconds)':
+      'Délai de connexion inactive amont (secondes)',
     'Client write timeout (seconds)': 'Délai d’écriture client (secondes)',
     'Shutdown grace period (seconds)': 'Délai de grâce à l’arrêt (secondes)',
     '0 means unlimited.': '0 signifie illimité.',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      'Les changements s’appliquent immédiatement aux nouvelles requêtes. Les délais du proxy restent gérés par la configuration de l’hôte.',
     'Available channels': 'Canaux disponibles',
-    'Read-only view of channels available to your user group.': 'Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.',
+    'Read-only view of channels available to your user group.':
+      'Vue en lecture seule des canaux disponibles pour votre groupe utilisateur.',
     'No available channels': 'Aucun canal disponible',
     'Group Management': 'Gestion des groupes',
     'Local load-test agent': 'Agent de test de charge local',
@@ -473,14 +482,18 @@ const newKeys = {
   ja: {
     Timeouts: 'タイムアウト',
     'Upstream total timeout (seconds)': '上流の合計タイムアウト（秒）',
-    'Streaming idle timeout (seconds)': 'ストリーミング無通信タイムアウト（秒）',
-    'Upstream idle connection timeout (seconds)': '上流アイドル接続タイムアウト（秒）',
+    'Streaming idle timeout (seconds)':
+      'ストリーミング無通信タイムアウト（秒）',
+    'Upstream idle connection timeout (seconds)':
+      '上流アイドル接続タイムアウト（秒）',
     'Client write timeout (seconds)': 'クライアント書き込みタイムアウト（秒）',
     'Shutdown grace period (seconds)': 'シャットダウン猶予時間（秒）',
     '0 means unlimited.': '0 は無制限を意味します。',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': '変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      '変更は新しいリクエストに直ちに適用されます。ゲートウェイプロキシのタイムアウトはホスト設定で管理されます。',
     'Available channels': '利用可能なチャンネル',
-    'Read-only view of channels available to your user group.': 'ユーザーグループで利用できるチャンネルを読み取り専用で表示します。',
+    'Read-only view of channels available to your user group.':
+      'ユーザーグループで利用できるチャンネルを読み取り専用で表示します。',
     'No available channels': '利用可能なチャンネルはありません',
     'Group Management': 'グループ管理',
     'Local load-test agent': 'ローカル負荷テスト Agent',
@@ -610,15 +623,21 @@ const newKeys = {
   },
   ru: {
     Timeouts: 'Тайм-ауты',
-    'Upstream total timeout (seconds)': 'Общий тайм-аут восходящего сервиса (секунды)',
-    'Streaming idle timeout (seconds)': 'Тайм-аут простоя потоковой передачи (секунды)',
-    'Upstream idle connection timeout (seconds)': 'Тайм-аут бездействующего соединения с восходящим сервисом (секунды)',
+    'Upstream total timeout (seconds)':
+      'Общий тайм-аут восходящего сервиса (секунды)',
+    'Streaming idle timeout (seconds)':
+      'Тайм-аут простоя потоковой передачи (секунды)',
+    'Upstream idle connection timeout (seconds)':
+      'Тайм-аут бездействующего соединения с восходящим сервисом (секунды)',
     'Client write timeout (seconds)': 'Тайм-аут записи клиенту (секунды)',
-    'Shutdown grace period (seconds)': 'Период ожидания при завершении (секунды)',
+    'Shutdown grace period (seconds)':
+      'Период ожидания при завершении (секунды)',
     '0 means unlimited.': '0 означает отсутствие ограничения.',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      'Изменения сразу применяются к новым запросам. Тайм-ауты прокси шлюза по-прежнему управляются конфигурацией хоста.',
     'Available channels': 'Доступные каналы',
-    'Read-only view of channels available to your user group.': 'Каналы, доступные вашей группе пользователей, доступны только для чтения.',
+    'Read-only view of channels available to your user group.':
+      'Каналы, доступные вашей группе пользователей, доступны только для чтения.',
     'No available channels': 'Нет доступных каналов',
     'Group Management': 'Управление группами',
     'Local load-test agent': 'Локальный агент нагрузочного теста',
@@ -748,15 +767,20 @@ const newKeys = {
   },
   vi: {
     Timeouts: 'Thời gian chờ',
-    'Upstream total timeout (seconds)': 'Thời gian chờ tổng của upstream (giây)',
-    'Streaming idle timeout (seconds)': 'Thời gian chờ không hoạt động của luồng (giây)',
-    'Upstream idle connection timeout (seconds)': 'Thời gian chờ kết nối upstream nhàn rỗi (giây)',
+    'Upstream total timeout (seconds)':
+      'Thời gian chờ tổng của upstream (giây)',
+    'Streaming idle timeout (seconds)':
+      'Thời gian chờ không hoạt động của luồng (giây)',
+    'Upstream idle connection timeout (seconds)':
+      'Thời gian chờ kết nối upstream nhàn rỗi (giây)',
     'Client write timeout (seconds)': 'Thời gian chờ ghi cho máy khách (giây)',
     'Shutdown grace period (seconds)': 'Thời gian chờ tắt máy (giây)',
     '0 means unlimited.': '0 có nghĩa là không giới hạn.',
-    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.': 'Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý.',
+    'Changes apply immediately to new requests. Gateway proxy timeouts remain managed by the host configuration.':
+      'Thay đổi áp dụng ngay cho các yêu cầu mới. Thời gian chờ proxy gateway vẫn do cấu hình máy chủ quản lý.',
     'Available channels': 'Các kênh khả dụng',
-    'Read-only view of channels available to your user group.': 'Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.',
+    'Read-only view of channels available to your user group.':
+      'Chỉ đọc các kênh khả dụng cho nhóm người dùng của bạn.',
     'No available channels': 'Không có kênh khả dụng',
     'Group Management': 'Quản lý nhóm',
     'Local load-test agent': 'Agent kiểm thử tải cục bộ',
@@ -2307,7 +2331,121 @@ const routeRateLimitKeys = {
       '此處控制模型請求速率限制。路由速率限制可在下方設定，仍可能回傳 429。',
   },
 }
+const routeCleanupKeys = {
+  en: {
+    'Save route': 'Save route',
+    'Clean stale bindings': 'Clean stale bindings',
+    'Billing group route deleted': 'Billing group route deleted',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.',
+  },
+  zh: {
+    'Save route': '保存路由',
+    'Clean stale bindings': '清理陈旧关联',
+    'Billing group route deleted': '计费分组路由已删除',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      '已删除 {{removed}} 条陈旧路由关联，并停用 {{disabled}} 条路由。',
+  },
+  fr: {
+    'Save route': 'Enregistrer la route',
+    'Clean stale bindings': 'Nettoyer les liaisons obsolètes',
+    'Billing group route deleted': 'Route de groupe de facturation supprimée',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      '{{removed}} liaisons obsolètes supprimées et {{disabled}} routes désactivées.',
+  },
+  ja: {
+    'Save route': 'ルートを保存',
+    'Clean stale bindings': '古い関連付けを整理',
+    'Billing group route deleted': '請求グループのルートを削除しました',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      '古いルート関連付けを{{removed}}件削除し、{{disabled}}件のルートを無効化しました。',
+  },
+  ru: {
+    'Save route': 'Сохранить маршрут',
+    'Clean stale bindings': 'Очистить устаревшие связи',
+    'Billing group route deleted': 'Маршрут группы биллинга удалён',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      'Удалено устаревших связей: {{removed}}, отключено маршрутов: {{disabled}}.',
+  },
+  vi: {
+    'Save route': 'Lưu tuyến',
+    'Clean stale bindings': 'Dọn liên kết cũ',
+    'Billing group route deleted': 'Đã xóa tuyến nhóm thanh toán',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      'Đã xóa {{removed}} liên kết tuyến cũ và vô hiệu hóa {{disabled}} tuyến.',
+  },
+  'zh-TW': {
+    'Save route': '儲存路由',
+    'Clean stale bindings': '清理過期關聯',
+    'Billing group route deleted': '計費分組路由已刪除',
+    'Removed {{removed}} stale route bindings and disabled {{disabled}} routes.':
+      '已刪除 {{removed}} 條過期路由關聯，並停用 {{disabled}} 條路由。',
+  },
+}
+for (const [locale, translations] of Object.entries(routeCleanupKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
 for (const [locale, translations] of Object.entries(routeRateLimitKeys)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const routeRetryKeys = {
+  en: {
+    '429 action': '429 action',
+    '5xx action': '5xx action',
+    'Use global error mapping': 'Use global error mapping',
+    switch_channel: 'Switch channel',
+    retry_channel: 'Retry channel',
+    retry_later: 'Retry later',
+    abort: 'Abort',
+  },
+  zh: {
+    '429 action': '429 动作',
+    '5xx action': '5xx 动作',
+    'Use global error mapping': '使用全局错误映射',
+    switch_channel: '切换渠道',
+    retry_channel: '重试当前渠道',
+    retry_later: '稍后重试',
+    abort: '终止',
+  },
+  fr: {
+    '429 action': 'Action 429',
+    '5xx action': 'Action 5xx',
+    'Use global error mapping': 'Utiliser le mappage global',
+    switch_channel: 'Changer de canal',
+    retry_channel: 'Réessayer le canal',
+    retry_later: 'Réessayer plus tard',
+    abort: 'Abandonner',
+  },
+  ja: {
+    '429 action': '429 アクション',
+    '5xx action': '5xx アクション',
+    'Use global error mapping': 'グローバルエラーマッピングを使用',
+    switch_channel: 'チャネルを切り替え',
+    retry_channel: 'チャネルを再試行',
+    retry_later: '後で再試行',
+    abort: '中止',
+  },
+  ru: {
+    '429 action': 'Действие для 429',
+    '5xx action': 'Действие для 5xx',
+    'Use global error mapping': 'Использовать глобальное сопоставление',
+    switch_channel: 'Сменить канал',
+    retry_channel: 'Повторить канал',
+    retry_later: 'Повторить позже',
+    abort: 'Прервать',
+  },
+  vi: {
+    '429 action': 'Hành động 429',
+    '5xx action': 'Hành động 5xx',
+    'Use global error mapping': 'Dùng ánh xạ lỗi toàn cục',
+    switch_channel: 'Chuyển kênh',
+    retry_channel: 'Thử lại kênh',
+    retry_later: 'Thử lại sau',
+    abort: 'Hủy',
+  },
+}
+for (const [locale, translations] of Object.entries(routeRetryKeys)) {
   Object.assign(newKeys[locale], translations)
 }
 

@@ -14,7 +14,7 @@ import { getChannels } from '@/features/channels/api'
 import {
   getFailoverConfig,
   getFailoverMonitoring,
-  updateFailoverConfig,
+  updateFailoverErrorMappings,
 } from './api'
 import type {
   FailoverConfig,
@@ -104,7 +104,7 @@ export function FailoverConfiguration() {
   const monitoringUnavailable = monitoringQuery.isError
   const monitoringLoading = monitoringQuery.isPending
   const saveMutation = useMutation({
-    mutationFn: updateFailoverConfig,
+    mutationFn: updateFailoverErrorMappings,
     onSuccess: async () => {
       toast.success(t('Error mappings saved'))
       setDraft(null)
@@ -132,7 +132,7 @@ export function FailoverConfiguration() {
           </p>
         </div>
         <Button
-          onClick={() => saveMutation.mutate(config)}
+          onClick={() => saveMutation.mutate(config.error_mappings)}
           disabled={!draft || saveMutation.isPending}
         >
           <Save className='size-4' /> {t('Save')}
@@ -330,16 +330,18 @@ export function FailoverConfiguration() {
               >
                 <ExternalLink className='size-4' /> {t('Open Grafana')}
               </Button>
-              ) : null}
+            ) : null}
           </div>
           {monitoringDisabled && (
             <div className='space-y-4 border p-4'>
               <div className='flex items-start gap-3'>
-                <CircleOff className='mt-0.5 size-5 shrink-0 text-muted-foreground' />
+                <CircleOff className='text-muted-foreground mt-0.5 size-5 shrink-0' />
                 <div className='space-y-1'>
                   <div className='font-medium'>{t('Monitoring disabled')}</div>
                   <p className='text-muted-foreground text-sm'>
-                    {t('Prometheus, Alertmanager, Grafana, metrics listener, and structured event logs are disabled.')}
+                    {t(
+                      'Prometheus, Alertmanager, Grafana, metrics listener, and structured event logs are disabled.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -363,44 +365,57 @@ export function FailoverConfiguration() {
           )}
           {!monitoringDisabled && monitoringUnavailable && (
             <div className='border p-4 text-sm'>
-              <div className='font-medium'>{t('Monitoring data unavailable')}</div>
+              <div className='font-medium'>
+                {t('Monitoring data unavailable')}
+              </div>
               <div className='text-muted-foreground'>
                 {t('The monitoring status endpoint could not be reached.')}
               </div>
             </div>
           )}
-          {!monitoringDisabled && !monitoringUnavailable && monitoringLoading && (
-            <div className='border p-4 text-sm text-muted-foreground'>
-              {t('Loading')}
-            </div>
-          )}
+          {!monitoringDisabled &&
+            !monitoringUnavailable &&
+            monitoringLoading && (
+              <div className='text-muted-foreground border p-4 text-sm'>
+                {t('Loading')}
+              </div>
+            )}
           {!monitoringDisabled &&
             !monitoringUnavailable &&
             !monitoringLoading && (
-            <>
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-                {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
-                  ([label, value]) => (
-                    <div key={label} className='border-b py-3'>
-                      <div className='text-muted-foreground text-sm'>{label}</div>
-                      <div className='mt-1 text-xl font-semibold'>{value}</div>
+              <>
+                <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                  {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
+                    ([label, value]) => (
+                      <div key={label} className='border-b py-3'>
+                        <div className='text-muted-foreground text-sm'>
+                          {label}
+                        </div>
+                        <div className='mt-1 text-xl font-semibold'>
+                          {value}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+                <div className='mt-6 space-y-2'>
+                  {monitoringQuery.data?.alerts.map((alert) => (
+                    <div
+                      key={alert.fingerprint}
+                      className='border-b py-3 text-sm'
+                    >
+                      <div className='font-medium'>
+                        {alert.name}
+                        {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
+                      </div>
+                      <div className='text-muted-foreground'>
+                        {alert.summary}
+                      </div>
                     </div>
-                  )
-                )}
-              </div>
-              <div className='mt-6 space-y-2'>
-                {monitoringQuery.data?.alerts.map((alert) => (
-                  <div key={alert.fingerprint} className='border-b py-3 text-sm'>
-                    <div className='font-medium'>
-                      {alert.name}
-                      {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
-                    </div>
-                    <div className='text-muted-foreground'>{alert.summary}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+                  ))}
+                </div>
+              </>
+            )}
         </TabsContent>
       </Tabs>
     </div>

@@ -6483,6 +6483,17 @@
     "Optional URL shown to ToB/VIP users": "可选，仅展示给 ToB/VIP 用户的 URL",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP 用户将看到此 URL，而不是实际上游地址。留空则使用基础 URL。",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "已将计费分组 {{billing_group}} 的客户类型更新为 {{group_type}}",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "请先删除该分组的路由配置并保存，然后再删除定价分组。"
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "请先删除该分组的路由配置并保存，然后再删除定价分组。",
+    "429 action": "429 动作",
+    "5xx action": "5xx 动作",
+    "switch_channel": "切换渠道",
+    "retry_channel": "重试当前渠道",
+    "retry_later": "稍后重试",
+    "abort": "终止",
+    "Use global error mapping": "使用全局错误映射",
+    "Save route": "保存路由",
+    "Clean stale bindings": "清理陈旧关联",
+    "Billing group route deleted": "计费分组路由已删除",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "已删除 {{removed}} 条陈旧路由关联，并停用 {{disabled}} 条路由。"
   }
 }

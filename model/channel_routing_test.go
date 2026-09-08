@@ -36,7 +36,7 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	config := &ChannelRoutingConfig{
 		Routes: []BillingGroupRoute{{
 			Id: 17, BillingGroup: " claude ", Name: " Claude ", Mode: RoutingModeStabilityFirst, Enabled: true,
-			ProfitGuardMode: ProfitGuardModeWarn, MinimumProfitMargin: 12.5,
+			MaxTotalAttempts: 2, ProfitGuardMode: ProfitGuardModeWarn, MinimumProfitMargin: 12.5,
 		}},
 		RouteChannels: []BillingGroupChannel{
 			{Id: 1, BillingGroupRouteId: 17, ChannelId: 38, Priority: 100, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 0.6},
@@ -68,6 +68,69 @@ func TestSaveChannelRoutingConfigPersistsOrderedChannelsAndRemovesMissingRows(t 
 	var oldCount int64
 	require.NoError(t, DB.Model(&BillingGroupRoute{}).Where("id = ?", 9).Count(&oldCount).Error)
 	assert.Zero(t, oldCount)
+}
+
+func TestSaveBillingGroupRoutePreservesExplicitTotalAttemptBudget(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 38, Name: "Claude primary", Group: "claude"},
+		{Id: 40, Name: "Claude fallback", Group: "claude"},
+	}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true,
+		MaxTotalAttempts: 2, RetryPolicy: `{"rate_limit_action":"switch_channel","upstream_action":"retry_channel"}`,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{
+			Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true,
+			MaxTotalAttempts: 2, RetryPolicy: `{"rate_limit_action":"switch_channel","upstream_action":"retry_channel"}`,
+		},
+		RouteChannels: []BillingGroupChannel{
+			{BillingGroupRouteId: 9, ChannelId: 38, Priority: 2, MaxAttempts: 3, Enabled: true, CostFactor: 1},
+			{BillingGroupRouteId: 9, ChannelId: 40, Priority: 1, MaxAttempts: 3, Enabled: true, CostFactor: 1},
+		},
+	}
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+
+	InitChannelRoutingCache()
+	policy, _, ok := ResolveBillingGroupRoute("claude")
+	require.True(t, ok)
+	assert.Equal(t, 2, policy.MaxTotalAttempts)
+	assert.Equal(t, "retry_channel", policy.RetryAction("upstream", 502, "switch_channel"))
+	assert.Equal(t, "retry_channel", policy.RetryAction("network", 504, "switch_channel"))
+}
+
+func TestSaveUpstreamErrorMappingsPreservesRoutesAndBindings(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{
+		Id: 9, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 7,
+	}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 2, Enabled: true, CostFactor: 1,
+	}).Error)
+	require.NoError(t, DB.Create(&[]UpstreamErrorMapping{
+		{Id: 1, RawCode: "rate_limit", StatusCode: 429, AlltokenCode: 204001, Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true},
+		{Id: 2, RawCode: "overloaded", StatusCode: 503, AlltokenCode: 205004, Category: "upstream", FailureScope: "provider", Action: "retry_later", Retryable: true, Enabled: true},
+	}).Error)
+
+	mappings := []UpstreamErrorMapping{{
+		Id: 1, RawCode: " RATE_LIMIT ", StatusCode: 429, AlltokenCode: 204001,
+		Category: "rate_limit", FailureScope: "channel", Action: "switch_channel", Retryable: true, Enabled: true,
+	}}
+	require.NoError(t, SaveUpstreamErrorMappings(mappings))
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, 7, route.MaxTotalAttempts)
+	var binding BillingGroupChannel
+	require.NoError(t, DB.First(&binding, 1).Error)
+	assert.Equal(t, 2, binding.MaxAttempts)
+	var savedMapping UpstreamErrorMapping
+	require.NoError(t, DB.First(&savedMapping, 1).Error)
+	assert.Equal(t, "rate_limit", savedMapping.RawCode)
+	assert.ErrorIs(t, DB.First(&UpstreamErrorMapping{}, 2).Error, gorm.ErrRecordNotFound)
 }
 
 func TestSaveChannelRoutingConfigRejectsInvalidMinimumProfitMargin(t *testing.T) {
@@ -289,6 +352,290 @@ func TestSaveChannelRoutingConfigRejectsEnabledRouteWithoutChannel(t *testing.T)
 	})
 
 	require.EqualError(t, err, "enabled billing group route requires an enabled channel")
+}
+
+func TestSaveBillingGroupRouteConfigCleansStalePersistedBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	}
+
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	assert.Empty(t, config.RouteChannels)
+	var count int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Where("billing_group_route_id = ?", 9).Count(&count).Error)
+	assert.Zero(t, count)
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.False(t, route.Enabled)
+}
+
+func TestSaveBillingGroupRouteConfigCleansStaleBindingWithLegacyInvalidValues(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: false}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 0, Enabled: false, CostFactor: 0,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: false},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 0, Enabled: false, CostFactor: 0,
+		}},
+	}
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	assert.Empty(t, config.RouteChannels)
+}
+
+func TestSaveBillingGroupRouteConfigPreservesValidBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 2, Enabled: true, CostFactor: 1,
+		}},
+	}
+
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	require.Len(t, config.RouteChannels, 1)
+	var entry BillingGroupChannel
+	require.NoError(t, DB.First(&entry, 1).Error)
+	assert.Equal(t, 2, entry.MaxAttempts)
+}
+
+func TestSaveBillingGroupRouteConfigRejectsMissingPersistedRoute(t *testing.T) {
+	setupChannelRoutingTables(t)
+
+	err := SaveBillingGroupRouteConfig(&BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 404, BillingGroup: "claude", Enabled: false},
+	})
+
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestSaveBillingGroupRouteConfigRejectsNewCrossGroupBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Other", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: false}).Error)
+
+	err := SaveBillingGroupRouteConfig(&BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: false},
+		RouteChannels: []BillingGroupChannel{{
+			BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	})
+
+	require.EqualError(t, err, `route channel does not belong to billing group "claude" (channel_id=38)`)
+}
+
+func TestSaveBillingGroupRouteConfigRejectsRouteRenameWithValidOldBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	err := SaveBillingGroupRouteConfig(&BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "other", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	})
+
+	require.EqualError(t, err, `route channel does not belong to billing group "other" (channel_id=38)`)
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, "claude", route.BillingGroup)
+}
+
+func TestSaveBillingGroupRouteConfigPreservesBindingMovedToRenamedGroup(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "other", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	}
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	require.Len(t, config.RouteChannels, 1)
+
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.Equal(t, "other", route.BillingGroup)
+	var entry BillingGroupChannel
+	require.NoError(t, DB.First(&entry, 1).Error)
+	assert.Equal(t, 38, entry.ChannelId)
+}
+
+func TestSaveBillingGroupRouteConfigNormalizesNegativeWeightForPriorityStrategy(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+
+	config := &BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, Weight: -1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	}
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	require.Len(t, config.RouteChannels, 1)
+	assert.Zero(t, config.RouteChannels[0].Weight)
+}
+
+func TestSaveBillingGroupRouteConfigDisablesRouteAfterRemovingLastEnabledChannel(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Claude", Group: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	config := &BillingGroupRouteConfig{Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}}
+	require.NoError(t, SaveBillingGroupRouteConfig(config))
+	assert.False(t, config.Route.Enabled)
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.False(t, route.Enabled)
+	var count int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Where("billing_group_route_id = ?", 9).Count(&count).Error)
+	assert.Zero(t, count)
+}
+
+func TestSaveBillingGroupRouteConfigDoesNotReplaceOtherRoutes(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 38, Name: "Claude", Group: "claude"},
+		{Id: 39, Name: "Other", Group: "other"},
+	}).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupRoute{
+		{Id: 9, BillingGroup: "claude", Enabled: true},
+		{Id: 10, BillingGroup: "other", Enabled: true},
+	}).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupChannel{
+		{Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1},
+		{Id: 2, BillingGroupRouteId: 10, ChannelId: 39, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1},
+	}).Error)
+
+	require.NoError(t, SaveBillingGroupRouteConfig(&BillingGroupRouteConfig{
+		Route: BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 2, Enabled: true, CostFactor: 1,
+		}},
+	}))
+
+	var otherRoute BillingGroupRoute
+	require.NoError(t, DB.First(&otherRoute, 10).Error)
+	var otherEntry BillingGroupChannel
+	require.NoError(t, DB.First(&otherEntry, 2).Error)
+	assert.Equal(t, 10, otherEntry.BillingGroupRouteId)
+	assert.Equal(t, 39, otherEntry.ChannelId)
+}
+
+func TestSaveChannelRoutingConfigCleansStalePersistedBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+	}).Error)
+
+	config := &ChannelRoutingConfig{
+		Routes: []BillingGroupRoute{{Id: 9, BillingGroup: "claude", Enabled: true}},
+		RouteChannels: []BillingGroupChannel{{
+			Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1,
+		}},
+	}
+	require.NoError(t, SaveChannelRoutingConfig(config))
+	assert.Empty(t, config.RouteChannels)
+	var count int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Where("billing_group_route_id = ?", 9).Count(&count).Error)
+	assert.Zero(t, count)
+}
+
+func TestDeleteBillingGroupRouteAndCleanupRejectNegativeRouteID(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupChannel{Id: 1, BillingGroupRouteId: 9, ChannelId: 38}).Error)
+
+	require.NoError(t, DeleteBillingGroupRoute(9))
+	assert.ErrorIs(t, DB.First(&BillingGroupRoute{}, 9).Error, gorm.ErrRecordNotFound)
+	assert.ErrorIs(t, DB.First(&BillingGroupChannel{}, 1).Error, gorm.ErrRecordNotFound)
+	_, err := CleanupStaleBillingGroupRoutes(-1)
+	require.EqualError(t, err, "billing group route id must be non-negative")
+}
+
+func TestDeleteBillingGroupRouteIsIdempotentForStaleRouteID(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&BillingGroupChannel{
+		Id: 1, BillingGroupRouteId: 9, ChannelId: 38,
+	}).Error)
+
+	require.NoError(t, DeleteBillingGroupRoute(9))
+	assert.ErrorIs(t, DB.First(&BillingGroupRoute{}, 9).Error, gorm.ErrRecordNotFound)
+	assert.ErrorIs(t, DB.First(&BillingGroupChannel{}, 1).Error, gorm.ErrRecordNotFound)
+}
+
+func TestCleanupStaleBillingGroupRoutesRemovesOrphansAndDisablesEmptyRoutes(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Create(&Channel{Id: 38, Name: "Moved", Group: "other"}).Error)
+	require.NoError(t, DB.Create(&BillingGroupRoute{Id: 9, BillingGroup: "claude", Enabled: true}).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupChannel{
+		{Id: 1, BillingGroupRouteId: 9, ChannelId: 38, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1},
+		{Id: 2, BillingGroupRouteId: 999, ChannelId: 404, Priority: 1, MaxAttempts: 1, Enabled: true, CostFactor: 1},
+	}).Error)
+
+	result, err := CleanupStaleBillingGroupRoutes(0)
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.RemovedRouteChannels)
+	assert.Equal(t, 1, result.DisabledRoutes)
+
+	var entryCount int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Count(&entryCount).Error)
+	assert.Zero(t, entryCount)
+	var route BillingGroupRoute
+	require.NoError(t, DB.First(&route, 9).Error)
+	assert.False(t, route.Enabled)
+}
+
+func TestCleanupStaleBillingGroupRoutesRemovesNullRouteBinding(t *testing.T) {
+	setupChannelRoutingTables(t)
+	require.NoError(t, DB.Exec(`
+		INSERT INTO billing_group_channels
+			(id, billing_group_route_id, channel_id, priority, weight, max_attempts, enabled, cost_factor)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
+	`, 1, 38, 1, 0, 1, true, 1).Error)
+
+	result, err := CleanupStaleBillingGroupRoutes(0)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.RemovedRouteChannels)
+
+	var count int64
+	require.NoError(t, DB.Model(&BillingGroupChannel{}).Count(&count).Error)
+	assert.Zero(t, count)
 }
 
 func TestDeleteBoundChannelRequiresRemovingItFromRouting(t *testing.T) {

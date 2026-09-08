@@ -6483,6 +6483,17 @@
     "Optional URL shown to ToB/VIP users": "ToB/VIP ユーザーに表示する任意の URL",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "ToB/VIP ユーザーには実際のアップストリーム URL の代わりにこの URL を表示します。空欄の場合はベース URL を使用します。",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "請求グループ {{billing_group}} の顧客タイプを {{group_type}} に更新しました",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "料金グループを削除する前に、このグループのルーティング設定を削除して保存してください。"
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "料金グループを削除する前に、このグループのルーティング設定を削除して保存してください。",
+    "429 action": "429 アクション",
+    "5xx action": "5xx アクション",
+    "switch_channel": "チャネルを切り替え",
+    "retry_channel": "チャネルを再試行",
+    "retry_later": "後で再試行",
+    "abort": "中止",
+    "Use global error mapping": "グローバルエラーマッピングを使用",
+    "Save route": "ルートを保存",
+    "Clean stale bindings": "古い関連付けを整理",
+    "Billing group route deleted": "請求グループのルートを削除しました",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "古いルート関連付けを{{removed}}件削除し、{{disabled}}件のルートを無効化しました。"
   }
 }

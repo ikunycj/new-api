@@ -6483,6 +6483,17 @@
     "Optional URL shown to ToB/VIP users": "URL facultative affichée aux utilisateurs ToB/VIP",
     "ToB/VIP users see this URL instead of the actual upstream URL. Leave empty to use the Base URL.": "Les utilisateurs ToB/VIP voient cette URL à la place de l'URL amont réelle. Laissez vide pour utiliser l'URL de base.",
     "Updated billing group {{billing_group}} customer type to {{group_type}}": "Type de client du groupe de facturation {{billing_group}} mis à jour en {{group_type}}",
-    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Supprimez d’abord la configuration de routage de ce groupe et enregistrez-la avant de supprimer le groupe tarifaire."
+    "Delete the routing configuration for this group first, then save before deleting the pricing group.": "Supprimez d’abord la configuration de routage de ce groupe et enregistrez-la avant de supprimer le groupe tarifaire.",
+    "429 action": "Action 429",
+    "5xx action": "Action 5xx",
+    "switch_channel": "Changer de canal",
+    "retry_channel": "Réessayer le canal",
+    "retry_later": "Réessayer plus tard",
+    "abort": "Abandonner",
+    "Use global error mapping": "Utiliser le mappage global",
+    "Save route": "Enregistrer la route",
+    "Clean stale bindings": "Nettoyer les liaisons obsolètes",
+    "Billing group route deleted": "Route de groupe de facturation supprimée",
+    "Removed {{removed}} stale route bindings and disabled {{disabled}} routes.": "{{removed}} liaisons obsolètes supprimées et {{disabled}} routes désactivées."
   }
 }
