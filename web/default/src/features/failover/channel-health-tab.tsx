@@ -33,9 +33,13 @@ const MAX_HISTORY_POINTS = 120
 const PROBE_ROUTE = '__probe__'
 
 type HistoryPoint = {
-  t: number
+  // Pre-formatted clock string rather than a numeric timestamp. ChartTooltipContent
+  // only treats the axis value as a label when it is a string; for a numeric
+  // dataKey it falls through to the series label instead, which made the tooltip
+  // header render the channel name (and NaN once formatted as a time).
+  t: string
   // Keyed by `${channelId}:${route}`, matching seriesKey().
-  [seriesKey: string]: number
+  [seriesKey: string]: number | string
 }
 
 function seriesKey(snapshot: ChannelHealthSnapshot) {
@@ -117,7 +121,7 @@ export function ChannelHealthTab() {
     if (!stamp || stamp === lastStampRef.current) return
     lastStampRef.current = stamp
 
-    const point: HistoryPoint = { t: stamp }
+    const point: HistoryPoint = { t: formatClock(stamp) }
     for (const s of snapshots) point[seriesKey(s)] = s.score
 
     const next = [...historyRef.current, point].slice(-MAX_HISTORY_POINTS)
@@ -294,12 +298,18 @@ export function ChannelHealthTab() {
             )}
           </div>
         ) : (
-          <ChartContainer config={chartConfig} className='h-64 w-full'>
+          // aspect-auto is required: ChartContainer's base class hardcodes
+          // aspect-video, which fights a fixed height and drives
+          // ResponsiveContainer into an endless re-measure loop that pins the
+          // main thread and freezes scrolling.
+          <ChartContainer
+            config={chartConfig}
+            className='aspect-auto h-64 w-full'
+          >
             <LineChart data={history} margin={{ left: 4, right: 12, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray='3 3' />
               <XAxis
                 dataKey='t'
-                tickFormatter={formatClock}
                 tickLine={false}
                 axisLine={false}
                 fontSize={11}
@@ -318,13 +328,7 @@ export function ChannelHealthTab() {
                 stroke='var(--muted-foreground)'
                 strokeDasharray='2 4'
               />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(v) => formatClock(Number(v))}
-                  />
-                }
-              />
+              <ChartTooltip content={<ChartTooltipContent />} />
               {filtered.map((s) => (
                 <Line
                   key={seriesKey(s)}
