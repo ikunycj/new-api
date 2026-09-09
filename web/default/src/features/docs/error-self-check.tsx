@@ -100,6 +100,11 @@ const ERROR_CATEGORIES: readonly ErrorCategory[] = [
   {
     id: 'relay-errors',
     titleKey: 'Relay errors',
+    errors: [],
+  },
+  {
+    id: 'other-errors',
+    titleKey: 'Other errors',
     errors: [
       {
         id: 'relay-stream-interrupted',
