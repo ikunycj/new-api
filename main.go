@@ -129,6 +129,7 @@ func main() {
 	// the executor registration and the loop are inert until an operator enables
 	// ChannelHealthEnabled and ChannelHealthProbeEnabled.
 	controller.RegisterChannelHealthProbeExecutor()
+	controller.RegisterChannelHealthScoreInjection()
 	service.StartChannelHealthProbeTask()
 
 	// Report this process as a system instance so the System Info page can show

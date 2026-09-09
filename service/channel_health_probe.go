@@ -46,7 +46,20 @@ const (
 // reports success plus observed latency. It is injected from the controller
 // package so this scheduler can reuse the existing, battle-tested testChannel
 // implementation instead of duplicating provider-specific request building.
-type ChannelProbeExecutor func(ctx context.Context, channel *model.Channel) (bool, time.Duration, error)
+//
+// The executor also reports which model it actually sent, because the probe
+// model is resolved from the channel's own model list: the scheduler needs the
+// real model name to file the sample under the right family bucket.
+type ChannelProbeExecutor func(ctx context.Context, channel *model.Channel) (result ChannelProbeResult, err error)
+
+// ChannelProbeResult is one probe outcome. ModelName is the model the probe
+// actually used, which may differ from the family's preferred cheap model when
+// the channel does not serve it.
+type ChannelProbeResult struct {
+	Success   bool
+	Latency   time.Duration
+	ModelName string
+}
 
 var (
 	channelProbeExecutor   atomic.Pointer[ChannelProbeExecutor]
@@ -207,7 +220,9 @@ func runSingleChannelProbe(executor ChannelProbeExecutor, channel *model.Channel
 	defer cancel()
 
 	startedAt := time.Now()
-	success, latency, probeErr := executor(ctx, channel)
+	result, probeErr := executor(ctx, channel)
+	success := result.Success
+	latency := result.Latency
 	if latency <= 0 {
 		latency = time.Since(startedAt)
 	}
@@ -218,10 +233,13 @@ func runSingleChannelProbe(executor ChannelProbeExecutor, channel *model.Channel
 	}
 
 	// Probe results are attributed to the synthetic probe route so they never
-	// overwrite the per-route scores earned by real traffic.
+	// overwrite the per-route scores earned by real traffic. The model name is
+	// carried through so the sample lands in the same family bucket that real
+	// traffic for that family uses.
 	RecordChannelHealthSample(ChannelHealthSample{
 		ChannelID: channel.Id,
 		Route:     ChannelHealthProbeRoute,
+		ModelName: result.ModelName,
 		Success:   success,
 		Latency:   latency,
 		Observed:  startedAt,

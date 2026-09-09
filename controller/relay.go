@@ -392,6 +392,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				service.RecordChannelHealthSample(service.ChannelHealthSample{
 					ChannelID: channel.Id,
 					Route:     route,
+					ModelName: relayInfo.OriginModelName,
 					Success:   false,
 					Latency:   attemptDuration,
 				})
@@ -446,6 +447,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			service.RecordChannelHealthSample(service.ChannelHealthSample{
 				ChannelID: channel.Id,
 				Route:     route,
+				ModelName: relayInfo.OriginModelName,
 				Success:   true,
 				Latency:   attemptDuration,
 			})

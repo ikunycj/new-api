@@ -228,6 +228,15 @@ export type ModelSettings = {
   RetryTimes: number
   ChannelCircuitEnabled: boolean
   ChannelCircuitConfig: string
+  ChannelHealthEnabled: boolean
+  ChannelHealthMode: 'observe' | 'active'
+  ChannelHealthHalfLifeSeconds: number
+  ChannelHealthMinSamples: number
+  ChannelHealthLatencyHalfLifeSeconds: number
+  ChannelHealthStateTTLSeconds: number
+  ChannelHealthProbeEnabled: boolean
+  ChannelHealthProbeIntervalSeconds: number
+  ChannelHealthProbeIdleGraceSeconds: number
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean

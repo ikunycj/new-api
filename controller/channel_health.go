@@ -2,9 +2,26 @@ package controller
 
 import (
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
+
+// RegisterChannelHealthScoreInjection wires the live health score lookup into
+// the routing layer. The routing logic lives in the model package, which cannot
+// import service (service imports model); so the getter is injected here in
+// the same way the probe executor is. Without this registration, routing falls
+// back to the legacy PreviousDayProbeSuccessRate even when the subsystem runs
+// in active mode.
+func RegisterChannelHealthScoreInjection() {
+	model.SetChannelHealthScoreGetter(func(channelID int, route string, modelName string) (float64, bool) {
+		snapshot, ok := service.GetChannelHealthSnapshot(channelID, route, modelName)
+		if !ok {
+			return 0, false
+		}
+		return snapshot.Score, true
+	})
+}
 
 // GetChannelHealth exposes the read-only channel health scores collected by the
 // EWMA scorer. It is the primary observability surface for phase 1: operators

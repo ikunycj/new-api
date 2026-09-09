@@ -34,10 +34,10 @@ func TestChannelHealthDisabledRecordsNothing(t *testing.T) {
 
 	RecordChannelHealthSample(ChannelHealthSample{ChannelID: 1, Route: "/v1/messages", Success: false})
 
-	if _, ok := GetChannelHealthSnapshot(1, "/v1/messages"); ok {
+	if _, ok := GetChannelHealthSnapshot(1, "/v1/messages", ""); ok {
 		t.Fatal("expected no snapshot while channel health is disabled")
 	}
-	if score := GetChannelHealthScore(1, "/v1/messages"); score != neutralHealthScore {
+	if score := GetChannelHealthScore(1, "/v1/messages", ""); score != neutralHealthScore {
 		t.Fatalf("expected neutral score while disabled, got %v", score)
 	}
 }
@@ -47,7 +47,7 @@ func TestChannelHealthDisabledRecordsNothing(t *testing.T) {
 func TestChannelHealthUnknownChannelIsNeutral(t *testing.T) {
 	enableChannelHealthForTest(t, 300, 5)
 
-	if score := GetChannelHealthScore(4242, "/v1/messages"); score != neutralHealthScore {
+	if score := GetChannelHealthScore(4242, "/v1/messages", ""); score != neutralHealthScore {
 		t.Fatalf("expected neutral score for unknown channel, got %v", score)
 	}
 }
@@ -65,7 +65,7 @@ func TestChannelHealthFailuresLowerScore(t *testing.T) {
 		})
 	}
 
-	snapshot, ok := GetChannelHealthSnapshot(7, "/v1/messages")
+	snapshot, ok := GetChannelHealthSnapshot(7, "/v1/messages", "")
 	if !ok {
 		t.Fatal("expected snapshot after recording failures")
 	}
@@ -89,7 +89,7 @@ func TestChannelHealthRecoversAfterSuccesses(t *testing.T) {
 			Observed: base.Add(time.Duration(i) * time.Second),
 		})
 	}
-	degraded, _ := GetChannelHealthSnapshot(8, "r")
+	degraded, _ := GetChannelHealthSnapshot(8, "r", "")
 
 	for i := 10; i < 40; i++ {
 		RecordChannelHealthSample(ChannelHealthSample{
@@ -97,7 +97,7 @@ func TestChannelHealthRecoversAfterSuccesses(t *testing.T) {
 			Observed: base.Add(time.Duration(i) * time.Second),
 		})
 	}
-	recovered, _ := GetChannelHealthSnapshot(8, "r")
+	recovered, _ := GetChannelHealthSnapshot(8, "r", "")
 
 	if recovered.Availability <= degraded.Availability {
 		t.Fatalf("expected recovery, degraded=%v recovered=%v",
@@ -112,7 +112,7 @@ func TestChannelHealthLowSampleCountStaysNearPrior(t *testing.T) {
 
 	RecordChannelHealthSample(ChannelHealthSample{ChannelID: 9, Route: "r", Success: false})
 
-	snapshot, ok := GetChannelHealthSnapshot(9, "r")
+	snapshot, ok := GetChannelHealthSnapshot(9, "r", "")
 	if !ok {
 		t.Fatal("expected snapshot")
 	}
@@ -141,7 +141,7 @@ func TestChannelHealthBecomesConfidentWithSamples(t *testing.T) {
 		})
 	}
 
-	snapshot, _ := GetChannelHealthSnapshot(10, "r")
+	snapshot, _ := GetChannelHealthSnapshot(10, "r", "")
 	if !snapshot.Confident {
 		t.Fatalf("expected confidence after 20 samples, samples=%v", snapshot.Samples)
 	}
@@ -163,7 +163,7 @@ func TestChannelHealthDecaysTowardNeutralWhenIdle(t *testing.T) {
 		})
 	}
 
-	snapshot, ok := GetChannelHealthSnapshot(11, "r")
+	snapshot, ok := GetChannelHealthSnapshot(11, "r", "")
 	if !ok {
 		t.Fatal("expected snapshot")
 	}
@@ -184,7 +184,7 @@ func TestChannelHealthHandlesOutOfOrderSamples(t *testing.T) {
 		Observed: now.Add(-10 * time.Minute),
 	})
 
-	snapshot, ok := GetChannelHealthSnapshot(12, "r")
+	snapshot, ok := GetChannelHealthSnapshot(12, "r", "")
 	if !ok {
 		t.Fatal("expected snapshot")
 	}
@@ -210,8 +210,8 @@ func TestChannelHealthIsolatesRoutes(t *testing.T) {
 		})
 	}
 
-	failing, _ := GetChannelHealthSnapshot(13, "/v1/messages")
-	healthy, _ := GetChannelHealthSnapshot(13, "/v1/chat")
+	failing, _ := GetChannelHealthSnapshot(13, "/v1/messages", "")
+	healthy, _ := GetChannelHealthSnapshot(13, "/v1/chat", "")
 	if failing.Availability >= healthy.Availability {
 		t.Fatalf("expected route isolation, failing=%v healthy=%v",
 			failing.Availability, healthy.Availability)
@@ -231,14 +231,14 @@ func TestChannelHealthLatencySpikeReducesScore(t *testing.T) {
 			Observed: base.Add(time.Duration(i) * time.Second),
 		})
 	}
-	stable, _ := GetChannelHealthSnapshot(14, "r")
+	stable, _ := GetChannelHealthSnapshot(14, "r", "")
 
 	RecordChannelHealthSample(ChannelHealthSample{
 		ChannelID: 14, Route: "r", Success: true,
 		Latency:  5 * time.Second,
 		Observed: base.Add(31 * time.Second),
 	})
-	spiked, _ := GetChannelHealthSnapshot(14, "r")
+	spiked, _ := GetChannelHealthSnapshot(14, "r", "")
 
 	if spiked.Score >= stable.Score {
 		t.Fatalf("expected latency spike to lower score, stable=%v spiked=%v",
@@ -255,13 +255,13 @@ func TestChannelHealthConfigChangeResetsState(t *testing.T) {
 	enableChannelHealthForTest(t, 300, 0)
 
 	RecordChannelHealthSample(ChannelHealthSample{ChannelID: 15, Route: "r", Success: false})
-	if _, ok := GetChannelHealthSnapshot(15, "r"); !ok {
+	if _, ok := GetChannelHealthSnapshot(15, "r", ""); !ok {
 		t.Fatal("expected snapshot before config change")
 	}
 
 	common.SetChannelHealthHalfLifeSeconds(120)
 
-	if _, ok := GetChannelHealthSnapshot(15, "r"); ok {
+	if _, ok := GetChannelHealthSnapshot(15, "r", ""); ok {
 		t.Fatal("expected state reset after configuration change")
 	}
 }
@@ -283,7 +283,7 @@ func TestChannelHealthListEvictsExpiredEntries(t *testing.T) {
 			t.Fatal("expected expired entry to be evicted")
 		}
 	}
-	if _, ok := GetChannelHealthSnapshot(17, "r"); !ok {
+	if _, ok := GetChannelHealthSnapshot(17, "r", ""); !ok {
 		t.Fatal("expected live entry to survive eviction")
 	}
 }
@@ -356,7 +356,7 @@ func TestChannelHealthConcurrentRecording(t *testing.T) {
 					Success:   i%2 == 0,
 					Latency:   time.Duration(i) * time.Millisecond,
 				})
-				GetChannelHealthScore(20+id%3, "r")
+				GetChannelHealthScore(20+id%3, "r", "")
 			}
 		}(worker)
 	}
@@ -365,7 +365,7 @@ func TestChannelHealthConcurrentRecording(t *testing.T) {
 	}
 
 	for channelID := 20; channelID < 23; channelID++ {
-		snapshot, ok := GetChannelHealthSnapshot(channelID, "r")
+		snapshot, ok := GetChannelHealthSnapshot(channelID, "r", "")
 		if !ok {
 			t.Fatalf("expected snapshot for channel %d", channelID)
 		}
@@ -386,5 +386,86 @@ func TestDecayFactorHalfLife(t *testing.T) {
 	}
 	if got := decayFactor(120*time.Second, 60); math.Abs(got-0.25) > 1e-9 {
 		t.Fatalf("expected 0.25 retention after two half-lives, got %v", got)
+	}
+}
+
+// Family isolation is the guarantee that makes cross-channel comparison fair:
+// a claude channel failing on claude-sonnet-4-6 must not drag down the same
+// channel's gpt score, and vice versa. Without bucketing per family, one
+// family's outage would silently reprice the other family's routing.
+func TestChannelHealthFamiliesAreIsolated(t *testing.T) {
+	enableChannelHealthForTest(t, 300, 1)
+
+	const channelID = 9100
+	const route = "/v1/chat/completions"
+
+	// Fail the claude family repeatedly.
+	for i := 0; i < 10; i++ {
+		RecordChannelHealthSample(ChannelHealthSample{
+			ChannelID: channelID,
+			Route:     route,
+			ModelName: "claude-sonnet-4-6",
+			Success:   false,
+		})
+	}
+	// Succeed on the gpt family for the same channel and route.
+	for i := 0; i < 10; i++ {
+		RecordChannelHealthSample(ChannelHealthSample{
+			ChannelID: channelID,
+			Route:     route,
+			ModelName: "gpt-5.4-mini",
+			Success:   true,
+		})
+	}
+
+	claudeSnapshot, ok := GetChannelHealthSnapshot(channelID, route, "claude-sonnet-4-6")
+	if !ok {
+		t.Fatal("expected a claude snapshot")
+	}
+	gptSnapshot, ok := GetChannelHealthSnapshot(channelID, route, "gpt-5.4-mini")
+	if !ok {
+		t.Fatal("expected a gpt snapshot")
+	}
+
+	if claudeSnapshot.Family != "claude" {
+		t.Fatalf("expected claude family bucket, got %q", claudeSnapshot.Family)
+	}
+	if gptSnapshot.Family != "gpt" {
+		t.Fatalf("expected gpt family bucket, got %q", gptSnapshot.Family)
+	}
+	if claudeSnapshot.Score >= gptSnapshot.Score {
+		t.Fatalf("claude failures must not be averaged with gpt successes: claude=%v gpt=%v",
+			claudeSnapshot.Score, gptSnapshot.Score)
+	}
+	if gptSnapshot.Failures != 0 {
+		t.Fatalf("gpt bucket must not inherit claude failures, got %d", gptSnapshot.Failures)
+	}
+	if claudeSnapshot.Successes != 0 {
+		t.Fatalf("claude bucket must not inherit gpt successes, got %d", claudeSnapshot.Successes)
+	}
+}
+
+// Variants within one family must share a bucket: a dated or suffixed model is
+// still the same upstream family, so splitting them would fragment the sample
+// count and keep every bucket below the confidence threshold.
+func TestChannelHealthFamilyVariantsShareBucket(t *testing.T) {
+	enableChannelHealthForTest(t, 300, 1)
+
+	const channelID = 9101
+	const route = "/v1/messages"
+
+	RecordChannelHealthSample(ChannelHealthSample{
+		ChannelID: channelID, Route: route, ModelName: "claude-sonnet-4-6", Success: false,
+	})
+	RecordChannelHealthSample(ChannelHealthSample{
+		ChannelID: channelID, Route: route, ModelName: "claude-opus-4-8", Success: false,
+	})
+
+	snapshot, ok := GetChannelHealthSnapshot(channelID, route, "claude-haiku-4-5-20251001")
+	if !ok {
+		t.Fatal("expected variants to resolve to the same claude bucket")
+	}
+	if snapshot.Failures != 2 {
+		t.Fatalf("expected both claude variants in one bucket, got %d failures", snapshot.Failures)
 	}
 }

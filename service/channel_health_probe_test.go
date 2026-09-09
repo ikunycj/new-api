@@ -135,9 +135,9 @@ func TestRunChannelHealthProbeOnceDisabledDoesNotExecute(t *testing.T) {
 	common.SetChannelHealthProbeEnabled(false)
 
 	var calls atomic.Int64
-	SetChannelProbeExecutor(func(context.Context, *model.Channel) (bool, time.Duration, error) {
+	SetChannelProbeExecutor(func(context.Context, *model.Channel) (ChannelProbeResult, error) {
 		calls.Add(1)
-		return true, time.Millisecond, nil
+		return ChannelProbeResult{Success: true, Latency: time.Millisecond}, nil
 	})
 	t.Cleanup(func() { SetChannelProbeExecutor(nil) })
 
@@ -159,20 +159,20 @@ func TestSetChannelProbeExecutorRoundTrip(t *testing.T) {
 	}
 
 	sentinel := errors.New("probe failed")
-	SetChannelProbeExecutor(func(context.Context, *model.Channel) (bool, time.Duration, error) {
-		return false, 5 * time.Millisecond, sentinel
+	SetChannelProbeExecutor(func(context.Context, *model.Channel) (ChannelProbeResult, error) {
+		return ChannelProbeResult{Latency: 5 * time.Millisecond}, sentinel
 	})
 
 	executor := loadChannelProbeExecutor()
 	if executor == nil {
 		t.Fatal("expected executor to be registered")
 	}
-	success, latency, err := executor(context.Background(), &model.Channel{Id: 1})
-	if success {
+	result, err := executor(context.Background(), &model.Channel{Id: 1})
+	if result.Success {
 		t.Fatal("expected failure result from stub executor")
 	}
-	if latency != 5*time.Millisecond {
-		t.Fatalf("unexpected latency %v", latency)
+	if result.Latency != 5*time.Millisecond {
+		t.Fatalf("unexpected latency %v", result.Latency)
 	}
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("unexpected error %v", err)
@@ -196,11 +196,11 @@ func TestProbeSamplesUseDedicatedRoute(t *testing.T) {
 		})
 	}
 
-	liveRoute, ok := GetChannelHealthSnapshot(505, "/v1/messages")
+	liveRoute, ok := GetChannelHealthSnapshot(505, "/v1/messages", "")
 	if !ok {
 		t.Fatal("expected snapshot for the real route")
 	}
-	probeRoute, ok := GetChannelHealthSnapshot(505, ChannelHealthProbeRoute)
+	probeRoute, ok := GetChannelHealthSnapshot(505, ChannelHealthProbeRoute, "")
 	if !ok {
 		t.Fatal("expected snapshot for the probe route")
 	}

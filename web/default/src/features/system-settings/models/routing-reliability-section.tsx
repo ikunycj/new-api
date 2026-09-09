@@ -66,6 +66,18 @@ const numericString = z.string().refine((value) => {
 const channelTestModes = ['scheduled_all', 'passive_recovery'] as const
 type ChannelTestMode = (typeof channelTestModes)[number]
 
+// The two health modes differ in one way that matters operationally: `observe`
+// records scores and exposes them for inspection but never lets them touch
+// channel selection, which makes it the safe way to validate the signal on
+// production traffic. `active` additionally allows the weighted router to
+// consume them.
+const channelHealthModes = ['observe', 'active'] as const
+type ChannelHealthMode = (typeof channelHealthModes)[number]
+
+function normalizeChannelHealthMode(value?: string): ChannelHealthMode {
+  return value === 'active' ? 'active' : 'observe'
+}
+
 const circuitPolicySchema = z.object({
   failure_threshold: z.number().int().min(1).max(10000),
   window_seconds: z.number().int().min(1).max(86400),
@@ -111,6 +123,30 @@ const routingReliabilitySchema = z
       }
     }),
     ChannelDisableThreshold: numericString,
+    // These bounds are deliberately identical to the server-side validation in
+    // model/option.go, so an out-of-range value is rejected here instead of
+    // costing a round-trip that ends in a 400.
+    ChannelHealthEnabled: z.boolean(),
+    ChannelHealthMode: z.enum(channelHealthModes),
+    ChannelHealthHalfLifeSeconds: z.coerce.number().int().min(5).max(86400),
+    ChannelHealthMinSamples: z.coerce.number().int().min(0).max(1000),
+    ChannelHealthLatencyHalfLifeSeconds: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(86400),
+    ChannelHealthStateTTLSeconds: z.coerce.number().int().min(60).max(604800),
+    ChannelHealthProbeEnabled: z.boolean(),
+    ChannelHealthProbeIntervalSeconds: z.coerce
+      .number()
+      .int()
+      .min(10)
+      .max(86400),
+    ChannelHealthProbeIdleGraceSeconds: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(86400),
     AutomaticDisableChannelEnabled: z.boolean(),
     AutomaticEnableChannelEnabled: z.boolean(),
     AutomaticDisableKeywords: z.string(),
@@ -161,6 +197,15 @@ type RoutingReliabilitySectionProps = {
     RetryTimes: number
     ChannelCircuitEnabled: boolean
     ChannelCircuitConfig: string
+    ChannelHealthEnabled: boolean
+    ChannelHealthMode: ChannelHealthMode
+    ChannelHealthHalfLifeSeconds: number
+    ChannelHealthMinSamples: number
+    ChannelHealthLatencyHalfLifeSeconds: number
+    ChannelHealthStateTTLSeconds: number
+    ChannelHealthProbeEnabled: boolean
+    ChannelHealthProbeIntervalSeconds: number
+    ChannelHealthProbeIdleGraceSeconds: number
     ChannelDisableThreshold: string
     AutomaticDisableChannelEnabled: boolean
     AutomaticEnableChannelEnabled: boolean
@@ -190,6 +235,15 @@ type NormalizedRoutingReliabilityValues = {
   RetryTimes: number
   ChannelCircuitEnabled: boolean
   ChannelCircuitConfig: string
+  ChannelHealthEnabled: boolean
+  ChannelHealthMode: ChannelHealthMode
+  ChannelHealthHalfLifeSeconds: number
+  ChannelHealthMinSamples: number
+  ChannelHealthLatencyHalfLifeSeconds: number
+  ChannelHealthStateTTLSeconds: number
+  ChannelHealthProbeEnabled: boolean
+  ChannelHealthProbeIntervalSeconds: number
+  ChannelHealthProbeIdleGraceSeconds: number
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean
@@ -211,6 +265,17 @@ const buildFormDefaults = (
   RetryTimes: defaults.RetryTimes ?? 0,
   ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
   ChannelCircuitConfig: defaults.ChannelCircuitConfig ?? '{}',
+  ChannelHealthEnabled: defaults.ChannelHealthEnabled,
+  ChannelHealthMode: normalizeChannelHealthMode(defaults.ChannelHealthMode),
+  ChannelHealthHalfLifeSeconds: defaults.ChannelHealthHalfLifeSeconds,
+  ChannelHealthMinSamples: defaults.ChannelHealthMinSamples,
+  ChannelHealthLatencyHalfLifeSeconds:
+    defaults.ChannelHealthLatencyHalfLifeSeconds,
+  ChannelHealthStateTTLSeconds: defaults.ChannelHealthStateTTLSeconds,
+  ChannelHealthProbeEnabled: defaults.ChannelHealthProbeEnabled,
+  ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
+  ChannelHealthProbeIdleGraceSeconds:
+    defaults.ChannelHealthProbeIdleGraceSeconds,
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -236,6 +301,17 @@ const normalizeDefaults = (
   RetryTimes: defaults.RetryTimes ?? 0,
   ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
   ChannelCircuitConfig: normalizeJsonDocument(defaults.ChannelCircuitConfig),
+  ChannelHealthEnabled: defaults.ChannelHealthEnabled,
+  ChannelHealthMode: normalizeChannelHealthMode(defaults.ChannelHealthMode),
+  ChannelHealthHalfLifeSeconds: defaults.ChannelHealthHalfLifeSeconds,
+  ChannelHealthMinSamples: defaults.ChannelHealthMinSamples,
+  ChannelHealthLatencyHalfLifeSeconds:
+    defaults.ChannelHealthLatencyHalfLifeSeconds,
+  ChannelHealthStateTTLSeconds: defaults.ChannelHealthStateTTLSeconds,
+  ChannelHealthProbeEnabled: defaults.ChannelHealthProbeEnabled,
+  ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
+  ChannelHealthProbeIdleGraceSeconds:
+    defaults.ChannelHealthProbeIdleGraceSeconds,
   ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -263,6 +339,16 @@ const normalizeFormValues = (
   RetryTimes: values.RetryTimes,
   ChannelCircuitEnabled: values.ChannelCircuitEnabled,
   ChannelCircuitConfig: normalizeJsonDocument(values.ChannelCircuitConfig),
+  ChannelHealthEnabled: values.ChannelHealthEnabled,
+  ChannelHealthMode: values.ChannelHealthMode,
+  ChannelHealthHalfLifeSeconds: values.ChannelHealthHalfLifeSeconds,
+  ChannelHealthMinSamples: values.ChannelHealthMinSamples,
+  ChannelHealthLatencyHalfLifeSeconds:
+    values.ChannelHealthLatencyHalfLifeSeconds,
+  ChannelHealthStateTTLSeconds: values.ChannelHealthStateTTLSeconds,
+  ChannelHealthProbeEnabled: values.ChannelHealthProbeEnabled,
+  ChannelHealthProbeIntervalSeconds: values.ChannelHealthProbeIntervalSeconds,
+  ChannelHealthProbeIdleGraceSeconds: values.ChannelHealthProbeIdleGraceSeconds,
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
@@ -310,6 +396,13 @@ export function RoutingReliabilitySection({
   const autoDisableStatusCodes = form.watch('AutomaticDisableStatusCodes')
   const autoRetryStatusCodes = form.watch('AutomaticRetryStatusCodes')
   const channelTestMode = form.watch('monitor_setting.channel_test_mode')
+  // The tuning knobs are meaningless while scoring is off, and probing is a
+  // strict sub-switch of scoring on the backend too (IsChannelHealthProbeEnabled
+  // requires both flags), so the UI mirrors that dependency rather than offering
+  // controls that silently do nothing.
+  const healthEnabled = form.watch('ChannelHealthEnabled')
+  const healthMode = form.watch('ChannelHealthMode')
+  const probeEnabled = form.watch('ChannelHealthProbeEnabled')
   const autoDisableParsed = useMemo(
     () => parseHttpStatusCodeRules(autoDisableStatusCodes),
     [autoDisableStatusCodes]
@@ -351,7 +444,7 @@ export function RoutingReliabilitySection({
           />
 
           <div className='flex min-w-0 flex-col gap-4'>
-            <div className='rounded-lg border bg-muted/20 p-4'>
+            <div className='bg-muted/20 rounded-lg border p-4'>
               <FormField
                 control={form.control}
                 name='ChannelCircuitEnabled'
@@ -397,6 +490,280 @@ export function RoutingReliabilitySection({
                 </FormItem>
               )}
             />
+          </div>
+
+          <Separator />
+
+          <div className='flex min-w-0 flex-col gap-4'>
+            <div className='flex flex-col gap-1'>
+              <h4 className='text-sm font-medium'>
+                {t('Real-time channel health scoring')}
+              </h4>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Scores every channel from live traffic using a time-decayed availability and latency average. Scores are bucketed per model family, so Claude channels are only compared with Claude channels and GPT with GPT.'
+                )}
+              </p>
+            </div>
+
+            <div className='grid min-w-0 gap-6 lg:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='ChannelHealthEnabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Health scoring')}</FormLabel>
+                      <FormDescription>
+                        {field.value
+                          ? t('Collecting samples')
+                          : t(
+                              'Off: no samples are collected and routing is unchanged'
+                            )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthMode'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Scoring mode')}</FormLabel>
+                    <Select
+                      items={[
+                        { value: 'observe', label: t('Observe only') },
+                        {
+                          value: 'active',
+                          label: t('Active (affects routing)'),
+                        },
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={!healthEnabled}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          <SelectItem value='observe'>
+                            {t('Observe only')}
+                          </SelectItem>
+                          <SelectItem value='active'>
+                            {t('Active (affects routing)')}
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {healthMode === 'active'
+                        ? t(
+                            'Live scores replace the previous-day success rate in the availability input. Only groups using the weighted routing strategy are affected; priority groups still take their first candidate.'
+                          )
+                        : t(
+                            'Scores are recorded and visible but never influence channel selection. Safe to enable on production traffic.'
+                          )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className='grid min-w-0 gap-6 lg:grid-cols-2 xl:grid-cols-4'>
+              <FormField
+                control={form.control}
+                name='ChannelHealthHalfLifeSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Availability half-life (seconds)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={5}
+                        max={86400}
+                        step={1}
+                        disabled={!healthEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'How fast old samples lose weight. Shorter reacts quicker but is noisier.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthMinSamples'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Minimum samples')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={1000}
+                        step={1}
+                        disabled={!healthEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Below this effective sample count the score is blended toward neutral, so a barely-used channel is neither blindly trusted nor unfairly condemned.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthLatencyHalfLifeSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Latency half-life (seconds)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={5}
+                        max={86400}
+                        step={1}
+                        disabled={!healthEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        "Decay of the channel's own latency baseline, which the newest response is scored against."
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthStateTTLSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('State TTL (seconds)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={60}
+                        max={604800}
+                        step={1}
+                        disabled={!healthEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Idle entries are evicted after this long so removed channels do not linger in memory.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className='grid min-w-0 gap-6 lg:grid-cols-3'>
+              <FormField
+                control={form.control}
+                name='ChannelHealthProbeEnabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Synthetic probing')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          "Probes idle channels with their family's cheapest model so they still have a fresh score. Costs upstream quota."
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={!healthEnabled}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthProbeIntervalSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Probe interval (seconds)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={10}
+                        max={86400}
+                        step={1}
+                        disabled={!healthEnabled || !probeEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('How often the probe loop wakes up.')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthProbeIdleGraceSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Probe idle grace (seconds)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={86400}
+                        step={1}
+                        disabled={!healthEnabled || !probeEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Channels that real traffic touched within this window are skipped, since real evidence beats a synthetic call.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </div>
 
           <Separator />

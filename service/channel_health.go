@@ -71,6 +71,10 @@ func sampleRetention(elapsed time.Duration, halfLifeSeconds int) float64 {
 type ChannelHealthSample struct {
 	ChannelID int
 	Route     string
+	// ModelName is the model that served this observation. It is used only to
+	// derive the family bucket, so callers pass the request's model and do not
+	// need to know how families are defined.
+	ModelName string
 	Success   bool
 	Latency   time.Duration
 	// Observed marks when the sample happened. Zero means "now"; it is
@@ -85,6 +89,7 @@ type ChannelHealthSample struct {
 type ChannelHealthSnapshot struct {
 	ChannelID       int       `json:"channel_id"`
 	Route           string    `json:"route"`
+	Family          string    `json:"family"`
 	Score           float64   `json:"score"`
 	RawScore        float64   `json:"raw_score"`
 	Availability    float64   `json:"availability"`
@@ -113,6 +118,13 @@ type channelHealthState struct {
 type channelHealthKey struct {
 	channelID int
 	route     string
+	// family buckets scores by model family (see common.ChannelModelFamily).
+	// Without it, a claude channel probed with claude-sonnet-4-6 and a gpt
+	// channel probed with gpt-5.4-mini would be compared on the same axis even
+	// though their latency and error profiles are not comparable. Bucketing per
+	// family is what makes "claude competes with claude" true rather than
+	// aspirational.
+	family string
 }
 
 var channelHealth = struct {
@@ -167,7 +179,11 @@ func RecordChannelHealthSample(sample ChannelHealthSample) {
 
 	halfLife := common.ChannelHealthHalfLifeSeconds()
 	latencyHalfLife := common.ChannelHealthLatencyHalfLifeSeconds()
-	key := channelHealthKey{channelID: sample.ChannelID, route: sample.Route}
+	key := channelHealthKey{
+		channelID: sample.ChannelID,
+		route:     sample.Route,
+		family:    common.ChannelModelFamily(sample.ModelName),
+	}
 
 	channelHealth.Lock()
 	defer channelHealth.Unlock()
@@ -270,6 +286,7 @@ func snapshotLocked(key channelHealthKey, state *channelHealthState, now time.Ti
 	return ChannelHealthSnapshot{
 		ChannelID:       key.channelID,
 		Route:           key.route,
+		Family:          key.family,
 		Score:           clampHealthScore(score),
 		RawScore:        raw,
 		Availability:    clampHealthScore(availability),
@@ -297,22 +314,26 @@ func clampHealthScore(score float64) float64 {
 	return score
 }
 
-// GetChannelHealthScore returns the blended score for one channel/route pair.
-// Unknown channels and a disabled subsystem both yield the neutral score, so
-// callers can use the result unconditionally without special-casing.
-func GetChannelHealthScore(channelID int, route string) float64 {
-	snapshot, ok := GetChannelHealthSnapshot(channelID, route)
+// GetChannelHealthScore returns the blended score for one channel/route/model
+// triple. Unknown channels and a disabled subsystem both yield the neutral
+// score, so callers can use the result unconditionally without special-casing.
+func GetChannelHealthScore(channelID int, route string, modelName string) float64 {
+	snapshot, ok := GetChannelHealthSnapshot(channelID, route, modelName)
 	if !ok {
 		return neutralHealthScore
 	}
 	return snapshot.Score
 }
 
-func GetChannelHealthSnapshot(channelID int, route string) (ChannelHealthSnapshot, bool) {
+func GetChannelHealthSnapshot(channelID int, route string, modelName string) (ChannelHealthSnapshot, bool) {
 	if !syncChannelHealthConfig() || channelID <= 0 {
 		return ChannelHealthSnapshot{}, false
 	}
-	key := channelHealthKey{channelID: channelID, route: route}
+	key := channelHealthKey{
+		channelID: channelID,
+		route:     route,
+		family:    common.ChannelModelFamily(modelName),
+	}
 	now := time.Now()
 	halfLife := common.ChannelHealthHalfLifeSeconds()
 	minSamples := common.ChannelHealthMinSamples()
@@ -358,7 +379,10 @@ func ListChannelHealthSnapshots() []ChannelHealthSnapshot {
 		if snapshots[i].ChannelID != snapshots[j].ChannelID {
 			return snapshots[i].ChannelID < snapshots[j].ChannelID
 		}
-		return snapshots[i].Route < snapshots[j].Route
+		if snapshots[i].Route != snapshots[j].Route {
+			return snapshots[i].Route < snapshots[j].Route
+		}
+		return snapshots[i].Family < snapshots[j].Family
 	})
 	return snapshots
 }

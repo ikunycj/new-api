@@ -81,6 +81,18 @@ const MODELS_SECTIONS = [
             settings.ChannelCircuitConfig,
             '{}'
           ),
+          ChannelHealthEnabled: settings.ChannelHealthEnabled,
+          ChannelHealthMode: settings.ChannelHealthMode,
+          ChannelHealthHalfLifeSeconds: settings.ChannelHealthHalfLifeSeconds,
+          ChannelHealthMinSamples: settings.ChannelHealthMinSamples,
+          ChannelHealthLatencyHalfLifeSeconds:
+            settings.ChannelHealthLatencyHalfLifeSeconds,
+          ChannelHealthStateTTLSeconds: settings.ChannelHealthStateTTLSeconds,
+          ChannelHealthProbeEnabled: settings.ChannelHealthProbeEnabled,
+          ChannelHealthProbeIntervalSeconds:
+            settings.ChannelHealthProbeIntervalSeconds,
+          ChannelHealthProbeIdleGraceSeconds:
+            settings.ChannelHealthProbeIdleGraceSeconds,
           ChannelDisableThreshold: settings.ChannelDisableThreshold,
           AutomaticDisableChannelEnabled:
             settings.AutomaticDisableChannelEnabled,

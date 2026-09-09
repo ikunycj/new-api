@@ -66,6 +66,18 @@ const defaultModelSettings: ModelSettings = {
   RetryTimes: 0,
   ChannelCircuitEnabled: false,
   ChannelCircuitConfig: '{}',
+  // Channel health scoring is opt-in: these defaults mirror the Go side
+  // (common/channel_health_config.go) so an option that has never been written
+  // renders the value the backend is actually using.
+  ChannelHealthEnabled: false,
+  ChannelHealthMode: 'observe',
+  ChannelHealthHalfLifeSeconds: 300,
+  ChannelHealthMinSamples: 5,
+  ChannelHealthLatencyHalfLifeSeconds: 600,
+  ChannelHealthStateTTLSeconds: 3600,
+  ChannelHealthProbeEnabled: false,
+  ChannelHealthProbeIntervalSeconds: 60,
+  ChannelHealthProbeIdleGraceSeconds: 300,
   ChannelDisableThreshold: '',
   AutomaticDisableChannelEnabled: false,
   AutomaticEnableChannelEnabled: false,
