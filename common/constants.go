@@ -92,6 +92,18 @@ var SMTPAccount = ""
 var SMTPFrom = ""
 var SMTPToken = ""
 
+const (
+	DefaultSMTPVerificationSubject  = "{{system_name}}邮箱验证邮件"
+	DefaultSMTPVerificationContent  = "<p>您好，你正在进行{{system_name}}邮箱验证。</p><p>您的验证码为: <strong>{{code}}</strong></p><p>验证码 {{valid_minutes}} 分钟内有效，如果不是本人操作，请忽略。</p>"
+	DefaultSMTPPasswordResetSubject = "{{system_name}}密码重置"
+	DefaultSMTPPasswordResetContent = "<p>您好，你正在进行{{system_name}}密码重置。</p><p>点击 <a href='{{reset_link}}'>此处</a> 进行密码重置。</p><p>如果链接无法点击，请尝试点击下面的链接或将其复制到浏览器中打开：<br> {{reset_link}} </p><p>重置链接 {{valid_minutes}} 分钟内有效，如果不是本人操作，请忽略。</p>"
+)
+
+var SMTPVerificationSubject = DefaultSMTPVerificationSubject
+var SMTPVerificationContent = DefaultSMTPVerificationContent
+var SMTPPasswordResetSubject = DefaultSMTPPasswordResetSubject
+var SMTPPasswordResetContent = DefaultSMTPPasswordResetContent
+
 var GitHubClientId = ""
 var GitHubClientSecret = ""
 var LinuxDOClientId = ""

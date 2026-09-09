@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 
 import {
   SettingsForm,
@@ -60,6 +61,10 @@ const createEmailSchema = (t: (key: string) => string) =>
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
     }, t('Enter a valid email or leave blank')),
     SMTPToken: z.string(),
+    SMTPVerificationSubject: z.string(),
+    SMTPVerificationContent: z.string(),
+    SMTPPasswordResetSubject: z.string(),
+    SMTPPasswordResetContent: z.string(),
     SMTPSSLEnabled: z.boolean(),
     SMTPStartTLSEnabled: z.boolean(),
     SMTPInsecureSkipVerify: z.boolean(),
@@ -105,6 +110,10 @@ export function EmailSettingsSection({
       SMTPAccount: values.SMTPAccount.trim(),
       SMTPFrom: values.SMTPFrom.trim(),
       SMTPToken: values.SMTPToken.trim(),
+      SMTPVerificationSubject: values.SMTPVerificationSubject.trim(),
+      SMTPVerificationContent: values.SMTPVerificationContent,
+      SMTPPasswordResetSubject: values.SMTPPasswordResetSubject.trim(),
+      SMTPPasswordResetContent: values.SMTPPasswordResetContent,
       SMTPSSLEnabled: securityMode === 'ssl_tls',
       SMTPStartTLSEnabled: securityMode === 'starttls',
       SMTPInsecureSkipVerify: values.SMTPInsecureSkipVerify,
@@ -117,6 +126,10 @@ export function EmailSettingsSection({
       SMTPAccount: defaultValues.SMTPAccount.trim(),
       SMTPFrom: defaultValues.SMTPFrom.trim(),
       SMTPToken: defaultValues.SMTPToken.trim(),
+      SMTPVerificationSubject: defaultValues.SMTPVerificationSubject.trim(),
+      SMTPVerificationContent: defaultValues.SMTPVerificationContent,
+      SMTPPasswordResetSubject: defaultValues.SMTPPasswordResetSubject.trim(),
+      SMTPPasswordResetContent: defaultValues.SMTPPasswordResetContent,
       SMTPSSLEnabled: defaultValues.SMTPSSLEnabled,
       SMTPStartTLSEnabled: defaultValues.SMTPStartTLSEnabled,
       SMTPInsecureSkipVerify: defaultValues.SMTPInsecureSkipVerify,
@@ -143,6 +156,35 @@ export function EmailSettingsSection({
 
     if (sanitized.SMTPToken && sanitized.SMTPToken !== initial.SMTPToken) {
       updates.push({ key: 'SMTPToken', value: sanitized.SMTPToken })
+    }
+
+    if (sanitized.SMTPVerificationSubject !== initial.SMTPVerificationSubject) {
+      updates.push({
+        key: 'SMTPVerificationSubject',
+        value: sanitized.SMTPVerificationSubject,
+      })
+    }
+    if (sanitized.SMTPVerificationContent !== initial.SMTPVerificationContent) {
+      updates.push({
+        key: 'SMTPVerificationContent',
+        value: sanitized.SMTPVerificationContent,
+      })
+    }
+    if (
+      sanitized.SMTPPasswordResetSubject !== initial.SMTPPasswordResetSubject
+    ) {
+      updates.push({
+        key: 'SMTPPasswordResetSubject',
+        value: sanitized.SMTPPasswordResetSubject,
+      })
+    }
+    if (
+      sanitized.SMTPPasswordResetContent !== initial.SMTPPasswordResetContent
+    ) {
+      updates.push({
+        key: 'SMTPPasswordResetContent',
+        value: sanitized.SMTPPasswordResetContent,
+      })
     }
 
     if (sanitized.SMTPSSLEnabled !== initial.SMTPSSLEnabled) {
@@ -405,6 +447,71 @@ export function EmailSettingsSection({
               </FormItem>
             )}
           />
+
+          <div className='space-y-4 border-t pt-4'>
+            <div>
+              <h3 className='font-medium'>
+                {t('Authentication email templates')}
+              </h3>
+              <p className='text-muted-foreground text-sm'>
+                {t('Available placeholders')}: <code>{'{{system_name}}'}</code>,{' '}
+                <code>{'{{code}}'}</code>, <code>{'{{valid_minutes}}'}</code>,{' '}
+                <code>{'{{reset_link}}'}</code>.
+              </p>
+            </div>
+            <FormField
+              control={form.control}
+              name='SMTPVerificationSubject'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Verification email subject')}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='SMTPVerificationContent'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Verification email body')}</FormLabel>
+                  <FormControl>
+                    <Textarea rows={5} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='SMTPPasswordResetSubject'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Password reset email subject')}</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='SMTPPasswordResetContent'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Password reset email body')}</FormLabel>
+                  <FormControl>
+                    <Textarea rows={8} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

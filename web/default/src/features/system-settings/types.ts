@@ -476,6 +476,10 @@ export type OperationsSettings = {
   SMTPAccount: string
   SMTPFrom: string
   SMTPToken: string
+  SMTPVerificationSubject: string
+  SMTPVerificationContent: string
+  SMTPPasswordResetSubject: string
+  SMTPPasswordResetContent: string
   SMTPSSLEnabled: boolean
   SMTPStartTLSEnabled: boolean
   SMTPInsecureSkipVerify: boolean

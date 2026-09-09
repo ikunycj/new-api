@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SettingsPage } from '../components/settings-page'
+import { SMTP_EMAIL_TEMPLATE_DEFAULTS } from '../integrations/email-template-defaults'
 import type { OperationsSettings } from '../types'
 import {
   OPERATIONS_DEFAULT_SECTION,
@@ -34,6 +35,7 @@ const defaultOperationsSettings: OperationsSettings = {
   SMTPAccount: '',
   SMTPFrom: '',
   SMTPToken: '',
+  ...SMTP_EMAIL_TEMPLATE_DEFAULTS,
   SMTPSSLEnabled: false,
   SMTPStartTLSEnabled: false,
   SMTPInsecureSkipVerify: false,

@@ -141,6 +141,10 @@ func AllOption() ([]*Option, error) {
 func InitOptionMap() {
 	common.OptionMapRWMutex.Lock()
 	common.OptionMap = make(map[string]string)
+	common.SMTPVerificationSubject = common.DefaultSMTPVerificationSubject
+	common.SMTPVerificationContent = common.DefaultSMTPVerificationContent
+	common.SMTPPasswordResetSubject = common.DefaultSMTPPasswordResetSubject
+	common.SMTPPasswordResetContent = common.DefaultSMTPPasswordResetContent
 
 	// 添加原有的系统配置
 	common.OptionMap["FileUploadPermission"] = strconv.Itoa(common.FileUploadPermission)
@@ -172,6 +176,10 @@ func InitOptionMap() {
 	common.OptionMap["SMTPPort"] = strconv.Itoa(common.SMTPPort)
 	common.OptionMap["SMTPAccount"] = ""
 	common.OptionMap["SMTPToken"] = ""
+	common.OptionMap["SMTPVerificationSubject"] = common.EffectiveSMTPVerificationSubject()
+	common.OptionMap["SMTPVerificationContent"] = common.EffectiveSMTPVerificationContent()
+	common.OptionMap["SMTPPasswordResetSubject"] = common.EffectiveSMTPPasswordResetSubject()
+	common.OptionMap["SMTPPasswordResetContent"] = common.EffectiveSMTPPasswordResetContent()
 	common.OptionMap["SMTPSSLEnabled"] = strconv.FormatBool(common.SMTPSSLEnabled)
 	common.OptionMap["SMTPStartTLSEnabled"] = strconv.FormatBool(common.SMTPStartTLSEnabled)
 	common.OptionMap["SMTPInsecureSkipVerify"] = strconv.FormatBool(common.SMTPInsecureSkipVerify)
@@ -633,6 +641,18 @@ func updateOptionMap(key string, value string) (err error) {
 		common.SMTPFrom = value
 	case "SMTPToken":
 		common.SMTPToken = value
+	case "SMTPVerificationSubject":
+		common.SMTPVerificationSubject = common.ResolveSMTPTemplate(value, common.DefaultSMTPVerificationSubject)
+		common.OptionMap[key] = common.SMTPVerificationSubject
+	case "SMTPVerificationContent":
+		common.SMTPVerificationContent = common.ResolveSMTPTemplate(value, common.DefaultSMTPVerificationContent)
+		common.OptionMap[key] = common.SMTPVerificationContent
+	case "SMTPPasswordResetSubject":
+		common.SMTPPasswordResetSubject = common.ResolveSMTPTemplate(value, common.DefaultSMTPPasswordResetSubject)
+		common.OptionMap[key] = common.SMTPPasswordResetSubject
+	case "SMTPPasswordResetContent":
+		common.SMTPPasswordResetContent = common.ResolveSMTPTemplate(value, common.DefaultSMTPPasswordResetContent)
+		common.OptionMap[key] = common.SMTPPasswordResetContent
 	case "ServerAddress":
 		system_setting.ServerAddress = value
 	case "WorkerUrl":

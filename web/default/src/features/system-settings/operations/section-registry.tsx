@@ -18,12 +18,17 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
+import { SMTP_EMAIL_TEMPLATE_DEFAULTS } from '../integrations/email-template-defaults'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
 import { PerformanceSection } from '../maintenance/performance-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+
+function resolveSMTPTemplate(value: string, defaultValue: string) {
+  return value.trim() === '' ? defaultValue : value
+}
 
 const OPERATIONS_SECTIONS = [
   {
@@ -69,6 +74,22 @@ const OPERATIONS_SECTIONS = [
           SMTPAccount: settings.SMTPAccount,
           SMTPFrom: settings.SMTPFrom,
           SMTPToken: settings.SMTPToken,
+          SMTPVerificationSubject: resolveSMTPTemplate(
+            settings.SMTPVerificationSubject,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPVerificationSubject
+          ),
+          SMTPVerificationContent: resolveSMTPTemplate(
+            settings.SMTPVerificationContent,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPVerificationContent
+          ),
+          SMTPPasswordResetSubject: resolveSMTPTemplate(
+            settings.SMTPPasswordResetSubject,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPPasswordResetSubject
+          ),
+          SMTPPasswordResetContent: resolveSMTPTemplate(
+            settings.SMTPPasswordResetContent,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPPasswordResetContent
+          ),
           SMTPSSLEnabled: settings.SMTPSSLEnabled,
           SMTPStartTLSEnabled: settings.SMTPStartTLSEnabled,
           SMTPInsecureSkipVerify: settings.SMTPInsecureSkipVerify,
