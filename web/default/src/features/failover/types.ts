@@ -141,3 +141,47 @@ export type FailoverMonitoringSnapshot = {
   sources: FailoverMonitoringSource[]
   grafana_url?: string
 }
+
+export type ChannelHealthSnapshot = {
+  channel_id: number
+  route: string
+  family: string
+  score: number
+  raw_score: number
+  availability: number
+  latency_score: number
+  latency_baseline_ms: number
+  last_latency_ms: number
+  samples: number
+  successes: number
+  failures: number
+  confident: boolean
+  updated_at: string
+}
+
+export type ChannelHealthProbeStats = {
+  last_run_at: string
+  last_probed: number
+  last_skipped: number
+  last_failed: number
+}
+
+export type ChannelHealthConfig = {
+  half_life_seconds: number
+  min_samples: number
+  latency_half_life_seconds: number
+  state_ttl_seconds: number
+  probe_enabled: boolean
+  probe_interval_seconds: number
+  probe_idle_grace_seconds: number
+}
+
+export type ChannelHealthSnapshotResponse = {
+  enabled: boolean
+  active: boolean
+  mode: 'observe' | 'active'
+  config: ChannelHealthConfig
+  probe_route: string
+  probe_stats: ChannelHealthProbeStats | null
+  channels: ChannelHealthSnapshot[]
+}

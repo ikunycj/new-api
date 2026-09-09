@@ -16,6 +16,7 @@ import {
   getFailoverMonitoring,
   updateFailoverErrorMappings,
 } from './api'
+import { ChannelHealthTab } from './channel-health-tab'
 import type {
   FailoverConfig,
   FailoverMonitoringMetrics,
@@ -145,6 +146,7 @@ export function FailoverConfiguration() {
           <TabsTrigger value='monitoring'>
             {t('Channel monitoring')}
           </TabsTrigger>
+          <TabsTrigger value='health'>{t('Health scores')}</TabsTrigger>
         </TabsList>
         <TabsContent value='errors' className='space-y-3 pt-4'>
           {config.error_mappings.map((mapping, index) => (
@@ -416,6 +418,9 @@ export function FailoverConfiguration() {
                 </div>
               </>
             )}
+        </TabsContent>
+        <TabsContent value='health' className='pt-4'>
+          <ChannelHealthTab />
         </TabsContent>
       </Tabs>
     </div>
