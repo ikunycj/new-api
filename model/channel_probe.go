@@ -215,3 +215,28 @@ func GetPreviousDayChannelProbeSuccessRate(channelID int, now time.Time) (float6
 	}
 	return rates[channelID], nil
 }
+
+// GetChannelsForHealthProbe returns the enabled channels that participate in a
+// configured billing group route. Channels outside every route are skipped:
+// probing them would spend upstream quota on capacity that routing cannot
+// select anyway.
+func GetChannelsForHealthProbe() ([]*Channel, error) {
+	if DB == nil {
+		return nil, errors.New("database is not initialised")
+	}
+	if !DB.Migrator().HasTable(&BillingGroupChannel{}) {
+		return nil, nil
+	}
+
+	var channels []*Channel
+	err := DB.Where("status = ? AND id IN (?)",
+		common.ChannelStatusEnabled,
+		DB.Model(&BillingGroupChannel{}).
+			Select("channel_id").
+			Where("enabled = ?", true),
+	).Find(&channels).Error
+	if err != nil {
+		return nil, err
+	}
+	return channels, nil
+}

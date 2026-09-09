@@ -124,6 +124,14 @@ func main() {
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 
+	// Channel health probes reuse the existing channel test implementation and
+	// only run for channels that real traffic has not exercised recently. Both
+	// the executor registration and the loop are inert until an operator enables
+	// ChannelHealthEnabled and ChannelHealthProbeEnabled.
+	controller.RegisterChannelHealthProbeExecutor()
+	controller.RegisterChannelHealthScoreInjection()
+	service.StartChannelHealthProbeTask()
+
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.
 	service.StartSystemInstanceReporter()

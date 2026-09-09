@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -292,7 +293,7 @@ func GetConfiguredRouteChannelWithStrategyConfig(group string, model string, req
 				candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
 			}
 		}
-		return chooseRouteCandidate(candidates, strategyConfig), nil
+		return chooseRouteCandidate(candidates, strategyConfig, requestPath, model), nil
 	}
 
 	channelSyncLock.RLock()
@@ -324,7 +325,7 @@ func GetConfiguredRouteChannelWithStrategyConfig(group string, model string, req
 		}
 		candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
 	}
-	return chooseRouteCandidate(candidates, strategyConfig), nil
+	return chooseRouteCandidate(candidates, strategyConfig, requestPath, model), nil
 }
 
 type weightedRouteCandidate struct {
@@ -333,13 +334,55 @@ type weightedRouteCandidate struct {
 	costFactor float64
 }
 
-func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig RoutingStrategyConfig) *Channel {
+// channelHealthScoreGetter returns the live health score for one
+// channel/route/model triple plus whether a snapshot exists. It is injected
+// rather than linked directly because the implementation lives in the service
+// package, which imports model; a direct model->service import would be a
+// dependency cycle. The same injection pattern is used for the channel health
+// probe executor.
+//
+// The model name is part of the lookup because health is bucketed per model
+// family: comparing a claude channel's score against a gpt channel's score
+// would average two incomparable latency and failure profiles.
+type channelHealthScoreGetter func(channelID int, route string, modelName string) (float64, bool)
+
+var (
+	channelHealthScoreGetterPtr atomic.Pointer[channelHealthScoreGetter]
+)
+
+// SetChannelHealthScoreGetter registers the live health score lookup. Without
+// it, routing falls back to the legacy PreviousDayProbeSuccessRate input even
+// when the subsystem is active. A nil getter clears the injection.
+func SetChannelHealthScoreGetter(getter channelHealthScoreGetter) {
+	if getter == nil {
+		channelHealthScoreGetterPtr.Store(nil)
+		return
+	}
+	channelHealthScoreGetterPtr.Store(&getter)
+}
+
+func loadChannelHealthScoreGetter() channelHealthScoreGetter {
+	if pointer := channelHealthScoreGetterPtr.Load(); pointer != nil {
+		return *pointer
+	}
+	return nil
+}
+
+func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig RoutingStrategyConfig, route string, modelName string) *Channel {
 	if len(candidates) == 0 {
 		return nil
 	}
 	if strategyConfig.Type != RoutingStrategyWeighted {
 		return candidates[0].channel
 	}
+
+	// When the real-time health subsystem is active and has a score for this
+	// channel/route pair, prefer it over the legacy PreviousDayProbeSuccessRate.
+	// The legacy value is pulled from the previous calendar day and therefore
+	// cannot react to a channel failing right now; the live score can. Observe
+	// mode leaves the legacy input untouched so routing behaviour is identical.
+	healthActive := common.IsChannelHealthActive()
+	healthScoreGetter := loadChannelHealthScoreGetter()
 
 	weights := make([]float64, len(candidates))
 	maxResponseTime := 0
@@ -365,6 +408,14 @@ func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig Ro
 			priceScore = minCostFactor / candidate.costFactor * 100
 		}
 		availabilityScore := candidate.channel.PreviousDayProbeSuccessRate
+		if healthActive && healthScoreGetter != nil {
+			// The live score is blended over [0,1], the legacy input over [0,100].
+			// A missing snapshot means "no information yet", so the legacy value
+			// is kept as the prior rather than jumping to a neutral 100.
+			if liveScore, ok := healthScoreGetter(candidate.channel.Id, route, modelName); ok {
+				availabilityScore = liveScore * 100
+			}
+		}
 		if availabilityScore <= 0 || math.IsNaN(availabilityScore) || math.IsInf(availabilityScore, 0) {
 			availabilityScore = 100
 		}

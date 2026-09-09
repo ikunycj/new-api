@@ -389,6 +389,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			if newAPIError.FailureScope() == "channel" || newAPIError.FailureScope() == "provider" {
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
 				service.RecordChannelCircuitFailure(channel.Id, route, policy)
+				service.RecordChannelHealthSample(service.ChannelHealthSample{
+					ChannelID: channel.Id,
+					Route:     route,
+					ModelName: relayInfo.OriginModelName,
+					Success:   false,
+					Latency:   attemptDuration,
+				})
 			}
 			attemptClass = observability.ErrorClass(newAPIError, contextErr)
 			upstreamStatus = newAPIError.StatusCode
@@ -437,6 +444,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			service.RecordChannelCircuitSuccess(channel.Id, route)
+			service.RecordChannelHealthSample(service.ChannelHealthSample{
+				ChannelID: channel.Id,
+				Route:     route,
+				ModelName: relayInfo.OriginModelName,
+				Success:   true,
+				Latency:   attemptDuration,
+			})
 			observability.RecordChannelRequest(channel.Id, "success")
 			if failoverOccurred {
 				observability.RecordFailoverDuration("success", policy.Mode, time.Since(requestStartedAt))

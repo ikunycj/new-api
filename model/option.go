@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,15 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticEnableChannelEnabled"] = strconv.FormatBool(common.AutomaticEnableChannelEnabled)
 	common.OptionMap[common.ChannelCircuitEnabledOptionKey] = strconv.FormatBool(common.IsChannelCircuitEnabled())
 	common.OptionMap[ChannelCircuitConfigOptionKey] = DefaultChannelCircuitConfigJSONString()
+	common.OptionMap[common.ChannelHealthEnabledOptionKey] = strconv.FormatBool(common.IsChannelHealthEnabled())
+	common.OptionMap[common.ChannelHealthModeOptionKey] = common.ChannelHealthMode()
+	common.OptionMap[common.ChannelHealthHalfLifeSecondsKey] = strconv.Itoa(common.ChannelHealthHalfLifeSeconds())
+	common.OptionMap[common.ChannelHealthMinSamplesOptionKey] = strconv.Itoa(common.ChannelHealthMinSamples())
+	common.OptionMap[common.ChannelHealthLatencyHalfLifeKey] = strconv.Itoa(common.ChannelHealthLatencyHalfLifeSeconds())
+	common.OptionMap[common.ChannelHealthStateTTLSecondsOptionKey] = strconv.Itoa(common.ChannelHealthStateTTLSeconds())
+	common.OptionMap[common.ChannelHealthProbeEnabledOptionKey] = strconv.FormatBool(common.IsChannelHealthProbeEnabled())
+	common.OptionMap[common.ChannelHealthProbeIntervalOptionKey] = strconv.Itoa(common.ChannelHealthProbeIntervalSeconds())
+	common.OptionMap[common.ChannelHealthProbeIdleGraceOptionKey] = strconv.Itoa(common.ChannelHealthProbeIdleGraceSeconds())
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -394,6 +404,10 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticEnableChannelEnabled = boolValue
 		case common.ChannelCircuitEnabledOptionKey:
 			common.SetChannelCircuitEnabled(boolValue)
+		case common.ChannelHealthEnabledOptionKey:
+			common.SetChannelHealthEnabled(boolValue)
+		case common.ChannelHealthProbeEnabledOptionKey:
+			common.SetChannelHealthProbeEnabled(boolValue)
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
@@ -471,8 +485,34 @@ func updateOptionMap(key string, value string) (err error) {
 		common.StreamClientWriteTimeout, _ = strconv.Atoi(value)
 	case "ShutdownTimeoutSeconds":
 		common.ShutdownTimeoutSeconds, _ = strconv.Atoi(value)
+	case common.ChannelHealthHalfLifeSecondsKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthHalfLifeSeconds(parsed)
+		}
+	case common.ChannelHealthMinSamplesOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthMinSamples(parsed)
+		}
+	case common.ChannelHealthLatencyHalfLifeKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthLatencyHalfLifeSeconds(parsed)
+		}
+	case common.ChannelHealthStateTTLSecondsOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthStateTTLSeconds(parsed)
+		}
+	case common.ChannelHealthProbeIntervalOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthProbeIntervalSeconds(parsed)
+		}
+	case common.ChannelHealthProbeIdleGraceOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthProbeIdleGraceSeconds(parsed)
+		}
 	}
 	switch key {
+	case common.ChannelHealthModeOptionKey:
+		common.SetChannelHealthMode(value)
 	case "EmailDomainWhitelist":
 		common.EmailDomainWhitelist = strings.Split(value, ",")
 	case "SMTPServer":
@@ -698,6 +738,20 @@ func updateOptionMap(key string, value string) (err error) {
 	return err
 }
 
+// normalizeBoundedIntOption validates an integer option and rejects values
+// outside the supported range so a typo cannot silently disable EWMA decay or
+// pin channel health state in memory indefinitely.
+func normalizeBoundedIntOption(value string, min, max int, name string) (string, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return "", fmt.Errorf("%s must be an integer", name)
+	}
+	if parsed < min || parsed > max {
+		return "", fmt.Errorf("%s must be between %d and %d", name, min, max)
+	}
+	return strconv.Itoa(parsed), nil
+}
+
 func normalizeOptionValue(key string, value string) (string, error) {
 	switch key {
 	case common.ChannelCircuitEnabledOptionKey:
@@ -706,6 +760,36 @@ func normalizeOptionValue(key string, value string) (string, error) {
 			return "", errors.New("ChannelCircuitEnabled must be a boolean")
 		}
 		return strconv.FormatBool(parsed), nil
+	case common.ChannelHealthEnabledOptionKey:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", errors.New("ChannelHealthEnabled must be a boolean")
+		}
+		return strconv.FormatBool(parsed), nil
+	case common.ChannelHealthModeOptionKey:
+		mode := strings.ToLower(strings.TrimSpace(value))
+		if mode != common.ChannelHealthModeObserve && mode != common.ChannelHealthModeActive {
+			return "", errors.New("ChannelHealthMode must be observe or active")
+		}
+		return mode, nil
+	case common.ChannelHealthHalfLifeSecondsKey:
+		return normalizeBoundedIntOption(value, 5, 86400, "ChannelHealthHalfLifeSeconds")
+	case common.ChannelHealthMinSamplesOptionKey:
+		return normalizeBoundedIntOption(value, 0, 1000, "ChannelHealthMinSamples")
+	case common.ChannelHealthLatencyHalfLifeKey:
+		return normalizeBoundedIntOption(value, 5, 86400, "ChannelHealthLatencyHalfLifeSeconds")
+	case common.ChannelHealthStateTTLSecondsOptionKey:
+		return normalizeBoundedIntOption(value, 60, 604800, "ChannelHealthStateTTLSeconds")
+	case common.ChannelHealthProbeEnabledOptionKey:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", errors.New("ChannelHealthProbeEnabled must be a boolean")
+		}
+		return strconv.FormatBool(parsed), nil
+	case common.ChannelHealthProbeIntervalOptionKey:
+		return normalizeBoundedIntOption(value, 10, 86400, "ChannelHealthProbeIntervalSeconds")
+	case common.ChannelHealthProbeIdleGraceOptionKey:
+		return normalizeBoundedIntOption(value, 0, 86400, "ChannelHealthProbeIdleGraceSeconds")
 	case ChannelCircuitConfigOptionKey:
 		normalized, err := NormalizeChannelCircuitConfigJSONString(value)
 		if err != nil {
