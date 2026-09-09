@@ -240,3 +240,88 @@ func TestChooseRouteCandidateHealthScoreClamping(t *testing.T) {
 	assert.NotNil(t, chosen)
 	assert.False(t, math.IsNaN(float64(chosen.Id)))
 }
+
+// TestChooseRouteCandidateDeadChannelIsNotRescued is the regression test for the
+// zero-availability fallback. A live health score of 0 is a measured verdict
+// that every request failed, but the legacy guard rewrote any zero to 100
+// because a zero PreviousDayProbeSuccessRate means "no probe data yesterday".
+// The result was that a dead channel received full marks. The bug is worst with
+// availability_weight at 100, where no other term can offset it, so that is the
+// configuration under test.
+func TestChooseRouteCandidateDeadChannelIsNotRescued(t *testing.T) {
+	common.SetChannelHealthEnabled(true)
+	common.SetChannelHealthMode(common.ChannelHealthModeActive)
+	defer func() {
+		common.SetChannelHealthEnabled(false)
+		common.SetChannelHealthMode(common.ChannelHealthModeObserve)
+	}()
+
+	SetChannelHealthScoreGetter(func(channelID int, route string, modelName string) (float64, bool) {
+		switch channelID {
+		case 1:
+			return 1.0, true // fully healthy
+		case 2:
+			return 0.0, true // measured as completely dead
+		}
+		return 0, false
+	})
+	defer SetChannelHealthScoreGetter(nil)
+
+	candidates := []weightedRouteCandidate{
+		newHealthCandidate(1, 100, 1, 1),
+		newHealthCandidate(2, 100, 1, 1),
+	}
+
+	wins := map[int]int{}
+	const iterations = 4000
+	for i := 0; i < iterations; i++ {
+		chosen := chooseRouteCandidate(candidates, RoutingStrategyConfig{
+			Type:               RoutingStrategyWeighted,
+			PriceWeight:        0,
+			AvailabilityWeight: 100,
+			LoadWeight:         0,
+		}, "/v1/chat/completions", "claude-sonnet-4-6")
+		if chosen != nil {
+			wins[chosen.Id]++
+		}
+	}
+
+	// A measured-zero channel must receive no traffic at all: its weight is
+	// staticWeight * 0 == 0, and chooseRouteCandidate skips zero weights.
+	assert.Equal(t, 0, wins[2], "channel measured at 0 availability must receive no traffic")
+	assert.Equal(t, iterations, wins[1], "all traffic must go to the healthy channel")
+}
+
+// TestChooseRouteCandidateLegacyZeroStillGetsBenefitOfDoubt pins the other half
+// of the same branch: without a live score, a zero PreviousDayProbeSuccessRate
+// still means "unknown", not "dead", so the legacy benefit of the doubt must
+// survive the fix above. Both channels report zero, so a correct implementation
+// treats them as equal rather than starving both.
+func TestChooseRouteCandidateLegacyZeroStillGetsBenefitOfDoubt(t *testing.T) {
+	common.SetChannelHealthEnabled(false)
+	common.SetChannelHealthMode(common.ChannelHealthModeObserve)
+	SetChannelHealthScoreGetter(nil)
+
+	candidates := []weightedRouteCandidate{
+		newHealthCandidate(1, 0, 1, 1),
+		newHealthCandidate(2, 0, 1, 1),
+	}
+
+	wins := map[int]int{}
+	const iterations = 4000
+	for i := 0; i < iterations; i++ {
+		chosen := chooseRouteCandidate(candidates, RoutingStrategyConfig{
+			Type:               RoutingStrategyWeighted,
+			PriceWeight:        0,
+			AvailabilityWeight: 100,
+			LoadWeight:         0,
+		}, "/v1/chat/completions", "claude-sonnet-4-6")
+		if chosen != nil {
+			wins[chosen.Id]++
+		}
+	}
+
+	assert.Equal(t, iterations, wins[1]+wins[2], "unknown-availability channels must still be selectable")
+	assert.Greater(t, wins[1], 0, "channel 1 must remain eligible")
+	assert.Greater(t, wins[2], 0, "channel 2 must remain eligible")
+}
