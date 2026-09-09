@@ -6102,6 +6102,10 @@
     "Password reset email subject": "Tiêu đề email đặt lại mật khẩu",
     "Password reset email body": "Nội dung email đặt lại mật khẩu",
     "Available placeholders": "Biến thay thế khả dụng",
+    "Streaming output interrupted due to too many pending requests": "Luồng đầu ra bị gián đoạn do có quá nhiều yêu cầu đang chờ",
+    "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "Hàng đợi của kênh upstream đã đạt giới hạn yêu cầu đang chờ, thường do pool tài khoản không đủ; trong một số ít trường hợp, năng lực tính toán của OpenAI có thể không đủ.",
+    "Retry the request several times or avoid peak hours.": "Thử lại yêu cầu vài lần hoặc tránh giờ cao điểm.",
+    "If the problem persists, click About above and contact the administrator.": "Nếu vấn đề kéo dài, hãy nhấp vào “Giới thiệu” ở phía trên và liên hệ quản trị viên để hỏi thêm.",
     "All channels": "Tất cả kênh"
   }
 }

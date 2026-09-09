@@ -6102,6 +6102,10 @@
     "Password reset email subject": "Password reset email subject",
     "Password reset email body": "Password reset email body",
     "Available placeholders": "Available placeholders",
+    "Streaming output interrupted due to too many pending requests": "Streaming output interrupted due to too many pending requests",
+    "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.",
+    "Retry the request several times or avoid peak hours.": "Retry the request several times or avoid peak hours.",
+    "If the problem persists, click About above and contact the administrator.": "If the problem persists, click About above and contact the administrator.",
     "All channels": "All channels"
   }
 }

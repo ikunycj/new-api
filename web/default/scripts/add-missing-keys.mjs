@@ -1474,6 +1474,14 @@ const errorSelfCheckTranslations = {
   en: {
     'Official model errors': 'Official model errors',
     'User client errors': 'User client errors',
+    'Streaming output interrupted due to too many pending requests':
+      'Streaming output interrupted due to too many pending requests',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.',
+    'Retry the request several times or avoid peak hours.':
+      'Retry the request several times or avoid peak hours.',
+    'If the problem persists, click About above and contact the administrator.':
+      'If the problem persists, click About above and contact the administrator.',
     'Search error keywords...': 'Search error keywords...',
     'Search error keywords': 'Search error keywords',
     'No matching errors found.': 'No matching errors found.',
@@ -1505,6 +1513,14 @@ const errorSelfCheckTranslations = {
   zh: {
     'Official model errors': '模型官方错误',
     'User client errors': '用户客户端错误',
+    'Streaming output interrupted due to too many pending requests':
+      '流式输出中断，请求太多',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      '真正原因是上游渠道的排队请求数达到上限，大概号池不足，小概率OpenAI算力不足',
+    'Retry the request several times or avoid peak hours.':
+      '多重试，或者避开使用高峰',
+    'If the problem persists, click About above and contact the administrator.':
+      '如果长时间不行，点击上方“关于”，联系管理员询问',
     'Search error keywords...': '搜索错误关键词...',
     'Search error keywords': '搜索错误关键词',
     'No matching errors found.': '未找到匹配的错误。',
@@ -1536,6 +1552,14 @@ const errorSelfCheckTranslations = {
   'zh-TW': {
     'Official model errors': '模型官方錯誤',
     'User client errors': '使用者端錯誤',
+    'Streaming output interrupted due to too many pending requests':
+      '串流輸出中斷，請求過多',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      '真正原因是上游渠道的排隊請求數已達上限，可能是帳號池不足，少數情況下也可能是 OpenAI 算力不足。',
+    'Retry the request several times or avoid peak hours.':
+      '多重試幾次，或避開使用高峰時段',
+    'If the problem persists, click About above and contact the administrator.':
+      '如果長時間無法恢復，請點擊上方「關於」並聯絡管理員詢問',
     'Search error keywords...': '搜尋錯誤關鍵字...',
     'Search error keywords': '搜尋錯誤關鍵字',
     'No matching errors found.': '找不到符合的錯誤。',
@@ -1567,6 +1591,14 @@ const errorSelfCheckTranslations = {
   fr: {
     'Official model errors': 'Erreurs officielles des modèles',
     'User client errors': 'Erreurs côté client',
+    'Streaming output interrupted due to too many pending requests':
+      'Flux interrompu en raison d’un trop grand nombre de requêtes en attente',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      'La file du canal amont a atteint sa limite de requêtes en attente, généralement parce que le pool de comptes est insuffisant ; dans de rares cas, la capacité de calcul d’OpenAI peut être insuffisante.',
+    'Retry the request several times or avoid peak hours.':
+      'Réessayez plusieurs fois ou évitez les heures de pointe.',
+    'If the problem persists, click About above and contact the administrator.':
+      'Si le problème persiste, cliquez sur « À propos » ci-dessus et contactez l’administrateur.',
     'Search error keywords...': 'Rechercher des mots-clés d’erreur...',
     'Search error keywords': 'Rechercher des mots-clés d’erreur',
     'No matching errors found.': 'Aucune erreur correspondante trouvée.',
@@ -1598,6 +1630,14 @@ const errorSelfCheckTranslations = {
   ja: {
     'Official model errors': 'モデル公式エラー',
     'User client errors': 'ユーザー側クライアントエラー',
+    'Streaming output interrupted due to too many pending requests':
+      '保留中のリクエストが多すぎるためストリーミング出力が中断されました',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      '主な原因は上流チャンネルの待機リクエスト数が上限に達したことです。通常はアカウントプールの不足で、まれに OpenAI の計算リソース不足の場合もあります。',
+    'Retry the request several times or avoid peak hours.':
+      '何度か再試行するか、混雑する時間帯を避けてください。',
+    'If the problem persists, click About above and contact the administrator.':
+      '長時間解消しない場合は、上部の「概要」をクリックして管理者にお問い合わせください。',
     'Search error keywords...': 'エラーキーワードを検索...',
     'Search error keywords': 'エラーキーワードを検索',
     'No matching errors found.': '一致するエラーが見つかりません。',
@@ -1629,6 +1669,14 @@ const errorSelfCheckTranslations = {
   ru: {
     'Official model errors': 'Официальные ошибки моделей',
     'User client errors': 'Ошибки клиентской части пользователя',
+    'Streaming output interrupted due to too many pending requests':
+      'Потоковый вывод прерван из-за слишком большого числа ожидающих запросов',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      'Очередь запросов upstream-канала достигла лимита; обычно это означает нехватку пула аккаунтов, а в редких случаях — недостаток вычислительных ресурсов OpenAI.',
+    'Retry the request several times or avoid peak hours.':
+      'Повторите запрос несколько раз или избегайте часов пик.',
+    'If the problem persists, click About above and contact the administrator.':
+      'Если проблема долго не устраняется, нажмите «О программе» выше и обратитесь к администратору.',
     'Search error keywords...': 'Поиск по ключевым словам ошибок...',
     'Search error keywords': 'Поиск по ключевым словам ошибок',
     'No matching errors found.': 'Подходящие ошибки не найдены.',
@@ -1660,6 +1708,14 @@ const errorSelfCheckTranslations = {
   vi: {
     'Official model errors': 'Lỗi chính thức của mô hình',
     'User client errors': 'Lỗi phía máy khách người dùng',
+    'Streaming output interrupted due to too many pending requests':
+      'Luồng đầu ra bị gián đoạn do có quá nhiều yêu cầu đang chờ',
+    'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.':
+      'Hàng đợi của kênh upstream đã đạt giới hạn yêu cầu đang chờ, thường do pool tài khoản không đủ; trong một số ít trường hợp, năng lực tính toán của OpenAI có thể không đủ.',
+    'Retry the request several times or avoid peak hours.':
+      'Thử lại yêu cầu vài lần hoặc tránh giờ cao điểm.',
+    'If the problem persists, click About above and contact the administrator.':
+      'Nếu vấn đề kéo dài, hãy nhấp vào “Giới thiệu” ở phía trên và liên hệ quản trị viên để hỏi thêm.',
     'Search error keywords...': 'Tìm kiếm từ khóa lỗi...',
     'Search error keywords': 'Tìm kiếm từ khóa lỗi',
     'No matching errors found.': 'Không tìm thấy lỗi phù hợp.',

@@ -6102,6 +6102,10 @@
     "Password reset email subject": "パスワードリセットメールの件名",
     "Password reset email body": "パスワードリセットメールの本文",
     "Available placeholders": "使用できるプレースホルダー",
+    "Streaming output interrupted due to too many pending requests": "保留中のリクエストが多すぎるためストリーミング出力が中断されました",
+    "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "主な原因は上流チャンネルの待機リクエスト数が上限に達したことです。通常はアカウントプールの不足で、まれに OpenAI の計算リソース不足の場合もあります。",
+    "Retry the request several times or avoid peak hours.": "何度か再試行するか、混雑する時間帯を避けてください。",
+    "If the problem persists, click About above and contact the administrator.": "長時間解消しない場合は、上部の「概要」をクリックして管理者にお問い合わせください。",
     "All channels": "すべてのチャンネル"
   }
 }

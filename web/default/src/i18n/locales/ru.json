@@ -6102,6 +6102,10 @@
     "Password reset email subject": "Тема письма для сброса пароля",
     "Password reset email body": "Текст письма для сброса пароля",
     "Available placeholders": "Доступные подстановки",
+    "Streaming output interrupted due to too many pending requests": "Потоковый вывод прерван из-за слишком большого числа ожидающих запросов",
+    "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "Очередь запросов upstream-канала достигла лимита; обычно это означает нехватку пула аккаунтов, а в редких случаях — недостаток вычислительных ресурсов OpenAI.",
+    "Retry the request several times or avoid peak hours.": "Повторите запрос несколько раз или избегайте часов пик.",
+    "If the problem persists, click About above and contact the administrator.": "Если проблема долго не устраняется, нажмите «О программе» выше и обратитесь к администратору.",
     "All channels": "Все каналы"
   }
 }

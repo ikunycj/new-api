@@ -6102,6 +6102,10 @@
     "Password reset email subject": "Objet de l’e-mail de réinitialisation du mot de passe",
     "Password reset email body": "Corps de l’e-mail de réinitialisation du mot de passe",
     "Available placeholders": "Variables disponibles",
+    "Streaming output interrupted due to too many pending requests": "Flux interrompu en raison d’un trop grand nombre de requêtes en attente",
+    "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "La file du canal amont a atteint sa limite de requêtes en attente, généralement parce que le pool de comptes est insuffisant ; dans de rares cas, la capacité de calcul d’OpenAI peut être insuffisante.",
+    "Retry the request several times or avoid peak hours.": "Réessayez plusieurs fois ou évitez les heures de pointe.",
+    "If the problem persists, click About above and contact the administrator.": "Si le problème persiste, cliquez sur « À propos » ci-dessus et contactez l’administrateur.",
     "All channels": "Tous les canaux"
   }
 }

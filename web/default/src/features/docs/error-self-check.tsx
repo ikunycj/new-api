@@ -100,7 +100,21 @@ const ERROR_CATEGORIES: readonly ErrorCategory[] = [
   {
     id: 'relay-errors',
     titleKey: 'Relay errors',
-    errors: [],
+    errors: [
+      {
+        id: 'relay-stream-too-many-pending-requests',
+        descriptionKey:
+          'Streaming output interrupted due to too many pending requests',
+        message:
+          'stream disconnected before completion: Too many pending requests, please retry later',
+        causeKey:
+          'The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.',
+        solutionKeys: [
+          'Retry the request several times or avoid peak hours.',
+          'If the problem persists, click About above and contact the administrator.',
+        ],
+      },
+    ],
   },
   {
     id: 'other-errors',
