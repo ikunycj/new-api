@@ -266,6 +266,8 @@ function CounterList({
 export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
+  const loadTestServerAddress =
+    typeof window !== 'undefined' ? window.location.origin : serverAddress
   const userId = useAuthStore((state) => state.auth.user?.id)
   const [persistedRuns, setPersistedRuns] = useState(() =>
     loadPersistedLoadTestRuns(userId)
@@ -440,7 +442,7 @@ export function LoadTestDemo() {
 
   useEffect(() => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
-    if (!serverAddress || !selectedKey) {
+    if (!loadTestServerAddress || !selectedKey) {
       setModels([])
       setSelectedModel('')
       setModelsLoading(false)
@@ -453,7 +455,7 @@ export function LoadTestDemo() {
     setModelsLoading(true)
 
     void fetchApiKeyModels(
-      getLoadTestApiBaseUrl(serverAddress),
+      getLoadTestApiBaseUrl(loadTestServerAddress),
       selectedKey.secret
     )
       .then((result) => {
@@ -481,7 +483,7 @@ export function LoadTestDemo() {
     return () => {
       active = false
     }
-  }, [keys, selectedKeyValue, serverAddress])
+  }, [keys, loadTestServerAddress, selectedKeyValue])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -502,7 +504,7 @@ export function LoadTestDemo() {
     const selectedModelOption = models.find(
       (model) => model.id === selectedModel
     )
-    if (!serverAddress || !selectedKey || !selectedModelOption) return
+    if (!loadTestServerAddress || !selectedKey || !selectedModelOption) return
     const durationValue =
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
@@ -635,7 +637,7 @@ export function LoadTestDemo() {
       }
 
       const request = sendLoadTestRequest(
-        serverAddress,
+        loadTestServerAddress,
         selectedKey,
         selectedModel,
         currentRunId,
@@ -697,7 +699,7 @@ export function LoadTestDemo() {
     requestsPerSecond,
     selectedKeyValue,
     selectedModel,
-    serverAddress,
+    loadTestServerAddress,
     streamMode,
     t,
   ])
