@@ -6106,6 +6106,9 @@
     "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "Очередь запросов upstream-канала достигла лимита; обычно это означает нехватку пула аккаунтов, а в редких случаях — недостаток вычислительных ресурсов OpenAI.",
     "Retry the request several times or avoid peak hours.": "Повторите запрос несколько раз или избегайте часов пик.",
     "If the problem persists, click About above and contact the administrator.": "Если проблема долго не устраняется, нажмите «О программе» выше и обратитесь к администратору.",
-    "All channels": "Все каналы"
+    "OpenAI and other model providers are experiencing server overload.": "Серверы OpenAI и других поставщиков моделей перегружены.",
+    "All channels": "Все каналы",
+    "Official OpenAI error": "Официальная ошибка OpenAI",
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Возможно, серверы OpenAI или других поставщиков моделей перегружены либо в OpenAI возникла временная внутренняя ошибка."
   }
 }

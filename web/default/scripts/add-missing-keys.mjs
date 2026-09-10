@@ -1487,8 +1487,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'No matching errors found.',
     'Model capacity insufficient': 'Model capacity insufficient',
     'Authentication failed': 'Authentication failed',
+    'Official OpenAI error': 'Official OpenAI error',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI and other official providers temporarily lack enough compute capacity.',
+    'OpenAI and other model providers are experiencing server overload.':
+      'OpenAI and other model providers are experiencing server overload.',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.',
     'The API key or authentication header is missing, expired, or invalid.':
       'The API key or authentication header is missing, expired, or invalid.',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1526,8 +1531,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '未找到匹配的错误。',
     'Model capacity insufficient': '模型容量不足',
     'Authentication failed': '认证失败',
+    'Official OpenAI error': 'OpenAI官方异常错误',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI 及其他官方厂商暂时缺乏足够的算力。',
+    'OpenAI and other model providers are experiencing server overload.':
+      'OpenAI 等模型厂商的服务器过载。',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      '可能是 OpenAI 等模型供应商服务器超载，也可能是 OpenAI 内部的临时 Bug。',
     'The API key or authentication header is missing, expired, or invalid.':
       'API Key 或鉴权请求头缺失、已过期或无效。',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1565,8 +1575,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '找不到符合的錯誤。',
     'Model capacity insufficient': '模型容量不足',
     'Authentication failed': '驗證失敗',
+    'Official OpenAI error': 'OpenAI 官方異常錯誤',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI 及其他官方廠商暫時缺乏足夠的算力。',
+    'OpenAI and other model providers are experiencing server overload.':
+      'OpenAI 等模型供應商的伺服器過載。',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      '可能是 OpenAI 等模型供應商的伺服器過載，也可能是 OpenAI 內部的暫時性 Bug。',
     'The API key or authentication header is missing, expired, or invalid.':
       'API Key 或驗證標頭缺失、已過期或無效。',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1604,8 +1619,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Aucune erreur correspondante trouvée.',
     'Model capacity insufficient': 'Capacité du modèle insuffisante',
     'Authentication failed': 'Échec de l’authentification',
+    'Official OpenAI error': 'Erreur officielle d’OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI et les autres fournisseurs officiels ne disposent temporairement pas d’une capacité de calcul suffisante.',
+    'OpenAI and other model providers are experiencing server overload.':
+      'Les serveurs d’OpenAI et d’autres fournisseurs de modèles sont surchargés.',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      'Les serveurs d’OpenAI ou d’autres fournisseurs de modèles peuvent être surchargés, ou OpenAI peut rencontrer un bug interne temporaire.',
     'The API key or authentication header is missing, expired, or invalid.':
       'La clé API ou l’en-tête d’authentification est manquant, expiré ou invalide.',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1643,8 +1663,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '一致するエラーが見つかりません。',
     'Model capacity insufficient': 'モデルの容量不足',
     'Authentication failed': '認証に失敗しました',
+    'Official OpenAI error': 'OpenAI 公式の異常エラー',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI などの公式プロバイダーで、選択したモデルに割り当てる計算リソースが一時的に不足しています。',
+    'OpenAI and other model providers are experiencing server overload.':
+      'OpenAI などのモデルプロバイダーのサーバーが過負荷になっています。',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      'OpenAI などのモデルプロバイダーのサーバーが過負荷になっているか、OpenAI 内部で一時的な不具合が発生している可能性があります。',
     'The API key or authentication header is missing, expired, or invalid.':
       'API キーまたは認証ヘッダーがないか、期限切れ、または無効です。',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1682,8 +1707,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Подходящие ошибки не найдены.',
     'Model capacity insufficient': 'Недостаточная ёмкость модели',
     'Authentication failed': 'Ошибка аутентификации',
+    'Official OpenAI error': 'Официальная ошибка OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'У OpenAI и других официальных поставщиков временно недостаточно вычислительных ресурсов.',
+    'OpenAI and other model providers are experiencing server overload.':
+      'Серверы OpenAI и других поставщиков моделей перегружены.',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      'Возможно, серверы OpenAI или других поставщиков моделей перегружены либо в OpenAI возникла временная внутренняя ошибка.',
     'The API key or authentication header is missing, expired, or invalid.':
       'Ключ API или заголовок аутентификации отсутствует, просрочен или недействителен.',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':
@@ -1721,8 +1751,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Không tìm thấy lỗi phù hợp.',
     'Model capacity insufficient': 'Mô hình không đủ năng lực',
     'Authentication failed': 'Xác thực không thành công',
+    'Official OpenAI error': 'Lỗi chính thức từ OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI và các nhà cung cấp chính thức khác tạm thời không có đủ năng lực tính toán.',
+    'OpenAI and other model providers are experiencing server overload.':
+      'Máy chủ của OpenAI và các nhà cung cấp mô hình khác đang bị quá tải.',
+    'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.':
+      'Có thể máy chủ của OpenAI hoặc các nhà cung cấp mô hình khác đang quá tải, hoặc OpenAI gặp lỗi nội bộ tạm thời.',
     'The API key or authentication header is missing, expired, or invalid.':
       'API Key hoặc tiêu đề xác thực bị thiếu, hết hạn hoặc không hợp lệ.',
     'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.':

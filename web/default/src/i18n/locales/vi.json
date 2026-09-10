@@ -6106,6 +6106,9 @@
     "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "Hàng đợi của kênh upstream đã đạt giới hạn yêu cầu đang chờ, thường do pool tài khoản không đủ; trong một số ít trường hợp, năng lực tính toán của OpenAI có thể không đủ.",
     "Retry the request several times or avoid peak hours.": "Thử lại yêu cầu vài lần hoặc tránh giờ cao điểm.",
     "If the problem persists, click About above and contact the administrator.": "Nếu vấn đề kéo dài, hãy nhấp vào “Giới thiệu” ở phía trên và liên hệ quản trị viên để hỏi thêm.",
-    "All channels": "Tất cả kênh"
+    "OpenAI and other model providers are experiencing server overload.": "Máy chủ của OpenAI và các nhà cung cấp mô hình khác đang bị quá tải.",
+    "All channels": "Tất cả kênh",
+    "Official OpenAI error": "Lỗi chính thức từ OpenAI",
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Có thể máy chủ của OpenAI hoặc các nhà cung cấp mô hình khác đang quá tải, hoặc OpenAI gặp lỗi nội bộ tạm thời."
   }
 }

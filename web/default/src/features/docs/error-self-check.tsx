@@ -36,6 +36,10 @@ import { NumberedSteps } from './components/numbered-steps'
 // Keep upstream error strings verbatim so users can search for them in logs.
 const OPENAI_CAPACITY_ERROR =
   'Selected model is at capacity. Please try a different model.'
+const OPENAI_SERVER_OVERLOADED_ERROR =
+  'stream disconnected before completion: Our servers are currently overloaded. Please try again later.'
+const OPENAI_PROCESSING_ERROR =
+  'stream disconnected before completion: An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists.'
 const UNAUTHORIZED_ERROR = 'Unauthorized'
 const STREAM_DISCONNECTED_ERROR =
   'stream disconnected before completion: stream closed before response.completed'
@@ -75,6 +79,22 @@ const ERROR_CATEGORIES: readonly ErrorCategory[] = [
           'To preserve cache-hit rates, keep retrying the request and wait for OpenAI to assign capacity through its queue.',
           'Start a new conversation or switch to a new group so the backend may select another account. Accounts can be served from different regions, where capacity pressure may differ; this may help, but the same shortage can still occur.',
         ],
+      },
+      {
+        id: 'openai-server-overloaded',
+        descriptionKey: 'OpenAI',
+        message: OPENAI_SERVER_OVERLOADED_ERROR,
+        causeKey:
+          'OpenAI and other model providers are experiencing server overload.',
+        solutionKeys: ['Retry'],
+      },
+      {
+        id: 'openai-processing-error',
+        descriptionKey: 'Official OpenAI error',
+        message: OPENAI_PROCESSING_ERROR,
+        causeKey:
+          'OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.',
+        solutionKeys: ['Retry'],
       },
     ],
   },

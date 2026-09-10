@@ -6106,6 +6106,9 @@
     "The upstream channel queue has reached its pending-request limit, usually because the account pool is insufficient; in rare cases, OpenAI compute capacity may be insufficient.": "真正原因是上游渠道的排隊請求數已達上限，可能是帳號池不足，少數情況下也可能是 OpenAI 算力不足。",
     "Retry the request several times or avoid peak hours.": "多重試幾次，或避開使用高峰時段",
     "If the problem persists, click About above and contact the administrator.": "如果長時間無法恢復，請點擊上方「關於」並聯絡管理員詢問",
-    "All channels": "所有頻道"
+    "OpenAI and other model providers are experiencing server overload.": "OpenAI 等模型供應商的伺服器過載。",
+    "All channels": "所有頻道",
+    "Official OpenAI error": "OpenAI 官方異常錯誤",
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "可能是 OpenAI 等模型供應商的伺服器過載，也可能是 OpenAI 內部的暫時性 Bug。"
   }
 }
