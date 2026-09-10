@@ -141,3 +141,76 @@ export type FailoverMonitoringSnapshot = {
   sources: FailoverMonitoringSource[]
   grafana_url?: string
 }
+
+export type ChannelHealthSnapshot = {
+  channel_id: number
+  route: string
+  family: string
+  score: number
+  raw_score: number
+  availability: number
+  latency_score: number
+  latency_baseline_ms: number
+  last_latency_ms: number
+  samples: number
+  successes: number
+  failures: number
+  confident: boolean
+  updated_at: string
+}
+
+export type ChannelHealthProbeStats = {
+  last_run_at: string
+  last_probed: number
+  last_skipped: number
+  last_failed: number
+}
+
+export type ChannelHealthConfig = {
+  half_life_seconds: number
+  min_samples: number
+  latency_half_life_seconds: number
+  state_ttl_seconds: number
+  probe_enabled: boolean
+  probe_interval_seconds: number
+  probe_idle_grace_seconds: number
+  history_enabled: boolean
+  history_bucket_seconds: number
+  history_retention_days: number
+}
+
+// One persisted bucket of the score time series. Every gauge here is the mean
+// over the bucket, so observation_count is needed to tell a well-sampled bucket
+// from a single stray reading.
+export type ChannelHealthHistoryPoint = {
+  channel_id: number
+  route: string
+  family: string
+  bucket_ts: number
+  score: number
+  availability: number
+  latency_score: number
+  latency_ms: number
+  samples: number
+  confident_count: number
+  observation_count: number
+}
+
+export type ChannelHealthHistoryResponse = {
+  enabled: boolean
+  bucket_seconds: number
+  retention_days: number
+  probe_route: string
+  hours: number
+  points: ChannelHealthHistoryPoint[]
+}
+
+export type ChannelHealthSnapshotResponse = {
+  enabled: boolean
+  active: boolean
+  mode: 'observe' | 'active'
+  config: ChannelHealthConfig
+  probe_route: string
+  probe_stats: ChannelHealthProbeStats | null
+  channels: ChannelHealthSnapshot[]
+}

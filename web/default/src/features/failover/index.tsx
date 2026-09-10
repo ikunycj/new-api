@@ -16,6 +16,7 @@ import {
   getFailoverMonitoring,
   updateFailoverErrorMappings,
 } from './api'
+import { ChannelHealthTab } from './channel-health-tab'
 import type {
   FailoverConfig,
   FailoverMonitoringMetrics,
@@ -123,301 +124,317 @@ export function FailoverConfiguration() {
   if (!config) return <div className='p-6 text-sm'>{t('Loading')}</div>
 
   return (
-    <div className='mx-auto w-full max-w-7xl space-y-5 p-4 md:p-6'>
-      <header className='flex flex-wrap items-center justify-between gap-3'>
-        <div>
-          <h1 className='text-xl font-semibold'>{t('Monitoring & Alerts')}</h1>
-          <p className='text-muted-foreground text-sm'>
-            {t('Manage channel error mappings and monitor channel health.')}
-          </p>
-        </div>
-        <Button
-          onClick={() => saveMutation.mutate(config.error_mappings)}
-          disabled={!draft || saveMutation.isPending}
-        >
-          <Save className='size-4' /> {t('Save')}
-        </Button>
-      </header>
+    // The layout <main> is overflow-hidden and flex-1, so a page taller than the
+    // viewport is clipped with no scrollbar anywhere. Every other long page owns
+    // its own scroll container (see section-page-layout); this page never did,
+    // which only became visible once the health tab made it tall.
+    <div className='min-h-0 flex-1 overflow-auto'>
+      <div className='mx-auto w-full max-w-7xl space-y-5 p-4 md:p-6'>
+        <header className='flex flex-wrap items-center justify-between gap-3'>
+          <div>
+            <h1 className='text-xl font-semibold'>
+              {t('Monitoring & Alerts')}
+            </h1>
+            <p className='text-muted-foreground text-sm'>
+              {t('Manage channel error mappings and monitor channel health.')}
+            </p>
+          </div>
+          <Button
+            onClick={() => saveMutation.mutate(config.error_mappings)}
+            disabled={!draft || saveMutation.isPending}
+          >
+            <Save className='size-4' /> {t('Save')}
+          </Button>
+        </header>
 
-      <Tabs defaultValue='errors'>
-        <TabsList>
-          <TabsTrigger value='errors'>{t('Error mappings')}</TabsTrigger>
-          <TabsTrigger value='monitoring'>
-            {t('Channel monitoring')}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value='errors' className='space-y-3 pt-4'>
-          {config.error_mappings.map((mapping, index) => (
-            <div
-              key={mapping.id}
-              className='grid gap-3 border-b pb-3 md:grid-cols-[1fr_1fr_120px_140px_1fr_1fr_auto] md:items-end'
-            >
-              <div className='space-y-1.5'>
-                <Label>{t('Channel')}</Label>
-                <NativeSelect
-                  className='w-full'
-                  value={mapping.channel_id}
-                  onChange={(event) => {
-                    const channel = channelByID.get(Number(event.target.value))
-                    updateConfig((current) => {
-                      current.error_mappings[index] = {
-                        ...mapping,
-                        channel_id: channel?.id ?? 0,
-                        channel_type: channel?.type ?? 0,
-                      }
-                      return current
-                    })
-                  }}
-                >
-                  <NativeSelectOption value={0}>
-                    {t('All channels')}
-                  </NativeSelectOption>
-                  {channels.map((channel) => (
-                    <NativeSelectOption key={channel.id} value={channel.id}>
-                      {channel.name} (#{channel.id})
+        <Tabs defaultValue='errors'>
+          <TabsList>
+            <TabsTrigger value='errors'>{t('Error mappings')}</TabsTrigger>
+            <TabsTrigger value='monitoring'>
+              {t('Channel monitoring')}
+            </TabsTrigger>
+            <TabsTrigger value='health'>{t('Health scores')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value='errors' className='space-y-3 pt-4'>
+            {config.error_mappings.map((mapping, index) => (
+              <div
+                key={mapping.id}
+                className='grid gap-3 border-b pb-3 md:grid-cols-[1fr_1fr_120px_140px_1fr_1fr_auto] md:items-end'
+              >
+                <div className='space-y-1.5'>
+                  <Label>{t('Channel')}</Label>
+                  <NativeSelect
+                    className='w-full'
+                    value={mapping.channel_id}
+                    onChange={(event) => {
+                      const channel = channelByID.get(
+                        Number(event.target.value)
+                      )
+                      updateConfig((current) => {
+                        current.error_mappings[index] = {
+                          ...mapping,
+                          channel_id: channel?.id ?? 0,
+                          channel_type: channel?.type ?? 0,
+                        }
+                        return current
+                      })
+                    }}
+                  >
+                    <NativeSelectOption value={0}>
+                      {t('All channels')}
                     </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </div>
-              <div className='space-y-1.5'>
-                <Label>{t('Upstream error code')}</Label>
-                <Input
-                  value={mapping.raw_code}
-                  onChange={(event) =>
+                    {channels.map((channel) => (
+                      <NativeSelectOption key={channel.id} value={channel.id}>
+                        {channel.name} (#{channel.id})
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>{t('Upstream error code')}</Label>
+                  <Input
+                    value={mapping.raw_code}
+                    onChange={(event) =>
+                      updateConfig((current) => {
+                        current.error_mappings[index] = {
+                          ...mapping,
+                          raw_code: event.target.value,
+                        }
+                        return current
+                      })
+                    }
+                  />
+                </div>
+                <NumberField
+                  label={t('HTTP status')}
+                  value={mapping.status_code}
+                  onChange={(statusCode) =>
                     updateConfig((current) => {
                       current.error_mappings[index] = {
                         ...mapping,
-                        raw_code: event.target.value,
+                        status_code: statusCode,
                       }
                       return current
                     })
                   }
                 />
-              </div>
-              <NumberField
-                label={t('HTTP status')}
-                value={mapping.status_code}
-                onChange={(statusCode) =>
-                  updateConfig((current) => {
-                    current.error_mappings[index] = {
-                      ...mapping,
-                      status_code: statusCode,
-                    }
-                    return current
-                  })
-                }
-              />
-              <NumberField
-                label={t('AllToken code')}
-                value={mapping.alltoken_code}
-                min={100000}
-                onChange={(alltoken_code) =>
-                  updateConfig((current) => {
-                    current.error_mappings[index] = {
-                      ...mapping,
-                      alltoken_code,
-                    }
-                    return current
-                  })
-                }
-              />
-              <div className='space-y-1.5'>
-                <Label>{t('Failure scope')}</Label>
-                <NativeSelect
-                  className='w-full'
-                  value={mapping.failure_scope}
-                  onChange={(event) =>
+                <NumberField
+                  label={t('AllToken code')}
+                  value={mapping.alltoken_code}
+                  min={100000}
+                  onChange={(alltoken_code) =>
                     updateConfig((current) => {
                       current.error_mappings[index] = {
                         ...mapping,
-                        failure_scope: event.target
-                          .value as UpstreamErrorMapping['failure_scope'],
+                        alltoken_code,
                       }
                       return current
                     })
                   }
-                >
-                  {['request', 'credential', 'channel', 'provider'].map(
-                    (scope) => (
-                      <NativeSelectOption key={scope} value={scope}>
-                        {scope}
-                      </NativeSelectOption>
-                    )
-                  )}
-                </NativeSelect>
-              </div>
-              <div className='space-y-1.5'>
-                <Label>{t('Action')}</Label>
-                <NativeSelect
-                  className='w-full'
-                  value={mapping.action}
-                  onChange={(event) =>
-                    updateConfig((current) => {
-                      current.error_mappings[index] = {
-                        ...mapping,
-                        action: event.target
-                          .value as UpstreamErrorMapping['action'],
-                      }
-                      return current
-                    })
-                  }
-                >
-                  {[
-                    'none',
-                    'retry_channel',
-                    'switch_channel',
-                    'retry_later',
-                    'abort',
-                    'manual',
-                  ].map((action) => (
-                    <NativeSelectOption key={action} value={action}>
-                      {action}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </div>
-              <Button
-                variant='ghost'
-                size='icon'
-                title={t('Delete')}
-                onClick={() =>
-                  updateConfig((current) => ({
-                    ...current,
-                    error_mappings: current.error_mappings.filter(
-                      (_, mappingIndex) => mappingIndex !== index
-                    ),
-                  }))
-                }
-              >
-                <Trash2 className='size-4' />
-              </Button>
-            </div>
-          ))}
-          <Button
-            variant='outline'
-            onClick={() =>
-              updateConfig((current) => ({
-                ...current,
-                error_mappings: [
-                  ...current.error_mappings,
-                  createErrorMapping(),
-                ],
-              }))
-            }
-          >
-            <Plus className='size-4' /> {t('Add error mapping')}
-          </Button>
-        </TabsContent>
-        <TabsContent value='monitoring' className='pt-4'>
-          <div className='mb-5 flex flex-wrap items-center justify-between gap-3'>
-            <div>
-              <h3 className='font-medium'>{t('Channel monitoring')}</h3>
-              <p className='text-muted-foreground text-sm'>
-                {t('Live channel routing health and failover metrics')}
-              </p>
-            </div>
-            {monitoringQuery.data?.status !== 'disabled' &&
-            monitoringQuery.data?.grafana_url ? (
-              <Button
-                variant='outline'
-                render={
-                  <a
-                    href={monitoringQuery.data.grafana_url}
-                    target='_blank'
-                    rel='noreferrer'
-                  />
-                }
-              >
-                <ExternalLink className='size-4' /> {t('Open Grafana')}
-              </Button>
-            ) : null}
-          </div>
-          {monitoringDisabled && (
-            <div className='space-y-4 border p-4'>
-              <div className='flex items-start gap-3'>
-                <CircleOff className='text-muted-foreground mt-0.5 size-5 shrink-0' />
-                <div className='space-y-1'>
-                  <div className='font-medium'>{t('Monitoring disabled')}</div>
-                  <p className='text-muted-foreground text-sm'>
-                    {t(
-                      'Prometheus, Alertmanager, Grafana, metrics listener, and structured event logs are disabled.'
+                />
+                <div className='space-y-1.5'>
+                  <Label>{t('Failure scope')}</Label>
+                  <NativeSelect
+                    className='w-full'
+                    value={mapping.failure_scope}
+                    onChange={(event) =>
+                      updateConfig((current) => {
+                        current.error_mappings[index] = {
+                          ...mapping,
+                          failure_scope: event.target
+                            .value as UpstreamErrorMapping['failure_scope'],
+                        }
+                        return current
+                      })
+                    }
+                  >
+                    {['request', 'credential', 'channel', 'provider'].map(
+                      (scope) => (
+                        <NativeSelectOption key={scope} value={scope}>
+                          {scope}
+                        </NativeSelectOption>
+                      )
                     )}
-                  </p>
+                  </NativeSelect>
                 </div>
+                <div className='space-y-1.5'>
+                  <Label>{t('Action')}</Label>
+                  <NativeSelect
+                    className='w-full'
+                    value={mapping.action}
+                    onChange={(event) =>
+                      updateConfig((current) => {
+                        current.error_mappings[index] = {
+                          ...mapping,
+                          action: event.target
+                            .value as UpstreamErrorMapping['action'],
+                        }
+                        return current
+                      })
+                    }
+                  >
+                    {[
+                      'none',
+                      'retry_channel',
+                      'switch_channel',
+                      'retry_later',
+                      'abort',
+                      'manual',
+                    ].map((action) => (
+                      <NativeSelectOption key={action} value={action}>
+                        {action}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  title={t('Delete')}
+                  onClick={() =>
+                    updateConfig((current) => ({
+                      ...current,
+                      error_mappings: current.error_mappings.filter(
+                        (_, mappingIndex) => mappingIndex !== index
+                      ),
+                    }))
+                  }
+                >
+                  <Trash2 className='size-4' />
+                </Button>
               </div>
-              <div className='grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3'>
-                {[
-                  [t('Prometheus'), t('Disabled')],
-                  [t('Alertmanager'), t('Disabled')],
-                  [t('Grafana'), t('Disabled')],
-                  [t('Metrics listener'), t('Disabled')],
-                  [t('Structured event logs'), t('Disabled')],
-                  [t('Nginx logs'), t('Retained')],
-                  [t('Channel probes'), t('Still running')],
-                ].map(([label, value]) => (
-                  <div key={label} className='border-b py-2'>
-                    <div className='text-muted-foreground'>{label}</div>
-                    <div className='font-medium'>{value}</div>
+            ))}
+            <Button
+              variant='outline'
+              onClick={() =>
+                updateConfig((current) => ({
+                  ...current,
+                  error_mappings: [
+                    ...current.error_mappings,
+                    createErrorMapping(),
+                  ],
+                }))
+              }
+            >
+              <Plus className='size-4' /> {t('Add error mapping')}
+            </Button>
+          </TabsContent>
+          <TabsContent value='monitoring' className='pt-4'>
+            <div className='mb-5 flex flex-wrap items-center justify-between gap-3'>
+              <div>
+                <h3 className='font-medium'>{t('Channel monitoring')}</h3>
+                <p className='text-muted-foreground text-sm'>
+                  {t('Live channel routing health and failover metrics')}
+                </p>
+              </div>
+              {monitoringQuery.data?.status !== 'disabled' &&
+              monitoringQuery.data?.grafana_url ? (
+                <Button
+                  variant='outline'
+                  render={
+                    <a
+                      href={monitoringQuery.data.grafana_url}
+                      target='_blank'
+                      rel='noreferrer'
+                    />
+                  }
+                >
+                  <ExternalLink className='size-4' /> {t('Open Grafana')}
+                </Button>
+              ) : null}
+            </div>
+            {monitoringDisabled && (
+              <div className='space-y-4 border p-4'>
+                <div className='flex items-start gap-3'>
+                  <CircleOff className='text-muted-foreground mt-0.5 size-5 shrink-0' />
+                  <div className='space-y-1'>
+                    <div className='font-medium'>
+                      {t('Monitoring disabled')}
+                    </div>
+                    <p className='text-muted-foreground text-sm'>
+                      {t(
+                        'Prometheus, Alertmanager, Grafana, metrics listener, and structured event logs are disabled.'
+                      )}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {!monitoringDisabled && monitoringUnavailable && (
-            <div className='border p-4 text-sm'>
-              <div className='font-medium'>
-                {t('Monitoring data unavailable')}
-              </div>
-              <div className='text-muted-foreground'>
-                {t('The monitoring status endpoint could not be reached.')}
-              </div>
-            </div>
-          )}
-          {!monitoringDisabled &&
-            !monitoringUnavailable &&
-            monitoringLoading && (
-              <div className='text-muted-foreground border p-4 text-sm'>
-                {t('Loading')}
-              </div>
-            )}
-          {!monitoringDisabled &&
-            !monitoringUnavailable &&
-            !monitoringLoading && (
-              <>
-                <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-                  {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
-                    ([label, value]) => (
-                      <div key={label} className='border-b py-3'>
-                        <div className='text-muted-foreground text-sm'>
-                          {label}
-                        </div>
-                        <div className='mt-1 text-xl font-semibold'>
-                          {value}
-                        </div>
-                      </div>
-                    )
-                  )}
                 </div>
-                <div className='mt-6 space-y-2'>
-                  {monitoringQuery.data?.alerts.map((alert) => (
-                    <div
-                      key={alert.fingerprint}
-                      className='border-b py-3 text-sm'
-                    >
-                      <div className='font-medium'>
-                        {alert.name}
-                        {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
-                      </div>
-                      <div className='text-muted-foreground'>
-                        {alert.summary}
-                      </div>
+                <div className='grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3'>
+                  {[
+                    [t('Prometheus'), t('Disabled')],
+                    [t('Alertmanager'), t('Disabled')],
+                    [t('Grafana'), t('Disabled')],
+                    [t('Metrics listener'), t('Disabled')],
+                    [t('Structured event logs'), t('Disabled')],
+                    [t('Nginx logs'), t('Retained')],
+                    [t('Channel probes'), t('Still running')],
+                  ].map(([label, value]) => (
+                    <div key={label} className='border-b py-2'>
+                      <div className='text-muted-foreground'>{label}</div>
+                      <div className='font-medium'>{value}</div>
                     </div>
                   ))}
                 </div>
-              </>
+              </div>
             )}
-        </TabsContent>
-      </Tabs>
+            {!monitoringDisabled && monitoringUnavailable && (
+              <div className='border p-4 text-sm'>
+                <div className='font-medium'>
+                  {t('Monitoring data unavailable')}
+                </div>
+                <div className='text-muted-foreground'>
+                  {t('The monitoring status endpoint could not be reached.')}
+                </div>
+              </div>
+            )}
+            {!monitoringDisabled &&
+              !monitoringUnavailable &&
+              monitoringLoading && (
+                <div className='text-muted-foreground border p-4 text-sm'>
+                  {t('Loading')}
+                </div>
+              )}
+            {!monitoringDisabled &&
+              !monitoringUnavailable &&
+              !monitoringLoading && (
+                <>
+                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
+                    {getMonitoringMetrics(t, monitoringQuery.data?.metrics).map(
+                      ([label, value]) => (
+                        <div key={label} className='border-b py-3'>
+                          <div className='text-muted-foreground text-sm'>
+                            {label}
+                          </div>
+                          <div className='mt-1 text-xl font-semibold'>
+                            {value}
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <div className='mt-6 space-y-2'>
+                    {monitoringQuery.data?.alerts.map((alert) => (
+                      <div
+                        key={alert.fingerprint}
+                        className='border-b py-3 text-sm'
+                      >
+                        <div className='font-medium'>
+                          {alert.name}
+                          {alert.channel_id ? ` · CH${alert.channel_id}` : ''}
+                        </div>
+                        <div className='text-muted-foreground'>
+                          {alert.summary}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+          </TabsContent>
+          <TabsContent value='health' className='pt-4'>
+            <ChannelHealthTab />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

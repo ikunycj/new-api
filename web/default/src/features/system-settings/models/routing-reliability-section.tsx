@@ -147,6 +147,13 @@ const routingReliabilitySchema = z
       .int()
       .min(0)
       .max(86400),
+    ChannelHealthHistoryEnabled: z.boolean(),
+    ChannelHealthHistoryBucketSeconds: z.coerce
+      .number()
+      .int()
+      .min(10)
+      .max(3600),
+    ChannelHealthHistoryRetentionDays: z.coerce.number().int().min(1).max(365),
     AutomaticDisableChannelEnabled: z.boolean(),
     AutomaticEnableChannelEnabled: z.boolean(),
     AutomaticDisableKeywords: z.string(),
@@ -206,6 +213,9 @@ type RoutingReliabilitySectionProps = {
     ChannelHealthProbeEnabled: boolean
     ChannelHealthProbeIntervalSeconds: number
     ChannelHealthProbeIdleGraceSeconds: number
+    ChannelHealthHistoryEnabled: boolean
+    ChannelHealthHistoryBucketSeconds: number
+    ChannelHealthHistoryRetentionDays: number
     ChannelDisableThreshold: string
     AutomaticDisableChannelEnabled: boolean
     AutomaticEnableChannelEnabled: boolean
@@ -244,6 +254,9 @@ type NormalizedRoutingReliabilityValues = {
   ChannelHealthProbeEnabled: boolean
   ChannelHealthProbeIntervalSeconds: number
   ChannelHealthProbeIdleGraceSeconds: number
+  ChannelHealthHistoryEnabled: boolean
+  ChannelHealthHistoryBucketSeconds: number
+  ChannelHealthHistoryRetentionDays: number
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean
@@ -276,6 +289,9 @@ const buildFormDefaults = (
   ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
   ChannelHealthProbeIdleGraceSeconds:
     defaults.ChannelHealthProbeIdleGraceSeconds,
+  ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
+  ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
+  ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -312,6 +328,9 @@ const normalizeDefaults = (
   ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
   ChannelHealthProbeIdleGraceSeconds:
     defaults.ChannelHealthProbeIdleGraceSeconds,
+  ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
+  ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
+  ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
   ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -349,6 +368,9 @@ const normalizeFormValues = (
   ChannelHealthProbeEnabled: values.ChannelHealthProbeEnabled,
   ChannelHealthProbeIntervalSeconds: values.ChannelHealthProbeIntervalSeconds,
   ChannelHealthProbeIdleGraceSeconds: values.ChannelHealthProbeIdleGraceSeconds,
+  ChannelHealthHistoryEnabled: values.ChannelHealthHistoryEnabled,
+  ChannelHealthHistoryBucketSeconds: values.ChannelHealthHistoryBucketSeconds,
+  ChannelHealthHistoryRetentionDays: values.ChannelHealthHistoryRetentionDays,
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
@@ -403,6 +425,7 @@ export function RoutingReliabilitySection({
   const healthEnabled = form.watch('ChannelHealthEnabled')
   const healthMode = form.watch('ChannelHealthMode')
   const probeEnabled = form.watch('ChannelHealthProbeEnabled')
+  const historyEnabled = form.watch('ChannelHealthHistoryEnabled')
   const autoDisableParsed = useMemo(
     () => parseHttpStatusCodeRules(autoDisableStatusCodes),
     [autoDisableStatusCodes]
@@ -758,6 +781,82 @@ export function RoutingReliabilitySection({
                       {t(
                         'Channels that real traffic touched within this window are skipped, since real evidence beats a synthetic call.'
                       )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className='grid min-w-0 gap-6 lg:grid-cols-3'>
+              <FormField
+                control={form.control}
+                name='ChannelHealthHistoryEnabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Persist score history')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Writes the score trend to the database so the dashboard chart survives a reload or a restart. Costs disk, not upstream quota.'
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={!healthEnabled}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthHistoryBucketSeconds'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('History bucket (seconds)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={10}
+                        max={3600}
+                        step={1}
+                        disabled={!healthEnabled || !historyEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Resolution of the stored trend. Scores inside one bucket are averaged.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='ChannelHealthHistoryRetentionDays'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('History retention (days)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={1}
+                        max={365}
+                        step={1}
+                        disabled={!healthEnabled || !historyEnabled}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Buckets older than this are deleted hourly.')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

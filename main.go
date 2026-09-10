@@ -131,6 +131,10 @@ func main() {
 	controller.RegisterChannelHealthProbeExecutor()
 	controller.RegisterChannelHealthScoreInjection()
 	service.StartChannelHealthProbeTask()
+	// Persist the score time series so the dashboard trend survives a page
+	// reload, a different browser or a restart. Inert until the operator enables
+	// ChannelHealthHistoryEnabled.
+	service.StartChannelHealthHistoryTask()
 
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.

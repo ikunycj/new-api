@@ -4,6 +4,8 @@ import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   BillingGroupChannel,
+  ChannelHealthHistoryResponse,
+  ChannelHealthSnapshotResponse,
   BillingGroupRoute,
   BillingGroupRouteConfig,
   BillingGroupType,
@@ -177,6 +179,30 @@ export async function updateBillingGroupType(
 export async function getFailoverMonitoring(): Promise<FailoverMonitoringSnapshot> {
   const response = await api.get<ApiResponse<FailoverMonitoringSnapshot>>(
     '/api/channel/failover/monitoring'
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+  return response.data.data
+}
+
+export async function getChannelHealthHistory(
+  hours: number
+): Promise<ChannelHealthHistoryResponse> {
+  const response = await api.get<ApiResponse<ChannelHealthHistoryResponse>>(
+    `/api/channel/failover/health/history?hours=${hours}`,
+    { disableDuplicate: true } satisfies ApiRequestConfig
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || 'Request failed')
+  }
+  return response.data.data
+}
+
+export async function getChannelHealthSnapshot(): Promise<ChannelHealthSnapshotResponse> {
+  const response = await api.get<ApiResponse<ChannelHealthSnapshotResponse>>(
+    '/api/channel/failover/health',
+    { disableDuplicate: true } satisfies ApiRequestConfig
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Request failed')
