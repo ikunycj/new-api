@@ -174,6 +174,35 @@ export type ChannelHealthConfig = {
   probe_enabled: boolean
   probe_interval_seconds: number
   probe_idle_grace_seconds: number
+  history_enabled: boolean
+  history_bucket_seconds: number
+  history_retention_days: number
+}
+
+// One persisted bucket of the score time series. Every gauge here is the mean
+// over the bucket, so observation_count is needed to tell a well-sampled bucket
+// from a single stray reading.
+export type ChannelHealthHistoryPoint = {
+  channel_id: number
+  route: string
+  family: string
+  bucket_ts: number
+  score: number
+  availability: number
+  latency_score: number
+  latency_ms: number
+  samples: number
+  confident_count: number
+  observation_count: number
+}
+
+export type ChannelHealthHistoryResponse = {
+  enabled: boolean
+  bucket_seconds: number
+  retention_days: number
+  probe_route: string
+  hours: number
+  points: ChannelHealthHistoryPoint[]
 }
 
 export type ChannelHealthSnapshotResponse = {

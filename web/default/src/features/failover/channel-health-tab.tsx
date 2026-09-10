@@ -20,15 +20,16 @@ import {
 } from '@/components/ui/chart'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
-import { getChannelHealthSnapshot } from './api'
-import type { ChannelHealthSnapshot } from './types'
+import { getChannelHealthHistory, getChannelHealthSnapshot } from './api'
+import type { ChannelHealthHistoryPoint, ChannelHealthSnapshot } from './types'
 
-// The backend keeps health state in memory only, so there is no history
-// endpoint to chart. We poll the snapshot and accumulate the series client
-// side; it starts empty on mount and is lost on unmount, which is called out
-// in the UI so nobody mistakes a short line for a young channel.
 const POLL_INTERVAL_MS = 15_000
+// Only bounds the in-tab fallback series. The server-backed trend is bounded by
+// its retention window instead.
 const MAX_HISTORY_POINTS = 120
+
+const HISTORY_RANGE_HOURS = [1, 6, 24] as const
+type HistoryRangeHours = (typeof HISTORY_RANGE_HOURS)[number]
 
 const PROBE_ROUTE = '__probe__'
 
@@ -54,6 +55,16 @@ function formatLatency(ms: number) {
   if (!ms || ms <= 0) return '—'
   if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
   return `${Math.round(ms)}ms`
+}
+
+// The bucket label drops seconds for windows longer than an hour: at 24h there
+// are ~1440 buckets and second-level precision is noise on the axis.
+function formatBucketLabel(tsMs: number, hours: number) {
+  const d = new Date(tsMs)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  if (hours > 1) return `${hh}:${mm}`
+  return `${hh}:${mm}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
 function formatClock(ts: number) {
@@ -93,6 +104,7 @@ export function ChannelHealthTab() {
   const [trafficFilter, setTrafficFilter] = useState<'all' | 'real' | 'probe'>(
     'all'
   )
+  const [rangeHours, setRangeHours] = useState<HistoryRangeHours>(6)
 
   const healthQuery = useQuery({
     queryKey: ['channel-health-snapshot'],
@@ -128,6 +140,45 @@ export function ChannelHealthTab() {
     historyRef.current = next
     setHistory(next)
   }, [snapshots, healthQuery.dataUpdatedAt])
+
+  const historyEnabled = healthQuery.data?.config.history_enabled ?? false
+
+  // The persisted series is only fetched when the server is actually writing it,
+  // so a deployment with history off pays nothing for this panel.
+  const historyQuery = useQuery({
+    queryKey: ['channel-health-history', rangeHours],
+    queryFn: () => getChannelHealthHistory(rangeHours),
+    refetchInterval: POLL_INTERVAL_MS,
+    refetchOnWindowFocus: false,
+    enabled: historyEnabled,
+  })
+
+  // Pivot the flat bucket rows into one chart row per bucket. The backend
+  // returns them oldest-first and one row per (channel, route, family), so a
+  // single bucket is spread across several rows that have to be merged by
+  // bucket_ts.
+  const serverHistory = useMemo<HistoryPoint[]>(() => {
+    const points = historyQuery.data?.points
+    if (!points || points.length === 0) return []
+    const byBucket = new Map<number, HistoryPoint>()
+    for (const p of points as ChannelHealthHistoryPoint[]) {
+      let row = byBucket.get(p.bucket_ts)
+      if (!row) {
+        row = { t: formatBucketLabel(p.bucket_ts * 1000, rangeHours) }
+        byBucket.set(p.bucket_ts, row)
+      }
+      row[`${p.channel_id}:${p.route}`] = p.score
+    }
+    return [...byBucket.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, row]) => row)
+  }, [historyQuery.data, rangeHours])
+
+  // Prefer the persisted series; fall back to the in-tab one while history is
+  // off or has not accumulated its first buckets yet, so the panel is never
+  // emptier than it was before persistence existed.
+  const chartIsPersisted = serverHistory.length >= 2
+  const chartHistory = chartIsPersisted ? serverHistory : history
 
   const filtered = useMemo(() => {
     if (trafficFilter === 'real') {
@@ -174,6 +225,28 @@ export function ChannelHealthTab() {
   }, [filtered])
 
   const data = healthQuery.data
+
+  // Built with if/else rather than nested ternaries: three distinct states
+  // (persisted, warming up, persistence off) read badly as one expression.
+  let trendCaption: string
+  if (chartIsPersisted) {
+    trendCaption = t(
+      'Stored server side in {{bucket}}s buckets, kept {{days}} days. Survives a reload.',
+      {
+        bucket: data?.config.history_bucket_seconds ?? 60,
+        days: data?.config.history_retention_days ?? 7,
+      }
+    )
+  } else if (historyEnabled) {
+    trendCaption = t(
+      'Waiting for the first stored buckets; showing this tab\u2019s own samples meanwhile.'
+    )
+  } else {
+    trendCaption = t(
+      'Collected in this browser tab since it was opened, every {{n}}s. Not persisted server side.',
+      { n: POLL_INTERVAL_MS / 1000 }
+    )
+  }
 
   if (healthQuery.isLoading) {
     return (
@@ -282,16 +355,30 @@ export function ChannelHealthTab() {
       )}
 
       <div>
-        <div className='mb-2 flex items-baseline justify-between gap-3'>
+        <div className='mb-2 flex flex-wrap items-baseline justify-between gap-3'>
           <h4 className='font-medium'>{t('Score trend')}</h4>
-          <span className='text-muted-foreground text-xs'>
-            {t(
-              'Collected in this browser tab since it was opened, every {{n}}s. Not persisted server side.',
-              { n: POLL_INTERVAL_MS / 1000 }
+          <div className='flex items-center gap-3'>
+            <span className='text-muted-foreground text-xs'>
+              {trendCaption}
+            </span>
+            {historyEnabled && (
+              <NativeSelect
+                value={String(rangeHours)}
+                onChange={(e) =>
+                  setRangeHours(Number(e.target.value) as HistoryRangeHours)
+                }
+                className='w-24'
+              >
+                {HISTORY_RANGE_HOURS.map((h) => (
+                  <NativeSelectOption key={h} value={String(h)}>
+                    {t('{{n}}h', { n: h })}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
             )}
-          </span>
+          </div>
         </div>
-        {history.length < 2 ? (
+        {chartHistory.length < 2 ? (
           <div className='text-muted-foreground border p-4 text-sm'>
             {t(
               'Waiting for the second sample. The trend needs at least two polls.'
@@ -306,7 +393,10 @@ export function ChannelHealthTab() {
             config={chartConfig}
             className='aspect-auto h-64 w-full'
           >
-            <LineChart data={history} margin={{ left: 4, right: 12, top: 8 }}>
+            <LineChart
+              data={chartHistory}
+              margin={{ left: 4, right: 12, top: 8 }}
+            >
               <CartesianGrid vertical={false} strokeDasharray='3 3' />
               <XAxis
                 dataKey='t'

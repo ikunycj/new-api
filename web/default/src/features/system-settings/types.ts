@@ -237,6 +237,9 @@ export type ModelSettings = {
   ChannelHealthProbeEnabled: boolean
   ChannelHealthProbeIntervalSeconds: number
   ChannelHealthProbeIdleGraceSeconds: number
+  ChannelHealthHistoryEnabled: boolean
+  ChannelHealthHistoryBucketSeconds: number
+  ChannelHealthHistoryRetentionDays: number
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean

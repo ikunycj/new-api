@@ -93,6 +93,11 @@ const MODELS_SECTIONS = [
             settings.ChannelHealthProbeIntervalSeconds,
           ChannelHealthProbeIdleGraceSeconds:
             settings.ChannelHealthProbeIdleGraceSeconds,
+          ChannelHealthHistoryEnabled: settings.ChannelHealthHistoryEnabled,
+          ChannelHealthHistoryBucketSeconds:
+            settings.ChannelHealthHistoryBucketSeconds,
+          ChannelHealthHistoryRetentionDays:
+            settings.ChannelHealthHistoryRetentionDays,
           ChannelDisableThreshold: settings.ChannelDisableThreshold,
           AutomaticDisableChannelEnabled:
             settings.AutomaticDisableChannelEnabled,
