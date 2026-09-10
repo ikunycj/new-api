@@ -408,15 +408,30 @@ func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig Ro
 			priceScore = minCostFactor / candidate.costFactor * 100
 		}
 		availabilityScore := candidate.channel.PreviousDayProbeSuccessRate
+		// haveLiveScore separates "measured" from "unknown". The legacy fallback
+		// below rewrites a zero to 100 because a zero PreviousDayProbeSuccessRate
+		// means "no probe data yesterday", not "totally broken". A live health
+		// score of 0 means the exact opposite: it is a measured, current verdict
+		// that every request failed. Without this flag the fallback would hand a
+		// dead channel full marks, which is most visible with availability_weight
+		// at 100 where nothing else can compensate.
+		haveLiveScore := false
 		if healthActive && healthScoreGetter != nil {
 			// The live score is blended over [0,1], the legacy input over [0,100].
 			// A missing snapshot means "no information yet", so the legacy value
 			// is kept as the prior rather than jumping to a neutral 100.
 			if liveScore, ok := healthScoreGetter(candidate.channel.Id, route, modelName); ok {
 				availabilityScore = liveScore * 100
+				haveLiveScore = true
 			}
 		}
-		if availabilityScore <= 0 || math.IsNaN(availabilityScore) || math.IsInf(availabilityScore, 0) {
+		if math.IsNaN(availabilityScore) || math.IsInf(availabilityScore, 0) {
+			availabilityScore = 100
+		} else if availabilityScore < 0 {
+			availabilityScore = 0
+		} else if availabilityScore == 0 && !haveLiveScore {
+			// Legacy-only path: zero means "unknown", so keep the old benefit of
+			// the doubt. A measured live zero is left at zero on purpose.
 			availabilityScore = 100
 		}
 		if availabilityScore > 100 {

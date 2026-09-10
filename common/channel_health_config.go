@@ -17,6 +17,13 @@ const (
 	ChannelHealthProbeEnabledOptionKey    = "ChannelHealthProbeEnabled"
 	ChannelHealthProbeIntervalOptionKey   = "ChannelHealthProbeIntervalSeconds"
 	ChannelHealthProbeIdleGraceOptionKey  = "ChannelHealthProbeIdleGraceSeconds"
+
+	// History persistence is separate from scoring: it costs disk instead of
+	// upstream quota, and an operator may reasonably want the live signal
+	// without keeping a long trend.
+	ChannelHealthHistoryEnabledOptionKey       = "ChannelHealthHistoryEnabled"
+	ChannelHealthHistoryBucketSecondsOptionKey = "ChannelHealthHistoryBucketSeconds"
+	ChannelHealthHistoryRetentionDaysOptionKey = "ChannelHealthHistoryRetentionDays"
 )
 
 // Scoring modes. Observe records and exports scores without ever influencing
@@ -41,6 +48,13 @@ const (
 	// is worth refreshing them synthetically.
 	DefaultChannelHealthProbeIntervalSeconds  = 60
 	DefaultChannelHealthProbeIdleGraceSeconds = 300
+
+	// A 60s bucket matches the probe cadence, so a probe-only channel
+	// contributes roughly one observation per bucket rather than being averaged
+	// away. Seven days at that resolution is a few tens of MB for a deployment
+	// of this size.
+	DefaultChannelHealthHistoryBucketSeconds = 60
+	DefaultChannelHealthHistoryRetentionDays = 7
 )
 
 const (
@@ -56,6 +70,15 @@ const (
 	maxChannelHealthMinSamples      = 1000
 	minChannelHealthStateTTLSeconds = 60
 	maxChannelHealthStateTTLSeconds = 604800
+
+	// A bucket shorter than 10s would write more rows than the probe produces
+	// observations; longer than an hour stops being a trend.
+	minChannelHealthHistoryBucketSeconds = 10
+	maxChannelHealthHistoryBucketSeconds = 3600
+	// Retention 0 is rejected rather than treated as "keep forever": unbounded
+	// growth on a table written every bucket is not a safe default.
+	minChannelHealthHistoryRetentionDays = 1
+	maxChannelHealthHistoryRetentionDays = 365
 )
 
 var (
@@ -68,6 +91,9 @@ var (
 	channelHealthProbeEnabled       atomic.Bool
 	channelHealthProbeInterval      atomic.Int64
 	channelHealthProbeIdleGrace     atomic.Int64
+	channelHealthHistoryEnabled     atomic.Bool
+	channelHealthHistoryBucketSec   atomic.Int64
+	channelHealthHistoryRetention   atomic.Int64
 	channelHealthConfigVersion      atomic.Uint64
 )
 
@@ -78,6 +104,8 @@ func init() {
 	channelHealthStateTTLSeconds.Store(DefaultChannelHealthStateTTLSeconds)
 	channelHealthProbeInterval.Store(DefaultChannelHealthProbeIntervalSeconds)
 	channelHealthProbeIdleGrace.Store(DefaultChannelHealthProbeIdleGraceSeconds)
+	channelHealthHistoryBucketSec.Store(DefaultChannelHealthHistoryBucketSeconds)
+	channelHealthHistoryRetention.Store(DefaultChannelHealthHistoryRetentionDays)
 }
 
 // SetChannelHealthProbeEnabled toggles synthetic probing. It is separate from
@@ -218,4 +246,40 @@ func ChannelHealthStateTTLSeconds() int {
 
 func ChannelHealthConfigVersion() uint64 {
 	return channelHealthConfigVersion.Load()
+}
+
+// SetChannelHealthHistoryEnabled toggles persistence of the score time series.
+// It deliberately does not bump the config version: unlike the tuning knobs,
+// turning history on or off does not invalidate accumulated in-memory state, and
+// discarding live scores just to start writing rows would be a bad trade.
+func SetChannelHealthHistoryEnabled(enabled bool) {
+	channelHealthHistoryEnabled.Store(enabled)
+}
+
+// IsChannelHealthHistoryEnabled requires the master switch too: there is nothing
+// to persist while scoring is off.
+func IsChannelHealthHistoryEnabled() bool {
+	return channelHealthEnabled.Load() && channelHealthHistoryEnabled.Load()
+}
+
+func SetChannelHealthHistoryBucketSeconds(seconds int) {
+	if seconds < minChannelHealthHistoryBucketSeconds || seconds > maxChannelHealthHistoryBucketSeconds {
+		return
+	}
+	channelHealthHistoryBucketSec.Store(int64(seconds))
+}
+
+func ChannelHealthHistoryBucketSeconds() int {
+	return int(channelHealthHistoryBucketSec.Load())
+}
+
+func SetChannelHealthHistoryRetentionDays(days int) {
+	if days < minChannelHealthHistoryRetentionDays || days > maxChannelHealthHistoryRetentionDays {
+		return
+	}
+	channelHealthHistoryRetention.Store(int64(days))
+}
+
+func ChannelHealthHistoryRetentionDays() int {
+	return int(channelHealthHistoryRetention.Load())
 }

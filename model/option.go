@@ -61,6 +61,9 @@ func InitOptionMap() {
 	common.OptionMap[common.ChannelHealthProbeEnabledOptionKey] = strconv.FormatBool(common.IsChannelHealthProbeEnabled())
 	common.OptionMap[common.ChannelHealthProbeIntervalOptionKey] = strconv.Itoa(common.ChannelHealthProbeIntervalSeconds())
 	common.OptionMap[common.ChannelHealthProbeIdleGraceOptionKey] = strconv.Itoa(common.ChannelHealthProbeIdleGraceSeconds())
+	common.OptionMap[common.ChannelHealthHistoryEnabledOptionKey] = strconv.FormatBool(common.IsChannelHealthHistoryEnabled())
+	common.OptionMap[common.ChannelHealthHistoryBucketSecondsOptionKey] = strconv.Itoa(common.ChannelHealthHistoryBucketSeconds())
+	common.OptionMap[common.ChannelHealthHistoryRetentionDaysOptionKey] = strconv.Itoa(common.ChannelHealthHistoryRetentionDays())
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -408,6 +411,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.SetChannelHealthEnabled(boolValue)
 		case common.ChannelHealthProbeEnabledOptionKey:
 			common.SetChannelHealthProbeEnabled(boolValue)
+		case common.ChannelHealthHistoryEnabledOptionKey:
+			common.SetChannelHealthHistoryEnabled(boolValue)
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
@@ -508,6 +513,14 @@ func updateOptionMap(key string, value string) (err error) {
 	case common.ChannelHealthProbeIdleGraceOptionKey:
 		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
 			common.SetChannelHealthProbeIdleGraceSeconds(parsed)
+		}
+	case common.ChannelHealthHistoryBucketSecondsOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthHistoryBucketSeconds(parsed)
+		}
+	case common.ChannelHealthHistoryRetentionDaysOptionKey:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			common.SetChannelHealthHistoryRetentionDays(parsed)
 		}
 	}
 	switch key {
@@ -790,6 +803,16 @@ func normalizeOptionValue(key string, value string) (string, error) {
 		return normalizeBoundedIntOption(value, 10, 86400, "ChannelHealthProbeIntervalSeconds")
 	case common.ChannelHealthProbeIdleGraceOptionKey:
 		return normalizeBoundedIntOption(value, 0, 86400, "ChannelHealthProbeIdleGraceSeconds")
+	case common.ChannelHealthHistoryEnabledOptionKey:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", errors.New("ChannelHealthHistoryEnabled must be a boolean")
+		}
+		return strconv.FormatBool(parsed), nil
+	case common.ChannelHealthHistoryBucketSecondsOptionKey:
+		return normalizeBoundedIntOption(value, 10, 3600, "ChannelHealthHistoryBucketSeconds")
+	case common.ChannelHealthHistoryRetentionDaysOptionKey:
+		return normalizeBoundedIntOption(value, 1, 365, "ChannelHealthHistoryRetentionDays")
 	case ChannelCircuitConfigOptionKey:
 		normalized, err := NormalizeChannelCircuitConfigJSONString(value)
 		if err != nil {

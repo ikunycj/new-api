@@ -115,4 +115,5 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 // but it still exposes per-channel operational data and stays behind auth.
 func TestChannelHealthRouteUsesReadPermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodGet, "/failover/health", authz.ChannelRead, controller.GetChannelHealth)
+	assertChannelRoutePermission(t, http.MethodGet, "/failover/health/history", authz.ChannelRead, controller.GetChannelHealthHistory)
 }

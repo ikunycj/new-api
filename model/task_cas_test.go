@@ -52,6 +52,7 @@ func TestMain(m *testing.M) {
 		&UserSubscription{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&ChannelHealthHistory{},
 		&SystemInstance{},
 		&SystemTask{},
 		&SystemTaskLock{},

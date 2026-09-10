@@ -469,3 +469,99 @@ func TestChannelHealthFamilyVariantsShareBucket(t *testing.T) {
 		t.Fatalf("expected both claude variants in one bucket, got %d failures", snapshot.Failures)
 	}
 }
+
+// TestChannelHealthConfidenceSurvivesSlowSamplingCadence is the regression test
+// for the confidence cap. The probe scheduler suppresses probing for
+// probe_idle_grace_seconds after each observation, so on a channel with no real
+// traffic the effective sampling interval is the idle grace rather than the
+// probe interval. When both defaulted to 300s the per-sample retention was
+// exactly decayFactor(300s, 300s) == 0.5, capping the accumulated sample count
+// at 1/(1-0.5) == 2 -- permanently below a min_samples of 5. Every score was
+// therefore flagged low-confidence and blended back toward the neutral prior no
+// matter how long the system ran, which silently disabled the whole signal.
+//
+// This reproduces that exact cadence: samples one half-life apart.
+func TestChannelHealthConfidenceSurvivesSlowSamplingCadence(t *testing.T) {
+	const halfLife = 300
+	enableChannelHealthForTest(t, halfLife, 5)
+
+	now := time.Now()
+	// 20 observations spaced one full half-life apart, mimicking probe traffic
+	// gated by an idle grace equal to the half-life. The series is anchored so
+	// that the newest sample lands at "now", because a live probe loop keeps
+	// sampling; a series that stopped long ago is the separate case covered by
+	// TestChannelHealthConfidenceDecaysAfterLongSilence.
+	const samples = 20
+	for i := samples - 1; i >= 0; i-- {
+		RecordChannelHealthSample(ChannelHealthSample{
+			ChannelID: 910, Route: "r", Success: true,
+			Latency:  100 * time.Millisecond,
+			Observed: now.Add(-time.Duration(i*halfLife) * time.Second),
+		})
+	}
+
+	snapshot, ok := GetChannelHealthSnapshot(910, "r", "")
+	if !ok {
+		t.Fatal("expected snapshot")
+	}
+	// Before the fix this converged to 2.0 and could never reach min_samples.
+	if snapshot.Samples < 5 {
+		t.Fatalf("sample count must reach min_samples on a slow cadence, got %v", snapshot.Samples)
+	}
+	if !snapshot.Confident {
+		t.Fatalf("expected confidence after 20 slow samples, samples=%v", snapshot.Samples)
+	}
+}
+
+// TestChannelHealthConfidenceStillRequiresEvidence guards the opposite failure:
+// the fix above must not hand out confidence for free. A single observation is
+// still a single observation.
+func TestChannelHealthConfidenceStillRequiresEvidence(t *testing.T) {
+	enableChannelHealthForTest(t, 300, 5)
+
+	RecordChannelHealthSample(ChannelHealthSample{
+		ChannelID: 911, Route: "r", Success: false,
+		Latency: 100 * time.Millisecond, Observed: time.Now(),
+	})
+
+	snapshot, ok := GetChannelHealthSnapshot(911, "r", "")
+	if !ok {
+		t.Fatal("expected snapshot")
+	}
+	if snapshot.Confident {
+		t.Fatalf("one sample must not be confident, samples=%v", snapshot.Samples)
+	}
+	// And the score must still be blended toward the prior rather than jumping
+	// straight to the raw 0 that a single failure would otherwise produce.
+	if snapshot.Score < 0.5 {
+		t.Fatalf("single failure should stay blended toward prior, got %v", snapshot.Score)
+	}
+}
+
+// TestChannelHealthConfidenceDecaysAfterLongSilence pins the intent of the
+// stretched sample half-life: confidence must outlive a quiet window, but a
+// channel that has gone truly silent for a long time must not keep claiming a
+// trusted verdict forever.
+func TestChannelHealthConfidenceDecaysAfterLongSilence(t *testing.T) {
+	const halfLife = 300
+	enableChannelHealthForTest(t, halfLife, 5)
+
+	// Build up solid confidence, then leave a very long gap.
+	base := time.Now().Add(-24 * time.Hour)
+	for i := 0; i < 40; i++ {
+		RecordChannelHealthSample(ChannelHealthSample{
+			ChannelID: 912, Route: "r", Success: true,
+			Latency:  100 * time.Millisecond,
+			Observed: base.Add(time.Duration(i*halfLife) * time.Second),
+		})
+	}
+
+	snapshot, ok := GetChannelHealthSnapshot(912, "r", "")
+	if !ok {
+		t.Fatal("expected snapshot")
+	}
+	// ~20h of silence against a stretched half-life of 1200s is many half-lives.
+	if snapshot.Confident {
+		t.Fatalf("confidence must decay after prolonged silence, samples=%v", snapshot.Samples)
+	}
+}

@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -44,9 +47,45 @@ func GetChannelHealth(c *gin.Context) {
 			"probe_enabled":             common.IsChannelHealthProbeEnabled(),
 			"probe_interval_seconds":    common.ChannelHealthProbeIntervalSeconds(),
 			"probe_idle_grace_seconds":  common.ChannelHealthProbeIdleGraceSeconds(),
+			"history_enabled":           common.IsChannelHealthHistoryEnabled(),
+			"history_bucket_seconds":    common.ChannelHealthHistoryBucketSeconds(),
+			"history_retention_days":    common.ChannelHealthHistoryRetentionDays(),
 		},
 		"probe_route": service.ChannelHealthProbeRoute,
 		"probe_stats": service.GetChannelProbeRunStats(),
 		"channels":    snapshots,
+	})
+}
+
+// GetChannelHealthHistory serves the persisted score time series. It is a
+// separate endpoint from GetChannelHealth because the two have different cost
+// profiles and refresh needs: the snapshot is cheap and polled often, the
+// history is a range scan the client only needs when it draws the chart.
+func GetChannelHealthHistory(c *gin.Context) {
+	hours, err := strconv.Atoi(c.DefaultQuery("hours", "6"))
+	if err != nil || hours <= 0 {
+		hours = 6
+	}
+	// Cap the window so a hand-crafted query cannot ask for a full-table scan.
+	if hours > 24*30 {
+		hours = 24 * 30
+	}
+
+	startTs := model.ChannelHealthHistoryStartTime(hours)
+	rows, err := model.GetChannelHealthHistory(startTs, time.Now().Unix())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if rows == nil {
+		rows = []model.ChannelHealthHistory{}
+	}
+	common.ApiSuccess(c, gin.H{
+		"enabled":        common.IsChannelHealthHistoryEnabled(),
+		"bucket_seconds": common.ChannelHealthHistoryBucketSeconds(),
+		"retention_days": common.ChannelHealthHistoryRetentionDays(),
+		"probe_route":    service.ChannelHealthProbeRoute,
+		"hours":          hours,
+		"points":         rows,
 	})
 }

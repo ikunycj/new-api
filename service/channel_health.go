@@ -53,7 +53,36 @@ const (
 	// the score responsive to consecutive failures while the time component
 	// still handles idle decay.
 	minSampleWeight = 0.125
+
+	// sampleCountHalfLifeFactor stretches the half-life used to age the effective
+	// sample count relative to the one used for the availability signal.
+	//
+	// Evidence and verdict decay at different rates. "Is this channel healthy
+	// right now" must react within one half-life, but "have I observed it enough
+	// to trust that verdict" should survive a few quiet windows -- otherwise
+	// confidence collapses on any channel whose traffic is sparse, and every
+	// score is permanently blended back toward the neutral prior.
+	//
+	// This is not hypothetical. The probe scheduler suppresses probing for
+	// probe_idle_grace_seconds after each observation, so on a channel with no
+	// real traffic the effective sampling interval is the idle grace, not the
+	// probe interval. With both grace and half-life at their defaults of 300s
+	// the retention per sample was exactly 0.5, capping the accumulated count at
+	// 1/(1-0.5) = 2 -- unreachably below a min_samples of 5, so `confident` could
+	// never become true no matter how long the system ran.
+	sampleCountHalfLifeFactor = 4
 )
+
+// sampleCountRetention returns the retention multiplier for the effective sample
+// counter. Unlike availability, the counter must not be sensitive to how far
+// apart two observations happened to fall: a channel sampled every 300s has not
+// seen less evidence than one sampled every 60s, it has just seen it slower. The
+// floor therefore applies unconditionally, giving a stable effective window of
+// 1/minSampleWeight observations, while snapshotLocked applies the time-based
+// ageing separately.
+func sampleCountRetention() float64 {
+	return 1 - minSampleWeight
+}
 
 // sampleRetention returns the EWMA retention multiplier for one observation.
 // It takes the stronger of time-based decay and the per-sample floor so that
@@ -213,7 +242,9 @@ func RecordChannelHealthSample(sample ChannelHealthSample) {
 	// Time-decayed EWMA with a per-sample weight floor: a long gap makes one
 	// sample dominate, and a rapid burst still moves the average.
 	state.availability = state.availability*retain + observation*(1-retain)
-	state.samples = state.samples*retain + 1
+	// The sample counter uses its own retention so a slow sampling cadence does
+	// not permanently cap it below min_samples (see sampleCountRetention).
+	state.samples = state.samples*sampleCountRetention() + 1
 
 	if sample.Success {
 		state.successes++
@@ -266,9 +297,10 @@ func snapshotLocked(key channelHealthKey, state *channelHealthState, now time.Ti
 	retain := decayFactor(elapsed, halfLife)
 
 	// Idle channels drift back toward neutral instead of holding a stale
-	// verdict; effective sample count decays with them.
+	// verdict; effective sample count decays with them, but more slowly, so a
+	// channel does not lose its accumulated confidence during one quiet window.
 	availability := state.availability*retain + neutralHealthScore*(1-retain)
-	samples := state.samples * retain
+	samples := state.samples * decayFactor(elapsed, halfLife*sampleCountHalfLifeFactor)
 
 	raw := clampHealthScore(availability * latencyScore(state))
 
