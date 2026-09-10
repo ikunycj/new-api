@@ -211,8 +211,8 @@ function calculateChannelUserCharge(
     0,
     channel.input_tokens_total > 0
       ? channel.input_tokens_total -
-          channel.cache_read_tokens -
-          channel.cache_write_tokens
+      channel.cache_read_tokens -
+      channel.cache_write_tokens
       : channel.input_tokens
   )
   return calculateLoadTestUserCharge(
@@ -266,6 +266,8 @@ function CounterList({
 export function LoadTestDemo() {
   const { t } = useTranslation()
   const { serverAddress } = useChatPresets()
+  const loadTestServerAddress =
+    typeof window !== 'undefined' ? window.location.origin : serverAddress
   const userId = useAuthStore((state) => state.auth.user?.id)
   const [persistedRuns, setPersistedRuns] = useState(() =>
     loadPersistedLoadTestRuns(userId)
@@ -285,29 +287,29 @@ export function LoadTestDemo() {
   const [durationSeconds, setDurationSeconds] = useState(
     String(
       persistedRun?.durationSeconds ||
-        savedConfig?.durationSeconds ||
-        LOAD_TEST_DEFAULT_DURATION_SECONDS
+      savedConfig?.durationSeconds ||
+      LOAD_TEST_DEFAULT_DURATION_SECONDS
     )
   )
   const [requestsPerSecond, setRequestsPerSecond] = useState(
     String(
       persistedRun?.requestsPerSecond ||
-        savedConfig?.requestsPerSecond ||
-        LOAD_TEST_DEFAULT_RPS
+      savedConfig?.requestsPerSecond ||
+      LOAD_TEST_DEFAULT_RPS
     )
   )
   const [concurrency, setConcurrency] = useState(
     String(
       persistedRun?.concurrency ||
-        savedConfig?.concurrency ||
-        LOAD_TEST_DEFAULT_CONCURRENCY
+      savedConfig?.concurrency ||
+      LOAD_TEST_DEFAULT_CONCURRENCY
     )
   )
   const [maxOutputTokens, setMaxOutputTokens] = useState(
     String(
       persistedRun?.maxOutputTokens ||
-        savedConfig?.maxOutputTokens ||
-        LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
+      savedConfig?.maxOutputTokens ||
+      LOAD_TEST_DEFAULT_MAX_OUTPUT_TOKENS
     )
   )
   const [limits, setLimits] = useState<LoadTestLimits>(DEFAULT_LOAD_TEST_LIMITS)
@@ -440,7 +442,7 @@ export function LoadTestDemo() {
 
   useEffect(() => {
     const selectedKey = keys.find((key) => key.key === selectedKeyValue)
-    if (!serverAddress || !selectedKey) {
+    if (!loadTestServerAddress || !selectedKey) {
       setModels([])
       setSelectedModel('')
       setModelsLoading(false)
@@ -453,7 +455,7 @@ export function LoadTestDemo() {
     setModelsLoading(true)
 
     void fetchApiKeyModels(
-      getLoadTestApiBaseUrl(serverAddress),
+      getLoadTestApiBaseUrl(loadTestServerAddress),
       selectedKey.secret
     )
       .then((result) => {
@@ -481,7 +483,7 @@ export function LoadTestDemo() {
     return () => {
       active = false
     }
-  }, [keys, selectedKeyValue, serverAddress])
+  }, [keys, loadTestServerAddress, selectedKeyValue])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -502,7 +504,7 @@ export function LoadTestDemo() {
     const selectedModelOption = models.find(
       (model) => model.id === selectedModel
     )
-    if (!serverAddress || !selectedKey || !selectedModelOption) return
+    if (!loadTestServerAddress || !selectedKey || !selectedModelOption) return
     const durationValue =
       durationSeconds.trim() === '' ? Number.NaN : Number(durationSeconds)
     const rpsValue =
@@ -635,7 +637,7 @@ export function LoadTestDemo() {
       }
 
       const request = sendLoadTestRequest(
-        serverAddress,
+        loadTestServerAddress,
         selectedKey,
         selectedModel,
         currentRunId,
@@ -697,7 +699,7 @@ export function LoadTestDemo() {
     requestsPerSecond,
     selectedKeyValue,
     selectedModel,
-    serverAddress,
+    loadTestServerAddress,
     streamMode,
     t,
   ])
@@ -739,8 +741,8 @@ export function LoadTestDemo() {
       (item.input_tokens_total > 0
         ? item.input_tokens_total
         : item.input_tokens +
-          item.cache_read_tokens +
-          item.cache_write_tokens) +
+        item.cache_read_tokens +
+        item.cache_write_tokens) +
       item.output_tokens,
     0
   )
@@ -764,9 +766,9 @@ export function LoadTestDemo() {
     channelStats.length > 0
       ? totalChannelTokens
       : stats.inputTokens +
-        stats.outputTokens +
-        stats.cacheReadTokens +
-        stats.cacheWriteTokens
+      stats.outputTokens +
+      stats.cacheReadTokens +
+      stats.cacheWriteTokens
   const currentTokensPerMinute = formatTokensPerMinute(
     totalTokens,
     status === 'running' ? elapsed / 1000 : durationValue
@@ -988,20 +990,20 @@ export function LoadTestDemo() {
   const agentRequest =
     selectedKeyMetadata && selectedModelMetadata
       ? {
-          token_id: selectedKeyMetadata.id,
-          model: selectedModel,
-          endpoint: selectedModelMetadata.endpoint,
-          prompt,
-          prompt_cache: promptCache,
-          stream_mode:
-            streamMode &&
-            supportsLoadTestStreaming(selectedModelMetadata.endpoint),
-          duration_seconds: durationValue,
-          requests_per_second: rpsValue,
-          concurrency: concurrencyValue,
-          max_output_tokens: maxOutputTokensValue,
-          request_timeout_seconds: limits.request_timeout_seconds,
-        }
+        token_id: selectedKeyMetadata.id,
+        model: selectedModel,
+        endpoint: selectedModelMetadata.endpoint,
+        prompt,
+        prompt_cache: promptCache,
+        stream_mode:
+          streamMode &&
+          supportsLoadTestStreaming(selectedModelMetadata.endpoint),
+        duration_seconds: durationValue,
+        requests_per_second: rpsValue,
+        concurrency: concurrencyValue,
+        max_output_tokens: maxOutputTokensValue,
+        request_timeout_seconds: limits.request_timeout_seconds,
+      }
       : null
 
   const getHistoricalUserCharge = (run: (typeof persistedRuns)[number]) => {
@@ -1214,16 +1216,16 @@ export function LoadTestDemo() {
                 <p className='text-muted-foreground text-xs'>
                   {selectedAgentForTab
                     ? t(
-                        'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.',
-                        {
-                          name: selectedAgentForTab.name,
-                          rps: selectedAgentForTab.max_rps,
-                          concurrency: selectedAgentForTab.max_concurrency,
-                        }
-                      )
+                      'Selected agent: {{name}} · up to {{rps}} RPS · {{concurrency}} concurrent requests.',
+                      {
+                        name: selectedAgentForTab.name,
+                        rps: selectedAgentForTab.max_rps,
+                        concurrency: selectedAgentForTab.max_concurrency,
+                      }
+                    )
                     : t(
-                        'Select a server or local agent to see its capacity here.'
-                      )}
+                      'Select a server or local agent to see its capacity here.'
+                    )}
                 </p>
               </div>
 
@@ -1629,8 +1631,8 @@ export function LoadTestDemo() {
                               channel.input_tokens_total > 0
                                 ? channel.input_tokens_total
                                 : channel.input_tokens +
-                                  channel.cache_read_tokens +
-                                  channel.cache_write_tokens
+                                channel.cache_read_tokens +
+                                channel.cache_write_tokens
                             const channelTokens =
                               inputTotalTokens + channel.output_tokens
                             const share = totalChannelTokens
@@ -1681,9 +1683,9 @@ export function LoadTestDemo() {
                                   $
                                   {pricing
                                     ? calculateChannelUserCharge(
-                                        channel,
-                                        pricing
-                                      ).toFixed(6)
+                                      channel,
+                                      pricing
+                                    ).toFixed(6)
                                     : '0.000000'}
                                 </TableCell>
                               </TableRow>
@@ -1710,8 +1712,8 @@ export function LoadTestDemo() {
               <p className='text-muted-foreground text-xs'>
                 {pricing
                   ? t(
-                      'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
-                    )
+                    'Estimated cost uses the selected model and group pricing snapshot. Token pricing includes input, output, cache read, and cache write usage; request pricing charges successful requests.'
+                  )
                   : t('Pricing is unavailable until the test starts.')}
               </p>
 
