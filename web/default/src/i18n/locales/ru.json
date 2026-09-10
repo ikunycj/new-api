@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "Повторите запрос несколько раз или избегайте часов пик.",
     "If the problem persists, click About above and contact the administrator.": "Если проблема долго не устраняется, нажмите «О программе» выше и обратитесь к администратору.",
     "OpenAI and other model providers are experiencing server overload.": "Серверы OpenAI и других поставщиков моделей перегружены.",
-    "All channels": "Все каналы",
     "Official OpenAI error": "Официальная ошибка OpenAI",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Возможно, серверы OpenAI или других поставщиков моделей перегружены либо в OpenAI возникла временная внутренняя ошибка."
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Возможно, серверы OpenAI или других поставщиков моделей перегружены либо в OpenAI возникла временная внутренняя ошибка.",
+    "All channels": "Все каналы",
+    "Invalid API key": "Недействительный ключ API",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "Ключ API указан неверно либо запрос отправляется не на тот сайт, например напрямую на сайт OpenAI.",
+    "Re-import through CC Switch (simplest).": "Повторно импортируйте через CC Switch (это проще всего).",
+    "Confirm that the API key and Base URL match.": "Убедитесь, что ключ API и Base URL соответствуют друг другу."
   }
 }

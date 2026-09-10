@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "Retry the request several times or avoid peak hours.",
     "If the problem persists, click About above and contact the administrator.": "If the problem persists, click About above and contact the administrator.",
     "OpenAI and other model providers are experiencing server overload.": "OpenAI and other model providers are experiencing server overload.",
-    "All channels": "All channels",
     "Official OpenAI error": "Official OpenAI error",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug."
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.",
+    "All channels": "All channels",
+    "Invalid API key": "Invalid API key",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.",
+    "Re-import through CC Switch (simplest).": "Re-import through CC Switch (simplest).",
+    "Confirm that the API key and Base URL match.": "Confirm that the API key and Base URL match."
   }
 }

@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "多重試幾次，或避開使用高峰時段",
     "If the problem persists, click About above and contact the administrator.": "如果長時間無法恢復，請點擊上方「關於」並聯絡管理員詢問",
     "OpenAI and other model providers are experiencing server overload.": "OpenAI 等模型供應商的伺服器過載。",
-    "All channels": "所有頻道",
     "Official OpenAI error": "OpenAI 官方異常錯誤",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "可能是 OpenAI 等模型供應商的伺服器過載，也可能是 OpenAI 內部的暫時性 Bug。"
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "可能是 OpenAI 等模型供應商的伺服器過載，也可能是 OpenAI 內部的暫時性 Bug。",
+    "All channels": "所有頻道",
+    "Invalid API key": "提供的 API 金鑰不正確，金鑰無效",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "金鑰錯誤，或請求的網站錯誤（例如直接請求 OpenAI 官網）",
+    "Re-import through CC Switch (simplest).": "重新透過 CC Switch 匯入（最簡單）",
+    "Confirm that the API key and Base URL match.": "確認金鑰與網址（Base URL）是否對應"
   }
 }

@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "Réessayez plusieurs fois ou évitez les heures de pointe.",
     "If the problem persists, click About above and contact the administrator.": "Si le problème persiste, cliquez sur « À propos » ci-dessus et contactez l’administrateur.",
     "OpenAI and other model providers are experiencing server overload.": "Les serveurs d’OpenAI et d’autres fournisseurs de modèles sont surchargés.",
-    "All channels": "Tous les canaux",
     "Official OpenAI error": "Erreur officielle d’OpenAI",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Les serveurs d’OpenAI ou d’autres fournisseurs de modèles peuvent être surchargés, ou OpenAI peut rencontrer un bug interne temporaire."
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Les serveurs d’OpenAI ou d’autres fournisseurs de modèles peuvent être surchargés, ou OpenAI peut rencontrer un bug interne temporaire.",
+    "All channels": "Tous les canaux",
+    "Invalid API key": "Clé API invalide",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "La clé API est incorrecte ou la requête est envoyée vers le mauvais site, par exemple directement vers le site d’OpenAI.",
+    "Re-import through CC Switch (simplest).": "Réimportez via CC Switch (le plus simple).",
+    "Confirm that the API key and Base URL match.": "Vérifiez que la clé API et la Base URL correspondent."
   }
 }

@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "何度か再試行するか、混雑する時間帯を避けてください。",
     "If the problem persists, click About above and contact the administrator.": "長時間解消しない場合は、上部の「概要」をクリックして管理者にお問い合わせください。",
     "OpenAI and other model providers are experiencing server overload.": "OpenAI などのモデルプロバイダーのサーバーが過負荷になっています。",
-    "All channels": "すべてのチャンネル",
     "Official OpenAI error": "OpenAI 公式の異常エラー",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "OpenAI などのモデルプロバイダーのサーバーが過負荷になっているか、OpenAI 内部で一時的な不具合が発生している可能性があります。"
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "OpenAI などのモデルプロバイダーのサーバーが過負荷になっているか、OpenAI 内部で一時的な不具合が発生している可能性があります。",
+    "All channels": "すべてのチャンネル",
+    "Invalid API key": "無効な API キー",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "API キーが正しくないか、誤ったウェブサイトにリクエストを送信しています（OpenAI の公式サイトへ直接リクエストする場合など）。",
+    "Re-import through CC Switch (simplest).": "CC Switch から再インポートしてください（最も簡単）。",
+    "Confirm that the API key and Base URL match.": "API キーと Base URL が対応していることを確認してください。"
   }
 }

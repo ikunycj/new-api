@@ -1487,6 +1487,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'No matching errors found.',
     'Model capacity insufficient': 'Model capacity insufficient',
     'Authentication failed': 'Authentication failed',
+    'Invalid API key': 'Invalid API key',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.',
+    'Re-import through CC Switch (simplest).':
+      'Re-import through CC Switch (simplest).',
+    'Confirm that the API key and Base URL match.':
+      'Confirm that the API key and Base URL match.',
     'Official OpenAI error': 'Official OpenAI error',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI and other official providers temporarily lack enough compute capacity.',
@@ -1531,6 +1538,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '未找到匹配的错误。',
     'Model capacity insufficient': '模型容量不足',
     'Authentication failed': '认证失败',
+    'Invalid API key': '提供的API密钥不正确，密钥无效',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      '密钥错误，或者请求的网站错误（例如直接请求 OpenAI 官网）',
+    'Re-import through CC Switch (simplest).':
+      '重新通过 CC Switch 导入（最简单）',
+    'Confirm that the API key and Base URL match.':
+      '确认密钥和网址（Base URL 是否对应）',
     'Official OpenAI error': 'OpenAI官方异常错误',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI 及其他官方厂商暂时缺乏足够的算力。',
@@ -1575,6 +1589,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '找不到符合的錯誤。',
     'Model capacity insufficient': '模型容量不足',
     'Authentication failed': '驗證失敗',
+    'Invalid API key': '提供的 API 金鑰不正確，金鑰無效',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      '金鑰錯誤，或請求的網站錯誤（例如直接請求 OpenAI 官網）',
+    'Re-import through CC Switch (simplest).':
+      '重新透過 CC Switch 匯入（最簡單）',
+    'Confirm that the API key and Base URL match.':
+      '確認金鑰與網址（Base URL）是否對應',
     'Official OpenAI error': 'OpenAI 官方異常錯誤',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI 及其他官方廠商暫時缺乏足夠的算力。',
@@ -1619,6 +1640,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Aucune erreur correspondante trouvée.',
     'Model capacity insufficient': 'Capacité du modèle insuffisante',
     'Authentication failed': 'Échec de l’authentification',
+    'Invalid API key': 'Clé API invalide',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      'La clé API est incorrecte ou la requête est envoyée vers le mauvais site, par exemple directement vers le site d’OpenAI.',
+    'Re-import through CC Switch (simplest).':
+      'Réimportez via CC Switch (le plus simple).',
+    'Confirm that the API key and Base URL match.':
+      'Vérifiez que la clé API et la Base URL correspondent.',
     'Official OpenAI error': 'Erreur officielle d’OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI et les autres fournisseurs officiels ne disposent temporairement pas d’une capacité de calcul suffisante.',
@@ -1663,6 +1691,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': '一致するエラーが見つかりません。',
     'Model capacity insufficient': 'モデルの容量不足',
     'Authentication failed': '認証に失敗しました',
+    'Invalid API key': '無効な API キー',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      'API キーが正しくないか、誤ったウェブサイトにリクエストを送信しています（OpenAI の公式サイトへ直接リクエストする場合など）。',
+    'Re-import through CC Switch (simplest).':
+      'CC Switch から再インポートしてください（最も簡単）。',
+    'Confirm that the API key and Base URL match.':
+      'API キーと Base URL が対応していることを確認してください。',
     'Official OpenAI error': 'OpenAI 公式の異常エラー',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI などの公式プロバイダーで、選択したモデルに割り当てる計算リソースが一時的に不足しています。',
@@ -1707,6 +1742,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Подходящие ошибки не найдены.',
     'Model capacity insufficient': 'Недостаточная ёмкость модели',
     'Authentication failed': 'Ошибка аутентификации',
+    'Invalid API key': 'Недействительный ключ API',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      'Ключ API указан неверно либо запрос отправляется не на тот сайт, например напрямую на сайт OpenAI.',
+    'Re-import through CC Switch (simplest).':
+      'Повторно импортируйте через CC Switch (это проще всего).',
+    'Confirm that the API key and Base URL match.':
+      'Убедитесь, что ключ API и Base URL соответствуют друг другу.',
     'Official OpenAI error': 'Официальная ошибка OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'У OpenAI и других официальных поставщиков временно недостаточно вычислительных ресурсов.',
@@ -1751,6 +1793,13 @@ const errorSelfCheckTranslations = {
     'No matching errors found.': 'Không tìm thấy lỗi phù hợp.',
     'Model capacity insufficient': 'Mô hình không đủ năng lực',
     'Authentication failed': 'Xác thực không thành công',
+    'Invalid API key': 'Khóa API không hợp lệ',
+    'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.':
+      'Khóa API không đúng hoặc yêu cầu đang được gửi đến sai trang web, chẳng hạn gọi trực tiếp trang web OpenAI.',
+    'Re-import through CC Switch (simplest).':
+      'Nhập lại qua CC Switch (đơn giản nhất).',
+    'Confirm that the API key and Base URL match.':
+      'Xác nhận khóa API và Base URL tương ứng với nhau.',
     'Official OpenAI error': 'Lỗi chính thức từ OpenAI',
     'OpenAI and other official providers temporarily lack enough compute capacity.':
       'OpenAI và các nhà cung cấp chính thức khác tạm thời không có đủ năng lực tính toán.',

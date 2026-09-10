@@ -40,6 +40,8 @@ const OPENAI_SERVER_OVERLOADED_ERROR =
   'stream disconnected before completion: Our servers are currently overloaded. Please try again later.'
 const OPENAI_PROCESSING_ERROR =
   'stream disconnected before completion: An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists.'
+const INVALID_API_KEY_ERROR =
+  'unexpected status 401 Unauthorized: Incorrect API key provided\n\nauth error: 401, auth error code: invalid_api_key'
 const UNAUTHORIZED_ERROR = 'Unauthorized'
 const STREAM_DISCONNECTED_ERROR =
   'stream disconnected before completion: stream closed before response.completed'
@@ -113,6 +115,18 @@ const ERROR_CATEGORIES: readonly ErrorCategory[] = [
           'Confirm that the API key is active, copied without extra spaces, and allowed to use the selected model.',
           'Send the key in the authentication format required by the endpoint, such as Authorization: Bearer <API_KEY>.',
           'Check the client Base URL and make sure it targets this service and uses the path expected by the selected protocol.',
+        ],
+      },
+      {
+        id: 'client-invalid-api-key',
+        code: '401',
+        descriptionKey: 'Invalid API key',
+        message: INVALID_API_KEY_ERROR,
+        causeKey:
+          'The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.',
+        solutionKeys: [
+          'Re-import through CC Switch (simplest).',
+          'Confirm that the API key and Base URL match.',
         ],
       },
     ],

@@ -6107,8 +6107,12 @@
     "Retry the request several times or avoid peak hours.": "Thử lại yêu cầu vài lần hoặc tránh giờ cao điểm.",
     "If the problem persists, click About above and contact the administrator.": "Nếu vấn đề kéo dài, hãy nhấp vào “Giới thiệu” ở phía trên và liên hệ quản trị viên để hỏi thêm.",
     "OpenAI and other model providers are experiencing server overload.": "Máy chủ của OpenAI và các nhà cung cấp mô hình khác đang bị quá tải.",
-    "All channels": "Tất cả kênh",
     "Official OpenAI error": "Lỗi chính thức từ OpenAI",
-    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Có thể máy chủ của OpenAI hoặc các nhà cung cấp mô hình khác đang quá tải, hoặc OpenAI gặp lỗi nội bộ tạm thời."
+    "OpenAI and other model providers may be experiencing server overload, or OpenAI may have encountered a temporary internal bug.": "Có thể máy chủ của OpenAI hoặc các nhà cung cấp mô hình khác đang quá tải, hoặc OpenAI gặp lỗi nội bộ tạm thời.",
+    "All channels": "Tất cả kênh",
+    "Invalid API key": "Khóa API không hợp lệ",
+    "The API key is incorrect, or the request is being sent to the wrong website, such as directly calling the OpenAI website.": "Khóa API không đúng hoặc yêu cầu đang được gửi đến sai trang web, chẳng hạn gọi trực tiếp trang web OpenAI.",
+    "Re-import through CC Switch (simplest).": "Nhập lại qua CC Switch (đơn giản nhất).",
+    "Confirm that the API key and Base URL match.": "Xác nhận khóa API và Base URL tương ứng với nhau."
   }
 }
