@@ -231,14 +231,14 @@ func main() {
 
 func usage() {
 	fmt.Println("usage:")
-	fmt.Println("  alltoken-loadtest-agent pair --server https://alltokenapi.com CODE")
+	fmt.Println("  alltoken-loadtest-agent pair [--server URL] CODE")
 	fmt.Println("  alltoken-loadtest-agent run [--max-rps N] [--max-concurrency N] [--target-url URL]")
 	fmt.Println("  alltoken-loadtest-agent status")
 }
 
 func pair(args []string) error {
 	flags := flag.NewFlagSet("pair", flag.ContinueOnError)
-	serverURL := flags.String("server", "https://alltokenapi.com", "AllToken server URL")
+	serverURL := flags.String("server", "", "AllToken server URL; defaults to local config")
 	name := flags.String("name", defaultAgentName(), "agent display name")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -247,6 +247,13 @@ func pair(args []string) error {
 		return errors.New("pairing code is required")
 	}
 	server := normalizeServerURL(*serverURL)
+	if server == "" {
+		configured, err := loadConfig()
+		if err != nil {
+			return errors.New("server URL is required for first pairing; use --server URL")
+		}
+		server = normalizeServerURL(configured.ServerURL)
+	}
 	if err := validateServerURL(server); err != nil {
 		return err
 	}
@@ -273,6 +280,10 @@ func runAgent(args []string) error {
 	config, err := loadConfig()
 	if err != nil {
 		return err
+	}
+	config.ServerURL = normalizeServerURL(config.ServerURL)
+	if err := validateServerURL(config.ServerURL); err != nil {
+		return fmt.Errorf("invalid configured server URL: %w", err)
 	}
 	if _, err := exec.LookPath("k6"); err != nil {
 		return errors.New("k6 is not installed or not available in PATH")
@@ -776,6 +787,10 @@ func loadConfig() (agentConfig, error) {
 	var config agentConfig
 	if err := common.Unmarshal(data, &config); err != nil {
 		return agentConfig{}, err
+	}
+	config.ServerURL = normalizeServerURL(config.ServerURL)
+	if err := validateServerURL(config.ServerURL); err != nil {
+		return agentConfig{}, fmt.Errorf("invalid configured server URL: %w", err)
 	}
 	return config, nil
 }
