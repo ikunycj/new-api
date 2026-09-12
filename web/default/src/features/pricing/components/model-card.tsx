@@ -84,7 +84,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
-  const groups = props.model.enable_groups || []
   const displayGroups = props.model.display_groups || []
   const groupPreviewLimit = 3
   const canExpandGroups = displayGroups.length > groupPreviewLimit
@@ -276,7 +275,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     metadata.push({
       key: 'groups',
       label: t('Groups'),
-      value: groups.length.toString(),
+      value: displayGroups.length.toString(),
     })
   }
   if (metadata.length < 3) {

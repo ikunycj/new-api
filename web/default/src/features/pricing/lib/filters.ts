@@ -50,6 +50,9 @@ export function filterBySearch(
       m.vendor_name?.toLowerCase().includes(lowerQuery) ||
       m.enable_groups?.some((group) =>
         group.toLowerCase().includes(lowerQuery)
+      ) ||
+      Object.keys(m.group_ratio || {}).some((group) =>
+        group.toLowerCase().includes(lowerQuery)
       )
   )
 }
@@ -95,11 +98,10 @@ export function filterByGroup(
   group: string
 ): PricingModel[] {
   if (group === FILTER_ALL) return models
-  return models.filter(
-    (model) =>
-      model.enable_groups?.includes(group) ||
-      model.enable_groups?.includes(FILTER_ALL)
-  )
+  // Pricing groups in the model square describe a catalog-wide price list;
+  // they do not express per-model routing availability. Once a group appears
+  // in the catalog, every returned model remains visible under that group.
+  return models
 }
 
 /**

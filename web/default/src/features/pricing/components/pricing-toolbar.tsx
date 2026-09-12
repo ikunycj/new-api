@@ -55,6 +55,7 @@ import {
 import { cn } from '@/lib/utils'
 
 import {
+  FILTER_ALL,
   PRICING_CURRENCIES,
   VIEW_MODES,
   getModelTypeLabels,
@@ -234,7 +235,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   }
 
   const vendorOptions: FilterDropdownOption[] = [
-    { value: 'all', label: t('All Vendors') },
+    { value: FILTER_ALL, label: t('All Vendors') },
     ...props.vendors.map((vendor) => ({
       value: vendor.name,
       label: vendor.name,

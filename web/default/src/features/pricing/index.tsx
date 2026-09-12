@@ -50,7 +50,7 @@ export function Pricing() {
     models,
     vendors,
     groupRatio,
-    usableGroup,
+    catalogGroups,
     endpointMap,
     isLoading,
     priceRate,
@@ -103,10 +103,10 @@ export function Pricing() {
 
   const availableGroups = useMemo(
     () =>
-      Object.keys(usableGroup || {}).filter(
+      Object.keys(catalogGroups || {}).filter(
         (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
       ),
-    [usableGroup]
+    [catalogGroups]
   )
 
   const displayModels = useMemo(
@@ -218,7 +218,7 @@ export function Pricing() {
             }}
             model={selectedModel}
             groupRatio={groupRatio || {}}
-            usableGroup={usableGroup || {}}
+            catalogGroups={catalogGroups || {}}
             endpointMap={
               (endpointMap as Record<
                 string,

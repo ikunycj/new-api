@@ -27,7 +27,7 @@ import {
   SORT_OPTIONS,
 } from '../constants'
 import type { PricingModel } from '../types'
-import { filterAndSortModels, sortModels } from './filters'
+import { filterAndSortModels, filterByGroup, sortModels } from './filters'
 
 const models: PricingModel[] = [
   {
@@ -216,5 +216,18 @@ describe('pricing model sorting', () => {
       sortModels(models, SORT_OPTIONS.PRICE_LOW)[0]?.model_name,
       'alpha-model'
     )
+  })
+})
+
+describe('pricing model group filtering', () => {
+  test('keeps every model visible for a catalog group', () => {
+    const model: PricingModel = {
+      ...models[0],
+      enable_groups: ['default'],
+      group_ratio: { default: 1, vip: 0.8 },
+    }
+
+    assert.deepEqual(filterByGroup([model], 'vip'), [model])
+    assert.deepEqual(filterByGroup(models, 'vip'), models)
   })
 })

@@ -21,7 +21,11 @@ import { describe, test } from 'node:test'
 
 import type { PricingModel } from '../types'
 import { filterByGroup } from './filters'
-import { expandModelsByGroup, formatGroupRatio } from './model-helpers'
+import {
+  expandModelsByGroup,
+  formatGroupRatio,
+  getDisplayGroupRatio,
+} from './model-helpers'
 
 const models: PricingModel[] = [
   {
@@ -108,7 +112,7 @@ describe('model group display entries', () => {
     )
   })
 
-  test('does not render unavailable or reserved groups', () => {
+  test('renders every configured catalog group, including a literal all name', () => {
     const result = expandModelsByGroup(models, ['default', 'auto', 'all'], {
       default: 1,
       auto: 0.5,
@@ -116,12 +120,63 @@ describe('model group display entries', () => {
     })
 
     assert.deepEqual(
-      result.map((model) => model.display_group),
-      ['default', 'default']
+      result.map((model) => model.display_groups),
+      [
+        [
+          { group: 'all', ratio: 0.1 },
+          { group: 'default', ratio: 1 },
+        ],
+        [
+          { group: 'all', ratio: 0.1 },
+          { group: 'default', ratio: 1 },
+        ],
+      ]
     )
   })
 
-  test('treats the all capability group as matching a selected group', () => {
+  test('shows catalog groups for a model with no enabled groups', () => {
+    const result = expandModelsByGroup(
+      [
+        {
+          id: 3,
+          model_name: 'catalog-only-model',
+          quota_type: 0,
+          model_ratio: 1,
+          completion_ratio: 1,
+          enable_groups: [],
+        },
+      ],
+      ['default', 'vip'],
+      { default: 1, vip: 0.8 }
+    )
+
+    assert.deepEqual(result[0].display_groups, [
+      { group: 'vip', ratio: 0.8 },
+      { group: 'default', ratio: 1 },
+    ])
+  })
+
+  test('uses the catalog ratio for a group absent from model abilities', () => {
+    const model = {
+      ...models[0],
+      enable_groups: ['default'],
+      group_ratio: { default: 1, vip: 0.8 },
+    }
+
+    assert.equal(getDisplayGroupRatio(model, 'vip'), 0.8)
+  })
+
+  test('uses the lowest catalog ratio even when no ability names match it', () => {
+    const model = {
+      ...models[0],
+      enable_groups: ['default'],
+      group_ratio: { default: 1, vip: 0.8 },
+    }
+
+    assert.equal(getDisplayGroupRatio(model), 0.8)
+  })
+
+  test('does not use model capability groups to filter catalog models', () => {
     assert.deepEqual(
       filterByGroup(models, 'vip').map((model) => model.model_name),
       ['grouped-model', 'wildcard-model']

@@ -53,8 +53,11 @@ export function getSortLabels(t: TFunction): Record<SortOption, string> {
   }
 }
 
-/** Filter values */
-export const FILTER_ALL = 'all'
+/**
+ * Empty filter values represent "all" so a configured pricing group named
+ * "all" remains a real catalog entry instead of colliding with UI state.
+ */
+export const FILTER_ALL = ''
 
 /** Model type options */
 export const MODEL_TYPES = {

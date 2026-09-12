@@ -42,6 +42,36 @@ func GetUserGroupPricingGroups(userGroup string) map[string]string {
 	return groups
 }
 
+// GetUserGroupVisiblePricingGroups returns the pricing-group catalog shown by
+// the model square. Unlike GetUserGroupPricingGroups, this display-only view
+// intentionally ignores group enabled state and runtime abilities. The
+// internal auto and all-groups markers are never catalog entries.
+func GetUserGroupVisiblePricingGroups(userGroup string) map[string]string {
+	groups := make(map[string]string)
+	for _, group := range ratio_setting.GetPricingGroupOrder() {
+		if group == "" || group == "auto" || group == setting.AllPricingGroups {
+			continue
+		}
+		groups[group] = group
+	}
+
+	if setting.UserGroupPricingGroupsAreAll(userGroup) {
+		return groups
+	}
+
+	allowed := setting.GetUserGroupPricingGroups(userGroup)
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, group := range allowed {
+		allowedSet[group] = struct{}{}
+	}
+	for group := range groups {
+		if _, ok := allowedSet[group]; !ok {
+			delete(groups, group)
+		}
+	}
+	return groups
+}
+
 func UserGroupCanUsePricingGroup(userGroup, pricingGroup string) bool {
 	_, ok := GetUserGroupPricingGroups(userGroup)[pricingGroup]
 	return ok

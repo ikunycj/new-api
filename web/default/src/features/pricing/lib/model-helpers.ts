@@ -24,20 +24,17 @@ import type { PricingDisplayModel, PricingModel } from '../types'
 // ----------------------------------------------------------------------------
 
 /**
- * Get available groups for a model
+ * Get pricing groups configured for the model-square catalog.
+ *
+ * This intentionally does not inspect a model's enabled abilities: the model
+ * square is a catalog of configured pricing groups, not a routing health view.
  */
-export function getAvailableGroups(
-  model: PricingModel,
-  usableGroup: Record<string, { desc: string; ratio: number }>
+export function getCatalogGroups(
+  catalogGroups: Record<string, string>
 ): string[] {
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const supportsAllGroups = modelEnableGroups.includes(FILTER_ALL)
-
-  return Object.keys(usableGroup)
-    .filter((group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group))
-    .filter((group) => supportsAllGroups || modelEnableGroups.includes(group))
+  return Object.keys(catalogGroups).filter(
+    (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
+  )
 }
 
 /**
@@ -67,13 +64,7 @@ export function expandModelsByGroup(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
   )
   return models.flatMap((model) => {
-    const enabledGroups = Array.isArray(model.enable_groups)
-      ? model.enable_groups
-      : []
-    const supportsAllGroups = enabledGroups.includes(FILTER_ALL)
-
     const groups = selectableGroups
-      .filter((group) => supportsAllGroups || enabledGroups.includes(group))
       .map((group) => ({
         group,
         ratio: getConfiguredGroupRatio(groupRatio, group),
@@ -105,28 +96,20 @@ export function getDisplayGroupRatio(
   model: PricingModel,
   selectedGroup?: string
 ): number {
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const supportsAllGroups = modelEnableGroups.includes(FILTER_ALL)
   const groupRatio = model.group_ratio || {}
 
   if (
     selectedGroup &&
     selectedGroup !== FILTER_ALL &&
-    (supportsAllGroups || modelEnableGroups.includes(selectedGroup))
+    typeof groupRatio[selectedGroup] === 'number' &&
+    Number.isFinite(groupRatio[selectedGroup])
   ) {
-    return getConfiguredGroupRatio(groupRatio, selectedGroup)
-  }
-
-  if (modelEnableGroups.length === 0) {
-    return 1
+    return groupRatio[selectedGroup]
   }
 
   let minRatio = Number.POSITIVE_INFINITY
 
-  for (const group of modelEnableGroups) {
-    const ratio = groupRatio[group]
+  for (const ratio of Object.values(groupRatio)) {
     if (
       typeof ratio === 'number' &&
       Number.isFinite(ratio) &&

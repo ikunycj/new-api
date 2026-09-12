@@ -67,7 +67,11 @@ import {
   isDynamicPricingModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
+import {
+  getCatalogGroups,
+  getConfiguredGroupRatio,
+  isTokenBasedModel,
+} from '../lib/model-helpers'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
 import type {
   ModelCapability,
@@ -443,10 +447,12 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendProviderSection(props: { model: PricingModel }) {
+function ModelBackendProviderSection(props: {
+  model: PricingModel
+  catalogGroups: string[]
+}) {
   const { t } = useTranslation()
   const model = props.model
-  const groups = normalizeCatalogItems(model.enable_groups)
   const endpoints = normalizeCatalogItems(model.supported_endpoint_types)
   const tags = parseTags(model.tags)
   const cells: React.ReactNode[] = []
@@ -465,10 +471,10 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
     </CatalogInfoCell>
   )
 
-  if (groups.length > 0) {
+  if (props.catalogGroups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
-        <CatalogPillList items={groups} />
+        <CatalogPillList items={props.catalogGroups} />
       </CatalogInfoCell>
     )
   }
@@ -509,12 +515,18 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendDetailsSection(props: { model: PricingModel }) {
+function ModelBackendDetailsSection(props: {
+  model: PricingModel
+  catalogGroups: string[]
+}) {
   return (
     <>
       <ModelBackendQuickStats model={props.model} />
       <ModelBackendSignalsSection model={props.model} />
-      <ModelBackendProviderSection model={props.model} />
+      <ModelBackendProviderSection
+        model={props.model}
+        catalogGroups={props.catalogGroups}
+      />
     </>
   )
 }
@@ -821,7 +833,7 @@ function getDynamicFormattedPricesByTier(
 function GroupPricingSection(props: {
   model: PricingModel
   groupRatio: Record<string, number>
-  usableGroup: Record<string, { desc: string; ratio: number }>
+  availableGroups: string[]
   priceRate: number
   usdExchangeRate: number
   tokenUnit: TokenUnit
@@ -829,11 +841,6 @@ function GroupPricingSection(props: {
 }) {
   const { t } = useTranslation()
   const showRechargePrice = props.showRechargePrice ?? false
-
-  const availableGroups = useMemo(
-    () => getAvailableGroups(props.model, props.usableGroup || {}),
-    [props.model, props.usableGroup]
-  )
 
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = props.tokenUnit === 'K' ? '1K' : '1M'
@@ -861,7 +868,7 @@ function GroupPricingSection(props: {
     return types
   }, [props.model, t])
 
-  if (availableGroups.length === 0) {
+  if (props.availableGroups.length === 0) {
     return (
       <section>
         <SectionTitle>{t('Pricing by Group')}</SectionTitle>
@@ -914,8 +921,8 @@ function GroupPricingSection(props: {
       groupRatioMultiplier: 1,
     })
     const formattedPricesByGroup = new Map(
-      availableGroups.map((group) => {
-        const ratio = props.groupRatio[group] || 1
+      props.availableGroups.map((group) => {
+        const ratio = getConfiguredGroupRatio(props.groupRatio, group)
         return [
           group,
           getDynamicFormattedPricesByTier(dynamicTiers, {
@@ -933,8 +940,8 @@ function GroupPricingSection(props: {
       <section>
         <SectionTitle>{t('Pricing by Group')}</SectionTitle>
         <div className='space-y-3'>
-          {availableGroups.map((group) => {
-            const ratio = props.groupRatio[group] || 1
+          {props.availableGroups.map((group) => {
+            const ratio = getConfiguredGroupRatio(props.groupRatio, group)
             const formattedPricesByTier =
               formattedPricesByGroup.get(group) ??
               new Map<DynamicPricingTier, Map<string, string>>()
@@ -1014,7 +1021,7 @@ function GroupPricingSection(props: {
         className='-mx-4 rounded-none border-0 sm:mx-0'
         tableClassName='text-sm'
         headerRowClassName='hover:bg-transparent'
-        data={availableGroups}
+        data={props.availableGroups}
         getRowKey={(group) => group}
         columns={[
           {
@@ -1029,7 +1036,8 @@ function GroupPricingSection(props: {
             header: t('Ratio'),
             className: thClass,
             cellClassName: 'text-muted-foreground py-2.5 font-mono',
-            cell: (group) => `${props.groupRatio[group] || 1}x`,
+            cell: (group) =>
+              `${getConfiguredGroupRatio(props.groupRatio, group)}x`,
           },
           ...(isTokenBased
             ? [
@@ -1092,7 +1100,7 @@ const TAB_META: Record<
 export interface ModelDetailsContentProps {
   model: PricingModel
   groupRatio: Record<string, number>
-  usableGroup: Record<string, { desc: string; ratio: number }>
+  catalogGroups: Record<string, string>
   endpointMap: Record<string, { path?: string; method?: string }>
   priceRate: number
   usdExchangeRate: number
@@ -1107,6 +1115,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const isDynamic =
     props.model.billing_mode === 'tiered_expr' &&
     Boolean(props.model.billing_expr)
+  const catalogGroups = getCatalogGroups(props.catalogGroups || {})
 
   return (
     <div className='@container/details space-y-4'>
@@ -1151,7 +1160,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             <GroupPricingSection
               model={props.model}
               groupRatio={props.groupRatio}
-              usableGroup={props.usableGroup}
+              availableGroups={catalogGroups}
               priceRate={props.priceRate}
               usdExchangeRate={props.usdExchangeRate}
               tokenUnit={props.tokenUnit}
@@ -1159,7 +1168,10 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             />
           </section>
 
-          <ModelBackendDetailsSection model={props.model} />
+          <ModelBackendDetailsSection
+            model={props.model}
+            catalogGroups={catalogGroups}
+          />
         </TabsContent>
 
         <TabsContent value='performance' className='outline-none'>
@@ -1219,7 +1231,7 @@ export function ModelDetails() {
   const {
     models,
     groupRatio,
-    usableGroup,
+    catalogGroups,
     endpointMap,
     isLoading,
     priceRate,
@@ -1297,7 +1309,7 @@ export function ModelDetails() {
         <ModelDetailsContent
           model={model}
           groupRatio={groupRatio || {}}
-          usableGroup={usableGroup || {}}
+          catalogGroups={catalogGroups || {}}
           priceRate={priceRate ?? 1}
           usdExchangeRate={billingUSDToCNYRate ?? 1}
           tokenUnit={tokenUnit}
