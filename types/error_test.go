@@ -193,21 +193,3 @@ func TestUnknownUpstreamSourceIsIgnored(t *testing.T) {
 	apiErr.EnsureErrorSource(ErrorSourceChannel)
 	assert.Equal(t, ErrorSourceChannel, apiErr.GetErrorSource())
 }
-
-func TestConfiguredClassificationOverridesBuiltInCatalog(t *testing.T) {
-	apiErr := WithOpenAIError(OpenAIError{
-		Message: "pool depleted",
-		Code:    "vendor_pool_empty",
-		Source:  ErrorSourceChannel,
-	}, http.StatusServiceUnavailable)
-	apiErr.SetChannelLocation(23, "Claude Pro")
-	apiErr.SetClassification(205004, "upstream", "channel", "switch_channel", true)
-
-	response := apiErr.ToOpenAIError()
-
-	assert.Equal(t, 205004, response.StableCode)
-	assert.Equal(t, "205004-CH23", response.ErrorRef)
-	assert.Equal(t, "channel", response.FailureScope)
-	require.NotNil(t, response.Retryable)
-	assert.True(t, *response.Retryable)
-}

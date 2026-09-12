@@ -129,6 +129,14 @@ const ERROR_CATEGORIES: readonly ErrorCategory[] = [
           'Confirm that the API key and Base URL match.',
         ],
       },
+      {
+        id: 'client-network-reconnecting',
+        code: '402',
+        descriptionKey: '一直重连，等待网络',
+        message: 'Reconnegting...waiting network',
+        causeKey: '用户网络故障',
+        solutionKeys: ['检查网络是否连通'],
+      },
     ],
   },
   {

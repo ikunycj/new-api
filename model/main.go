@@ -269,6 +269,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
+		return err
+	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
@@ -276,9 +279,6 @@ func migrateDB() error {
 		return err
 	}
 	if err := resetChannelMonitorSchema(); err != nil {
-		return err
-	}
-	if err := removeLegacyBillingGroupCircuitColumns(); err != nil {
 		return err
 	}
 	err := DB.AutoMigrate(
@@ -319,7 +319,6 @@ func migrateDB() error {
 		&ChannelCostEntry{},
 		&BillingGroupRoute{},
 		&BillingGroupChannel{},
-		&UpstreamErrorMapping{},
 		&CasbinRule{},
 		&AuthzRole{},
 		&AffiliateRuleVersion{},
@@ -351,6 +350,9 @@ func migrateDB() error {
 }
 
 func migrateDBFast() error {
+	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
+		return err
+	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
@@ -358,9 +360,6 @@ func migrateDBFast() error {
 		return err
 	}
 	if err := resetChannelMonitorSchema(); err != nil {
-		return err
-	}
-	if err := removeLegacyBillingGroupCircuitColumns(); err != nil {
 		return err
 	}
 	var wg sync.WaitGroup
@@ -406,7 +405,6 @@ func migrateDBFast() error {
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&BillingGroupRoute{}, "BillingGroupRoute"},
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
-		{&UpstreamErrorMapping{}, "UpstreamErrorMapping"},
 		{&AffiliateRuleVersion{}, "AffiliateRuleVersion"},
 		{&AffiliateUserOverride{}, "AffiliateUserOverride"},
 		{&AffiliateReferral{}, "AffiliateReferral"},
@@ -625,23 +623,17 @@ func removeLegacyUserClassificationColumn() error {
 	return nil
 }
 
-func removeLegacyBillingGroupCircuitColumns() error {
-	if DB == nil || !DB.Migrator().HasTable(&BillingGroupRoute{}) {
+// removeLegacyTokenGroupRetryTimesColumn removes the API-key-specific retry
+// override that is no longer part of the token contract. AutoMigrate does not
+// drop columns removed from a model, so keep this cleanup explicit and
+// idempotent for existing databases.
+func removeLegacyTokenGroupRetryTimesColumn() error {
+	migrator := DB.Migrator()
+	if !migrator.HasTable(&Token{}) || !migrator.HasColumn(&Token{}, "group_retry_times") {
 		return nil
 	}
-	migrator := DB.Migrator()
-	for _, column := range []string{
-		"circuit_failure_threshold",
-		"circuit_window_seconds",
-		"circuit_cooldown_seconds",
-		"circuit_half_open_requests",
-	} {
-		if !migrator.HasColumn(&BillingGroupRoute{}, column) {
-			continue
-		}
-		if err := migrator.DropColumn(&BillingGroupRoute{}, column); err != nil {
-			return fmt.Errorf("remove legacy billing group circuit column %s: %w", column, err)
-		}
+	if err := DB.Exec("ALTER TABLE ? DROP COLUMN ?", clause.Table{Name: "tokens"}, clause.Column{Name: "group_retry_times"}).Error; err != nil {
+		return fmt.Errorf("remove legacy token group retry times column: %w", err)
 	}
 	return nil
 }

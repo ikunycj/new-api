@@ -116,10 +116,9 @@ func buildChannelPriorityCandidates(channels []*model.Channel, group string) []d
 				continue
 			}
 			entryByID[entry.ChannelId] = dynamicChannelCandidate{
-				routePriority:   entry.Priority,
-				routeOrder:      order,
-				routeWeight:     entry.Weight,
-				routeCostFactor: normalizeRouteCostFactor(entry.CostFactor),
+				routePriority: entry.Priority,
+				routeOrder:    order,
+				routeWeight:   entry.Weight,
 			}
 		}
 	}
@@ -134,7 +133,6 @@ func buildChannelPriorityCandidates(channels []*model.Channel, group string) []d
 			group:           group,
 			groupIndex:      0,
 			routeConfigured: configured,
-			routeCostFactor: 1,
 			routingStrategy: policy.RoutingStrategy,
 		}
 		if configured {
@@ -145,7 +143,6 @@ func buildChannelPriorityCandidates(channels []*model.Channel, group string) []d
 			candidate.routePriority = entry.routePriority
 			candidate.routeOrder = entry.routeOrder
 			candidate.routeWeight = entry.routeWeight
-			candidate.routeCostFactor = entry.routeCostFactor
 		}
 		candidates = append(candidates, candidate)
 	}

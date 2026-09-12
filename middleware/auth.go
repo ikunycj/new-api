@@ -218,18 +218,6 @@ func AdminAuth() func(c *gin.Context) {
 	}
 }
 
-// AdminSessionAuth authenticates browser subrequests that can forward the
-// login cookie but cannot attach the dashboard-only New-Api-User header.
-func AdminSessionAuth() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		authHelper(c, authOptions{
-			minRole:          common.RoleAdminUser,
-			allowAccessToken: false,
-			requireUserID:    false,
-		})
-	}
-}
-
 func RootAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelper(c, authOptions{
@@ -535,21 +523,6 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	}
 	groupCandidates = routableTokenGroupCandidates(groupCandidates)
 	common.SetContextKey(c, constant.ContextKeyTokenGroupCandidates, groupCandidates)
-	groupRetryTimes, err := token.GetGroupRetryTimes()
-	if err != nil {
-		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
-		return err
-	}
-	concreteGroups := groupCandidates
-	if len(concreteGroups) == 0 && token.Group != "" && token.Group != "auto" {
-		concreteGroups = []string{token.Group}
-	}
-	groupRetryTimes, err = service.NormalizeTokenGroupRetryTimes(concreteGroups, groupRetryTimes)
-	if err != nil {
-		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
-		return err
-	}
-	common.SetContextKey(c, constant.ContextKeyTokenGroupRetryTimes, groupRetryTimes)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
 	if len(parts) > 1 {
 		if model.IsAdmin(token.UserId) {

@@ -41,10 +41,6 @@ export const apiKeySchema = z.object({
   accessed_time: z.number(),
   group: z.string().nullish().default(''),
   group_candidates: z.array(z.string()).optional().default([]),
-  group_retry_times: z
-    .record(z.string(), z.number().int().min(0).max(100))
-    .optional()
-    .default({}),
   cross_group_retry: z
     .preprocess((v) => {
       if (v === 1) return true
@@ -104,7 +100,6 @@ export interface ApiKeyFormData {
   allow_ips: string
   group: string
   group_candidates?: string[]
-  group_retry_times: Record<string, number>
   cross_group_retry: boolean
 }
 

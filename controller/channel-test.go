@@ -567,6 +567,7 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 	consumedTime := float64(milliseconds) / 1000.0
 	other := buildTestLogOther(c, info, priceData, usage, tieredResult)
 	cacheInputTokens, cacheStatsAvailable := service.CacheStatsInputTokens(info, usage)
+	ttftMs := testTTFTMilliseconds(info)
 	model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
 		ChannelId:           channel.Id,
 		PromptTokens:        usage.PromptTokens,
@@ -584,12 +585,13 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 		Group:               info.UsingGroup,
 		Other:               other,
 	})
+	model.UpdateCachedChannelTestTTFT(channel.Id, float64(ttftMs))
 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
 	return testResult{
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
-		ttftMs:      testTTFTMilliseconds(info),
+		ttftMs:      ttftMs,
 	}
 }
 

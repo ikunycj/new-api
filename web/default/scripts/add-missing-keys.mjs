@@ -5,6 +5,9 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    '一直重连，等待网络': 'Constantly reconnecting, waiting for network',
+    '用户网络故障': 'User network failure',
+    '检查网络是否连通': 'Check whether the network is connected',
     'Authentication email templates': 'Authentication email templates',
     'Available placeholders': 'Available placeholders',
     'Verification email subject': 'Verification email subject',
@@ -1533,6 +1536,9 @@ const errorSelfCheckTranslations = {
       '多重试，或者避开使用高峰',
     'If the problem persists, click About above and contact the administrator.':
       '如果长时间不行，点击上方“关于”，联系管理员询问',
+    '一直重连，等待网络': '一直重连，等待网络',
+    '用户网络故障': '用户网络故障',
+    '检查网络是否连通': '检查网络是否连通',
     'Search error keywords...': '搜索错误关键词...',
     'Search error keywords': '搜索错误关键词',
     'No matching errors found.': '未找到匹配的错误。',
@@ -1584,6 +1590,9 @@ const errorSelfCheckTranslations = {
       '多重試幾次，或避開使用高峰時段',
     'If the problem persists, click About above and contact the administrator.':
       '如果長時間無法恢復，請點擊上方「關於」並聯絡管理員詢問',
+    '一直重连，等待网络': '一直重新連線，等待網路',
+    '用户网络故障': '使用者網路故障',
+    '检查网络是否连通': '檢查網路是否連通',
     'Search error keywords...': '搜尋錯誤關鍵字...',
     'Search error keywords': '搜尋錯誤關鍵字',
     'No matching errors found.': '找不到符合的錯誤。',
@@ -1635,6 +1644,9 @@ const errorSelfCheckTranslations = {
       'Réessayez plusieurs fois ou évitez les heures de pointe.',
     'If the problem persists, click About above and contact the administrator.':
       'Si le problème persiste, cliquez sur « À propos » ci-dessus et contactez l’administrateur.',
+    '一直重连，等待网络': 'Reconnexion continue, en attente du réseau',
+    '用户网络故障': 'Défaillance du réseau de l’utilisateur',
+    '检查网络是否连通': 'Vérifiez que le réseau est accessible',
     'Search error keywords...': 'Rechercher des mots-clés d’erreur...',
     'Search error keywords': 'Rechercher des mots-clés d’erreur',
     'No matching errors found.': 'Aucune erreur correspondante trouvée.',
@@ -1686,6 +1698,9 @@ const errorSelfCheckTranslations = {
       '何度か再試行するか、混雑する時間帯を避けてください。',
     'If the problem persists, click About above and contact the administrator.':
       '長時間解消しない場合は、上部の「概要」をクリックして管理者にお問い合わせください。',
+    '一直重连，等待网络': '再接続を繰り返しています。ネットワークを待機中',
+    '用户网络故障': 'ユーザーのネットワーク障害',
+    '检查网络是否连通': 'ネットワーク接続を確認してください',
     'Search error keywords...': 'エラーキーワードを検索...',
     'Search error keywords': 'エラーキーワードを検索',
     'No matching errors found.': '一致するエラーが見つかりません。',
@@ -1737,6 +1752,9 @@ const errorSelfCheckTranslations = {
       'Повторите запрос несколько раз или избегайте часов пик.',
     'If the problem persists, click About above and contact the administrator.':
       'Если проблема долго не устраняется, нажмите «О программе» выше и обратитесь к администратору.',
+    '一直重连，等待网络': 'Постоянное переподключение, ожидание сети',
+    '用户网络故障': 'Сбой сети пользователя',
+    '检查网络是否连通': 'Проверьте подключение к сети',
     'Search error keywords...': 'Поиск по ключевым словам ошибок...',
     'Search error keywords': 'Поиск по ключевым словам ошибок',
     'No matching errors found.': 'Подходящие ошибки не найдены.',
@@ -1788,6 +1806,9 @@ const errorSelfCheckTranslations = {
       'Thử lại yêu cầu vài lần hoặc tránh giờ cao điểm.',
     'If the problem persists, click About above and contact the administrator.':
       'Nếu vấn đề kéo dài, hãy nhấp vào “Giới thiệu” ở phía trên và liên hệ quản trị viên để hỏi thêm.',
+    '一直重连，等待网络': 'Liên tục kết nối lại, đang chờ mạng',
+    '用户网络故障': 'Sự cố mạng của người dùng',
+    '检查网络是否连通': 'Kiểm tra kết nối mạng',
     'Search error keywords...': 'Tìm kiếm từ khóa lỗi...',
     'Search error keywords': 'Tìm kiếm từ khóa lỗi',
     'No matching errors found.': 'Không tìm thấy lỗi phù hợp.',

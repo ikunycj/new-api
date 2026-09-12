@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -43,10 +42,8 @@ type RetryParam struct {
 	excludedChannels   map[int]struct{}
 	excludedProviders  map[int]struct{}
 	currentChannelID   int
-	startedAt          time.Time
 	runtimePolicy      *model.RuntimeRoutingPolicy
 	runtimePolicyGroup string
-	routeChannels      []model.BillingGroupChannel
 	routeConfigured    bool
 	groupPolicies      map[string]model.RuntimeRoutingPolicy
 	groupRoutes        map[string][]model.BillingGroupChannel
@@ -65,7 +62,6 @@ type dynamicChannelCandidate struct {
 	routePriority   int
 	routeOrder      int
 	routeWeight     int
-	routeCostFactor float64
 	score           float64
 	selectionWeight float64
 	routingStrategy ratio_setting.PricingGroupRoutingStrategy
@@ -322,8 +318,9 @@ func (p *RetryParam) MarkAttempted() {
 	}
 }
 
-// RegisterSelectedChannel records the effective attempt budget before an
-// upstream request starts. A route entry can narrow the channel's own budget.
+// RegisterSelectedChannel records the channel's own upstream attempt budget
+// before an upstream request starts. Route membership controls eligibility and
+// ranking only; retry count comes from the channel setting.
 func (p *RetryParam) RegisterSelectedChannel(channel *model.Channel, group string) {
 	if p == nil || channel == nil || channel.Id <= 0 {
 		return
@@ -339,13 +336,6 @@ func (p *RetryParam) RegisterSelectedChannel(channel *model.Channel, group strin
 		p.channelLimits = make(map[int]int)
 	}
 	limit := channel.GetUpstreamMaxRetries() + 1
-	if entries, configured := p.routeForGroup(group); configured {
-		for _, entry := range entries {
-			if entry.ChannelId == channel.Id && entry.MaxAttempts > 0 && entry.MaxAttempts < limit {
-				limit = entry.MaxAttempts
-			}
-		}
-	}
 	if limit < 1 {
 		limit = 1
 	}
@@ -428,9 +418,7 @@ func (p *RetryParam) HasChannelRetry(channelID int) bool {
 		limit = model.DefaultChannelUpstreamMaxRetries + 1
 	}
 	return p.attemptCounts[channelID] < limit &&
-		p.channelGroupHasBudget(channelID) &&
-		p.channelGroupWithinRoutingAttemptBudget(channelID) &&
-		p.withinRoutingBudget()
+		p.channelGroupHasBudget(channelID)
 }
 
 func (p *RetryParam) IsAutoRouting() bool { return p != nil && p.TokenGroup == "auto" }
@@ -458,30 +446,16 @@ func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
 		switch policy.Mode {
 		case ratio_setting.PricingGroupRetryModeFixed:
 			limit = policy.RetryTimes + 1
-		case ratio_setting.PricingGroupRetryModeActiveChannels:
-			activeChannels, err := p.activeRetryChannelCount(group)
+		case ratio_setting.PricingGroupRetryModeFollowChannels, ratio_setting.PricingGroupRetryModeActiveChannels:
+			followChannelBudget, err := p.followChannelRetryBudget(group)
 			if err != nil {
-				logger.LogError(p.Ctx, "failed to count active channels for retry budget: "+err.Error())
+				logger.LogError(p.Ctx, "failed to calculate follow-channel retry budget: "+err.Error())
 				limit = 1
 			} else {
-				limit = activeChannels + 1
+				limit = followChannelBudget
 			}
 		default:
 			limit = 1
-		}
-	}
-	if p.Ctx != nil {
-		if values, ok := common.GetContextKeyType[map[string]int](p.Ctx, constant.ContextKeyTokenGroupRetryTimes); ok {
-			if retryTimes, exists := values[group]; exists {
-				configured = true
-				tokenLimit := retryTimes + 1
-				if retryTimes < 0 || retryTimes > MaxTokenGroupRetryTimes {
-					tokenLimit = 1
-				}
-				if limit == 0 || tokenLimit < limit {
-					limit = tokenLimit
-				}
-			}
 		}
 	}
 	if !configured {
@@ -494,14 +468,12 @@ func (p *RetryParam) groupRetryLimit(group string) (int, bool) {
 	return limit, true
 }
 
-// activeRetryChannelCount returns the number of channels that could actually
-// receive a request right now. Retry budgets using "active channels" must not
-// count a channel with no usable credential, a full concurrency slot, a provider
-// excluded by the current failure, or a zero-weight route entry. Attempted
-// channels are intentionally not excluded here: the budget is
-// a group-wide upper bound, while candidate selection owns per-request
-// exclusions.
-func (p *RetryParam) activeRetryChannelCount(group string) (int, error) {
+// followChannelRetryBudget returns the total number of requests the currently
+// eligible channels can receive. Each channel contributes its first request
+// plus its configured upstream retries. The eligibility filters intentionally
+// match candidate selection, while already attempted channels remain counted
+// because this is a group-wide budget.
+func (p *RetryParam) followChannelRetryBudget(group string) (int, error) {
 	if p == nil {
 		return 0, nil
 	}
@@ -518,7 +490,7 @@ func (p *RetryParam) activeRetryChannelCount(group string) (int, error) {
 			}
 		}
 	}
-	count := 0
+	budget := 0
 	for _, channel := range channels {
 		if channel == nil || !channel.HasEnabledKey() || p.isProviderExcluded(channel.Type) {
 			continue
@@ -532,9 +504,13 @@ func (p *RetryParam) activeRetryChannelCount(group string) (int, error) {
 				continue
 			}
 		}
-		count++
+		channelBudget := channel.GetUpstreamMaxRetries() + 1
+		if channelBudget < 1 {
+			channelBudget = 1
+		}
+		budget += channelBudget
 	}
-	return count, nil
+	return budget, nil
 }
 
 func (p *RetryParam) groupHasBudget(group string) bool {
@@ -557,37 +533,21 @@ func (p *RetryParam) groupForChannel(channelID int) string {
 	return group
 }
 
-func (p *RetryParam) groupWithinRoutingAttemptBudget(group string) bool {
-	if p == nil {
-		return false
-	}
-	policy, _, configured := p.loadGroupPolicy(group)
-	return !configured || policy.MaxTotalAttempts <= 0 || p.groupAttemptCounts[group] < policy.MaxTotalAttempts
-}
-
-func (p *RetryParam) channelGroupWithinRoutingAttemptBudget(channelID int) bool {
-	if p == nil {
-		return false
-	}
-	return p.groupWithinRoutingAttemptBudget(p.groupForChannel(channelID))
-}
-
 func (p *RetryParam) HasNextRetry() bool {
-	if p == nil || !p.withinRoutingBudget() {
+	if p == nil {
 		return false
 	}
 	return len(p.availableCandidates(false)) > 0
 }
 
 func (p *RetryParam) AdvanceRetry() bool {
-	if p == nil || !p.withinRoutingBudget() {
+	if p == nil {
 		return false
 	}
 	// Keep the current channel contiguous until its configured budget is used.
 	if p.currentChannelID > 0 && !p.isExcluded(p.currentChannelID) &&
 		p.attemptCounts[p.currentChannelID] < p.channelLimits[p.currentChannelID] &&
-		p.channelGroupHasBudget(p.currentChannelID) &&
-		p.channelGroupWithinRoutingAttemptBudget(p.currentChannelID) {
+		p.channelGroupHasBudget(p.currentChannelID) {
 		p.IncreaseRetry()
 		return true
 	}
@@ -683,21 +643,16 @@ func (p *RetryParam) loadPolicy() model.RuntimeRoutingPolicy {
 		policy := model.DefaultRuntimeRoutingPolicy()
 		p.runtimePolicy = &policy
 		p.runtimePolicyGroup = ""
-		p.routeChannels = nil
 		p.routeConfigured = false
 		return policy
 	}
 	if p.runtimePolicy != nil && p.runtimePolicyGroup == group {
 		return *p.runtimePolicy
 	}
-	policy, entries, configured := p.loadGroupPolicy(group)
+	policy, _, configured := p.loadGroupPolicy(group)
 	p.runtimePolicy = &policy
 	p.runtimePolicyGroup = group
-	p.routeChannels = entries
 	p.routeConfigured = configured
-	if p.startedAt.IsZero() {
-		p.startedAt = time.Now()
-	}
 	return policy
 }
 
@@ -706,14 +661,6 @@ func (p *RetryParam) RuntimePolicy() model.RuntimeRoutingPolicy { return p.loadP
 func (p *RetryParam) RouteConfigured() bool {
 	p.loadPolicy()
 	return p.routeConfigured
-}
-
-func (p *RetryParam) routeForGroup(group string) ([]model.BillingGroupChannel, bool) {
-	if p == nil {
-		return nil, false
-	}
-	_, entries, configured := p.loadGroupPolicy(group)
-	return entries, configured
 }
 
 func (p *RetryParam) isExcluded(channelID int) bool {
@@ -749,8 +696,8 @@ func (p *RetryParam) isProviderExcluded(channelType int) bool {
 	return excluded
 }
 
-// HandleChannelFailure applies the error mapping action. retry_channel leaves
-// the candidate eligible; switching actions exclude it.
+// HandleChannelFailure applies the structured error action. retry_channel
+// leaves the candidate eligible; switching actions exclude it.
 func (p *RetryParam) HandleChannelFailure(channelID int, action string) {
 	if p == nil || channelID <= 0 {
 		return
@@ -759,27 +706,6 @@ func (p *RetryParam) HandleChannelFailure(channelID int, action string) {
 		return
 	}
 	p.ExcludeChannel(channelID)
-}
-
-func (p *RetryParam) withinRoutingBudget() bool {
-	if p == nil {
-		return false
-	}
-	policy := p.loadPolicy()
-	if p.startedAt.IsZero() {
-		p.startedAt = time.Now()
-	}
-	// Route attempt budgets belong to one pricing group. Cross-group routing
-	// checks them while building candidates so an exhausted group cannot block
-	// the next group.
-	group, err := p.currentGroup()
-	if !p.canCrossGroups() && err == nil && !p.groupWithinRoutingAttemptBudget(group) {
-		return false
-	}
-	if policy.TotalTimeoutMs > 0 && time.Since(p.startedAt) >= time.Duration(policy.TotalTimeoutMs)*time.Millisecond {
-		return false
-	}
-	return true
 }
 
 func (p *RetryParam) availableCandidates(commit ...bool) []dynamicChannelCandidate {
@@ -886,9 +812,6 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 		}
 		groupIndex := groupIndices[index]
 		policy, entries, configured := p.loadGroupPolicy(group)
-		if !p.groupWithinRoutingAttemptBudget(group) {
-			continue
-		}
 		channels, err := model.GetEligibleChannels(group, p.ModelName, p.RequestPath, p.excludedChannels)
 		if err != nil {
 			return nil, err
@@ -900,10 +823,9 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 					continue
 				}
 				entryByID[entry.ChannelId] = dynamicChannelCandidate{
-					routePriority:   entry.Priority,
-					routeOrder:      order,
-					routeWeight:     entry.Weight,
-					routeCostFactor: normalizeRouteCostFactor(entry.CostFactor),
+					routePriority: entry.Priority,
+					routeOrder:    order,
+					routeWeight:   entry.Weight,
 				}
 			}
 		}
@@ -929,7 +851,6 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 				group:           group,
 				groupIndex:      groupIndex,
 				routeConfigured: configured,
-				routeCostFactor: 1,
 				routingStrategy: policy.RoutingStrategy,
 			}
 			if configured {
@@ -940,7 +861,6 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 				candidate.routePriority = entry.routePriority
 				candidate.routeOrder = entry.routeOrder
 				candidate.routeWeight = entry.routeWeight
-				candidate.routeCostFactor = entry.routeCostFactor
 				// A zero route weight explicitly opts a channel out of normal
 				// traffic. A forced channel remains eligible so its hard layer can
 				// still provide an intentional emergency path.
@@ -1010,6 +930,7 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 	filtered := make([][]dynamicChannelCandidate, len(grouped))
 	globalMinPrice := math.Inf(1)
 	globalMinTTFT := math.Inf(1)
+	globalMinRecentTestTTFT := math.Inf(1)
 	for index, candidates := range grouped {
 		if len(candidates) == 0 {
 			continue
@@ -1030,6 +951,9 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 			if ttft := dynamicChannelTTFT(candidate.channel); ttft > 0 && ttft < globalMinTTFT {
 				globalMinTTFT = ttft
 			}
+			if ttft := dynamicChannelRecentTestTTFT(candidate.channel); ttft > 0 && ttft < globalMinRecentTestTTFT {
+				globalMinRecentTestTTFT = ttft
+			}
 		}
 	}
 
@@ -1044,7 +968,7 @@ func selectDynamicGroupIndex(p *RetryParam, grouped [][]dynamicChannelCandidate,
 		}
 		grouped[index] = candidates
 		strategy := routingStrategyForCandidates(candidates)
-		score := dynamicGroupScore(candidates, globalMinPrice, strategy, globalMinTTFT)
+		score := dynamicGroupScore(candidates, globalMinPrice, strategy, globalMinTTFT, globalMinRecentTestTTFT)
 		if math.IsInf(score, -1) || math.IsNaN(score) {
 			continue
 		}
@@ -1290,11 +1214,11 @@ func routingStrategyForCandidates(candidates []dynamicChannelCandidate) ratio_se
 }
 
 func normalizeRoutingStrategy(strategy ratio_setting.PricingGroupRoutingStrategy) ratio_setting.PricingGroupRoutingStrategy {
-	weightTotal := strategy.PriceWeight + strategy.AvailabilityWeight + strategy.LoadWeight + strategy.TTFTWeight
+	weightTotal := strategy.PriceWeight + strategy.AvailabilityWeight + strategy.LoadWeight + strategy.TTFTWeight + strategy.RecentTestTTFTWeight
 	// Strategy IDs are administrator-defined catalog keys. They are not a
 	// closed enum; only an empty ID or invalid weights should fall back.
 	if strings.TrimSpace(strategy.Strategy) == "" ||
-		strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 ||
+		strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 || strategy.RecentTestTTFTWeight < 0 ||
 		math.IsNaN(weightTotal) || math.IsInf(weightTotal, 0) || math.Abs(weightTotal-100) > 0.0001 {
 		return ratio_setting.DefaultPricingGroupRoutingStrategy()
 	}
@@ -1331,6 +1255,17 @@ func dynamicChannelTTFT(channel *model.Channel) float64 {
 	return ttft
 }
 
+func dynamicChannelRecentTestTTFT(channel *model.Channel) float64 {
+	if channel == nil {
+		return 0
+	}
+	ttft := channel.LastTestTTFTMs
+	if ttft <= 0 || math.IsNaN(ttft) || math.IsInf(ttft, 0) {
+		return 0
+	}
+	return ttft
+}
+
 func dynamicTTFTBaseline(candidates []dynamicChannelCandidate) float64 {
 	baseline := math.Inf(1)
 	for _, candidate := range candidates {
@@ -1345,6 +1280,25 @@ func dynamicTTFTBaseline(candidates []dynamicChannelCandidate) float64 {
 // A missing sample uses a neutral prior and never establishes the baseline.
 func dynamicTTFTScore(channel *model.Channel, baseline float64) float64 {
 	ttft := dynamicChannelTTFT(channel)
+	if ttft <= 0 || baseline <= 0 || math.IsNaN(baseline) || math.IsInf(baseline, 0) {
+		return dynamicTTFTPrior
+	}
+	score := baseline / ttft
+	return math.Min(1, math.Max(0, score))
+}
+
+func dynamicRecentTestTTFTBaseline(candidates []dynamicChannelCandidate) float64 {
+	baseline := math.Inf(1)
+	for _, candidate := range candidates {
+		if ttft := dynamicChannelRecentTestTTFT(candidate.channel); ttft > 0 && ttft < baseline {
+			baseline = ttft
+		}
+	}
+	return baseline
+}
+
+func dynamicRecentTestTTFTScore(channel *model.Channel, baseline float64) float64 {
+	ttft := dynamicChannelRecentTestTTFT(channel)
 	if ttft <= 0 || baseline <= 0 || math.IsNaN(baseline) || math.IsInf(baseline, 0) {
 		return dynamicTTFTPrior
 	}
@@ -1382,8 +1336,12 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 	if len(ttftBaselines) > 0 {
 		ttftBaseline = ttftBaselines[0]
 	}
-	priceSum, availabilitySum, ttftSum, weightSum := 0.0, 0.0, 0.0, 0.0
+	priceSum, availabilitySum, ttftSum, recentTestTTFTSum, weightSum := 0.0, 0.0, 0.0, 0.0, 0.0
+	recentTestTTFTBaseline := dynamicRecentTestTTFTBaseline(candidates)
 	totalCapacity, totalCurrent := 0.0, 0.0
+	if len(ttftBaselines) > 1 {
+		recentTestTTFTBaseline = ttftBaselines[1]
+	}
 	for _, candidate := range candidates {
 		if candidate.channel == nil {
 			continue
@@ -1402,6 +1360,7 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 		priceSum += price * weight
 		availabilitySum += availability * weight
 		ttftSum += dynamicTTFTScore(candidate.channel, ttftBaseline) * weight
+		recentTestTTFTSum += dynamicRecentTestTTFTScore(candidate.channel, recentTestTTFTBaseline) * weight
 		weightSum += weight
 
 		// At the group level, load represents aggregate remaining capacity.
@@ -1429,7 +1388,8 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 	return 100 * ((strategy.PriceWeight/100)*(priceSum/weightSum) +
 		(strategy.AvailabilityWeight/100)*(availabilitySum/weightSum) +
 		(strategy.LoadWeight/100)*loadScore +
-		(strategy.TTFTWeight/100)*(ttftSum/weightSum))
+		(strategy.TTFTWeight/100)*(ttftSum/weightSum) +
+		(strategy.RecentTestTTFTWeight/100)*(recentTestTTFTSum/weightSum))
 }
 
 func smoothWeightedCandidateIndex(p *RetryParam, candidates []dynamicChannelCandidate) int {
@@ -1504,10 +1464,11 @@ func annotateDynamicCandidateScores(candidates []dynamicChannelCandidate) {
 		groupCandidates := candidatesForIndices(candidates, indices)
 		strategy := routingStrategyForCandidates(groupCandidates)
 		minTTFT := dynamicTTFTBaseline(groupCandidates)
+		minRecentTestTTFT := dynamicRecentTestTTFTBaseline(groupCandidates)
 		maxScore := 0.0
 		for _, index := range indices {
 			candidate := &candidates[index]
-			candidate.score = dynamicCandidateScore(*candidate, minPrice, strategy, minTTFT)
+			candidate.score = dynamicCandidateScore(*candidate, minPrice, strategy, minTTFT, minRecentTestTTFT)
 			if candidate.score > maxScore {
 				maxScore = candidate.score
 			}
@@ -1543,13 +1504,18 @@ func dynamicCandidateScore(candidate dynamicChannelCandidate, minPrice float64, 
 	strategy = normalizeRoutingStrategy(strategy)
 	priceScore, availability, load := dynamicCandidateFeatures(candidate, minPrice)
 	ttftBaseline := dynamicTTFTBaseline([]dynamicChannelCandidate{candidate})
+	recentTestTTFTBaseline := dynamicRecentTestTTFTBaseline([]dynamicChannelCandidate{candidate})
 	if len(ttftBaselines) > 0 {
 		ttftBaseline = ttftBaselines[0]
+	}
+	if len(ttftBaselines) > 1 {
+		recentTestTTFTBaseline = ttftBaselines[1]
 	}
 	return 100 * ((strategy.PriceWeight/100)*priceScore +
 		(strategy.AvailabilityWeight/100)*availability +
 		(strategy.LoadWeight/100)*load +
-		(strategy.TTFTWeight/100)*dynamicTTFTScore(candidate.channel, ttftBaseline))
+		(strategy.TTFTWeight/100)*dynamicTTFTScore(candidate.channel, ttftBaseline) +
+		(strategy.RecentTestTTFTWeight/100)*dynamicRecentTestTTFTScore(candidate.channel, recentTestTTFTBaseline))
 }
 
 func dynamicCandidateUtilization(candidate dynamicChannelCandidate) float64 {
@@ -1747,18 +1713,11 @@ func weightedDynamicCandidateIndex(candidates []dynamicChannelCandidate, randomW
 }
 
 // channelPriceMultiplier is the only price feature used by dynamic priority.
-// Billing model prices, model mappings, currency conversion, and route cost
-// factors remain separate concerns and must not affect channel ordering.
+// Billing model prices, model mappings, and currency conversion remain
+// separate concerns and must not affect channel ordering.
 func channelPriceMultiplier(candidate dynamicChannelCandidate) float64 {
 	if candidate.channel == nil {
 		return math.Inf(1)
 	}
 	return candidate.channel.GetPriceMultiplier()
-}
-
-func normalizeRouteCostFactor(value float64) float64 {
-	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-		return 1
-	}
-	return value
 }

@@ -20,8 +20,11 @@ var defaultGroupRatio = map[string]float64{
 }
 
 const (
-	PricingGroupRetryModeFixed          = "fixed"
+	PricingGroupRetryModeFixed = "fixed"
+	// PricingGroupRetryModeActiveChannels is the legacy persisted value. It is
+	// accepted and normalized to follow_channels when configurations load.
 	PricingGroupRetryModeActiveChannels = "active_channels"
+	PricingGroupRetryModeFollowChannels = "follow_channels"
 	MaxPricingGroupRetryTimes           = 100
 	// The values below are the initial strategy IDs. They are not an enum:
 	// administrators may create arbitrary strategy IDs and names.
@@ -46,12 +49,13 @@ type PricingGroupRetryPolicy struct {
 // from JSON; the ID is the key in PricingGroupRoutingConfiguration.Strategies.
 // Weights are percentages and must add up to 100.
 type PricingGroupRoutingStrategy struct {
-	Strategy           string  `json:"-"`
-	Name               string  `json:"name"`
-	PriceWeight        float64 `json:"price_weight"`
-	AvailabilityWeight float64 `json:"availability_weight"`
-	LoadWeight         float64 `json:"load_weight"`
-	TTFTWeight         float64 `json:"ttft_weight"`
+	Strategy             string  `json:"-"`
+	Name                 string  `json:"name"`
+	PriceWeight          float64 `json:"price_weight"`
+	AvailabilityWeight   float64 `json:"availability_weight"`
+	LoadWeight           float64 `json:"load_weight"`
+	TTFTWeight           float64 `json:"ttft_weight"`
+	RecentTestTTFTWeight float64 `json:"recent_test_ttft_weight"`
 }
 
 // PricingGroupRoutingConfiguration stores the strategy catalog separately
@@ -64,11 +68,12 @@ type PricingGroupRoutingConfiguration struct {
 
 func DefaultPricingGroupRoutingStrategy() PricingGroupRoutingStrategy {
 	return PricingGroupRoutingStrategy{
-		Strategy:           PricingGroupRoutingStrategyBalanced,
-		PriceWeight:        40,
-		AvailabilityWeight: 40,
-		LoadWeight:         20,
-		TTFTWeight:         0,
+		Strategy:             PricingGroupRoutingStrategyBalanced,
+		PriceWeight:          40,
+		AvailabilityWeight:   40,
+		LoadWeight:           20,
+		TTFTWeight:           0,
+		RecentTestTTFTWeight: 0,
 	}
 }
 
@@ -77,10 +82,10 @@ func PricingGroupRoutingStrategyPreset(strategy string) PricingGroupRoutingStrat
 	switch strings.TrimSpace(strategy) {
 	case PricingGroupRoutingStrategyPriceFirst:
 		result.Strategy = PricingGroupRoutingStrategyPriceFirst
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight = 65, 20, 15, 0
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight = 65, 20, 15, 0, 0
 	case PricingGroupRoutingStrategyStable:
 		result.Strategy = PricingGroupRoutingStrategyStable
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight = 20, 60, 20, 0
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight = 20, 60, 20, 0, 0
 	}
 	return result
 }
@@ -497,7 +502,7 @@ func GetPricingGroupRetryPolicy(group string) (PricingGroupRetryPolicy, bool) {
 	if _, exists := snapshot.groupRatios[group]; !exists {
 		return PricingGroupRetryPolicy{}, false
 	}
-	return PricingGroupRetryPolicy{Mode: PricingGroupRetryModeActiveChannels}, true
+	return PricingGroupRetryPolicy{Mode: PricingGroupRetryModeFollowChannels}, true
 }
 
 func GetPricingGroupRetryPolicyCopy() map[string]PricingGroupRetryPolicy {
@@ -902,7 +907,7 @@ func normalizePricingGroupDisplayNames(raw map[string]string, ratios map[string]
 func defaultPricingGroupRetryPolicies(ratios map[string]float64) map[string]PricingGroupRetryPolicy {
 	result := make(map[string]PricingGroupRetryPolicy, len(ratios))
 	for group := range ratios {
-		result[group] = PricingGroupRetryPolicy{Mode: PricingGroupRetryModeActiveChannels}
+		result[group] = PricingGroupRetryPolicy{Mode: PricingGroupRetryModeFollowChannels}
 	}
 	return result
 }
@@ -936,8 +941,9 @@ func parsePricingGroupRetryPolicies(jsonStr string) (map[string]PricingGroupRetr
 			if policy.RetryTimes < 0 || policy.RetryTimes > MaxPricingGroupRetryTimes {
 				return nil, errors.New("分组 " + group + " 的固定重试次数必须在 0 到 100 之间")
 			}
-		case PricingGroupRetryModeActiveChannels:
+		case PricingGroupRetryModeFollowChannels, PricingGroupRetryModeActiveChannels:
 			policy.RetryTimes = 0
+			policy.Mode = PricingGroupRetryModeFollowChannels
 			policies[group] = policy
 		default:
 			return nil, errors.New("分组 " + group + " 的重试模式无效")
@@ -955,11 +961,12 @@ func ParsePricingGroupRoutingConfiguration(
 	groupRatios map[string]float64,
 ) (PricingGroupRoutingConfiguration, error) {
 	type rawRoutingStrategy struct {
-		Name               *string  `json:"name"`
-		PriceWeight        *float64 `json:"price_weight"`
-		AvailabilityWeight *float64 `json:"availability_weight"`
-		LoadWeight         *float64 `json:"load_weight"`
-		TTFTWeight         *float64 `json:"ttft_weight"`
+		Name                 *string  `json:"name"`
+		PriceWeight          *float64 `json:"price_weight"`
+		AvailabilityWeight   *float64 `json:"availability_weight"`
+		LoadWeight           *float64 `json:"load_weight"`
+		TTFTWeight           *float64 `json:"ttft_weight"`
+		RecentTestTTFTWeight *float64 `json:"recent_test_ttft_weight"`
 	}
 	type rawConfiguration struct {
 		Strategies    map[string]rawRoutingStrategy `json:"strategies"`
@@ -999,24 +1006,29 @@ func ParsePricingGroupRoutingConfiguration(
 		}
 		strategyNames[name] = strategyID
 		if definition.PriceWeight == nil || definition.AvailabilityWeight == nil || definition.LoadWeight == nil {
-			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 必须同时设置价格、可用性、负载和首Token延迟权重")
+			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 必须同时设置价格、可用性和负载权重")
 		}
 		ttftWeight := float64(0)
 		if definition.TTFTWeight != nil {
 			ttftWeight = *definition.TTFTWeight
 		}
-		strategy := PricingGroupRoutingStrategy{
-			Strategy:           strategyID,
-			Name:               name,
-			PriceWeight:        *definition.PriceWeight,
-			AvailabilityWeight: *definition.AvailabilityWeight,
-			LoadWeight:         *definition.LoadWeight,
-			TTFTWeight:         ttftWeight,
+		recentTestTTFTWeight := float64(0)
+		if definition.RecentTestTTFTWeight != nil {
+			recentTestTTFTWeight = *definition.RecentTestTTFTWeight
 		}
-		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 ||
-			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) || math.IsNaN(strategy.TTFTWeight) ||
-			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) || math.IsInf(strategy.TTFTWeight, 0) ||
-			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight+strategy.TTFTWeight-100) > 0.0001 {
+		strategy := PricingGroupRoutingStrategy{
+			Strategy:             strategyID,
+			Name:                 name,
+			PriceWeight:          *definition.PriceWeight,
+			AvailabilityWeight:   *definition.AvailabilityWeight,
+			LoadWeight:           *definition.LoadWeight,
+			TTFTWeight:           ttftWeight,
+			RecentTestTTFTWeight: recentTestTTFTWeight,
+		}
+		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 || strategy.RecentTestTTFTWeight < 0 ||
+			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) || math.IsNaN(strategy.TTFTWeight) || math.IsNaN(strategy.RecentTestTTFTWeight) ||
+			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) || math.IsInf(strategy.TTFTWeight, 0) || math.IsInf(strategy.RecentTestTTFTWeight, 0) ||
+			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight+strategy.TTFTWeight+strategy.RecentTestTTFTWeight-100) > 0.0001 {
 			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 的调度权重总和必须为 100")
 		}
 		strategies[strategyID] = strategy

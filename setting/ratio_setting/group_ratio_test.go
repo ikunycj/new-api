@@ -42,7 +42,7 @@ func TestPricingGroupRetryPolicyValidationAndNormalization(t *testing.T) {
 	assert.Equal(t, PricingGroupRetryPolicy{Mode: PricingGroupRetryModeFixed, RetryTimes: 5}, alpha)
 	beta, exists := GetPricingGroupRetryPolicy("beta")
 	require.True(t, exists)
-	assert.Equal(t, PricingGroupRetryPolicy{Mode: PricingGroupRetryModeActiveChannels, RetryTimes: 0}, beta)
+	assert.Equal(t, PricingGroupRetryPolicy{Mode: PricingGroupRetryModeFollowChannels, RetryTimes: 0}, beta)
 
 	for _, invalid := range []string{
 		`{"alpha":{"mode":"fixed","retry_times":-1}}`,
@@ -51,6 +51,24 @@ func TestPricingGroupRetryPolicyValidationAndNormalization(t *testing.T) {
 	} {
 		require.Error(t, UpdatePricingGroupRetryPolicyByJSONString(invalid), invalid)
 	}
+}
+
+func TestPricingGroupRetryPolicyNormalizesLegacyActiveChannelsMode(t *testing.T) {
+	previousRatios := GroupRatio2JSONString()
+	previousPolicies := PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, UpdateGroupRatioByJSONString(`{"alpha":1}`))
+	require.NoError(t, UpdatePricingGroupRetryPolicyByJSONString(
+		`{"alpha":{"mode":"active_channels","retry_times":9}}`,
+	))
+
+	policy, exists := GetPricingGroupRetryPolicy("alpha")
+	require.True(t, exists)
+	assert.Equal(t, PricingGroupRetryModeFollowChannels, policy.Mode)
+	assert.Zero(t, policy.RetryTimes)
 }
 
 func TestPricingGroupRemarkRoundTripAndValidation(t *testing.T) {
@@ -125,7 +143,7 @@ func TestParsePricingGroupConfigurationRequiresMatchingGroups(t *testing.T) {
 	assert.Equal(t, []string{"beta", "alpha"}, configuration.GroupOrder)
 	assert.Equal(t, map[string]bool{"alpha": true, "beta": false}, configuration.GroupEnabled)
 	assert.Equal(t, PricingGroupRetryPolicy{
-		Mode:       PricingGroupRetryModeActiveChannels,
+		Mode:       PricingGroupRetryModeFollowChannels,
 		RetryTimes: 0,
 	}, configuration.RetryPolicies["beta"])
 
@@ -210,7 +228,7 @@ func TestParsePersistedPricingGroupConfigurationBuildsCompleteSnapshot(t *testin
 	assert.Equal(t, map[string]bool{"alpha": true, "beta": true}, configuration.GroupEnabled)
 	assert.Equal(t, map[string]PricingGroupRetryPolicy{
 		"alpha": {Mode: PricingGroupRetryModeFixed, RetryTimes: 4},
-		"beta":  {Mode: PricingGroupRetryModeActiveChannels},
+		"beta":  {Mode: PricingGroupRetryModeFollowChannels},
 	}, configuration.RetryPolicies)
 }
 
@@ -238,7 +256,7 @@ func TestPricingGroupRetryPolicyDefaultsToActiveChannels(t *testing.T) {
 	policy, exists := GetPricingGroupRetryPolicy("alpha")
 	require.True(t, exists)
 	assert.Equal(t, PricingGroupRetryPolicy{
-		Mode: PricingGroupRetryModeActiveChannels,
+		Mode: PricingGroupRetryModeFollowChannels,
 	}, policy)
 
 	_, exists = GetPricingGroupRetryPolicy("unknown")
@@ -300,11 +318,12 @@ func TestPricingGroupRoutingConfigurationCRUDValidation(t *testing.T) {
 
 func TestPricingGroupRoutingConfigurationSupportsTTFTWeight(t *testing.T) {
 	configuration, err := ParsePricingGroupRoutingConfiguration(`{
-		"strategies":{"latency":{"name":"低延迟","price_weight":20,"availability_weight":20,"load_weight":10,"ttft_weight":50}},
+		"strategies":{"latency":{"name":"低延迟","price_weight":20,"availability_weight":20,"load_weight":10,"ttft_weight":25,"recent_test_ttft_weight":25}},
 		"group_bindings":{"alpha":"latency"}
 	}`, map[string]float64{"alpha": 1})
 	require.NoError(t, err)
-	assert.Equal(t, float64(50), configuration.Strategies["latency"].TTFTWeight)
+	assert.Equal(t, float64(25), configuration.Strategies["latency"].TTFTWeight)
+	assert.Equal(t, float64(25), configuration.Strategies["latency"].RecentTestTTFTWeight)
 
 	// Existing persisted configurations omit ttft_weight and retain their
 	// original three-weight total.
@@ -314,9 +333,16 @@ func TestPricingGroupRoutingConfigurationSupportsTTFTWeight(t *testing.T) {
 	}`, map[string]float64{"alpha": 1})
 	require.NoError(t, err)
 	assert.Zero(t, legacy.Strategies["legacy"].TTFTWeight)
+	assert.Zero(t, legacy.Strategies["legacy"].RecentTestTTFTWeight)
 
 	_, err = ParsePricingGroupRoutingConfiguration(`{
 		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"ttft_weight":10}},
+		"group_bindings":{"alpha":"invalid"}
+	}`, map[string]float64{"alpha": 1})
+	require.Error(t, err)
+
+	_, err = ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"recent_test_ttft_weight":-1}},
 		"group_bindings":{"alpha":"invalid"}
 	}`, map[string]float64{"alpha": 1})
 	require.Error(t, err)

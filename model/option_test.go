@@ -124,7 +124,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 	var persisted map[string]ratio_setting.PricingGroupRetryPolicy
 	require.NoError(t, common.UnmarshalJsonStr(retryPolicyValue, &persisted))
 	assert.Equal(t, ratio_setting.PricingGroupRetryPolicy{
-		Mode:       ratio_setting.PricingGroupRetryModeActiveChannels,
+		Mode:       ratio_setting.PricingGroupRetryModeFollowChannels,
 		RetryTimes: 0,
 	}, persisted["beta"])
 }
@@ -166,19 +166,31 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 		`["alpha"]`,
 		`{"alpha":{"mode":"active_channels","retry_times":0}}`,
 		`{
-			"strategies":{"enterprise":{"name":"企业策略","price_weight":65,"availability_weight":20,"load_weight":15}},
+			"strategies":{"enterprise":{"name":"企业策略","price_weight":45,"availability_weight":20,"load_weight":10,"ttft_weight":5,"recent_test_ttft_weight":20}},
 			"group_bindings":{"alpha":"enterprise"}
 		}`,
 	))
 	strategy, exists := ratio_setting.GetPricingGroupRoutingStrategy("alpha")
 	require.True(t, exists)
 	assert.Equal(t, "enterprise", strategy.Strategy)
-	assert.Equal(t, float64(65), strategy.PriceWeight)
+	assert.Equal(t, float64(45), strategy.PriceWeight)
+	assert.Equal(t, float64(20), strategy.AvailabilityWeight)
+	assert.Equal(t, float64(10), strategy.LoadWeight)
+	assert.Equal(t, float64(5), strategy.TTFTWeight)
+	assert.Equal(t, float64(20), strategy.RecentTestTTFTWeight)
 
 	var stored Option
 	require.NoError(t, DB.Where(commonKeyCol+" = ?", "PricingGroupRoutingStrategy").First(&stored).Error)
-	assert.Contains(t, stored.Value, "enterprise")
-	assert.Contains(t, stored.Value, "group_bindings")
+	var persisted ratio_setting.PricingGroupRoutingConfiguration
+	require.NoError(t, common.UnmarshalJsonStr(stored.Value, &persisted))
+	persistedStrategy, exists := persisted.Strategies["enterprise"]
+	require.True(t, exists)
+	assert.Equal(t, float64(45), persistedStrategy.PriceWeight)
+	assert.Equal(t, float64(20), persistedStrategy.AvailabilityWeight)
+	assert.Equal(t, float64(10), persistedStrategy.LoadWeight)
+	assert.Equal(t, float64(5), persistedStrategy.TTFTWeight)
+	assert.Equal(t, float64(20), persistedStrategy.RecentTestTTFTWeight)
+	assert.Equal(t, "enterprise", persisted.GroupBindings["alpha"])
 }
 
 func TestUpdatePricingGroupConfigurationPersistsRemarks(t *testing.T) {
@@ -217,7 +229,7 @@ func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {
 	policy, exists := ratio_setting.GetPricingGroupRetryPolicy("beta")
 	require.True(t, exists)
 	assert.Equal(t, ratio_setting.PricingGroupRetryPolicy{
-		Mode: ratio_setting.PricingGroupRetryModeActiveChannels,
+		Mode: ratio_setting.PricingGroupRetryModeFollowChannels,
 	}, policy)
 
 	common.OptionMapRWMutex.RLock()

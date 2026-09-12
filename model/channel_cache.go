@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -24,12 +25,31 @@ var channelsIDM map[int]*Channel                     // all channels include dis
 var channel2advancedCustomConfig map[int]*dto.AdvancedCustomConfig
 var channelSyncLock sync.RWMutex
 
+// Channel-test TTFT is published independently from the persisted channel
+// snapshot. Serializing full refreshes keeps an older, slower refresh from
+// replacing a newer snapshot, while the per-channel version protects a
+// just-completed test from being overwritten by a log query that started
+// before that test finished.
+var channelCacheRefreshLock sync.Mutex
+var channelTestTTFTVersions = make(map[int]uint64)
+
 func InitChannelCache() {
+	channelCacheRefreshLock.Lock()
+	defer channelCacheRefreshLock.Unlock()
+
 	InitChannelRoutingCache()
 	if !common.MemoryCacheEnabled {
 		InvalidatePricingCache()
 		return
 	}
+
+	channelSyncLock.RLock()
+	refreshTTFTVersions := make(map[int]uint64, len(channelTestTTFTVersions))
+	for channelID, version := range channelTestTTFTVersions {
+		refreshTTFTVersions[channelID] = version
+	}
+	channelSyncLock.RUnlock()
+
 	newChannelId2channel := make(map[int]*Channel)
 	newChannel2advancedCustomConfig := make(map[int]*dto.AdvancedCustomConfig)
 	var channels []*Channel
@@ -93,6 +113,21 @@ func InitChannelCache() {
 	group2model2channels = newGroup2model2channels
 	//channelsIDM = newChannelId2channel
 	for i, channel := range newChannelId2channel {
+		// LastTestTTFTMs is a runtime-only value. If the log query did not
+		// return a usable sample (for example, consume logging is disabled or
+		// a test completed concurrently with this refresh), retain the latest
+		// value already published in the process instead of briefly resetting
+		// the scheduler's metric to zero.
+		if oldChannel, ok := channelsIDM[i]; ok && oldChannel != nil {
+			// If a test completed after this refresh began, the in-memory value
+			// is newer than the query snapshot and must win even when the query
+			// returned a positive (but stale) sample.
+			if channelTestTTFTVersions[i] != refreshTTFTVersions[i] {
+				channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
+			} else if channel.LastTestTTFTMs <= 0 && oldChannel.LastTestTTFTMs > 0 {
+				channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
+			}
+		}
 		if channel.ChannelInfo.IsMultiKey {
 			channel.Keys = channel.GetKeys()
 			if channel.ChannelInfo.MultiKeyMode == constant.MultiKeyModePolling {
@@ -107,6 +142,11 @@ func InitChannelCache() {
 	}
 	channelsIDM = newChannelId2channel
 	channel2advancedCustomConfig = newChannel2advancedCustomConfig
+	for channelID := range channelTestTTFTVersions {
+		if _, ok := newChannelId2channel[channelID]; !ok {
+			delete(channelTestTTFTVersions, channelID)
+		}
+	}
 	channelSyncLock.Unlock()
 	// Lock ordering: InvalidatePricingCache acquires updatePricingLock, and
 	// GetPricing (holding updatePricingLock) nests channelSyncLock.RLock via
@@ -251,6 +291,39 @@ func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) 
 	} else {
 		common.SysLog("failed to load channel TTFT metrics while syncing cache: " + err.Error())
 	}
+	if ttfts, err := GetLatestChannelTestTTFTs(channelIDs); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.LastTestTTFTMs = ttfts[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load latest channel test TTFTs while syncing cache: " + err.Error())
+	}
+}
+
+// UpdateCachedChannelTestTTFT publishes a newly completed channel-test TTFT
+// to the in-memory channel cache. Test TTFT is a runtime metric rather than a
+// persisted channel field, so replacing the cached model would risk losing
+// concurrent runtime state; update only this metric instead.
+func UpdateCachedChannelTestTTFT(channelID int, ttftMs float64) {
+	if !common.MemoryCacheEnabled || channelID <= 0 || ttftMs <= 0 || math.IsNaN(ttftMs) || math.IsInf(ttftMs, 0) {
+		return
+	}
+
+	channelSyncLock.Lock()
+	defer channelSyncLock.Unlock()
+	cached, ok := channelsIDM[channelID]
+	if !ok || cached == nil {
+		return
+	}
+	updated := *cached
+	updated.LastTestTTFTMs = ttftMs
+	channelsIDM[channelID] = &updated
+	if channelTestTTFTVersions == nil {
+		channelTestTTFTVersions = make(map[int]uint64)
+	}
+	channelTestTTFTVersions[channelID]++
 }
 
 // GetRandomSatisfiedChannelExcluding selects a weighted channel while
@@ -289,162 +362,6 @@ func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, r
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
-}
-
-// GetConfiguredRouteChannel selects only from the channels configured for a
-// billing group. This legacy helper keeps the configured lower-is-earlier
-// route ordering; the request selector applies the dynamic strategy before
-// using route order as a tie-breaker.
-func GetConfiguredRouteChannel(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}) (*Channel, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	if !common.MemoryCacheEnabled {
-		channelIDs := make([]int, 0, len(entries))
-		entryByChannel := make(map[int]BillingGroupChannel, len(entries))
-		for _, entry := range entries {
-			if !entry.Enabled {
-				continue
-			}
-			if _, skip := excluded[entry.ChannelId]; skip {
-				continue
-			}
-			channelIDs = append(channelIDs, entry.ChannelId)
-			entryByChannel[entry.ChannelId] = entry
-		}
-		if len(channelIDs) == 0 {
-			return nil, nil
-		}
-		var abilities []Ability
-		query := DB.Where(&Ability{Group: group, Model: model, Enabled: true}).Where("channel_id IN ?", channelIDs)
-		if err := query.Find(&abilities).Error; err != nil {
-			return nil, err
-		}
-		if len(abilities) == 0 {
-			normalizedModel := ratio_setting.FormatMatchingModelName(model)
-			if normalizedModel != model {
-				query = DB.Where(&Ability{Group: group, Model: normalizedModel, Enabled: true}).Where("channel_id IN ?", channelIDs)
-				if err := query.Find(&abilities).Error; err != nil {
-					return nil, err
-				}
-			}
-		}
-		abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
-		if len(abilities) == 0 {
-			return nil, nil
-		}
-		eligibleIDs := make([]int, 0, len(abilities))
-		for _, ability := range abilities {
-			eligibleIDs = append(eligibleIDs, ability.ChannelId)
-		}
-		var channels []Channel
-		if err := DB.Where("id IN ? AND status = ?", eligibleIDs, common.ChannelStatusEnabled).Find(&channels).Error; err != nil {
-			return nil, err
-		}
-		channelByID := make(map[int]*Channel, len(channels))
-		for i := range channels {
-			channelByID[channels[i].Id] = &channels[i]
-		}
-		bestPriority := 0
-		hasPriority := false
-		totalWeight := 0
-		candidates := make([]BillingGroupChannel, 0, len(channels))
-		for channelID := range channelByID {
-			entry := entryByChannel[channelID]
-			if !hasPriority || entry.Priority < bestPriority {
-				bestPriority = entry.Priority
-				hasPriority = true
-				candidates = candidates[:0]
-				totalWeight = 0
-			}
-			if entry.Priority != bestPriority {
-				continue
-			}
-			weight := entry.Weight
-			if weight <= 0 {
-				weight = 100
-			}
-			totalWeight += weight
-			candidates = append(candidates, entry)
-		}
-		if len(candidates) == 0 {
-			return nil, nil
-		}
-		selected := rand.Intn(totalWeight)
-		for _, entry := range candidates {
-			weight := entry.Weight
-			if weight <= 0 {
-				weight = 100
-			}
-			selected -= weight
-			if selected < 0 {
-				return channelByID[entry.ChannelId], nil
-			}
-		}
-		return channelByID[candidates[len(candidates)-1].ChannelId], nil
-	}
-
-	channelSyncLock.RLock()
-	defer channelSyncLock.RUnlock()
-	eligibleIDs := filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
-	if len(eligibleIDs) == 0 {
-		normalizedModel := ratio_setting.FormatMatchingModelName(model)
-		eligibleIDs = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
-	}
-	eligible := make(map[int]struct{}, len(eligibleIDs))
-	for _, channelID := range eligibleIDs {
-		eligible[channelID] = struct{}{}
-	}
-
-	bestPriority := 0
-	hasPriority := false
-	totalWeight := 0
-	candidates := make([]BillingGroupChannel, 0)
-	for _, entry := range entries {
-		if !entry.Enabled {
-			continue
-		}
-		if _, skip := excluded[entry.ChannelId]; skip {
-			continue
-		}
-		if _, ok := eligible[entry.ChannelId]; !ok {
-			continue
-		}
-		channel := channelsIDM[entry.ChannelId]
-		if channel == nil || channel.Status != common.ChannelStatusEnabled {
-			continue
-		}
-		if !hasPriority || entry.Priority < bestPriority {
-			bestPriority = entry.Priority
-			hasPriority = true
-			candidates = candidates[:0]
-			totalWeight = 0
-		}
-		if entry.Priority != bestPriority {
-			continue
-		}
-		weight := entry.Weight
-		if weight <= 0 {
-			weight = 100
-		}
-		totalWeight += weight
-		candidates = append(candidates, entry)
-	}
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-	selected := rand.Intn(totalWeight)
-	for _, entry := range candidates {
-		weight := entry.Weight
-		if weight <= 0 {
-			weight = 100
-		}
-		selected -= weight
-		if selected < 0 {
-			return channelsIDM[entry.ChannelId], nil
-		}
-	}
-	return channelsIDM[candidates[len(candidates)-1].ChannelId], nil
 }
 
 // HasSatisfiedChannelExcluding reports whether at least one eligible channel
@@ -554,6 +471,7 @@ func CacheUpdateChannel(channel *Channel) {
 		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
 		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
 		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
+		channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
 	}
 	channelsIDM[channel.Id] = channel
 	if channel2advancedCustomConfig == nil {
@@ -600,6 +518,7 @@ func SyncChannelCacheEntry(channel *Channel) {
 		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
 		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
 		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
+		channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		channel.Keys = channel.GetKeys()

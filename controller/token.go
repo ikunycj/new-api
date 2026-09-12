@@ -19,20 +19,18 @@ import (
 
 type tokenRequest struct {
 	model.Token
-	GroupCandidates *[]string       `json:"group_candidates"`
-	GroupRetryTimes *map[string]int `json:"group_retry_times"`
+	GroupCandidates *[]string `json:"group_candidates"`
 }
 
 type tokenResponse struct {
 	*model.Token
-	GroupCandidates     []string       `json:"group_candidates"`
-	GroupRetryTimes     map[string]int `json:"group_retry_times"`
-	DailyTokens         int64          `json:"daily_tokens"`
-	TotalTokens         int64          `json:"total_tokens"`
-	DailyQuota          int64          `json:"daily_quota"`
-	TotalQuota          int64          `json:"total_quota"`
-	CurrentConcurrency  int            `json:"current_concurrency"`
-	ConcurrencyDegraded bool           `json:"concurrency_degraded"`
+	GroupCandidates     []string `json:"group_candidates"`
+	DailyTokens         int64    `json:"daily_tokens"`
+	TotalTokens         int64    `json:"total_tokens"`
+	DailyQuota          int64    `json:"daily_quota"`
+	TotalQuota          int64    `json:"total_quota"`
+	CurrentConcurrency  int      `json:"current_concurrency"`
+	ConcurrencyDegraded bool     `json:"concurrency_degraded"`
 }
 
 func tokenConcreteGroups(token *model.Token) ([]string, error) {
@@ -63,20 +61,9 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 		common.SysLog("failed to decode token group candidates: " + err.Error())
 		groupCandidates = []string{}
 	}
-	groupRetryTimes, err := token.GetGroupRetryTimes()
-	if err != nil {
-		common.SysLog("failed to decode token group retry times: " + err.Error())
-		groupRetryTimes = nil
-	}
-	groupRetryTimes, err = service.NormalizeTokenGroupRetryTimes(groupCandidates, groupRetryTimes)
-	if err != nil {
-		common.SysLog("failed to normalize token group retry times: " + err.Error())
-		groupRetryTimes = map[string]int{}
-	}
 	return &tokenResponse{
 		Token:           &maskedToken,
 		GroupCandidates: groupCandidates,
-		GroupRetryTimes: groupRetryTimes,
 	}
 }
 
@@ -135,7 +122,7 @@ func getTokenUserGroup(c *gin.Context) (string, error) {
 	return model.GetUserGroup(c.GetInt("id"), false)
 }
 
-func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *[]string, retryTimes *map[string]int) error {
+func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *[]string) error {
 	var groups []string
 	if candidates != nil && len(*candidates) > 0 {
 		if err := service.ValidateTokenGroupCandidates(userGroup, *candidates); err != nil {
@@ -184,21 +171,7 @@ func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *
 		}
 	}
 
-	values := map[string]int{}
-	if retryTimes != nil {
-		values = *retryTimes
-	} else {
-		var err error
-		values, err = token.GetGroupRetryTimes()
-		if err != nil {
-			return err
-		}
-	}
-	normalized, err := service.NormalizeTokenGroupRetryTimes(groups, values)
-	if err != nil {
-		return err
-	}
-	return token.SetGroupRetryTimes(normalized)
+	return nil
 }
 
 func GetAllTokens(c *gin.Context) {
@@ -374,7 +347,7 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, fmt.Errorf("请选择至少一个模型计费分组"))
 		return
 	}
-	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates, request.GroupRetryTimes); err != nil {
+	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -412,7 +385,6 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		GroupCandidates:    token.GroupCandidates,
-		GroupRetryTimes:    token.GroupRetryTimes,
 		CrossGroupRetry:    token.CrossGroupRetry,
 	}
 	err = cleanToken.Insert()
@@ -493,13 +465,12 @@ func UpdateToken(c *gin.Context) {
 			selection.Group = token.Group
 		}
 		selection.CrossGroupRetry = token.CrossGroupRetry
-		if err := applyTokenGroupSelection(&selection, userGroup, request.GroupCandidates, request.GroupRetryTimes); err != nil {
+		if err := applyTokenGroupSelection(&selection, userGroup, request.GroupCandidates); err != nil {
 			common.ApiError(c, err)
 			return
 		}
 		cleanToken.Group = selection.Group
 		cleanToken.GroupCandidates = selection.GroupCandidates
-		cleanToken.GroupRetryTimes = selection.GroupRetryTimes
 		cleanToken.CrossGroupRetry = selection.CrossGroupRetry
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name

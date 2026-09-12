@@ -111,7 +111,7 @@ type GroupPricingRow = {
   strategyId: string
 }
 
-type PricingGroupRetryMode = 'fixed' | 'active_channels'
+type PricingGroupRetryMode = 'fixed' | 'follow_channels'
 
 type PricingGroupRetryPolicy = {
   mode: PricingGroupRetryMode
@@ -124,6 +124,7 @@ type PricingGroupRoutingStrategy = {
   availability_weight: number
   load_weight: number
   ttft_weight: number
+  recent_test_ttft_weight: number
 }
 
 type PricingGroupRoutingConfiguration = {
@@ -139,6 +140,7 @@ type StrategyDraft = {
   availabilityWeight: string
   loadWeight: string
   ttftWeight: string
+  recentTestTTFTWeight: string
 }
 
 type GroupPricingEditorState = {
@@ -155,16 +157,16 @@ const DEFAULT_GROUP_RETRY_TIMES = 3
 const MAX_GROUP_RETRY_TIMES = 100
 const RETRY_MODE_ITEMS = [
   { value: 'fixed', label: '固定次数' },
-  { value: 'active_channels', label: '活跃渠道数' },
+  { value: 'follow_channels', label: '跟随渠道' },
 ] as const
 const DEFAULT_ROUTING_STRATEGY_DEFINITIONS: Array<{
   id: string
   name: string
-  weights: [number, number, number, number]
+  weights: [number, number, number, number, number]
 }> = [
-  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0] },
-  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0] },
-  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0] },
+  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0, 0] },
+  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0, 0] },
+  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0, 0] },
 ]
 const STRATEGY_WEIGHT_EPSILON = 0.0001
 
@@ -265,7 +267,7 @@ function parsePricingGroupRetryPolicy(
   const result: Record<string, PricingGroupRetryPolicy> = {}
   for (const [group, policy] of Object.entries(parsed)) {
     const mode: PricingGroupRetryMode =
-      policy.mode === 'fixed' ? 'fixed' : 'active_channels'
+      policy.mode === 'fixed' ? 'fixed' : 'follow_channels'
     const retryTimes = Number(policy.retry_times)
     result[group] = {
       mode,
@@ -304,6 +306,7 @@ function parsePricingGroupRoutingConfiguration(
               availability_weight: definition.weights[1],
               load_weight: definition.weights[2],
               ttft_weight: definition.weights[3],
+              recent_test_ttft_weight: definition.weights[4],
             },
           ])
         ),
@@ -329,6 +332,8 @@ function parsePricingGroupRoutingConfiguration(
       load_weight: readWeight('load_weight'),
       // Older saved configurations predate TTFT routing and omit this field.
       ttft_weight: readWeight('ttft_weight') || 0,
+      // Older saved configurations predate recent-test TTFT routing.
+      recent_test_ttft_weight: readWeight('recent_test_ttft_weight') || 0,
     }
   }
 
@@ -353,6 +358,7 @@ function strategyDraftsFromConfiguration(
     availabilityWeight: String(strategy.availability_weight),
     loadWeight: String(strategy.load_weight),
     ttftWeight: String(strategy.ttft_weight),
+    recentTestTTFTWeight: String(strategy.recent_test_ttft_weight),
   }))
 }
 
@@ -393,7 +399,8 @@ function isValidStrategyDraft(strategy: StrategyDraft): boolean {
     !isValidStrategyWeight(strategy.priceWeight) ||
     !isValidStrategyWeight(strategy.availabilityWeight) ||
     !isValidStrategyWeight(strategy.loadWeight) ||
-    !isValidStrategyWeight(strategy.ttftWeight)
+    !isValidStrategyWeight(strategy.ttftWeight) ||
+    !isValidStrategyWeight(strategy.recentTestTTFTWeight)
   ) {
     return false
   }
@@ -401,7 +408,8 @@ function isValidStrategyDraft(strategy: StrategyDraft): boolean {
     Number(strategy.priceWeight) +
     Number(strategy.availabilityWeight) +
     Number(strategy.loadWeight) +
-    Number(strategy.ttftWeight)
+    Number(strategy.ttftWeight) +
+    Number(strategy.recentTestTTFTWeight)
   return Math.abs(total - 100) <= STRATEGY_WEIGHT_EPSILON
 }
 
@@ -412,7 +420,7 @@ function isValidGroupPricingRow(
   if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
   if (!strategyIds.has(row.strategyId)) return false
   if (
-    row.retryMode !== 'active_channels' &&
+    row.retryMode !== 'follow_channels' &&
     !isValidFixedRetryTimes(row.retryTimes)
   ) {
     return false
@@ -484,7 +492,7 @@ function buildGroupPricingRows(
 
   return orderedNames.map((name) => {
     const retryPolicy = retryPolicies[name] ?? {
-      mode: 'active_channels',
+      mode: 'follow_channels',
       retry_times: 0,
     }
     return {
@@ -525,6 +533,7 @@ function serializeGroupPricingState(
       availability_weight: Number(strategy.availabilityWeight),
       load_weight: Number(strategy.loadWeight),
       ttft_weight: Number(strategy.ttftWeight),
+      recent_test_ttft_weight: Number(strategy.recentTestTTFTWeight),
     }
   }
 
@@ -615,7 +624,7 @@ function sourceGroupPricingSignature(
   const retryPolicies: Record<string, PricingGroupRetryPolicy> = {}
   for (const name of names) {
     retryPolicies[name] = configuredPolicies[name] ?? {
-      mode: 'active_channels',
+      mode: 'follow_channels',
       retry_times: 0,
     }
   }
@@ -906,7 +915,7 @@ function GroupPricingTable({
           remark: '',
           enabled: true,
           ratio: '1',
-          retryMode: 'active_channels',
+          retryMode: 'follow_channels',
           retryTimes: '0',
           strategyId: currentStrategies[0]?.id ?? '',
         },
@@ -923,7 +932,8 @@ function GroupPricingTable({
         | 'priceWeight'
         | 'availabilityWeight'
         | 'loadWeight'
-        | 'ttftWeight',
+        | 'ttftWeight'
+        | 'recentTestTTFTWeight',
       value: string
     ) => {
       const nextStrategies = currentStrategies.map((strategy) =>
@@ -963,6 +973,7 @@ function GroupPricingTable({
         availabilityWeight: '40',
         loadWeight: '20',
         ttftWeight: '0',
+        recentTestTTFTWeight: '0',
       },
     ])
   }, [currentRows, currentStrategies, emitState])
@@ -1430,7 +1441,7 @@ function GroupPricingTable({
                 <div>
                   <div className='text-sm font-semibold'>策略设置</div>
                   <div className='text-muted-foreground text-xs'>
-                    策略独立于定价分组维护，四项权重总和必须为 100。
+                    策略独立于定价分组维护，五项权重总和必须为 100。
                   </div>
                 </div>
                 <Button
@@ -1447,7 +1458,7 @@ function GroupPricingTable({
                 {currentStrategies.map((strategy) => (
                   <div
                     key={strategy._id}
-                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(4,7rem)_2.5rem] md:items-end'
+                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(5,7rem)_2.5rem] md:items-end'
                   >
                     <div className='space-y-1'>
                       <Label className='text-xs'>名称</Label>
@@ -1471,7 +1482,8 @@ function GroupPricingTable({
                         ['价格', 'priceWeight'],
                         ['可用性', 'availabilityWeight'],
                         ['负载', 'loadWeight'],
-                        ['首Token延迟', 'ttftWeight'],
+                        ['昨日平均TTFT', 'ttftWeight'],
+                        ['最近测试TTFT', 'recentTestTTFTWeight'],
                       ] as const
                     ).map(([label, field]) => (
                       <div key={field} className='space-y-1'>
@@ -1503,10 +1515,10 @@ function GroupPricingTable({
                     >
                       <HugeiconsIcon icon={Delete02Icon} />
                     </Button>
-                    <div className='text-muted-foreground text-xs md:col-span-6'>
+                    <div className='text-muted-foreground text-xs md:col-span-7'>
                       当前比例：{strategy.priceWeight}% /{' '}
                       {strategy.availabilityWeight}% / {strategy.loadWeight}% /{' '}
-                      {strategy.ttftWeight}%
+                      {strategy.ttftWeight}% / {strategy.recentTestTTFTWeight}%
                     </div>
                   </div>
                 ))}
@@ -1836,8 +1848,8 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 }
               />
               <p className='text-muted-foreground text-xs'>
-                首次请求失败后允许再次尝试的次数；动态模式按本次请求可用的渠道数计算。API
-                Key 和路由配置可以进一步限制实际重试次数。
+                固定模式表示首次请求失败后允许再次尝试的次数；跟随渠道模式按当前可用渠道数与各渠道可重试次数之和计算。API
+                Key 不再单独覆盖分组重试预算。
               </p>
             </div>
             <div className='space-y-2'>
@@ -1889,7 +1901,7 @@ function RetryPolicyControl(props: RetryPolicyControlProps) {
         items={RETRY_MODE_ITEMS}
         value={props.mode}
         onValueChange={(value) => {
-          if (value === 'fixed' || value === 'active_channels') {
+          if (value === 'fixed' || value === 'follow_channels') {
             props.onModeChange(value)
           }
         }}
@@ -1900,7 +1912,7 @@ function RetryPolicyControl(props: RetryPolicyControlProps) {
         <SelectContent alignItemWithTrigger={false}>
           <SelectGroup>
             <SelectItem value='fixed'>固定次数</SelectItem>
-            <SelectItem value='active_channels'>活跃渠道数</SelectItem>
+            <SelectItem value='follow_channels'>跟随渠道</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

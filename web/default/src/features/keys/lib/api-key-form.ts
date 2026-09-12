@@ -24,7 +24,6 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import type { ApiKey, ApiKeyFormData } from '../types'
 
 export const MAX_GROUP_CANDIDATES = 16
-export const MAX_GROUP_RETRY_TIMES = 100
 
 // ============================================================================
 // Form Schema
@@ -56,10 +55,6 @@ export function getApiKeyFormSchema(t: TFunction) {
           (groups) => !groups.includes('auto'),
           t('Auto group cannot be selected directly')
         ),
-      group_retry_times: z.record(
-        z.string(),
-        z.number().int().min(0).max(MAX_GROUP_RETRY_TIMES)
-      ),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
@@ -95,7 +90,6 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   model_limits: [],
   allow_ips: '',
   group_candidates: [],
-  group_retry_times: {},
   cross_group_retry: false,
   tokenCount: 1,
 }
@@ -105,7 +99,6 @@ export function getApiKeyFormDefaultValues(): ApiKeyFormValues {
     ...API_KEY_FORM_DEFAULT_VALUES,
     model_limits: [],
     group_candidates: [],
-    group_retry_times: {},
   }
 }
 
@@ -126,12 +119,6 @@ export function transformFormDataToPayload(
     group = 'auto'
   }
 
-  const groupRetryTimes: Record<string, number> = {}
-  for (const group of groups) {
-    const retryTimes = data.group_retry_times[group]
-    if (retryTimes !== undefined) groupRetryTimes[group] = retryTimes
-  }
-
   return {
     name: data.name,
     remain_quota: data.unlimited_quota
@@ -146,7 +133,6 @@ export function transformFormDataToPayload(
     allow_ips: data.allow_ips || '',
     group,
     group_candidates: groups,
-    group_retry_times: groupRetryTimes,
     cross_group_retry: usesOrderedGroups,
   }
 }
@@ -167,12 +153,6 @@ export function transformApiKeyToFormDefaults(
     }
   }
 
-  const groupRetryTimes: Record<string, number> = {}
-  for (const group of groups) {
-    const retryTimes = apiKey.group_retry_times[group]
-    if (retryTimes !== undefined) groupRetryTimes[group] = retryTimes
-  }
-
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
@@ -188,7 +168,6 @@ export function transformApiKeyToFormDefaults(
       : [],
     allow_ips: apiKey.allow_ips || '',
     group_candidates: groups,
-    group_retry_times: groupRetryTimes,
     cross_group_retry: groups.length > 1,
     tokenCount: 1,
   }

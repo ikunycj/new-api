@@ -92,7 +92,6 @@ describe('API key management', () => {
 
     assert.ok(apiKey)
     assert.deepEqual(apiKey.group_candidates, [])
-    assert.deepEqual(apiKey.group_retry_times, {})
     assert.equal(apiKey.group, 'default')
     assert.equal(apiKey.cross_group_retry, false)
     assert.equal(apiKey.daily_tokens, 0)
@@ -128,7 +127,6 @@ describe('API key management', () => {
               accessed_time: 1,
               group: 'default',
               group_candidates: ['default'],
-              group_retry_times: {},
               cross_group_retry: false,
               model_limits_enabled: false,
               model_limits: '',

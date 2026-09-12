@@ -146,30 +146,21 @@ export function ApiKeysMutateDrawer({
     resolver: zodResolver(schema),
     defaultValues: getApiKeyFormDefaultValues(),
   })
-  const [invalidRetryGroups, setInvalidRetryGroups] = useState<Set<string>>(
-    () => new Set()
-  )
 
   // Load existing data when updating
   useEffect(() => {
     if (open && isUpdate && currentRow) {
-      setInvalidRetryGroups(new Set())
       void getApiKey(currentRow.id).then((result) => {
         if (result.success && result.data) {
           form.reset(transformApiKeyToFormDefaults(result.data, defaultGroup))
         }
       })
     } else if (open && !isUpdate) {
-      setInvalidRetryGroups(new Set())
       form.reset(getApiKeyFormDefaultValues())
     }
   }, [open, isUpdate, currentRow, form, defaultGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
-    if (invalidRetryGroups.size > 0) {
-      toast.error(t('Please fix the highlighted fields before saving'))
-      return
-    }
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
@@ -256,7 +247,6 @@ export function ApiKeysMutateDrawer({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('group_candidates')
-  const groupRetryTimes = form.watch('group_retry_times')
   const selectedModelLimits = form.watch('model_limits')
   const modelQueryGroups = useMemo(
     () => (selectedGroups.length > 0 ? selectedGroups : ['']),
@@ -290,33 +280,8 @@ export function ApiKeysMutateDrawer({
   const unlimitedQuota = form.watch('unlimited_quota')
 
   const handleGroupSelectionChange = (value: string[]) => {
-    const previous = form.getValues('group_retry_times')
-    const next: Record<string, number> = {}
-    for (const group of value) {
-      if (previous[group] !== undefined) next[group] = previous[group]
-    }
-    form.setValue('group_retry_times', next, {
-      shouldDirty: true,
-      shouldValidate: true,
-    })
     form.setValue('cross_group_retry', value.length > 1, {
       shouldDirty: true,
-    })
-    setInvalidRetryGroups((current) => {
-      const next = new Set<string>()
-      for (const group of current) {
-        if (value.includes(group)) next.add(group)
-      }
-      return next
-    })
-  }
-
-  const handleRetryTimesValidityChange = (group: string, isValid: boolean) => {
-    setInvalidRetryGroups((current) => {
-      const next = new Set(current)
-      if (isValid) next.delete(group)
-      else next.add(group)
-      return next
     })
   }
 
@@ -477,27 +442,12 @@ export function ApiKeysMutateDrawer({
                       <ApiKeyRoutingGroupsField
                         options={groups}
                         value={field.value}
-                        retryTimes={groupRetryTimes}
                         modelsByGroup={modelsByGroup}
                         isLoadingModels={isLoadingModels}
                         onValueChange={(value) => {
                           field.onChange(value)
                           handleGroupSelectionChange(value)
                         }}
-                        onRetryTimesChange={(group, value) => {
-                          const next = {
-                            ...form.getValues('group_retry_times'),
-                          }
-                          if (value === undefined) delete next[group]
-                          else next[group] = value
-                          form.setValue('group_retry_times', next, {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          })
-                        }}
-                        onRetryTimesValidityChange={
-                          handleRetryTimesValidityChange
-                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -506,7 +456,7 @@ export function ApiKeysMutateDrawer({
               />
               <FormDescription>
                 {t(
-                  'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.'
+                  'The first group is used first; retryable failures follow the order below.'
                 )}
               </FormDescription>
             </SideDrawerSection>
@@ -669,7 +619,7 @@ export function ApiKeysMutateDrawer({
           <Button
             type='button'
             onClick={form.handleSubmit(onSubmit, onInvalid)}
-            disabled={isSubmitting || invalidRetryGroups.size > 0}
+            disabled={isSubmitting}
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}

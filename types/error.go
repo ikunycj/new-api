@@ -137,7 +137,6 @@ type NewAPIError struct {
 	cause          *ErrorCause
 	channelID      int
 	channelName    string
-	classification *errorDefinition
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -268,19 +267,6 @@ func (e *NewAPIError) SetChannelLocation(channelID int, channelName string) {
 		e.channelID = channelID
 	}
 	e.channelName = strings.TrimSpace(channelName)
-}
-
-func (e *NewAPIError) SetClassification(stableCode int, category string, failureScope string, action string, retryable bool) {
-	if e == nil || stableCode < 100000 || stableCode > 999999 {
-		return
-	}
-	e.classification = &errorDefinition{
-		Code:         stableCode,
-		Category:     strings.TrimSpace(category),
-		FailureScope: strings.TrimSpace(failureScope),
-		Action:       strings.TrimSpace(action),
-	}
-	e.SetRetryable(retryable)
 }
 
 func (e *NewAPIError) StableCode() int {

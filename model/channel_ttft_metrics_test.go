@@ -48,6 +48,8 @@ func TestGetLatestChannelTestTTFTsIncludesManualAndAutomaticTests(t *testing.T) 
 	require.NoError(t, err)
 	automaticTTFT, err := common.Marshal(map[string]any{"frt": 120})
 	require.NoError(t, err)
+	userNamedTestTTFT, err := common.Marshal(map[string]any{"frt": 999})
+	require.NoError(t, err)
 	olderTTFT, err := common.Marshal(map[string]any{"frt": 90})
 	require.NoError(t, err)
 	invalidTTFT, err := common.Marshal(map[string]any{"frt": -1})
@@ -56,6 +58,9 @@ func TestGetLatestChannelTestTTFTsIncludesManualAndAutomaticTests(t *testing.T) 
 	require.NoError(t, LOG_DB.Create(&[]Log{
 		{ChannelId: 1001, Type: LogTypeConsume, TokenName: ChannelTestTokenName, CreatedAt: 100, Other: string(manualTTFT)},
 		{ChannelId: 1001, Type: LogTypeConsume, TokenName: ChannelProbeTokenName, CreatedAt: 200, Other: string(automaticTTFT)},
+		// A regular API key can use the same display name; it must not be
+		// mistaken for a channel-test log merely because its token name matches.
+		{ChannelId: 1001, TokenId: 1234, Type: LogTypeConsume, TokenName: ChannelTestTokenName, CreatedAt: 300, Other: string(userNamedTestTTFT)},
 		{ChannelId: 1001, Type: LogTypeConsume, TokenName: "普通请求", CreatedAt: 300, Other: string(invalidTTFT)},
 		{ChannelId: 1002, Type: LogTypeConsume, TokenName: ChannelTestTokenName, CreatedAt: 100, Other: string(olderTTFT)},
 		{ChannelId: 1002, Type: LogTypeConsume, TokenName: ChannelProbeTokenName, CreatedAt: 200, Other: string(invalidTTFT)},

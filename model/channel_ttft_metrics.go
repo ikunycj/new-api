@@ -31,6 +31,7 @@ func GetLatestChannelTestTTFTs(channelIDs []int) (map[int]float64, error) {
 		Select("channel_id, token_name, other").
 		Where("channel_id IN ?", channelIDs).
 		Where("type = ?", LogTypeConsume).
+		Where("token_id = ?", 0).
 		Where("token_name IN ?", []string{ChannelTestTokenName, ChannelProbeTokenName}).
 		Order("created_at DESC, id DESC").
 		Find(&logs).Error; err != nil {

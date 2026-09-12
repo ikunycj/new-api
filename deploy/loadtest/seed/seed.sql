@@ -108,51 +108,32 @@ ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   weight = EXCLUDED.weight;
 
 INSERT INTO billing_group_routes (
-  billing_group, name, enabled, max_total_attempts, total_timeout_ms,
+  billing_group, name, enabled,
   created_time, updated_time
 )
 VALUES (
-  'default', 'Default load-test route', true, 4, 10000,
+  'default', 'Default load-test route', true,
   extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
 )
 ON CONFLICT (billing_group) DO UPDATE SET
   name = EXCLUDED.name,
   enabled = EXCLUDED.enabled,
-  max_total_attempts = EXCLUDED.max_total_attempts,
-  total_timeout_ms = EXCLUDED.total_timeout_ms,
   updated_time = EXCLUDED.updated_time;
 
 DELETE FROM billing_group_channels
 WHERE billing_group_route_id = (SELECT id FROM billing_group_routes WHERE billing_group = 'default');
 
 INSERT INTO billing_group_channels (
-  billing_group_route_id, channel_id, priority, weight, max_attempts, enabled, cost_factor
+  billing_group_route_id, channel_id, priority, weight, enabled
 )
 SELECT
   (SELECT id FROM billing_group_routes WHERE billing_group = 'default'),
   id,
   CASE name WHEN 'Load Test Channel A' THEN 100 ELSE 90 END,
   100,
-  1,
-  true,
-  CASE name WHEN 'Load Test Channel A' THEN 0.2 ELSE 1.0 END
+  true
 FROM channels
 WHERE name IN ('Load Test Channel A', 'Load Test Channel B');
-
-INSERT INTO channel_error_mappings (
-  channel_id, channel_type, raw_code, status_code, stable_code,
-  category, failure_scope, action, retryable, enabled
-)
-VALUES
-  (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true)
-ON CONFLICT (channel_id, channel_type, raw_code, status_code) DO UPDATE SET
-  stable_code = EXCLUDED.stable_code,
-  category = EXCLUDED.category,
-  failure_scope = EXCLUDED.failure_scope,
-  action = EXCLUDED.action,
-  retryable = EXCLUDED.retryable,
-  enabled = EXCLUDED.enabled;
 
 COMMIT;
 

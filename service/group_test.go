@@ -104,22 +104,3 @@ func TestDisabledPricingGroupIsHiddenAndRejectedForTokens(t *testing.T) {
 	err := ValidateTokenGroupCandidates("default", []string{"vip"})
 	require.ErrorContains(t, err, "已关闭")
 }
-
-func TestNormalizeTokenGroupRetryTimes(t *testing.T) {
-	normalized, err := NormalizeTokenGroupRetryTimes(
-		[]string{"openai-low", "claude-low"},
-		map[string]int{"openai-low": 0, "unused": 7},
-	)
-	require.NoError(t, err)
-	assert.Equal(t, map[string]int{
-		"openai-low": 0,
-	}, normalized)
-
-	for _, value := range []int{-1, MaxTokenGroupRetryTimes + 1} {
-		_, err = NormalizeTokenGroupRetryTimes(
-			[]string{"openai-low"},
-			map[string]int{"openai-low": value},
-		)
-		require.Error(t, err)
-	}
-}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -29,19 +30,21 @@ func setupChannelRoute(t *testing.T) []model.Channel {
 		require.NoError(t, model.DB.Exec("DELETE FROM "+table).Error)
 	}
 	weight := uint(100)
+	channelRetries := 1
+	channelNoRetries := 0
 	channels := []model.Channel{
-		{Id: 92001, Name: "Claude Pro", Key: "pro", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Weight: &weight},
-		{Id: 92002, Name: "Claude Official", Key: "official", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Weight: &weight},
+		{Id: 92001, Name: "Claude Pro", Key: "pro", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Weight: &weight, UpstreamMaxRetries: &channelRetries},
+		{Id: 92002, Name: "Claude Official", Key: "official", Status: common.ChannelStatusEnabled, Models: "claude-test", Group: "claude", Weight: &weight, UpstreamMaxRetries: &channelNoRetries},
 	}
 	require.NoError(t, model.DB.Create(&channels).Error)
 	for _, channel := range channels {
 		require.NoError(t, model.DB.Create(&model.Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id, Enabled: true, Weight: weight}).Error)
 	}
-	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true, MaxTotalAttempts: 3, TotalTimeoutMs: 30000}
+	route := model.BillingGroupRoute{Id: 81, BillingGroup: "claude", Name: "Claude", Enabled: true}
 	require.NoError(t, model.DB.Create(&route).Error)
 	require.NoError(t, model.DB.Create(&[]model.BillingGroupChannel{
-		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 1, Weight: 100, MaxAttempts: 2, Enabled: true, CostFactor: 0.6},
-		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 2, Weight: 100, MaxAttempts: 1, Enabled: true, CostFactor: 1.1},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[0].Id, Priority: 1, Weight: 100, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: channels[1].Id, Priority: 2, Weight: 100, Enabled: true},
 	}).Error)
 	originalMemoryCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = true
@@ -219,7 +222,7 @@ func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	assert.Equal(t, "claude", thirdGroup)
 }
 
-func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
+func TestCrossGroupRetryUsesIndependentPricingGroupRetryBudgets(t *testing.T) {
 	channels := setupChannelRoute(t)
 	weight := uint(100)
 	economyChannel := model.Channel{
@@ -239,16 +242,11 @@ func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
 		Enabled:   true,
 		Weight:    weight,
 	}).Error)
-	require.NoError(t, model.DB.Model(&model.BillingGroupRoute{}).
-		Where("id = ?", 81).
-		Update("max_total_attempts", 2).Error)
 	economyRoute := model.BillingGroupRoute{
-		Id:               82,
-		BillingGroup:     "economy",
-		Name:             "Economy",
-		Enabled:          true,
-		MaxTotalAttempts: 1,
-		TotalTimeoutMs:   30000,
+		Id:           82,
+		BillingGroup: "economy",
+		Name:         "Economy",
+		Enabled:      true,
 	}
 	require.NoError(t, model.DB.Create(&economyRoute).Error)
 	require.NoError(t, model.DB.Create(&model.BillingGroupChannel{
@@ -256,10 +254,15 @@ func TestCrossGroupRetryUsesIndependentRouteAttemptBudgets(t *testing.T) {
 		ChannelId:           economyChannel.Id,
 		Priority:            100,
 		Weight:              100,
-		MaxAttempts:         1,
 		Enabled:             true,
-		CostFactor:          1,
 	}).Error)
+	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"claude":{"mode":"fixed","retry_times":1},"economy":{"mode":"fixed","retry_times":0}}`,
+	))
 	model.InitChannelCache()
 
 	ctx, _ := gin.CreateTestContext(nil)
@@ -383,64 +386,14 @@ func TestMarkChannelAttemptedInitializesDefaultBudget(t *testing.T) {
 	assert.Equal(t, model.DefaultChannelUpstreamMaxRetries+1, param.channelLimits[92001])
 }
 
-func TestRetryParamTracksIndependentGroupRetryBudgets(t *testing.T) {
-	ctx, _ := gin.CreateTestContext(nil)
-	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{
-		"openai": 0,
-		"claude": 2,
-	})
-	param := &RetryParam{
-		Ctx:           ctx,
-		TokenGroup:    "auto",
-		channelGroups: map[int]string{1: "openai", 2: "claude"},
-		channelLimits: map[int]int{1: 10, 2: 10},
-	}
-
-	assert.True(t, param.groupHasBudget("openai"))
-	assert.True(t, param.groupHasBudget("claude"))
-	param.MarkChannelAttempted(1)
-	assert.False(t, param.groupHasBudget("openai"))
-	assert.True(t, param.groupHasBudget("claude"))
-
-	param.MarkChannelAttempted(2)
-	param.MarkChannelAttempted(2)
-	assert.True(t, param.groupHasBudget("claude"))
-	param.MarkChannelAttempted(2)
-	assert.False(t, param.groupHasBudget("claude"))
-}
-
-func TestPricingGroupRetryPolicyCapsTokenRetryBudget(t *testing.T) {
-	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
-	t.Cleanup(func() {
-		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
-	})
-	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
-		`{"openai":{"mode":"fixed","retry_times":2}}`,
-	))
-
-	ctx, _ := gin.CreateTestContext(nil)
-	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{"openai": 5})
-	param := &RetryParam{Ctx: ctx, TokenGroup: "openai"}
-	limit, configured := param.groupRetryLimit("openai")
-	require.True(t, configured)
-	assert.Equal(t, 3, limit)
-
-	ctx, _ = gin.CreateTestContext(nil)
-	common.SetContextKey(ctx, constant.ContextKeyTokenGroupRetryTimes, map[string]int{"openai": 1})
-	param = &RetryParam{Ctx: ctx, TokenGroup: "openai"}
-	limit, configured = param.groupRetryLimit("openai")
-	require.True(t, configured)
-	assert.Equal(t, 2, limit)
-}
-
-func TestActiveChannelRetryPolicyUsesRequestScopedChannelCount(t *testing.T) {
+func TestFollowChannelRetryPolicyUsesRequestScopedChannelBudget(t *testing.T) {
 	channels := setupChannelRoute(t)
 	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	t.Cleanup(func() {
 		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
 	})
 	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
-		`{"claude":{"mode":"active_channels","retry_times":0}}`,
+		`{"claude":{"mode":"follow_channels","retry_times":0}}`,
 	))
 
 	param := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", RequestPath: "/v1/messages"}
@@ -460,15 +413,40 @@ func TestActiveChannelRetryPolicyUsesRequestScopedChannelCount(t *testing.T) {
 	assert.Equal(t, 2, newLimit)
 }
 
-func TestActiveChannelRetryPolicyCountsOnlyConfiguredRouteChannels(t *testing.T) {
+func TestFollowChannelRetryPolicySumsChannelBudgets(t *testing.T) {
 	channels := setupChannelRoute(t)
 	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
 	t.Cleanup(func() {
 		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
 	})
 	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
-		`{"claude":{"mode":"active_channels","retry_times":0}}`,
+		`{"claude":{"mode":"follow_channels","retry_times":0}}`,
 	))
+	require.NoError(t, model.DB.Model(&model.Channel{}).
+		Where("id = ?", channels[0].Id).
+		Update("upstream_max_retries", 2).Error)
+	model.InitChannelCache()
+
+	param := &RetryParam{TokenGroup: "claude", ModelName: "claude-test", RequestPath: "/v1/messages"}
+	limit, configured := param.groupRetryLimit("claude")
+
+	require.True(t, configured)
+	// Channel 1 contributes 1 + 2 attempts and channel 2 contributes 1.
+	assert.Equal(t, 4, limit)
+}
+
+func TestFollowChannelRetryPolicyCountsOnlyConfiguredRouteChannels(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousPolicies := ratio_setting.PricingGroupRetryPolicy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(previousPolicies))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupRetryPolicyByJSONString(
+		`{"claude":{"mode":"follow_channels","retry_times":0}}`,
+	))
+	require.NoError(t, model.DB.Model(&model.Channel{}).
+		Where("id = ?", channels[0].Id).
+		Update("upstream_max_retries", 2).Error)
 	require.NoError(t, model.DB.Model(&model.BillingGroupChannel{}).
 		Where("billing_group_route_id = ? AND channel_id = ?", 81, channels[1].Id).
 		Update("enabled", false).Error)
@@ -478,7 +456,7 @@ func TestActiveChannelRetryPolicyCountsOnlyConfiguredRouteChannels(t *testing.T)
 	limit, configured := param.groupRetryLimit("claude")
 
 	require.True(t, configured)
-	assert.Equal(t, 2, limit)
+	assert.Equal(t, 3, limit)
 }
 
 func TestUnconfiguredRouteHonorsChannelRetryBudget(t *testing.T) {
@@ -502,31 +480,6 @@ func TestUnconfiguredRouteHonorsChannelRetryBudget(t *testing.T) {
 		param.MarkChannelAttempted(channel.Id)
 		if attempt < 11 {
 			require.True(t, param.HasNextRetry(), "attempt %d should still have the channel retry budget", attempt)
-			require.True(t, param.AdvanceRetry())
-		} else {
-			assert.False(t, param.HasNextRetry())
-		}
-	}
-}
-
-func TestConfiguredRouteTotalBudgetCapsChannelRetryBudget(t *testing.T) {
-	channels := setupChannelRoute(t)
-	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Update("upstream_max_retries", 10).Error)
-	require.NoError(t, model.DB.Model(&model.BillingGroupChannel{}).
-		Where("billing_group_route_id = ? AND channel_id = ?", 81, channels[0].Id).
-		Update("max_attempts", 20).Error)
-	model.InitChannelCache()
-
-	ctx, _ := gin.CreateTestContext(nil)
-	param := &RetryParam{Ctx: ctx, TokenGroup: "claude", ModelName: "claude-test"}
-	for attempt := 1; attempt <= 3; attempt++ {
-		channel, _, err := CacheGetRandomSatisfiedChannel(param)
-		require.NoError(t, err)
-		require.NotNil(t, channel)
-		assert.Equal(t, channels[0].Id, channel.Id)
-		param.MarkChannelAttempted(channel.Id)
-		if attempt < 3 {
-			require.True(t, param.HasNextRetry())
 			require.True(t, param.AdvanceRetry())
 		} else {
 			assert.False(t, param.HasNextRetry())
@@ -838,6 +791,35 @@ func TestDynamicRoutingUsesTTFTWeightAndNeutralMissingSamples(t *testing.T) {
 	assert.InDelta(t, 75, groupScore, 0.0001)
 }
 
+func TestDynamicRoutingUsesRecentTestTTFTWeightAndNeutralMissingSamples(t *testing.T) {
+	fast := &model.Channel{Id: 94118, LastTestTTFTMs: 80}
+	slow := &model.Channel{Id: 94119, LastTestTTFTMs: 160}
+	missing := &model.Channel{Id: 94120}
+	strategy := ratio_setting.PricingGroupRoutingStrategy{
+		Strategy:             "custom_recent_ttft_only",
+		PriceWeight:          0,
+		AvailabilityWeight:   0,
+		LoadWeight:           0,
+		TTFTWeight:           0,
+		RecentTestTTFTWeight: 100,
+	}
+	candidates := []dynamicChannelCandidate{
+		{channel: fast},
+		{channel: slow},
+		{channel: missing},
+	}
+	baseline := dynamicRecentTestTTFTBaseline(candidates)
+	fastScore := dynamicCandidateScore(candidates[0], 1, strategy, math.Inf(1), baseline)
+	slowScore := dynamicCandidateScore(candidates[1], 1, strategy, math.Inf(1), baseline)
+	missingScore := dynamicCandidateScore(candidates[2], 1, strategy, math.Inf(1), baseline)
+
+	assert.Greater(t, fastScore, slowScore)
+	assert.InDelta(t, 100, fastScore, 0.0001)
+	assert.InDelta(t, 50, slowScore, 0.0001)
+	assert.InDelta(t, 50, missingScore, 0.0001)
+	assert.InDelta(t, 75, dynamicGroupScore(candidates[:2], 1, strategy, math.Inf(1), baseline), 0.0001)
+}
+
 func TestDynamicPriorityScoreUsesNormalizedPriceMultiplier(t *testing.T) {
 	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
 	candidates := []dynamicChannelCandidate{
@@ -885,22 +867,6 @@ func TestDynamicPriorityScoreUsesNormalizedPriceMultiplier(t *testing.T) {
 	assert.Equal(t, 94003, ranked[2].channel.Id)
 }
 
-func TestDynamicPriorityIgnoresRouteCostFactor(t *testing.T) {
-	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
-	cheapRoute := dynamicChannelCandidate{
-		channel:         &model.Channel{Id: 94004, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100},
-		routeCostFactor: 0.5,
-	}
-	expensiveRoute := dynamicChannelCandidate{
-		channel:         &model.Channel{Id: 94005, PriceMultiplier: 1, PreviousDayProbeSuccessRate: 95, PreviousDayProbeSampleCount: 100},
-		routeCostFactor: 2,
-	}
-
-	cheapScore := dynamicCandidateScore(cheapRoute, 1, strategy)
-	expensiveScore := dynamicCandidateScore(expensiveRoute, 1, strategy)
-	assert.InDelta(t, cheapScore, expensiveScore, 0.0001)
-}
-
 func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {
 	resetDynamicScheduleStates()
 	t.Cleanup(resetDynamicScheduleStates)
@@ -925,9 +891,8 @@ func TestRoutingSelectionRollbackRestoresSmoothSchedulerCredit(t *testing.T) {
 				PreviousDayProbeSuccessRate: 95,
 				PreviousDayProbeSampleCount: 100,
 			},
-			group:           group,
-			groupIndex:      id / 10,
-			routeCostFactor: 1,
+			group:      group,
+			groupIndex: id / 10,
 		}
 	}
 	grouped := [][]dynamicChannelCandidate{

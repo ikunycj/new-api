@@ -16,9 +16,6 @@ func classifyError(err *NewAPIError) errorDefinition {
 	if err == nil {
 		return errorDefinition{}
 	}
-	if err.classification != nil {
-		return *err.classification
-	}
 	rawCode := strings.ToLower(strings.TrimSpace(string(err.errorCode)))
 	source := err.GetErrorSource()
 	switch source {
@@ -55,20 +52,22 @@ func classifyChannelError(rawCode string, statusCode int) errorDefinition {
 	case strings.Contains(rawCode, "invalid_api_key") || strings.Contains(rawCode, "invalid_credential"):
 		return errorDefinition{202001, "auth", "credential", "switch_channel"}
 	case strings.Contains(rawCode, "rate_limit") || statusCode == 429:
-		// A rate limit exhausts the current upstream attempt. The billing-group
-		// route decides whether to retry this channel or switch to the next one.
+		// A rate limit exhausts the current upstream attempt. The active channel
+		// and group retry policies decide whether to retry or switch candidates.
 		return errorDefinition{204001, "rate_limit", "channel", "switch_channel"}
 	case strings.Contains(rawCode, "all_pools_exhausted"):
 		return errorDefinition{205003, "upstream", "channel", "switch_channel"}
 	case strings.Contains(rawCode, "pool_exhausted"):
 		return errorDefinition{205004, "upstream", "channel", "switch_channel"}
+	case strings.Contains(rawCode, "channel_exhausted"):
+		return errorDefinition{205001, "upstream", "channel", "switch_channel"}
 	case strings.Contains(rawCode, "no_healthy_account"):
 		return errorDefinition{205001, "upstream", "channel", "switch_channel"}
 	case strings.Contains(rawCode, "timeout"):
 		return errorDefinition{210001, "network", "channel", "switch_channel"}
 	case statusCode >= 500:
-		// A generic 5xx is scoped to the current channel. Route policy may retry
-		// it or continue with the next configured channel.
+		// A generic 5xx is scoped to the current channel. The active retry
+		// policies may retry it or continue with the next candidate.
 		return errorDefinition{205002, "upstream", "channel", "switch_channel"}
 	default:
 		return errorDefinition{200001, "unknown", "channel", "switch_channel"}

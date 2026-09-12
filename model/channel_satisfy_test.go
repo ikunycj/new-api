@@ -85,9 +85,12 @@ func TestMemoryChannelCacheLoadsPreviousDayAverageTTFT(t *testing.T) {
 	require.NoError(t, err)
 	secondOther, err := common.Marshal(map[string]any{"frt": 120})
 	require.NoError(t, err)
+	latestOther, err := common.Marshal(map[string]any{"frt": 70})
+	require.NoError(t, err)
 	require.NoError(t, LOG_DB.Create(&[]Log{
 		{ChannelId: channelID, Type: LogTypeConsume, IsStream: true, CreatedAt: start + 1, Other: string(firstOther)},
 		{ChannelId: channelID, Type: LogTypeConsume, IsStream: true, CreatedAt: start + 2, Other: string(secondOther)},
+		{ChannelId: channelID, Type: LogTypeConsume, TokenName: ChannelTestTokenName, CreatedAt: time.Now().Unix(), Other: string(latestOther)},
 	}).Error)
 
 	originalMemoryCacheEnabled := common.MemoryCacheEnabled
@@ -106,6 +109,7 @@ func TestMemoryChannelCacheLoadsPreviousDayAverageTTFT(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, eligible, 1)
 	assert.InDelta(t, 100, eligible[0].PreviousDayAverageTTFTMs, 0.000001)
+	assert.InDelta(t, 70, eligible[0].LastTestTTFTMs, 0.000001)
 }
 
 func TestPreviousNaturalDayBoundsUseLocalCalendarMidnights(t *testing.T) {

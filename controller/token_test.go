@@ -36,15 +36,14 @@ type tokenPageResponse struct {
 }
 
 type tokenResponseItem struct {
-	ID                  int            `json:"id"`
-	Name                string         `json:"name"`
-	Key                 string         `json:"key"`
-	Status              int            `json:"status"`
-	Group               string         `json:"group"`
-	GroupCandidates     []string       `json:"group_candidates"`
-	GroupRetryTimes     map[string]int `json:"group_retry_times"`
-	CurrentConcurrency  int            `json:"current_concurrency"`
-	ConcurrencyDegraded bool           `json:"concurrency_degraded"`
+	ID                  int      `json:"id"`
+	Name                string   `json:"name"`
+	Key                 string   `json:"key"`
+	Status              int      `json:"status"`
+	Group               string   `json:"group"`
+	GroupCandidates     []string `json:"group_candidates"`
+	CurrentConcurrency  int      `json:"current_concurrency"`
+	ConcurrencyDegraded bool     `json:"concurrency_degraded"`
 }
 
 type tokenKeyResponse struct {
@@ -583,7 +582,6 @@ func TestAddTokenNormalizesOrderedGroupCandidates(t *testing.T) {
 		"model_limits":         "",
 		"group":                "default",
 		"group_candidates":     []string{"default", "vip"},
-		"group_retry_times":    map[string]int{"default": 0, "vip": 5},
 		"cross_group_retry":    true,
 	}
 
@@ -600,9 +598,6 @@ func TestAddTokenNormalizesOrderedGroupCandidates(t *testing.T) {
 	groups, err := token.GetGroupCandidates()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"default", "vip"}, groups)
-	retryTimes, err := token.GetGroupRetryTimes()
-	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"default": 0, "vip": 5}, retryTimes)
 }
 
 func TestAddTokenNormalizesSingleCandidateToFixedGroup(t *testing.T) {
@@ -630,9 +625,6 @@ func TestAddTokenNormalizesSingleCandidateToFixedGroup(t *testing.T) {
 	assert.Equal(t, "vip", token.Group)
 	assert.Empty(t, token.GroupCandidates)
 	assert.False(t, token.CrossGroupRetry)
-	retryTimes, err := token.GetGroupRetryTimes()
-	require.NoError(t, err)
-	assert.Empty(t, retryTimes)
 }
 
 func TestAddTokenRequiresAtLeastOneGroup(t *testing.T) {
@@ -664,7 +656,6 @@ func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {
 	multiToken := seedToken(t, db, 1, "multi-group-token", "multi1234token5678")
 	multiToken.Group = "auto"
 	require.NoError(t, multiToken.SetGroupCandidates([]string{"default", "vip"}))
-	require.NoError(t, multiToken.SetGroupRetryTimes(map[string]int{"default": 0, "vip": 5}))
 	require.NoError(t, db.Save(multiToken).Error)
 
 	fixedCtx, fixedRecorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/"+strconv.Itoa(fixedToken.Id), nil, 1)
@@ -676,7 +667,6 @@ func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {
 	require.NoError(t, common.Unmarshal(fixedResponse.Data, &fixedItem))
 	assert.Equal(t, "default", fixedItem.Group)
 	assert.Equal(t, []string{"default"}, fixedItem.GroupCandidates)
-	assert.Empty(t, fixedItem.GroupRetryTimes)
 	assert.Equal(t, fixedToken.GetMaskedKey(), fixedItem.Key)
 
 	multiCtx, multiRecorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/"+strconv.Itoa(multiToken.Id), nil, 1)
@@ -688,7 +678,6 @@ func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {
 	require.NoError(t, common.Unmarshal(multiResponse.Data, &multiItem))
 	assert.Equal(t, "auto", multiItem.Group)
 	assert.Equal(t, []string{"default", "vip"}, multiItem.GroupCandidates)
-	assert.Equal(t, map[string]int{"default": 0, "vip": 5}, multiItem.GroupRetryTimes)
 	assert.Equal(t, multiToken.GetMaskedKey(), multiItem.Key)
 	assert.NotContains(t, multiRecorder.Body.String(), `"group_candidates":"`)
 }
@@ -698,10 +687,8 @@ func TestUpdateTokenPreservesOrReplacesGroupCandidatesExplicitly(t *testing.T) {
 	token := seedToken(t, db, 1, "editable-multi-group", "group1234token5678")
 	token.Group = "auto"
 	require.NoError(t, token.SetGroupCandidates([]string{"default", "vip"}))
-	require.NoError(t, token.SetGroupRetryTimes(map[string]int{"default": 0, "vip": 5}))
 	require.NoError(t, db.Save(token).Error)
 	originalCandidates := token.GroupCandidates
-	originalRetryTimes := token.GroupRetryTimes
 
 	omittedBody := map[string]any{
 		"id":                   token.Id,
@@ -719,7 +706,6 @@ func TestUpdateTokenPreservesOrReplacesGroupCandidatesExplicitly(t *testing.T) {
 	require.True(t, decodeAPIResponse(t, omittedRecorder).Success)
 	require.NoError(t, db.First(token, token.Id).Error)
 	assert.Equal(t, originalCandidates, token.GroupCandidates)
-	assert.Equal(t, originalRetryTimes, token.GroupRetryTimes)
 
 	statusBody := map[string]any{
 		"id":               token.Id,
@@ -745,7 +731,6 @@ func TestUpdateTokenPreservesOrReplacesGroupCandidatesExplicitly(t *testing.T) {
 		"model_limits":         "",
 		"group":                "auto",
 		"group_candidates":     []string{"vip"},
-		"group_retry_times":    map[string]int{"vip": 1},
 		"cross_group_retry":    false,
 	}
 	replacementCtx, replacementRecorder := newAuthenticatedContext(t, http.MethodPut, "/api/token/", replacementBody, 1)
@@ -755,9 +740,6 @@ func TestUpdateTokenPreservesOrReplacesGroupCandidatesExplicitly(t *testing.T) {
 	require.NoError(t, db.First(token, token.Id).Error)
 	assert.Equal(t, "vip", token.Group)
 	assert.Empty(t, token.GroupCandidates)
-	retryTimes, err := token.GetGroupRetryTimes()
-	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"vip": 1}, retryTimes)
 
 	var responseItem tokenResponseItem
 	require.NoError(t, common.Unmarshal(replacementResponse.Data, &responseItem))

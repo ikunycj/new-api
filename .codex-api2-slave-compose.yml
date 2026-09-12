@@ -1,0 +1,31 @@
+services:
+  new-api:
+    image: alpine:3.20
+    container_name: new-api
+    restart: always
+    stop_grace_period: 150s
+    entrypoint: ["/new-api", "--log-dir", "/app/logs"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+      - ./new-api-current.bin:/new-api:ro
+    env_file:
+      - /etc/new-api/new-api-slave.env
+    # The tunnel listens on the gateway of the app network, not Docker's
+    # default bridge gateway.
+    extra_hosts:
+      - "host.docker.internal:172.18.0.1"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":[[:space:]]*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  new-api-network:
+    external: true
+    name: new-api_new-api-network

@@ -267,9 +267,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)
 			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
 			newAPIError.SetChannelLocation(channel.Id, channel.Name)
-			if mapping, ok := model.MatchUpstreamErrorMapping(channel.Id, channel.Type, string(newAPIError.GetErrorCode()), newAPIError.StatusCode); ok {
-				newAPIError.SetClassification(mapping.StableCode, mapping.Category, mapping.FailureScope, mapping.Action, mapping.Retryable)
-			}
 			switch newAPIError.FailureScope() {
 			case "credential", "channel":
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
@@ -367,8 +364,8 @@ func isRelayErrorRetryable(err *types.NewAPIError) bool {
 	if err == nil {
 		return false
 	}
-	// A matched upstream error mapping is authoritative; status-code rules are
-	// only the fallback for errors without an explicit classification.
+	// An explicit retryability decision is authoritative; status-code rules are
+	// only the fallback when no decision was provided.
 	if err.HasRetryable() {
 		return err.IsRetryable()
 	}

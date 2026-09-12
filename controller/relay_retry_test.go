@@ -51,19 +51,6 @@ func newOrderedRoutingBillingInfo(userID int) *relaycommon.RelayInfo {
 	}
 }
 
-func TestCancellationPhase(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	before, _ := gin.CreateTestContext(httptest.NewRecorder())
-	assert.Equal(t, "before_upstream", cancellationPhase(before, false))
-	assert.Equal(t, "upstream", cancellationPhase(before, true))
-
-	response, _ := gin.CreateTestContext(httptest.NewRecorder())
-	_, err := response.Writer.Write([]byte("partial response"))
-	require.NoError(t, err)
-	assert.Equal(t, "response", cancellationPhase(response, true))
-}
-
 func TestRelayRetryCommittedStopsAfterStreamingOutput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -117,38 +104,6 @@ func TestShouldRetryUpstreamSourcesUseConfiguredStatusCodes(t *testing.T) {
 			assert.Equal(t, tt.want, isFailoverEligible(ctx, err))
 		})
 	}
-}
-
-func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	err := types.WithOpenAIError(types.OpenAIError{
-		Message: "vendor rejected request",
-		Code:    "vendor_policy_error",
-		Source:  types.ErrorSourceChannel,
-	}, http.StatusBadGateway)
-	err.SetClassification(207001, "policy", "request", "none", false)
-
-	assert.False(t, shouldRetry(ctx, err, 1))
-	assert.False(t, isFailoverEligible(ctx, err))
-}
-
-func TestShouldRetryExplicitMappingOverridesStatusCodeFallback(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
-	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
-	operation_setting.AutomaticRetryStatusCodeRanges = nil
-
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	err := types.WithOpenAIError(types.OpenAIError{
-		Message: "vendor requests a retry",
-		Code:    "vendor_retryable_error",
-		Source:  types.ErrorSourceChannel,
-	}, http.StatusBadRequest)
-	err.SetClassification(207002, "upstream", "provider", "switch_channel", true)
-
-	assert.True(t, shouldRetry(ctx, err, 1))
-	assert.True(t, isFailoverEligible(ctx, err))
 }
 
 func TestShouldRetryTaskRelayUsesConfiguredStatusCodes(t *testing.T) {

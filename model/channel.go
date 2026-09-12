@@ -840,14 +840,8 @@ func ensureChannelsCanBeDeleted(db *gorm.DB, ids []int) error {
 func deleteChannelRecords(tx *gorm.DB, ids []int) error {
 	deleteProbeHistory := tx.Migrator().HasTable(&ChannelProbeHistory{})
 	deleteProbeState := tx.Migrator().HasTable(&ChannelProbeState{})
-	deleteErrorMappings := tx.Migrator().HasTable(&UpstreamErrorMapping{})
 	deleteCostEntries := tx.Migrator().HasTable(&ChannelCostEntry{})
 	for _, chunk := range lo.Chunk(ids, 200) {
-		if deleteErrorMappings {
-			if err := tx.Where("channel_id IN ?", chunk).Delete(&UpstreamErrorMapping{}).Error; err != nil {
-				return err
-			}
-		}
 		if deleteCostEntries {
 			if err := tx.Where("channel_id IN ?", chunk).Delete(&ChannelCostEntry{}).Error; err != nil {
 				return err
