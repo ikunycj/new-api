@@ -42,9 +42,7 @@ mkdir -p results
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 export BASE_URL="$REMOTE_BASE_URL"
 export LOAD_PROFILE="$profile"
-export K6_PROMETHEUS_RW_SERVER_URL="${K6_PROMETHEUS_RW_SERVER_URL:-http://prometheus:9090/api/v1/write}"
 
 echo "Remote target: $BASE_URL"
-echo "Prometheus remote write: $K6_PROMETHEUS_RW_SERVER_URL"
 echo "Running k6 profile: $profile"
 docker compose -f compose.yml run --rm --no-deps k6

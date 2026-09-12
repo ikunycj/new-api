@@ -4,6 +4,3 @@
 !README.md
 !loadtest/
 !loadtest/**
-!observability/
-!observability/**
-observability/**/data/

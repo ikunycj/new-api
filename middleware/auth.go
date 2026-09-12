@@ -13,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/pkg/observability"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -23,48 +22,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-func recordTokenAuthFailure(c *gin.Context, reason string, status int) {
-	route := c.FullPath()
-	if route == "" {
-		route = "unmatched"
-	}
-	observability.RecordAuthFailure(route, reason, status)
-	observability.MarkContextError(c, observability.ErrorAuth)
-	observability.LogEvent(c, observability.Event{
-		Event:             "auth_failure",
-		RequestID:         c.GetString(common.RequestIdKey),
-		Provider:          observability.ProviderOther,
-		Route:             route,
-		Status:            status,
-		ErrorClass:        observability.ErrorAuth,
-		AuthFailureReason: reason,
-	})
-}
-
-func tokenAuthFailureReason(token *model.Token, err error) string {
-	if errors.Is(err, model.ErrDatabase) {
-		return "database_error"
-	}
-	if token == nil {
-		return "token_not_found"
-	}
-	switch token.Status {
-	case common.TokenStatusDisabled:
-		return "token_disabled"
-	case common.TokenStatusExpired:
-		return "token_expired"
-	case common.TokenStatusExhausted:
-		return "token_exhausted"
-	}
-	if token.ExpiredTime != -1 && token.ExpiredTime < common.GetTimestamp() {
-		return "token_expired"
-	}
-	if !token.UnlimitedQuota && token.RemainQuota <= 0 {
-		return "token_exhausted"
-	}
-	return "token_invalid"
-}
 
 func validUserInfo(username string, role int) bool {
 	// check username is empty
@@ -358,7 +315,6 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		key := c.Request.Header.Get("Authorization")
 		if key == "" {
-			recordTokenAuthFailure(c, "token_not_provided", http.StatusUnauthorized)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": common.TranslateMessage(c, i18n.MsgTokenNotProvided),
@@ -376,13 +332,11 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		token, err := model.GetTokenByKey(key, false)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				recordTokenAuthFailure(c, "token_not_found", http.StatusUnauthorized)
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"success": false,
 					"message": common.TranslateMessage(c, i18n.MsgTokenInvalid),
 				})
 			} else {
-				observability.MarkContextError(c, observability.ErrorInternal)
 				common.SysLog("TokenAuthReadOnly GetTokenByKey database error: " + err.Error())
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
@@ -396,7 +350,6 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		// TokenAuthReadOnly must keep allowing other token states to query read-only
 		// data, such as token usage logs; only explicitly disabled tokens are denied.
 		if token.Status == common.TokenStatusDisabled {
-			recordTokenAuthFailure(c, "token_disabled", http.StatusUnauthorized)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"message": common.TranslateMessage(c, i18n.MsgTokenStatusUnavailable),
@@ -496,12 +449,10 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		if err != nil {
 			if errors.Is(err, model.ErrDatabase) {
-				observability.MarkContextError(c, observability.ErrorInternal)
 				common.SysLog("TokenAuth ValidateUserToken database error: " + err.Error())
 				abortWithOpenAiMessage(c, http.StatusInternalServerError,
 					common.TranslateMessage(c, i18n.MsgDatabaseError))
 			} else {
-				recordTokenAuthFailure(c, tokenAuthFailureReason(token, err), http.StatusUnauthorized)
 				abortWithOpenAiMessage(c, http.StatusUnauthorized,
 					common.TranslateMessage(c, i18n.MsgTokenInvalid))
 			}
@@ -514,12 +465,10 @@ func TokenAuth() func(c *gin.Context) {
 			logger.LogDebug(c, "Token has IP restrictions, checking client IP %s", clientIp)
 			ip := net.ParseIP(clientIp)
 			if ip == nil {
-				recordTokenAuthFailure(c, "ip_restricted", http.StatusForbidden)
 				abortWithOpenAiMessage(c, http.StatusForbidden, "无法解析客户端 IP 地址")
 				return
 			}
 			if common.IsIpInCIDRList(ip, allowIps) == false {
-				recordTokenAuthFailure(c, "ip_restricted", http.StatusForbidden)
 				abortWithOpenAiMessage(c, http.StatusForbidden, "您的 IP 不在令牌允许访问的列表中", types.ErrorCodeAccessDenied)
 				return
 			}
@@ -528,7 +477,6 @@ func TokenAuth() func(c *gin.Context) {
 
 		userCache, err := model.GetUserCache(token.UserId)
 		if err != nil {
-			observability.MarkContextError(c, observability.ErrorInternal)
 			common.SysLog(fmt.Sprintf("TokenAuth GetUserCache error for user %d: %v", token.UserId, err))
 			abortWithOpenAiMessage(c, http.StatusInternalServerError,
 				common.TranslateMessage(c, i18n.MsgDatabaseError))
@@ -536,7 +484,6 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		userEnabled := userCache.Status == common.UserStatusEnabled
 		if !userEnabled {
-			recordTokenAuthFailure(c, "user_disabled", http.StatusForbidden)
 			abortWithOpenAiMessage(c, http.StatusForbidden, common.TranslateMessage(c, i18n.MsgAuthUserBanned))
 			return
 		}
@@ -545,7 +492,6 @@ func TokenAuth() func(c *gin.Context) {
 
 		userGroup := userCache.Group
 		if err := validateTokenGroupAccess(userGroup, token); err != nil {
-			recordTokenAuthFailure(c, "group_forbidden", http.StatusForbidden)
 			abortWithOpenAiMessage(c, http.StatusForbidden, err.Error())
 			return
 		}
@@ -584,7 +530,6 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
 	groupCandidates, err := token.GetGroupCandidates()
 	if err != nil {
-		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
 		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌候选分组配置无效")
 		return err
 	}
@@ -592,7 +537,6 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	common.SetContextKey(c, constant.ContextKeyTokenGroupCandidates, groupCandidates)
 	groupRetryTimes, err := token.GetGroupRetryTimes()
 	if err != nil {
-		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
 		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
 		return err
 	}
@@ -602,7 +546,6 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	}
 	groupRetryTimes, err = service.NormalizeTokenGroupRetryTimes(concreteGroups, groupRetryTimes)
 	if err != nil {
-		recordTokenAuthFailure(c, "token_config_invalid", http.StatusForbidden)
 		abortWithOpenAiMessage(c, http.StatusForbidden, "令牌分组重试配置无效")
 		return err
 	}
@@ -612,7 +555,6 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		if model.IsAdmin(token.UserId) {
 			c.Set("specific_channel_id", parts[1])
 		} else {
-			recordTokenAuthFailure(c, "specific_channel_forbidden", http.StatusForbidden)
 			c.Header("specific_channel_version", "701e3ae1dc3f7975556d354e0675168d004891c8")
 			abortWithOpenAiMessage(c, http.StatusForbidden, "普通用户不支持指定渠道")
 			return fmt.Errorf("普通用户不支持指定渠道")

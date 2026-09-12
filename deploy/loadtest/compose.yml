@@ -72,13 +72,6 @@ services:
       retries: 20
     networks: [loadtest]
 
-  pyroscope:
-    image: grafana/pyroscope:1.13.2
-    command: ["server"]
-    ports:
-      - "127.0.0.1:${LOADTEST_PYROSCOPE_PORT:-4040}:4040"
-    networks: [loadtest]
-
   new-api:
     build:
       context: ../..
@@ -100,11 +93,7 @@ services:
       SQL_MAX_IDLE_CONNS: ${SQL_MAX_IDLE_CONNS:-40}
       SQL_MAX_LIFETIME: ${SQL_MAX_LIFETIME:-60}
       REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-100}
-      ENABLE_METRICS: "true"
-      METRICS_PORT: "8006"
       ENABLE_PPROF: "true"
-      PYROSCOPE_URL: http://pyroscope:4040
-      PYROSCOPE_APP_NAME: new-api-loadtest
       NODE_NAME: loadtest-node-1
     ulimits:
       nofile:
@@ -113,7 +102,6 @@ services:
     ports:
       - "127.0.0.1:${LOADTEST_API_PORT:-3100}:3000"
       - "127.0.0.1:${LOADTEST_PPROF_PORT:-8005}:8005"
-      - "127.0.0.1:${LOADTEST_METRICS_PORT:-8006}:8006"
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,8 +111,6 @@ services:
         condition: service_healthy
       mock-upstream-b:
         condition: service_healthy
-      pyroscope:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\"'"]
       interval: 5s
@@ -151,101 +137,6 @@ services:
         condition: service_healthy
     networks: [loadtest]
 
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.17.1
-    environment:
-      DATA_SOURCE_URI: postgres:5432/new_api?sslmode=disable
-      DATA_SOURCE_USER: loadtest
-      DATA_SOURCE_PASS: loadtest
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [loadtest]
-
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.67.0
-    command: ["--redis.addr=redis://redis:6379"]
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks: [loadtest]
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.2
-    privileged: true
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-    networks: [loadtest]
-
-  prometheus:
-    image: prom/prometheus:v3.2.1
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=7d
-      - --web.enable-remote-write-receiver
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - loadtest_prometheus:/prometheus
-    ports:
-      - "127.0.0.1:${LOADTEST_PROMETHEUS_PORT:-9090}:9090"
-    depends_on:
-      new-api:
-        condition: service_healthy
-      postgres-exporter:
-        condition: service_started
-      redis-exporter:
-        condition: service_started
-      alertmanager:
-        condition: service_started
-    networks: [loadtest]
-
-  alert-sink:
-    build:
-      context: ./alert-sink
-    ports:
-      - "127.0.0.1:${LOADTEST_ALERT_SINK_PORT:-19094}:8080"
-    networks: [loadtest]
-
-  alertmanager:
-    image: prom/alertmanager:v0.28.1
-    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
-    volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - loadtest_alertmanager:/alertmanager
-    ports:
-      - "127.0.0.1:${LOADTEST_ALERTMANAGER_PORT:-9093}:9093"
-    depends_on:
-      alert-sink:
-        condition: service_started
-    networks: [loadtest]
-
-  grafana:
-    image: grafana/grafana:11.5.2
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-loadtest}
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_USERS_DEFAULT_THEME: light
-      GF_SECURITY_ALLOW_EMBEDDING: "true"
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - loadtest_grafana:/var/lib/grafana
-    ports:
-      - "127.0.0.1:${LOADTEST_GRAFANA_PORT:-3001}:3000"
-    depends_on:
-      prometheus:
-        condition: service_started
-      pyroscope:
-        condition: service_started
-    networks: [loadtest]
-
   k6:
     image: grafana/k6:0.57.0
     profiles: ["runner"]
@@ -265,8 +156,6 @@ services:
       CAPACITY_STAGE_DURATION: ${CAPACITY_STAGE_DURATION:-2m}
       CAPACITY_PREALLOCATED_VUS: ${CAPACITY_PREALLOCATED_VUS:-500}
       CAPACITY_MAX_VUS: ${CAPACITY_MAX_VUS:-2000}
-      K6_PROMETHEUS_RW_SERVER_URL: ${K6_PROMETHEUS_RW_SERVER_URL:-http://prometheus:9090/api/v1/write}
-      K6_PROMETHEUS_RW_TREND_STATS: p(95),p(99),avg,max
     ulimits:
       nofile:
         soft: 65535
@@ -274,12 +163,10 @@ services:
     volumes:
       - ./k6:/scripts:ro
       - ./results:/results
-    command: ["run", "--out", "experimental-prometheus-rw", "--summary-export", "/results/summary.json", "/scripts/load.js"]
+    command: ["run", "--summary-export", "/results/summary.json", "/scripts/load.js"]
     depends_on:
       seed:
         condition: service_completed_successfully
-      prometheus:
-        condition: service_started
     networks: [loadtest]
 
 networks:
@@ -288,6 +175,3 @@ networks:
 
 volumes:
   loadtest_postgres:
-  loadtest_prometheus:
-  loadtest_alertmanager:
-  loadtest_grafana:

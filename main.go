@@ -23,7 +23,6 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
-	"github.com/QuantumNous/new-api/pkg/monitoring"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/router"
@@ -182,7 +181,6 @@ func main() {
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
-	server.Use(monitoring.HTTPMiddleware())
 	server.Use(middleware.Version())
 	server.Use(middleware.I18n())
 	middleware.SetUpLogger(server)
@@ -205,14 +203,6 @@ func main() {
 		BuildFS:   buildFS,
 		IndexPage: indexPage,
 	})
-	metricsServer, err := monitoring.Start()
-	if err != nil {
-		common.FatalLog("failed to start metrics server: " + err.Error())
-		return
-	}
-	if metricsServer != nil {
-		common.SysLog("Prometheus metrics enabled on " + metricsServer.Addr)
-	}
 	var port = os.Getenv("PORT")
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
@@ -244,11 +234,6 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		common.SysError(fmt.Sprintf("server forced to shutdown: %v", err))
-	}
-	if metricsServer != nil {
-		if err := metricsServer.Shutdown(ctx); err != nil {
-			common.SysError(fmt.Sprintf("metrics server forced to shutdown: %v", err))
-		}
 	}
 	// 内存中的看板数据保存入库，避免重启丢失未落库数据 (issue #5679)
 	if common.DataExportEnabled {

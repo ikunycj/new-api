@@ -145,7 +145,6 @@ function headersForVU() {
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-    'X-Load-Test-ID': `${profile}-${__VU}-${__ITER}`,
   };
 }
 

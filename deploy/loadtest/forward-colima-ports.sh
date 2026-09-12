@@ -21,11 +21,5 @@ forward_service_port() {
 forward_service_port postgres 5432
 forward_service_port redis 6379
 forward_service_port mock-upstream 8080
-forward_service_port pyroscope 4040
 forward_service_port new-api 3000
 forward_service_port new-api 8005
-forward_service_port new-api 8006
-forward_service_port prometheus 9090
-forward_service_port alert-sink 8080
-forward_service_port alertmanager 9093
-forward_service_port grafana 3000

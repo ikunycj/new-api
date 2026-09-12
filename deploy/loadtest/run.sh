@@ -16,16 +16,13 @@ esac
 mkdir -p results
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
-docker compose -f compose.yml build mock-upstream mock-upstream-b alert-sink new-api
-docker compose -f compose.yml up -d postgres redis mock-upstream mock-upstream-b pyroscope new-api postgres-exporter redis-exporter cadvisor alert-sink alertmanager prometheus grafana
+docker compose -f compose.yml build mock-upstream mock-upstream-b new-api
+docker compose -f compose.yml up -d postgres redis mock-upstream mock-upstream-b new-api
 sh ./forward-colima-ports.sh
 docker compose -f compose.yml run --rm seed
 
-echo "Grafana:      http://localhost:${LOADTEST_GRAFANA_PORT:-3001}/d/new-api-loadtest"
-echo "Prometheus:   http://localhost:${LOADTEST_PROMETHEUS_PORT:-9090}"
-echo "Alertmanager: http://localhost:${LOADTEST_ALERTMANAGER_PORT:-9093}"
-echo "Alert log:    http://localhost:${LOADTEST_ALERT_SINK_PORT:-19094}/alerts"
-echo "Pyroscope:    http://localhost:${LOADTEST_PYROSCOPE_PORT:-4040}"
+echo "Load-test API: http://localhost:${LOADTEST_API_PORT:-3100}/api/status"
+echo "pprof:         http://localhost:${LOADTEST_PPROF_PORT:-8005}/debug/pprof/"
 echo "Running k6 profile: $profile"
 
 LOAD_PROFILE="$profile" docker compose -f compose.yml run --rm k6

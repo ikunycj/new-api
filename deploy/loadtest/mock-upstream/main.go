@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -35,13 +34,6 @@ type channelState struct {
 	remaining int64
 	consumed  uint64
 }
-
-var (
-	activeRequests atomic.Int64
-	requests       atomic.Uint64
-	errorsTotal    atomic.Uint64
-	durationNanos  atomic.Uint64
-)
 
 func main() {
 	cfg := config{
@@ -68,10 +60,6 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		metrics(w, r)
-		state.writeMetrics(w)
-	})
 	mux.HandleFunc("/control/state", state.handleState)
 	mux.HandleFunc("/control/reset", state.handleReset)
 	mux.HandleFunc("/control/exhaust", state.handleExhaust)
@@ -94,32 +82,21 @@ func main() {
 }
 
 func handleChat(w http.ResponseWriter, r *http.Request, cfg config, state *channelState) {
-	startedAt := time.Now()
-	requests.Add(1)
-	activeRequests.Add(1)
-	defer func() {
-		activeRequests.Add(-1)
-		durationNanos.Add(uint64(time.Since(startedAt)))
-	}()
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var input request
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil {
-		errorsTotal.Add(1)
 		http.Error(w, `{"error":{"message":"invalid request"}}`, http.StatusBadRequest)
 		return
 	}
 	if cfg.errorRate > 0 && rand.Float64() < cfg.errorRate {
-		errorsTotal.Add(1)
 		time.Sleep(cfg.ttft)
 		writeChannelError(w, state, "injected load-test failure", "mock_error", http.StatusServiceUnavailable)
 		return
 	}
 	if !state.consume(30) {
-		errorsTotal.Add(1)
 		writeChannelError(w, state, "mock channel is exhausted", "channel_exhausted", http.StatusServiceUnavailable)
 		return
 	}
@@ -224,32 +201,6 @@ func streamResponse(w http.ResponseWriter, cfg config) {
 	_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-loadtest\",\"object\":\"chat.completion.chunk\",\"created\":%d,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"total_tokens\":30}}\n\n", time.Now().Unix())
 	_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
-}
-
-func metrics(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	requestCount := requests.Load()
-	durationSeconds := float64(durationNanos.Load()) / float64(time.Second)
-	_, _ = fmt.Fprintf(w, "# HELP mock_openai_requests_active Current requests handled by the mock upstream.\n")
-	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_requests_active gauge\nmock_openai_requests_active %d\n", activeRequests.Load())
-	_, _ = fmt.Fprintf(w, "# HELP mock_openai_requests_total Requests handled by the mock upstream.\n")
-	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_requests_total counter\nmock_openai_requests_total %d\n", requestCount)
-	_, _ = fmt.Fprintf(w, "# HELP mock_openai_errors_total Injected or validation errors.\n")
-	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_errors_total counter\nmock_openai_errors_total %d\n", errorsTotal.Load())
-	_, _ = fmt.Fprintf(w, "# HELP mock_openai_request_duration_seconds Total request handling duration.\n")
-	_, _ = fmt.Fprintf(w, "# TYPE mock_openai_request_duration_seconds summary\nmock_openai_request_duration_seconds_sum %.6f\nmock_openai_request_duration_seconds_count %d\n", durationSeconds, requestCount)
-}
-
-func (s *channelState) writeMetrics(w http.ResponseWriter) {
-	s.Lock()
-	defer s.Unlock()
-	_, _ = fmt.Fprintf(w, "mock_channel_remaining_tokens{channel_id=\"%d\",channel_name=\"%s\"} %d\n", s.id, s.name, s.remaining)
-	_, _ = fmt.Fprintf(w, "mock_channel_consumed_tokens_total{channel_id=\"%d\",channel_name=\"%s\"} %d\n", s.id, s.name, s.consumed)
-	disabled := 0
-	if s.disabled {
-		disabled = 1
-	}
-	_, _ = fmt.Fprintf(w, "mock_channel_disabled{channel_id=\"%d\",channel_name=\"%s\"} %d\n", s.id, s.name, disabled)
 }
 
 func durationFromMillis(name string, fallback int) time.Duration {
