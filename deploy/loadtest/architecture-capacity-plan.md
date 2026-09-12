@@ -68,7 +68,7 @@ total_token_tps  = (prompt_tokens + completion_tokens) / 测试窗口秒数
 
 ## 4. 压测设计
 
-仓库提供 `run-remote.sh`，要求专用远程 Token、目标 URL 和 `CONFIRM_REMOTE_LOADTEST=yes`，避免误把压测发送到未审批的地址。远程压测前还要明确预算、Provider 限额、停止条件和维护窗口。
+远程压测必须使用仓库外部的负载发生器，并配置专用远程 Token 和已审批的目标 URL。开始前还要明确预算、Provider 限额、停止条件和维护窗口，避免误把压测发送到未审批的地址。
 
 至少准备四类请求：
 
@@ -104,11 +104,11 @@ total_token_tps  = (prompt_tokens + completion_tokens) / 测试窗口秒数
 
 ## 5. 数据收集与停止条件
 
-本仓库保留 k6 summary、应用日志和 pprof 作为压测证据。基础设施资源数据应由目标环境已有的主机、容器、数据库和 Redis 运维工具采集，不在此压测栈内启动额外监控服务。
+压测应保留负载发生器结果、应用日志和 pprof 作为证据。基础设施资源数据应由目标环境已有的主机、容器、数据库和 Redis 运维工具采集，不在此测试栈内启动额外监控服务。
 
 每个阶段至少记录：
 
-- k6 的请求数、错误率、P50/P95/P99、TTFB、dropped iterations
+- 负载发生器的请求数、错误率、P50/P95/P99、TTFB 和丢弃请求数
 - Provider usage 汇总与网关结算 Token
 - API 网关和渠道代理的 CPU、RSS、连接数、文件描述符、网络吞吐
 - PostgreSQL 连接数、等待、慢查询、锁和磁盘 I/O
@@ -119,9 +119,9 @@ total_token_tps  = (prompt_tokens + completion_tokens) / 测试窗口秒数
 
 ## 6. 本地压测结果的解释边界
 
-本地确定性 Mock Provider 可以验证请求链路、k6 脚本、计费和故障转移，但不能外推线上 Token TPS。Colima、Docker、数据库和负载发生器共享本机资源时，最先达到的可能是本地资源上限，而不是 API 网关容量上限。
+本地确定性 Mock Provider 可以验证请求链路、计费和故障转移，但不能外推线上 Token TPS。Colima、Docker、数据库和负载发生器共享本机资源时，最先达到的可能是本地资源上限，而不是 API 网关容量上限。
 
-任何被负载发生器 OOM、网络耗尽或 dropped iterations 主导的阶段都应标记为无效。必须在目标环境复测，才能形成线上容量结论。
+任何被负载发生器 OOM、网络耗尽或丢弃请求主导的阶段都应标记为无效。必须在目标环境复测，才能形成线上容量结论。
 
 ## 7. 线上部署与机器规格建议
 
@@ -131,7 +131,7 @@ total_token_tps  = (prompt_tokens + completion_tokens) / 测试窗口秒数
 | 渠道代理 | 2~4 vCPU / 4~8 GB | 4~8 vCPU / 8~16 GB | 按 Provider/账号/IP 分组横向扩展 |
 | PostgreSQL | 8 vCPU / 32 GB / NVMe | 16 vCPU / 64 GB / 高 IOPS NVMe | 少量高配，主从/故障切换，统一连接池 |
 | Redis | 4 vCPU / 16 GB | 8 vCPU / 32 GB | 主从/哨兵或集群，按容量和吞吐扩展 |
-| 负载发生器 | 4 vCPU / 8 GB | 8 vCPU / 16 GB | 10k VU 以上使用分布式 k6 |
+| 负载发生器 | 4 vCPU / 8 GB | 8 vCPU / 16 GB | 10k VU 以上使用分布式负载发生器 |
 
 API 网关、渠道代理和负载发生器适合多台中等规格；PostgreSQL、Redis 适合少量高规格并做高可用。当单个渠道的出口 IP、连接数或 Provider 配额成为瓶颈时，应增加渠道节点或独立出口 IP，而不是只增加 API 网关节点。
 
@@ -157,7 +157,7 @@ API 网关、渠道代理和负载发生器适合多台中等规格；PostgreSQL
 压测中：
 
 - 先 smoke，再阶梯，再 steady/soak，最后做 spike/burst。
-- 每个阶段至少保留 5~10 分钟稳定窗口并保存 k6 summary。
+- 每个阶段至少保留 5~10 分钟稳定窗口并保存负载发生器结果。
 - 同时观察业务端和压测机资源，压测机饱和时结果无效。
 - 任一停止条件触发后立即降压。
 

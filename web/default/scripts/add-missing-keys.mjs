@@ -1938,7 +1938,6 @@ const retiredKeys = new Set([
   'Maximum total attempts',
   'Move down',
   'Move up',
-  'Open Grafana',
   'Request RPS',
   'Stable code',
   'Total timeout (ms)',

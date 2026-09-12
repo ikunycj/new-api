@@ -2,7 +2,6 @@
 set -eu
 
 cd "$(dirname "$0")"
-mkdir -p results
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
 # Build the application before starting the load-test services so dependency
