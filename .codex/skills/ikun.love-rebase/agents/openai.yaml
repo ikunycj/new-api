@@ -1,0 +1,4 @@
+interface:
+  display_name: "ikun.love-rebase"
+  short_description: "Rebase ikun.love with exactly one branding UI commit"
+  default_prompt: "Use $ikun.love-rebase to update ikun.love onto the latest origin/feature/new-channel-and-group with exactly one branding UI commit at the tip."
