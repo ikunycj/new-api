@@ -460,27 +460,41 @@ func GetPricingGroupActivity(groups []string) map[string]PricingGroupActivity {
 	return activityByGroup
 }
 
-// collectPricingUserActivity reads one user's active request members from the
-// local index and its dedicated Redis sorted set. The local index is always
-// included so a request started on this process is visible immediately, while
-// Redis provides the cross-node view when it is available.
-func collectPricingUserActivity(userID int) (map[string]struct{}, bool) {
-	activeMembers := make(map[string]struct{})
-	if userID <= 0 {
-		return activeMembers, false
-	}
-	now := time.Now().UnixMilli()
-	localPricingGroupActivity.Lock()
-	entries := localPricingGroupActivity.users[userID]
-	for member, entry := range entries {
-		if entry.expiresAt <= now {
-			delete(entries, member)
+// collectPricingUserActivity reads active request members from the existing user
+// index, merging local activity with a single Redis pipeline for the entire page.
+func collectPricingUserActivity(userIDs []int) (map[int]map[string]struct{}, bool) {
+	activeMembersByUser := make(map[int]map[string]struct{}, len(userIDs))
+	uniqueUserIDs := make([]int, 0, len(userIDs))
+	seen := make(map[int]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if userID <= 0 {
 			continue
 		}
-		activeMembers[member] = struct{}{}
+		if _, exists := seen[userID]; exists {
+			continue
+		}
+		seen[userID] = struct{}{}
+		uniqueUserIDs = append(uniqueUserIDs, userID)
+		activeMembersByUser[userID] = make(map[string]struct{})
 	}
-	if len(entries) == 0 {
-		delete(localPricingGroupActivity.users, userID)
+	if len(uniqueUserIDs) == 0 {
+		return activeMembersByUser, false
+	}
+
+	now := time.Now().UnixMilli()
+	localPricingGroupActivity.Lock()
+	for _, userID := range uniqueUserIDs {
+		entries := localPricingGroupActivity.users[userID]
+		for member, entry := range entries {
+			if entry.expiresAt <= now {
+				delete(entries, member)
+				continue
+			}
+			activeMembersByUser[userID][member] = struct{}{}
+		}
+		if len(entries) == 0 {
+			delete(localPricingGroupActivity.users, userID)
+		}
 	}
 	localPricingGroupActivity.Unlock()
 
@@ -488,25 +502,33 @@ func collectPricingUserActivity(userID int) (map[string]struct{}, bool) {
 	if common.RedisEnabled && common.RDB != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), pricingGroupActivityRedisTimeout)
 		pipeline := common.RDB.Pipeline()
-		key := pricingUserActivityRedisKey(userID)
-		pipeline.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10))
-		membersCommand := pipeline.ZRangeByScore(ctx, key, &redis.ZRangeBy{
-			Min: strconv.FormatInt(now+1, 10),
-			Max: "+inf",
-		})
+		commands := make(map[int]*redis.StringSliceCmd, len(uniqueUserIDs))
+		for _, userID := range uniqueUserIDs {
+			key := pricingUserActivityRedisKey(userID)
+			pipeline.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(now, 10))
+			commands[userID] = pipeline.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+				Min: strconv.FormatInt(now+1, 10),
+				Max: "+inf",
+			})
+		}
 		_, err := pipeline.Exec(ctx)
 		cancel()
 		if err != nil {
 			redisDegraded = true
-		} else if members, commandErr := membersCommand.Result(); commandErr != nil {
-			redisDegraded = true
 		} else {
-			for _, member := range members {
-				activeMembers[member] = struct{}{}
+			for userID, command := range commands {
+				members, commandErr := command.Result()
+				if commandErr != nil {
+					redisDegraded = true
+					continue
+				}
+				for _, member := range members {
+					activeMembersByUser[userID][member] = struct{}{}
+				}
 			}
 		}
 	}
-	return activeMembers, redisDegraded
+	return activeMembersByUser, redisDegraded
 }
 
 // collectPricingTokenActivity reads active request members for each API key.
@@ -587,8 +609,19 @@ func GetUserInFlightRequests(userID int) (count int, degraded bool) {
 	if userID <= 0 {
 		return 0, false
 	}
-	activeMembers, degraded := collectPricingUserActivity(userID)
-	return len(activeMembers), degraded
+	counts, degraded := GetUsersInFlightRequests([]int{userID})
+	return counts[userID], degraded
+}
+
+// GetUsersInFlightRequests returns the active request count for each requested
+// user across all of their API keys. The boolean reports a degraded Redis view.
+func GetUsersInFlightRequests(userIDs []int) (map[int]int, bool) {
+	activeMembersByUser, degraded := collectPricingUserActivity(userIDs)
+	counts := make(map[int]int, len(activeMembersByUser))
+	for userID, members := range activeMembersByUser {
+		counts[userID] = len(members)
+	}
+	return counts, degraded
 }
 
 // GetTokenInFlightRequests returns the active request count for each requested

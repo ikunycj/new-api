@@ -172,6 +172,10 @@ func TestGetUserInFlightRequestsUsesUserIndexAndIsolatesUsers(t *testing.T) {
 	count, degraded = GetUserInFlightRequests(8)
 	assert.Equal(t, 1, count)
 	assert.False(t, degraded)
+
+	counts, degraded := GetUsersInFlightRequests([]int{7, 8, 9, 7, 0, -1})
+	assert.Equal(t, map[int]int{7: 2, 8: 1, 9: 0}, counts)
+	assert.False(t, degraded)
 }
 
 func TestGetUserInFlightRequestsReportsMissingRedisAsDegraded(t *testing.T) {
@@ -192,6 +196,14 @@ func TestGetUserInFlightRequestsReportsMissingRedisAsDegraded(t *testing.T) {
 	count, degraded := GetUserInFlightRequests(7)
 	assert.Zero(t, count)
 	assert.True(t, degraded)
+
+	counts, degraded := GetUsersInFlightRequests([]int{7, 8})
+	assert.Equal(t, map[int]int{7: 0, 8: 0}, counts)
+	assert.True(t, degraded)
+
+	counts, degraded = GetUsersInFlightRequests(nil)
+	assert.Empty(t, counts)
+	assert.False(t, degraded)
 }
 
 func TestGetTokenInFlightRequestsIsolatesApiKeys(t *testing.T) {

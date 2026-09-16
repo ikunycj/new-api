@@ -300,6 +300,29 @@ func Register(c *gin.Context) {
 	return
 }
 
+type userListResponse struct {
+	*model.User
+	CurrentConcurrency  int  `json:"current_concurrency"`
+	ConcurrencyDegraded bool `json:"concurrency_degraded"`
+}
+
+func buildUserListResponses(users []*model.User) []*userListResponse {
+	userIDs := make([]int, 0, len(users))
+	for _, user := range users {
+		userIDs = append(userIDs, user.Id)
+	}
+	counts, degraded := service.GetUsersInFlightRequests(userIDs)
+	responses := make([]*userListResponse, 0, len(users))
+	for _, user := range users {
+		responses = append(responses, &userListResponse{
+			User:                user,
+			CurrentConcurrency:  counts[user.Id],
+			ConcurrencyDegraded: degraded,
+		})
+	}
+	return responses
+}
+
 func GetAllUsers(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	users, total, err := model.GetAllUsers(pageInfo)
@@ -315,7 +338,7 @@ func GetAllUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(buildUserListResponses(users))
 
 	common.ApiSuccess(c, pageInfo)
 	return
@@ -350,7 +373,7 @@ func SearchUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(buildUserListResponses(users))
 	common.ApiSuccess(c, pageInfo)
 	return
 }

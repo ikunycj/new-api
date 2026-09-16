@@ -45,6 +45,8 @@ export const userSchema = z.object({
   quota: z.number(),
   used_quota: z.number(),
   request_count: z.number(),
+  current_concurrency: z.number().int().min(0).optional(),
+  concurrency_degraded: z.boolean().optional(),
   onboarding_required: z.boolean().optional(),
   onboarding_version: z.number().nullable().optional(),
   group: z.string(),

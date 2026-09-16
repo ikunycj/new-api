@@ -169,6 +169,34 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileBadge: true },
     },
     {
+      accessorKey: 'current_concurrency',
+      header: '当前并发',
+      cell: ({ row }) => {
+        const user = row.original
+        if (user.concurrency_degraded || user.current_concurrency == null) {
+          return (
+            <span
+              className='text-warning text-sm'
+              title='并发统计暂不可用，请稍后刷新'
+            >
+              暂不可用
+            </span>
+          )
+        }
+        return (
+          <span
+            className='text-sm tabular-nums'
+            title='当前正在处理的请求数，刷新列表后更新'
+          >
+            {user.current_concurrency}
+          </span>
+        )
+      },
+      enableSorting: false,
+      size: 120,
+      meta: { mobileOrder: 35 },
+    },
+    {
       id: 'quota',
       accessorKey: 'quota',
       header: t('Quota'),
