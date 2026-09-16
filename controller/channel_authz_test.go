@@ -141,6 +141,31 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 	assert.Equal(t, "default", channel.Group)
 }
 
+func TestChannelProbePolicyRequestContract(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		requestData := map[string]any{
+			"auto_probe_enabled":        enabled,
+			"probe_failure_auto_ban":    "retired",
+			"probe_success_auto_enable": !enabled,
+			"models":                    "gpt-4o", "test_model": "gpt-4o", "group": "default",
+		}
+		body, err := common.Marshal(requestData)
+		require.NoError(t, err)
+		var request PatchChannel
+		require.NoError(t, common.Unmarshal(body, &request))
+		require.NoError(t, validateChannel(&request.Channel, false))
+		assert.Equal(t, enabled, request.ShouldAutoProbe())
+		response, err := common.Marshal(request.Channel)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, common.Unmarshal(response, &fields))
+		assert.Equal(t, enabled, fields["auto_probe_enabled"])
+		assert.NotContains(t, fields, "probe_failure_auto_ban")
+		assert.NotContains(t, fields, "probe_success_auto_enable")
+		assert.ElementsMatch(t, []string{"auto_probe_enabled", "models", "test_model", "group"}, channelUpdateColumns(requestData))
+	}
+}
+
 func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 	columns := channelUpdateColumns(map[string]any{
 		"auto_probe_enabled":     false,

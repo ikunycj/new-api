@@ -272,6 +272,9 @@ func migrateDB() error {
 	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
 		return err
 	}
+	if err := removeLegacyChannelProbePolicyColumns(); err != nil {
+		return err
+	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
@@ -351,6 +354,9 @@ func migrateDB() error {
 
 func migrateDBFast() error {
 	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
+		return err
+	}
+	if err := removeLegacyChannelProbePolicyColumns(); err != nil {
 		return err
 	}
 	if err := migrateUsernameToNonUnique(); err != nil {
@@ -619,6 +625,23 @@ func removeLegacyUserClassificationColumn() error {
 	}
 	if err := migrator.DropColumn(legacy, "user_type"); err != nil {
 		return fmt.Errorf("remove legacy users.user_type column: %w", err)
+	}
+	return nil
+}
+
+// removeLegacyChannelProbePolicyColumns 仅删除旧开关，不推导或覆盖统一开关。
+func removeLegacyChannelProbePolicyColumns() error {
+	migrator := DB.Migrator()
+	if !migrator.HasTable(&Channel{}) {
+		return nil
+	}
+	for _, column := range []string{"probe_failure_auto_ban", "probe_success_auto_enable"} {
+		if !migrator.HasColumn(&Channel{}, column) {
+			continue
+		}
+		if err := DB.Exec("ALTER TABLE ? DROP COLUMN IF EXISTS ?", clause.Table{Name: "channels"}, clause.Column{Name: column}).Error; err != nil {
+			return fmt.Errorf("remove legacy channel probe column %s: %w", column, err)
+		}
 	}
 	return nil
 }

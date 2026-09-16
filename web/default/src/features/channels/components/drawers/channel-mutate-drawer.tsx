@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   AlertCircle,
@@ -338,8 +339,6 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
     values.auto_disabled_probe_interval_seconds !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
-    values.probe_failure_auto_ban === false ||
-    values.probe_success_auto_enable === false ||
     values.upstream_max_retries !== 1 ||
     values.max_concurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     values.price_multiplier !== 1 ||
@@ -750,8 +749,6 @@ export function ChannelMutateDrawer({
   const currentAutoDisabledProbeIntervalSeconds = form.watch(
     'auto_disabled_probe_interval_seconds'
   )
-  const currentProbeFailureAutoBan = form.watch('probe_failure_auto_ban')
-  const currentProbeSuccessAutoEnable = form.watch('probe_success_auto_enable')
   const currentUpstreamMaxRetries = form.watch('upstream_max_retries')
   const currentMaxConcurrency = form.watch('max_concurrency')
   const currentPriceMultiplier = form.watch('price_multiplier')
@@ -1027,8 +1024,6 @@ export function ChannelMutateDrawer({
       CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
     currentAutoDisabledProbeIntervalSeconds !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
-    currentProbeFailureAutoBan === false ||
-    currentProbeSuccessAutoEnable === false ||
     currentUpstreamMaxRetries !== 1 ||
     currentMaxConcurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     currentPriceMultiplier !== 1 ||
@@ -3679,29 +3674,61 @@ export function ChannelMutateDrawer({
                               />
                             </div>
 
-                            <FormField
-                              control={form.control}
-                              name='auto_probe_enabled'
-                              render={({ field }) => (
-                                <FormItem className='flex items-start justify-between gap-4'>
-                                  <div className='space-y-0.5'>
-                                    <FormLabel>
-                                      {t('Automatic probe')}
-                                    </FormLabel>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.AUTO_PROBE_ENABLED)}
-                                    </FormDescription>
-                                  </div>
-                                  <FormControl>
-                                    <Switch
-                                      className='shrink-0'
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
+                            <div className='space-y-1'>
+                              <div className='flex items-start gap-4'>
+                                <FormField
+                                  control={form.control}
+                                  name='auto_probe_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='min-w-0 flex-1 gap-1'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <FormLabel>自动探测</FormLabel>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                      <FormDescription>
+                                        开启后定期探测，探测失败自动禁用
+                                      </FormDescription>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='auto_ban'
+                                  render={({ field }) => (
+                                    <FormItem className='min-w-0 flex-1 gap-1'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <FormLabel>{t('Auto Ban')}</FormLabel>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value === 1}
+                                            onCheckedChange={(checked) =>
+                                              field.onChange(checked ? 1 : 0)
+                                            }
+                                          />
+                                        </FormControl>
+                                      </div>
+                                      <FormDescription>
+                                        {t(FIELD_DESCRIPTIONS.AUTO_BAN)}
+                                      </FormDescription>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <Link
+                                to='/system-settings/models/$section'
+                                params={{ section: 'routing-reliability' }}
+                                className='text-primary focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-xs underline underline-offset-4 hover:no-underline focus-visible:ring-2 focus-visible:outline-none'
+                              >
+                                封禁规则设置
+                              </Link>
+                            </div>
 
                             <FormField
                               control={form.control}
@@ -3721,29 +3748,6 @@ export function ChannelMutateDrawer({
                                     {t(FIELD_DESCRIPTIONS.TEST_MODEL)}
                                   </FormDescription>
                                   <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-
-                            <FormField
-                              control={form.control}
-                              name='auto_ban'
-                              render={({ field }) => (
-                                <FormItem className='flex items-center justify-between'>
-                                  <div className='space-y-0.5'>
-                                    <FormLabel>{t('Auto Ban')}</FormLabel>
-                                    <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.AUTO_BAN)}
-                                    </FormDescription>
-                                  </div>
-                                  <FormControl>
-                                    <Switch
-                                      checked={field.value === 1}
-                                      onCheckedChange={(checked) =>
-                                        field.onChange(checked ? 1 : 0)
-                                      }
-                                    />
-                                  </FormControl>
                                 </FormItem>
                               )}
                             />
@@ -3810,9 +3814,7 @@ export function ChannelMutateDrawer({
                                 )}
                               />
                               <p className='text-muted-foreground text-xs sm:col-span-2'>
-                                {t(
-                                  'The system probe task scans the task queue every 60 seconds.'
-                                )}
+                                探测按渠道独立调度，间隔从上次探测完成后计算。恢复还需等待探测成功；并发繁忙时可能排队。
                               </p>
                               <FormField
                                 control={form.control}
@@ -3951,61 +3953,6 @@ export function ChannelMutateDrawer({
                                       )}
                                     </FormDescription>
                                     <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-
-                            <div className='grid gap-4 sm:grid-cols-2'>
-                              <FormField
-                                control={form.control}
-                                name='probe_failure_auto_ban'
-                                render={({ field }) => (
-                                  <FormItem className='flex items-start justify-between gap-4'>
-                                    <div className='space-y-0.5'>
-                                      <FormLabel>
-                                        {t('Probe failure auto-ban')}
-                                      </FormLabel>
-                                      <FormDescription>
-                                        {t(
-                                          FIELD_DESCRIPTIONS.PROBE_FAILURE_AUTO_BAN
-                                        )}
-                                      </FormDescription>
-                                    </div>
-                                    <FormControl>
-                                      <Switch
-                                        className='shrink-0'
-                                        disabled={!currentAutoProbeEnabled}
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name='probe_success_auto_enable'
-                                render={({ field }) => (
-                                  <FormItem className='flex items-start justify-between gap-4'>
-                                    <div className='space-y-0.5'>
-                                      <FormLabel>
-                                        {t('Probe success auto-enable')}
-                                      </FormLabel>
-                                      <FormDescription>
-                                        {t(
-                                          FIELD_DESCRIPTIONS.PROBE_SUCCESS_AUTO_ENABLE
-                                        )}
-                                      </FormDescription>
-                                    </div>
-                                    <FormControl>
-                                      <Switch
-                                        className='shrink-0'
-                                        disabled={!currentAutoProbeEnabled}
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                      />
-                                    </FormControl>
                                   </FormItem>
                                 )}
                               />

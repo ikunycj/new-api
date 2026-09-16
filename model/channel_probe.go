@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -29,6 +30,137 @@ type ChannelProbeHistory struct {
 	StatusCode   int    `json:"status_code"`
 	ErrorMessage string `json:"error_message,omitempty" gorm:"type:text"`
 	CheckedAt    int64  `json:"checked_at" gorm:"bigint;index:idx_channel_probe_history,priority:2;index"`
+}
+
+// GetDueChannelProbes loads only due work, oldest first. Credentials are loaded
+// by the worker after it acquires a lease, not by every scheduler tick.
+func GetDueChannelProbes(ctx context.Context, now int64) ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.WithContext(ctx).Model(&Channel{}).Omit("key").
+		Joins("LEFT JOIN channel_probe_states ON channel_probe_states.channel_id = channels.id").
+		Where("channels.auto_probe_enabled = ? AND channels.status IN ?", true, []int{common.ChannelStatusEnabled, common.ChannelStatusAutoDisabled}).
+		Where("COALESCE(channel_probe_states.next_probe_at, 0) <= ? AND COALESCE(channel_probe_states.lease_until, 0) <= ?", now, now).
+		Order("COALESCE(channel_probe_states.next_probe_at, 0) ASC, channels.id ASC").
+		Find(&channels).Error
+	return channels, err
+}
+
+// CompleteChannelProbe atomically commits the history, schedule and optional
+// status transition. It uses current settings and never overrides manual disable
+// or accepts a result from an expired/replaced lease.
+func CompleteChannelProbe(ctx context.Context, channelID int, result ChannelProbeHistory, leaseUntil int64, usingKey string) (*Channel, bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	channelStatusLock.Lock()
+	defer channelStatusLock.Unlock()
+	var channel Channel
+	changed := false
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where("id = ?", channelID).First(&channel).Error; err != nil {
+			return err
+		}
+		var state ChannelProbeState
+		if err := lockForUpdate(tx).Where("channel_id = ?", channelID).First(&state).Error; err != nil {
+			return err
+		}
+		now := common.GetTimestamp()
+		if leaseUntil <= now || state.LeaseUntil != leaseUntil {
+			return errors.New("probe lease is no longer owned")
+		}
+		var err error
+		changed, err = applyChannelProbeStatus(tx, &channel, result.Success, usingKey, result.ErrorMessage)
+		if err != nil {
+			return err
+		}
+		interval := channel.GetProbeIntervalSeconds()
+		if channel.Status == common.ChannelStatusAutoDisabled {
+			interval = channel.GetAutoDisabledProbeIntervalSeconds()
+		}
+		result.ChannelID = channelID
+		result.CheckedAt = now
+		return persistChannelProbeResult(tx, channelID, result, now+int64(interval), leaseUntil)
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if changed && common.MemoryCacheEnabled {
+		SyncChannelCacheEntry(&channel)
+	}
+	return &channel, changed, nil
+}
+
+// RecoverChannelAfterTest 使用与自动探测相同的事务条件，但不改动探测历史、租约或调度。
+func RecoverChannelAfterTest(ctx context.Context, channelID int, usingKey string) (*Channel, bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	channelStatusLock.Lock()
+	defer channelStatusLock.Unlock()
+	var channel Channel
+	changed := false
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where("id = ?", channelID).First(&channel).Error; err != nil {
+			return err
+		}
+		var err error
+		changed, err = applyChannelProbeStatus(tx, &channel, true, usingKey, "")
+		return err
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if changed && common.MemoryCacheEnabled {
+		SyncChannelCacheEntry(&channel)
+	}
+	return &channel, changed, nil
+}
+
+// applyChannelProbeStatus 只能传入当前事务中加行锁后读取的渠道。
+// 探测闭环独立于业务请求的 auto_ban 和全局自动禁用配置。
+func applyChannelProbeStatus(tx *gorm.DB, channel *Channel, success bool, usingKey, reason string) (bool, error) {
+	if !channel.ShouldAutoProbe() || channel.Status == common.ChannelStatusManuallyDisabled {
+		return false, nil
+	}
+	beforeStatus := channel.Status
+	if success {
+		if channel.Status != common.ChannelStatusAutoDisabled {
+			return false, nil
+		}
+		if channel.ChannelInfo.IsMultiKey {
+			// 只恢复渠道，不解除任何 Key 隔离；成功的 Key 必须仍存在且当前可用。
+			available := false
+			for index, key := range channel.GetKeys() {
+				status, explicit := channel.ChannelInfo.MultiKeyStatusList[index]
+				if usingKey != "" && key == usingKey && (!explicit || status == common.ChannelStatusEnabled) {
+					available = true
+					break
+				}
+			}
+			if !available {
+				return false, nil
+			}
+		}
+		channel.Status = common.ChannelStatusEnabled
+	} else {
+		if channel.Status != common.ChannelStatusEnabled {
+			return false, nil
+		}
+		channel.Status = common.ChannelStatusAutoDisabled
+	}
+	info := channel.GetOtherInfo()
+	info["status_time"] = common.GetTimestamp()
+	info["status_reason"] = reason
+	channel.SetOtherInfo(info)
+	if err := tx.Model(&Channel{}).Where("id = ? AND status = ? AND auto_probe_enabled = ?", channel.Id, beforeStatus, true).
+		Updates(map[string]any{"status": channel.Status, "other_info": channel.OtherInfo}).Error; err != nil {
+		return false, err
+	}
+	if err := tx.Model(&Ability{}).Where("channel_id = ?", channel.Id).
+		Update("enabled", channel.Status == common.ChannelStatusEnabled).Error; err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func ensureChannelProbeState(channelID int) (*ChannelProbeState, error) {
@@ -129,30 +261,34 @@ func saveChannelProbeResult(channelID int, result ChannelProbeHistory, nextProbe
 		nextProbeAt = result.CheckedAt
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&result).Error; err != nil {
-			return err
-		}
-		stateQuery := tx.Model(&ChannelProbeState{}).Where("channel_id = ?", channelID)
-		if leaseUntil > 0 {
-			stateQuery = stateQuery.Where("lease_until = ?", leaseUntil)
-		}
-		stateUpdate := stateQuery.Updates(map[string]any{
-			"last_probe_at":   result.CheckedAt,
-			"next_probe_at":   nextProbeAt,
-			"lease_until":     0,
-			"last_success":    result.Success,
-			"last_latency_ms": result.LatencyMs,
-		})
-		if stateUpdate.Error != nil {
-			return stateUpdate.Error
-		}
-		if leaseUntil > 0 && stateUpdate.RowsAffected != 1 {
-			return errors.New("probe lease is no longer owned")
-		}
-		cutoff := result.CheckedAt - int64(channelProbeHistoryRetention/time.Second)
-		return tx.Where("checked_at < ?", cutoff).
-			Delete(&ChannelProbeHistory{}).Error
+		return persistChannelProbeResult(tx, channelID, result, nextProbeAt, leaseUntil)
 	})
+}
+
+func persistChannelProbeResult(tx *gorm.DB, channelID int, result ChannelProbeHistory, nextProbeAt, leaseUntil int64) error {
+	if err := tx.Create(&result).Error; err != nil {
+		return err
+	}
+	stateQuery := tx.Model(&ChannelProbeState{}).Where("channel_id = ?", channelID)
+	if leaseUntil > 0 {
+		stateQuery = stateQuery.Where("lease_until = ?", leaseUntil)
+	}
+	stateUpdate := stateQuery.Updates(map[string]any{
+		"last_probe_at":   result.CheckedAt,
+		"next_probe_at":   nextProbeAt,
+		"lease_until":     0,
+		"last_success":    result.Success,
+		"last_latency_ms": result.LatencyMs,
+	})
+	if stateUpdate.Error != nil {
+		return stateUpdate.Error
+	}
+	if leaseUntil > 0 && stateUpdate.RowsAffected != 1 {
+		return errors.New("probe lease is no longer owned")
+	}
+	cutoff := result.CheckedAt - int64(channelProbeHistoryRetention/time.Second)
+	return tx.Where("checked_at < ?", cutoff).
+		Delete(&ChannelProbeHistory{}).Error
 }
 
 func PreviousNaturalDayBounds(now time.Time) (int64, int64) {

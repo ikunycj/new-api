@@ -185,7 +185,8 @@ func ListSystemTasks(limit int) ([]*SystemTask, error) {
 		limit = 100
 	}
 	var tasks []*SystemTask
-	err := DB.Order("id desc").Limit(limit).Find(&tasks).Error
+	// Continuous jobs must remain visible even after newer tasks finish.
+	err := DB.Order("CASE WHEN status IN ('pending', 'running') THEN 0 ELSE 1 END").Order("id desc").Limit(limit).Find(&tasks).Error
 	return tasks, err
 }
 

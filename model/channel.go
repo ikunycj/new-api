@@ -50,8 +50,6 @@ type Channel struct {
 	AutoProbeEnabled                 *bool    `json:"auto_probe_enabled"`
 	ProbeIntervalSeconds             int      `json:"probe_interval_seconds"`
 	AutoDisabledProbeIntervalSeconds int      `json:"auto_disabled_probe_interval_seconds"`
-	ProbeFailureAutoBan              *bool    `json:"probe_failure_auto_ban"`
-	ProbeSuccessAutoEnable           *bool    `json:"probe_success_auto_enable"`
 	UpstreamMaxRetries               *int     `json:"upstream_max_retries"`
 	MaxConcurrency                   *int     `json:"max_concurrency"`
 	CurrentConcurrency               int      `json:"current_concurrency" gorm:"-"`
@@ -299,7 +297,7 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 				logger.LogDebug(nil, "channel %d polling index: %d", channel.Id, channel.ChannelInfo.MultiKeyPollingIndex)
 			}
 			if !common.MemoryCacheEnabled {
-				_ = channel.SaveChannelInfo()
+				_ = channel.saveChannelPollingIndex()
 			} else {
 				// CacheUpdateChannel(channel)
 			}
@@ -351,8 +349,19 @@ func (channel *Channel) HasEnabledKey() bool {
 	return false
 }
 
-func (channel *Channel) SaveChannelInfo() error {
-	return DB.Model(channel).Update("channel_info", channel.ChannelInfo).Error
+// 轮询只更新游标，不能用请求开始时的快照覆盖并发禁用的 Key。
+func (channel *Channel) saveChannelPollingIndex() error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var current Channel
+		if err := lockForUpdate(tx).Where("id = ?", channel.Id).First(&current).Error; err != nil {
+			return err
+		}
+		if !current.ChannelInfo.IsMultiKey {
+			return nil
+		}
+		current.ChannelInfo.MultiKeyPollingIndex = channel.ChannelInfo.MultiKeyPollingIndex
+		return tx.Model(&Channel{}).Where("id = ?", channel.Id).Update("channel_info", current.ChannelInfo).Error
+	})
 }
 
 func (channel *Channel) GetModels() []string {
@@ -401,7 +410,7 @@ func (channel *Channel) GetOtherInfo() map[string]interface{} {
 }
 
 func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
-	otherInfoBytes, err := json.Marshal(otherInfo)
+	otherInfoBytes, err := common.Marshal(otherInfo)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to marshal other info: channel_id=%d, tag=%s, name=%s, error=%v", channel.Id, channel.GetTag(), channel.Name, err))
 		return
@@ -446,26 +455,6 @@ func (channel *Channel) GetAutoDisabledProbeIntervalSeconds() int {
 		return DefaultAutoDisabledProbeIntervalSeconds
 	}
 	return channel.AutoDisabledProbeIntervalSeconds
-}
-
-func (channel *Channel) ShouldProbeFailureAutoBan() bool {
-	if channel == nil {
-		return false
-	}
-	if channel.ProbeFailureAutoBan != nil {
-		return *channel.ProbeFailureAutoBan
-	}
-	return channel.GetAutoBan()
-}
-
-func (channel *Channel) ShouldProbeSuccessAutoEnable() bool {
-	if channel == nil {
-		return false
-	}
-	if channel.ProbeSuccessAutoEnable != nil {
-		return *channel.ProbeSuccessAutoEnable
-	}
-	return true
 }
 
 func (channel *Channel) GetTestModel() string {
@@ -1050,6 +1039,22 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 			return err
 		}
 		if statusChanged {
+			if channel.Status == common.ChannelStatusAutoDisabled && channel.ShouldAutoProbe() {
+				// A relay failure must not leave the recovery probe waiting for the
+				// previous healthy-channel interval. Preserve any in-flight lease.
+				state := ChannelProbeState{
+					ChannelID:   channelId,
+					NextProbeAt: common.GetTimestamp() + int64(channel.GetAutoDisabledProbeIntervalSeconds()),
+				}
+				if err := tx.Clauses(clause.OnConflict{
+					Columns: []clause.Column{{Name: "channel_id"}},
+					DoUpdates: clause.Assignments(map[string]any{
+						"next_probe_at": gorm.Expr("LEAST(channel_probe_states.next_probe_at, EXCLUDED.next_probe_at)"),
+					}),
+				}).Create(&state).Error; err != nil {
+					return err
+				}
+			}
 			return tx.Model(&Ability{}).Where("channel_id = ?", channelId).
 				Update("enabled", channel.Status == common.ChannelStatusEnabled).Error
 		}

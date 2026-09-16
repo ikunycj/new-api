@@ -938,11 +938,6 @@ func TestChannel(c *gin.Context) {
 			return
 		}
 	}
-	//defer func() {
-	//	if channel.ChannelInfo.IsMultiKey {
-	//		go func() { _ = channel.SaveChannelInfo() }()
-	//	}
-	//}()
 	testModel := c.Query("model")
 	endpointType := c.Query("endpoint_type")
 	isStream, _ := strconv.ParseBool(c.Query("stream"))
@@ -982,6 +977,7 @@ func TestChannel(c *gin.Context) {
 		})
 		return
 	}
+	recoverChannelAfterSuccessfulTest(requestCtx, channel.Id, result.context)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -1000,6 +996,17 @@ type channelTestSummary struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 	Disabled  int `json:"disabled"`
+}
+
+// 仅由显式单渠道/批量测试成功路径调用，分组监控不参与渠道恢复。
+func recoverChannelAfterSuccessfulTest(ctx context.Context, channelID int, testContext *gin.Context) {
+	usingKey := ""
+	if testContext != nil {
+		usingKey = common.GetContextKeyString(testContext, constant.ContextKeyChannelKey)
+	}
+	if err := service.RecoverChannelAfterTest(ctx, channelID, usingKey); err != nil {
+		common.SysError(fmt.Sprintf("recover channel after successful test failed: channel=%d error=%v", channelID, err))
+	}
 }
 
 // performChannelTests runs the channel test loop synchronously, honoring ctx
@@ -1054,7 +1061,11 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 			}
 		}
 
-		if newAPIError == nil {
+		// 恢复只依据原始测试结果，不受业务禁用阈值合成错误影响。
+		if result.localErr == nil && result.newAPIError == nil {
+			recoverChannelAfterSuccessfulTest(ctx, channel.Id, result.context)
+		}
+		if newAPIError == nil && result.localErr == nil {
 			summary.Succeeded++
 		} else {
 			summary.Failed++

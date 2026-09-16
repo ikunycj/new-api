@@ -150,8 +150,6 @@ export const channelFormSchema = z
     auto_probe_enabled: z.boolean(),
     probe_interval_seconds: z.number().int().min(0).max(604800),
     auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
-    probe_failure_auto_ban: z.boolean(),
-    probe_success_auto_enable: z.boolean(),
     upstream_max_retries: z.number().int().min(0).max(100).nullable(),
     max_concurrency: z.number().int().min(1).max(10000).nullable(),
     price_multiplier: z.number().finite().min(0).max(1000),
@@ -323,8 +321,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   auto_probe_enabled: false,
   probe_interval_seconds: 120,
   auto_disabled_probe_interval_seconds: 10,
-  probe_failure_auto_ban: true,
-  probe_success_auto_enable: true,
   upstream_max_retries: 1,
   max_concurrency: 1000,
   price_multiplier: 1,
@@ -478,9 +474,6 @@ export function transformChannelToFormDefaults(
     auto_disabled_probe_interval_seconds:
       channel.auto_disabled_probe_interval_seconds ??
       CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban:
-      channel.probe_failure_auto_ban ?? (channel.auto_ban ?? 0) === 1,
-    probe_success_auto_enable: channel.probe_success_auto_enable ?? true,
     upstream_max_retries:
       channel.upstream_max_retries === undefined
         ? CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries
@@ -705,8 +698,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban: formData.probe_failure_auto_ban,
-    probe_success_auto_enable: formData.probe_success_auto_enable,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
@@ -765,8 +756,6 @@ export function transformFormDataToUpdatePayload(
     probe_interval_seconds: formData.probe_interval_seconds,
     auto_disabled_probe_interval_seconds:
       formData.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban: formData.probe_failure_auto_ban,
-    probe_success_auto_enable: formData.probe_success_auto_enable,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,

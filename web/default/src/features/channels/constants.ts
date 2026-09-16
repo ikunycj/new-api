@@ -359,14 +359,9 @@ export const FIELD_DESCRIPTIONS = {
   WEIGHT: 'Used for load balancing. Higher weight = more requests',
   TEST_MODEL: 'Model to use when testing channel connectivity',
   AUTO_BAN: 'Automatically disable channel on repeated failures',
-  AUTO_PROBE_ENABLED: 'Automatically probe this channel in the background',
   PROBE_INTERVAL: 'Interval for probing enabled channels, in seconds',
   AUTO_DISABLED_PROBE_INTERVAL:
     'Interval for probing auto-disabled channels, in seconds',
-  PROBE_FAILURE_AUTO_BAN:
-    'Automatically disable the channel when a probe fails',
-  PROBE_SUCCESS_AUTO_ENABLE:
-    'Automatically enable the channel after a successful probe',
   UPSTREAM_MAX_RETRIES:
     'Maximum retries for this channel after the first upstream attempt',
   MAX_CONCURRENCY: '最大并发数，未设置时默认为1000。',

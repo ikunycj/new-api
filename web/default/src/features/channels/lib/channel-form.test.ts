@@ -24,6 +24,7 @@ import {
   CHANNEL_FORM_DEFAULT_VALUES,
   channelFormSchema,
   transformChannelToFormDefaults,
+  transformFormDataToCreatePayload,
   transformFormDataToUpdatePayload,
 } from './channel-form'
 
@@ -138,16 +139,26 @@ describe('channel form API mapping', () => {
     assert.equal(transformChannelToFormDefaults(parsed).key, '')
   })
 
-  test('preserves an explicitly enabled automatic probe setting', () => {
-    const defaults = transformChannelToFormDefaults(
-      channel({ auto_probe_enabled: true })
-    )
-    const parsed = channelFormSchema.parse(defaults)
-    const payload = transformFormDataToUpdatePayload(parsed, 42)
+  for (const enabled of [true, false]) {
+    test(`自动探测为 ${enabled} 时使用单一开关保存且不改变业务自动禁用`, () => {
+      const defaults = transformChannelToFormDefaults(
+        channel({ auto_probe_enabled: enabled, auto_ban: 0 })
+      )
+      const parsed = channelFormSchema.parse(defaults)
+      const created = transformFormDataToCreatePayload(parsed).channel
+      const updated = transformFormDataToUpdatePayload(parsed, 42)
 
-    assert.equal(defaults.auto_probe_enabled, true)
-    assert.equal(payload.auto_probe_enabled, true)
-  })
+      assert.equal(defaults.auto_probe_enabled, enabled)
+      for (const payload of [created, updated]) {
+        assert.equal(payload.auto_probe_enabled, enabled)
+        assert.equal(payload.auto_ban, 0)
+        assert.equal(Object.hasOwn(payload, 'probe_failure_auto_ban'), false)
+        assert.equal(Object.hasOwn(payload, 'probe_success_auto_enable'), false)
+        assert.equal(payload.probe_interval_seconds, 120)
+        assert.equal(payload.auto_disabled_probe_interval_seconds, 10)
+      }
+    })
+  }
 
   test('requires a configured test model', () => {
     const defaults = transformChannelToFormDefaults(channel())

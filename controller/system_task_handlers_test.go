@@ -32,7 +32,7 @@ func TestShouldRunChannelProbeRequiresSupportedRecoverableChannel(t *testing.T) 
 	autoProbeEnabled := true
 	assert.False(t, shouldRunChannelProbe(nil))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, TestModel: testModel, AutoProbeEnabled: &autoProbeDisabled}))
-	assert.False(t, shouldRunChannelProbe(&model.Channel{Status: common.ChannelStatusManuallyDisabled}))
+	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusManuallyDisabled, TestModel: testModel, AutoProbeEnabled: &autoProbeEnabled}))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeKling, Status: common.ChannelStatusEnabled}))
 	assert.False(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}))
 	assert.True(t, shouldRunChannelProbe(&model.Channel{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, TestModel: testModel, AutoProbeEnabled: &autoProbeEnabled}))
@@ -42,21 +42,11 @@ func TestShouldRunChannelProbeRequiresSupportedRecoverableChannel(t *testing.T) 
 		TestModel: testModel, AutoProbeEnabled: &autoProbeEnabled,
 		ChannelInfo: model.ChannelInfo{IsMultiKey: true},
 	}))
-	assert.False(t, shouldRunChannelProbe(&model.Channel{
+	assert.True(t, shouldRunChannelProbe(&model.Channel{
 		Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusAutoDisabled,
-		TestModel:   testModel,
+		TestModel: testModel, AutoProbeEnabled: &autoProbeEnabled,
 		ChannelInfo: model.ChannelInfo{IsMultiKey: true},
 	}))
-}
-
-func TestChannelProbeIntervalUsesResultingStatus(t *testing.T) {
-	channel := &model.Channel{
-		ProbeIntervalSeconds:             11,
-		AutoDisabledProbeIntervalSeconds: 29,
-	}
-
-	assert.Equal(t, 11, channelProbeIntervalSeconds(channel, common.ChannelStatusEnabled))
-	assert.Equal(t, 29, channelProbeIntervalSeconds(channel, common.ChannelStatusAutoDisabled))
 }
 
 func TestChannelTestHandlerIsOnDemandOnly(t *testing.T) {
