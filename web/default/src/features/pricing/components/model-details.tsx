@@ -1115,7 +1115,9 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const isDynamic =
     props.model.billing_mode === 'tiered_expr' &&
     Boolean(props.model.billing_expr)
-  const catalogGroups = getCatalogGroups(props.catalogGroups || {})
+  const catalogGroups = getCatalogGroups(props.catalogGroups || {}).filter(
+    (group) => props.model.enable_groups?.includes(group)
+  )
 
   return (
     <div className='@container/details space-y-4'>

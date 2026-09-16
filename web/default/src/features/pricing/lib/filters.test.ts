@@ -156,12 +156,14 @@ describe('pricing model sorting', () => {
       }
     )
 
-    assert.deepEqual(byModel.map((model) => model.model_name), [
-      'claude-fable-5',
-    ])
-    assert.deepEqual(byVendor.map((model) => model.model_name), [
-      'claude-fable-5',
-    ])
+    assert.deepEqual(
+      byModel.map((model) => model.model_name),
+      ['claude-fable-5']
+    )
+    assert.deepEqual(
+      byVendor.map((model) => model.model_name),
+      ['claude-fable-5']
+    )
     assert.equal(byGroup.length, 1)
   })
 
@@ -196,7 +198,10 @@ describe('pricing model sorting', () => {
         sortBy: SORT_OPTIONS.NAME,
       })
 
-      assert.deepEqual(result.map((model) => model.model_name), [expected])
+      assert.deepEqual(
+        result.map((model) => model.model_name),
+        [expected]
+      )
     }
   })
 
@@ -220,14 +225,19 @@ describe('pricing model sorting', () => {
 })
 
 describe('pricing model group filtering', () => {
-  test('keeps every model visible for a catalog group', () => {
+  test('only keeps models that enable the selected catalog group', () => {
     const model: PricingModel = {
       ...models[0],
       enable_groups: ['default'],
       group_ratio: { default: 1, vip: 0.8 },
     }
 
-    assert.deepEqual(filterByGroup([model], 'vip'), [model])
-    assert.deepEqual(filterByGroup(models, 'vip'), models)
+    assert.deepEqual(filterByGroup([model], 'vip'), [])
+    assert.deepEqual(
+      filterByGroup([{ ...models[0], enable_groups: ['vip'] }], 'vip').map(
+        (item) => item.model_name
+      ),
+      ['zeta-model']
+    )
   })
 })

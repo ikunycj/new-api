@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { getPreferredModelOrder } from '../../../lib/model-preferences'
 import {
   SORT_OPTIONS,
   FILTER_ALL,
@@ -26,7 +27,6 @@ import {
   type ModelTypeOption,
 } from '../constants'
 import type { PricingModel } from '../types'
-import { getPreferredModelOrder } from '../../../lib/model-preferences'
 
 // ----------------------------------------------------------------------------
 // Filter Utilities
@@ -48,12 +48,7 @@ export function filterBySearch(
     (m) =>
       m.model_name?.toLowerCase().includes(lowerQuery) ||
       m.vendor_name?.toLowerCase().includes(lowerQuery) ||
-      m.enable_groups?.some((group) =>
-        group.toLowerCase().includes(lowerQuery)
-      ) ||
-      Object.keys(m.group_ratio || {}).some((group) =>
-        group.toLowerCase().includes(lowerQuery)
-      )
+      m.enable_groups?.some((group) => group.toLowerCase().includes(lowerQuery))
   )
 }
 
@@ -98,10 +93,7 @@ export function filterByGroup(
   group: string
 ): PricingModel[] {
   if (group === FILTER_ALL) return models
-  // Pricing groups in the model square describe a catalog-wide price list;
-  // they do not express per-model routing availability. Once a group appears
-  // in the catalog, every returned model remains visible under that group.
-  return models
+  return models.filter((model) => model.enable_groups?.includes(group))
 }
 
 /**

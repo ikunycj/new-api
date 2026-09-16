@@ -26,8 +26,8 @@ import type { PricingDisplayModel, PricingModel } from '../types'
 /**
  * Get pricing groups configured for the model-square catalog.
  *
- * This intentionally does not inspect a model's enabled abilities: the model
- * square is a catalog of configured pricing groups, not a routing health view.
+ * The catalog contains configured groups, while each model's enabled groups
+ * determine which of those groups can actually serve that model.
  */
 export function getCatalogGroups(
   catalogGroups: Record<string, string>
@@ -64,7 +64,9 @@ export function expandModelsByGroup(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
   )
   return models.flatMap((model) => {
+    const enabledGroups = new Set(model.enable_groups || [])
     const groups = selectableGroups
+      .filter((group) => enabledGroups.has(group))
       .map((group) => ({
         group,
         ratio: getConfiguredGroupRatio(groupRatio, group),
@@ -97,10 +99,12 @@ export function getDisplayGroupRatio(
   selectedGroup?: string
 ): number {
   const groupRatio = model.group_ratio || {}
+  const enabledGroups = new Set(model.enable_groups || [])
 
   if (
     selectedGroup &&
     selectedGroup !== FILTER_ALL &&
+    enabledGroups.has(selectedGroup) &&
     typeof groupRatio[selectedGroup] === 'number' &&
     Number.isFinite(groupRatio[selectedGroup])
   ) {
@@ -109,7 +113,8 @@ export function getDisplayGroupRatio(
 
   let minRatio = Number.POSITIVE_INFINITY
 
-  for (const ratio of Object.values(groupRatio)) {
+  for (const group of enabledGroups) {
+    const ratio = groupRatio[group]
     if (
       typeof ratio === 'number' &&
       Number.isFinite(ratio) &&

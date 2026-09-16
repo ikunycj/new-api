@@ -282,10 +282,11 @@ O = ratio1 × ratio2 × ...
 `/api/pricing` 还会：
 
 - 使用 `default` 账号组配置的定价分组可见范围作为模型广场目录；
-- 只排除内部的 `auto`/全量标记，不按分组启用状态、渠道能力、健康度或当前访问者权限隐藏目录分组；
+- 全局目录只排除内部的 `auto`/全量标记；每个模型实际展示的分组是其 `enable_groups` 与该目录的交集；
+- 目录本身不按渠道健康度或当前访问者权限裁剪，实际 API 请求仍会按令牌/用户授权以及启用的路由能力执行校验；
 - 返回独立的 `group_ratio`、`usable_group`、供应商与端点信息。
 
-见 `controller/pricing.go`、`service/group.go`。模型广场是定价分组目录展示，不代表这些分组当前有可用渠道；实际 API 请求仍会按令牌/用户授权以及启用的路由能力执行校验。
+见 `controller/pricing.go`、`service/group.go`。`group_ratio` 与 `usable_group` 是全局目录数据，模型自身的 `enable_groups` 决定该模型可展示和可筛选的分组；这组展示数据不代表分组当前有可用渠道。
 
 模型广场从 `/api/status` 读取 `billing_usd_to_cny_rate`，非法或缺失时回退为 `1`，见 `web/default/src/features/pricing/hooks/use-pricing-data.ts:32-45`。当前展示规则是：
 
