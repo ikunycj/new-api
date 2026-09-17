@@ -3,7 +3,7 @@ import { describe, test } from 'node:test'
 
 import { formatChartTime } from '@/lib/time'
 
-import { buildCacheTrendChartValues } from './cache-trend'
+import { buildCacheTrendChartValues, summarizeCacheTrend } from './cache-trend'
 
 describe('admin console cache trend chart values', () => {
   test('fills zero rates when the cache trend has no points', () => {
@@ -24,7 +24,15 @@ describe('admin console cache trend chart values', () => {
 
     assert.equal(values.length, 4)
     assert.equal(
-      values.every((value) => value.CacheRate === 0),
+      values.every(
+        (value) =>
+          value.CacheRate === 0 &&
+          value.CacheInputTokens === 0 &&
+          value.CacheReadTokens === 0 &&
+          value.CacheWriteTokens === 0 &&
+          value.CacheHitRequests === 0 &&
+          value.CacheEligibleRequests === 0
+      ),
       true
     )
   })
@@ -55,8 +63,32 @@ describe('admin console cache trend chart values', () => {
     )
 
     assert.deepEqual(
-      values.map((value) => value.CacheRate),
-      [25, 0]
+      values.map((value) => ({
+        rate: value.CacheRate,
+        inputTokens: value.CacheInputTokens,
+        readTokens: value.CacheReadTokens,
+        writeTokens: value.CacheWriteTokens,
+        hitRequests: value.CacheHitRequests,
+        eligibleRequests: value.CacheEligibleRequests,
+      })),
+      [
+        {
+          rate: 25,
+          inputTokens: 100,
+          readTokens: 25,
+          writeTokens: 0,
+          hitRequests: 1,
+          eligibleRequests: 1,
+        },
+        {
+          rate: 0,
+          inputTokens: 0,
+          readTokens: 0,
+          writeTokens: 0,
+          hitRequests: 0,
+          eligibleRequests: 0,
+        },
+      ]
     )
   })
 
@@ -106,5 +138,40 @@ describe('admin console cache trend chart values', () => {
         ['ChatGPT Plus #2', 10],
       ]
     )
+  })
+
+  test('summarizes token and request cache hit metrics', () => {
+    const summary = summarizeCacheTrend([
+      {
+        Time: '09-02 10:00',
+        Model: 'paid',
+        CacheRate: 25,
+        CacheInputTokens: 100,
+        CacheReadTokens: 25,
+        CacheWriteTokens: 10,
+        CacheHitRequests: 1,
+        CacheEligibleRequests: 2,
+      },
+      {
+        Time: '09-02 11:00',
+        Model: 'paid',
+        CacheRate: 50,
+        CacheInputTokens: 300,
+        CacheReadTokens: 150,
+        CacheWriteTokens: 20,
+        CacheHitRequests: 2,
+        CacheEligibleRequests: 3,
+      },
+    ])
+
+    assert.deepEqual(summary, {
+      cacheInputTokens: 400,
+      cacheReadTokens: 175,
+      cacheWriteTokens: 30,
+      cacheHitRequests: 3,
+      cacheEligibleRequests: 5,
+      tokenHitRate: 43.75,
+      requestHitRate: 60,
+    })
   })
 })

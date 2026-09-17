@@ -176,7 +176,15 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
     {
       title: 'Token 数',
       value: formatTokenAmount(stats?.tokens.today ?? 0),
-      detail: `累计 ${formatTokenAmount(stats?.tokens.total ?? 0)}`,
+      detail: (
+        <>
+          累计 {formatTokenAmount(stats?.tokens.total ?? 0)}
+          <strong className='text-foreground/85 font-semibold'>
+            {' / 缓存命中 '}
+            {(stats?.tokens.cache_hit_rate ?? 0).toFixed(1)}%
+          </strong>
+        </>
+      ),
       icon: Layers01Icon,
       tone: 'chart-4',
     },

@@ -45,6 +45,11 @@ type AdminConsolePeriodStats struct {
 	Total int64 `json:"total"`
 }
 
+type AdminConsoleTokenStats struct {
+	AdminConsolePeriodStats
+	CacheHitRate float64 `json:"cache_hit_rate"`
+}
+
 type AdminConsoleUserStats struct {
 	Today       int64 `json:"today"`
 	Total       int64 `json:"total"`
@@ -96,7 +101,7 @@ type AdminConsoleStats struct {
 	Channels    AdminConsoleChannelStats     `json:"channels"`
 	Requests    AdminConsolePeriodStats      `json:"requests"`
 	Users       AdminConsoleUserStats        `json:"users"`
-	Tokens      AdminConsolePeriodStats      `json:"tokens"`
+	Tokens      AdminConsoleTokenStats       `json:"tokens"`
 	Quota       AdminConsolePeriodStats      `json:"quota"`
 	Revenue     AdminConsoleRevenueStats     `json:"revenue"`
 	Performance AdminConsolePerformanceStats `json:"performance"`
@@ -123,6 +128,8 @@ type adminConsoleLogRow struct {
 	TokensToday             int64   `gorm:"column:tokens_today"`
 	TokensMonth             int64   `gorm:"column:tokens_month"`
 	TokensTotal             int64   `gorm:"column:tokens_total"`
+	CacheInputTokensToday   int64   `gorm:"column:cache_input_tokens_today"`
+	CacheReadTokensToday    int64   `gorm:"column:cache_read_tokens_today"`
 	QuotaToday              int64   `gorm:"column:quota_today"`
 	QuotaMonth              int64   `gorm:"column:quota_month"`
 	QuotaTotal              int64   `gorm:"column:quota_total"`
@@ -272,6 +279,8 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_today,
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_month,
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint), 0) AS tokens_total,
+			COALESCE(SUM(input_tokens_total) FILTER (WHERE cache_stats_available = TRUE AND created_at >= ? AND created_at < ?), 0) AS cache_input_tokens_today,
+			COALESCE(SUM(cache_read_tokens) FILTER (WHERE cache_stats_available = TRUE AND created_at >= ? AND created_at < ?), 0) AS cache_read_tokens_today,
 			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_today,
 			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_month,
 			COALESCE(SUM(quota), 0) AS quota_total,
@@ -291,6 +300,8 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 		monthMetricStart, monthMetricEnd,
 		metricStart, metricEnd,
 		monthMetricStart, monthMetricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
 		metricStart, metricEnd,
 		monthMetricStart, monthMetricEnd,
 		metricStart, metricEnd,
@@ -430,7 +441,10 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 		Today: mainRow.UsersToday, Total: mainRow.UsersTotal,
 		ActiveToday: logRow.ActiveUsersToday, ActiveWeek: logRow.ActiveUsersWeek, ActiveMonth: logRow.ActiveUsersMonth,
 	}
-	stats.Tokens = AdminConsolePeriodStats{Today: logRow.TokensToday, Month: logRow.TokensMonth, Total: logRow.TokensTotal}
+	stats.Tokens = AdminConsoleTokenStats{AdminConsolePeriodStats: AdminConsolePeriodStats{Today: logRow.TokensToday, Month: logRow.TokensMonth, Total: logRow.TokensTotal}}
+	if logRow.CacheInputTokensToday > 0 {
+		stats.Tokens.CacheHitRate = float64(logRow.CacheReadTokensToday) / float64(logRow.CacheInputTokensToday) * 100
+	}
 	stats.Quota = AdminConsolePeriodStats{Today: logRow.QuotaToday, Month: logRow.QuotaMonth, Total: logRow.QuotaTotal}
 	stats.Revenue = AdminConsoleRevenueStats{Today: mainRow.RevenueToday, Month: mainRow.RevenueMonth, Total: mainRow.RevenueTotal}
 	stats.Performance = AdminConsolePerformanceStats{

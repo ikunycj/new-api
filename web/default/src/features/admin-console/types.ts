@@ -35,6 +35,10 @@ export interface AdminConsolePeriodStats {
   total: number
 }
 
+export interface AdminConsoleTokenStats extends AdminConsolePeriodStats {
+  cache_hit_rate: number
+}
+
 export interface AdminConsoleUserStats {
   today: number
   total: number
@@ -86,7 +90,7 @@ export interface AdminConsoleStats {
   channels: AdminConsoleChannelStats
   requests: AdminConsolePeriodStats
   users: AdminConsoleUserStats
-  tokens: AdminConsolePeriodStats
+  tokens: AdminConsoleTokenStats
   quota: AdminConsolePeriodStats
   revenue: AdminConsoleRevenueStats
   performance: AdminConsolePerformanceStats

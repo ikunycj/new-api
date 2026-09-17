@@ -7,7 +7,22 @@ import type { AdminConsoleCacheTrendPoint } from './types'
 export interface CacheTrendChartValue {
   Time: string
   CacheRate: number
+  CacheInputTokens: number
+  CacheReadTokens: number
+  CacheWriteTokens: number
+  CacheHitRequests: number
+  CacheEligibleRequests: number
   Model: string
+}
+
+export interface CacheTrendSummary {
+  cacheInputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  cacheHitRequests: number
+  cacheEligibleRequests: number
+  tokenHitRate: number
+  requestHitRate: number
 }
 
 interface AreaChartValue {
@@ -17,6 +32,11 @@ interface AreaChartValue {
 
 function cacheTrendKey(time: string, model: string): string {
   return `${time}\u0000${model}`
+}
+
+function nonNegativeNumber(value: unknown): number {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
 }
 
 export function buildCacheTrendChartValues(
@@ -46,7 +66,10 @@ export function buildCacheTrendChartValues(
     }
   }
 
-  const rates = new Map<string, number>()
+  const cacheMetrics = new Map<
+    string,
+    Omit<CacheTrendChartValue, 'Time' | 'Model'>
+  >()
   for (const point of cacheTrendPoints) {
     const model =
       point.channel_id !== undefined
@@ -57,12 +80,17 @@ export function buildCacheTrendChartValues(
 
     const time = formatChartTime(timestamp, timeGranularity)
     times.add(time)
-    const inputTokens = Number(point.cache_input_tokens)
+    const inputTokens = nonNegativeNumber(point.cache_input_tokens)
     const hitRate = Number(point.cache_hit_rate)
-    rates.set(
-      cacheTrendKey(time, model),
-      inputTokens > 0 && Number.isFinite(hitRate) ? hitRate : 0
-    )
+    cacheMetrics.set(cacheTrendKey(time, model), {
+      CacheRate:
+        inputTokens > 0 && Number.isFinite(hitRate) ? Math.max(hitRate, 0) : 0,
+      CacheInputTokens: inputTokens,
+      CacheReadTokens: nonNegativeNumber(point.cache_read_tokens),
+      CacheWriteTokens: nonNegativeNumber(point.cache_write_tokens),
+      CacheHitRequests: nonNegativeNumber(point.cache_hit_requests),
+      CacheEligibleRequests: nonNegativeNumber(point.cache_eligible_requests),
+    })
   }
 
   if (times.size === 0) return []
@@ -70,12 +98,54 @@ export function buildCacheTrendChartValues(
   const values: CacheTrendChartValue[] = []
   for (const time of [...times].sort()) {
     for (const model of [...models].sort()) {
+      const metrics = cacheMetrics.get(cacheTrendKey(time, model))
       values.push({
         Time: time,
-        CacheRate: rates.get(cacheTrendKey(time, model)) ?? 0,
+        CacheRate: metrics?.CacheRate ?? 0,
+        CacheInputTokens: metrics?.CacheInputTokens ?? 0,
+        CacheReadTokens: metrics?.CacheReadTokens ?? 0,
+        CacheWriteTokens: metrics?.CacheWriteTokens ?? 0,
+        CacheHitRequests: metrics?.CacheHitRequests ?? 0,
+        CacheEligibleRequests: metrics?.CacheEligibleRequests ?? 0,
         Model: model,
       })
     }
   }
   return values
+}
+
+export function summarizeCacheTrend(
+  values: CacheTrendChartValue[]
+): CacheTrendSummary {
+  const summary = values.reduce(
+    (result, value) => {
+      result.cacheInputTokens += nonNegativeNumber(value.CacheInputTokens)
+      result.cacheReadTokens += nonNegativeNumber(value.CacheReadTokens)
+      result.cacheWriteTokens += nonNegativeNumber(value.CacheWriteTokens)
+      result.cacheHitRequests += nonNegativeNumber(value.CacheHitRequests)
+      result.cacheEligibleRequests += nonNegativeNumber(
+        value.CacheEligibleRequests
+      )
+      return result
+    },
+    {
+      cacheInputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheHitRequests: 0,
+      cacheEligibleRequests: 0,
+    }
+  )
+
+  return {
+    ...summary,
+    tokenHitRate:
+      summary.cacheInputTokens > 0
+        ? (summary.cacheReadTokens / summary.cacheInputTokens) * 100
+        : 0,
+    requestHitRate:
+      summary.cacheEligibleRequests > 0
+        ? (summary.cacheHitRequests / summary.cacheEligibleRequests) * 100
+        : 0,
+  }
 }

@@ -32,11 +32,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
 import { getAdminConsoleCacheTrend } from '@/features/admin-console/api'
-import { buildCacheTrendChartValues } from '@/features/admin-console/cache-trend'
+import {
+  buildCacheTrendChartValues,
+  summarizeCacheTrend,
+} from '@/features/admin-console/cache-trend'
 import { formatChannelDisplayName } from '@/features/admin-console/channel-display'
 import { getPricingGroups } from '@/features/channels/api'
 import { processChartData } from '@/features/dashboard/lib'
 import type { DashboardMetric, QuotaDataItem } from '@/features/dashboard/types'
+import { formatCompactNumber, formatNumber } from '@/lib/format'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import type { TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
@@ -224,6 +228,10 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     props.timeGranularity,
   ])
   const cacheTrendHasSeries = cacheTrendValues.length > 0
+  const cacheTrendSummary = useMemo(
+    () => summarizeCacheTrend(cacheTrendValues),
+    [cacheTrendValues]
+  )
   const spec = useMemo(() => {
     if (cacheTrendValues.length === 0) return chartData.spec_area
 
@@ -282,10 +290,36 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
             mark: {
               content: [
                 {
-                  key: t('Cache hit rate'),
+                  key: 'Token 命中率',
                   value: (datum: Record<string, unknown>) => {
+                    const inputTokens = Number(datum?.CacheInputTokens)
                     const rate = Number(datum?.CacheRate)
-                    return Number.isFinite(rate) ? `${rate.toFixed(2)}%` : '-'
+                    return inputTokens > 0 && Number.isFinite(rate)
+                      ? `${rate.toFixed(2)}%`
+                      : '-'
+                  },
+                },
+                {
+                  key: '缓存命中 Token',
+                  value: (datum: Record<string, unknown>) =>
+                    formatNumber(Number(datum?.CacheReadTokens) || 0),
+                },
+                {
+                  key: '缓存写入 Token',
+                  value: (datum: Record<string, unknown>) =>
+                    formatNumber(Number(datum?.CacheWriteTokens) || 0),
+                },
+                {
+                  key: '命中请求',
+                  value: (datum: Record<string, unknown>) => {
+                    const hitRequests = Number(datum?.CacheHitRequests) || 0
+                    const eligibleRequests =
+                      Number(datum?.CacheEligibleRequests) || 0
+                    const rate =
+                      eligibleRequests > 0
+                        ? ` (${((hitRequests / eligibleRequests) * 100).toFixed(1)}%)`
+                        : ''
+                    return `${formatNumber(hitRequests)} / ${formatNumber(eligibleRequests)}${rate}`
                   },
                 },
               ],
@@ -312,7 +346,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
       legends: chartData.spec_area.legends,
       tooltip: chartData.spec_area.tooltip,
     }
-  }, [cacheTrendValues, chartData.spec_area, t])
+  }, [cacheTrendValues, chartData.spec_area])
   let chartContent = themeReady ? (
     <VChart
       key={`${props.dimension}-${props.metric}-${props.timeGranularity}-${resolvedTheme}`}
@@ -366,19 +400,56 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='flex w-full items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
-        <IconBadge
-          tone={props.dimension === 'group' ? 'chart-2' : 'chart-3'}
-          size='sm'
-        >
-          <Icon />
-        </IconBadge>
-        <div className='text-sm font-semibold'>{props.title}</div>
-        <span className='text-muted-foreground text-xs'>
-          合计 {chartData.totalCountDisplay}
-        </span>
+      <div className='space-y-1.5 border-b px-3 py-2 sm:px-5 sm:py-3'>
+        <div className='flex w-full items-center gap-2'>
+          <IconBadge
+            tone={props.dimension === 'group' ? 'chart-2' : 'chart-3'}
+            size='sm'
+          >
+            <Icon />
+          </IconBadge>
+          <div className='text-sm font-semibold'>{props.title}</div>
+          <span className='text-muted-foreground text-xs'>
+            合计 {chartData.totalCountDisplay}
+          </span>
+        </div>
         {cacheTrendHasSeries && (
-          <span className='text-muted-foreground text-xs'>· 缓存命中率</span>
+          <div className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 pl-8 text-xs tabular-nums'>
+            <span>
+              缓存命中{' '}
+              <strong className='text-foreground/85 font-medium'>
+                {formatCompactNumber(cacheTrendSummary.cacheReadTokens)}
+              </strong>{' '}
+              Token
+            </span>
+            <span>
+              Token 命中率{' '}
+              <strong className='text-foreground/85 font-medium'>
+                {cacheTrendSummary.cacheInputTokens > 0
+                  ? `${cacheTrendSummary.tokenHitRate.toFixed(1)}%`
+                  : '-'}
+              </strong>
+            </span>
+            <span>
+              请求命中{' '}
+              <strong className='text-foreground/85 font-medium'>
+                {formatCompactNumber(cacheTrendSummary.cacheHitRequests)} /{' '}
+                {formatCompactNumber(cacheTrendSummary.cacheEligibleRequests)}
+                {cacheTrendSummary.cacheEligibleRequests > 0
+                  ? ` (${cacheTrendSummary.requestHitRate.toFixed(1)}%)`
+                  : ''}
+              </strong>
+            </span>
+            {cacheTrendSummary.cacheWriteTokens > 0 && (
+              <span>
+                缓存写入{' '}
+                <strong className='text-foreground/85 font-medium'>
+                  {formatCompactNumber(cacheTrendSummary.cacheWriteTokens)}
+                </strong>{' '}
+                Token
+              </span>
+            )}
+          </div>
         )}
       </div>
 

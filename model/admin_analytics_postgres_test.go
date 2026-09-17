@@ -79,8 +79,8 @@ func TestGetAdminConsoleStatsAggregatesPostgresData(t *testing.T) {
 	}).Error)
 
 	require.NoError(t, LOG_DB.Create(&[]Log{
-		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: startOfDay + 60, PromptTokens: 100, CompletionTokens: 20, Quota: 1000, UseTime: 10},
-		{UserId: 2, TokenId: 2, Type: LogTypeConsume, CreatedAt: startOfDay + 3600, PromptTokens: 30, CompletionTokens: 10, Quota: 2000, UseTime: 20},
+		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: startOfDay + 60, PromptTokens: 100, CompletionTokens: 20, InputTokensTotal: 100, CacheReadTokens: 40, CacheStatsAvailable: true, Quota: 1000, UseTime: 10},
+		{UserId: 2, TokenId: 2, Type: LogTypeConsume, CreatedAt: startOfDay + 3600, PromptTokens: 30, CompletionTokens: 10, InputTokensTotal: 50, CacheReadTokens: 20, CacheStatsAvailable: true, Quota: 2000, UseTime: 20},
 		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: now.Unix() - 30, PromptTokens: 3, CompletionTokens: 2, Quota: 10, UseTime: 4},
 		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: now.Unix() + 30, PromptTokens: 300, CompletionTokens: 200, Quota: 5000, UseTime: 40},
 		{UserId: 3, TokenId: 3, Type: LogTypeConsume, CreatedAt: startOfDay - 86400, PromptTokens: 200, CompletionTokens: 50, Quota: 3000, UseTime: 8},
@@ -107,7 +107,8 @@ func TestGetAdminConsoleStatsAggregatesPostgresData(t *testing.T) {
 	assert.Equal(t, AdminConsoleChannelStats{Total: 4, Enabled: 2, AutoDisabled: 1}, stats.Channels)
 	assert.Equal(t, AdminConsolePeriodStats{Today: 4, Month: 6, Total: 8}, stats.Requests)
 	assert.Equal(t, AdminConsoleUserStats{Today: 2, Total: 6, ActiveToday: 2, ActiveWeek: 4, ActiveMonth: 5}, stats.Users)
-	assert.Equal(t, AdminConsolePeriodStats{Today: 665, Month: 930, Total: 995}, stats.Tokens)
+	assert.Equal(t, AdminConsolePeriodStats{Today: 665, Month: 930, Total: 995}, stats.Tokens.AdminConsolePeriodStats)
+	assert.InDelta(t, 40, stats.Tokens.CacheHitRate, 0.001)
 	assert.Equal(t, AdminConsolePeriodStats{Today: 8010, Month: 11410, Total: 12510}, stats.Quota)
 	assert.InDelta(t, 153.25, stats.Revenue.Today, 0.001)
 	assert.InDelta(t, 183, stats.Revenue.Month, 0.001)
@@ -167,13 +168,13 @@ func TestGetAdminConsoleStatsAtRangeFiltersRangeMetrics(t *testing.T) {
 	rangeStart := startOfDay + 100
 	rangeEnd := startOfDay + 200
 	require.NoError(t, DB.Create(&[]User{
-		{Id: 1, Username: "inside", CreatedAt: rangeStart + 1},
-		{Id: 2, Username: "before", CreatedAt: rangeStart - 1},
-		{Id: 3, Username: "after", CreatedAt: rangeEnd + 1},
+		{Id: 1, Username: "inside", AffCode: "inside", CreatedAt: rangeStart + 1},
+		{Id: 2, Username: "before", AffCode: "before", CreatedAt: rangeStart - 1},
+		{Id: 3, Username: "after", AffCode: "after", CreatedAt: rangeEnd + 1},
 	}).Error)
 	require.NoError(t, LOG_DB.Create(&[]Log{
-		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeStart + 20, PromptTokens: 10, CompletionTokens: 20, Quota: 100, UseTime: 10},
-		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeEnd - 1, PromptTokens: 20, CompletionTokens: 30, Quota: 200, UseTime: 20},
+		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeStart + 20, PromptTokens: 10, CompletionTokens: 20, InputTokensTotal: 100, CacheReadTokens: 40, CacheStatsAvailable: true, Quota: 100, UseTime: 10},
+		{UserId: 1, TokenId: 1, Type: LogTypeConsume, CreatedAt: rangeEnd - 1, PromptTokens: 20, CompletionTokens: 30, InputTokensTotal: 100, CacheReadTokens: 60, CacheStatsAvailable: true, Quota: 200, UseTime: 20},
 		{UserId: 2, TokenId: 2, Type: LogTypeConsume, CreatedAt: rangeStart - 1, PromptTokens: 100, CompletionTokens: 100, Quota: 1000, UseTime: 30},
 		{UserId: 3, TokenId: 3, Type: LogTypeConsume, CreatedAt: rangeEnd + 2, PromptTokens: 200, CompletionTokens: 200, Quota: 2000, UseTime: 1},
 	}).Error)
@@ -190,6 +191,7 @@ func TestGetAdminConsoleStatsAtRangeFiltersRangeMetrics(t *testing.T) {
 	assert.Equal(t, int64(1), stats.Users.Today)
 	assert.Equal(t, int64(2), stats.Requests.Today)
 	assert.Equal(t, int64(80), stats.Tokens.Today)
+	assert.InDelta(t, 50, stats.Tokens.CacheHitRate, 0.001)
 	assert.Equal(t, int64(300), stats.Quota.Today)
 	assert.InDelta(t, 5, stats.Revenue.Today, 0.001)
 	assert.InDelta(t, 15, stats.Performance.AverageResponseSeconds, 0.001)

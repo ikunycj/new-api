@@ -113,25 +113,6 @@ type LogCacheTrendPoint struct {
 	CacheHitRate          float64 `json:"cache_hit_rate"`
 }
 
-type logCacheTrendMetricRow struct {
-	Timestamp             int64 `gorm:"column:timestamp"`
-	CacheInputTokens      int64 `gorm:"column:cache_input_tokens"`
-	CacheReadTokens       int64 `gorm:"column:cache_read_tokens"`
-	CacheWriteTokens      int64 `gorm:"column:cache_write_tokens"`
-	CacheHitRequests      int64 `gorm:"column:cache_hit_requests"`
-	CacheEligibleRequests int64 `gorm:"column:cache_eligible_requests"`
-}
-
-type logCacheTrendGroupRow struct {
-	logCacheTrendMetricRow
-	Name string `gorm:"column:name"`
-}
-
-type logCacheTrendChannelRow struct {
-	logCacheTrendMetricRow
-	ChannelID int `gorm:"column:channel_id"`
-}
-
 func validateLogAnalyticsFilters(filters *LogAnalyticsFilters) error {
 	if filters.StartTimestamp <= 0 || filters.EndTimestamp <= 0 {
 		return errors.New("start_timestamp and end_timestamp are required")
@@ -229,41 +210,29 @@ func cacheTrendMetricSelect(bucketExpression string) string {
 		COUNT(*) AS cache_eligible_requests`
 }
 
-func cacheTrendPointFromMetrics(metrics logCacheTrendMetricRow) LogCacheTrendPoint {
-	point := LogCacheTrendPoint{
-		Timestamp:             metrics.Timestamp,
-		CacheInputTokens:      metrics.CacheInputTokens,
-		CacheReadTokens:       metrics.CacheReadTokens,
-		CacheWriteTokens:      metrics.CacheWriteTokens,
-		CacheHitRequests:      metrics.CacheHitRequests,
-		CacheEligibleRequests: metrics.CacheEligibleRequests,
-	}
+func setCacheTrendHitRate(point *LogCacheTrendPoint) {
 	if point.CacheInputTokens > 0 {
 		point.CacheHitRate = float64(point.CacheReadTokens) / float64(point.CacheInputTokens) * 100
 	}
-	return point
 }
 
 func getLogCacheTrendByGroup(filters LogCacheTrendFilters, bucketExpression string) ([]LogCacheTrendPoint, error) {
 	groupColumn := "logs." + logGroupCol
-	var rows []logCacheTrendGroupRow
+	var points []LogCacheTrendPoint
 	query := LOG_DB.Table("logs").
 		Where("logs.type = ? AND logs.cache_stats_available = ?", LogTypeConsume, true).
 		Where("logs.created_at >= ? AND logs.created_at <= ?", filters.StartTimestamp, filters.EndTimestamp).
 		Select(groupColumn + " AS name, " + cacheTrendMetricSelect(bucketExpression)).
 		Group(groupColumn + ", " + bucketExpression).
 		Order("timestamp ASC, name ASC")
-	if err := query.Scan(&rows).Error; err != nil {
+	if err := query.Scan(&points).Error; err != nil {
 		return nil, err
 	}
-	points := make([]LogCacheTrendPoint, 0, len(rows))
-	for _, row := range rows {
-		point := cacheTrendPointFromMetrics(row.logCacheTrendMetricRow)
-		point.Name = row.Name
-		if strings.TrimSpace(point.Name) == "" {
-			point.Name = "未记录分组"
+	for i := range points {
+		setCacheTrendHitRate(&points[i])
+		if strings.TrimSpace(points[i].Name) == "" {
+			points[i].Name = "未记录分组"
 		}
-		points = append(points, point)
 	}
 	return points, nil
 }
@@ -287,34 +256,31 @@ func getLogCacheTrendChannelNames(channelIDs []int) map[int]string {
 }
 
 func getLogCacheTrendByChannel(filters LogCacheTrendFilters, bucketExpression string) ([]LogCacheTrendPoint, error) {
-	var rows []logCacheTrendChannelRow
 	channelColumn := "logs.channel_id"
+	var points []LogCacheTrendPoint
 	query := LOG_DB.Table("logs").
 		Where("logs.type = ? AND logs.cache_stats_available = ?", LogTypeConsume, true).
 		Where("logs.created_at >= ? AND logs.created_at <= ?", filters.StartTimestamp, filters.EndTimestamp).
 		Select(channelColumn + " AS channel_id, " + cacheTrendMetricSelect(bucketExpression)).
 		Group(channelColumn + ", " + bucketExpression).
 		Order("timestamp ASC, channel_id ASC")
-	if err := query.Scan(&rows).Error; err != nil {
+	if err := query.Scan(&points).Error; err != nil {
 		return nil, err
 	}
-	channelIDs := make([]int, 0, len(rows))
-	seenChannelIDs := make(map[int]struct{}, len(rows))
-	for _, row := range rows {
-		if _, ok := seenChannelIDs[row.ChannelID]; ok {
+	channelIDs := make([]int, 0, len(points))
+	seenChannelIDs := make(map[int]struct{}, len(points))
+	for _, point := range points {
+		if _, ok := seenChannelIDs[point.ChannelID]; ok {
 			continue
 		}
-		seenChannelIDs[row.ChannelID] = struct{}{}
-		channelIDs = append(channelIDs, row.ChannelID)
+		seenChannelIDs[point.ChannelID] = struct{}{}
+		channelIDs = append(channelIDs, point.ChannelID)
 	}
 	channelNames := getLogCacheTrendChannelNames(channelIDs)
 
-	points := make([]LogCacheTrendPoint, 0, len(rows))
-	for _, row := range rows {
-		point := cacheTrendPointFromMetrics(row.logCacheTrendMetricRow)
-		point.ChannelID = row.ChannelID
-		point.Name = formatChannelDisplayName(row.ChannelID, channelNames[row.ChannelID])
-		points = append(points, point)
+	for i := range points {
+		setCacheTrendHitRate(&points[i])
+		points[i].Name = formatChannelDisplayName(points[i].ChannelID, channelNames[points[i].ChannelID])
 	}
 	return points, nil
 }
