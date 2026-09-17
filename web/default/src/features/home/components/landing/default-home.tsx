@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { lazy, Suspense } from 'react'
 
-import { useStatus } from '@/hooks/use-status'
 import { getModuleAccessFromStatus } from '@/lib/nav-modules'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
 
 import { DeferUntilVisible } from './defer-until-visible'
 import { LandingHero } from './landing-hero'
@@ -35,9 +35,9 @@ interface DefaultHomeProps {
 }
 
 export function DefaultHome(props: DefaultHomeProps) {
-  const { status } = useStatus()
   const pricingAccess = getModuleAccessFromStatus(
-    status as Record<string, unknown> | null,
+    (getPublicBootstrap()?.status as Record<string, unknown> | undefined) ??
+      null,
     'pricing'
   )
   const catalogAvailable =

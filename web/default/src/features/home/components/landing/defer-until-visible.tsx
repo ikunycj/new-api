@@ -18,9 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef, useState } from 'react'
 
+import { cn } from '@/lib/utils'
+
 interface DeferUntilVisibleProps {
   children: React.ReactNode
   waitForScroll?: boolean
+  placeholderClassName?: string
 }
 
 export function DeferUntilVisible(props: DeferUntilVisibleProps) {
@@ -69,21 +72,39 @@ export function DeferUntilVisible(props: DeferUntilVisibleProps) {
       return
     }
 
+    const reveal = () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', revealIfNearOrPassed)
+      setVisible(true)
+    }
+    const revealIfNearOrPassed = () => {
+      if (marker.getBoundingClientRect().top <= window.innerHeight + 200) {
+        reveal()
+      }
+    }
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting) return
-        setVisible(true)
-        observer.disconnect()
+        if (entry.isIntersecting) reveal()
       },
       { rootMargin: '200px 0px' }
     )
     observer.observe(marker)
-    return () => observer.disconnect()
+    window.addEventListener('scroll', revealIfNearOrPassed, { passive: true })
+    revealIfNearOrPassed()
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', revealIfNearOrPassed)
+    }
   }, [props.waitForScroll])
 
   if (visible) return props.children
 
   return (
-    <div ref={markerRef} className='bg-muted/30 min-h-32' aria-hidden='true' />
+    <div
+      ref={markerRef}
+      className={cn('bg-muted/30 min-h-32', props.placeholderClassName)}
+      aria-hidden='true'
+    />
   )
 }

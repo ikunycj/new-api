@@ -16,46 +16,59 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useHomeCatalog } from '../../hooks/use-home-catalog'
+import { lazy, type ReactNode, Suspense } from 'react'
+
 import { AiClientsSection } from './ai-clients-section'
 import { CapabilitiesSection } from './capabilities-section'
-import { ConsolePreviewSection } from './console-preview-section'
 import { DeferUntilVisible } from './defer-until-visible'
 import { FaqSection } from './faq-section'
 import { FeaturedModelsSection } from './featured-models-section'
-import { GatewaySection } from './gateway-section'
 import { HomeCtaSection } from './home-cta-section'
-import { PricingPreviewSection } from './pricing-preview-section'
+
+const GatewaySection = lazy(() =>
+  import('./gateway-section').then((module) => ({
+    default: module.GatewaySection,
+  }))
+)
+
+const ConsolePreviewSection = lazy(() =>
+  import('./console-preview-section').then((module) => ({
+    default: module.ConsolePreviewSection,
+  }))
+)
 
 interface BelowFoldHomeProps {
   catalogAvailable: boolean
   isAuthenticated: boolean
 }
 
-function CatalogSections() {
-  const catalog = useHomeCatalog()
+function DeferredLandingSection(props: {
+  children: ReactNode
+  placeholderClassName: string
+}) {
+  const fallback = (
+    <div className={props.placeholderClassName} aria-hidden='true' />
+  )
 
   return (
-    <>
-      <ConsolePreviewSection models={catalog.models} />
-      <GatewaySection />
-      <PricingPreviewSection
-        models={catalog.models}
-        isLoading={catalog.isLoading}
-      />
-    </>
+    <DeferUntilVisible placeholderClassName={props.placeholderClassName}>
+      <Suspense fallback={fallback}>{props.children}</Suspense>
+    </DeferUntilVisible>
   )
 }
 
 export function BelowFoldHome(props: BelowFoldHomeProps) {
   return (
     <>
-      <AiClientsSection />
       <FeaturedModelsSection catalogAvailable={props.catalogAvailable} />
+      <AiClientsSection />
+      <DeferredLandingSection placeholderClassName='min-h-[132rem] bg-transparent md:min-h-[96rem]'>
+        <GatewaySection />
+      </DeferredLandingSection>
+      <DeferredLandingSection placeholderClassName='min-h-[60rem] bg-transparent'>
+        <ConsolePreviewSection />
+      </DeferredLandingSection>
       <CapabilitiesSection />
-      <DeferUntilVisible>
-        <CatalogSections />
-      </DeferUntilVisible>
       <FaqSection />
       <HomeCtaSection isAuthenticated={props.isAuthenticated} />
     </>

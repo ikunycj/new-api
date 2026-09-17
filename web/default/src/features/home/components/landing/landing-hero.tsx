@@ -66,7 +66,7 @@ export function LandingHero(props: LandingHeroProps) {
   const { t } = useTranslation()
   const primaryPath = props.isAuthenticated ? '/dashboard' : '/sign-up'
   const primaryLabel = props.isAuthenticated
-    ? t('Connect AI clients in one click')
+    ? t('Quick start')
     : t('Get Started')
   const secondaryPath = '/playground'
   const secondaryLabel = t('Start a web chat')

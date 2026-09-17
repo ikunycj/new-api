@@ -1859,7 +1859,498 @@ Object.assign(newKeys.ja, errorSelfCheckTranslations.ja)
 Object.assign(newKeys.ru, errorSelfCheckTranslations.ru)
 Object.assign(newKeys.vi, errorSelfCheckTranslations.vi)
 
+const homeLandingTranslations = {
+  en: {
+    'Model gateway address': 'Model gateway address',
+    'Import popular clients in one click with CC Switch':
+      'Import popular clients in one click with CC Switch',
+    'Learn how to configure CC Switch and import in one click':
+      'Learn how to configure CC Switch and import in one click',
+    'Support multiple clients': 'Support multiple clients',
+    'Usage documentation': 'Usage documentation',
+    'Various prices at a glance': 'Various prices at a glance',
+    'View more in Model Square': 'View more in Model Square',
+  },
+  zh: {
+    'Model gateway address': '模型网关地址',
+    'Import popular clients in one click with CC Switch':
+      '配合 CC Switch 一键导入各种主流客户端',
+    'Learn how to configure CC Switch and import in one click':
+      '查看如何配置 CC Switch 并一键导入',
+    'Support multiple clients': '支持多种客户端',
+    'Usage documentation': '使用文档',
+    'Various prices at a glance': '各种价格一目了然',
+    'View more in Model Square': '去模型广场查看更多',
+  },
+  'zh-TW': {
+    'Model gateway address': '模型閘道位址',
+    'Import popular clients in one click with CC Switch':
+      '搭配 CC Switch 一鍵匯入各種主流用戶端',
+    'Learn how to configure CC Switch and import in one click':
+      '查看如何設定 CC Switch 並一鍵匯入',
+    'Support multiple clients': '支援多種用戶端',
+    'Usage documentation': '使用文件',
+    'Various prices at a glance': '各種價格一目了然',
+    'View more in Model Square': '前往模型廣場查看更多',
+  },
+  fr: {
+    'Model gateway address': 'Adresse de la passerelle de modèles',
+    'Import popular clients in one click with CC Switch':
+      'Importez vos clients favoris en un clic avec CC Switch',
+    'Learn how to configure CC Switch and import in one click':
+      'Configurer CC Switch et importer en un clic',
+    'Support multiple clients': 'Plusieurs clients compatibles',
+    'Usage documentation': 'Guide d’utilisation',
+    'Various prices at a glance': 'Aperçu des différents prix',
+    'View more in Model Square': 'Voir plus dans la place des modèles',
+  },
+  ja: {
+    'Model gateway address': 'モデルゲートウェイのアドレス',
+    'Import popular clients in one click with CC Switch':
+      'CC Switch で主要クライアントにワンクリックでインポート',
+    'Learn how to configure CC Switch and import in one click':
+      'CC Switch の設定とワンクリックインポートの方法を見る',
+    'Support multiple clients': 'さまざまなクライアントに対応',
+    'Usage documentation': '利用ガイド',
+    'Various prices at a glance': 'さまざまな価格をひと目で確認',
+    'View more in Model Square': 'モデル広場でもっと見る',
+  },
+  ru: {
+    'Model gateway address': 'Адрес шлюза моделей',
+    'Import popular clients in one click with CC Switch':
+      'Импорт в популярные клиенты одним нажатием с CC Switch',
+    'Learn how to configure CC Switch and import in one click':
+      'Как настроить CC Switch и выполнить импорт одним нажатием',
+    'Support multiple clients': 'Поддержка разных клиентов',
+    'Usage documentation': 'Руководство',
+    'Various prices at a glance': 'Разные цены с первого взгляда',
+    'View more in Model Square': 'Подробнее на витрине моделей',
+  },
+  vi: {
+    'Model gateway address': 'Địa chỉ cổng mô hình',
+    'Import popular clients in one click with CC Switch':
+      'Nhập vào các ứng dụng phổ biến bằng một cú nhấp với CC Switch',
+    'Learn how to configure CC Switch and import in one click':
+      'Xem cách cấu hình CC Switch và nhập bằng một cú nhấp',
+    'Support multiple clients': 'Hỗ trợ nhiều ứng dụng',
+    'Usage documentation': 'Hướng dẫn sử dụng',
+    'Various prices at a glance': 'Các mức giá khác nhau trong nháy mắt',
+    'View more in Model Square': 'Xem thêm trong Model Square',
+  },
+}
+
+for (const [locale, translations] of Object.entries(homeLandingTranslations)) {
+  Object.assign(newKeys[locale], translations)
+}
+const consoleMonitoringTranslations = {
+  en: {
+    'Console and monitoring': 'Console and monitoring',
+    'Clear call records, visible group status':
+      'Clear call records, visible group status',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      'Review model, group, token, cost, and latency for every call, then check group availability from the same console.',
+    'Model, group, tokens, cost and latency':
+      'Model, group, tokens, cost and latency',
+    'Tokens / cost': 'Tokens / cost',
+    'Group status query': 'Group status query',
+    'Check available groups, latency, and recent test results for an API key.':
+      'Check available groups, latency, and recent test results for an API key.',
+    'Check status': 'Check status',
+  },
+  zh: {
+    'Console and monitoring': '控制台与监控',
+    'Clear call records, visible group status': '调用记录清晰，分组状态可查',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      '在控制台查看每次调用的模型、分组、Token、费用和耗时，并查询分组可用状态。',
+    'Model, group, tokens, cost and latency': '模型、分组、Token、费用与耗时',
+    'Tokens / cost': 'Token / 费用',
+    'Group status query': '分组状态查询',
+    'Check available groups, latency, and recent test results for an API key.':
+      '按 API 密钥查询可用分组、延迟和最近检测结果。',
+    'Check status': '查询状态',
+  },
+  'zh-TW': {
+    'Console and monitoring': '控制台與監控',
+    'Clear call records, visible group status': '呼叫記錄清楚，分組狀態可查',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      '在控制台查看每次呼叫的模型、分組、Token、費用和耗時，並查詢分組可用狀態。',
+    'Model, group, tokens, cost and latency': '模型、分組、Token、費用與耗時',
+    'Tokens / cost': 'Token / 費用',
+    'Group status query': '分組狀態查詢',
+    'Check available groups, latency, and recent test results for an API key.':
+      '依 API 金鑰查詢可用分組、延遲和最近檢測結果。',
+    'Check status': '查詢狀態',
+  },
+  fr: {
+    'Console and monitoring': 'Console et surveillance',
+    'Clear call records, visible group status':
+      'Appels clairement suivis, état des groupes visible',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      'Consultez le modèle, le groupe, les tokens, le coût et la latence de chaque appel, puis vérifiez la disponibilité des groupes depuis la même console.',
+    'Model, group, tokens, cost and latency':
+      'Modèle, groupe, tokens, coût et latence',
+    'Tokens / cost': 'Tokens / coût',
+    'Group status query': 'État des groupes',
+    'Check available groups, latency, and recent test results for an API key.':
+      'Vérifiez les groupes disponibles, la latence et les derniers résultats de test pour une clé API.',
+    'Check status': 'Vérifier l’état',
+  },
+  ja: {
+    'Console and monitoring': 'コンソールと監視',
+    'Clear call records, visible group status':
+      '呼び出し履歴を明確に、グループ状態を確認可能に',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      '各呼び出しのモデル、グループ、トークン、費用、レイテンシーを確認し、同じコンソールからグループの可用性を照会できます。',
+    'Model, group, tokens, cost and latency':
+      'モデル、グループ、トークン、費用、レイテンシー',
+    'Tokens / cost': 'トークン / 費用',
+    'Group status query': 'グループ状態の照会',
+    'Check available groups, latency, and recent test results for an API key.':
+      'API キーごとに利用可能なグループ、レイテンシー、最新のテスト結果を確認します。',
+    'Check status': '状態を確認',
+  },
+  ru: {
+    'Console and monitoring': 'Консоль и мониторинг',
+    'Clear call records, visible group status':
+      'Понятный журнал вызовов и доступный статус групп',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      'Просматривайте модель, группу, токены, стоимость и задержку каждого вызова, а также доступность групп в одной консоли.',
+    'Model, group, tokens, cost and latency':
+      'Модель, группа, токены, стоимость и задержка',
+    'Tokens / cost': 'Токены / стоимость',
+    'Group status query': 'Проверка статуса групп',
+    'Check available groups, latency, and recent test results for an API key.':
+      'Проверяйте доступные группы, задержку и последние результаты тестов для API-ключа.',
+    'Check status': 'Проверить статус',
+  },
+  vi: {
+    'Console and monitoring': 'Bảng điều khiển và giám sát',
+    'Clear call records, visible group status':
+      'Lịch sử gọi rõ ràng, trạng thái nhóm dễ kiểm tra',
+    'Review model, group, token, cost, and latency for every call, then check group availability from the same console.':
+      'Xem mô hình, nhóm, token, chi phí và độ trễ của từng lần gọi, đồng thời kiểm tra tính khả dụng của nhóm ngay trong cùng bảng điều khiển.',
+    'Model, group, tokens, cost and latency':
+      'Mô hình, nhóm, token, chi phí và độ trễ',
+    'Tokens / cost': 'Token / chi phí',
+    'Group status query': 'Tra cứu trạng thái nhóm',
+    'Check available groups, latency, and recent test results for an API key.':
+      'Kiểm tra các nhóm khả dụng, độ trễ và kết quả kiểm tra gần nhất cho một API key.',
+    'Check status': 'Kiểm tra trạng thái',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  consoleMonitoringTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const multiGroupRoutingTranslations = {
+  en: {
+    'Model group routing': 'Model group routing',
+    'One API key, multiple model groups': 'One API key, multiple model groups',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.',
+    'Example configuration': 'Example configuration',
+    'Selected group order': 'Selected group order',
+    'Drag to change priority': 'Drag to change priority',
+    'Priority {{priority}}': 'Priority {{priority}}',
+    Selected: 'Selected',
+    Standby: 'Standby',
+    'Model-aware routing': 'Model-aware routing',
+    'The request only tries groups that support its model.':
+      'The request only tries groups that support its model.',
+    'Automatic fallback': 'Automatic fallback',
+    'Next in order': 'Next in order',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.',
+  },
+  zh: {
+    'Model group routing': '模型分组路由',
+    'One API key, multiple model groups': '一个API密钥，多种模型分组选择',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      '创建密钥时可选择多个分组；请求会按顺序匹配支持该模型的分组，并在需要时自动兜底。',
+    'Example configuration': '示例配置',
+    'Selected group order': '已选分组顺序',
+    'Drag to change priority': '拖动调整优先级',
+    'Priority {{priority}}': '优先级 {{priority}}',
+    Selected: '已选中',
+    Standby: '备用',
+    'Model-aware routing': '按模型自动路由',
+    'The request only tries groups that support its model.':
+      '请求只会尝试支持该模型的分组。',
+    'Automatic fallback': '自动兜底',
+    'Next in order': '顺序中的下一组',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      '优先尝试第一个兼容分组；不可用时由下一个兼容分组接管，并按最终成功的分组计费。',
+  },
+  'zh-TW': {
+    'Model group routing': '模型分組路由',
+    'One API key, multiple model groups': '一個 API 金鑰，多種模型分組選擇',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      '建立金鑰時可選擇多個分組；請求會依序比對支援該模型的分組，並在需要時自動備援。',
+    'Example configuration': '範例設定',
+    'Selected group order': '已選分組順序',
+    'Drag to change priority': '拖曳調整優先順序',
+    'Priority {{priority}}': '優先順序 {{priority}}',
+    Selected: '已選取',
+    Standby: '備用',
+    'Model-aware routing': '依模型自動路由',
+    'The request only tries groups that support its model.':
+      '請求只會嘗試支援該模型的分組。',
+    'Automatic fallback': '自動備援',
+    'Next in order': '順序中的下一組',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      '優先嘗試第一個相容分組；不可用時由下一個相容分組接手，並依最終成功的分組計費。',
+  },
+  fr: {
+    'Model group routing': 'Routage par groupe de modèles',
+    'One API key, multiple model groups':
+      'Une clé API, plusieurs groupes de modèles',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      'Sélectionnez plusieurs groupes lors de la création d’une clé. Les requêtes utilisent les groupes compatibles dans l’ordre et basculent automatiquement si nécessaire.',
+    'Example configuration': 'Exemple de configuration',
+    'Selected group order': 'Ordre des groupes sélectionnés',
+    'Drag to change priority': 'Faites glisser pour modifier la priorité',
+    'Priority {{priority}}': 'Priorité {{priority}}',
+    Selected: 'Sélectionné',
+    Standby: 'En attente',
+    'Model-aware routing': 'Routage selon le modèle',
+    'The request only tries groups that support its model.':
+      'La requête essaie uniquement les groupes compatibles avec son modèle.',
+    'Automatic fallback': 'Basculement automatique',
+    'Next in order': 'Suivant dans l’ordre',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      'Le premier groupe compatible est essayé en priorité. S’il est indisponible, le groupe compatible suivant prend le relais et la facturation utilise le groupe ayant réussi.',
+  },
+  ja: {
+    'Model group routing': 'モデルグループルーティング',
+    'One API key, multiple model groups':
+      '1 つの API キーで複数のモデルグループを選択',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      'キー作成時に複数のグループを選択できます。リクエストは対応グループを順番に照合し、必要に応じて自動的にフォールバックします。',
+    'Example configuration': '設定例',
+    'Selected group order': '選択したグループの順序',
+    'Drag to change priority': 'ドラッグして優先順位を変更',
+    'Priority {{priority}}': '優先順位 {{priority}}',
+    Selected: '選択済み',
+    Standby: '待機',
+    'Model-aware routing': 'モデル対応ルーティング',
+    'The request only tries groups that support its model.':
+      'リクエストは対象モデルに対応するグループのみを試します。',
+    'Automatic fallback': '自動フォールバック',
+    'Next in order': '次のグループ',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      '最初の対応グループを優先し、利用できない場合は次の対応グループへ切り替え、成功したグループの倍率で課金します。',
+  },
+  ru: {
+    'Model group routing': 'Маршрутизация по группам моделей',
+    'One API key, multiple model groups':
+      'Один API-ключ, несколько групп моделей',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      'При создании ключа выберите несколько групп. Запросы последовательно используют совместимые группы и автоматически переключаются при необходимости.',
+    'Example configuration': 'Пример конфигурации',
+    'Selected group order': 'Порядок выбранных групп',
+    'Drag to change priority': 'Перетащите, чтобы изменить приоритет',
+    'Priority {{priority}}': 'Приоритет {{priority}}',
+    Selected: 'Выбрано',
+    Standby: 'Резерв',
+    'Model-aware routing': 'Маршрутизация по модели',
+    'The request only tries groups that support its model.':
+      'Запрос использует только группы, поддерживающие его модель.',
+    'Automatic fallback': 'Автоматическое переключение',
+    'Next in order': 'Следующая по порядку',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      'Сначала используется первая совместимая группа. Если она недоступна, запрос переходит к следующей, а списание выполняется по группе, обработавшей запрос.',
+  },
+  vi: {
+    'Model group routing': 'Định tuyến theo nhóm mô hình',
+    'One API key, multiple model groups': 'Một API key, nhiều nhóm mô hình',
+    'Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.':
+      'Chọn nhiều nhóm khi tạo khóa. Yêu cầu sẽ lần lượt khớp với các nhóm hỗ trợ mô hình và tự động chuyển dự phòng khi cần.',
+    'Example configuration': 'Cấu hình minh họa',
+    'Selected group order': 'Thứ tự nhóm đã chọn',
+    'Drag to change priority': 'Kéo để thay đổi độ ưu tiên',
+    'Priority {{priority}}': 'Ưu tiên {{priority}}',
+    Selected: 'Đã chọn',
+    Standby: 'Dự phòng',
+    'Model-aware routing': 'Định tuyến theo mô hình',
+    'The request only tries groups that support its model.':
+      'Yêu cầu chỉ thử các nhóm hỗ trợ mô hình tương ứng.',
+    'Automatic fallback': 'Tự động chuyển dự phòng',
+    'Next in order': 'Nhóm tiếp theo',
+    'The first compatible group is tried first. If it is unavailable, the next compatible group takes over and billing uses the group that succeeds.':
+      'Nhóm tương thích đầu tiên được ưu tiên. Nếu không khả dụng, nhóm tương thích tiếp theo sẽ tiếp quản và chi phí được tính theo nhóm xử lý thành công.',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  multiGroupRoutingTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const gatewaySectionTranslations = {
+  en: {
+    'One gateway interface connects every model':
+      'One gateway interface connects every model',
+    'Connect models from leading providers to the agent tools you already use.':
+      'Connect models from leading providers to the agent tools you already use.',
+  },
+  zh: {
+    'One gateway interface connects every model': '一个网关接口，贯通所有模型',
+    'Connect models from leading providers to the agent tools you already use.':
+      '将各家主流模型接入您常用的 Agent 工具。',
+  },
+  'zh-TW': {
+    'One gateway interface connects every model': '一個閘道介面，串聯所有模型',
+    'Connect models from leading providers to the agent tools you already use.':
+      '將各家主流模型接入您常用的 Agent 工具。',
+  },
+  fr: {
+    'One gateway interface connects every model':
+      'Une seule interface de passerelle pour tous les modèles',
+    'Connect models from leading providers to the agent tools you already use.':
+      'Connectez les modèles des principaux fournisseurs aux outils agent que vous utilisez déjà.',
+  },
+  ja: {
+    'One gateway interface connects every model':
+      '1 つのゲートウェイで、あらゆるモデルへ',
+    'Connect models from leading providers to the agent tools you already use.':
+      '主要プロバイダーのモデルを、普段お使いの Agent ツールに接続します。',
+  },
+  ru: {
+    'One gateway interface connects every model':
+      'Один интерфейс шлюза для всех моделей',
+    'Connect models from leading providers to the agent tools you already use.':
+      'Подключайте модели ведущих поставщиков к привычным агентским инструментам.',
+  },
+  vi: {
+    'One gateway interface connects every model':
+      'Một giao diện cổng kết nối mọi mô hình',
+    'Connect models from leading providers to the agent tools you already use.':
+      'Kết nối mô hình từ các nhà cung cấp hàng đầu với những công cụ agent bạn đang sử dụng.',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  gatewaySectionTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const featuredPricingTranslations = {
+  en: {
+    'Text input': 'Text input',
+    'Image output': 'Image output',
+    'Standard pricing': 'Standard pricing',
+    'Official price': 'Official price',
+    'Official price: {{price}}': 'Official price: {{price}}',
+    '×{{ratio}} of official price': '×{{ratio}} of official price',
+    'Input tokens: ≤272K / >272K': 'Input tokens: ≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': 'Off-peak / peak pricing (UTC)',
+    'Text and image tokens are priced separately':
+      'Text and image tokens are priced separately',
+    'Input tokens: <200K / ≥200K': 'Input tokens: <200K / ≥200K',
+  },
+  zh: {
+    'Text input': '文本输入',
+    'Image output': '图片输出',
+    'Standard pricing': '标准定价',
+    'Official price': '官方原价',
+    'Official price: {{price}}': '官方原价：{{price}}',
+    '×{{ratio}} of official price': 'x{{folds}}折',
+    'Input tokens: ≤272K / >272K': '输入 Token：≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': '低峰 / 高峰价格（UTC）',
+    'Text and image tokens are priced separately': '文本和图片 Token 分别计价',
+    'Input tokens: <200K / ≥200K': '输入 Token：<200K / ≥200K',
+  },
+  'zh-TW': {
+    'Text input': '文字輸入',
+    'Image output': '圖片輸出',
+    'Standard pricing': '標準定價',
+    'Official price': '官方原價',
+    'Official price: {{price}}': '官方原價：{{price}}',
+    '×{{ratio}} of official price': 'x{{folds}}折',
+    'Input tokens: ≤272K / >272K': '輸入 Token：≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': '離峰 / 尖峰價格（UTC）',
+    'Text and image tokens are priced separately': '文字和圖片 Token 分別計價',
+    'Input tokens: <200K / ≥200K': '輸入 Token：<200K / ≥200K',
+  },
+  fr: {
+    'Text input': 'Entrée texte',
+    'Image output': 'Sortie image',
+    'Standard pricing': 'Tarif standard',
+    'Official price': 'Prix officiel',
+    'Official price: {{price}}': 'Prix officiel : {{price}}',
+    '×{{ratio}} of official price': '×{{ratio}} du prix officiel',
+    'Input tokens: ≤272K / >272K': 'Tokens en entrée : ≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': 'Tarifs heures creuses / pleines (UTC)',
+    'Text and image tokens are priced separately':
+      'Tokens de texte et d’image facturés séparément',
+    'Input tokens: <200K / ≥200K': 'Tokens en entrée : <200K / ≥200K',
+  },
+  ja: {
+    'Text input': 'テキスト入力',
+    'Image output': '画像出力',
+    'Standard pricing': '標準料金',
+    'Official price': '公式価格',
+    'Official price: {{price}}': '公式価格：{{price}}',
+    '×{{ratio}} of official price': '公式価格の{{ratio}}倍',
+    'Input tokens: ≤272K / >272K': '入力トークン：≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': 'オフピーク / ピーク料金（UTC）',
+    'Text and image tokens are priced separately':
+      'テキストと画像のトークンは別料金',
+    'Input tokens: <200K / ≥200K': '入力トークン：<200K / ≥200K',
+  },
+  ru: {
+    'Text input': 'Ввод текста',
+    'Image output': 'Вывод изображения',
+    'Standard pricing': 'Стандартный тариф',
+    'Official price': 'Официальная цена',
+    'Official price: {{price}}': 'Официальная цена: {{price}}',
+    '×{{ratio}} of official price': '×{{ratio}} от официальной цены',
+    'Input tokens: ≤272K / >272K': 'Входные токены: ≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': 'Вне пика / в пиковые часы (UTC)',
+    'Text and image tokens are priced separately':
+      'Текстовые и графические токены тарифицируются отдельно',
+    'Input tokens: <200K / ≥200K': 'Входные токены: <200K / ≥200K',
+  },
+  vi: {
+    'Text input': 'Văn bản đầu vào',
+    'Image output': 'Hình ảnh đầu ra',
+    'Standard pricing': 'Giá tiêu chuẩn',
+    'Official price': 'Giá gốc chính thức',
+    'Official price: {{price}}': 'Giá chính thức: {{price}}',
+    '×{{ratio}} of official price': '×{{ratio}} giá chính thức',
+    'Input tokens: ≤272K / >272K': 'Token đầu vào: ≤272K / >272K',
+    'Off-peak / peak pricing (UTC)': 'Giá thấp điểm / cao điểm (UTC)',
+    'Text and image tokens are priced separately':
+      'Token văn bản và hình ảnh được tính giá riêng',
+    'Input tokens: <200K / ≥200K': 'Token đầu vào: <200K / ≥200K',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  featuredPricingTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const retiredKeys = new Set([
+  "各種價格一目了然",
+  "前往模型廣場查看更多",
+  "Official pricing",
+  "Official pricing for {{model}}",
+  "Official USD prices × site exchange rate: 1 USD = {{rate}} CNY",
+  "Exchange rate unavailable; prices are shown in USD.",
+  "Standard API prices; input excludes cache hits. Batch, Fast and tool fees are not included.",
+  "Official pricing checked on {{date}}; not synced live.",
+  "Models can change while your product interface stays stable.",
+  "One gateway accepts compatible endpoints and routes each request through the current configuration.",
+  "Usage and observability",
+  "Every request leaves a clear record.",
+  "Review usage, cost, and response timing by model, token, and time.",
   'Available placeholders: {{system_name}}, {{code}}, {{valid_minutes}}, {{reset_link}}.',
   // Error self-check guide no longer has a separate directory.
   'Common error directory',
