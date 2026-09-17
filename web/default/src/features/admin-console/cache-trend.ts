@@ -115,10 +115,13 @@ export function buildCacheTrendChartValues(
 }
 
 export function summarizeCacheTrend(
-  values: CacheTrendChartValue[]
+  values: CacheTrendChartValue[],
+  selectedModels?: readonly string[]
 ): CacheTrendSummary {
+  const selectedModelSet = selectedModels ? new Set(selectedModels) : undefined
   const summary = values.reduce(
     (result, value) => {
+      if (selectedModelSet && !selectedModelSet.has(value.Model)) return result
       result.cacheInputTokens += nonNegativeNumber(value.CacheInputTokens)
       result.cacheReadTokens += nonNegativeNumber(value.CacheReadTokens)
       result.cacheWriteTokens += nonNegativeNumber(value.CacheWriteTokens)

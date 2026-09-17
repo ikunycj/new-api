@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import { Layers3, RadioTower } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -69,6 +69,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     `${customization.preset}:${customization.radius}`
   )
   const [themeReady, setThemeReady] = useState(false)
+  const [selectedModels, setSelectedModels] = useState<string[] | undefined>()
   const themeManagerRef = useRef<
     (typeof import('@visactor/vchart'))['ThemeManager'] | null
   >(null)
@@ -228,10 +229,28 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     props.timeGranularity,
   ])
   const cacheTrendHasSeries = cacheTrendValues.length > 0
-  const cacheTrendSummary = useMemo(
-    () => summarizeCacheTrend(cacheTrendValues),
+  const availableModels = useMemo(
+    () => new Set(cacheTrendValues.map((value) => value.Model)),
     [cacheTrendValues]
   )
+  const effectiveSelectedModels = useMemo(() => {
+    if (!selectedModels) return undefined
+    const selected = selectedModels.filter((model) =>
+      availableModels.has(model)
+    )
+    return selected.length > 0 ? selected : undefined
+  }, [availableModels, selectedModels])
+  const cacheTrendSummary = useMemo(
+    () => summarizeCacheTrend(cacheTrendValues, effectiveSelectedModels),
+    [cacheTrendValues, effectiveSelectedModels]
+  )
+  const handleLegendItemClick = useCallback((event: { value?: unknown }) => {
+    if (!Array.isArray(event.value)) return
+    const models = event.value.filter(
+      (value): value is string => typeof value === 'string'
+    )
+    setSelectedModels(models.length > 0 ? models : undefined)
+  }, [])
   const spec = useMemo(() => {
     if (cacheTrendValues.length === 0) return chartData.spec_area
 
@@ -343,13 +362,18 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
         },
       ],
       color: chartData.spec_area.color,
-      legends: chartData.spec_area.legends,
+      legends: effectiveSelectedModels
+        ? {
+            ...chartData.spec_area.legends,
+            defaultSelected: effectiveSelectedModels,
+          }
+        : chartData.spec_area.legends,
       tooltip: chartData.spec_area.tooltip,
     }
-  }, [cacheTrendValues, chartData.spec_area])
+  }, [cacheTrendValues, chartData.spec_area, effectiveSelectedModels])
   let chartContent = themeReady ? (
     <VChart
-      key={`${props.dimension}-${props.metric}-${props.timeGranularity}-${resolvedTheme}`}
+      key={`${props.dimension}-${props.metric}-${props.timeGranularity}-${props.startTimestamp}-${props.endTimestamp}-${resolvedTheme}`}
       spec={{
         ...spec,
         title: { visible: false },
@@ -357,6 +381,7 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
         background: 'transparent',
       }}
       option={VCHART_OPTION}
+      onLegendItemClick={handleLegendItemClick}
     />
   ) : null
 

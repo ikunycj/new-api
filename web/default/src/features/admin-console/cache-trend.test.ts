@@ -174,4 +174,39 @@ describe('admin console cache trend chart values', () => {
       requestHitRate: 60,
     })
   })
+
+  test('summarizes only the groups or channels selected in the legend', () => {
+    const values = [
+      {
+        Time: '09-02 10:00',
+        Model: 'ChatGPT Plus #20',
+        CacheRate: 40,
+        CacheInputTokens: 100,
+        CacheReadTokens: 40,
+        CacheWriteTokens: 10,
+        CacheHitRequests: 2,
+        CacheEligibleRequests: 4,
+      },
+      {
+        Time: '09-02 10:00',
+        Model: 'DeepSeek官方 #22',
+        CacheRate: 20,
+        CacheInputTokens: 200,
+        CacheReadTokens: 40,
+        CacheWriteTokens: 5,
+        CacheHitRequests: 1,
+        CacheEligibleRequests: 5,
+      },
+    ]
+
+    assert.deepEqual(summarizeCacheTrend(values, ['DeepSeek官方 #22']), {
+      cacheInputTokens: 200,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 5,
+      cacheHitRequests: 1,
+      cacheEligibleRequests: 5,
+      tokenHitRate: 20,
+      requestHitRate: 20,
+    })
+  })
 })
