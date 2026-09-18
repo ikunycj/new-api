@@ -261,7 +261,7 @@ function PriceMultiplierCell({ channel }: { channel: Channel }) {
 }
 
 /**
- * Inline upstream retry count editor. The effective default is 0 when a
+ * Inline upstream retry count editor. The effective default is 1 when a
  * channel has no explicit value, matching the backend's retry behavior.
  */
 function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
@@ -273,7 +273,7 @@ function UpstreamMaxRetriesCell({ channel }: { channel: Channel }) {
 
   return (
     <NumericSpinnerInput
-      value={channel.upstream_max_retries ?? 0}
+      value={channel.upstream_max_retries ?? 1}
       min={0}
       max={100}
       step={1}

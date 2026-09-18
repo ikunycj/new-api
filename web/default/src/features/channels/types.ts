@@ -60,7 +60,7 @@ export const channelSchema = z.object({
   status_code_mapping: z.string().nullish(),
   auto_ban: z.number().nullish(),
   auto_probe_enabled: z.boolean().nullish(),
-  probe_period_minutes: z.number().default(5),
+  probe_period_minutes: z.number().default(2),
   probe_random_delay_enabled: z.boolean().default(false),
   probe_stream_enabled: z.boolean().default(false),
   upstream_max_retries: z.number().nullish(),

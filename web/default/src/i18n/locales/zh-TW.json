@@ -581,7 +581,7 @@
     "Automatic probe": "自動探測",
     "Automatically disable channel on repeated failures": "重複失敗時自動停用渠道",
     "Automatically disable channels exceeding this response time": "自動停用超出此回應時間的渠道",
-    "Automatically disable channels when tests fail": "當對渠道的批量測試失敗/普通請求失敗時，自動停用對應渠道",
+    "Automatically disable channels when tests fail": "當測試失敗時自動停用渠道",
     "Automatically disable the channel when a probe fails": "探測失敗時自動停用渠道",
     "Automatically enable the channel after a successful probe": "探測成功後自動啟用渠道",
     "Automatically probe all channels in the background": "在背景自動探測所有渠道",

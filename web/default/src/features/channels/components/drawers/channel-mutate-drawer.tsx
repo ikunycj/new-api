@@ -339,7 +339,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
     values.probe_random_delay_enabled ||
     values.probe_stream_enabled ||
-    values.upstream_max_retries !== 0 ||
+    values.upstream_max_retries !== 1 ||
     values.max_concurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     values.price_multiplier !== 1 ||
     values.price_multiplier_mode !== 'usd' ||
@@ -1025,7 +1025,7 @@ export function ChannelMutateDrawer({
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
     currentProbeRandomDelayEnabled ||
     currentProbeStreamEnabled ||
-    currentUpstreamMaxRetries !== 0 ||
+    currentUpstreamMaxRetries !== 1 ||
     currentMaxConcurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     currentPriceMultiplier !== 1 ||
     currentPriceMultiplierMode !== 'usd' ||
