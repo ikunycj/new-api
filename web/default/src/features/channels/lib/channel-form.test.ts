@@ -54,7 +54,7 @@ describe('channel form API mapping', () => {
       })
     )
 
-    assert.equal(defaults.probe_period_minutes, 2)
+    assert.equal(defaults.probe_period_minutes, 5)
     assert.equal(defaults.price_multiplier, 0)
   })
 
@@ -104,10 +104,10 @@ describe('channel form API mapping', () => {
       {
         auto_ban: 0,
         auto_probe_enabled: false,
-        probe_period_minutes: 2,
+        probe_period_minutes: 5,
         probe_random_delay_enabled: false,
         probe_stream_enabled: false,
-        upstream_max_retries: 1,
+        upstream_max_retries: 0,
         max_concurrency: 1000,
         price_multiplier: 1,
       }
@@ -125,10 +125,10 @@ describe('channel form API mapping', () => {
 
     assert.equal(defaults.auto_ban, 0)
     assert.equal(defaults.auto_probe_enabled, false)
-    assert.equal(defaults.probe_period_minutes, 2)
+    assert.equal(defaults.probe_period_minutes, 5)
     assert.equal(defaults.probe_random_delay_enabled, false)
     assert.equal(defaults.probe_stream_enabled, false)
-    assert.equal(defaults.upstream_max_retries, 1)
+    assert.equal(defaults.upstream_max_retries, 0)
     assert.equal(defaults.max_concurrency, 1000)
     assert.equal(defaults.price_multiplier, 1)
   })
