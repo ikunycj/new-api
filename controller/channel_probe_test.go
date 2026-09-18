@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -10,50 +11,40 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func probeTestChannel(id int) *model.Channel {
+func probeTestChannel(id, periodMinutes int) *model.Channel {
 	return &model.Channel{
 		Id: id, Type: constant.ChannelTypeOpenAI,
-		Status:           common.ChannelStatusAutoDisabled,
-		AutoProbeEnabled: common.GetPointer(true), TestModel: common.GetPointer("gpt-4o"),
+		Status: common.ChannelStatusAutoDisabled, AutoProbeEnabled: common.GetPointer(true),
+		TestModel: common.GetPointer("gpt-4o"), ProbePeriodMinutes: periodMinutes,
 	}
 }
 
-func TestChannelProbeSchedulerReprobesDueChannelWhileAnotherIsBlocked(t *testing.T) {
+func TestChannelProbeSchedulerRunsPeriodGroupsOnMinuteCycles(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		ticks := make(chan time.Time)
 		var mu sync.Mutex
 		starts := map[int]int{}
-		nextProbeAt := int64(0)
 		scheduler := channelProbeScheduler{
 			enabled: func() bool { return true },
-			loadDue: func(_ context.Context, now int64) ([]*model.Channel, error) {
-				mu.Lock()
-				defer mu.Unlock()
-				channels := []*model.Channel{probeTestChannel(1)}
-				if now >= nextProbeAt {
-					channels = append(channels, probeTestChannel(2))
-				}
-				return channels, nil
+			loadCandidates: func(context.Context) ([]*model.Channel, error) {
+				return []*model.Channel{
+					probeTestChannel(1, 1),
+					probeTestChannel(2, 2),
+					probeTestChannel(3, 2),
+					probeTestChannel(4, 3),
+				}, nil
 			},
-			probe: func(ctx context.Context, id int) channelProbeResult {
+			probe: func(_ context.Context, id int) channelProbeResult {
 				mu.Lock()
 				starts[id]++
-				if id == 2 {
-					nextProbeAt = common.GetTimestamp() + 10
-				}
 				mu.Unlock()
-				if id == 1 {
-					<-ctx.Done()
-					return channelProbeResult{}
-				}
-				return channelProbeResult{summary: channelProbeSummary{Checked: 1, Failed: 1}}
+				return channelProbeResult{summary: channelProbeSummary{Checked: 1, Succeeded: 1}}
 			},
 		}
 		done := make(chan channelProbeResult, 1)
@@ -62,85 +53,61 @@ func TestChannelProbeSchedulerReprobesDueChannelWhileAnotherIsBlocked(t *testing
 			done <- channelProbeResult{summary: summary, err: err}
 		}()
 		synctest.Wait()
-		assert.Equal(t, map[int]int{1: 1, 2: 1}, starts)
+		assert.Empty(t, starts, "the scheduler waits for the first 60-second cycle")
 
-		// Advance the synthetic clock, not wall time: no early retry at 9s.
-		time.Sleep(9 * time.Second)
 		ticks <- time.Now()
 		synctest.Wait()
-		assert.Equal(t, map[int]int{1: 1, 2: 1}, starts)
-		time.Sleep(time.Second)
+		assert.Equal(t, map[int]int{1: 1}, starts)
+
 		ticks <- time.Now()
 		synctest.Wait()
-		assert.Equal(t, map[int]int{1: 1, 2: 2}, starts, "channel 2 retries at 10s while channel 1 remains in flight")
+		assert.Equal(t, map[int]int{1: 2, 2: 1, 3: 1}, starts)
+
+		ticks <- time.Now()
+		synctest.Wait()
+		assert.Equal(t, map[int]int{1: 3, 2: 1, 3: 1, 4: 1}, starts)
+
 		cancel()
 		synctest.Wait()
 		result := <-done
 		require.ErrorIs(t, result.err, context.Canceled)
-		assert.Equal(t, channelProbeSummary{Checked: 2, Failed: 2}, result.summary)
+		assert.Equal(t, channelProbeSummary{Checked: 6, Succeeded: 6}, result.summary)
 	})
 }
 
-func TestChannelProbeSchedulerBoundsWorkersAndDrainsOnCancellation(t *testing.T) {
+func TestChannelProbeSchedulerLaunchesWholeDueGroupWithoutConcurrencyLimit(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		ticks := make(chan time.Time)
-		releaseFirst := make(chan struct{})
-		var mu sync.Mutex
-		started := map[int]int{}
-		finished := map[int]bool{}
+		channels := make([]*model.Channel, 0, 32)
+		for id := 1; id <= 32; id++ {
+			channels = append(channels, probeTestChannel(id, 1))
+		}
+		started := make(chan int, len(channels))
 		scheduler := channelProbeScheduler{
-			enabled: func() bool { return true },
-			loadDue: func(context.Context, int64) ([]*model.Channel, error) {
-				mu.Lock()
-				defer mu.Unlock()
-				var channels []*model.Channel
-				for id := 1; id <= 9; id++ {
-					if !finished[id] {
-						channels = append(channels, probeTestChannel(id))
-					}
-				}
-				return channels, nil
-			},
+			enabled:        func() bool { return true },
+			loadCandidates: func(context.Context) ([]*model.Channel, error) { return channels, nil },
 			probe: func(ctx context.Context, id int) channelProbeResult {
-				mu.Lock()
-				started[id]++
-				mu.Unlock()
-				if id == 1 {
-					select {
-					case <-releaseFirst:
-					case <-ctx.Done():
-					}
-				} else {
-					<-ctx.Done()
-				}
-				mu.Lock()
-				finished[id] = true
-				mu.Unlock()
+				started <- id
+				<-ctx.Done()
 				return channelProbeResult{}
 			},
 		}
 		done := make(chan error, 1)
 		go func() { _, err := scheduler.run(ctx, ticks); done <- err }()
-		synctest.Wait()
-		require.Len(t, started, 8)
-		assert.Zero(t, started[9])
 		ticks <- time.Now()
 		synctest.Wait()
-		assert.Len(t, started, 8)
-		close(releaseFirst)
-		synctest.Wait()
+		assert.Len(t, started, len(channels), "all channels in the due group start together")
+
+		// A later due cycle must not overlap an already-running probe for the same channel.
 		ticks <- time.Now()
 		synctest.Wait()
-		assert.Equal(t, 1, started[9], "a released slot accepts queued work without waiting for the other probes")
+		assert.Len(t, started, len(channels))
+
 		cancel()
 		synctest.Wait()
 		require.ErrorIs(t, <-done, context.Canceled)
-		assert.Len(t, finished, 9, "all in-flight probes exit before the dispatcher returns")
-		for id, count := range started {
-			assert.Equal(t, 1, count, "no overlapping probe for channel %d", id)
-		}
 	})
 }
 
@@ -152,20 +119,22 @@ func TestChannelProbeSchedulerStopsOnLeaseLossOrDisable(t *testing.T) {
 				enabled := true
 				var reportErr error
 				exited := make(chan struct{})
+				var closeOnce sync.Once
 				scheduler := channelProbeScheduler{
 					enabled: func() bool { return enabled },
-					loadDue: func(context.Context, int64) ([]*model.Channel, error) {
-						return []*model.Channel{probeTestChannel(1)}, nil
+					loadCandidates: func(context.Context) ([]*model.Channel, error) {
+						return []*model.Channel{probeTestChannel(1, 1)}, nil
 					},
 					probe: func(ctx context.Context, _ int) channelProbeResult {
 						<-ctx.Done()
-						close(exited)
+						closeOnce.Do(func() { close(exited) })
 						return channelProbeResult{}
 					},
 					report: func(channelProbeSummary, int) error { return reportErr },
 				}
 				done := make(chan error, 1)
 				go func() { _, err := scheduler.run(context.Background(), ticks); done <- err }()
+				ticks <- time.Now()
 				synctest.Wait()
 				if disabled {
 					enabled = false
@@ -190,37 +159,38 @@ func TestChannelProbeSchedulerStopsOnLeaseLossOrDisable(t *testing.T) {
 	}
 }
 
-func TestChannelProbeSchedulerSkipsBusyChannelsWithoutStarvingRecovery(t *testing.T) {
+func TestChannelProbeSchedulerReturnsCandidateLoadError(t *testing.T) {
+	wantErr := errors.New("load failed")
+	ticks := make(chan time.Time, 1)
+	ticks <- time.Now()
+	scheduler := channelProbeScheduler{
+		enabled:        func() bool { return true },
+		loadCandidates: func(context.Context) ([]*model.Channel, error) { return nil, wantErr },
+		probe:          func(context.Context, int) channelProbeResult { return channelProbeResult{} },
+	}
+	_, err := scheduler.run(context.Background(), ticks)
+	require.ErrorIs(t, err, wantErr)
+}
+
+func TestChannelProbeRandomDelayIsOptionalAndBoundedToOneMinute(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		var channels []*model.Channel
-		for id := 1; id <= 9; id++ {
-			channel := probeTestChannel(91000 + id)
-			channel.MaxConcurrency = common.GetPointer(1)
-			channels = append(channels, channel)
-			if id <= 8 {
-				require.True(t, service.TryAcquireChannelConcurrency(channel.Id, 1))
-				t.Cleanup(func() { service.ReleaseChannelConcurrency(channel.Id) })
-			}
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		started := make(chan int, 9)
-		scheduler := channelProbeScheduler{
-			enabled: func() bool { return true },
-			loadDue: func(context.Context, int64) ([]*model.Channel, error) { return channels, nil },
-			probe: func(ctx context.Context, id int) channelProbeResult {
-				started <- id
-				<-ctx.Done()
-				return channelProbeResult{}
-			},
-		}
-		done := make(chan error, 1)
-		go func() { _, err := scheduler.run(ctx, make(chan time.Time)); done <- err }()
+		called := 0
+		executor := channelProbeExecutor{randomDelay: func() time.Duration {
+			called++
+			return 2 * time.Minute
+		}}
+		assert.True(t, executor.waitRandomDelay(context.Background(), false))
+		assert.Zero(t, called)
+
+		done := make(chan bool, 1)
+		go func() { done <- executor.waitRandomDelay(context.Background(), true) }()
 		synctest.Wait()
-		require.Len(t, started, 1)
-		assert.Equal(t, 91009, <-started)
-		cancel()
+		assert.Equal(t, 1, called)
+		time.Sleep(channelProbeRandomDelayWindow - time.Second)
 		synctest.Wait()
-		require.ErrorIs(t, <-done, context.Canceled)
+		assert.Empty(t, done)
+		time.Sleep(time.Second)
+		synctest.Wait()
+		assert.True(t, <-done)
 	})
 }

@@ -275,6 +275,9 @@ func migrateDB() error {
 	if err := removeLegacyChannelProbePolicyColumns(); err != nil {
 		return err
 	}
+	if err := migrateChannelProbePeriod(); err != nil {
+		return err
+	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
@@ -627,6 +630,61 @@ func removeLegacyUserClassificationColumn() error {
 		return fmt.Errorf("remove legacy users.user_type column: %w", err)
 	}
 	return nil
+}
+
+// migrateChannelProbePeriod converts the old per-channel second interval to
+// minute-based period groups, then removes obsolete scheduling columns.
+func migrateChannelProbePeriod() error {
+	if DB == nil {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		migrator := tx.Migrator()
+		if migrator.HasTable(&Channel{}) {
+			hasLegacyInterval := migrator.HasColumn(&Channel{}, "probe_interval_seconds")
+			hasProbePeriod := migrator.HasColumn(&Channel{}, "probe_period_minutes")
+			if hasLegacyInterval {
+				type legacyProbeInterval struct {
+					ID      int `gorm:"column:id"`
+					Seconds int `gorm:"column:probe_interval_seconds"`
+				}
+				var intervals []legacyProbeInterval
+				if err := tx.Table("channels").Select("id", "probe_interval_seconds").Find(&intervals).Error; err != nil {
+					return fmt.Errorf("read legacy channel probe intervals: %w", err)
+				}
+				if !hasProbePeriod {
+					if err := migrator.RenameColumn(&Channel{}, "probe_interval_seconds", "probe_period_minutes"); err != nil {
+						return fmt.Errorf("rename channel probe interval column: %w", err)
+					}
+				} else if err := migrator.DropColumn(&Channel{}, "probe_interval_seconds"); err != nil {
+					return fmt.Errorf("remove legacy channel probe interval column: %w", err)
+				}
+				for _, interval := range intervals {
+					minutes := DefaultChannelProbePeriodMinutes
+					if interval.Seconds > 0 {
+						minutes = (interval.Seconds + 59) / 60
+						if minutes > MaxChannelProbePeriodMinutes {
+							minutes = MaxChannelProbePeriodMinutes
+						}
+					}
+					if err := tx.Table("channels").Where("id = ?", interval.ID).Update("probe_period_minutes", minutes).Error; err != nil {
+						return fmt.Errorf("convert channel %d probe period: %w", interval.ID, err)
+					}
+				}
+			}
+			if migrator.HasColumn(&Channel{}, "auto_disabled_probe_interval_seconds") {
+				if err := migrator.DropColumn(&Channel{}, "auto_disabled_probe_interval_seconds"); err != nil {
+					return fmt.Errorf("remove auto-disabled channel probe interval column: %w", err)
+				}
+			}
+		}
+		if migrator.HasTable(&ChannelProbeState{}) && migrator.HasColumn(&ChannelProbeState{}, "next_probe_at") {
+			if err := migrator.DropColumn(&ChannelProbeState{}, "next_probe_at"); err != nil {
+				return fmt.Errorf("remove per-channel next probe column: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 // removeLegacyChannelProbePolicyColumns 仅删除旧开关，不推导或覆盖统一开关。

@@ -759,7 +759,7 @@ func validateTestResponseBody(respBody []byte, isStream bool) error {
 }
 
 func shouldUseStreamForAutomaticChannelTest(channel *model.Channel) bool {
-	return channel != nil && channel.Type == constant.ChannelTypeCodex
+	return channel != nil && (channel.ProbeStreamEnabled || channel.Type == constant.ChannelTypeCodex)
 }
 
 func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {

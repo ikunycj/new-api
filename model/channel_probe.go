@@ -11,12 +11,11 @@ import (
 
 const channelProbeHistoryRetention = 31 * 24 * time.Hour
 
-// ChannelProbeState stores request-independent scheduling state for one
-// channel. The lease prevents multiple master nodes probing it concurrently.
+// ChannelProbeState stores the latest probe result and the per-channel lease.
+// Scheduling is driven by minute-based period groups in the system task.
 type ChannelProbeState struct {
 	ChannelID     int   `json:"channel_id" gorm:"primaryKey"`
 	LastProbeAt   int64 `json:"last_probe_at" gorm:"bigint"`
-	NextProbeAt   int64 `json:"next_probe_at" gorm:"bigint;index"`
 	LeaseUntil    int64 `json:"-" gorm:"bigint;index"`
 	LastSuccess   bool  `json:"last_success"`
 	LastLatencyMs int64 `json:"last_latency_ms"`
@@ -32,22 +31,21 @@ type ChannelProbeHistory struct {
 	CheckedAt    int64  `json:"checked_at" gorm:"bigint;index:idx_channel_probe_history,priority:2;index"`
 }
 
-// GetDueChannelProbes loads only due work, oldest first. Credentials are loaded
-// by the worker after it acquires a lease, not by every scheduler tick.
-func GetDueChannelProbes(ctx context.Context, now int64) ([]*Channel, error) {
+// GetChannelProbeCandidates loads every enabled or automatically disabled
+// channel that participates in automatic probing. Credentials are loaded only
+// after a worker acquires the per-channel lease.
+func GetChannelProbeCandidates(ctx context.Context) ([]*Channel, error) {
 	var channels []*Channel
 	err := DB.WithContext(ctx).Model(&Channel{}).Omit("key").
-		Joins("LEFT JOIN channel_probe_states ON channel_probe_states.channel_id = channels.id").
-		Where("channels.auto_probe_enabled = ? AND channels.status IN ?", true, []int{common.ChannelStatusEnabled, common.ChannelStatusAutoDisabled}).
-		Where("COALESCE(channel_probe_states.next_probe_at, 0) <= ? AND COALESCE(channel_probe_states.lease_until, 0) <= ?", now, now).
-		Order("COALESCE(channel_probe_states.next_probe_at, 0) ASC, channels.id ASC").
+		Where("auto_probe_enabled = ? AND status IN ?", true, []int{common.ChannelStatusEnabled, common.ChannelStatusAutoDisabled}).
+		Order("probe_period_minutes ASC, id ASC").
 		Find(&channels).Error
 	return channels, err
 }
 
-// CompleteChannelProbe atomically commits the history, schedule and optional
-// status transition. It uses current settings and never overrides manual disable
-// or accepts a result from an expired/replaced lease.
+// CompleteChannelProbe atomically commits the history and optional status
+// transition. It uses current settings and never overrides manual disable or
+// accepts a result from an expired/replaced lease.
 func CompleteChannelProbe(ctx context.Context, channelID int, result ChannelProbeHistory, leaseUntil int64, usingKey string) (*Channel, bool, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -73,13 +71,9 @@ func CompleteChannelProbe(ctx context.Context, channelID int, result ChannelProb
 		if err != nil {
 			return err
 		}
-		interval := channel.GetProbeIntervalSeconds()
-		if channel.Status == common.ChannelStatusAutoDisabled {
-			interval = channel.GetAutoDisabledProbeIntervalSeconds()
-		}
 		result.ChannelID = channelID
 		result.CheckedAt = now
-		return persistChannelProbeResult(tx, channelID, result, now+int64(interval), leaseUntil)
+		return persistChannelProbeResult(tx, channelID, result, leaseUntil)
 	})
 	if err != nil {
 		return nil, false, err
@@ -186,8 +180,8 @@ func ensureChannelProbeState(channelID int) (*ChannelProbeState, error) {
 	return &state, nil
 }
 
-// ClaimChannelProbe atomically claims a due channel probe. A zero NextProbeAt
-// means the channel has never been probed and is immediately due.
+// ClaimChannelProbe atomically claims a channel whose previous lease is no
+// longer active. Period-group scheduling decides when the channel is due.
 func ClaimChannelProbe(channelID int, now int64, leaseSeconds int64) (bool, error) {
 	if _, err := ensureChannelProbeState(channelID); err != nil {
 		return false, err
@@ -196,7 +190,7 @@ func ClaimChannelProbe(channelID int, now int64, leaseSeconds int64) (bool, erro
 		leaseSeconds = 300
 	}
 	result := DB.Model(&ChannelProbeState{}).
-		Where("channel_id = ? AND next_probe_at <= ? AND lease_until <= ?", channelID, now, now).
+		Where("channel_id = ? AND lease_until <= ?", channelID, now).
 		Update("lease_until", now+leaseSeconds)
 	if result.Error != nil {
 		return false, result.Error
@@ -218,15 +212,15 @@ func ReleaseChannelProbe(channelID int, leaseUntil int64) error {
 		Update("lease_until", 0).Error
 }
 
-func SaveChannelProbeResult(channelID int, result ChannelProbeHistory, nextProbeAt int64) error {
-	return saveChannelProbeResult(channelID, result, nextProbeAt, 0)
+func SaveChannelProbeResult(channelID int, result ChannelProbeHistory) error {
+	return saveChannelProbeResult(channelID, result, 0)
 }
 
 // SaveChannelProbeResultWithLease persists the outcome and clears the lease in
 // one transaction. The lease token prevents a stale worker overwriting a newer
 // worker's result.
-func SaveChannelProbeResultWithLease(channelID int, result ChannelProbeHistory, nextProbeAt int64, leaseUntil int64) error {
-	return saveChannelProbeResult(channelID, result, nextProbeAt, leaseUntil)
+func SaveChannelProbeResultWithLease(channelID int, result ChannelProbeHistory, leaseUntil int64) error {
+	return saveChannelProbeResult(channelID, result, leaseUntil)
 }
 
 // GetLastChannelProbeTimes returns the latest automatic probe timestamp for
@@ -249,7 +243,7 @@ func GetLastChannelProbeTimes(channelIDs []int) (map[int]int64, error) {
 	return times, nil
 }
 
-func saveChannelProbeResult(channelID int, result ChannelProbeHistory, nextProbeAt int64, leaseUntil int64) error {
+func saveChannelProbeResult(channelID int, result ChannelProbeHistory, leaseUntil int64) error {
 	if channelID <= 0 {
 		return errors.New("channel id is required")
 	}
@@ -257,15 +251,12 @@ func saveChannelProbeResult(channelID int, result ChannelProbeHistory, nextProbe
 	if result.CheckedAt == 0 {
 		result.CheckedAt = common.GetTimestamp()
 	}
-	if nextProbeAt < result.CheckedAt {
-		nextProbeAt = result.CheckedAt
-	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		return persistChannelProbeResult(tx, channelID, result, nextProbeAt, leaseUntil)
+		return persistChannelProbeResult(tx, channelID, result, leaseUntil)
 	})
 }
 
-func persistChannelProbeResult(tx *gorm.DB, channelID int, result ChannelProbeHistory, nextProbeAt, leaseUntil int64) error {
+func persistChannelProbeResult(tx *gorm.DB, channelID int, result ChannelProbeHistory, leaseUntil int64) error {
 	if err := tx.Create(&result).Error; err != nil {
 		return err
 	}
@@ -275,7 +266,6 @@ func persistChannelProbeResult(tx *gorm.DB, channelID int, result ChannelProbeHi
 	}
 	stateUpdate := stateQuery.Updates(map[string]any{
 		"last_probe_at":   result.CheckedAt,
-		"next_probe_at":   nextProbeAt,
 		"lease_until":     0,
 		"last_success":    result.Success,
 		"last_latency_ms": result.LatencyMs,

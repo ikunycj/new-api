@@ -408,11 +408,7 @@ func TestChannelProbeExecutorCommitsOnlyFinalResult(t *testing.T) {
 			var state model.ChannelProbeState
 			require.NoError(t, db.First(&state, "channel_id = ?", channel.Id).Error)
 			assert.Zero(t, state.LeaseUntil)
-			wantInterval := int64(channel.GetProbeIntervalSeconds())
-			if !recoverOnRetry {
-				wantInterval = int64(channel.GetAutoDisabledProbeIntervalSeconds())
-			}
-			assert.Equal(t, wantInterval, state.NextProbeAt-state.LastProbeAt)
+			assert.Positive(t, state.LastProbeAt)
 		})
 	}
 }

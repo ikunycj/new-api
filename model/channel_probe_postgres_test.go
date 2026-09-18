@@ -18,46 +18,38 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestGetDueChannelProbesFiltersAndOrdersWork(t *testing.T) {
-	setupPostgresAnalyticsTestDB(t, &Channel{}, &ChannelProbeState{})
+func TestGetChannelProbeCandidatesFiltersAndOrdersPeriodGroups(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{})
 	channels := []Channel{
-		{Id: 1, Key: "never-expose", AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusEnabled},
-		{Id: 2, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusAutoDisabled},
-		{Id: 3, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusEnabled},
-		{Id: 4, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusEnabled},
-		{Id: 5, AutoProbeEnabled: common.GetPointer(false), Status: common.ChannelStatusEnabled},
-		{Id: 6, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusManuallyDisabled},
+		{Id: 1, Key: "never-expose", AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusEnabled, ProbePeriodMinutes: 2},
+		{Id: 2, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusAutoDisabled, ProbePeriodMinutes: 1},
+		{Id: 3, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusEnabled, ProbePeriodMinutes: 3},
+		{Id: 4, AutoProbeEnabled: common.GetPointer(false), Status: common.ChannelStatusEnabled, ProbePeriodMinutes: 1},
+		{Id: 5, AutoProbeEnabled: common.GetPointer(true), Status: common.ChannelStatusManuallyDisabled, ProbePeriodMinutes: 1},
 	}
 	require.NoError(t, DB.Create(&channels).Error)
-	require.NoError(t, DB.Create(&[]ChannelProbeState{
-		{ChannelID: 2, NextProbeAt: 10},
-		{ChannelID: 3, NextProbeAt: 101},
-		{ChannelID: 4, NextProbeAt: 5, LeaseUntil: 101},
-	}).Error)
-	due, err := GetDueChannelProbes(context.Background(), 100)
+	candidates, err := GetChannelProbeCandidates(context.Background())
 	require.NoError(t, err)
-	require.Len(t, due, 2)
-	assert.Equal(t, 1, due[0].Id)
-	assert.Equal(t, 2, due[1].Id)
-	assert.Empty(t, due[0].Key)
+	require.Len(t, candidates, 3)
+	assert.Equal(t, []int{2, 1, 3}, []int{candidates[0].Id, candidates[1].Id, candidates[2].Id})
+	assert.Empty(t, candidates[1].Key)
 }
 
-func TestCompleteChannelProbeUsesCurrentStatusAndRecoverySettings(t *testing.T) {
+func TestCompleteChannelProbeUsesCurrentStatusAndUnifiedPeriod(t *testing.T) {
 	cases := []struct {
-		name         string
-		status       int
-		success      bool
-		autoProbe    bool
-		wantStatus   int
-		wantInterval int64
+		name       string
+		status     int
+		success    bool
+		autoProbe  bool
+		wantStatus int
 	}{
-		{"recover", common.ChannelStatusAutoDisabled, true, true, common.ChannelStatusEnabled, 120},
-		{"still failing", common.ChannelStatusAutoDisabled, false, true, common.ChannelStatusAutoDisabled, 10},
-		{"disable independently of business auto ban", common.ChannelStatusEnabled, false, true, common.ChannelStatusAutoDisabled, 10},
-		{"manual disable wins on success", common.ChannelStatusManuallyDisabled, true, true, common.ChannelStatusManuallyDisabled, 120},
-		{"manual disable wins on failure", common.ChannelStatusManuallyDisabled, false, true, common.ChannelStatusManuallyDisabled, 120},
-		{"auto probe switched off on success", common.ChannelStatusAutoDisabled, true, false, common.ChannelStatusAutoDisabled, 10},
-		{"auto probe switched off on failure", common.ChannelStatusEnabled, false, false, common.ChannelStatusEnabled, 120},
+		{"recover", common.ChannelStatusAutoDisabled, true, true, common.ChannelStatusEnabled},
+		{"still failing", common.ChannelStatusAutoDisabled, false, true, common.ChannelStatusAutoDisabled},
+		{"disable independently of business auto ban", common.ChannelStatusEnabled, false, true, common.ChannelStatusAutoDisabled},
+		{"manual disable wins on success", common.ChannelStatusManuallyDisabled, true, true, common.ChannelStatusManuallyDisabled},
+		{"manual disable wins on failure", common.ChannelStatusManuallyDisabled, false, true, common.ChannelStatusManuallyDisabled},
+		{"auto probe switched off on success", common.ChannelStatusAutoDisabled, true, false, common.ChannelStatusAutoDisabled},
+		{"auto probe switched off on failure", common.ChannelStatusEnabled, false, false, common.ChannelStatusEnabled},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -68,8 +60,7 @@ func TestCompleteChannelProbeUsesCurrentStatusAndRecoverySettings(t *testing.T) 
 			previousAutoDisable := common.AutomaticDisableChannelEnabled
 			common.AutomaticDisableChannelEnabled = false
 			t.Cleanup(func() { common.AutomaticDisableChannelEnabled = previousAutoDisable })
-			channel := Channel{Id: 11, Status: tc.status, AutoProbeEnabled: &tc.autoProbe, AutoBan: common.GetPointer(0),
-				ProbeIntervalSeconds: 120, AutoDisabledProbeIntervalSeconds: 10}
+			channel := Channel{Id: 11, Status: tc.status, AutoProbeEnabled: &tc.autoProbe, AutoBan: common.GetPointer(0), ProbePeriodMinutes: 2}
 			require.NoError(t, DB.Create(&channel).Error)
 			require.NoError(t, DB.Create(&Ability{ChannelId: channel.Id, Group: "test", Model: "gpt-4o", Enabled: tc.status == common.ChannelStatusEnabled}).Error)
 			now := common.GetTimestamp()
@@ -81,7 +72,6 @@ func TestCompleteChannelProbeUsesCurrentStatusAndRecoverySettings(t *testing.T) 
 			var state ChannelProbeState
 			require.NoError(t, DB.First(&state, "channel_id = ?", channel.Id).Error)
 			assert.Zero(t, state.LeaseUntil)
-			assert.Equal(t, tc.wantInterval, state.NextProbeAt-state.LastProbeAt)
 			assert.Equal(t, tc.success, state.LastSuccess)
 			var history []ChannelProbeHistory
 			require.NoError(t, DB.Find(&history).Error)
@@ -124,32 +114,31 @@ func TestCompleteChannelProbeRejectsExpiredOrReplacedLeaseWithoutChangingStatus(
 	}
 }
 
-func TestRelayAutoDisableAdvancesRecoveryProbeAndPreservesLease(t *testing.T) {
+func TestRelayAutoDisableDoesNotCreateOrRescheduleProbeState(t *testing.T) {
 	for _, existing := range []bool{false, true} {
-		t.Run(map[bool]string{false: "first probe", true: "scheduled probe"}[existing], func(t *testing.T) {
+		t.Run(map[bool]string{false: "no state", true: "active lease"}[existing], func(t *testing.T) {
 			setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{})
 			previousCacheEnabled := common.MemoryCacheEnabled
 			common.MemoryCacheEnabled = false
 			t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
-			channel := Channel{Id: 13, Status: common.ChannelStatusEnabled, AutoProbeEnabled: common.GetPointer(true), AutoDisabledProbeIntervalSeconds: 10}
+			channel := Channel{Id: 13, Status: common.ChannelStatusEnabled, AutoProbeEnabled: common.GetPointer(true), ProbePeriodMinutes: 2}
 			require.NoError(t, DB.Create(&channel).Error)
-			now := common.GetTimestamp()
-			leaseUntil := int64(0)
+			state := ChannelProbeState{ChannelID: channel.Id, LastProbeAt: 50, LeaseUntil: 800}
 			if existing {
-				leaseUntil = now + 300
-				require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, NextProbeAt: now + 600, LeaseUntil: leaseUntil}).Error)
+				require.NoError(t, DB.Create(&state).Error)
 			}
+
 			require.True(t, UpdateChannelStatus(channel.Id, "", common.ChannelStatusAutoDisabled, "upstream failure"))
-			var state ChannelProbeState
-			require.NoError(t, DB.First(&state, "channel_id = ?", channel.Id).Error)
-			assert.GreaterOrEqual(t, state.NextProbeAt, now+10)
-			assert.LessOrEqual(t, state.NextProbeAt, common.GetTimestamp()+10)
-			assert.Equal(t, leaseUntil, state.LeaseUntil)
-			// Repeated errors must not continually postpone the recovery probe.
-			assert.False(t, UpdateChannelStatus(channel.Id, "", common.ChannelStatusAutoDisabled, "another failure"))
-			var repeated ChannelProbeState
-			require.NoError(t, DB.First(&repeated, "channel_id = ?", channel.Id).Error)
-			assert.Equal(t, state.NextProbeAt, repeated.NextProbeAt)
+			var count int64
+			require.NoError(t, DB.Model(&ChannelProbeState{}).Where("channel_id = ?", channel.Id).Count(&count).Error)
+			if !existing {
+				assert.Zero(t, count)
+				return
+			}
+			assert.Equal(t, int64(1), count)
+			var after ChannelProbeState
+			require.NoError(t, DB.First(&after, "channel_id = ?", channel.Id).Error)
+			assert.Equal(t, state, after)
 		})
 	}
 }
@@ -215,7 +204,7 @@ func TestRemoveLegacyChannelProbePolicyColumnsHandlesConcurrentDrop(t *testing.T
 	}
 }
 
-func TestChannelTestRecoveryUsesCurrentPolicyAndPreservesProbeSchedule(t *testing.T) {
+func TestChannelTestRecoveryUsesCurrentPolicyAndPreservesProbeState(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		status     int
@@ -235,7 +224,7 @@ func TestChannelTestRecoveryUsesCurrentPolicyAndPreservesProbeSchedule(t *testin
 			channel := Channel{Id: 24, Status: common.ChannelStatusAutoDisabled, AutoProbeEnabled: common.GetPointer(true)}
 			require.NoError(t, DB.Create(&channel).Error)
 			require.NoError(t, DB.Create(&Ability{ChannelId: channel.Id, Group: "test", Model: "gpt-4o"}).Error)
-			state := ChannelProbeState{ChannelID: channel.Id, NextProbeAt: 500, LeaseUntil: 800}
+			state := ChannelProbeState{ChannelID: channel.Id, LastProbeAt: 500, LeaseUntil: 800}
 			require.NoError(t, DB.Create(&state).Error)
 			// 请求开始后修改状态/策略，恢复必须以最新持久化值为准。
 			require.NoError(t, DB.Model(&Channel{}).Where("id = ?", channel.Id).Updates(map[string]any{

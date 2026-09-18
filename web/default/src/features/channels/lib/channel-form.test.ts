@@ -46,17 +46,15 @@ function channel(overrides: Partial<Channel> = {}): Channel {
 }
 
 describe('channel form API mapping', () => {
-  test('preserves explicit zero routing and probe values', () => {
+  test('normalizes an invalid zero probe period and preserves zero routing values', () => {
     const defaults = transformChannelToFormDefaults(
       channel({
-        probe_interval_seconds: 0,
-        auto_disabled_probe_interval_seconds: 0,
+        probe_period_minutes: 0,
         price_multiplier: 0,
       })
     )
 
-    assert.equal(defaults.probe_interval_seconds, 0)
-    assert.equal(defaults.auto_disabled_probe_interval_seconds, 0)
+    assert.equal(defaults.probe_period_minutes, 2)
     assert.equal(defaults.price_multiplier, 0)
   })
 
@@ -95,10 +93,10 @@ describe('channel form API mapping', () => {
       {
         auto_ban: CHANNEL_FORM_DEFAULT_VALUES.auto_ban,
         auto_probe_enabled: CHANNEL_FORM_DEFAULT_VALUES.auto_probe_enabled,
-        probe_interval_seconds:
-          CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
-        auto_disabled_probe_interval_seconds:
-          CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
+        probe_period_minutes: CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes,
+        probe_random_delay_enabled:
+          CHANNEL_FORM_DEFAULT_VALUES.probe_random_delay_enabled,
+        probe_stream_enabled: CHANNEL_FORM_DEFAULT_VALUES.probe_stream_enabled,
         upstream_max_retries: CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries,
         max_concurrency: CHANNEL_FORM_DEFAULT_VALUES.max_concurrency,
         price_multiplier: CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
@@ -106,8 +104,9 @@ describe('channel form API mapping', () => {
       {
         auto_ban: 0,
         auto_probe_enabled: false,
-        probe_interval_seconds: 120,
-        auto_disabled_probe_interval_seconds: 10,
+        probe_period_minutes: 2,
+        probe_random_delay_enabled: false,
+        probe_stream_enabled: false,
         upstream_max_retries: 1,
         max_concurrency: 1000,
         price_multiplier: 1,
@@ -117,16 +116,18 @@ describe('channel form API mapping', () => {
     const defaults = transformChannelToFormDefaults(
       channel({
         auto_ban: null,
-        probe_interval_seconds: undefined,
-        auto_disabled_probe_interval_seconds: undefined,
+        probe_period_minutes: undefined,
+        probe_random_delay_enabled: undefined,
+        probe_stream_enabled: undefined,
         max_concurrency: null,
       })
     )
 
     assert.equal(defaults.auto_ban, 0)
     assert.equal(defaults.auto_probe_enabled, false)
-    assert.equal(defaults.probe_interval_seconds, 120)
-    assert.equal(defaults.auto_disabled_probe_interval_seconds, 10)
+    assert.equal(defaults.probe_period_minutes, 2)
+    assert.equal(defaults.probe_random_delay_enabled, false)
+    assert.equal(defaults.probe_stream_enabled, false)
     assert.equal(defaults.upstream_max_retries, 1)
     assert.equal(defaults.max_concurrency, 1000)
     assert.equal(defaults.price_multiplier, 1)
@@ -142,7 +143,13 @@ describe('channel form API mapping', () => {
   for (const enabled of [true, false]) {
     test(`自动探测为 ${enabled} 时使用单一开关保存且不改变业务自动禁用`, () => {
       const defaults = transformChannelToFormDefaults(
-        channel({ auto_probe_enabled: enabled, auto_ban: 0 })
+        channel({
+          auto_probe_enabled: enabled,
+          auto_ban: 0,
+          probe_period_minutes: 3,
+          probe_random_delay_enabled: true,
+          probe_stream_enabled: true,
+        })
       )
       const parsed = channelFormSchema.parse(defaults)
       const created = transformFormDataToCreatePayload(parsed).channel
@@ -154,8 +161,9 @@ describe('channel form API mapping', () => {
         assert.equal(payload.auto_ban, 0)
         assert.equal(Object.hasOwn(payload, 'probe_failure_auto_ban'), false)
         assert.equal(Object.hasOwn(payload, 'probe_success_auto_enable'), false)
-        assert.equal(payload.probe_interval_seconds, 120)
-        assert.equal(payload.auto_disabled_probe_interval_seconds, 10)
+        assert.equal(payload.probe_period_minutes, 3)
+        assert.equal(payload.probe_random_delay_enabled, true)
+        assert.equal(payload.probe_stream_enabled, true)
       }
     })
   }

@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -13,9 +14,10 @@ import (
 )
 
 const (
-	channelProbeWorkerCount  = 8
-	channelProbeTimeout      = 240 * time.Second
-	channelProbeLeaseSeconds = int64(300)
+	channelProbeCycle             = time.Minute
+	channelProbeRandomDelayWindow = time.Minute
+	channelProbeTimeout           = 240 * time.Second
+	channelProbeLeaseSeconds      = int64(360)
 )
 
 // One system-task lease owns this continuous dispatcher. Individual channel
@@ -62,13 +64,16 @@ func (h channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, ru
 		request: func(ctx context.Context, channel *model.Channel, userID int) testResult {
 			return testChannelWithTokenName(ctx, channel, userID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel), channelProbeTokenName, "")
 		},
+		randomDelay: func() time.Duration {
+			return time.Duration(rand.Int64N(int64(channelProbeRandomDelayWindow)))
+		},
 	}
 	var lastReport time.Time
 	lastChecked := 0
 	scheduler := channelProbeScheduler{
-		loadDue: model.GetDueChannelProbes,
-		probe:   executor.run,
-		enabled: h.Enabled,
+		loadCandidates: model.GetChannelProbeCandidates,
+		probe:          executor.run,
+		enabled:        h.Enabled,
 		report: func(summary channelProbeSummary, active int) error {
 			if summary.Checked != lastChecked {
 				service.PublishChannelProbeRefresh()
@@ -85,7 +90,7 @@ func (h channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, ru
 			}{summary, active})
 		},
 	}
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(channelProbeCycle)
 	defer ticker.Stop()
 	summary, err := scheduler.run(ctx, ticker.C)
 	if err != nil {
@@ -101,58 +106,76 @@ type channelProbeResult struct {
 	err       error
 }
 
-// The dispatcher owns all counters and active IDs. Workers only send results,
-// so a slow channel cannot block another channel's next due probe.
+// channelProbeScheduler counts the fixed one-minute system cycles per probe
+// period. When a period group becomes due, every eligible channel in that group
+// is launched asynchronously without a scheduler-level concurrency limit.
 type channelProbeScheduler struct {
-	loadDue func(context.Context, int64) ([]*model.Channel, error)
-	probe   func(context.Context, int) channelProbeResult
-	enabled func() bool
-	report  func(channelProbeSummary, int) error
+	loadCandidates func(context.Context) ([]*model.Channel, error)
+	probe          func(context.Context, int) channelProbeResult
+	enabled        func() bool
+	report         func(channelProbeSummary, int) error
 }
 
 func (scheduler channelProbeScheduler) run(parent context.Context, ticks <-chan time.Time) (summary channelProbeSummary, err error) {
 	ctx, cancel := context.WithCancel(parent)
-	results := make(chan channelProbeResult, channelProbeWorkerCount)
+	results := make(chan channelProbeResult)
 	active := make(map[int]bool)
+	periodCounts := make(map[int]int)
 	var workers sync.WaitGroup
 	defer func() {
 		cancel()
 		workers.Wait()
 	}()
-	scan := true
+
+	if !scheduler.enabled() {
+		return summary, nil
+	}
 	for {
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			return summary, ctx.Err()
-		}
-		if scan {
+		case <-ticks:
 			if !scheduler.enabled() {
 				return summary, nil
 			}
-			if len(active) < channelProbeWorkerCount {
-				channels, loadErr := scheduler.loadDue(ctx, common.GetTimestamp())
-				if loadErr != nil {
-					return summary, loadErr
+			channels, loadErr := scheduler.loadCandidates(ctx)
+			if loadErr != nil {
+				return summary, loadErr
+			}
+
+			groups := make(map[int][]*model.Channel)
+			for _, channel := range channels {
+				if !shouldRunChannelProbe(channel) {
+					continue
 				}
-				for _, channel := range channels {
-					if ctx.Err() != nil || len(active) == channelProbeWorkerCount {
-						break
-					}
-					if !shouldRunChannelProbe(channel) || active[channel.Id] {
-						continue
-					}
-					// Busy relay channels must not repeatedly consume the first worker
-					// slots and starve later recovery probes. The worker still acquires
-					// capacity atomically to cover races with new relay requests.
-					if service.CurrentChannelConcurrency(channel.Id) >= channel.GetMaxConcurrency() {
+				period := channel.GetProbePeriodMinutes()
+				groups[period] = append(groups[period], channel)
+			}
+			for period := range periodCounts {
+				if _, exists := groups[period]; !exists {
+					delete(periodCounts, period)
+				}
+			}
+			for period, group := range groups {
+				periodCounts[period]++
+				if periodCounts[period] < period {
+					continue
+				}
+				periodCounts[period] = 0
+				for _, channel := range group {
+					if active[channel.Id] {
 						continue
 					}
 					active[channel.Id] = true
 					workers.Add(1)
-					go func(id int) {
+					go func(channelID int) {
 						defer workers.Done()
-						result := scheduler.probe(ctx, id)
-						result.channelID = id
-						results <- result
+						result := scheduler.probe(ctx, channelID)
+						result.channelID = channelID
+						select {
+						case results <- result:
+						case <-ctx.Done():
+						}
 					}(channel.Id)
 				}
 			}
@@ -161,13 +184,6 @@ func (scheduler channelProbeScheduler) run(parent context.Context, ticks <-chan 
 					return summary, reportErr
 				}
 			}
-			scan = false
-		}
-		select {
-		case <-ctx.Done():
-			return summary, ctx.Err()
-		case <-ticks:
-			scan = true
 		case result := <-results:
 			delete(active, result.channelID)
 			summary.Checked += result.summary.Checked
@@ -177,18 +193,43 @@ func (scheduler channelProbeScheduler) run(parent context.Context, ticks <-chan 
 			summary.Enabled += result.summary.Enabled
 			if result.err != nil {
 				// A single channel lease or persistence error must not stop the
-				// continuous dispatcher for every other channel. The worker has
-				// already released its active slot; the channel can be retried on
-				// a later scan after its lease expires.
+				// continuous dispatcher for every other channel.
 				common.SysError(fmt.Sprintf("channel probe worker failed: channel=%d error=%v", result.channelID, result.err))
+			}
+			if scheduler.report != nil {
+				if reportErr := scheduler.report(summary, len(active)); reportErr != nil {
+					return summary, reportErr
+				}
 			}
 		}
 	}
 }
 
 type channelProbeExecutor struct {
-	testUserID int
-	request    func(context.Context, *model.Channel, int) testResult
+	testUserID  int
+	request     func(context.Context, *model.Channel, int) testResult
+	randomDelay func() time.Duration
+}
+
+func (executor channelProbeExecutor) waitRandomDelay(ctx context.Context, enabled bool) bool {
+	if !enabled || executor.randomDelay == nil {
+		return ctx.Err() == nil
+	}
+	delay := executor.randomDelay()
+	if delay <= 0 {
+		return ctx.Err() == nil
+	}
+	if delay > channelProbeRandomDelayWindow {
+		delay = channelProbeRandomDelayWindow
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (executor channelProbeExecutor) run(ctx context.Context, channelID int) channelProbeResult {
@@ -206,7 +247,7 @@ func (executor channelProbeExecutor) run(ctx context.Context, channelID int) cha
 			common.SysError(fmt.Sprintf("release channel probe lease failed: channel=%d error=%v", channelID, err))
 		}
 	}()
-	// Re-read after claiming: status/configuration may change while awaiting a slot.
+
 	channel, err := model.GetChannelById(channelID, true)
 	if err != nil {
 		return channelProbeResult{err: err}
@@ -214,8 +255,20 @@ func (executor channelProbeExecutor) run(ctx context.Context, channelID int) cha
 	if !shouldRunChannelProbe(channel) || ctx.Err() != nil {
 		return channelProbeResult{}
 	}
+	if !executor.waitRandomDelay(ctx, channel.ProbeRandomDelayEnabled) {
+		return channelProbeResult{}
+	}
+	if channel.ProbeRandomDelayEnabled {
+		channel, err = model.GetChannelById(channelID, true)
+		if err != nil {
+			return channelProbeResult{err: err}
+		}
+		if !shouldRunChannelProbe(channel) {
+			return channelProbeResult{}
+		}
+	}
 
-	// Bound the whole probe, including retries, below the channel lease lifetime.
+	// Bound the upstream probe and all retries below the remaining lease time.
 	probeCtx, cancel := context.WithTimeout(ctx, channelProbeTimeout)
 	defer cancel()
 	started := time.Now()
@@ -224,14 +277,7 @@ func (executor channelProbeExecutor) run(ctx context.Context, channelID int) cha
 		if probeCtx.Err() != nil {
 			break
 		}
-		if !service.TryAcquireChannelConcurrency(channelID, channel.GetMaxConcurrency()) {
-			// Capacity exhaustion is not an upstream failure.
-			return channelProbeResult{}
-		}
-		result = func() testResult {
-			defer service.ReleaseChannelConcurrency(channelID)
-			return executor.request(probeCtx, channel, executor.testUserID)
-		}()
+		result = executor.request(probeCtx, channel, executor.testUserID)
 		if result.localErr == nil && result.newAPIError == nil {
 			break
 		}

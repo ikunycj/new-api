@@ -148,8 +148,9 @@ export const channelFormSchema = z
     test_model: z.string().trim().min(1, ERROR_MESSAGES.REQUIRED_TEST_MODEL),
     auto_ban: z.number().optional(),
     auto_probe_enabled: z.boolean(),
-    probe_interval_seconds: z.number().int().min(0).max(604800),
-    auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
+    probe_period_minutes: z.number().int().min(1).max(10080),
+    probe_random_delay_enabled: z.boolean(),
+    probe_stream_enabled: z.boolean(),
     upstream_max_retries: z.number().int().min(0).max(100).nullable(),
     max_concurrency: z.number().int().min(1).max(10000).nullable(),
     price_multiplier: z.number().finite().min(0).max(1000),
@@ -319,8 +320,9 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   test_model: '',
   auto_ban: 0,
   auto_probe_enabled: false,
-  probe_interval_seconds: 120,
-  auto_disabled_probe_interval_seconds: 10,
+  probe_period_minutes: 2,
+  probe_random_delay_enabled: false,
+  probe_stream_enabled: false,
   upstream_max_retries: 1,
   max_concurrency: 1000,
   price_multiplier: 1,
@@ -468,12 +470,12 @@ export function transformChannelToFormDefaults(
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 0,
     auto_probe_enabled: channel.auto_probe_enabled ?? false,
-    probe_interval_seconds:
-      channel.probe_interval_seconds ??
-      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      channel.auto_disabled_probe_interval_seconds ??
-      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
+    probe_period_minutes:
+      channel.probe_period_minutes == null || channel.probe_period_minutes <= 0
+        ? CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes
+        : channel.probe_period_minutes,
+    probe_random_delay_enabled: channel.probe_random_delay_enabled ?? false,
+    probe_stream_enabled: channel.probe_stream_enabled ?? false,
     upstream_max_retries:
       channel.upstream_max_retries === undefined
         ? CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries
@@ -695,9 +697,9 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 0,
     auto_probe_enabled: formData.auto_probe_enabled,
-    probe_interval_seconds: formData.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      formData.auto_disabled_probe_interval_seconds,
+    probe_period_minutes: formData.probe_period_minutes,
+    probe_random_delay_enabled: formData.probe_random_delay_enabled,
+    probe_stream_enabled: formData.probe_stream_enabled,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
@@ -753,9 +755,9 @@ export function transformFormDataToUpdatePayload(
     test_model: formData.test_model.trim(),
     auto_ban: formData.auto_ban ?? 0,
     auto_probe_enabled: formData.auto_probe_enabled,
-    probe_interval_seconds: formData.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      formData.auto_disabled_probe_interval_seconds,
+    probe_period_minutes: formData.probe_period_minutes,
+    probe_random_delay_enabled: formData.probe_random_delay_enabled,
+    probe_stream_enabled: formData.probe_stream_enabled,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,

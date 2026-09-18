@@ -141,7 +141,9 @@ function SystemTasksTable(props: SystemTasksTableProps) {
                 <TableCell className='px-4 py-3 align-middle'>
                   <div className='space-y-0.5'>
                     <div className='font-medium'>
-                      {t(TYPE_LABEL[task.type] ?? task.type)}
+                      {task.type === 'channel_probe'
+                        ? '渠道自动探测'
+                        : t(TYPE_LABEL[task.type] ?? task.type)}
                     </div>
                     <div className='text-muted-foreground font-mono text-[11px]'>
                       {TYPE_DISPLAY_ID[task.type] ?? task.type}
@@ -367,9 +369,7 @@ export function SystemTasksPanel() {
         </div>
       </div>
 
-      <div aria-busy={tasksQuery.isFetching}>
-        {taskContent}
-      </div>
+      <div aria-busy={tasksQuery.isFetching}>{taskContent}</div>
     </section>
   )
 }

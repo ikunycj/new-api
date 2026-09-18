@@ -45,32 +45,33 @@ type Channel struct {
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
-	StatusCodeMapping                *string  `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	AutoBan                          *int     `json:"auto_ban" gorm:"default:0"`
-	AutoProbeEnabled                 *bool    `json:"auto_probe_enabled"`
-	ProbeIntervalSeconds             int      `json:"probe_interval_seconds"`
-	AutoDisabledProbeIntervalSeconds int      `json:"auto_disabled_probe_interval_seconds"`
-	UpstreamMaxRetries               *int     `json:"upstream_max_retries"`
-	MaxConcurrency                   *int     `json:"max_concurrency"`
-	CurrentConcurrency               int      `json:"current_concurrency" gorm:"-"`
-	PriceMultiplier                  float64  `json:"price_multiplier"`
-	PriceMultiplierMode              string   `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
-	DailyTokens                      int64    `json:"daily_tokens" gorm:"-"`
-	TotalTokens                      int64    `json:"total_tokens" gorm:"-"`
-	DailyCostUSD                     float64  `json:"daily_cost_usd" gorm:"-"`
-	TotalCostUSD                     float64  `json:"total_cost_usd" gorm:"-"`
-	ForcePriority                    *bool    `json:"force_priority"`
-	ForcePriorityScope               string   `json:"force_priority_scope" gorm:"type:varchar(16)"`
-	PreviousDayProbeSuccessRate      float64  `json:"previous_day_probe_success_rate" gorm:"-"`
-	PreviousDayProbeSampleCount      int      `json:"-" gorm:"-"`
-	PreviousDayAverageTTFTMs         float64  `json:"previous_day_average_ttft_ms" gorm:"-"`
-	PriorityScore                    *float64 `json:"priority_score,omitempty" gorm:"-"`
-	OtherInfo                        string   `json:"other_info"`
-	Tag                              *string  `json:"tag" gorm:"index"`
-	Setting                          *string  `json:"setting" gorm:"type:text"` // 渠道额外设置
-	ParamOverride                    *string  `json:"param_override" gorm:"type:text"`
-	HeaderOverride                   *string  `json:"header_override" gorm:"type:text"`
-	Remark                           *string  `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	StatusCodeMapping           *string  `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
+	AutoBan                     *int     `json:"auto_ban" gorm:"default:0"`
+	AutoProbeEnabled            *bool    `json:"auto_probe_enabled"`
+	ProbePeriodMinutes          int      `json:"probe_period_minutes"`
+	ProbeRandomDelayEnabled     bool     `json:"probe_random_delay_enabled"`
+	ProbeStreamEnabled          bool     `json:"probe_stream_enabled"`
+	UpstreamMaxRetries          *int     `json:"upstream_max_retries"`
+	MaxConcurrency              *int     `json:"max_concurrency"`
+	CurrentConcurrency          int      `json:"current_concurrency" gorm:"-"`
+	PriceMultiplier             float64  `json:"price_multiplier"`
+	PriceMultiplierMode         string   `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	DailyTokens                 int64    `json:"daily_tokens" gorm:"-"`
+	TotalTokens                 int64    `json:"total_tokens" gorm:"-"`
+	DailyCostUSD                float64  `json:"daily_cost_usd" gorm:"-"`
+	TotalCostUSD                float64  `json:"total_cost_usd" gorm:"-"`
+	ForcePriority               *bool    `json:"force_priority"`
+	ForcePriorityScope          string   `json:"force_priority_scope" gorm:"type:varchar(16)"`
+	PreviousDayProbeSuccessRate float64  `json:"previous_day_probe_success_rate" gorm:"-"`
+	PreviousDayProbeSampleCount int      `json:"-" gorm:"-"`
+	PreviousDayAverageTTFTMs    float64  `json:"previous_day_average_ttft_ms" gorm:"-"`
+	PriorityScore               *float64 `json:"priority_score,omitempty" gorm:"-"`
+	OtherInfo                   string   `json:"other_info"`
+	Tag                         *string  `json:"tag" gorm:"index"`
+	Setting                     *string  `json:"setting" gorm:"type:text"` // 渠道额外设置
+	ParamOverride               *string  `json:"param_override" gorm:"type:text"`
+	HeaderOverride              *string  `json:"header_override" gorm:"type:text"`
+	Remark                      *string  `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -81,18 +82,17 @@ type Channel struct {
 }
 
 const (
-	DefaultChannelProbeIntervalSeconds      = 120
-	DefaultAutoDisabledProbeIntervalSeconds = 10
-	DefaultChannelUpstreamMaxRetries        = 1
-	DefaultChannelMaxConcurrency            = 1000
-	MaxChannelMaxConcurrency                = 10000
-	MaxChannelProbeIntervalSeconds          = 7 * 24 * 60 * 60
-	MaxChannelUpstreamRetries               = 100
-	MaxChannelPriceMultiplier               = 1000
-	ChannelPriceMultiplierModeUSD           = "usd"
-	ChannelPriceMultiplierModeCNY           = "cny"
-	ChannelForcePriorityScopeGroup          = "group"
-	ChannelForcePriorityScopeCrossGroup     = "cross_group"
+	DefaultChannelProbePeriodMinutes    = 5
+	DefaultChannelUpstreamMaxRetries    = 0
+	DefaultChannelMaxConcurrency        = 1000
+	MaxChannelMaxConcurrency            = 10000
+	MaxChannelProbePeriodMinutes        = 7 * 24 * 60
+	MaxChannelUpstreamRetries           = 100
+	MaxChannelPriceMultiplier           = 1000
+	ChannelPriceMultiplierModeUSD       = "usd"
+	ChannelPriceMultiplierModeCNY       = "cny"
+	ChannelForcePriorityScopeGroup      = "group"
+	ChannelForcePriorityScopeCrossGroup = "cross_group"
 )
 
 type ChannelInfo struct {
@@ -436,11 +436,11 @@ func (channel *Channel) GetAutoBan() bool {
 	return *channel.AutoBan == 1
 }
 
-func (channel *Channel) GetProbeIntervalSeconds() int {
-	if channel == nil || channel.ProbeIntervalSeconds <= 0 {
-		return DefaultChannelProbeIntervalSeconds
+func (channel *Channel) GetProbePeriodMinutes() int {
+	if channel == nil || channel.ProbePeriodMinutes <= 0 {
+		return DefaultChannelProbePeriodMinutes
 	}
-	return channel.ProbeIntervalSeconds
+	return channel.ProbePeriodMinutes
 }
 
 func (channel *Channel) ShouldAutoProbe() bool {
@@ -448,13 +448,6 @@ func (channel *Channel) ShouldAutoProbe() bool {
 		return false
 	}
 	return channel.AutoProbeEnabled != nil && *channel.AutoProbeEnabled
-}
-
-func (channel *Channel) GetAutoDisabledProbeIntervalSeconds() int {
-	if channel == nil || channel.AutoDisabledProbeIntervalSeconds <= 0 {
-		return DefaultAutoDisabledProbeIntervalSeconds
-	}
-	return channel.AutoDisabledProbeIntervalSeconds
 }
 
 func (channel *Channel) GetTestModel() string {
@@ -1039,22 +1032,6 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 			return err
 		}
 		if statusChanged {
-			if channel.Status == common.ChannelStatusAutoDisabled && channel.ShouldAutoProbe() {
-				// A relay failure must not leave the recovery probe waiting for the
-				// previous healthy-channel interval. Preserve any in-flight lease.
-				state := ChannelProbeState{
-					ChannelID:   channelId,
-					NextProbeAt: common.GetTimestamp() + int64(channel.GetAutoDisabledProbeIntervalSeconds()),
-				}
-				if err := tx.Clauses(clause.OnConflict{
-					Columns: []clause.Column{{Name: "channel_id"}},
-					DoUpdates: clause.Assignments(map[string]any{
-						"next_probe_at": gorm.Expr("LEAST(channel_probe_states.next_probe_at, EXCLUDED.next_probe_at)"),
-					}),
-				}).Create(&state).Error; err != nil {
-					return err
-				}
-			}
 			return tx.Model(&Ability{}).Where("channel_id = ?", channelId).
 				Update("enabled", channel.Status == common.ChannelStatusEnabled).Error
 		}

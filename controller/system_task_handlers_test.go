@@ -49,6 +49,13 @@ func TestShouldRunChannelProbeRequiresSupportedRecoverableChannel(t *testing.T) 
 	}))
 }
 
+func TestShouldUseStreamForAutomaticChannelTest(t *testing.T) {
+	assert.False(t, shouldUseStreamForAutomaticChannelTest(nil))
+	assert.False(t, shouldUseStreamForAutomaticChannelTest(&model.Channel{Type: constant.ChannelTypeOpenAI}))
+	assert.True(t, shouldUseStreamForAutomaticChannelTest(&model.Channel{Type: constant.ChannelTypeOpenAI, ProbeStreamEnabled: true}))
+	assert.True(t, shouldUseStreamForAutomaticChannelTest(&model.Channel{Type: constant.ChannelTypeCodex}))
+}
+
 func TestChannelTestHandlerIsOnDemandOnly(t *testing.T) {
 	_, scheduled := any(channelTestHandler{}).(service.ScheduledSystemTaskHandler)
 	assert.False(t, scheduled)

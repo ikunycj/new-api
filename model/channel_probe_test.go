@@ -11,6 +11,22 @@ import (
 	"gorm.io/gorm"
 )
 
+type legacyChannelProbeMigrationChannel struct {
+	ID                               int `gorm:"column:id;primaryKey"`
+	ProbeIntervalSeconds             int `gorm:"column:probe_interval_seconds"`
+	AutoDisabledProbeIntervalSeconds int `gorm:"column:auto_disabled_probe_interval_seconds"`
+}
+
+func (legacyChannelProbeMigrationChannel) TableName() string { return "channels" }
+
+type legacyChannelProbeMigrationState struct {
+	ChannelID   int   `gorm:"column:channel_id;primaryKey"`
+	NextProbeAt int64 `gorm:"column:next_probe_at"`
+	LeaseUntil  int64 `gorm:"column:lease_until"`
+}
+
+func (legacyChannelProbeMigrationState) TableName() string { return "channel_probe_states" }
+
 func setupChannelProbeTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -29,6 +45,44 @@ func setupChannelProbeTestDB(t *testing.T) *gorm.DB {
 		initCol()
 	})
 	return testDB
+}
+
+func TestMigrateChannelProbePeriodConvertsSecondsAndDropsObsoleteColumns(t *testing.T) {
+	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, testDB.AutoMigrate(&legacyChannelProbeMigrationChannel{}, &legacyChannelProbeMigrationState{}))
+	require.NoError(t, testDB.Create(&[]legacyChannelProbeMigrationChannel{
+		{ID: 1, ProbeIntervalSeconds: 0, AutoDisabledProbeIntervalSeconds: 10},
+		{ID: 2, ProbeIntervalSeconds: 60, AutoDisabledProbeIntervalSeconds: 10},
+		{ID: 3, ProbeIntervalSeconds: 61, AutoDisabledProbeIntervalSeconds: 30},
+	}).Error)
+	require.NoError(t, testDB.Create(&legacyChannelProbeMigrationState{ChannelID: 1, NextProbeAt: 123, LeaseUntil: 456}).Error)
+
+	previousDB := DB
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	DB = testDB
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	initCol()
+	t.Cleanup(func() {
+		DB = previousDB
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		initCol()
+	})
+
+	require.NoError(t, migrateChannelProbePeriod())
+	require.NoError(t, migrateChannelProbePeriod())
+	assert.False(t, DB.Migrator().HasColumn(&Channel{}, "probe_interval_seconds"))
+	assert.False(t, DB.Migrator().HasColumn(&Channel{}, "auto_disabled_probe_interval_seconds"))
+	assert.True(t, DB.Migrator().HasColumn(&Channel{}, "probe_period_minutes"))
+	assert.False(t, DB.Migrator().HasColumn(&ChannelProbeState{}, "next_probe_at"))
+
+	var periods []struct {
+		ID                 int
+		ProbePeriodMinutes int
+	}
+	require.NoError(t, DB.Table("channels").Order("id").Find(&periods).Error)
+	assert.Equal(t, []int{5, 1, 2}, []int{periods[0].ProbePeriodMinutes, periods[1].ProbePeriodMinutes, periods[2].ProbePeriodMinutes})
 }
 
 func TestClaimChannelProbeAllowsOnlyOneActiveLease(t *testing.T) {
@@ -83,7 +137,7 @@ func TestSaveChannelProbeResultWithLeaseRejectsStaleOwner(t *testing.T) {
 		ChannelID: 1003,
 		Success:   false,
 		CheckedAt: 450,
-	}, 500, 400)
+	}, 400)
 	require.Error(t, err)
 	assert.Equal(t, int64(701), readProbeLease(t, db, 1003))
 
@@ -96,7 +150,7 @@ func TestSaveChannelProbeResultWithLeaseRejectsStaleOwner(t *testing.T) {
 		Success:   true,
 		LatencyMs: 42,
 		CheckedAt: 500,
-	}, 800, 701))
+	}, 701))
 	assert.Zero(t, readProbeLease(t, db, 1003))
 
 	var stored ChannelProbeHistory
@@ -105,7 +159,6 @@ func TestSaveChannelProbeResultWithLeaseRejectsStaleOwner(t *testing.T) {
 	assert.Equal(t, int64(42), stored.LatencyMs)
 	var state ChannelProbeState
 	require.NoError(t, db.First(&state, "channel_id = ?", 1003).Error)
-	assert.Equal(t, int64(800), state.NextProbeAt)
 	assert.Equal(t, int64(500), state.LastProbeAt)
 }
 
@@ -118,7 +171,7 @@ func TestSaveChannelProbeResultUsesAuthoritativeChannelIDAndCleansGlobalHistory(
 		ChannelID: 9999,
 		Success:   true,
 		CheckedAt: int64(channelProbeHistoryRetention/time.Second) + 10,
-	}, int64(channelProbeHistoryRetention/time.Second)+20))
+	}))
 
 	var stored []ChannelProbeHistory
 	require.NoError(t, db.Order("id ASC").Find(&stored).Error)
@@ -138,23 +191,19 @@ func TestGetLastChannelProbeTimesReturnsLatestStateByChannel(t *testing.T) {
 	assert.Equal(t, map[int]int64{1010: 200}, times)
 }
 
-func TestChannelProbeSettingsKeepIntervalsAndRetryDefaultsSeparate(t *testing.T) {
+func TestChannelProbeSettingsKeepPeriodAndRetryDefaultsSeparate(t *testing.T) {
 	retries := 0
 	channel := &Channel{
-		ProbeIntervalSeconds:             17,
-		AutoDisabledProbeIntervalSeconds: 43,
-		UpstreamMaxRetries:               &retries,
+		ProbePeriodMinutes: 3,
+		UpstreamMaxRetries: &retries,
 	}
-	assert.Equal(t, 17, channel.GetProbeIntervalSeconds())
-	assert.Equal(t, 43, channel.GetAutoDisabledProbeIntervalSeconds())
+	assert.Equal(t, 3, channel.GetProbePeriodMinutes())
 	assert.Zero(t, channel.GetUpstreamMaxRetries())
 
-	channel.ProbeIntervalSeconds = 0
-	channel.AutoDisabledProbeIntervalSeconds = 0
+	channel.ProbePeriodMinutes = 0
 	channel.UpstreamMaxRetries = nil
-	assert.Equal(t, 120, channel.GetProbeIntervalSeconds())
-	assert.Equal(t, 10, channel.GetAutoDisabledProbeIntervalSeconds())
-	assert.Equal(t, 1, channel.GetUpstreamMaxRetries())
+	assert.Equal(t, 5, channel.GetProbePeriodMinutes())
+	assert.Zero(t, channel.GetUpstreamMaxRetries())
 	assert.Equal(t, 1000, channel.GetMaxConcurrency())
 	maxConcurrency := 7
 	channel.MaxConcurrency = &maxConcurrency

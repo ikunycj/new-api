@@ -144,10 +144,13 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 func TestChannelProbePolicyRequestContract(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		requestData := map[string]any{
-			"auto_probe_enabled":        enabled,
-			"probe_failure_auto_ban":    "retired",
-			"probe_success_auto_enable": !enabled,
-			"models":                    "gpt-4o", "test_model": "gpt-4o", "group": "default",
+			"auto_probe_enabled":         enabled,
+			"probe_period_minutes":       3,
+			"probe_random_delay_enabled": true,
+			"probe_stream_enabled":       true,
+			"probe_failure_auto_ban":     "retired",
+			"probe_success_auto_enable":  !enabled,
+			"models":                     "gpt-4o", "test_model": "gpt-4o", "group": "default",
 		}
 		body, err := common.Marshal(requestData)
 		require.NoError(t, err)
@@ -160,27 +163,37 @@ func TestChannelProbePolicyRequestContract(t *testing.T) {
 		var fields map[string]any
 		require.NoError(t, common.Unmarshal(response, &fields))
 		assert.Equal(t, enabled, fields["auto_probe_enabled"])
+		assert.Equal(t, float64(3), fields["probe_period_minutes"])
+		assert.Equal(t, true, fields["probe_random_delay_enabled"])
+		assert.Equal(t, true, fields["probe_stream_enabled"])
 		assert.NotContains(t, fields, "probe_failure_auto_ban")
 		assert.NotContains(t, fields, "probe_success_auto_enable")
-		assert.ElementsMatch(t, []string{"auto_probe_enabled", "models", "test_model", "group"}, channelUpdateColumns(requestData))
+		assert.ElementsMatch(t, []string{
+			"auto_probe_enabled", "probe_period_minutes", "probe_random_delay_enabled", "probe_stream_enabled",
+			"models", "test_model", "group",
+		}, channelUpdateColumns(requestData))
 	}
 }
 
 func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 	columns := channelUpdateColumns(map[string]any{
-		"auto_probe_enabled":     false,
-		"probe_interval_seconds": 0,
-		"price_multiplier":       0,
-		"price_multiplier_mode":  "",
-		"multi_key_mode":         "single",
-		"name":                   "updated",
-		"balance":                0,
-		"key_mode":               "replace",
+		"auto_probe_enabled":         false,
+		"probe_period_minutes":       0,
+		"probe_random_delay_enabled": false,
+		"probe_stream_enabled":       false,
+		"price_multiplier":           0,
+		"price_multiplier_mode":      "",
+		"multi_key_mode":             "single",
+		"name":                       "updated",
+		"balance":                    0,
+		"key_mode":                   "replace",
 	})
 
 	assert.ElementsMatch(t, []string{
 		"auto_probe_enabled",
-		"probe_interval_seconds",
+		"probe_period_minutes",
+		"probe_random_delay_enabled",
+		"probe_stream_enabled",
 		"price_multiplier",
 		"price_multiplier_mode",
 		"channel_info",

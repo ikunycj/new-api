@@ -60,8 +60,9 @@ export const channelSchema = z.object({
   status_code_mapping: z.string().nullish(),
   auto_ban: z.number().nullish(),
   auto_probe_enabled: z.boolean().nullish(),
-  probe_interval_seconds: z.number().default(120),
-  auto_disabled_probe_interval_seconds: z.number().default(10),
+  probe_period_minutes: z.number().default(2),
+  probe_random_delay_enabled: z.boolean().default(false),
+  probe_stream_enabled: z.boolean().default(false),
   upstream_max_retries: z.number().nullish(),
   max_concurrency: z.number().nullish(),
   current_concurrency: z.number().default(0),
@@ -422,8 +423,9 @@ export interface ChannelFormData {
   test_model?: string
   auto_ban?: number
   auto_probe_enabled?: boolean
-  probe_interval_seconds?: number
-  auto_disabled_probe_interval_seconds?: number
+  probe_period_minutes?: number
+  probe_random_delay_enabled?: boolean
+  probe_stream_enabled?: boolean
   upstream_max_retries?: number | null
   max_concurrency?: number | null
   price_multiplier?: number

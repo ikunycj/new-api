@@ -33,30 +33,33 @@ func TestChannelUpdateSelectedFieldsPersistsExplicitZeroValues(t *testing.T) {
 	setupChannelUpdateTestDB(t)
 	retries := 4
 	channel := &Channel{
-		Id:                               95001,
-		Name:                             "keep-this-name",
-		Key:                              "keep-this-key",
-		Models:                           "model-a",
-		Group:                            "pricing-a",
-		Status:                           common.ChannelStatusEnabled,
-		ProbeIntervalSeconds:             120,
-		AutoDisabledProbeIntervalSeconds: 180,
-		PriceMultiplier:                  2.5,
-		PriceMultiplierMode:              ChannelPriceMultiplierModeCNY,
-		UpstreamMaxRetries:               &retries,
+		Id:                      95001,
+		Name:                    "keep-this-name",
+		Key:                     "keep-this-key",
+		Models:                  "model-a",
+		Group:                   "pricing-a",
+		Status:                  common.ChannelStatusEnabled,
+		ProbePeriodMinutes:      2,
+		ProbeRandomDelayEnabled: true,
+		ProbeStreamEnabled:      true,
+		PriceMultiplier:         2.5,
+		PriceMultiplierMode:     ChannelPriceMultiplierModeCNY,
+		UpstreamMaxRetries:      &retries,
 	}
 	require.NoError(t, DB.Create(channel).Error)
 
-	channel.ProbeIntervalSeconds = 0
-	channel.AutoDisabledProbeIntervalSeconds = 0
+	channel.ProbePeriodMinutes = 0
+	channel.ProbeRandomDelayEnabled = false
+	channel.ProbeStreamEnabled = false
 	autoProbeEnabled := false
 	channel.AutoProbeEnabled = &autoProbeEnabled
 	channel.PriceMultiplier = 0
 	channel.PriceMultiplierMode = ""
 	channel.UpstreamMaxRetries = nil
 	require.NoError(t, channel.Update(
-		"probe_interval_seconds",
-		"auto_disabled_probe_interval_seconds",
+		"probe_period_minutes",
+		"probe_random_delay_enabled",
+		"probe_stream_enabled",
 		"auto_probe_enabled",
 		"price_multiplier",
 		"price_multiplier_mode",
@@ -65,8 +68,9 @@ func TestChannelUpdateSelectedFieldsPersistsExplicitZeroValues(t *testing.T) {
 
 	var stored Channel
 	require.NoError(t, DB.First(&stored, channel.Id).Error)
-	assert.Zero(t, stored.ProbeIntervalSeconds)
-	assert.Zero(t, stored.AutoDisabledProbeIntervalSeconds)
+	assert.Zero(t, stored.ProbePeriodMinutes)
+	assert.False(t, stored.ProbeRandomDelayEnabled)
+	assert.False(t, stored.ProbeStreamEnabled)
 	require.NotNil(t, stored.AutoProbeEnabled)
 	assert.False(t, *stored.AutoProbeEnabled)
 	assert.Zero(t, stored.PriceMultiplier)

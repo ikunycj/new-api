@@ -335,10 +335,10 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     (values.auto_ban ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
     values.auto_probe_enabled === true ||
-    values.probe_interval_seconds !==
-      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
-    values.auto_disabled_probe_interval_seconds !==
-      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
+    values.probe_period_minutes !==
+      CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
+    values.probe_random_delay_enabled ||
+    values.probe_stream_enabled ||
     values.upstream_max_retries !== 1 ||
     values.max_concurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     values.price_multiplier !== 1 ||
@@ -745,10 +745,11 @@ export function ChannelMutateDrawer({
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
   const currentAutoProbeEnabled = form.watch('auto_probe_enabled')
-  const currentProbeIntervalSeconds = form.watch('probe_interval_seconds')
-  const currentAutoDisabledProbeIntervalSeconds = form.watch(
-    'auto_disabled_probe_interval_seconds'
+  const currentProbePeriodMinutes = form.watch('probe_period_minutes')
+  const currentProbeRandomDelayEnabled = form.watch(
+    'probe_random_delay_enabled'
   )
+  const currentProbeStreamEnabled = form.watch('probe_stream_enabled')
   const currentUpstreamMaxRetries = form.watch('upstream_max_retries')
   const currentMaxConcurrency = form.watch('max_concurrency')
   const currentPriceMultiplier = form.watch('price_multiplier')
@@ -1020,10 +1021,10 @@ export function ChannelMutateDrawer({
     (currentAutoBan ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
     currentAutoProbeEnabled === true ||
-    currentProbeIntervalSeconds !==
-      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds ||
-    currentAutoDisabledProbeIntervalSeconds !==
-      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds ||
+    currentProbePeriodMinutes !==
+      CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
+    currentProbeRandomDelayEnabled ||
+    currentProbeStreamEnabled ||
     currentUpstreamMaxRetries !== 1 ||
     currentMaxConcurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     currentPriceMultiplier !== 1 ||
@@ -3755,15 +3756,15 @@ export function ChannelMutateDrawer({
                             <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
-                                name='probe_interval_seconds'
+                                name='probe_period_minutes'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>{t('Probe interval')}</FormLabel>
+                                    <FormLabel>探测周期</FormLabel>
                                     <FormControl>
                                       <Input
                                         type='number'
-                                        min={0}
-                                        max={604800}
+                                        min={1}
+                                        max={10080}
                                         step={1}
                                         {...field}
                                         disabled={!currentAutoProbeEnabled}
@@ -3775,46 +3776,65 @@ export function ChannelMutateDrawer({
                                       />
                                     </FormControl>
                                     <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.PROBE_INTERVAL)}
+                                      以分钟为单位；相同周期的渠道按组统一计数
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>
                                 )}
                               />
-                              <FormField
-                                control={form.control}
-                                name='auto_disabled_probe_interval_seconds'
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>
-                                      {t('Auto-disabled probe interval')}
-                                    </FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type='number'
-                                        min={0}
-                                        max={604800}
-                                        step={1}
-                                        {...field}
-                                        disabled={!currentAutoProbeEnabled}
-                                        onChange={(event) =>
-                                          field.onChange(
-                                            Number(event.target.value)
-                                          )
-                                        }
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t(
-                                        FIELD_DESCRIPTIONS.AUTO_DISABLED_PROBE_INTERVAL
-                                      )}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                              <div className='grid gap-3'>
+                                <FormField
+                                  control={form.control}
+                                  name='probe_random_delay_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-3'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>开启随机延迟</FormLabel>
+                                          <FormDescription>
+                                            周期触发后在 0–60 秒内随机开始
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            disabled={!currentAutoProbeEnabled}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='probe_stream_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-3'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>流式探测</FormLabel>
+                                          <FormDescription>
+                                            使用流式请求检查渠道响应
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            disabled={!currentAutoProbeEnabled}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
                               <p className='text-muted-foreground text-xs sm:col-span-2'>
-                                探测按渠道独立调度，间隔从上次探测完成后计算。恢复还需等待探测成功；并发繁忙时可能排队。
+                                系统每 60
+                                秒推进一次周期；周期到达时，同组内所有启用或自动禁用渠道会同时异步探测，不设置并发上限。
                               </p>
                               <FormField
                                 control={form.control}

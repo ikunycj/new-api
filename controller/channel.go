@@ -684,11 +684,11 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		return fmt.Errorf("test model is required")
 	}
 	channel.TestModel = common.GetPointer(testModel)
-	if channel.ProbeIntervalSeconds < 0 || channel.ProbeIntervalSeconds > model.MaxChannelProbeIntervalSeconds {
-		return fmt.Errorf("probe interval must be between 0 and %d seconds", model.MaxChannelProbeIntervalSeconds)
+	if channel.ProbePeriodMinutes < 0 || channel.ProbePeriodMinutes > model.MaxChannelProbePeriodMinutes {
+		return fmt.Errorf("probe period must be between 0 and %d minutes", model.MaxChannelProbePeriodMinutes)
 	}
-	if channel.AutoDisabledProbeIntervalSeconds < 0 || channel.AutoDisabledProbeIntervalSeconds > model.MaxChannelProbeIntervalSeconds {
-		return fmt.Errorf("auto-disabled probe interval must be between 0 and %d seconds", model.MaxChannelProbeIntervalSeconds)
+	if channel.ProbePeriodMinutes == 0 {
+		channel.ProbePeriodMinutes = model.DefaultChannelProbePeriodMinutes
 	}
 	if channel.UpstreamMaxRetries != nil && (*channel.UpstreamMaxRetries < 0 || *channel.UpstreamMaxRetries > model.MaxChannelUpstreamRetries) {
 		return fmt.Errorf("upstream max retries must be between 0 and %d", model.MaxChannelUpstreamRetries)
