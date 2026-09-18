@@ -59,4 +59,25 @@ curl -v http://127.0.0.1:3000/api/status
 curl -v https://<selected-domain>/api/status
 ```
 
-Check OpenResty routing, TLS, and upstream connectivity. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
+Determine which gateway currently owns the public listener, then check DNS, TLS, that gateway's route, and upstream connectivity. If APISIX is active, verify its route, upstream, and candidate/current configuration hash before considering an application rollback. A healthy local app with a failed public check is usually a proxy/domain problem, not an artifact problem.
+
+## SSE stalls, buffers, or terminates through APISIX
+
+Compare the same request directly against new-api and through APISIX. Record first-event time, inter-event timing, terminal event, total bytes, HTTP status, and connection close reason. Verify the APISIX body-capture limit and worker memory before increasing it.
+
+Rollback in this order:
+
+1. Disable `http-logger` on the affected route and repeat the SSE test.
+2. Restore the previous APISIX configuration snapshot.
+3. If the gateway or TLS path remains unhealthy, release the public listener and restore OpenResty.
+4. Do not roll back new-api unless the direct application path is also failing.
+
+## Audit collector is slow or unavailable
+
+The audit path is fail-open by default and must not turn successful AI requests into gateway failures. Check the APISIX error log, configured retry behavior, collector `/healthz`, collector process logs, in-memory queue saturation, and independent audit-database connectivity.
+
+- If collector recovery is expected quickly, retain the bounded retry configuration.
+- If the collector queue is full, it returns `503`; APISIX may retry according to the configured limit and can eventually drop the audit event.
+- If APISIX worker memory or request latency is affected, disable `http-logger` before restarting unrelated services.
+- Do not restart or recreate the new-api PostgreSQL or Redis because the independent audit database is unhealthy.
+- Because the collector has no local WAL, acknowledged in-memory events can be lost if the collector exits before writing them to PostgreSQL. Do not report this first-stage design as lossless.

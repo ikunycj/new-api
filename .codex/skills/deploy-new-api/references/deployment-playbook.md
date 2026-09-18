@@ -14,6 +14,8 @@
 
 First confirm the target: `aliyun` (development), `alltokenapi` (production), or `ikun.love` (production). Set `$deployHost` to the user's answer and do not run remote commands until the target is confirmed. Set `$releaseBranch` from the target table (`master` for the existing targets, `ikun.love` for `ikun.love`). For either production target, confirm explicit permission for production writes. Then read repository instructions, inspect the dirty worktree, verify live DNS, and capture a read-only server baseline from `production-topology.md`.
 
+Also classify the requested deployment as application-only, APISIX candidate deployment, audit-collector deployment, `http-logger` configuration, public gateway cutover, or rollback. For gateway or audit work, separately confirm the gateway host, collector host, and public domain, then follow `apisix-audit-gateway.md`. Do not treat permission to deploy the application as permission to modify TLS, 80/443 listeners, body capture, DNS, or the audit store.
+
 Check workstation tools:
 
 ```powershell
@@ -150,6 +152,8 @@ curl -fsS -o /dev/null -w '%{http_code}\n' https://<selected-domain>/pricing
 For `ikun.love`, substitute `ikun-new-api`, `new-api:ikun`, `ikun-new-api-postgres`, and `ikun-new-api-redis`; also verify the app is attached to `ikun-new-api-network` and the Compose project is `ikun-new-api`. Use a GET request for `/api/status` (the public endpoint does not guarantee a successful HEAD response).
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.
+
+If the release also includes APISIX or collector work, first prove the application directly, then execute the independent candidate, SSE, audit-ingest, cutover, and rollback checks in `apisix-audit-gateway.md`. Record the APISIX image digest, sanitized configuration SHA-256, collector version, audit schema version, and representative acceptance request IDs. Never include captured bodies or secret values in the deployment record.
 
 ## 7. Record and clean up
 
