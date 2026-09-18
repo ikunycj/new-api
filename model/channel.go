@@ -58,8 +58,8 @@ type Channel struct {
 	PriceMultiplierMode         string   `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
 	DailyTokens                 int64    `json:"daily_tokens" gorm:"-"`
 	TotalTokens                 int64    `json:"total_tokens" gorm:"-"`
-	DailyCostUSD                float64  `json:"daily_cost_usd" gorm:"-"`
-	TotalCostUSD                float64  `json:"total_cost_usd" gorm:"-"`
+	DailyCostCNY                *float64 `json:"daily_cost_cny" gorm:"-"`
+	TotalCostCNY                *float64 `json:"total_cost_cny" gorm:"-"`
 	ForcePriority               *bool    `json:"force_priority"`
 	ForcePriorityScope          string   `json:"force_priority_scope" gorm:"type:varchar(16)"`
 	PreviousDayProbeSuccessRate float64  `json:"previous_day_probe_success_rate" gorm:"-"`
@@ -501,30 +501,22 @@ func (channel *Channel) GetPriceMultiplierMode() string {
 	}
 }
 
-func (channel *Channel) CalculateTokenCostUSD(tokens int64, billingUSDToCNYRate float64) float64 {
-	if channel == nil || tokens <= 0 {
-		return 0
+// EstimateCostCNY prices model usage before the customer group discount.
+// USD mode buys $1 of upstream credit for ¥1; CNY mode buys ¥1 for ¥1.
+// Both return actual CNY, independent of the wallet display currency.
+func (channel *Channel) EstimateCostCNY(baseUSD, baseCNY float64) *float64 {
+	if channel == nil {
+		return nil
 	}
-	multiplier := channel.GetPriceMultiplier()
-	if channel.GetPriceMultiplierMode() == ChannelPriceMultiplierModeCNY &&
-		billingUSDToCNYRate > 0 && !math.IsNaN(billingUSDToCNYRate) && !math.IsInf(billingUSDToCNYRate, 0) {
-		multiplier /= billingUSDToCNYRate
+	base := baseUSD
+	if channel.GetPriceMultiplierMode() == ChannelPriceMultiplierModeCNY {
+		base = baseCNY
 	}
-	return float64(tokens) / 1_000_000 * multiplier
-}
-
-// CalculateQuotaCostUSD converts recorded consume quota to its USD-equivalent
-// using the configured quota unit and billing exchange rate. Unlike
-// CalculateTokenCostUSD, this reflects the quota actually written to logs and
-// includes fixed-price, cache, audio, image, and other billing paths.
-func CalculateQuotaCostUSD(quota int64, billingUSDToCNYRate float64) float64 {
-	if quota <= 0 || common.QuotaPerUnit <= 0 || math.IsNaN(common.QuotaPerUnit) || math.IsInf(common.QuotaPerUnit, 0) {
-		return 0
+	cost := base * channel.GetPriceMultiplier()
+	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return nil
 	}
-	if billingUSDToCNYRate <= 0 || math.IsNaN(billingUSDToCNYRate) || math.IsInf(billingUSDToCNYRate, 0) {
-		billingUSDToCNYRate = 1
-	}
-	return float64(quota) / common.QuotaPerUnit / billingUSDToCNYRate
+	return &cost
 }
 
 func (channel *Channel) IsForcePriority() bool {

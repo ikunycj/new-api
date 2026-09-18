@@ -90,7 +90,7 @@ function ChannelCardComponent({
   }
 
   const fieldLabels: Record<string, string> = {
-    daily_cost_usd: `${t('Daily Cost')} / ${t('Total cost')}`,
+    daily_cost_cny: '日成本 / 总成本（¥）',
     daily_tokens: `${t('Daily Usage')} / ${t('Total Usage')}`,
     response_time: t('Response'),
     test_time: t('Last Tested'),
@@ -111,7 +111,7 @@ function ChannelCardComponent({
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
   const weightCell = renderCell('weight')
-  const costCell = renderCell('daily_cost_usd')
+  const costCell = renderCell('daily_cost_cny')
   const tokenUsageCell = renderCell('daily_tokens')
   const responseCell = renderCell('response_time')
   const priceMultiplierCell = renderCell('price_multiplier')
@@ -174,7 +174,7 @@ function ChannelCardComponent({
             <ChannelMetric label={fieldLabels.test_time}>
               {testCell}
             </ChannelMetric>
-            <ChannelMetric label={fieldLabels.daily_cost_usd}>
+            <ChannelMetric label={fieldLabels.daily_cost_cny}>
               {costCell}
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.daily_tokens}>

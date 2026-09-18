@@ -73,8 +73,8 @@ export const channelSchema = z.object({
     .default('usd'),
   daily_tokens: z.number().default(0),
   total_tokens: z.number().default(0),
-  daily_cost_usd: z.number().default(0),
-  total_cost_usd: z.number().default(0),
+  daily_cost_cny: z.number().nullable().default(null),
+  total_cost_cny: z.number().nullable().default(null),
   priority_score: z.number().nullish(),
   force_priority: z.boolean().nullish(),
   force_priority_scope: z

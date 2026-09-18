@@ -3924,7 +3924,7 @@ export function ChannelMutateDrawer({
                                       />
                                     </FormControl>
                                     <FormDescription>
-                                      {t(FIELD_DESCRIPTIONS.PRICE_MULTIPLIER)}
+                                      {FIELD_DESCRIPTIONS.PRICE_MULTIPLIER}
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>
@@ -3935,16 +3935,17 @@ export function ChannelMutateDrawer({
                                 name='price_multiplier_mode'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>
-                                      {t('Price multiplier mode')}
-                                    </FormLabel>
+                                    <FormLabel>上游充值方式</FormLabel>
                                     <Select
                                       items={[
                                         {
                                           value: 'usd',
-                                          label: t('USD-equivalent'),
+                                          label: '¥1 充 $1 额度',
                                         },
-                                        { value: 'cny', label: t('CNY') },
+                                        {
+                                          value: 'cny',
+                                          label: '¥1 充 ¥1 额度',
+                                        },
                                       ]}
                                       value={field.value}
                                       onValueChange={field.onChange}
@@ -3959,18 +3960,16 @@ export function ChannelMutateDrawer({
                                       >
                                         <SelectGroup>
                                           <SelectItem value='usd'>
-                                            {t('USD-equivalent')}
+                                            ¥1 充 $1 额度
                                           </SelectItem>
                                           <SelectItem value='cny'>
-                                            {t('CNY')}
+                                            ¥1 充 ¥1 额度
                                           </SelectItem>
                                         </SelectGroup>
                                       </SelectContent>
                                     </Select>
                                     <FormDescription>
-                                      {t(
-                                        FIELD_DESCRIPTIONS.PRICE_MULTIPLIER_MODE
-                                      )}
+                                      {FIELD_DESCRIPTIONS.PRICE_MULTIPLIER_MODE}
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>

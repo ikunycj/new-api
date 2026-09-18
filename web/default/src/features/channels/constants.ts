@@ -363,9 +363,9 @@ export const FIELD_DESCRIPTIONS = {
     'Maximum retries for this channel after the first upstream attempt',
   MAX_CONCURRENCY: '最大并发数，未设置时默认为1000。',
   PRICE_MULTIPLIER:
-    'Relative upstream cost used for channel ranking. 1 means unchanged.',
+    '上游平台扣费倍率，用于估算渠道人民币成本，也参与渠道排序；与本站计费分组倍率独立。未设置或填 0 时按 1 计算。',
   PRICE_MULTIPLIER_MODE:
-    'Currency used when comparing this channel price multiplier',
+    '美元额度：模型美元费用 × 倍率；人民币额度：模型美元费用 × 计费汇率 × 倍率。按本站模型计价及当前渠道配置估算，实际支出以上游账单为准。',
   FORCE_PRIORITY:
     'Place this channel before ordinary channels in its selected scope',
   FORCE_PRIORITY_SCOPE:

@@ -629,8 +629,8 @@ export function aggregateChannelsByTag(
         used_quota: 0,
         daily_tokens: 0,
         total_tokens: 0,
-        daily_cost_usd: 0,
-        total_cost_usd: 0,
+        daily_cost_cny: 0,
+        total_cost_cny: 0,
         response_time: 0,
         weight: -1 as unknown as number | null,
         balance: 0,
@@ -664,8 +664,14 @@ export function aggregateChannelsByTag(
     tagRow.used_quota += channel.used_quota
     tagRow.daily_tokens += channel.daily_tokens
     tagRow.total_tokens += channel.total_tokens
-    tagRow.daily_cost_usd += channel.daily_cost_usd
-    tagRow.total_cost_usd += channel.total_cost_usd
+    tagRow.daily_cost_cny =
+      tagRow.daily_cost_cny == null || channel.daily_cost_cny == null
+        ? null
+        : tagRow.daily_cost_cny + channel.daily_cost_cny
+    tagRow.total_cost_cny =
+      tagRow.total_cost_cny == null || channel.total_cost_cny == null
+        ? null
+        : tagRow.total_cost_cny + channel.total_cost_cny
 
     // Aggregate response_time (average)
     tagRow.response_time =

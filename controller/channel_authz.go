@@ -175,8 +175,8 @@ var channelReadOnlyFields = map[string]struct{}{
 	"used_quota":                      {},
 	"daily_tokens":                    {},
 	"total_tokens":                    {},
-	"daily_cost_usd":                  {},
-	"total_cost_usd":                  {},
+	"daily_cost_cny":                  {},
+	"total_cost_cny":                  {},
 	"previous_day_probe_success_rate": {},
 	"previous_day_average_ttft_ms":    {},
 	"priority_score":                  {},
@@ -217,11 +217,11 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	if _, ok := requestData["total_tokens"]; ok {
 		channel.TotalTokens = 0
 	}
-	if _, ok := requestData["daily_cost_usd"]; ok {
-		channel.DailyCostUSD = 0
+	if _, ok := requestData["daily_cost_cny"]; ok {
+		channel.DailyCostCNY = nil
 	}
-	if _, ok := requestData["total_cost_usd"]; ok {
-		channel.TotalCostUSD = 0
+	if _, ok := requestData["total_cost_cny"]; ok {
+		channel.TotalCostCNY = nil
 	}
 	if _, ok := requestData["priority_score"]; ok {
 		channel.PriorityScore = nil

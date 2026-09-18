@@ -20,7 +20,6 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -177,13 +176,12 @@ func enrichChannelUsage(channels []*model.Channel) {
 			ids = append(ids, channel.Id)
 		}
 	}
-	usageByChannel, err := model.GetChannelTokenUsageAt(ids, time.Now())
+	usageByChannel, err := model.GetChannelUsageAt(ids, time.Now())
 	if err != nil {
-		common.SysLog("failed to load channel token usage: " + err.Error())
+		common.SysLog("failed to load channel usage and cost: " + err.Error())
 		return
 	}
 
-	billingRate := operation_setting.GetBillingUSDToCNYRate()
 	for _, channel := range channels {
 		if channel == nil {
 			continue
@@ -191,8 +189,14 @@ func enrichChannelUsage(channels []*model.Channel) {
 		usage := usageByChannel[channel.Id]
 		channel.DailyTokens = usage.DailyTokens
 		channel.TotalTokens = usage.TotalTokens
-		channel.DailyCostUSD = model.CalculateQuotaCostUSD(usage.DailyQuota, billingRate)
-		channel.TotalCostUSD = model.CalculateQuotaCostUSD(usage.TotalQuota, billingRate)
+		channel.DailyCostCNY = nil
+		channel.TotalCostCNY = nil
+		if !usage.DailyCostIncomplete {
+			channel.DailyCostCNY = channel.EstimateCostCNY(usage.DailyBaseCostUSD, usage.DailyBaseCostCNY)
+		}
+		if !usage.TotalCostIncomplete {
+			channel.TotalCostCNY = channel.EstimateCostCNY(usage.TotalBaseCostUSD, usage.TotalBaseCostCNY)
+		}
 	}
 }
 

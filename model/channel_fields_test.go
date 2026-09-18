@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChannelGetGroupsTrimsDropsEmptyAndDeduplicates(t *testing.T) {
@@ -29,23 +29,32 @@ func TestChannelSelectionFieldDefaults(t *testing.T) {
 	assert.Equal(t, ChannelForcePriorityScopeCrossGroup, channel.GetForcePriorityScope())
 }
 
-func TestChannelCalculateTokenCostUSDUsesMultiplierCurrency(t *testing.T) {
-	usdChannel := &Channel{PriceMultiplier: 2, PriceMultiplierMode: ChannelPriceMultiplierModeUSD}
-	assert.InDelta(t, 3, usdChannel.CalculateTokenCostUSD(1_500_000, 7.5), 0.000001)
-
-	cnyChannel := &Channel{PriceMultiplier: 15, PriceMultiplierMode: ChannelPriceMultiplierModeCNY}
-	assert.InDelta(t, 3, cnyChannel.CalculateTokenCostUSD(1_500_000, 7.5), 0.000001)
-	assert.Zero(t, cnyChannel.CalculateTokenCostUSD(0, 7.5))
+func TestChannelEstimateCostCNYUsesUpstreamCreditPurchaseMode(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		mode string
+		want float64
+	}{
+		{"five yuan buys five dollars of credit", ChannelPriceMultiplierModeUSD, 5},
+		{"RMB credit costs the official RMB price times the multiplier", ChannelPriceMultiplierModeCNY, 35},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			channel := &Channel{PriceMultiplier: 0.2, PriceMultiplierMode: tt.mode}
+			cost := channel.EstimateCostCNY(25, 175)
+			require.NotNil(t, cost)
+			assert.InDelta(t, tt.want, *cost, 1e-9)
+		})
+	}
 }
 
-func TestCalculateQuotaCostUSDUsesRecordedQuota(t *testing.T) {
-	previousQuotaPerUnit := common.QuotaPerUnit
-	t.Cleanup(func() { common.QuotaPerUnit = previousQuotaPerUnit })
-	common.QuotaPerUnit = 500_000
-
-	assert.InDelta(t, 2, CalculateQuotaCostUSD(7_300_000, 7.3), 0.000001)
-	assert.Zero(t, CalculateQuotaCostUSD(0, 7.3))
-	assert.Zero(t, CalculateQuotaCostUSD(-1, 7.3))
+func TestChannelEstimateCostCNYRejectsInvalidAmounts(t *testing.T) {
+	channel := &Channel{PriceMultiplier: 0.2}
+	for _, base := range []float64{-1, math.Inf(1), math.NaN()} {
+		assert.Nil(t, channel.EstimateCostCNY(base, base))
+	}
+	cost := channel.EstimateCostCNY(0, 0)
+	require.NotNil(t, cost)
+	assert.Zero(t, *cost)
 }
 
 func TestChannelGetTestModel(t *testing.T) {

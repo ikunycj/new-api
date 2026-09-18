@@ -46,7 +46,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
@@ -66,6 +65,7 @@ import {
   isTagAggregateRow,
   type TagRow,
 } from '../lib'
+import { formatChannelCostCNY } from '../lib/channel-cost'
 import { CHANNEL_FORM_DEFAULT_VALUES } from '../lib/channel-form'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
@@ -368,32 +368,17 @@ function PeriodMetricCell(props: {
 }
 
 function ChannelCostCell({ channel }: { channel: Channel }) {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const options = {
-    abbreviate: false,
-    digitsLarge: 2,
-    digitsSmall: 4,
-    locale,
-  } as const
 
   return (
     <PeriodMetricCell
-      dailyLabel={t('Daily Cost')}
-      dailyValue={formatChannelCost(channel.daily_cost_usd, options)}
-      totalLabel={t('Total cost')}
-      totalValue={formatChannelCost(channel.total_cost_usd, options)}
+      dailyLabel='日成本（人民币估算，含探测）'
+      dailyValue={formatChannelCostCNY(channel.daily_cost_cny, locale)}
+      totalLabel='总成本（人民币估算，含探测）'
+      totalValue={formatChannelCostCNY(channel.total_cost_cny, locale)}
     />
   )
-}
-
-function formatChannelCost(
-  amountUSD: number,
-  options: Parameters<typeof formatBillingCurrencyFromUSD>[1]
-): string {
-  return amountUSD === 0
-    ? '0'
-    : formatBillingCurrencyFromUSD(amountUSD, options)
 }
 
 function formatTokenMillions(tokens: number, locale?: string): string {
@@ -993,10 +978,10 @@ export function useChannelsColumns(
         enableSorting: false,
       },
 
-      // Today's and lifetime recorded consume cost
+      // Estimated upstream acquisition cost in CNY, independent of wallet currency.
       {
-        accessorKey: 'daily_cost_usd',
-        header: `${t('Daily Cost')} / ${t('Total cost')}`,
+        accessorKey: 'daily_cost_cny',
+        header: '日成本 / 总成本（¥）',
         cell: ({ row }) => <ChannelCostCell channel={row.original} />,
         size: 180,
         enableSorting: false,
