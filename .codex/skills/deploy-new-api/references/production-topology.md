@@ -54,24 +54,6 @@ The live inspection on 2026-09-05 found the following topology. Re-check it befo
 
 The `alltokenapi` host has roughly 1.8 GiB RAM plus swap. Do not build the frontend, Go binary, or Docker multi-stage image there. The `ikun.love` host is a separate dedicated stack; its observed capacity is not a deployment default, and the same no-remote-build policy still applies.
 
-## Gateway and audit topology
-
-The application host table above does not prove that the active gateway, APISIX candidate, collector, or audit database is colocated with the application. Before any APISIX or audit change, verify and record these mutable values for the selected environment:
-
-| Role | Required live discovery |
-| --- | --- |
-| Active edge gateway | Product/process, service manager, configuration path, listener ports, and rollback command |
-| APISIX candidate | Host, deployment mode, image version/digest, configuration directory, and candidate ports |
-| Gateway upstream | Verified new-api address or Docker service/network; never assume a historical network name |
-| Audit collector | Host/container, private endpoint, health path, version, and authentication mechanism |
-| Audit storage | Independent database endpoint and schema version; never display credentials |
-| TLS owner | Certificate manager, certificate paths, renewal mechanism, SANs, expiry, and fingerprint |
-| DNS | Live A/AAAA/CNAME records and TTL; no mutation without separate authorization |
-| Canary path | `curl --resolve`, alternate listener, header route, or canary hostname used before public cutover |
-| Rollback artifacts | OpenResty configuration snapshot/hash, APISIX configuration snapshot/hash, and previous image digest |
-
-Do not change this section from `verify live` to fixed APISIX values until an authorized deployment has been completed and independently verified. Follow `apisix-audit-gateway.md` for the full discovery, candidate, cutover, and rollback procedure.
-
 ## Last successful release record
 
 These values are historical evidence, not defaults for the next release:
