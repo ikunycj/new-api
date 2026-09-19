@@ -503,7 +503,17 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	// Realtime dashboard counters. This is pure in-process arithmetic on the
 	// relay hot path — no IO, no allocation and no lock held across the rest of
 	// the request — so it stays cheap regardless of how many users are active.
-	RecordRealtimeUsage(userId, params.PromptTokens+params.CompletionTokens)
+	//
+	// The cache counters reuse the same eligibility helpers as the hourly
+	// quota_data rollup below, so the realtime card and the historical card
+	// always answer the same question over the same sample.
+	RecordRealtimeCacheUsage(
+		userId,
+		params.PromptTokens+params.CompletionTokens,
+		cacheReadTokensForQuotaData(params),
+		inputTokensTotalForQuotaData(params),
+		params.CacheStatsAvailable,
+	)
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
 			UserID:    userId,

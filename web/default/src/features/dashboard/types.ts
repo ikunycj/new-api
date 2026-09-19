@@ -73,12 +73,22 @@ export interface RealtimeWindow {
   tokens: number
   rpm: number
   tpm: number
+  cache_read_tokens: number
+  input_tokens_total: number
+  // 0-1 ratio, or null when no request in the window reported cache metadata.
+  // null and 0 mean different things: null is "not measured", 0 is a real
+  // observed miss, and the UI must not render the former as the latter.
+  cache_hit_rate: number | null
 }
 
 export interface RealtimeBucket {
   timestamp: number
   requests: number
   tokens: number
+  // Raw terms rather than a ratio, so several buckets can be re-aggregated
+  // before dividing without needing to weight per-bucket rates.
+  cache_read_tokens: number
+  input_tokens_total: number
 }
 
 export interface RealtimeSnapshot {

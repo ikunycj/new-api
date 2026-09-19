@@ -6562,6 +6562,19 @@
     "Normalized (recommended)": "归一化（推荐）",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "上游的运营态细节（余额不足、号池耗尽、渠道状态码等）会被替换为携带 request id 的稳定错误。内部调用方若通过签名的压测 token 认证，仍可在 X-Alltoken-* 响应头中拿到完整分类。",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "上游错误体会原样转发给调用方。开启此项可阻止余额、号池与渠道信息继续向下游泄露。",
-    "Health scores": "健康分"
+    "Health scores": "健康分",
+    "1 min": "1 分钟",
+    "5 min": "5 分钟",
+    "Realtime Throughput": "实时吞吐量",
+    "Per-minute trend": "每分钟趋势",
+    "Cache Hit Rate": "缓存命中率",
+    "requests": "请求",
+    "Node:": "节点：",
+    "Updates every {{seconds}}s": "每 {{seconds}} 秒更新",
+    "Counters cover the last 6 hours and reset when this node restarts.": "统计覆盖最近 6 小时，该节点重启后重置。",
+    "No requests recorded in the last hour.": "最近一小时没有请求记录。",
+    "Realtime data unavailable": "实时数据不可用",
+    "cached input tokens": "缓存输入 Token",
+    "No cache data reported in this window": "该时间窗内没有上游上报缓存数据"
 }
 }

@@ -184,3 +184,55 @@ func TestGetRealtimeMetricsByUserReturnsThatUser(t *testing.T) {
 	require.Equal(t, 1, payload.Data.Windows[0].Requests)
 	require.Equal(t, 250, payload.Data.Windows[0].Tokens)
 }
+
+func TestGetSelfRealtimeMetricsSerializesCacheHitRate(t *testing.T) {
+	enableRealtimeForTest(t)
+
+	// 800 of 1000 input tokens served from cache.
+	model.RecordRealtimeCacheUsage(1, 500, 800, 1000, true)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/realtime/self", nil)
+
+	GetSelfRealtimeMetrics(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload realtimeSnapshotResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.True(t, payload.Success, payload.Message)
+
+	for _, window := range payload.Data.Windows {
+		require.Equal(t, 800, window.CacheReadTokens, "%ds window", window.WindowSeconds)
+		require.Equal(t, 1000, window.InputTokensTotal, "%ds window", window.WindowSeconds)
+		require.NotNil(t, window.CacheHitRate, "%ds window", window.WindowSeconds)
+		require.InDelta(t, 0.8, *window.CacheHitRate, 1e-9, "%ds window", window.WindowSeconds)
+	}
+}
+
+func TestGetSelfRealtimeMetricsEmitsNullCacheHitRateWithoutSample(t *testing.T) {
+	enableRealtimeForTest(t)
+
+	// Traffic with no cache metadata. The wire format must carry an explicit
+	// null so the client can tell "unmeasured" from "0% hit rate" — a plain 0
+	// here would be rendered as a confident zero on the dashboard.
+	model.RecordRealtimeCacheUsage(1, 500, 0, 1000, false)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/realtime/self", nil)
+
+	GetSelfRealtimeMetrics(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"cache_hit_rate":null`)
+
+	var payload realtimeSnapshotResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	for _, window := range payload.Data.Windows {
+		require.Nil(t, window.CacheHitRate, "%ds window", window.WindowSeconds)
+		require.Zero(t, window.InputTokensTotal, "%ds window", window.WindowSeconds)
+	}
+}
