@@ -82,6 +82,10 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		//http router
 		httpRouter := relayV1Router.Group("")
+		// RelayTrace must wrap the response writer before any handler writes, and
+		// must run after TokenAuth so user/token ids are available. No-op unless
+		// RELAY_TRACE_ENABLED is set.
+		httpRouter.Use(middleware.RelayTrace())
 		httpRouter.Use(middleware.Distribute())
 
 		// claude related routes
@@ -191,6 +195,7 @@ func SetRelayRouter(router *gin.Engine) {
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())
 	relayGeminiRouter.Use(middleware.TokenAuth())
 	relayGeminiRouter.Use(middleware.ModelRequestRateLimit())
+	relayGeminiRouter.Use(middleware.RelayTrace())
 	relayGeminiRouter.Use(middleware.Distribute())
 	{
 		// Gemini API 路径格式: /v1beta/models/{model_name}:{action}

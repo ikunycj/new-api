@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/relaytrace"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/i18n"
@@ -202,6 +203,12 @@ func main() {
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()
 
+	// 初始化中转请求/响应 JSONL 落盘（默认关闭，由 RELAY_TRACE_ENABLED 控制）。
+	// 失败只告警不阻断启动：审计日志不可用不应导致网关无法提供服务。
+	if err := relaytrace.Init(relaytrace.ConfigFromEnv()); err != nil {
+		common.SysError("failed to init relay trace: " + err.Error())
+	}
+
 	// 设置路由
 	router.SetRouter(server, router.ThemeAssets{
 		DefaultBuildFS:   buildFS,
@@ -245,6 +252,8 @@ func main() {
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
 	}
+	// 落盘缓冲区中剩余的 trace 记录，避免重启丢失已接收的审计数据
+	relaytrace.Close()
 	common.SysLog("server exited")
 }
 
