@@ -83,6 +83,7 @@ const MODELS_SECTIONS = [
           ),
           ChannelHealthEnabled: settings.ChannelHealthEnabled,
           ChannelHealthMode: settings.ChannelHealthMode,
+          PublicErrorMode: settings.PublicErrorMode,
           ChannelHealthHalfLifeSeconds: settings.ChannelHealthHalfLifeSeconds,
           ChannelHealthMinSamples: settings.ChannelHealthMinSamples,
           ChannelHealthLatencyHalfLifeSeconds:

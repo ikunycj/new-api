@@ -6554,6 +6554,11 @@
     "Fewer than {{n}} samples: the score is blended toward the neutral prior and should not be trusted yet.": "Fewer than {{n}} samples: the score is blended toward the neutral prior and should not be trusted yet.",
     "low samples": "low samples",
     "No health samples recorded yet for this filter.": "No health samples recorded yet for this filter.",
+    "Client-facing error message": "Client-facing error message",
+    "Passthrough (legacy)": "Passthrough (legacy)",
+    "Normalized (recommended)": "Normalized (recommended)",
+    "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
+    "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
     "Health scores": "Health scores"
 }
 }

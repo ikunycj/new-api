@@ -178,7 +178,7 @@ SCCDDD
 
 ## 5. 错误记录
 
-客户端最终错误和内部上游尝试使用同一结构。示例：
+内部上游尝试和内部调用方使用同一结构。示例：
 
 ```json
 {
@@ -204,6 +204,26 @@ SCCDDD
 - `X-Alltoken-Code`
 - `X-Alltoken-Error-Ref`
 - `X-Alltoken-Retryable`
+
+### 5.0 对外错误口径
+
+上面的结构包含 `channel_id`、`channel_name`、`error_ref` 等运营态字段，**只对内部调用方开放**。控制项 `PublicErrorMode` 决定外部调用方拿到什么：
+
+| 取值 | 行为 |
+| --- | --- |
+| `passthrough`（默认） | 保持旧行为：上游错误体与 `X-Alltoken-*` 响应头原样返回给所有调用方 |
+| `normalized` | 对外投影：按 `alltoken_code` 归类后返回稳定错误，并附 `request id`；`X-Alltoken-*` 响应头只对内部调用方下发 |
+
+`normalized` 的投影规则：
+
+- **按 `alltoken_code` 归类，不按 HTTP 状态码**。同一个状态码可能来自不同层，例如上游凭证失效返回的 401 不能表现为调用方自身的鉴权问题，因此归类只使用六位码。
+- **上游运营态一律折叠**。余额不足、号池耗尽、渠道状态码等任何 5xx 语义统一映射为 `503 Service temporarily unavailable, please retry later`；上游限流保留 `429`，因为它是调用方可直接消费的重试信号。
+- **调用方自身错误原样保留**。请求格式、鉴权、模型不存在、内容策略、用户自身额度不足等属于调用方问题，消息与状态码保持原样（但状态码仍只取 4xx；内部附着的 5xx 不会被带出）。
+- **错误信息附 `request id`**，支持凭 request id 从 `logs` 表反查到渠道，`error_ref` 不下发。
+
+内部调用方的判定依据是压测 token 的 HMAC 签名（`VerifyMockLoadTestRequest`），签名校验通过后才标记为内部请求；仅携带客户端可伪造的标识头不算。
+
+流式响应已开始写出时，错误按传输格式以帧内事件返回（OpenAI 兼容流为 `data: ...`，Claude 为 `event: error`），不再重写 HTTP 状态码。
 
 ### 5.1 作用域
 
@@ -280,3 +300,4 @@ Grafana 以渠道为筛选和归因维度，至少展示：
 6. 开启熔断后，渠道熔断时不再接收新请求，冷却后半开探测成功可恢复；关闭时渠道始终通过熔断检查。
 7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断；不再依赖 Cluster/号池指标。
 8. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。
+9. `PublicErrorMode=normalized` 时，外部调用方在余额不足、号池耗尽、上游 5xx 场景下拿到的响应不含余额、号池、渠道名或上游地址；上游限流仍为 429；内部签名调用方仍能读到完整 `X-Alltoken-*` 分类。
