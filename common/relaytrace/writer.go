@@ -3,6 +3,7 @@ package relaytrace
 import (
 	"bufio"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 const (
@@ -36,6 +39,15 @@ type fileWriter struct {
 	maxBytes   int64
 	maxBackups int
 
+	// minFree is the free-space floor; 0 disables the guard. checkEvery bounds
+	// how often the filesystem is sampled so statfs stays off the hot path.
+	minFree    uint64
+	checkEvery time.Duration
+
+	// lastCheck/paused cache the most recent disk verdict between samples.
+	lastCheck time.Time
+	paused    bool
+
 	file *os.File
 	buf  *bufio.Writer
 	size int64
@@ -46,6 +58,10 @@ type fileWriter struct {
 	bg sync.WaitGroup
 }
 
+// errDiskLow signals that writing is paused to protect the filesystem. Returned
+// instead of writing so the caller counts it as a drop rather than a failure.
+var errDiskLow = errors.New("relaytrace: paused, free disk below threshold")
+
 func newFileWriter(cfg Config) (*fileWriter, error) {
 	if err := os.MkdirAll(cfg.Dir, dirPerm); err != nil {
 		return nil, fmt.Errorf("create trace dir %q: %w", cfg.Dir, err)
@@ -54,11 +70,51 @@ func newFileWriter(cfg Config) (*fileWriter, error) {
 		dir:        cfg.Dir,
 		maxBytes:   cfg.MaxFileBytes(),
 		maxBackups: cfg.MaxBackups,
+		minFree:    cfg.MinFreeDiskBytes(),
+		checkEvery: time.Duration(cfg.DiskCheckInterval) * time.Second,
 	}
 	if err := w.open(); err != nil {
 		return nil, err
 	}
 	return w, nil
+}
+
+// diskLow reports whether writing should pause, sampling the filesystem at most
+// once per checkEvery.
+//
+// A statfs failure is treated as "not low" on purpose: an unreadable mount must
+// not silently disable auditing. The disk-full case surfaces as a write error
+// instead, which is already handled.
+func (w *fileWriter) diskLow(now time.Time) bool {
+	if w.minFree == 0 {
+		return false
+	}
+	if !w.lastCheck.IsZero() && now.Sub(w.lastCheck) < w.checkEvery {
+		return w.paused
+	}
+	w.lastCheck = now
+
+	free, err := freeDiskBytes(w.dir)
+	if err != nil {
+		w.paused = false
+		return false
+	}
+	low := free < w.minFree
+	// Log only on transition so a sustained low-disk condition cannot itself
+	// flood the very filesystem the guard is protecting.
+	if low != w.paused {
+		if low {
+			common.SysError(fmt.Sprintf(
+				"relay trace paused: free disk %dMB below threshold %dMB at %s",
+				free>>20, w.minFree>>20, w.dir))
+		} else {
+			common.SysLog(fmt.Sprintf(
+				"relay trace resumed: free disk %dMB recovered above %dMB",
+				free>>20, w.minFree>>20))
+		}
+	}
+	w.paused = low
+	return low
 }
 
 func (w *fileWriter) activePath() string {
@@ -88,6 +144,12 @@ func (w *fileWriter) open() error {
 // size limit. The newline is added here so callers cannot forget it and corrupt
 // the line-oriented format.
 func (w *fileWriter) writeLine(line []byte) error {
+	// Checked before rotation: rotation itself writes a gzip file, so proceeding
+	// while the disk is nearly full would consume the very headroom being
+	// defended.
+	if w.diskLow(time.Now()) {
+		return errDiskLow
+	}
 	if w.maxBytes > 0 && w.size+int64(len(line))+1 > w.maxBytes {
 		if err := w.rotate(); err != nil {
 			// Rotation failure must not stop trace collection; keep appending to

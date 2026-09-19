@@ -62,6 +62,18 @@ type Config struct {
 	// thinking signatures can be found with a single jq filter instead of
 	// re-parsing SSE after the fact.
 	DetectSignature bool
+
+	// MinFreeDiskMB pauses writing while the trace filesystem has less free
+	// space than this. Rotation+gzip alone cannot guarantee safety: production
+	// traffic is bursty (measured 6.7k-1.6M requests/day, a 235x swing), so a
+	// peak day can outrun compression and fill the disk. An audit log must never
+	// be the reason the gateway loses its filesystem. 0 disables the check.
+	MinFreeDiskMB int
+
+	// DiskCheckInterval bounds how often free space is sampled, in seconds.
+	// statfs is cheap but not free, and checking per-record would put a syscall
+	// on the write path for no benefit: disks do not fill in microseconds.
+	DiskCheckInterval int
 }
 
 // Environment variable names.
@@ -77,6 +89,8 @@ const (
 	EnvUsers           = "RELAY_TRACE_USERS"
 	EnvModels          = "RELAY_TRACE_MODELS"
 	EnvDetectSignature = "RELAY_TRACE_DETECT_SIGNATURE"
+	EnvMinFreeDiskMB   = "RELAY_TRACE_MIN_FREE_DISK_MB"
+	EnvDiskCheckSec    = "RELAY_TRACE_DISK_CHECK_SEC"
 )
 
 // Default values. The feature is off by default; when switched on, the
@@ -89,23 +103,31 @@ const (
 	defaultQueueSize  = 8192
 	defaultMaxFileMB  = 512
 	defaultMaxBackups = 30
+
+	// defaultMinFreeDiskMB leaves 2GB headroom. Sized from measured production
+	// volume: a peak day writes ~54GB raw, so 2GB is roughly an hour of runway
+	// at peak rate, enough for rotation to compress or for an operator to react.
+	defaultMinFreeDiskMB = 2048
+	defaultDiskCheckSec  = 10
 )
 
 // ConfigFromEnv builds a Config from environment variables, clamping each value
 // into a sane range so a typo can never produce an unusable configuration.
 func ConfigFromEnv() Config {
 	cfg := Config{
-		Enabled:         common.GetEnvOrDefaultBool(EnvEnabled, false),
-		Dir:             common.GetEnvOrDefaultString(EnvDir, defaultDir),
-		SampleRate:      common.GetEnvOrDefault(EnvSampleRate, defaultSampleRate),
-		ErrorAlways:     common.GetEnvOrDefaultBool(EnvErrorAlways, true),
-		MaxBodyKB:       common.GetEnvOrDefault(EnvMaxBodyKB, defaultMaxBodyKB),
-		QueueSize:       common.GetEnvOrDefault(EnvQueueSize, defaultQueueSize),
-		MaxFileMB:       common.GetEnvOrDefault(EnvMaxFileMB, defaultMaxFileMB),
-		MaxBackups:      common.GetEnvOrDefault(EnvMaxBackups, defaultMaxBackups),
-		Users:           parseIntSet(common.GetEnvOrDefaultString(EnvUsers, "")),
-		Models:          parseStringSet(common.GetEnvOrDefaultString(EnvModels, "")),
-		DetectSignature: common.GetEnvOrDefaultBool(EnvDetectSignature, true),
+		Enabled:           common.GetEnvOrDefaultBool(EnvEnabled, false),
+		Dir:               common.GetEnvOrDefaultString(EnvDir, defaultDir),
+		SampleRate:        common.GetEnvOrDefault(EnvSampleRate, defaultSampleRate),
+		ErrorAlways:       common.GetEnvOrDefaultBool(EnvErrorAlways, true),
+		MaxBodyKB:         common.GetEnvOrDefault(EnvMaxBodyKB, defaultMaxBodyKB),
+		QueueSize:         common.GetEnvOrDefault(EnvQueueSize, defaultQueueSize),
+		MaxFileMB:         common.GetEnvOrDefault(EnvMaxFileMB, defaultMaxFileMB),
+		MaxBackups:        common.GetEnvOrDefault(EnvMaxBackups, defaultMaxBackups),
+		Users:             parseIntSet(common.GetEnvOrDefaultString(EnvUsers, "")),
+		Models:            parseStringSet(common.GetEnvOrDefaultString(EnvModels, "")),
+		DetectSignature:   common.GetEnvOrDefaultBool(EnvDetectSignature, true),
+		MinFreeDiskMB:     common.GetEnvOrDefault(EnvMinFreeDiskMB, defaultMinFreeDiskMB),
+		DiskCheckInterval: common.GetEnvOrDefault(EnvDiskCheckSec, defaultDiskCheckSec),
 	}
 	cfg.normalize()
 	return cfg
@@ -134,6 +156,20 @@ func (c *Config) normalize() {
 	if c.MaxBackups < 0 {
 		c.MaxBackups = 0
 	}
+	if c.MinFreeDiskMB < 0 {
+		c.MinFreeDiskMB = 0
+	}
+	if c.DiskCheckInterval <= 0 {
+		c.DiskCheckInterval = defaultDiskCheckSec
+	}
+}
+
+// MinFreeDiskBytes is MinFreeDiskMB expressed in bytes.
+func (c *Config) MinFreeDiskBytes() uint64 {
+	if c.MinFreeDiskMB <= 0 {
+		return 0
+	}
+	return uint64(c.MinFreeDiskMB) << 20
 }
 
 // MaxBodyBytes is MaxBodyKB expressed in bytes.

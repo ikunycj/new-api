@@ -447,3 +447,144 @@ func TestReInitReplacesTracer(t *testing.T) {
 		t.Fatalf("second tracer did not receive data: %v", secondLines)
 	}
 }
+
+// --- free disk guard ---
+
+// drainQueue waits for the writer goroutine to consume everything submitted so
+// far. Counters must be read before Close(), which clears the active tracer.
+func drainQueue(t *testing.T, want int64) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		submitted, written, _, failed := Stats()
+		if submitted == want && written+failed+DiskPaused() == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	submitted, written, dropped, failed := Stats()
+	t.Fatalf("queue did not drain: submitted=%d written=%d dropped=%d failed=%d paused=%d (want %d)",
+		submitted, written, dropped, failed, DiskPaused(), want)
+}
+
+func TestDiskGuardPausesWritesWhenSpaceLow(t *testing.T) {
+	cfg := testConfig(t)
+	// Threshold far above any real free space, so the guard must trip.
+	cfg.MinFreeDiskMB = 1 << 30 // 1PB
+	if err := Init(cfg); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(Close)
+
+	const n = 20
+	for i := 0; i < n; i++ {
+		Submit(&Record{Rid: "paused", Resp: "x"})
+	}
+	drainQueue(t, n)
+
+	if got := DiskPaused(); got != n {
+		t.Fatalf("expected %d records discarded by the disk guard, got %d", n, got)
+	}
+	_, written, _, failed := Stats()
+	if written != 0 {
+		t.Errorf("guard let %d records through", written)
+	}
+	// A deliberate pause must not be reported as a malfunction.
+	if failed != 0 {
+		t.Errorf("disk pause counted as failure (failed=%d)", failed)
+	}
+}
+
+func TestDiskGuardDisabledByZero(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.MinFreeDiskMB = 0
+	if err := Init(cfg); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(Close)
+
+	Submit(&Record{Rid: "allowed", Resp: "x"})
+	drainQueue(t, 1)
+
+	if got := DiskPaused(); got != 0 {
+		t.Errorf("guard ran while disabled (diskPaused=%d)", got)
+	}
+	if _, written, _, _ := Stats(); written != 1 {
+		t.Errorf("want 1 record written, got %d", written)
+	}
+}
+
+// TestDiskGuardDefaultDoesNotBlockNormalRuns guards against a threshold so high
+// that ordinary machines silently stop recording. The default must be satisfied
+// by any host with room to run the test suite at all.
+func TestDiskGuardDefaultDoesNotBlockNormalRuns(t *testing.T) {
+	cfg := testConfig(t) // normalize() applies defaultMinFreeDiskMB
+	if err := Init(cfg); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(Close)
+
+	Submit(&Record{Rid: "normal", Resp: "x"})
+	drainQueue(t, 1)
+
+	if got := DiskPaused(); got != 0 {
+		free, err := freeDiskBytes(cfg.Dir)
+		t.Fatalf("default threshold paused writing on this host "+
+			"(diskPaused=%d, free=%dMB, threshold=%dMB, statfs err=%v)",
+			got, free>>20, cfg.MinFreeDiskMB, err)
+	}
+}
+
+// TestDiskCheckIsCachedBetweenSamples proves the guard does not put a statfs
+// syscall on every record: within one interval the verdict is reused.
+func TestDiskCheckIsCachedBetweenSamples(t *testing.T) {
+	w := &fileWriter{
+		dir:        t.TempDir(),
+		minFree:    1, // any real disk clears this, so paused stays false
+		checkEvery: time.Hour,
+	}
+	start := time.Now()
+	if w.diskLow(start) {
+		t.Fatal("unexpected pause with a 1-byte threshold")
+	}
+	first := w.lastCheck
+
+	// Inside the interval the cached verdict is returned and no resample occurs.
+	if w.diskLow(start.Add(time.Minute)) {
+		t.Fatal("cached verdict flipped without a resample")
+	}
+	if !w.lastCheck.Equal(first) {
+		t.Error("guard resampled before the interval elapsed")
+	}
+
+	// Past the interval it samples again.
+	if w.diskLow(start.Add(2 * time.Hour)) {
+		t.Fatal("unexpected pause after resample")
+	}
+	if w.lastCheck.Equal(first) {
+		t.Error("guard failed to resample after the interval")
+	}
+}
+
+func TestFreeDiskBytesReportsPlausibleValue(t *testing.T) {
+	free, err := freeDiskBytes(t.TempDir())
+	if err != nil {
+		t.Fatalf("freeDiskBytes: %v", err)
+	}
+	if free == 0 {
+		t.Fatal("reported zero free bytes on a writable temp dir")
+	}
+}
+
+// TestDiskGuardUnreadableDirDoesNotPause encodes the fail-open choice: an
+// unreadable mount must not silently switch auditing off.
+func TestDiskGuardUnreadableDirDoesNotPause(t *testing.T) {
+	w := &fileWriter{
+		dir:        filepath.Join(t.TempDir(), "does-not-exist"),
+		minFree:    1 << 40,
+		checkEvery: time.Millisecond,
+	}
+	if w.diskLow(time.Now()) {
+		t.Error("statfs failure should fail open, not pause writing")
+	}
+}
