@@ -70,6 +70,26 @@ function formatRate(value: number, locale: Intl.LocalesArgument) {
 }
 
 /**
+ * Render the cache hit rate, or a placeholder when it was never measured.
+ *
+ * The backend sends null when no request in the window reported cache
+ * metadata. That is not the same as a 0% hit rate, so it must not be formatted
+ * as one: a user whose upstream simply does not report caching would otherwise
+ * read a confident "0%" and conclude their cache is broken.
+ */
+function formatCacheHitRate(
+  value: number | null,
+  locale: Intl.LocalesArgument
+) {
+  if (value == null) return '--'
+  const percent = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+  }).format(value * 100)
+
+  return `${percent}%`
+}
+
+/**
  * Drop the bucket for the minute currently in progress.
  *
  * Every bucket in the series is one minute wide, so its raw count is already a
@@ -198,6 +218,23 @@ export function RealtimeMetricsPanel() {
           const tpm = formatRate(entry.metrics?.tpm ?? 0, locale)
           const requestsDisplay = formatStatNumber(requests, locale)
           const tokensDisplay = formatStatNumber(tokens, locale)
+          const cacheHitRate = entry.metrics?.cache_hit_rate ?? null
+          const cacheHitRateDisplay = formatCacheHitRate(cacheHitRate, locale)
+          const cacheReadDisplay = formatStatNumber(
+            entry.metrics?.cache_read_tokens ?? 0,
+            locale
+          )
+          const cacheInputDisplay = formatStatNumber(
+            entry.metrics?.input_tokens_total ?? 0,
+            locale
+          )
+          // Spell the ratio out on hover. The percentage alone hides how thin
+          // the sample is, and a 100% rate over 12 tokens deserves less trust
+          // than the same number over a million.
+          const cacheHitRateTitle =
+            cacheHitRate == null
+              ? t('No cache data reported in this window')
+              : `${cacheReadDisplay.fullValue} / ${cacheInputDisplay.fullValue} ${t('cached input tokens')}`
 
           return (
             <div
@@ -234,6 +271,24 @@ export function RealtimeMetricsPanel() {
                         TPM
                       </span>
                     </div>
+                  </div>
+
+                  <div
+                    className='mt-1.5 flex items-baseline gap-1.5'
+                    title={cacheHitRateTitle}
+                  >
+                    <span
+                      className={`truncate font-mono text-sm leading-tight font-bold tracking-tight tabular-nums sm:text-base ${
+                        cacheHitRate == null
+                          ? 'text-muted-foreground'
+                          : 'text-foreground'
+                      }`}
+                    >
+                      {cacheHitRateDisplay}
+                    </span>
+                    <span className='text-muted-foreground text-[11px] font-medium tracking-wide uppercase'>
+                      {t('Cache Hit Rate')}
+                    </span>
                   </div>
 
                   <div className='text-muted-foreground/70 mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums'>

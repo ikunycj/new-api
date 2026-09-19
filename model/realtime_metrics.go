@@ -36,8 +36,8 @@ const (
 	// covers the longest window plus a comfortable margin for the chart.
 	realtimeRetentionSeconds = 6 * 60 * 60
 
-	// realtimeSlotCount is the ring length. Each slot is 16 bytes, so one ring
-	// costs ~34KB regardless of how much traffic the user generates.
+	// realtimeSlotCount is the ring length. Each slot is 24 bytes, so one ring
+	// costs ~52KB regardless of how much traffic the user generates.
 	realtimeSlotCount = realtimeRetentionSeconds / realtimeSlotSeconds
 
 	// realtimeIdleTTL is how long a user's ring survives without traffic before
@@ -81,6 +81,17 @@ type realtimeSlot struct {
 	// Tokens counts prompt plus completion tokens, matching how the existing
 	// dashboard defines token throughput so the two views agree.
 	Tokens int32
+	// CacheReadTokens and InputTokensTotal are the cache hit rate's numerator
+	// and denominator. They only accumulate for requests whose upstream
+	// actually reported cache metadata, mirroring the rule the hourly
+	// quota_data rollup applies: a response that says nothing about caching is
+	// left out of the sample entirely rather than being counted as a miss.
+	// That is why the denominator is a separate counter instead of Tokens —
+	// Tokens includes completion tokens and every cache-silent request, so a
+	// ratio taken against it would be neither a hit rate nor comparable to the
+	// historical card.
+	CacheReadTokens  int32
+	InputTokensTotal int32
 }
 
 // realtimeRing is a fixed-size circular buffer of slots for a single user.
@@ -92,8 +103,20 @@ type realtimeRing struct {
 	lastSeen int64
 }
 
+// realtimeUsage is one request's contribution to a ring. It is a struct rather
+// than a widening parameter list so adding a future counter does not mean
+// touching every call site again.
+type realtimeUsage struct {
+	// Tokens is prompt plus completion tokens.
+	Tokens int
+	// CacheReadTokens and InputTokensTotal are both zero unless the upstream
+	// reported cache metadata; see realtimeSlot for why they travel together.
+	CacheReadTokens  int
+	InputTokensTotal int
+}
+
 // add folds one request into the slot covering now.
-func (r *realtimeRing) add(now int64, tokens int) {
+func (r *realtimeRing) add(now int64, usage realtimeUsage) {
 	slotStart := now - (now % realtimeSlotSeconds)
 	idx := int((slotStart / realtimeSlotSeconds) % realtimeSlotCount)
 	slot := &r.slots[idx]
@@ -104,14 +127,18 @@ func (r *realtimeRing) add(now int64, tokens int) {
 		*slot = realtimeSlot{Timestamp: slotStart}
 	}
 	slot.Requests++
-	slot.Tokens += int32(tokens)
+	slot.Tokens += int32(usage.Tokens)
+	slot.CacheReadTokens += int32(usage.CacheReadTokens)
+	slot.InputTokensTotal += int32(usage.InputTokensTotal)
 	r.lastSeen = now
 }
 
 // realtimeWindowResult is the aggregate for one requested window.
 type realtimeWindowResult struct {
-	Requests int
-	Tokens   int
+	Requests         int
+	Tokens           int
+	CacheReadTokens  int
+	InputTokensTotal int
 }
 
 // snapshot copies the slots covering the given window so the caller can
@@ -172,9 +199,33 @@ func ResetRealtimeMetricsForTest() {
 	realtimeRegistry.mu.Unlock()
 }
 
-// RecordRealtimeUsage folds one billable request into the user's ring.
-// It is called from the relay hot path and does no IO.
+// RecordRealtimeUsage folds one billable request into the user's ring,
+// recording throughput only. Callers that also know the request's cache
+// accounting should use RecordRealtimeCacheUsage instead.
 func RecordRealtimeUsage(userId int, tokens int) {
+	recordRealtimeUsage(userId, realtimeUsage{Tokens: tokens})
+}
+
+// RecordRealtimeCacheUsage folds one billable request into the user's ring
+// together with its cache accounting.
+//
+// cacheStatsAvailable is the caller's assertion that the upstream actually
+// reported cache metadata. When it is false both cache counters are dropped
+// rather than recorded as zero, which is what keeps the resulting ratio a hit
+// rate over a consistent sample instead of silently counting every
+// cache-silent upstream as a miss.
+func RecordRealtimeCacheUsage(userId int, tokens int, cacheReadTokens int, inputTokensTotal int, cacheStatsAvailable bool) {
+	usage := realtimeUsage{Tokens: tokens}
+	if cacheStatsAvailable {
+		usage.CacheReadTokens = cacheReadTokens
+		usage.InputTokensTotal = inputTokensTotal
+	}
+	recordRealtimeUsage(userId, usage)
+}
+
+// recordRealtimeUsage is the shared hot path. It is called from the relay path
+// and does no IO.
+func recordRealtimeUsage(userId int, usage realtimeUsage) {
 	if !realtimeEnabled || userId <= 0 {
 		return
 	}
@@ -208,7 +259,7 @@ func RecordRealtimeUsage(userId int, tokens int) {
 	}
 
 	ring.mu.Lock()
-	ring.add(now, tokens)
+	ring.add(now, usage)
 	ring.mu.Unlock()
 }
 
@@ -258,6 +309,12 @@ type realtimeBucket struct {
 	Timestamp int64 `json:"timestamp"`
 	Requests  int   `json:"requests"`
 	Tokens    int   `json:"tokens"`
+	// Raw cache counters rather than a precomputed ratio: a per-minute bucket
+	// is often a tiny sample, and the client may want to re-aggregate several
+	// buckets before dividing. Dividing here first would make that impossible
+	// without weighting.
+	CacheReadTokens  int `json:"cache_read_tokens"`
+	InputTokensTotal int `json:"input_tokens_total"`
 }
 
 // RealtimeWindow is throughput over one trailing window.
@@ -267,6 +324,15 @@ type RealtimeWindow struct {
 	Tokens        int     `json:"tokens"`
 	RPM           float64 `json:"rpm"`
 	TPM           float64 `json:"tpm"`
+	// CacheReadTokens / InputTokensTotal are the hit rate's raw terms, exposed
+	// so a caller can tell an empty sample apart from a genuine 0%.
+	CacheReadTokens  int `json:"cache_read_tokens"`
+	InputTokensTotal int `json:"input_tokens_total"`
+	// CacheHitRate is the 0-1 ratio, or nil when no request in the window
+	// reported cache metadata. A pointer is used deliberately: JSON 0 and
+	// "unknown" must not collapse to the same value, or the dashboard would
+	// render a confident 0% for a window it knows nothing about.
+	CacheHitRate *float64 `json:"cache_hit_rate"`
 }
 
 // RealtimeSnapshot is the payload behind the realtime cards and chart.
@@ -449,6 +515,8 @@ func sumSlots(slots []realtimeSlot, now int64, window int64) realtimeWindowResul
 		}
 		result.Requests += int(slot.Requests)
 		result.Tokens += int(slot.Tokens)
+		result.CacheReadTokens += int(slot.CacheReadTokens)
+		result.InputTokensTotal += int(slot.InputTokensTotal)
 	}
 	return result
 }
@@ -468,6 +536,8 @@ func buildSeries(slots []realtimeSlot, now int64, window int64) []realtimeBucket
 		}
 		series[index].Requests += int(slot.Requests)
 		series[index].Tokens += int(slot.Tokens)
+		series[index].CacheReadTokens += int(slot.CacheReadTokens)
+		series[index].InputTokensTotal += int(slot.InputTokensTotal)
 	}
 	return series
 }
@@ -487,10 +557,25 @@ func emptySeries(now int64, window int64) []realtimeBucket {
 func buildWindow(window int64, result realtimeWindowResult) RealtimeWindow {
 	windowMinutes := float64(window) / 60
 	return RealtimeWindow{
-		WindowSeconds: int(window),
-		Requests:      result.Requests,
-		Tokens:        result.Tokens,
-		RPM:           float64(result.Requests) / windowMinutes,
-		TPM:           float64(result.Tokens) / windowMinutes,
+		WindowSeconds:    int(window),
+		Requests:         result.Requests,
+		Tokens:           result.Tokens,
+		RPM:              float64(result.Requests) / windowMinutes,
+		TPM:              float64(result.Tokens) / windowMinutes,
+		CacheReadTokens:  result.CacheReadTokens,
+		InputTokensTotal: result.InputTokensTotal,
+		CacheHitRate:     realtimeCacheHitRate(result),
 	}
+}
+
+// realtimeCacheHitRate returns the 0-1 hit rate, or nil when the window holds
+// no cache-reporting request. Returning nil rather than 0 is what lets the
+// dashboard show a placeholder for "no data" instead of claiming a 0% hit rate
+// it cannot support.
+func realtimeCacheHitRate(result realtimeWindowResult) *float64 {
+	if result.InputTokensTotal <= 0 {
+		return nil
+	}
+	rate := float64(result.CacheReadTokens) / float64(result.InputTokensTotal)
+	return &rate
 }

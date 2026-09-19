@@ -14,6 +14,12 @@ func BenchmarkRecordRealtimeUsage(b *testing.B) {
 	realtimeNow = func() int64 { return time.Now().Unix() }
 	b.Cleanup(func() { realtimeNow = original })
 
+	// Without this the recording path returns at its first branch and the
+	// benchmark times an empty function call instead of the ring.
+	originalEnabled := realtimeEnabled
+	realtimeEnabled = true
+	b.Cleanup(func() { realtimeEnabled = originalEnabled })
+
 	realtimeRegistry.mu.Lock()
 	originalUsers := realtimeRegistry.users
 	realtimeRegistry.users = make(map[int]*realtimeRing)
@@ -44,6 +50,12 @@ func BenchmarkRecordRealtimeUsageManyUsers(b *testing.B) {
 	realtimeNow = func() int64 { return time.Now().Unix() }
 	b.Cleanup(func() { realtimeNow = original })
 
+	// Without this the recording path returns at its first branch and the
+	// benchmark times an empty function call instead of the ring.
+	originalEnabled := realtimeEnabled
+	realtimeEnabled = true
+	b.Cleanup(func() { realtimeEnabled = originalEnabled })
+
 	realtimeRegistry.mu.Lock()
 	originalUsers := realtimeRegistry.users
 	realtimeRegistry.users = make(map[int]*realtimeRing)
@@ -67,6 +79,12 @@ func BenchmarkGetRealtimeSnapshot(b *testing.B) {
 	realtimeNow = func() int64 { return time.Now().Unix() }
 	b.Cleanup(func() { realtimeNow = original })
 
+	// Without this the recording path returns at its first branch and the
+	// benchmark times an empty function call instead of the ring.
+	originalEnabled := realtimeEnabled
+	realtimeEnabled = true
+	b.Cleanup(func() { realtimeEnabled = originalEnabled })
+
 	realtimeRegistry.mu.Lock()
 	originalUsers := realtimeRegistry.users
 	realtimeRegistry.users = make(map[int]*realtimeRing)
@@ -85,4 +103,37 @@ func BenchmarkGetRealtimeSnapshot(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GetRealtimeSnapshot(1)
 	}
+}
+
+// BenchmarkRecordRealtimeCacheUsage is the entry point the relay path actually
+// calls. It exists next to BenchmarkRecordRealtimeUsage so the cost of carrying
+// the two cache counters can be read off directly as the difference between the
+// two, rather than being asserted.
+func BenchmarkRecordRealtimeCacheUsage(b *testing.B) {
+	original := realtimeNow
+	realtimeNow = func() int64 { return time.Now().Unix() }
+	b.Cleanup(func() { realtimeNow = original })
+
+	originalEnabled := realtimeEnabled
+	realtimeEnabled = true
+	b.Cleanup(func() { realtimeEnabled = originalEnabled })
+
+	realtimeRegistry.mu.Lock()
+	originalUsers := realtimeRegistry.users
+	realtimeRegistry.users = make(map[int]*realtimeRing)
+	realtimeRegistry.mu.Unlock()
+	b.Cleanup(func() {
+		realtimeRegistry.mu.Lock()
+		realtimeRegistry.users = originalUsers
+		realtimeRegistry.mu.Unlock()
+	})
+
+	RecordRealtimeCacheUsage(1, 1000, 800, 900, true)
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			RecordRealtimeCacheUsage(1, 1000, 800, 900, true)
+		}
+	})
 }

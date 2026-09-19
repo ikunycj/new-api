@@ -28,11 +28,13 @@ import { VCHART_OPTION } from '@/lib/vchart'
 
 import type { RealtimeBucket } from '../../types'
 
-/** The two series the trend can plot. Their magnitudes differ too much to share
- *  one y-axis, so the chart shows one at a time behind a toggle. */
+/** The three series the trend can plot. Their magnitudes differ too much to
+ *  share one y-axis (a percentage and a token count cannot coexist), so the
+ *  chart shows one at a time behind a toggle. */
 const TREND_METRICS = [
   { key: 'requests', label: 'RPM' },
   { key: 'tokens', label: 'TPM' },
+  { key: 'cache', label: 'Cache' },
 ] as const
 
 type TrendMetricKey = (typeof TREND_METRICS)[number]['key']
@@ -70,27 +72,51 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
   const [metric, setMetric] = useState<TrendMetricKey>('requests')
 
   const isRequests = metric === 'requests'
-  const metricLabel = isRequests ? 'RPM' : 'TPM'
+  const isCache = metric === 'cache'
+  let metricLabel = 'TPM'
+  if (isRequests) metricLabel = 'RPM'
+  else if (isCache) metricLabel = t('Cache Hit Rate')
 
   const spec = useMemo(() => {
     if (props.series.length === 0) return null
 
     const { textColor, gridColor } = getChartThemeTokens(resolvedTheme)
-    const values = props.series.map((bucket) => ({
-      time: dayjs(bucket.timestamp * 1000).format('HH:mm'),
-      value: isRequests ? bucket.requests : bucket.tokens,
-    }))
+    const values = props.series.map((bucket) => {
+      let value: number | null
+      if (isCache) {
+        // A minute with no cache-reporting request has no rate to plot. null
+        // leaves a gap in the line, which is honest: interpolating across it
+        // or substituting 0 would both invent a measurement that never
+        // happened.
+        value =
+          bucket.input_tokens_total > 0
+            ? (bucket.cache_read_tokens / bucket.input_tokens_total) * 100
+            : null
+      } else if (isRequests) {
+        value = bucket.requests
+      } else {
+        value = bucket.tokens
+      }
+
+      return { time: dayjs(bucket.timestamp * 1000).format('HH:mm'), value }
+    })
+
+    let colorIndex = 5
+    if (isRequests) colorIndex = 0
+    else if (isCache) colorIndex = 2
 
     return {
       type: 'line' as const,
       data: [{ id: 'realtimeTrend', values }],
       xField: 'time',
       yField: 'value',
-      color: [getChartColor(isRequests ? 0 : 5)],
+      color: [getChartColor(colorIndex)],
       line: {
         style: { lineWidth: 2, curveType: 'monotone' },
       },
-      point: { visible: false },
+      // A gap-heavy cache series can leave isolated points with no neighbours
+      // to connect to, which would render as an invisible line.
+      point: { visible: isCache },
       area: { visible: false },
       legends: { visible: false },
       padding: { top: 8, right: 12, bottom: 4, left: 4 },
@@ -100,8 +126,12 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
           content: [
             {
               key: metricLabel,
-              value: (datum: { value: number }) =>
-                formatNumber(datum.value, props.locale),
+              value: (datum: { value: number | null }) => {
+                if (datum.value == null) return '--'
+                return isCache
+                  ? `${formatNumber(Math.round(datum.value * 10) / 10, props.locale)}%`
+                  : formatNumber(datum.value, props.locale)
+              },
             },
           ],
         },
@@ -114,9 +144,13 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
         },
         {
           orient: 'left',
+          // Pin the percentage axis to 0-100 so the cache line is read against
+          // a fixed scale; autoscaling would make a 91%-to-93% wobble look
+          // like a collapse.
+          ...(isCache ? { min: 0, max: 100 } : {}),
           label: {
             formatMethod: (value: number) =>
-              formatCompactNumber(value, props.locale),
+              isCache ? `${value}%` : formatCompactNumber(value, props.locale),
             style: { fill: textColor, fontSize: 10 },
           },
           grid: {
@@ -126,7 +160,14 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
         },
       ],
     }
-  }, [isRequests, metricLabel, props.locale, props.series, resolvedTheme])
+  }, [
+    isCache,
+    isRequests,
+    metricLabel,
+    props.locale,
+    props.series,
+    resolvedTheme,
+  ])
 
   if (props.loading) {
     return <div className='h-40 sm:h-48' />
@@ -159,7 +200,9 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {option.label}
+              {/* RPM and TPM are acronyms and stay as-is; "Cache" is a word
+                  and gets translated. */}
+              {option.key === 'cache' ? t(option.label) : option.label}
             </button>
           ))}
         </div>
