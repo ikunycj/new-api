@@ -59,6 +59,53 @@ export interface FlowQuotaDataItem {
 
 export type FlowMetric = 'quota' | 'tokens' | 'requests'
 
+// ----------------------------------------------------------------------------
+// Realtime throughput
+//
+// These come from in-process counters, not from quota_data. The backend keeps
+// one ring buffer per active user and only ever reports the traffic this node
+// served itself, so NodeName identifies the instance behind the numbers.
+// ----------------------------------------------------------------------------
+
+export interface RealtimeWindow {
+  window_seconds: number
+  requests: number
+  tokens: number
+  rpm: number
+  tpm: number
+}
+
+export interface RealtimeBucket {
+  timestamp: number
+  requests: number
+  tokens: number
+}
+
+export interface RealtimeSnapshot {
+  user_id: number
+  now: number
+  node_name: string
+  windows: RealtimeWindow[]
+  series: RealtimeBucket[]
+}
+
+export interface RealtimeUserSummary {
+  user_id: number
+  username: string
+  requests: number
+  tokens: number
+  rpm: number
+  tpm: number
+  last_seen: number
+}
+
+export interface RealtimeUsersResponse {
+  window_seconds: number
+  node_name: string
+  now: number
+  users: RealtimeUserSummary[]
+}
+
 export type FlowOverflowMode = 'aggregate' | 'hide'
 
 export type FlowRole = 'user' | 'admin' | 'root'

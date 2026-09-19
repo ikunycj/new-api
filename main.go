@@ -111,6 +111,9 @@ func main() {
 	// 数据看板
 	go model.UpdateQuotaData()
 
+	// 实时吞吐量计数器（进程内环形缓冲，不落库）
+	model.InitRealtimeMetrics()
+
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))
 		if err != nil {

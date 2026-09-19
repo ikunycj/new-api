@@ -22,6 +22,8 @@ import type { PlanRecord } from '@/features/subscriptions/types'
 import type {
   FlowQuotaDataItem,
   QuotaDataItem,
+  RealtimeSnapshot,
+  RealtimeUsersResponse,
   UptimeGroupResult,
 } from './types'
 
@@ -92,6 +94,38 @@ export async function getUserQuotaDates(
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     endpoint,
     { params }
+  )
+  return res.data
+}
+
+// ----------------------------------------------------------------------------
+// Realtime Throughput
+// ----------------------------------------------------------------------------
+
+// Get the calling user's own realtime throughput. The backend derives the user
+// from the session, so there is deliberately no user id parameter here.
+export async function getSelfRealtimeMetrics() {
+  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
+    '/api/data/realtime/self'
+  )
+  return res.data
+}
+
+// Get per-user realtime throughput. Admin only — the route is AdminAuth gated
+// on the server, so a non-admin role would get 403 rather than other users'
+// numbers.
+export async function getRealtimeMetricsUsers(windowSeconds = 60) {
+  const res = await api.get<{ success: boolean; data: RealtimeUsersResponse }>(
+    '/api/data/realtime/users',
+    { params: { window_seconds: windowSeconds } }
+  )
+  return res.data
+}
+
+// Get one specific user's realtime throughput. Admin only.
+export async function getRealtimeMetricsByUser(userId: number) {
+  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
+    `/api/data/realtime/users/${userId}`
   )
   return res.data
 }
