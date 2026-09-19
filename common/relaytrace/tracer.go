@@ -2,6 +2,7 @@ package relaytrace
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,10 @@ type tracer struct {
 	written   atomic.Int64
 	dropped   atomic.Int64
 	failed    atomic.Int64
+
+	// diskPaused counts records discarded by the free-space guard, kept apart
+	// from failed so "the disk is full" is distinguishable from "writing broke".
+	diskPaused atomic.Int64
 }
 
 var (
@@ -99,6 +104,18 @@ func Stats() (submitted, written, dropped, failed int64) {
 		return 0, 0, 0, 0
 	}
 	return t.submitted.Load(), t.written.Load(), t.dropped.Load(), t.failed.Load()
+}
+
+// DiskPaused returns how many records the free-space guard discarded. A nonzero
+// and growing value means the trace filesystem needs attention.
+func DiskPaused() int64 {
+	mu.RLock()
+	t := active
+	mu.RUnlock()
+	if t == nil {
+		return 0
+	}
+	return t.diskPaused.Load()
 }
 
 // Config returns the active configuration, or a disabled zero value.
@@ -209,6 +226,12 @@ func (t *tracer) persist(fw *fileWriter, r *Record) {
 		return
 	}
 	if err := fw.writeLine(line); err != nil {
+		// A disk-space pause is a deliberate drop, not a malfunction. Counting
+		// it separately keeps `failed` meaningful as "something is broken".
+		if errors.Is(err, errDiskLow) {
+			t.diskPaused.Add(1)
+			return
+		}
 		t.failed.Add(1)
 		return
 	}
