@@ -97,58 +97,77 @@ func RelayTrace() gin.HandlerFunc {
 		}
 		c.Writer = writer
 
-		c.Next()
+		// Deferred so the record survives a panicking handler. A panic unwinds
+		// past any code placed after c.Next(), which would silently drop exactly
+		// the traces worth keeping: the ones explaining why a request blew up.
+		// gin.Recovery still turns the panic into a 500 for the client.
+		defer func() {
+			// Restore the original writer so later middleware in the chain does
+			// not keep writing through a wrapper that outlived its purpose.
+			c.Writer = writer.ResponseWriter
 
-		// Restore the original writer so later middleware in the chain does not
-		// keep writing through a wrapper that outlived its purpose.
-		c.Writer = writer.ResponseWriter
+			status := writer.Status()
+			userId := common.GetContextKeyInt(c, constant.ContextKeyUserId)
+			model := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
-		status := writer.Status()
-		userId := common.GetContextKeyInt(c, constant.ContextKeyUserId)
-		model := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
-
-		if !relaytrace.ShouldRecord(status, userId, model) {
-			return
-		}
-
-		respBytes := writer.body.Bytes()
-		rec := &relaytrace.Record{
-			Rid:           c.GetString(common.RequestIdKey),
-			Ts:            start.UnixMilli(),
-			Status:        status,
-			DurationMs:    time.Since(start).Milliseconds(),
-			Method:        c.Request.Method,
-			Path:          c.Request.URL.Path,
-			Model:         model,
-			Stream:        common.GetContextKeyBool(c, constant.ContextKeyIsStream),
-			ReqHeaders:    relaytrace.FilterHeaders(c.GetHeader),
-			ReqSize:       reqSize,
-			RespSize:      writer.total,
-			ReqTruncated:  reqTruncated,
-			RespTruncated: writer.truncated,
-			Resp:          string(respBytes),
-		}
-
-		// Inline valid JSON verbatim; fall back to a plain string for multipart
-		// uploads and malformed payloads so the line stays parseable either way.
-		if json.Valid(reqBody) {
-			rec.Req = json.RawMessage(reqBody)
-		} else if len(reqBody) > 0 {
-			rec.ReqRaw = string(reqBody)
-		}
-
-		// Derived flag so "which channel strips thinking signatures" is a single
-		// jq filter rather than a re-parse of every stored SSE stream. Only set
-		// when the key actually appears, because its absence is normal for
-		// models that never emit signatures and must not look like a stripped one.
-		if cfg.DetectSignature {
-			if hasSig, present := relaytrace.DetectSignature(respBytes); present {
-				rec.HasSignature = &hasSig
+			if !relaytrace.ShouldRecord(status, userId, model) {
+				return
 			}
-		}
+			submitRecord(c, writer, reqBody, reqSize, reqTruncated, start, cfg)
+		}()
 
-		relaytrace.Submit(rec)
+		c.Next()
 	}
+}
+
+// submitRecord assembles the trace record and hands it to the writer queue.
+// Split out of the middleware body so the deferred call stays readable.
+func submitRecord(
+	c *gin.Context,
+	writer *traceResponseWriter,
+	reqBody []byte,
+	reqSize int,
+	reqTruncated bool,
+	start time.Time,
+	cfg relaytrace.Config,
+) {
+	respBytes := writer.body.Bytes()
+	rec := &relaytrace.Record{
+		Rid:           c.GetString(common.RequestIdKey),
+		Ts:            start.UnixMilli(),
+		Status:        writer.Status(),
+		DurationMs:    time.Since(start).Milliseconds(),
+		Method:        c.Request.Method,
+		Path:          c.Request.URL.Path,
+		Model:         common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
+		Stream:        common.GetContextKeyBool(c, constant.ContextKeyIsStream),
+		ReqHeaders:    relaytrace.FilterHeaders(c.GetHeader),
+		ReqSize:       reqSize,
+		RespSize:      writer.total,
+		ReqTruncated:  reqTruncated,
+		RespTruncated: writer.truncated,
+		Resp:          string(respBytes),
+	}
+
+	// Inline valid JSON verbatim; fall back to a plain string for multipart
+	// uploads and malformed payloads so the line stays parseable either way.
+	if json.Valid(reqBody) {
+		rec.Req = json.RawMessage(reqBody)
+	} else if len(reqBody) > 0 {
+		rec.ReqRaw = string(reqBody)
+	}
+
+	// Derived flag so "which channel strips thinking signatures" is a single
+	// jq filter rather than a re-parse of every stored SSE stream. Only set
+	// when the key actually appears, because its absence is normal for
+	// models that never emit signatures and must not look like a stripped one.
+	if cfg.DetectSignature {
+		if hasSig, present := relaytrace.DetectSignature(respBytes); present {
+			rec.HasSignature = &hasSig
+		}
+	}
+
+	relaytrace.Submit(rec)
 }
 
 // readRequestBody returns a copy of the request body bounded by maxBody.
