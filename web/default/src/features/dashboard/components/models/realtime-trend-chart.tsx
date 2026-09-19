@@ -101,6 +101,18 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
       return { time: dayjs(bucket.timestamp * 1000).format('HH:mm'), value }
     })
 
+    // A point whose neighbours are both null has no line segment to belong to,
+    // so it would render as nothing at all. Markers are only turned on when
+    // such a point actually exists: showing them unconditionally would clutter
+    // every well-connected series to guard against a case that is usually
+    // absent.
+    const hasOrphanPoint = values.some(
+      (entry, index) =>
+        entry.value != null &&
+        values[index - 1]?.value == null &&
+        values[index + 1]?.value == null
+    )
+
     let colorIndex = 5
     if (isRequests) colorIndex = 0
     else if (isCache) colorIndex = 2
@@ -114,9 +126,8 @@ export function RealtimeTrendChart(props: RealtimeTrendChartProps) {
       line: {
         style: { lineWidth: 2, curveType: 'monotone' },
       },
-      // A gap-heavy cache series can leave isolated points with no neighbours
-      // to connect to, which would render as an invisible line.
-      point: { visible: isCache },
+      // Markers only when a point would otherwise be invisible; see above.
+      point: { visible: hasOrphanPoint },
       area: { visible: false },
       legends: { visible: false },
       padding: { top: 8, right: 12, bottom: 4, left: 4 },
