@@ -199,11 +199,30 @@ func applyPublicErrorSuffix(message string, opts []PublicErrorOptions) string {
 // meanings: a 401 from an upstream credential failure must not be shown as the
 // caller's own authentication problem.
 func publicCategoryFor(e *NewAPIError) PublicErrorCategory {
-	code := e.AlltokenCode()
+	// After failover gives up, the error handed to the caller is the
+	// upstream_exhausted wrapper, whose own classification only says "our
+	// supply ran out". The wrapper carries the last real upstream failure as
+	// its cause, and that is the classification the caller must be judged on:
+	// a rate limit that survived failover is still a rate limit, and must keep
+	// its 429 rather than collapsing into the generic 503.
+	if cause := e.cause; cause != nil && cause.AlltokenCode > 0 && e.AlltokenCode() == 305001 {
+		code := cause.AlltokenCode
+		return publicCategoryForCode(code, ErrorCode(cause.RawCode))
+	}
+	return publicCategoryForCode(e.AlltokenCode(), e.errorCode)
+}
+
+// publicCategoryForCode maps a classification onto the public set.
+//
+// rawCode carries the original classification code so the specific cases that
+// are not decidable from the six-digit range alone (policy, the caller's own
+// quota, model availability) still resolve correctly when the category is
+// derived from a failover cause.
+func publicCategoryForCode(code int, rawCode ErrorCode) PublicErrorCategory {
 
 	// Content policy is checked first so a policy failure is never folded into
 	// a generic request error.
-	switch e.errorCode {
+	switch rawCode {
 	case ErrorCodeSensitiveWordsDetected, ErrorCodeViolationFeeGrokCSAM, ErrorCodePromptBlocked:
 		return PublicErrorCategoryPolicy
 	case ErrorCodeInsufficientUserQuota, ErrorCodePreConsumeTokenQuotaFailed:

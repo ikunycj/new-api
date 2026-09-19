@@ -348,3 +348,97 @@ func toStr(value any) string {
 		return "non-empty"
 	}
 }
+
+// channelUpstreamFailure builds the error the relay produces for a supplier
+// response, i.e. one attributed to the channel that served the request. The
+// classification of such an error is derived from its source and status, which
+// is what makes the failover cause non-trivial.
+func channelUpstreamFailure(message string, status int) *NewAPIError {
+	err := NewErrorWithStatusCode(errors.New(message), ErrorCodeBadResponseStatusCode, status)
+	err.SetErrorSource(ErrorSourceChannel)
+	return err
+}
+
+// TestFailingOverPreservesTheUpstreamClassification pins the failover case.
+//
+// When every candidate channel fails, the error the caller finally sees is the
+// upstream_exhausted wrapper (305001) rather than the last real failure. The
+// wrapper must not erase what actually went wrong upstream: a rate limit that
+// survived failover is still a rate limit, and a caller that backs off on 429
+// would otherwise be handed a 503 and never learn to slow down.
+func TestFailingOverPreservesTheUpstreamClassification(t *testing.T) {
+	withNormalizedMode(t)
+
+	cases := []struct {
+		name         string
+		lastErr      *NewAPIError
+		wantStatus   int
+		wantCategory PublicErrorCategory
+	}{
+		{
+			name: "upstream rate limit keeps its 429 through failover",
+			lastErr: channelUpstreamFailure("Rate limit reached for gpt-4o",
+				http.StatusTooManyRequests),
+			wantStatus:   http.StatusTooManyRequests,
+			wantCategory: PublicErrorCategoryRateLimit,
+		},
+		{
+			name: "upstream balance exhaustion becomes a 503",
+			lastErr: channelUpstreamFailure("Insufficient balance for acct_9f31",
+				http.StatusPaymentRequired),
+			wantStatus:   http.StatusServiceUnavailable,
+			wantCategory: PublicErrorCategoryServer,
+		},
+		{
+			name: "upstream 5xx becomes a 503",
+			lastErr: channelUpstreamFailure("upstream exploded at node-7",
+				http.StatusInternalServerError),
+			wantStatus:   http.StatusServiceUnavailable,
+			wantCategory: PublicErrorCategoryServer,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapped := NewUpstreamExhaustedError(tc.lastErr, 2)
+
+			if got := wrapped.AlltokenCode(); got != 305001 {
+				t.Fatalf("wrapper classification = %d, want 305001", got)
+			}
+			if got := wrapped.PublicStatusCode(); got != tc.wantStatus {
+				t.Errorf("PublicStatusCode() = %d, want %d", got, tc.wantStatus)
+			}
+			if got := publicCategoryFor(wrapped); got != tc.wantCategory {
+				t.Errorf("publicCategoryFor() = %q, want %q", got, tc.wantCategory)
+			}
+		})
+	}
+}
+
+// TestFailoverWrapperDoesNotLeakTheCause guards the other half: recovering the
+// classification must not put upstream detail back into the client message.
+func TestFailoverWrapperDoesNotLeakTheCause(t *testing.T) {
+	withNormalizedMode(t)
+
+	lastErr := NewErrorWithStatusCode(
+		errors.New("Insufficient balance for account acct_9f31 at https://pay.gptstore.example/recharge"),
+		ErrorCodeBadResponseStatusCode,
+		http.StatusPaymentRequired,
+	)
+	lastErr.SetErrorSource(ErrorSourceChannel)
+
+	wrapped := NewUpstreamExhaustedError(lastErr, 2)
+	projected := wrapped.ToPublicOpenAIError()
+
+	for _, needle := range []string{"acct_9f31", "gptstore", "Insufficient balance", "https://"} {
+		if strings.Contains(projected.Message, needle) {
+			t.Errorf("projected message leaks %q: %s", needle, projected.Message)
+		}
+	}
+	if projected.Message != publicMessageServiceUnavailable {
+		t.Errorf("projected message = %q, want the generic constant", projected.Message)
+	}
+	if wrapped.ErrorRef() == "" {
+		t.Error("error ref should still be available internally")
+	}
+}
