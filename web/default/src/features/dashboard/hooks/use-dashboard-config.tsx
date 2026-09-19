@@ -25,6 +25,7 @@ import {
   Flame,
   TrendingUp,
   Activity,
+  DatabaseZap,
   type LucideIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -86,6 +87,18 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
       iconTone: 'warning',
       getValue: (stat, timeRangeMinutes = 1) =>
         safeDivide(stat?.tpm ?? 0, timeRangeMinutes),
+    },
+    {
+      key: 'cacheHitRate',
+      title: t('Cache Hit Rate'),
+      description: t('Cached input tokens ratio'),
+      icon: DatabaseZap,
+      iconTone: 'chart-2',
+      // Returned as a 0-1 ratio; the card renders it as a percentage. A zero
+      // denominator means the window holds no cache-reporting requests, and
+      // the card shows a placeholder instead of a misleading 0%.
+      getValue: (stat) =>
+        safeDivide(stat?.cacheReadTokens ?? 0, stat?.inputTokensTotal ?? 0, 4),
     },
   ]
 }

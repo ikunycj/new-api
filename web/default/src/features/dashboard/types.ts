@@ -34,6 +34,12 @@ export interface QuotaDataItem {
   use_group?: string
   channel_id?: number
   channel_name?: string
+  // Cache billing counters. Both are 0 for rows written before the columns
+  // existed, and input_tokens_total only accumulates for requests whose
+  // upstream reported cache metadata — so a zero denominator means
+  // "no cache data", not "0% hit rate".
+  cache_read_tokens?: number
+  input_tokens_total?: number
 }
 
 export interface FlowQuotaDataItem {

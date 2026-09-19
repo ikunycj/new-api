@@ -512,8 +512,32 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  common.NodeName,
+			// Only feed the cache counters when the upstream actually reported
+			// cache metadata. Requests without it must not enter the hit-rate
+			// denominator, otherwise unknown responses would be counted as misses.
+			CacheReadTokens:  cacheReadTokensForQuotaData(params),
+			InputTokensTotal: inputTokensTotalForQuotaData(params),
 		})
 	}
+}
+
+// cacheReadTokensForQuotaData returns the cache-read token count eligible for
+// the dashboard hit rate, or 0 when the upstream reported no cache metadata.
+func cacheReadTokensForQuotaData(params RecordConsumeLogParams) int {
+	if !params.CacheStatsAvailable {
+		return 0
+	}
+	return params.CacheReadTokens
+}
+
+// inputTokensTotalForQuotaData mirrors cacheReadTokensForQuotaData: the
+// denominator only accumulates alongside a real cache report so the ratio is
+// always computed over a consistent sample.
+func inputTokensTotalForQuotaData(params RecordConsumeLogParams) int {
+	if !params.CacheStatsAvailable {
+		return 0
+	}
+	return params.InputTokensTotal
 }
 
 type RecordTaskBillingLogParams struct {
