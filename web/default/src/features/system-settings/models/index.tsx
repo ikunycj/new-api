@@ -71,6 +71,8 @@ const defaultModelSettings: ModelSettings = {
   // renders the value the backend is actually using.
   ChannelHealthEnabled: false,
   ChannelHealthMode: 'observe',
+  // Mirrors DefaultPublicErrorMode in common/public_error_config.go.
+  PublicErrorMode: 'passthrough',
   ChannelHealthHalfLifeSeconds: 300,
   ChannelHealthMinSamples: 5,
   ChannelHealthLatencyHalfLifeSeconds: 600,

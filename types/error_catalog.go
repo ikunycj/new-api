@@ -75,44 +75,48 @@ func classifyChannelError(rawCode string, statusCode int) errorDefinition {
 	}
 }
 
+// alltokenDefinitions is the classification table for errors the gateway
+// generates itself. It is package-level so tests can walk the whole catalogue
+// rather than a hand-maintained copy.
+var alltokenDefinitions = map[string]errorDefinition{
+	"invalid_request":                 {301001, "request", "request", "none"},
+	"bad_request_body":                {301002, "request", "request", "none"},
+	"invalid_api_type":                {301003, "request", "request", "none"},
+	"read_request_body_failed":        {301004, "request", "request", "none"},
+	"access_denied":                   {302001, "auth", "request", "none"},
+	"insufficient_user_quota":         {303001, "quota", "request", "none"},
+	"pre_consume_token_quota_failed":  {303002, "quota", "request", "none"},
+	"upstream_exhausted":              {305001, "upstream", "channel", "retry_later"},
+	"bad_response_status_code":        {305002, "upstream", "channel", "switch_channel"},
+	"bad_response":                    {305003, "upstream", "channel", "switch_channel"},
+	"empty_response":                  {305004, "upstream", "channel", "switch_channel"},
+	"aws_invoke_error":                {305005, "upstream", "channel", "switch_channel"},
+	"channel:no_available_key":        {306001, "channel", "channel", "switch_channel"},
+	"channel:param_override_invalid":  {306002, "channel", "channel", "switch_channel"},
+	"channel:header_override_invalid": {306003, "channel", "channel", "switch_channel"},
+	"channel:model_mapped_error":      {306004, "channel", "channel", "switch_channel"},
+	"channel:aws_client_error":        {306005, "channel", "channel", "switch_channel"},
+	"channel:invalid_key":             {306006, "channel", "channel", "switch_channel"},
+	"channel:response_time_exceeded":  {306007, "channel", "channel", "switch_channel"},
+	"sensitive_words_detected":        {307001, "policy", "request", "none"},
+	"violation_fee.grok.csam":         {307002, "policy", "request", "none"},
+	"prompt_blocked":                  {307003, "policy", "request", "manual"},
+	"convert_request_failed":          {308001, "protocol", "request", "none"},
+	"json_marshal_failed":             {308002, "protocol", "request", "none"},
+	"bad_response_body":               {308003, "protocol", "channel", "switch_channel"},
+	"query_data_error":                {309001, "internal", "request", "none"},
+	"update_data_error":               {309002, "internal", "request", "none"},
+	"count_token_failed":              {309003, "internal", "request", "none"},
+	"model_price_error":               {309004, "internal", "request", "none"},
+	"get_channel_failed":              {309005, "internal", "request", "retry_later"},
+	"gen_relay_info_failed":           {309006, "internal", "request", "none"},
+	"do_request_failed":               {310001, "network", "channel", "switch_channel"},
+	"read_response_body_failed":       {310002, "network", "channel", "switch_channel"},
+	"model_not_found":                 {311001, "model", "channel", "switch_channel"},
+}
+
 func classifyAlltokenError(rawCode string) errorDefinition {
-	definitions := map[string]errorDefinition{
-		"invalid_request":                 {301001, "request", "request", "none"},
-		"bad_request_body":                {301002, "request", "request", "none"},
-		"invalid_api_type":                {301003, "request", "request", "none"},
-		"read_request_body_failed":        {301004, "request", "request", "none"},
-		"access_denied":                   {302001, "auth", "request", "none"},
-		"insufficient_user_quota":         {303001, "quota", "request", "none"},
-		"pre_consume_token_quota_failed":  {303002, "quota", "request", "none"},
-		"upstream_exhausted":              {305001, "upstream", "channel", "retry_later"},
-		"bad_response_status_code":        {305002, "upstream", "channel", "switch_channel"},
-		"bad_response":                    {305003, "upstream", "channel", "switch_channel"},
-		"empty_response":                  {305004, "upstream", "channel", "switch_channel"},
-		"aws_invoke_error":                {305005, "upstream", "channel", "switch_channel"},
-		"channel:no_available_key":        {306001, "channel", "channel", "switch_channel"},
-		"channel:param_override_invalid":  {306002, "channel", "channel", "switch_channel"},
-		"channel:header_override_invalid": {306003, "channel", "channel", "switch_channel"},
-		"channel:model_mapped_error":      {306004, "channel", "channel", "switch_channel"},
-		"channel:aws_client_error":        {306005, "channel", "channel", "switch_channel"},
-		"channel:invalid_key":             {306006, "channel", "channel", "switch_channel"},
-		"channel:response_time_exceeded":  {306007, "channel", "channel", "switch_channel"},
-		"sensitive_words_detected":        {307001, "policy", "request", "none"},
-		"violation_fee.grok.csam":         {307002, "policy", "request", "none"},
-		"prompt_blocked":                  {307003, "policy", "request", "manual"},
-		"convert_request_failed":          {308001, "protocol", "request", "none"},
-		"json_marshal_failed":             {308002, "protocol", "request", "none"},
-		"bad_response_body":               {308003, "protocol", "channel", "switch_channel"},
-		"query_data_error":                {309001, "internal", "request", "none"},
-		"update_data_error":               {309002, "internal", "request", "none"},
-		"count_token_failed":              {309003, "internal", "request", "none"},
-		"model_price_error":               {309004, "internal", "request", "none"},
-		"get_channel_failed":              {309005, "internal", "request", "retry_later"},
-		"gen_relay_info_failed":           {309006, "internal", "request", "none"},
-		"do_request_failed":               {310001, "network", "channel", "switch_channel"},
-		"read_response_body_failed":       {310002, "network", "channel", "switch_channel"},
-		"model_not_found":                 {311001, "model", "channel", "switch_channel"},
-	}
-	if definition, ok := definitions[rawCode]; ok {
+	if definition, ok := alltokenDefinitions[rawCode]; ok {
 		return definition
 	}
 	return errorDefinition{300001, "unknown", "request", "none"}

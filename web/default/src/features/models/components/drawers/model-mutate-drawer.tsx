@@ -208,6 +208,7 @@ export function ModelMutateDrawer({
       ChannelCircuitConfig: '{}',
       ChannelHealthEnabled: false,
       ChannelHealthMode: 'observe',
+      PublicErrorMode: 'passthrough',
       ChannelHealthHalfLifeSeconds: 300,
       ChannelHealthMinSamples: 5,
       ChannelHealthLatencyHalfLifeSeconds: 600,

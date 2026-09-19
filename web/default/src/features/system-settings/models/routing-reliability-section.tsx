@@ -78,6 +78,18 @@ function normalizeChannelHealthMode(value?: string): ChannelHealthMode {
   return value === 'active' ? 'active' : 'observe'
 }
 
+// `passthrough` is the legacy behaviour: whatever the upstream returned is
+// forwarded to the caller verbatim. `normalized` projects it onto a stable,
+// client-facing shape so operational detail (balance, account pool, upstream
+// host names) stops leaking outward. Defaults to `passthrough`, matching
+// common/public_error_config.go, so an unwritten option changes nothing.
+const publicErrorModes = ['passthrough', 'normalized'] as const
+type PublicErrorMode = (typeof publicErrorModes)[number]
+
+function normalizePublicErrorMode(value?: string): PublicErrorMode {
+  return value === 'normalized' ? 'normalized' : 'passthrough'
+}
+
 const circuitPolicySchema = z.object({
   failure_threshold: z.number().int().min(1).max(10000),
   window_seconds: z.number().int().min(1).max(86400),
@@ -154,6 +166,7 @@ const routingReliabilitySchema = z
       .min(10)
       .max(3600),
     ChannelHealthHistoryRetentionDays: z.coerce.number().int().min(1).max(365),
+    PublicErrorMode: z.enum(publicErrorModes),
     AutomaticDisableChannelEnabled: z.boolean(),
     AutomaticEnableChannelEnabled: z.boolean(),
     AutomaticDisableKeywords: z.string(),
@@ -216,6 +229,7 @@ type RoutingReliabilitySectionProps = {
     ChannelHealthHistoryEnabled: boolean
     ChannelHealthHistoryBucketSeconds: number
     ChannelHealthHistoryRetentionDays: number
+    PublicErrorMode: PublicErrorMode
     ChannelDisableThreshold: string
     AutomaticDisableChannelEnabled: boolean
     AutomaticEnableChannelEnabled: boolean
@@ -257,6 +271,7 @@ type NormalizedRoutingReliabilityValues = {
   ChannelHealthHistoryEnabled: boolean
   ChannelHealthHistoryBucketSeconds: number
   ChannelHealthHistoryRetentionDays: number
+  PublicErrorMode: PublicErrorMode
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
   AutomaticEnableChannelEnabled: boolean
@@ -292,6 +307,7 @@ const buildFormDefaults = (
   ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
   ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
   ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
+  PublicErrorMode: normalizePublicErrorMode(defaults.PublicErrorMode),
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -331,6 +347,7 @@ const normalizeDefaults = (
   ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
   ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
   ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
+  PublicErrorMode: normalizePublicErrorMode(defaults.PublicErrorMode),
   ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
@@ -371,6 +388,7 @@ const normalizeFormValues = (
   ChannelHealthHistoryEnabled: values.ChannelHealthHistoryEnabled,
   ChannelHealthHistoryBucketSeconds: values.ChannelHealthHistoryBucketSeconds,
   ChannelHealthHistoryRetentionDays: values.ChannelHealthHistoryRetentionDays,
+  PublicErrorMode: values.PublicErrorMode,
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
   AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
@@ -424,6 +442,7 @@ export function RoutingReliabilitySection({
   // controls that silently do nothing.
   const healthEnabled = form.watch('ChannelHealthEnabled')
   const healthMode = form.watch('ChannelHealthMode')
+  const publicErrorMode = form.watch('PublicErrorMode')
   const probeEnabled = form.watch('ChannelHealthProbeEnabled')
   const historyEnabled = form.watch('ChannelHealthHistoryEnabled')
   const autoDisableParsed = useMemo(
@@ -596,6 +615,58 @@ export function RoutingReliabilitySection({
                           )
                         : t(
                             'Scores are recorded and visible but never influence channel selection. Safe to enable on production traffic.'
+                          )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className='grid min-w-0 gap-6 lg:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='PublicErrorMode'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Client-facing error message')}</FormLabel>
+                    <Select
+                      items={[
+                        {
+                          value: 'passthrough',
+                          label: t('Passthrough (legacy)'),
+                        },
+                        {
+                          value: 'normalized',
+                          label: t('Normalized (recommended)'),
+                        },
+                      ]}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          <SelectItem value='passthrough'>
+                            {t('Passthrough (legacy)')}
+                          </SelectItem>
+                          <SelectItem value='normalized'>
+                            {t('Normalized (recommended)')}
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {publicErrorMode === 'normalized'
+                        ? t(
+                            'Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.'
+                          )
+                        : t(
+                            'Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.'
                           )}
                     </FormDescription>
                     <FormMessage />

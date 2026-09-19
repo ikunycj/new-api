@@ -64,6 +64,7 @@ func InitOptionMap() {
 	common.OptionMap[common.ChannelHealthHistoryEnabledOptionKey] = strconv.FormatBool(common.IsChannelHealthHistoryEnabled())
 	common.OptionMap[common.ChannelHealthHistoryBucketSecondsOptionKey] = strconv.Itoa(common.ChannelHealthHistoryBucketSeconds())
 	common.OptionMap[common.ChannelHealthHistoryRetentionDaysOptionKey] = strconv.Itoa(common.ChannelHealthHistoryRetentionDays())
+	common.OptionMap[common.PublicErrorModeOptionKey] = common.PublicErrorMode()
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
@@ -526,6 +527,8 @@ func updateOptionMap(key string, value string) (err error) {
 	switch key {
 	case common.ChannelHealthModeOptionKey:
 		common.SetChannelHealthMode(value)
+	case common.PublicErrorModeOptionKey:
+		common.SetPublicErrorMode(value)
 	case "EmailDomainWhitelist":
 		common.EmailDomainWhitelist = strings.Split(value, ",")
 	case "SMTPServer":
@@ -785,6 +788,8 @@ func normalizeOptionValue(key string, value string) (string, error) {
 			return "", errors.New("ChannelHealthMode must be observe or active")
 		}
 		return mode, nil
+	case common.PublicErrorModeOptionKey:
+		return common.NormalizePublicErrorMode(value)
 	case common.ChannelHealthHalfLifeSecondsKey:
 		return normalizeBoundedIntOption(value, 5, 86400, "ChannelHealthHalfLifeSeconds")
 	case common.ChannelHealthMinSamplesOptionKey:

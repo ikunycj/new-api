@@ -230,6 +230,7 @@ export type ModelSettings = {
   ChannelCircuitConfig: string
   ChannelHealthEnabled: boolean
   ChannelHealthMode: 'observe' | 'active'
+  PublicErrorMode: 'passthrough' | 'normalized'
   ChannelHealthHalfLifeSeconds: number
   ChannelHealthMinSamples: number
   ChannelHealthLatencyHalfLifeSeconds: number

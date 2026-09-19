@@ -6557,6 +6557,11 @@
     "Fewer than {{n}} samples: the score is blended toward the neutral prior and should not be trusted yet.": "样本不足 {{n}} 个：分数被向中性值混合，暂不可信。",
     "low samples": "样本不足",
     "No health samples recorded yet for this filter.": "当前筛选条件下暂无健康分样本。",
+    "Client-facing error message": "对外错误提示",
+    "Passthrough (legacy)": "原样透传（旧行为）",
+    "Normalized (recommended)": "归一化（推荐）",
+    "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "上游的运营态细节（余额不足、号池耗尽、渠道状态码等）会被替换为携带 request id 的稳定错误。内部调用方若通过签名的压测 token 认证，仍可在 X-Alltoken-* 响应头中拿到完整分类。",
+    "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "上游错误体会原样转发给调用方。开启此项可阻止余额、号池与渠道信息继续向下游泄露。",
     "Health scores": "健康分"
 }
 }

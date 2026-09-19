@@ -136,26 +136,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			newAPIError.SetRequestID(requestId)
 			newAPIError.SetAttemptCount(len(c.GetStringSlice("use_channel")))
-			c.Header("X-Alltoken-Error-Source", string(newAPIError.GetErrorSource()))
-			c.Header("X-Alltoken-Error-Code", newAPIError.SourceCode())
-			c.Header("X-Alltoken-Code", fmt.Sprintf("%06d", newAPIError.AlltokenCode()))
-			c.Header("X-Alltoken-Error-Ref", newAPIError.ErrorRef())
-			c.Header("X-Alltoken-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
-			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
-			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
-			switch relayFormat {
-			case types.RelayFormatOpenAIRealtime:
-				helper.WssError(c, ws, newAPIError.ToOpenAIError())
-			case types.RelayFormatClaude:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"type":  "error",
-					"error": newAPIError.ToClaudeError(),
-				})
-			default:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"error": newAPIError.ToOpenAIError(),
-				})
+			// The internal classification stays available to authenticated
+			// internal callers, whose tooling classifies failures by
+			// X-Alltoken-Code. Once the projection is on, a normal caller only
+			// gets X-Request-Id: the rest would enumerate the channel pool.
+			if internalErrorDetailAllowed(c) {
+				c.Header("X-Alltoken-Error-Source", string(newAPIError.GetErrorSource()))
+				c.Header("X-Alltoken-Error-Code", newAPIError.SourceCode())
+				c.Header("X-Alltoken-Code", fmt.Sprintf("%06d", newAPIError.AlltokenCode()))
+				c.Header("X-Alltoken-Error-Ref", newAPIError.ErrorRef())
+				c.Header("X-Alltoken-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
 			}
+			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
+			writeRelayError(c, relayFormat, ws, newAPIError, requestId)
 		}
 	}()
 
@@ -190,6 +183,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			return
 		}
+		// The run id was verified against this token's signature, so the
+		// caller is our own load-test agent. Mark the request as internal
+		// before it can fail, so a failed run still reports the real
+		// classification in the response headers.
+		c.Set(contextKeyInternalErrorDetail, true)
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
