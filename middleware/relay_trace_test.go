@@ -641,3 +641,115 @@ func (h *hijackableRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		bufio.NewWriter(h.conn),
 	), nil
 }
+
+// TestDisabledIsFullyInert is the strictest form of the "off means off" claim:
+// with tracing disabled the middleware must not wrap the writer, not read the
+// body, not allocate, and not touch the filesystem.
+func TestDisabledIsFullyInert(t *testing.T) {
+	dir := t.TempDir()
+	if err := relaytrace.Init(relaytrace.Config{Enabled: false, Dir: dir}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(relaytrace.Close)
+
+	if relaytrace.Enabled() {
+		t.Fatal("Enabled() must report false")
+	}
+
+	const payload = `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+
+	var (
+		writerType  string
+		seenBody    string
+		isWrapped   bool
+		flushCalled int
+	)
+	router := newTraceRouter(func(c *gin.Context) {
+		// The writer must be gin's own, never our wrapper: wrapping is what
+		// costs memory per request and mirrors every byte written.
+		_, isWrapped = c.Writer.(*traceResponseWriter)
+		writerType = fmt.Sprintf("%T", c.Writer)
+		body, _ := io.ReadAll(c.Request.Body)
+		seenBody = string(body)
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = c.Writer.WriteString("data: {\"a\":1}\n\n")
+		c.Writer.Flush()
+		flushCalled++
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer sk-must-not-be-read")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if isWrapped {
+		t.Errorf("response writer was wrapped while disabled (got %s)", writerType)
+	}
+	if seenBody != payload {
+		t.Errorf("body altered while disabled:\nwant %s\ngot  %s", payload, seenBody)
+	}
+	if flushCalled != 1 {
+		t.Errorf("flush passthrough broken: %d", flushCalled)
+	}
+
+	// Submit and ShouldRecord must be inert, not merely unused by the middleware.
+	relaytrace.Submit(&relaytrace.Record{Rid: "should-vanish", Status: 500})
+	if relaytrace.ShouldRecord(500, 1, "gpt-4o") {
+		t.Error("ShouldRecord must return false while disabled")
+	}
+	submitted, written, dropped, failed := relaytrace.Stats()
+	if submitted|written|dropped|failed != 0 {
+		t.Errorf("counters moved while disabled: %d/%d/%d/%d", submitted, written, dropped, failed)
+	}
+
+	// Nothing may appear on disk, not even an empty file or the directory tree.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("disabled tracing touched the filesystem: %v", names)
+	}
+}
+
+// TestDisabledAllocatesNothing pins the zero-cost claim to a number. The
+// middleware itself must add nothing on top of a bare router: the comparison is
+// against the same router without RelayTrace mounted, since gin and net/http
+// allocate on their own regardless.
+func TestDisabledAllocatesNothing(t *testing.T) {
+	if err := relaytrace.Init(relaytrace.Config{Enabled: false, Dir: t.TempDir()}); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(relaytrace.Close)
+
+	handler := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) }
+
+	traced := gin.New()
+	traced.Use(RelayTrace())
+	traced.POST("/v1/chat/completions", handler)
+
+	bare := gin.New()
+	bare.POST("/v1/chat/completions", handler)
+
+	serve := func(r *gin.Engine) func() {
+		return func() {
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{}`))
+			r.ServeHTTP(httptest.NewRecorder(), req)
+		}
+	}
+
+	withTrace := testing.AllocsPerRun(300, serve(traced))
+	without := testing.AllocsPerRun(300, serve(bare))
+
+	// Allow a tiny margin for measurement jitter rather than demanding exact
+	// equality, but anything beyond that means the disabled path is doing work.
+	if delta := withTrace - without; delta > 1 {
+		t.Errorf("disabled middleware added %.1f allocs/request (traced=%.1f, bare=%.1f)", delta, withTrace, without)
+	}
+}
