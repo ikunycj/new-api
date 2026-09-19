@@ -331,7 +331,25 @@ func OpenAIChatRequestToClaudeMessages(c *gin.Context, textRequest dto.GeneralOp
 			if text == "" {
 				text = "..."
 			}
-			claudeMessage.Content = text
+			if message.Role == "assistant" && message.ReasoningContent != nil && *message.ReasoningContent != "" {
+				sig := ""
+				if message.ReasoningSignature != nil {
+					sig = *message.ReasoningSignature
+				}
+				claudeMessage.Content = []dto.ClaudeMediaMessage{
+					{
+						Type:      "thinking",
+						Thinking:  message.ReasoningContent,
+						Signature: sig,
+					},
+					{
+						Type: "text",
+						Text: common.GetPointer[string](text),
+					},
+				}
+			} else {
+				claudeMessage.Content = text
+			}
 		} else {
 			claudeMediaMessages := make([]dto.ClaudeMediaMessage, 0)
 			for _, mediaMessage := range message.ParseContent() {
@@ -368,6 +386,18 @@ func OpenAIChatRequestToClaudeMessages(c *gin.Context, textRequest dto.GeneralOp
 					claudeMediaMessages = append(claudeMediaMessages, claudeMediaMessage)
 					continue
 				}
+			}
+
+			if message.Role == "assistant" && message.ReasoningContent != nil && *message.ReasoningContent != "" {
+				sig := ""
+				if message.ReasoningSignature != nil {
+					sig = *message.ReasoningSignature
+				}
+				claudeMediaMessages = append([]dto.ClaudeMediaMessage{{
+					Type:      "thinking",
+					Thinking:  message.ReasoningContent,
+					Signature: sig,
+				}}, claudeMediaMessages...)
 			}
 
 			if message.ToolCalls != nil {
