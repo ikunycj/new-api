@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -491,4 +493,151 @@ func TestHijackSupported(t *testing.T) {
 	if !hijackable {
 		t.Fatal("trace wrapper must remain an http.Hijacker for websocket upgrades")
 	}
+}
+
+// TestStreamAbortedMidwayIsStillRecorded covers a client that disconnects while
+// the response is still streaming. The handler stops early, but whatever was
+// already sent must still be persisted: a truncated trace of a dropped request
+// is often the only evidence of why it dropped.
+func TestStreamAbortedMidwayIsStillRecorded(t *testing.T) {
+	dir := enableTrace(t, nil)
+
+	const sent = 3
+	router := newTraceRouter(func(c *gin.Context) {
+		common.SetContextKey(c, constant.ContextKeyIsStream, true)
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		for i := 0; i < sent; i++ {
+			if _, err := c.Writer.WriteString(fmt.Sprintf("data: {\"chunk\":%d}\n\n", i)); err != nil {
+				return
+			}
+			c.Writer.Flush()
+		}
+		// Client vanished: the handler returns without emitting [DONE].
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"stream":true}`))
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	records := readRecords(t, dir)
+	if len(records) != 1 {
+		t.Fatalf("an aborted stream must still produce a record, got %d", len(records))
+	}
+	r := records[0]
+	if !r.Stream {
+		t.Error("record should be marked as stream")
+	}
+	// The partial body is the point: it must be present and parseable.
+	for i := 0; i < sent; i++ {
+		want := fmt.Sprintf("{\"chunk\":%d}", i)
+		if !strings.Contains(r.Resp, want) {
+			t.Errorf("partial stream lost chunk %d; resp=%q", i, r.Resp)
+		}
+	}
+	if strings.Contains(r.Resp, "[DONE]") {
+		t.Error("aborted stream must not claim completion")
+	}
+	if r.RespSize != len(r.Resp) {
+		t.Errorf("resp_size %d should match the bytes actually sent (%d)", r.RespSize, len(r.Resp))
+	}
+}
+
+// TestHandlerPanicDoesNotLoseTrace ensures a panicking handler still leaves
+// evidence behind. Without gin's Recovery the request dies, so the trace is the
+// only record that the request ever happened.
+func TestHandlerPanicDoesNotLoseTrace(t *testing.T) {
+	dir := enableTrace(t, nil)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(common.RequestIdKey, "panic-rid")
+		c.Next()
+	})
+	router.Use(gin.Recovery())
+	router.Use(RelayTrace())
+	router.POST("/v1/messages", func(c *gin.Context) {
+		c.Writer.WriteString("data: {\"partial\":true}\n\n")
+		c.Writer.Flush()
+		panic("upstream exploded")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"stream":true}`))
+	func() {
+		defer func() { _ = recover() }()
+		router.ServeHTTP(httptest.NewRecorder(), req)
+	}()
+
+	records := readRecords(t, dir)
+	if len(records) != 1 {
+		t.Fatalf("a panicking handler must still leave a trace, got %d records", len(records))
+	}
+	if !strings.Contains(records[0].Resp, "partial") {
+		t.Errorf("bytes written before the panic should be preserved, got %q", records[0].Resp)
+	}
+}
+
+// TestWebsocketUpgradeHijackReachesRealWriter goes beyond asserting that the
+// wrapper implements http.Hijacker: it performs the hijack and checks the
+// connection belongs to the underlying writer, which is what /v1/realtime needs.
+func TestWebsocketUpgradeHijackReachesRealWriter(t *testing.T) {
+	enableTrace(t, nil)
+
+	var (
+		hijackErr  error
+		gotConn    bool
+		wroteBytes int
+	)
+	router := newTraceRouter(func(c *gin.Context) {
+		hj, ok := c.Writer.(http.Hijacker)
+		if !ok {
+			t.Error("trace wrapper is not an http.Hijacker")
+			return
+		}
+		conn, buf, err := hj.Hijack()
+		hijackErr = err
+		if err != nil {
+			return
+		}
+		gotConn = conn != nil
+		// Write directly on the hijacked connection, bypassing gin entirely.
+		n, _ := buf.WriteString("HTTP/1.1 101 Switching Protocols\r\n\r\n")
+		_ = buf.Flush()
+		wroteBytes = n
+		_ = conn.Close()
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{}`))
+	router.ServeHTTP(newHijackableRecorder(), req)
+
+	if hijackErr != nil {
+		t.Fatalf("Hijack through the trace wrapper failed: %v", hijackErr)
+	}
+	if !gotConn {
+		t.Fatal("Hijack returned a nil connection")
+	}
+	if wroteBytes == 0 {
+		t.Fatal("could not write on the hijacked connection")
+	}
+}
+
+// hijackableRecorder is a recorder that supports Hijack, standing in for a real
+// connection during the websocket upgrade.
+type hijackableRecorder struct {
+	*httptest.ResponseRecorder
+	conn net.Conn
+}
+
+func newHijackableRecorder() *hijackableRecorder {
+	server, client := net.Pipe()
+	// Drain the client end so writes on the server end do not block.
+	go func() {
+		_, _ = io.Copy(io.Discard, client)
+	}()
+	return &hijackableRecorder{ResponseRecorder: httptest.NewRecorder(), conn: server}
+}
+
+func (h *hijackableRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return h.conn, bufio.NewReadWriter(
+		bufio.NewReader(h.conn),
+		bufio.NewWriter(h.conn),
+	), nil
 }
