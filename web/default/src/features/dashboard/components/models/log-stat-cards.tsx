@@ -58,6 +58,17 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
   }
 }
 
+// Cache hit rate arrives as a 0-1 ratio; render it with at most one decimal so
+// the card stays legible at the existing font size.
+function formatPercent(value: number, locale: Intl.LocalesArgument): string {
+  const percent = value * 100
+  const formatted = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+  }).format(percent)
+
+  return `${formatted}%`
+}
+
 export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
@@ -67,6 +78,8 @@ export function LogStatCards(props: LogStatCardsProps) {
     totalQuota: number
     totalCount: number
     totalTokens: number
+    totalCacheRead: number
+    totalInputTokens: number
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -119,18 +132,41 @@ export function LogStatCards(props: LogStatCardsProps) {
     rpm: stats?.totalCount ?? 0,
     quota: stats?.totalQuota ?? 0,
     tpm: stats?.totalTokens ?? 0,
+    cacheReadTokens: stats?.totalCacheRead ?? 0,
+    inputTokensTotal: stats?.totalInputTokens ?? 0,
   }
 
+  // Cache hit rate has no meaningful value until at least one request in the
+  // window reported cache metadata, so surface a placeholder rather than 0%.
+  const cacheDataAvailable = (stats?.totalInputTokens ?? 0) > 0
+
   const items = statCardsConfig.map((config) => {
-    const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
     const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-    const formatted =
-      config.key === 'quota'
-        ? {
-            displayValue: formatQuota(rawValue),
-            fullValue: formatQuota(rawValue),
-          }
-        : formatStatNumber(rawValue, locale)
+
+    if (config.key === 'cacheHitRate' && !cacheDataAvailable) {
+      return {
+        title: config.title,
+        value: '--',
+        fullValue: '--',
+        desc: config.description,
+        icon: config.icon,
+        iconTone: config.iconTone,
+      }
+    }
+
+    const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
+    let formatted: { displayValue: string; fullValue: string }
+    if (config.key === 'quota') {
+      formatted = {
+        displayValue: formatQuota(rawValue),
+        fullValue: formatQuota(rawValue),
+      }
+    } else if (config.key === 'cacheHitRate') {
+      const percent = formatPercent(rawValue, locale)
+      formatted = { displayValue: percent, fullValue: percent }
+    } else {
+      formatted = formatStatNumber(rawValue, locale)
+    }
 
     return {
       title: config.title,
@@ -144,7 +180,7 @@ export function LogStatCards(props: LogStatCardsProps) {
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
+      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-6'>
         {items.map((it, idx) => {
           const Icon = it.icon
           let valueContent
