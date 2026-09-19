@@ -500,6 +500,10 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	// Realtime dashboard counters. This is pure in-process arithmetic on the
+	// relay hot path — no IO, no allocation and no lock held across the rest of
+	// the request — so it stays cheap regardless of how many users are active.
+	RecordRealtimeUsage(userId, params.PromptTokens+params.CompletionTokens)
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
 			UserID:    userId,

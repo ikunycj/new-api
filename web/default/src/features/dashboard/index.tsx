@@ -102,6 +102,29 @@ const LazyPerformanceOverview = lazy(() =>
   }))
 )
 
+const LazyRealtimeMetricsPanel = lazy(() =>
+  import('./components/models/realtime-metrics-panel').then((m) => ({
+    default: m.RealtimeMetricsPanel,
+  }))
+)
+
+/** Placeholder matching the realtime panel's three-column row. */
+function RealtimeMetricsFallback() {
+  return (
+    <div className='overflow-hidden rounded-lg border'>
+      <div className='divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
+        {[0, 1, 2].map((index) => (
+          <div key={index} className='px-3 py-3 sm:px-5 sm:py-4'>
+            <Skeleton className='h-3 w-12' />
+            <Skeleton className='mt-2 h-6 w-24' />
+            <Skeleton className='mt-1.5 h-4 w-32' />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const LazyUserCharts = lazy(() =>
   import('./components/users/user-charts').then((m) => ({
     default: m.UserCharts,
@@ -354,6 +377,11 @@ export function Dashboard() {
           {activeSection === 'models' && (
             <>
               <FadeIn>
+                <Suspense fallback={<RealtimeMetricsFallback />}>
+                  <LazyRealtimeMetricsPanel />
+                </Suspense>
+              </FadeIn>
+              <FadeIn delay={0.05}>
                 <Suspense fallback={<LogStatCardsFallback />}>
                   <LazyLogStatCards
                     filters={modelFilters}
@@ -362,13 +390,13 @@ export function Dashboard() {
                 </Suspense>
               </FadeIn>
               {isAdmin && (
-                <FadeIn delay={0.05}>
+                <FadeIn delay={0.1}>
                   <Suspense fallback={<PerformanceOverviewFallback />}>
                     <LazyPerformanceOverview />
                   </Suspense>
                 </FadeIn>
               )}
-              <FadeIn delay={0.1}>
+              <FadeIn delay={0.15}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart
                     data={modelData}
@@ -382,7 +410,7 @@ export function Dashboard() {
                   />
                 </Suspense>
               </FadeIn>
-              <FadeIn delay={0.15}>
+              <FadeIn delay={0.2}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyModelCharts
                     data={modelData}

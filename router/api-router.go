@@ -358,6 +358,12 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
+		// Realtime throughput reads in-process counters only. The self route
+		// takes the user id from the session so it can never be pointed at
+		// another account; the admin routes are the only way to read everyone.
+		dataRoute.GET("/realtime/self", middleware.UserAuth(), controller.GetSelfRealtimeMetrics)
+		dataRoute.GET("/realtime/users", middleware.AdminAuth(), controller.GetRealtimeMetricsUsers)
+		dataRoute.GET("/realtime/users/:id", middleware.AdminAuth(), controller.GetRealtimeMetricsByUser)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
