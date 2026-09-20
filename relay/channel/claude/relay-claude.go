@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -227,6 +228,22 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeBadResponseBody)
 		}
+	case types.RelayFormatOpenAIResponses:
+		convertResult, convertErr := relayconvert.ConvertResponse(c, info, types.RelayFormatOpenAIResponses, &claudeResponse)
+		if convertErr != nil {
+			return types.NewError(convertErr, types.ErrorCodeBadResponseBody)
+		}
+		responsesResponse, ok := convertResult.Value.(*dto.OpenAIResponsesResponse)
+		if !ok {
+			return types.NewError(fmt.Errorf("expected OpenAI Responses response, got %T", convertResult.Value), types.ErrorCodeBadResponseBody)
+		}
+		if responseID := helper.GetResponseID(c); responseID != "" {
+			responsesResponse.ID = responseID
+		}
+		responseData, err = common.Marshal(responsesResponse)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
 	case types.RelayFormatClaude:
 		responseData = data
 	}
@@ -237,6 +254,100 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 
 	service.IOCopyBytesGracefully(c, httpResp, responseData)
 	return nil
+}
+
+func ClaudeResponsesStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*dto.Usage, *types.NewAPIError) {
+	responseID := helper.GetResponseID(c)
+	created := common.GetTimestamp()
+	state, err := relayconvert.NewResponseStreamState(types.RelayFormatClaude, types.RelayFormatOpenAIResponses, relayconvert.ResponseStreamOptions{
+		ID:      responseID,
+		Model:   info.UpstreamModelName,
+		Created: created,
+	})
+	if err != nil {
+		return nil, types.NewError(err, types.ErrorCodeBadResponse)
+	}
+	claudeInfo := &ClaudeResponseInfo{
+		ResponseId:   responseID,
+		Created:      created,
+		Model:        info.UpstreamModelName,
+		ResponseText: strings.Builder{},
+		Usage:        &dto.Usage{},
+	}
+	var streamErr *types.NewAPIError
+	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+		var claudeResponse dto.ClaudeResponse
+		if unmarshalErr := common.UnmarshalJsonStr(data, &claudeResponse); unmarshalErr != nil {
+			streamErr = types.NewError(unmarshalErr, types.ErrorCodeBadResponseBody)
+			sr.Stop(streamErr)
+			return
+		}
+		if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
+			streamErr = types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+			sr.Stop(streamErr)
+			return
+		}
+		if claudeResponse.StopReason != "" {
+			maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
+		}
+		if claudeResponse.Delta != nil && claudeResponse.Delta.StopReason != nil {
+			maybeMarkClaudeRefusal(c, *claudeResponse.Delta.StopReason)
+		}
+		FormatClaudeResponseInfo(&claudeResponse, nil, claudeInfo)
+		results, convertErr := relayconvert.ConvertStreamResponseChunk(c, info, state, &claudeResponse)
+		if convertErr != nil {
+			streamErr = types.NewError(convertErr, types.ErrorCodeBadResponseBody)
+			sr.Stop(streamErr)
+			return
+		}
+		for _, result := range results {
+			event, ok := result.Value.(relayconvert.ChatToResponsesStreamEvent)
+			if !ok {
+				streamErr = types.NewError(fmt.Errorf("expected OpenAI Responses stream event, got %T", result.Value), types.ErrorCodeBadResponseBody)
+				sr.Stop(streamErr)
+				return
+			}
+			payload := event.Payload
+			payload.Type = event.Type
+			data, marshalErr := common.Marshal(payload)
+			if marshalErr != nil {
+				streamErr = types.NewError(marshalErr, types.ErrorCodeJsonMarshalFailed)
+				sr.Stop(streamErr)
+				return
+			}
+			if writeErr := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, string(data)); writeErr != nil {
+				streamErr = types.NewError(writeErr, types.ErrorCodeBadResponse)
+				sr.Stop(streamErr)
+				return
+			}
+		}
+	})
+	if streamErr != nil {
+		return nil, streamErr
+	}
+	HandleStreamFinalResponse(c, info, claudeInfo)
+	usage := buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
+	state.SetUsage(&usage)
+	results, err := relayconvert.FinalizeStreamResponse(c, info, state)
+	if err != nil {
+		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
+	}
+	for _, result := range results {
+		event, ok := result.Value.(relayconvert.ChatToResponsesStreamEvent)
+		if !ok {
+			return nil, types.NewError(fmt.Errorf("expected OpenAI Responses final event, got %T", result.Value), types.ErrorCodeBadResponseBody)
+		}
+		payload := event.Payload
+		payload.Type = event.Type
+		data, marshalErr := common.Marshal(payload)
+		if marshalErr != nil {
+			return nil, types.NewError(marshalErr, types.ErrorCodeJsonMarshalFailed)
+		}
+		if writeErr := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, string(data)); writeErr != nil {
+			return nil, types.NewError(writeErr, types.ErrorCodeBadResponse)
+		}
+	}
+	return claudeInfo.Usage, nil
 }
 
 func ClaudeHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*dto.Usage, *types.NewAPIError) {

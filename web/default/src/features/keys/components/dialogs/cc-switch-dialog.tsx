@@ -26,8 +26,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import type { TFunction } from 'i18next'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getPreferredModelOrder } from '@/lib/model-preferences'
-import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { Dialog } from '@/components/dialog'
 import {
@@ -50,13 +48,16 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { getPreferredModelOrder } from '@/lib/model-preferences'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import type { ApiKeyModelEndpoint, ApiKeyModelsResult } from '../../api'
+import type { ApiKeyModelsResult } from '../../api'
 import { useApiKeyModelCatalog } from '../../hooks/use-api-key-model-catalog'
 import {
   buildCCSwitchImportUrl,
   resolveCCSwitchDefaultName,
 } from '../../lib/cc-switch-import'
+import { selectSuggestedModel } from '../../lib/cc-switch-model-selection'
 import type { CCSwitchApp, CCSwitchModelField } from '../../lib/model-catalog'
 import type { ApiKey } from '../../types'
 import {
@@ -160,55 +161,6 @@ function createInitialDrafts(
   }
 }
 
-function selectSuggestedModel(
-  models: ApiKeyModelsResult | undefined,
-  app: CCSwitchApp
-): string {
-  if (!models?.success) return ''
-
-  let endpoint: ApiKeyModelEndpoint = 'gemini'
-  if (app === 'claude') endpoint = 'anthropic'
-  if (app === 'codex') endpoint = 'openai-response'
-
-  const preferredModel = getPreferredModelOrder().find((preferred) =>
-    models.models.some(
-      (model) =>
-        model.id === preferred &&
-        model.supportedEndpointTypes.includes(endpoint)
-    )
-  )
-  if (preferredModel) return preferredModel
-
-  const preferredFamilies: Record<CCSwitchApp, string[]> = {
-    claude: ['claude', 'anthropic'],
-    codex: ['gpt-', 'codex', 'o1', 'o3', 'o4'],
-    gemini: ['gemini', 'google'],
-  }
-  const family = preferredFamilies[app]
-  const appModel = models.models.find((model) => {
-    const id = model.id.toLowerCase()
-    const owner = model.ownedBy?.toLowerCase() ?? ''
-    return (
-      model.supportedEndpointTypes.includes(endpoint) &&
-      family.some(
-        (candidate) => id.includes(candidate) || owner.includes(candidate)
-      )
-    )
-  })
-  if (appModel) return appModel.id
-
-  const generalModel = models.models.find((model) =>
-    model.supportedEndpointTypes.some(
-      (endpoint) =>
-        endpoint === 'openai' ||
-        endpoint === 'anthropic' ||
-        endpoint === 'gemini' ||
-        endpoint === 'openai-response'
-    )
-  )
-  return generalModel?.id ?? ''
-}
-
 function getRoutingLabel(t: TFunction, apiKey: ApiKey | null): string {
   if (!apiKey) return t('Not available')
   if (apiKey.group_candidates.length > 0) {
@@ -267,7 +219,11 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     if (!props.open || !modelsQuery.data?.success) return
     if (primaryModelValue) return
 
-    const suggestedModel = selectSuggestedModel(modelsQuery.data, app)
+    const suggestedModel = selectSuggestedModel(
+      modelsQuery.data,
+      app,
+      getPreferredModelOrder()
+    )
     if (!suggestedModel) return
 
     setDrafts((current) => ({

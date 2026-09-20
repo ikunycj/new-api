@@ -1,14 +1,70 @@
 package claude
 
 import (
+	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service/relayconvert"
+	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHandleClaudeResponseDataOpenAIResponses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	info := &relaycommon.RelayInfo{RelayFormat: types.RelayFormatOpenAIResponses, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "claude-sonnet-test"}}
+	claudeBody := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-test","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":2}}`)
+	httpResp := &http.Response{Body: io.NopCloser(bytes.NewReader(claudeBody))}
+	claudeInfo := &ClaudeResponseInfo{ResponseId: "resp_1", Usage: &dto.Usage{}, ResponseText: strings.Builder{}}
+	var parsed dto.ClaudeResponse
+	require.NoError(t, common.Unmarshal(claudeBody, &parsed))
+	_, convertErr := relayconvert.ConvertResponse(c, info, types.RelayFormatOpenAIResponses, &parsed)
+	require.NoError(t, convertErr)
+
+	err := HandleClaudeResponseData(c, info, claudeInfo, httpResp, claudeBody)
+	assert.Nil(t, err)
+	assert.Contains(t, recorder.Body.String(), `"object":"response"`)
+	assert.Contains(t, recorder.Body.String(), `"hello"`)
+	assert.Contains(t, recorder.Body.String(), `"input_tokens":3`)
+}
+
+func TestClaudeResponsesStreamHandlerEmitsResponsesEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousStreamingTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 1
+	defer func() { constant.StreamingTimeout = previousStreamingTimeout }()
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	info := &relaycommon.RelayInfo{RelayFormat: types.RelayFormatOpenAIResponses, IsStream: true, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "claude-sonnet-test"}}
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-test\",\"usage\":{\"input_tokens\":3}}}\n\n",
+		"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
+		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	}
+	resp := &http.Response{Body: io.NopCloser(strings.NewReader(strings.Join(events, "")))}
+	usage, apiErr := ClaudeResponsesStreamHandler(c, resp, info)
+	assert.Nil(t, apiErr)
+	require.NotNil(t, usage)
+	body := recorder.Body.String()
+	assert.Contains(t, body, "event: response.created")
+	assert.Contains(t, body, "event: response.output_text.delta")
+	assert.Contains(t, body, "event: response.completed")
+}
 
 func commonPointer[T any](value T) *T {
 	return &value
