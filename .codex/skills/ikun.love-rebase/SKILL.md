@@ -1,6 +1,6 @@
 ---
 name: ikun.love-rebase
-description: Rebase new-api's ikun.love branch onto the latest origin/feature/new-channel-and-group, keeping exactly one ikun.love branding UI commit at the tip. Use for updating this branding branch or repeating the rebase originally based on commit 1e073c613. Publishing or updating this skill belongs on feature/new-channel-and-group and does not invoke the rebase.
+description: Rebase new-api's ikun.love branch onto a user-selected remote base branch, keeping exactly one ikun.love branding UI commit at the tip. Use for updating this branding branch or repeating the rebase originally based on commit 1e073c613. The base branch must be selected for each rebase; publishing or updating this skill is a separate operation.
 ---
 
 # ikun.love Rebase
@@ -11,35 +11,38 @@ The checked-out branch must be `ikun.love`, with this history:
 
 ```text
 <new SHA> feat(web): apply ikun.love branding   (HEAD -> ikun.love)
-<fetched SHA>                                 (origin/feature/new-channel-and-group)
+<fetched SHA>                                 (origin/<selected-base-branch>)
 ```
 
 `1e073c613ce6e2cbd9f5af715f416fc618d5c572` identifies the original branding commit. Its SHA changes after rebasing. Reuse its current rebased version at the tip of `ikun.love`, preserving previously reviewed conflict resolutions. Do not repeatedly cherry-pick the original SHA or select a same-named commit from arbitrary history.
 
-Use the freshly fetched **remote** feature branch as the base. A local feature branch may have divergent history or contain old branding; do not assume its tip is the desired base. Leave its branch pointer intact during this rebase.
+Use the freshly fetched **remote branch selected for this invocation** as the base. The base is not a skill default: choose it from the current release plan every time, record the exact remote SHA, and pass the branch explicitly to the script. A local feature branch may have divergent history or contain old branding; do not assume its tip is the desired base. Leave its branch pointer intact during this rebase.
 
-Maintain this skill in `.codex/skills/ikun.love-rebase/` on `feature/new-channel-and-group`. It is inherited by `ikun.love` through the feature base, so it does not add a second branch-specific commit. Keep the explicitly requested name `ikun.love-rebase`, including the dot.
+Maintain this skill in `.codex/skills/ikun.love-rebase/` on the selected base branch or on the shared branch from which that base is maintained. It is inherited by `ikun.love` through the base history, so it does not add a second branch-specific commit. Keep the explicitly requested name `ikun.love-rebase`, including the dot.
 
-Publishing this skill is a separate operation: integrate the latest remote feature, commit the skill on `feature/new-channel-and-group`, and push that branch. Do not run this rebase or push `ikun.love` merely because the user is committing or publishing the skill.
+Publishing this skill is a separate operation: integrate the latest remote base, commit the skill on the selected maintenance branch, and push that branch. Do not run this rebase or push `ikun.love` merely because the user is committing or publishing the skill.
 
 ## Run
 
 Work in the user's new-api checkout. Invocation of the rebase authorizes the local branch switch and rebase. Inspect branch status, then run from the repository root:
 
 ```bash
-bash -c "$(cat .codex/skills/ikun.love-rebase/scripts/rebase.sh)" ikun.love-rebase "$PWD"
+# Choose the base for this rebase explicitly; this example is not a default.
+base_branch=feature/new-common-api
+bash -c "$(cat .codex/skills/ikun.love-rebase/scripts/rebase.sh)" \
+  ikun.love-rebase "$PWD" "$base_branch"
 ```
 
 Read the whole script into Bash before it switches branches: an older `ikun.love` may not yet contain this skill. The command substitution reads trusted repository code; do not substitute untrusted text. When the skill was loaded from a different checkout, use that loaded skill's absolute script path and pass the intended checkout as the final argument.
 
-The script fetches the remote feature branch, checks that the current branding tip is a single UI commit based on a known feature revision, switches branches, creates a backup ref when needed, and runs:
+The script fetches `origin/<base-branch>`, checks that the current branding tip is a single UI commit based on a known feature revision, switches branches, creates a backup ref when needed, and runs:
 
 ```bash
 git rebase --no-rebase-merges --reapply-cherry-picks --empty=stop \
   --onto "$base" "$branding_parent"
 ```
 
-The explicit parent boundary selects exactly one commit, even when the upstream history was rewritten. Repeating the operation with an unchanged base is a no-op. The script prints the pinned base and backup ref before rebasing.
+The explicit parent boundary selects exactly one commit, even when the upstream history was rewritten. Repeating the operation with an unchanged base is a no-op. The script prints the selected base branch, pinned base SHA, and backup ref before rebasing. Omitting the base branch is an error; the script never chooses one implicitly.
 
 Do not auto-stash a dirty working tree, overwrite `.env`, reset the local feature branch, or change running services. For a failed preflight, report the specific condition. If additional commits or an unknown parent are found, inspect their contents before deciding how to retain that work; never silently discard them to force the one-commit shape.
 
@@ -58,7 +61,7 @@ For a conflict that cannot be resolved without a product decision, retain the re
 
 ## Verify And Report
 
-Use the pinned base SHA for these checks, including after manually continuing a rebase:
+Use the explicitly selected and pinned base SHA for these checks, including after manually continuing a rebase:
 
 ```bash
 git branch --show-current
