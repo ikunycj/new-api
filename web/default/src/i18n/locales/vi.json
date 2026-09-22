@@ -6152,6 +6152,15 @@
     "Group status query": "Tra cứu trạng thái nhóm",
     "Check available groups, latency, and recent test results for an API key.": "Kiểm tra các nhóm khả dụng, độ trễ và kết quả kiểm tra gần nhất cho một API key.",
     "Check status": "Kiểm tra trạng thái",
+    "Select a date before clearing aggregation data.": "Hãy chọn ngày trước khi xóa dữ liệu tổng hợp.",
+    "Failed to clean aggregation data": "Không thể xóa dữ liệu tổng hợp",
+    "{{count}} aggregation rows removed.": "Đã xóa {{count}} dòng tổng hợp.",
+    "No aggregation rows matched the selected time.": "Không có dòng tổng hợp nào trong khoảng thời gian đã chọn.",
+    "Clean aggregation data": "Xóa dữ liệu tổng hợp",
+    "Confirm aggregation cleanup": "Xác nhận xóa dữ liệu tổng hợp",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Dữ liệu tổng hợp trước {{date}} sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Dữ liệu tổng hợp trước thời điểm đã chọn sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
+    "Delete aggregation data": "Xóa dữ liệu tổng hợp",
     "All channels": "Tất cả kênh"
   }
 }

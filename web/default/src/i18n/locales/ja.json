@@ -6152,6 +6152,15 @@
     "Group status query": "グループ状態の照会",
     "Check available groups, latency, and recent test results for an API key.": "API キーごとに利用可能なグループ、レイテンシー、最新のテスト結果を確認します。",
     "Check status": "状態を確認",
+    "Select a date before clearing aggregation data.": "集計データを削除する前に日付を選択してください。",
+    "Failed to clean aggregation data": "集計データの削除に失敗しました",
+    "{{count}} aggregation rows removed.": "{{count}} 件の集計データを削除しました。",
+    "No aggregation rows matched the selected time.": "選択した期間に一致する集計データはありません。",
+    "Clean aggregation data": "集計データを削除",
+    "Confirm aggregation cleanup": "集計データの削除を確認",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "{{date}} より前の集計データを完全に削除します。元のログには影響しません。",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "選択した時刻より前の集計データを完全に削除します。元のログには影響しません。",
+    "Delete aggregation data": "集計データを削除",
     "All channels": "すべてのチャンネル"
   }
 }

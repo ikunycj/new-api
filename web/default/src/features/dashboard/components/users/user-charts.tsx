@@ -111,7 +111,13 @@ export function UserCharts(props: UserChartsProps) {
     queryKey: ['dashboard', 'user-quota', timeRange],
     queryFn: () => getUserQuotaDataByUsers(timeRange),
     select: (res) => (res.success ? res.data : []),
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
   const chartData = useMemo(
     () =>

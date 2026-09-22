@@ -161,6 +161,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       'Choose whether force priority applies within one group or across groups',
     'ID (Default)': 'ID (Default)',
+    'Select a date before clearing aggregation data.':
+      'Select a date before clearing aggregation data.',
+    'Failed to clean aggregation data': 'Failed to clean aggregation data',
+    '{{count}} aggregation rows removed.': '{{count}} aggregation rows removed.',
+    'No aggregation rows matched the selected time.':
+      'No aggregation rows matched the selected time.',
+    'Clean aggregation data': 'Clean aggregation data',
+    'Confirm aggregation cleanup': 'Confirm aggregation cleanup',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.',
+    'Delete aggregation data': 'Delete aggregation data',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
   },
@@ -318,6 +331,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       '选择强制优先仅适用于一个分组还是跨分组',
     'ID (Default)': 'ID（默认）',
+    'Select a date before clearing aggregation data.':
+      '清理聚合数据前请选择日期。',
+    'Failed to clean aggregation data': '清理聚合数据失败',
+    '{{count}} aggregation rows removed.': '已删除 {{count}} 条聚合记录。',
+    'No aggregation rows matched the selected time.':
+      '没有匹配所选时间的聚合记录。',
+    'Clean aggregation data': '清理聚合数据',
+    'Confirm aggregation cleanup': '确认清理聚合数据',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      '这将永久删除 {{date}} 之前的聚合数据，不会影响源日志。',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      '这将永久删除所选时间之前的聚合数据，不会影响源日志。',
+    'Delete aggregation data': '删除聚合数据',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
   },
@@ -481,6 +507,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       'Choisissez si la priorité forcée s’applique à un groupe ou à plusieurs groupes',
     'ID (Default)': 'ID (par défaut)',
+    'Select a date before clearing aggregation data.':
+      'Sélectionnez une date avant de supprimer les données agrégées.',
+    'Failed to clean aggregation data': 'Échec de la suppression des données agrégées',
+    '{{count}} aggregation rows removed.': '{{count}} lignes agrégées supprimées.',
+    'No aggregation rows matched the selected time.':
+      'Aucune ligne agrégée ne correspond à la période sélectionnée.',
+    'Clean aggregation data': 'Supprimer les données agrégées',
+    'Confirm aggregation cleanup': 'Confirmer la suppression des agrégats',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      'Les agrégats antérieurs au {{date}} seront supprimés définitivement. Les journaux sources ne seront pas modifiés.',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      'Les agrégats antérieurs à l’horodatage sélectionné seront supprimés définitivement. Les journaux sources ne seront pas modifiés.',
+    'Delete aggregation data': 'Supprimer les données agrégées',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
   },
@@ -638,6 +677,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       '強制優先を1つのグループ内だけに適用するか、グループ間に適用するかを選択',
     'ID (Default)': 'ID（デフォルト）',
+    'Select a date before clearing aggregation data.':
+      '集計データを削除する前に日付を選択してください。',
+    'Failed to clean aggregation data': '集計データの削除に失敗しました',
+    '{{count}} aggregation rows removed.': '{{count}} 件の集計データを削除しました。',
+    'No aggregation rows matched the selected time.':
+      '選択した期間に一致する集計データはありません。',
+    'Clean aggregation data': '集計データを削除',
+    'Confirm aggregation cleanup': '集計データの削除を確認',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      '{{date}} より前の集計データを完全に削除します。元のログには影響しません。',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      '選択した時刻より前の集計データを完全に削除します。元のログには影響しません。',
+    'Delete aggregation data': '集計データを削除',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
   },
@@ -797,6 +849,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       'Выберите, действует ли принудительный приоритет внутри одной группы или между группами',
     'ID (Default)': 'ID (по умолчанию)',
+    'Select a date before clearing aggregation data.':
+      'Выберите дату перед удалением агрегированных данных.',
+    'Failed to clean aggregation data': 'Не удалось удалить агрегированные данные',
+    '{{count}} aggregation rows removed.': 'Удалено агрегированных строк: {{count}}.',
+    'No aggregation rows matched the selected time.':
+      'За выбранный период агрегированные строки не найдены.',
+    'Clean aggregation data': 'Удалить агрегированные данные',
+    'Confirm aggregation cleanup': 'Подтвердите удаление агрегатов',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      'Агрегаты до {{date}} будут удалены навсегда. Исходные логи не изменятся.',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      'Агрегаты до выбранного времени будут удалены навсегда. Исходные логи не изменятся.',
+    'Delete aggregation data': 'Удалить агрегированные данные',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
   },
@@ -955,6 +1020,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       'Chọn áp dụng ưu tiên bắt buộc trong một nhóm hay trên nhiều nhóm',
     'ID (Default)': 'ID (mặc định)',
+    'Select a date before clearing aggregation data.':
+      'Hãy chọn ngày trước khi xóa dữ liệu tổng hợp.',
+    'Failed to clean aggregation data': 'Không thể xóa dữ liệu tổng hợp',
+    '{{count}} aggregation rows removed.': 'Đã xóa {{count}} dòng tổng hợp.',
+    'No aggregation rows matched the selected time.':
+      'Không có dòng tổng hợp nào trong khoảng thời gian đã chọn.',
+    'Clean aggregation data': 'Xóa dữ liệu tổng hợp',
+    'Confirm aggregation cleanup': 'Xác nhận xóa dữ liệu tổng hợp',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      'Dữ liệu tổng hợp trước {{date}} sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      'Dữ liệu tổng hợp trước thời điểm đã chọn sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.',
+    'Delete aggregation data': 'Xóa dữ liệu tổng hợp',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
   },
@@ -1101,6 +1179,19 @@ const newKeys = {
     'Choose whether force priority applies within one group or across groups':
       '選擇強制優先僅適用於單一分組或跨分組',
     'ID (Default)': 'ID（預設）',
+    'Select a date before clearing aggregation data.':
+      '清理聚合資料前請選擇日期。',
+    'Failed to clean aggregation data': '清理聚合資料失敗',
+    '{{count}} aggregation rows removed.': '已刪除 {{count}} 筆聚合資料。',
+    'No aggregation rows matched the selected time.':
+      '選取的時間內沒有符合的聚合資料。',
+    'Clean aggregation data': '清理聚合資料',
+    'Confirm aggregation cleanup': '確認清理聚合資料',
+    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.':
+      '這將永久刪除 {{date}} 之前的聚合資料，不會影響來源日誌。',
+    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.':
+      '這將永久刪除選取時間之前的聚合資料，不會影響來源日誌。',
+    'Delete aggregation data': '刪除聚合資料',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '這會根據所有渠道設定重建渠道路由索引，包括支援模型、分組和權重。重建期間路由可能短暫不完整。是否繼續？',
   },

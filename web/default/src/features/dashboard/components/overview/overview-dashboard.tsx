@@ -469,7 +469,6 @@ export function OverviewDashboard() {
   const [ccSwitchKey, setCCSwitchKey] = useState('')
   const [isResolvingCCSwitchKey, setIsResolvingCCSwitchKey] = useState(false)
   const requestChoiceOpenRef = useRef(false)
-  const selfRefreshInFlightRef = useRef(false)
   const onboardingMutationGenerationRef = useRef(0)
 
   useEffect(() => {
@@ -483,12 +482,11 @@ export function OverviewDashboard() {
     let disposed = false
 
     const refreshSelf = async () => {
-      if (disposed || selfRefreshInFlightRef.current) return
+      if (disposed) return
 
       const currentUser = useAuthStore.getState().auth.user
       if (!currentUser || currentUser.id !== user.id) return
 
-      selfRefreshInFlightRef.current = true
       const refreshGeneration = onboardingMutationGenerationRef.current
       try {
         const result = await getSelf()
@@ -517,23 +515,13 @@ export function OverviewDashboard() {
         setUser(refreshedUser)
       } catch {
         // Keep the cached snapshot when the refresh is unavailable.
-      } finally {
-        selfRefreshInFlightRef.current = false
       }
     }
 
     void refreshSelf()
-    const handleWindowFocus = () => void refreshSelf()
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void refreshSelf()
-    }
-    window.addEventListener('focus', handleWindowFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       disposed = true
-      window.removeEventListener('focus', handleWindowFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [setUser, user?.id])
 
@@ -549,8 +537,13 @@ export function OverviewDashboard() {
       return result.success ? (result.data?.items ?? []) : []
     },
     enabled: Boolean(user?.id),
-    staleTime: 0,
+    staleTime: Infinity,
+    gcTime: 0,
     refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const anyKey = useMemo(

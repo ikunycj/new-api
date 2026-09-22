@@ -6152,6 +6152,15 @@
     "Group status query": "Group status query",
     "Check available groups, latency, and recent test results for an API key.": "Check available groups, latency, and recent test results for an API key.",
     "Check status": "Check status",
+    "Select a date before clearing aggregation data.": "Select a date before clearing aggregation data.",
+    "Failed to clean aggregation data": "Failed to clean aggregation data",
+    "{{count}} aggregation rows removed.": "{{count}} aggregation rows removed.",
+    "No aggregation rows matched the selected time.": "No aggregation rows matched the selected time.",
+    "Clean aggregation data": "Clean aggregation data",
+    "Confirm aggregation cleanup": "Confirm aggregation cleanup",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.",
+    "Delete aggregation data": "Delete aggregation data",
     "All channels": "All channels"
   }
 }

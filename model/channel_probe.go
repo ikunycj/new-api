@@ -251,9 +251,10 @@ func saveChannelProbeResult(channelID int, result ChannelProbeHistory, leaseUnti
 	if result.CheckedAt == 0 {
 		result.CheckedAt = common.GetTimestamp()
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		return persistChannelProbeResult(tx, channelID, result, leaseUntil)
 	})
+	return err
 }
 
 func persistChannelProbeResult(tx *gorm.DB, channelID int, result ChannelProbeHistory, leaseUntil int64) error {

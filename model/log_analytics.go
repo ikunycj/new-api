@@ -290,6 +290,14 @@ func GetLogCacheTrend(filters LogCacheTrendFilters) ([]LogCacheTrendPoint, error
 	if err := validateLogCacheTrendFilters(&filters); err != nil {
 		return points, err
 	}
+	return queryLogCacheTrend(filters)
+}
+
+func queryLogCacheTrend(filters LogCacheTrendFilters) ([]LogCacheTrendPoint, error) {
+	points := []LogCacheTrendPoint{}
+	if err := validateLogCacheTrendFilters(&filters); err != nil {
+		return points, err
+	}
 	bucketExpression := logAnalyticsBucketExpression(filters.Granularity, filters.TimezoneOffset)
 	if filters.Dimension == LogCacheTrendDimensionGroup {
 		return getLogCacheTrendByGroup(filters, bucketExpression)
@@ -298,6 +306,19 @@ func GetLogCacheTrend(filters LogCacheTrendFilters) ([]LogCacheTrendPoint, error
 }
 
 func GetLogAnalytics(filters LogAnalyticsFilters) (LogAnalytics, error) {
+	analytics := LogAnalytics{
+		TokenTrend:        []LogTokenTrendPoint{},
+		UserTrend:         []LogUserTrendPoint{},
+		GroupDistribution: []LogDistributionItem{},
+		ModelDistribution: []LogDistributionItem{},
+	}
+	if err := validateLogAnalyticsFilters(&filters); err != nil {
+		return analytics, err
+	}
+	return queryLogAnalytics(filters)
+}
+
+func queryLogAnalytics(filters LogAnalyticsFilters) (LogAnalytics, error) {
 	analytics := LogAnalytics{
 		TokenTrend:        []LogTokenTrendPoint{},
 		UserTrend:         []LogUserTrendPoint{},
@@ -518,6 +539,10 @@ func populateLogUserDetails(logs []*Log) error {
 }
 
 func GetLogFilterOptions() (LogFilterOptions, error) {
+	return queryLogFilterOptions()
+}
+
+func queryLogFilterOptions() (LogFilterOptions, error) {
 	options := LogFilterOptions{Groups: []string{}, Channels: []LogFilterChannel{}}
 	var err error
 	options.Groups, err = GetPricingGroupNames()

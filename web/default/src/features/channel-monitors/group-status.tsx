@@ -78,7 +78,13 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
   const statusQuery = useQuery({
     queryKey: ['group-status'],
     queryFn: getGroupStatus,
-    refetchInterval: 15_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   useEffect(() => {

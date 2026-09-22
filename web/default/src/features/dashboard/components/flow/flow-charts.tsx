@@ -339,7 +339,13 @@ export function FlowCharts(props: FlowChartsProps) {
     queryFn: () => getFlowQuotaDates(flowQueryParams, includeAdminData),
     select: (res) =>
       requireSuccessfulFlowRows(res, t('Please try again later.')),
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const maskSensitive = props.sensitiveVisible === false

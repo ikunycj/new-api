@@ -2,30 +2,12 @@ package model
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 )
 
-const adminConsoleStatsCacheTTL = time.Minute
 const adminConsoleMaxRangeSeconds = int64(90 * 24 * time.Hour / time.Second)
-
-type adminConsoleStatsCacheKey struct {
-	startTimestamp int64
-	endTimestamp   int64
-	customRange    bool
-}
-
-type adminConsoleStatsCacheEntry struct {
-	expiresAt time.Time
-	stats     AdminConsoleStats
-}
-
-var adminConsoleStatsCache = struct {
-	sync.Mutex
-	entries map[adminConsoleStatsCacheKey]adminConsoleStatsCacheEntry
-}{entries: make(map[adminConsoleStatsCacheKey]adminConsoleStatsCacheEntry)}
 
 type AdminConsoleKeyStats struct {
 	Total   int64 `json:"total"`
@@ -472,10 +454,10 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 func GetAdminConsoleStats() (AdminConsoleStats, error) {
 	now := time.Now()
 	todayStart, tomorrowStart, _, _, _ := adminConsoleTimeBounds(now)
-	return getCachedAdminConsoleStats(now, adminConsoleTimeRange{
+	return getAdminConsoleStatsAtRange(now, adminConsoleTimeRange{
 		startTimestamp: todayStart,
 		endTimestamp:   tomorrowStart,
-	}, false)
+	})
 }
 
 // GetAdminConsoleStatsForRange returns console metrics for the inclusive Unix
@@ -486,34 +468,7 @@ func GetAdminConsoleStatsForRange(startTimestamp, endTimestamp int64) (AdminCons
 	if err != nil {
 		return AdminConsoleStats{}, err
 	}
-	return getCachedAdminConsoleStats(now, selectedRange, true)
-}
-
-func getCachedAdminConsoleStats(now time.Time, selectedRange adminConsoleTimeRange, customRange bool) (AdminConsoleStats, error) {
-	key := adminConsoleStatsCacheKey{
-		startTimestamp: selectedRange.startTimestamp,
-		endTimestamp:   selectedRange.endTimestamp,
-		customRange:    customRange,
-	}
-	adminConsoleStatsCache.Lock()
-	defer adminConsoleStatsCache.Unlock()
-	for key, entry := range adminConsoleStatsCache.entries {
-		if !now.Before(entry.expiresAt) {
-			delete(adminConsoleStatsCache.entries, key)
-		}
-	}
-	if entry, ok := adminConsoleStatsCache.entries[key]; ok && now.Before(entry.expiresAt) {
-		return entry.stats, nil
-	}
-	stats, err := getAdminConsoleStatsAtRange(now, selectedRange)
-	if err != nil {
-		return AdminConsoleStats{}, err
-	}
-	adminConsoleStatsCache.entries[key] = adminConsoleStatsCacheEntry{
-		expiresAt: now.Add(adminConsoleStatsCacheTTL),
-		stats:     stats,
-	}
-	return stats, nil
+	return getAdminConsoleStatsAtRange(now, selectedRange)
 }
 
 func getAdminConsoleRealtimeStatsAt(now time.Time) (AdminConsoleRealtimeStats, error) {

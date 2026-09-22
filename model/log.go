@@ -130,8 +130,8 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 type Log struct {
 	Id                  int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
 	UserId              int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt           int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
-	Type                int    `json:"type" gorm:"index:idx_created_at_type"`
+	CreatedAt           int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type;index:idx_logs_rollup_day,priority:2"`
+	Type                int    `json:"type" gorm:"index:idx_created_at_type;index:idx_logs_rollup_day,priority:1"`
 	Content             string `json:"content"`
 	Username            string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
 	TokenName           string `json:"token_name" gorm:"index;default:''"`
@@ -145,7 +145,7 @@ type Log struct {
 	CacheStatsAvailable bool   `json:"cache_stats_available"`
 	UseTime             int    `json:"use_time" gorm:"default:0"`
 	IsStream            bool   `json:"is_stream"`
-	ChannelId           int    `json:"channel" gorm:"index"`
+	ChannelId           int    `json:"channel" gorm:"index;index:idx_logs_rollup_day,priority:3"`
 	ChannelName         string `json:"channel_name" gorm:"->"`
 	TokenId             int    `json:"token_id" gorm:"default:0;index"`
 	Group               string `json:"group" gorm:"index"`
@@ -828,7 +828,11 @@ type Stat struct {
 	CacheHitRate          float64 `json:"cache_hit_rate"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, channel int, group string, userId int) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, channel int, group string, userId int) (Stat, error) {
+	return querySumUsedQuota(logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, channel, group, userId)
+}
+
+func querySumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, channel int, group string, userId int) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
 
 	// 为rpm和tpm创建单独的查询

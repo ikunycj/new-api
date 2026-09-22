@@ -67,6 +67,13 @@ export function TagBatchEditDialog({
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['pricing-groups'],
     queryFn: getPricingGroups,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Transform groups to multi-select options

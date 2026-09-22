@@ -345,6 +345,15 @@ func runLogCleanupTask(ctx context.Context, task *model.SystemTask, runnerID str
 		failSystemTask(task, runnerID, errors.New("target timestamp is required"))
 		return
 	}
+	canDelete, err := model.CanDeleteLogsBefore(ctx, payload.TargetTimestamp)
+	if err != nil {
+		failSystemTask(task, runnerID, err)
+		return
+	}
+	if !canDelete {
+		failSystemTask(task, runnerID, errors.New("log rollup has not completed the selected date"))
+		return
+	}
 	if payload.BatchSize <= 0 {
 		payload.BatchSize = logCleanupBatchSize
 	}

@@ -64,7 +64,13 @@ export function PerformanceHealthPanel() {
   const metricsQuery = useQuery({
     queryKey: ['perf-metrics-summary', windowHours],
     queryFn: () => getPerfMetricsSummary(windowHours),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
     retry: false,
   })
 

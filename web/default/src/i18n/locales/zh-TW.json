@@ -6152,6 +6152,15 @@
     "Group status query": "分組狀態查詢",
     "Check available groups, latency, and recent test results for an API key.": "依 API 金鑰查詢可用分組、延遲和最近檢測結果。",
     "Check status": "查詢狀態",
+    "Select a date before clearing aggregation data.": "清理聚合資料前請選擇日期。",
+    "Failed to clean aggregation data": "清理聚合資料失敗",
+    "{{count}} aggregation rows removed.": "已刪除 {{count}} 筆聚合資料。",
+    "No aggregation rows matched the selected time.": "選取的時間內沒有符合的聚合資料。",
+    "Clean aggregation data": "清理聚合資料",
+    "Confirm aggregation cleanup": "確認清理聚合資料",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "這將永久刪除 {{date}} 之前的聚合資料，不會影響來源日誌。",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "這將永久刪除選取時間之前的聚合資料，不會影響來源日誌。",
+    "Delete aggregation data": "刪除聚合資料",
     "All channels": "所有頻道"
   }
 }

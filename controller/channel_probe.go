@@ -76,7 +76,6 @@ func (h channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, ru
 		enabled:        h.Enabled,
 		report: func(summary channelProbeSummary, active int) error {
 			if summary.Checked != lastChecked {
-				service.PublishChannelProbeRefresh()
 				lastChecked = summary.Checked
 			}
 			if !lastReport.IsZero() && time.Since(lastReport) < 15*time.Second {

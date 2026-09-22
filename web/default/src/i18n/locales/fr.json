@@ -6152,6 +6152,15 @@
     "Group status query": "État des groupes",
     "Check available groups, latency, and recent test results for an API key.": "Vérifiez les groupes disponibles, la latence et les derniers résultats de test pour une clé API.",
     "Check status": "Vérifier l’état",
+    "Select a date before clearing aggregation data.": "Sélectionnez une date avant de supprimer les données agrégées.",
+    "Failed to clean aggregation data": "Échec de la suppression des données agrégées",
+    "{{count}} aggregation rows removed.": "{{count}} lignes agrégées supprimées.",
+    "No aggregation rows matched the selected time.": "Aucune ligne agrégée ne correspond à la période sélectionnée.",
+    "Clean aggregation data": "Supprimer les données agrégées",
+    "Confirm aggregation cleanup": "Confirmer la suppression des agrégats",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Les agrégats antérieurs au {{date}} seront supprimés définitivement. Les journaux sources ne seront pas modifiés.",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Les agrégats antérieurs à l’horodatage sélectionné seront supprimés définitivement. Les journaux sources ne seront pas modifiés.",
+    "Delete aggregation data": "Supprimer les données agrégées",
     "All channels": "Tous les canaux"
   }
 }

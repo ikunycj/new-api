@@ -74,6 +74,13 @@ export function CommonLogsStats() {
     },
     placeholderData: (previousData, previousQuery) =>
       previousQuery?.queryKey[1] === isAdmin ? previousData : undefined,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   if (isLoading) {

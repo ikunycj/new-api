@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useQuery } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
@@ -109,7 +109,6 @@ export function CommonLogsFilterBar<TData>(
 ) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const searchParams = route.useSearch()
   const routeParams = route.useParams()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
@@ -159,7 +158,13 @@ export function CommonLogsFilterBar<TData>(
     queryKey: ['usage-logs-filter-options'],
     queryFn: getLogFilterOptions,
     enabled: showAdminFilters,
-    staleTime: 5 * 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const handleChange = useCallback(
@@ -188,10 +193,7 @@ export function CommonLogsFilterBar<TData>(
         page: 1,
       },
     })
-    queryClient.invalidateQueries({ queryKey: ['logs'] })
-    queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-    queryClient.invalidateQueries({ queryKey: ['call-logs-analytics'] })
-  }, [filters, logType, navigate, queryClient, targetSection])
+  }, [filters, logType, navigate, targetSection])
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
@@ -215,10 +217,7 @@ export function CommonLogsFilterBar<TData>(
         ...resetSearch,
       },
     })
-    queryClient.invalidateQueries({ queryKey: ['logs'] })
-    queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-    queryClient.invalidateQueries({ queryKey: ['call-logs-analytics'] })
-  }, [navigate, queryClient, targetSection])
+  }, [navigate, targetSection])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

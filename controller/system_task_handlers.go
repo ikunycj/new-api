@@ -20,6 +20,28 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(logRollupHandler{})
+}
+
+type logRollupHandler struct{}
+
+func (logRollupHandler) Type() string { return model.SystemTaskTypeLogRollup }
+
+func (logRollupHandler) Enabled() bool {
+	return common.UsingLogDatabase(common.DatabaseTypePostgreSQL) &&
+		common.GetEnvOrDefaultBool("LOG_ROLLUP_ENABLED", true)
+}
+
+func (logRollupHandler) Interval() time.Duration { return 5 * time.Minute }
+func (logRollupHandler) NewPayload() any         { return nil }
+
+func (logRollupHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	result, err := model.RunLogRollup(ctx, 30*time.Second)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
 // channelTestHandler runs an on-demand "test all channels" task.

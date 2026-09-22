@@ -63,6 +63,7 @@ import dayjs from '@/lib/dayjs'
 import { formatTimestampToDate } from '@/lib/format'
 
 import {
+  deleteLogUsageRollups,
   getCurrentLogCleanupTask,
   getSystemTask,
   startLogCleanupTask,
@@ -159,6 +160,8 @@ export function LogSettingsSection({
     null
   )
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showRollupConfirmDialog, setShowRollupConfirmDialog] = useState(false)
+  const [isCleaningRollups, setIsCleaningRollups] = useState(false)
   const [serverLogInfo, setServerLogInfo] = useState<ServerLogInfo | null>(null)
   const [serverLogCleanupMode, setServerLogCleanupMode] = useState('by_count')
   const [serverLogCleanupValue, setServerLogCleanupValue] = useState(10)
@@ -210,6 +213,11 @@ export function LogSettingsSection({
   const formattedPurgeDate = useMemo(() => {
     if (!purgeDate) return ''
     return formatTimestampToDate(purgeDate.getTime(), 'milliseconds')
+  }, [purgeDate])
+
+  const purgeBeforeDate = useMemo(() => {
+    if (!purgeDate) return null
+    return dayjs(purgeDate).format('YYYY-MM-DD')
   }, [purgeDate])
 
   const logCleanupActive = isActiveLogCleanupTask(logCleanupTask)
@@ -297,6 +305,44 @@ export function LogSettingsSection({
       toast.error(message)
     } finally {
       setIsStartingLogCleanup(false)
+    }
+  }
+
+  const handleRequestCleanRollups = () => {
+    if (!purgeBeforeDate) {
+      toast.error(t('Select a date before clearing aggregation data.'))
+      return
+    }
+    setShowRollupConfirmDialog(true)
+  }
+
+  const handleCleanRollups = async () => {
+    if (!purgeBeforeDate) {
+      toast.error(t('Select a date before clearing aggregation data.'))
+      return
+    }
+    setIsCleaningRollups(true)
+    try {
+      const res = await deleteLogUsageRollups(purgeBeforeDate)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to clean aggregation data'))
+      }
+      toast.success(
+        res.data?.deleted_count
+          ? t('{{count}} aggregation rows removed.', {
+              count: res.data.deleted_count,
+            })
+          : t('No aggregation rows matched the selected time.')
+      )
+      setShowRollupConfirmDialog(false)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('Failed to clean aggregation data')
+      )
+    } finally {
+      setIsCleaningRollups(false)
     }
   }
 
@@ -397,6 +443,16 @@ export function LogSettingsSection({
                 {isStartingLogCleanup || logCleanupActive
                   ? t('Cleaning...')
                   : t('Clean logs')}
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={handleRequestCleanRollups}
+                disabled={isCleaningRollups}
+              >
+                {isCleaningRollups
+                  ? t('Cleaning...')
+                  : t('Clean aggregation data')}
               </Button>
             </div>
             {logCleanupTask && (
@@ -607,6 +663,44 @@ export function LogSettingsSection({
               disabled={isStartingLogCleanup}
             >
               {isStartingLogCleanup ? t('Cleaning...') : t('Delete logs')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showRollupConfirmDialog}
+        onOpenChange={setShowRollupConfirmDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('Confirm aggregation cleanup')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {formattedPurgeDate
+                ? t(
+                    'This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.',
+                    { date: formattedPurgeDate }
+                  )
+                : t(
+                    'This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.'
+                  )}{' '}
+              {t('This action cannot be undone.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCleaningRollups}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant='destructive'
+              onClick={handleCleanRollups}
+              disabled={isCleaningRollups}
+            >
+              {isCleaningRollups
+                ? t('Cleaning...')
+                : t('Delete aggregation data')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

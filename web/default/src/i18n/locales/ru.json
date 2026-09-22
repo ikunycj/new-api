@@ -6152,6 +6152,15 @@
     "Group status query": "Проверка статуса групп",
     "Check available groups, latency, and recent test results for an API key.": "Проверяйте доступные группы, задержку и последние результаты тестов для API-ключа.",
     "Check status": "Проверить статус",
+    "Select a date before clearing aggregation data.": "Выберите дату перед удалением агрегированных данных.",
+    "Failed to clean aggregation data": "Не удалось удалить агрегированные данные",
+    "{{count}} aggregation rows removed.": "Удалено агрегированных строк: {{count}}.",
+    "No aggregation rows matched the selected time.": "За выбранный период агрегированные строки не найдены.",
+    "Clean aggregation data": "Удалить агрегированные данные",
+    "Confirm aggregation cleanup": "Подтвердите удаление агрегатов",
+    "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Агрегаты до {{date}} будут удалены навсегда. Исходные логи не изменятся.",
+    "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Агрегаты до выбранного времени будут удалены навсегда. Исходные логи не изменятся.",
+    "Delete aggregation data": "Удалить агрегированные данные",
     "All channels": "Все каналы"
   }
 }

@@ -160,6 +160,17 @@ export async function startLogCleanupTask(targetTimestamp: number) {
   return res.data
 }
 
+export async function deleteLogUsageRollups(beforeDate: string) {
+  const res = await api.delete<{
+    success: boolean
+    message?: string
+    data?: { deleted_count: number }
+  }>('/api/system-task/log-rollup', {
+    params: { before_date: beforeDate },
+  })
+  return res.data
+}
+
 export async function getCurrentLogCleanupTask() {
   const res = await api.get<SystemTaskResponse<LogCleanupTask | null>>(
     '/api/system-task/current',

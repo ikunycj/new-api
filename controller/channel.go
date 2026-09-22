@@ -75,92 +75,6 @@ func clearChannelInfo(channel *model.Channel) {
 	}
 }
 
-func enrichPreviousDayProbeRates(channels []*model.Channel) {
-	ids := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		if channel != nil && channel.Id > 0 {
-			ids = append(ids, channel.Id)
-		}
-	}
-	rates, err := model.GetPreviousDayChannelProbeSuccessRates(ids, time.Now())
-	if err != nil {
-		common.SysLog("failed to load previous-day channel probe rates: " + err.Error())
-		return
-	}
-	for _, channel := range channels {
-		if channel != nil {
-			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
-		}
-	}
-}
-
-func enrichPreviousDayAverageTTFTs(channels []*model.Channel) {
-	ids := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		if channel != nil && channel.Id > 0 {
-			ids = append(ids, channel.Id)
-		}
-	}
-	averages, err := model.GetPreviousDayChannelAverageTTFTs(ids, time.Now())
-	if err != nil {
-		common.SysLog("failed to load previous-day channel average TTFTs: " + err.Error())
-		return
-	}
-	for _, channel := range channels {
-		if channel != nil {
-			channel.PreviousDayAverageTTFTMs = averages[channel.Id]
-		}
-	}
-}
-
-func enrichLastChannelTestTimes(channels []*model.Channel) {
-	ids := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		if channel != nil && channel.Id > 0 {
-			ids = append(ids, channel.Id)
-		}
-	}
-	probeTimes, err := model.GetLastChannelProbeTimes(ids)
-	if err != nil {
-		common.SysLog("failed to load last channel probe times: " + err.Error())
-	}
-
-	for _, channel := range channels {
-		if channel == nil {
-			continue
-		}
-		channel.LastTestTime = channel.TestTime
-		channel.LastTestIsAuto = false
-		if probeTime := probeTimes[channel.Id]; probeTime > channel.TestTime {
-			channel.LastTestTime = probeTime
-			channel.LastTestIsAuto = true
-		}
-	}
-}
-
-func enrichLastChannelTestTTFTs(channels []*model.Channel) {
-	ids := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		if channel == nil {
-			continue
-		}
-		channel.LastTestTTFTMs = 0
-		if channel.Id > 0 {
-			ids = append(ids, channel.Id)
-		}
-	}
-	ttfts, err := model.GetLatestChannelTestTTFTs(ids)
-	if err != nil {
-		common.SysLog("failed to load latest channel test TTFTs: " + err.Error())
-		return
-	}
-	for _, channel := range channels {
-		if channel != nil {
-			channel.LastTestTTFTMs = ttfts[channel.Id]
-		}
-	}
-}
-
 func enrichCurrentChannelConcurrency(channels []*model.Channel) {
 	for _, channel := range channels {
 		if channel != nil {
@@ -169,47 +83,47 @@ func enrichCurrentChannelConcurrency(channels []*model.Channel) {
 	}
 }
 
-func enrichChannelUsage(channels []*model.Channel) {
+func enrichChannelRuntimeMetrics(channels []*model.Channel) {
+	for _, channel := range channels {
+		clearChannelInfo(channel)
+	}
 	ids := make([]int, 0, len(channels))
 	for _, channel := range channels {
 		if channel != nil && channel.Id > 0 {
 			ids = append(ids, channel.Id)
 		}
 	}
-	usageByChannel, err := model.GetChannelUsageAt(ids, time.Now())
+	runtimeMetrics, err := model.GetChannelRuntimeMetrics(ids, time.Now())
 	if err != nil {
-		common.SysLog("failed to load channel usage and cost: " + err.Error())
-		return
+		common.SysLog("failed to load channel runtime metrics: " + err.Error())
 	}
-
 	for _, channel := range channels {
 		if channel == nil {
 			continue
 		}
-		usage := usageByChannel[channel.Id]
-		channel.DailyTokens = usage.DailyTokens
-		channel.TotalTokens = usage.TotalTokens
+		metrics := runtimeMetrics[channel.Id]
+		channel.LastTestTime = channel.TestTime
+		channel.LastTestIsAuto = false
+		if metrics.LastProbeAt > channel.TestTime {
+			channel.LastTestTime = metrics.LastProbeAt
+			channel.LastTestIsAuto = true
+		}
+		channel.LastTestTTFTMs = metrics.LastTestTTFTMs
+		channel.PreviousDayProbeSuccessRate = metrics.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = metrics.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = metrics.PreviousDayAverageTTFTMs
+		channel.DailyTokens = metrics.Usage.DailyTokens
+		channel.TotalTokens = metrics.Usage.TotalTokens
 		channel.DailyCostCNY = nil
 		channel.TotalCostCNY = nil
-		if !usage.DailyCostIncomplete {
-			channel.DailyCostCNY = channel.EstimateCostCNY(usage.DailyBaseCostUSD, usage.DailyBaseCostCNY)
+		if !metrics.Usage.DailyCostIncomplete {
+			channel.DailyCostCNY = channel.EstimateCostCNY(metrics.Usage.DailyBaseCostUSD, metrics.Usage.DailyBaseCostCNY)
 		}
-		if !usage.TotalCostIncomplete {
-			channel.TotalCostCNY = channel.EstimateCostCNY(usage.TotalBaseCostUSD, usage.TotalBaseCostCNY)
+		if !metrics.Usage.TotalCostIncomplete {
+			channel.TotalCostCNY = channel.EstimateCostCNY(metrics.Usage.TotalBaseCostUSD, metrics.Usage.TotalBaseCostCNY)
 		}
 	}
-}
-
-func enrichChannelRuntimeMetrics(channels []*model.Channel) {
-	for _, channel := range channels {
-		clearChannelInfo(channel)
-	}
-	enrichLastChannelTestTimes(channels)
-	enrichLastChannelTestTTFTs(channels)
-	enrichPreviousDayProbeRates(channels)
-	enrichPreviousDayAverageTTFTs(channels)
 	enrichCurrentChannelConcurrency(channels)
-	enrichChannelUsage(channels)
 }
 
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
@@ -594,13 +508,7 @@ func GetChannel(c *gin.Context) {
 		return
 	}
 	if channel != nil {
-		clearChannelInfo(channel)
-		enrichLastChannelTestTimes([]*model.Channel{channel})
-		enrichLastChannelTestTTFTs([]*model.Channel{channel})
-		enrichPreviousDayProbeRates([]*model.Channel{channel})
-		enrichPreviousDayAverageTTFTs([]*model.Channel{channel})
-		enrichCurrentChannelConcurrency([]*model.Channel{channel})
-		enrichChannelUsage([]*model.Channel{channel})
+		enrichChannelRuntimeMetrics([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

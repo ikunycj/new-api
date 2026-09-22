@@ -784,7 +784,24 @@ func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	return LOG_DB.AutoMigrate(&Log{})
+	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	if common.UsingLogDatabase(common.DatabaseTypePostgreSQL) && logRollupEnabled() {
+		// The previous development-only schema used an ID checkpoint and price
+		// dimensions. Remove it once before creating the final day-based schema.
+		legacyCheckpointTable := LOG_DB.Migrator().HasTable("log_rollup_checkpoints")
+		legacyRollupSchema := LOG_DB.Migrator().HasTable("channel_usage_rollups") &&
+			(LOG_DB.Migrator().HasColumn("channel_usage_rollups", "group_ratio_raw") ||
+				LOG_DB.Migrator().HasColumn("channel_usage_rollups", "billing_rate_raw"))
+		if legacyCheckpointTable || legacyRollupSchema {
+			if err := LOG_DB.Migrator().DropTable("channel_usage_rollups", "log_rollup_checkpoints", "log_rollup_state"); err != nil {
+				return err
+			}
+		}
+		return LOG_DB.AutoMigrate(&ChannelUsageRollup{}, &LogRollupState{})
+	}
+	return nil
 }
 
 func migrateClickHouseLogDB() error {

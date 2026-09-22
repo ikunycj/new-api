@@ -77,6 +77,13 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
     queryKey: ['pricing-groups'],
     queryFn: getPricingGroups,
     enabled: props.dimension === 'group',
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
   const cacheTrendEnabled =
     !props.loading &&
@@ -108,7 +115,13 @@ export function DimensionUsageChart(props: DimensionUsageChartProps) {
       })
     },
     enabled: cacheTrendEnabled,
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   useEffect(() => {

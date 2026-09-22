@@ -135,14 +135,26 @@ export function SummaryCards() {
         end_timestamp: summaryTimeRange.end_timestamp,
         default_time: 'hour',
       }),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
 
   const historicalSummaryQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'summary'],
     queryFn: getUserQuotaSummary,
     enabled: Boolean(user?.id),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
 
   const apiKeysQuery = useQuery({
@@ -168,15 +180,26 @@ export function SummaryCards() {
       };
     },
     enabled: Boolean(user?.id),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
 
   const inFlightQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'user-in-flight', user?.id],
     queryFn: getUserInFlight,
     enabled: Boolean(user?.id),
-    refetchInterval: 5_000,
-    staleTime: 2_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   });
 
   const loading =

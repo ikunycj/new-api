@@ -272,6 +272,9 @@ func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) 
 	if len(channelIDs) == 0 {
 		return
 	}
+	// Routing cache refreshes also run in SQLite-backed tests and on the hot
+	// request path. Keep this enrichment limited to probe and TTFT tables;
+	// historical usage is PostgreSQL-specific and belongs to the admin API.
 	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, now); err == nil {
 		for _, channel := range channels {
 			if channel != nil {
@@ -307,7 +310,10 @@ func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) 
 // persisted channel field, so replacing the cached model would risk losing
 // concurrent runtime state; update only this metric instead.
 func UpdateCachedChannelTestTTFT(channelID int, ttftMs float64) {
-	if !common.MemoryCacheEnabled || channelID <= 0 || ttftMs <= 0 || math.IsNaN(ttftMs) || math.IsInf(ttftMs, 0) {
+	if channelID <= 0 || ttftMs <= 0 || math.IsNaN(ttftMs) || math.IsInf(ttftMs, 0) {
+		return
+	}
+	if !common.MemoryCacheEnabled {
 		return
 	}
 

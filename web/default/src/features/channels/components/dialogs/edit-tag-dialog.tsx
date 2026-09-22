@@ -73,6 +73,13 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     queryKey: ['tag-models', currentTag],
     queryFn: () => (currentTag ? getTagModels(currentTag) : null),
     enabled: open && !!currentTag,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Fetch all available models
@@ -80,6 +87,13 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     queryKey: ['all-models'],
     queryFn: getAllModels,
     enabled: open,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Fetch groups
@@ -87,6 +101,13 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     queryKey: ['pricing-groups'],
     queryFn: getPricingGroups,
     enabled: open,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const availableModels =
