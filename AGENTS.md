@@ -111,6 +111,17 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - Migrations only need to support PostgreSQL. Use PostgreSQL `ALTER TABLE` and other PostgreSQL-native migration syntax where appropriate.
 - Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic.
 
+### One-Time Log Aggregation Database Repair
+
+When AI assistance starts or deploys the project, first check whether the PostgreSQL log database actually used by the application contains `log_rollup_state` and `channel_usage_rollups`. If either table is missing or has an incomplete schema, create a temporary SQL file or run equivalent one-time SQL to repair it. Delete the temporary SQL and repair code immediately after verification; do not add this repair to the application startup path.
+
+- Use the separate log database when `LOG_SQL_DSN` is set; otherwise use the primary database from `SQL_DSN`.
+- Before and after execution, verify only the database name, schema, tables, and indexes. Never print DSNs, passwords, or other secrets.
+- One-time SQL may only create or complete `log_rollup_state`, `channel_usage_rollups`, and their query indexes. It must not delete logs, drop existing tables, reset aggregation state, or manually insert a state row.
+- Execute with `psql -v ON_ERROR_STOP=1` or an existing PostgreSQL driver from the project. After execution, confirm the database name, schema, tables, and indexes from the results.
+- After the repair, delete the temporary SQL, temporary executor, and temporary startup migration code, then check `git status` again.
+- Do not add `migrateLOGDB()` back to the primary-database reuse path for this repair. That path is fixed through a one-time operational action.
+
 **Relay and provider behavior:**
 
 - When implementing a new channel, confirm whether the provider supports `StreamOptions`; if supported, add the channel to `streamSupportedChannels`.
