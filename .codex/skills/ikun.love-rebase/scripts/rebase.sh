@@ -6,13 +6,16 @@ fail() {
   exit 1
 }
 
-[[ $# -le 1 ]] || fail 'Usage: bash rebase.sh [new-api-checkout]'
+[[ $# -eq 2 ]] || fail 'Usage: bash rebase.sh <new-api-checkout> <base-branch>'
 cd "${1:-.}"
 repo=$(git rev-parse --show-toplevel)
 cd "$repo"
 
 target='ikun.love'
-upstream='origin/feature/new-channel-and-group'
+base_branch=$2
+git check-ref-format --branch "$base_branch" >/dev/null 2>&1 ||
+  fail "Invalid base branch: $base_branch"
+upstream="origin/$base_branch"
 subject='feat(web): apply ikun.love branding'
 
 for operation in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD sequencer; do
@@ -47,7 +50,7 @@ done < <(git diff --no-renames --name-only -z "$parent" "$source")
 # Remember the previous upstream so a freshly rewritten remote is supported.
 previous_base=$(git rev-parse --verify "refs/remotes/$upstream^{commit}" 2>/dev/null || true)
 git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=30 fetch origin \
-  '+refs/heads/feature/new-channel-and-group:refs/remotes/origin/feature/new-channel-and-group'
+  "+refs/heads/$base_branch:refs/remotes/origin/$base_branch"
 base=$(git rev-parse --verify "refs/remotes/$upstream^{commit}")
 if ! git merge-base --is-ancestor "$parent" "$base"; then
   if [[ -z "$previous_base" ]] || ! git merge-base --is-ancestor "$parent" "$previous_base"; then
@@ -58,7 +61,7 @@ fi
   fail 'ikun.love changed during preflight; inspect the new branch state.'
 
 git switch "$target"
-printf 'Base: %s\nBranding source: %s\n' "$base" "$source"
+printf 'Base branch: %s\nBase: %s\nBranding source: %s\n' "$base_branch" "$base" "$source"
 if [[ "$parent" != "$base" ]]; then
   backup="refs/backup/ikun.love-rebase/$source"
   git update-ref "$backup" "$source"
