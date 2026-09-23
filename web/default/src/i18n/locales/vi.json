@@ -6161,6 +6161,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Dữ liệu tổng hợp trước {{date}} sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Dữ liệu tổng hợp trước thời điểm đã chọn sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
     "Delete aggregation data": "Xóa dữ liệu tổng hợp",
+    "OpenAI Responses to Anthropic Messages": "OpenAI Responses sang Anthropic Messages",
     "All channels": "Tất cả kênh"
   }
 }

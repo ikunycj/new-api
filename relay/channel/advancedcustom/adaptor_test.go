@@ -326,6 +326,48 @@ func TestAdaptorConvertsResponsesRequestToOpenAIChatUpstream(t *testing.T) {
 	assert.Equal(t, "/v1/chat/completions", parsedURL.Path)
 }
 
+func TestAdaptorConvertsResponsesRequestToClaudeMessagesUpstream(t *testing.T) {
+	adaptor := &Adaptor{}
+	info := advancedCustomRelayInfo(&dto.AdvancedCustomConfig{
+		Routes: []dto.AdvancedCustomRoute{
+			{
+				IncomingPath: "/v1/responses",
+				UpstreamPath: "/v1/messages",
+				Converter:    relayconvert.ConverterOpenAIResponsesToClaude,
+			},
+		},
+	})
+	info.RelayMode = relayconstant.RelayModeResponses
+	info.RequestURLPath = "/v1/responses"
+	gin.SetMode(gin.TestMode)
+	c := advancedCustomGinContext("/v1/responses")
+
+	converted, err := adaptor.ConvertOpenAIResponsesRequest(c, info, dto.OpenAIResponsesRequest{
+		Model: "deepseek-flash",
+		Input: mustAdvancedCustomRawMessage(t, []map[string]any{
+			{"role": "developer", "content": "You are concise."},
+			{"role": "user", "content": "Reply with OK."},
+		}),
+	})
+	require.NoError(t, err)
+
+	claudeReq, ok := converted.(*dto.ClaudeRequest)
+	require.True(t, ok)
+	assert.Equal(t, "deepseek-flash", claudeReq.Model)
+	assert.Equal(t, "You are concise.", claudeReq.ParseSystem()[0].GetText())
+	require.Len(t, claudeReq.Messages, 1)
+	assert.Equal(t, "user", claudeReq.Messages[0].Role)
+	parts, parseErr := claudeReq.Messages[0].ParseContent()
+	require.NoError(t, parseErr)
+	assert.Equal(t, "Reply with OK.", parts[0].GetText())
+
+	requestURL, err := adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	parsedURL, err := url.Parse(requestURL)
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/messages", parsedURL.Path)
+}
+
 func TestAdaptorSelectsDuplicateResponsesRoutesByModel(t *testing.T) {
 	config := &dto.AdvancedCustomConfig{
 		Routes: []dto.AdvancedCustomRoute{

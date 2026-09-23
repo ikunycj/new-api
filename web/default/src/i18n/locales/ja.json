@@ -6161,6 +6161,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "{{date}} より前の集計データを完全に削除します。元のログには影響しません。",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "選択した時刻より前の集計データを完全に削除します。元のログには影響しません。",
     "Delete aggregation data": "集計データを削除",
+    "OpenAI Responses to Anthropic Messages": "OpenAI Responses から Anthropic Messages",
     "All channels": "すべてのチャンネル"
   }
 }

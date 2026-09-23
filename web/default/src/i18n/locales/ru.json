@@ -6161,6 +6161,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "Агрегаты до {{date}} будут удалены навсегда. Исходные логи не изменятся.",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Агрегаты до выбранного времени будут удалены навсегда. Исходные логи не изменятся.",
     "Delete aggregation data": "Удалить агрегированные данные",
+    "OpenAI Responses to Anthropic Messages": "OpenAI Responses в Anthropic Messages",
     "All channels": "Все каналы"
   }
 }

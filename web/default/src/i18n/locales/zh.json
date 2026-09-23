@@ -6161,6 +6161,7 @@
     "This will permanently remove aggregation buckets before {{date}}. Source logs are not affected.": "这将永久删除 {{date}} 之前的聚合数据，不会影响源日志。",
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "这将永久删除所选时间之前的聚合数据，不会影响源日志。",
     "Delete aggregation data": "删除聚合数据",
+    "OpenAI Responses to Anthropic Messages": "OpenAI Responses 到 Anthropic Messages",
     "All channels": "所有渠道"
   }
 }

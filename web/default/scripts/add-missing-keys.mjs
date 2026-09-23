@@ -176,6 +176,7 @@ const newKeys = {
     'Delete aggregation data': 'Delete aggregation data',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses to Anthropic Messages',
   },
   zh: {
     'Automatically disable channels when tests fail':
@@ -346,6 +347,7 @@ const newKeys = {
     'Delete aggregation data': '删除聚合数据',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses 到 Anthropic Messages',
   },
   fr: {
     'Authentication email templates': 'Modèles d’e-mails d’authentification',
@@ -522,6 +524,7 @@ const newKeys = {
     'Delete aggregation data': 'Supprimer les données agrégées',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses vers Anthropic Messages',
   },
   ja: {
     'Authentication email templates': '認証メールテンプレート',
@@ -692,6 +695,7 @@ const newKeys = {
     'Delete aggregation data': '集計データを削除',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses から Anthropic Messages',
   },
   ru: {
     'Authentication email templates': 'Шаблоны писем для аутентификации',
@@ -864,6 +868,7 @@ const newKeys = {
     'Delete aggregation data': 'Удалить агрегированные данные',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses в Anthropic Messages',
   },
   vi: {
     'Authentication email templates': 'Mẫu email xác thực',
@@ -1035,6 +1040,7 @@ const newKeys = {
     'Delete aggregation data': 'Xóa dữ liệu tổng hợp',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses sang Anthropic Messages',
   },
   'zh-TW': {
     'Automatically disable channels when tests fail':
@@ -1194,6 +1200,7 @@ const newKeys = {
     'Delete aggregation data': '刪除聚合資料',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '這會根據所有渠道設定重建渠道路由索引，包括支援模型、分組和權重。重建期間路由可能短暫不完整。是否繼續？',
+    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses 到 Anthropic Messages',
   },
 }
 

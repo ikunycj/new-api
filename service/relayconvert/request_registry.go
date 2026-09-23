@@ -77,6 +77,7 @@ const (
 	ConverterOpenAIChatToClaudeMessages  = "openai_chat_completions_to_anthropic_messages"
 	ConverterOpenAIChatToOpenAIResponses = "openai_chat_completions_to_openai_responses"
 	ConverterOpenAIResponsesToOpenAIChat = "openai_responses_to_openai_chat_completions"
+	ConverterOpenAIResponsesToClaude     = "openai_responses_to_claude_messages"
 	ConverterOpenAIResponsesToGemini     = "openai_responses_to_gemini_generate_content"
 	ConverterGeminiContentToOpenAIChat   = "gemini_generate_content_to_openai_chat_completions"
 	ConverterOpenAIChatToGeminiContent   = "openai_chat_completions_to_gemini_generate_content"
