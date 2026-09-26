@@ -23,9 +23,9 @@ func setupDimensionTest(t *testing.T) *int64 {
 func TestRealtimeFilterSeparatesKeysAndModels(t *testing.T) {
 	setupDimensionTest(t)
 
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 40, 80, true)
-	RecordRealtimeRequest(1, 10, "claude-sonnet-4", 200, 0, 50, true)
-	RecordRealtimeRequest(1, 20, "gpt-4o", 400, 10, 20, true)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 40, 80, true, 0)
+	RecordRealtimeRequest(1, 10, "claude-sonnet-4", 200, 0, 50, true, 0)
+	RecordRealtimeRequest(1, 20, "gpt-4o", 400, 10, 20, true, 0)
 
 	// The account total must be the sum of every combination, because the
 	// user-level ring is written unconditionally.
@@ -58,8 +58,8 @@ func TestRealtimeFilterCannotReachAnotherUsersTraffic(t *testing.T) {
 	// narrows within the caller's own rings, so a forged key id cannot widen the
 	// result to another account. This is the property the /self endpoint relies
 	// on instead of an ownership lookup.
-	RecordRealtimeRequest(2, 99, "gpt-4o", 500_000, 0, 0, false)
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false)
+	RecordRealtimeRequest(2, 99, "gpt-4o", 500_000, 0, 0, false, 0)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false, 0)
 
 	leaked := windowsByLength(GetRealtimeSnapshotFiltered(1, RealtimeFilter{TokenID: 99}))[60]
 	require.Zero(t, leaked.Requests, "another user's key must not match")
@@ -72,8 +72,8 @@ func TestRealtimeFilterCannotReachAnotherUsersTraffic(t *testing.T) {
 func TestRealtimeFilterZeroValueMatchesAccountTotal(t *testing.T) {
 	setupDimensionTest(t)
 
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 30, 60, true)
-	RecordRealtimeRequest(1, 20, "o3", 300, 10, 40, true)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 30, 60, true, 0)
+	RecordRealtimeRequest(1, 20, "o3", 300, 10, 40, true, 0)
 
 	// An empty filter must read the account ring and agree with the breakdown
 	// summed over every combination; if it did not, the headline card and the
@@ -92,9 +92,9 @@ func TestRealtimeDimensionRingCapPreservesAccountTotals(t *testing.T) {
 
 	// Fill the breakdown to its cap, then send one more distinct combination.
 	for i := 0; i < realtimeMaxDimensionRings; i++ {
-		RecordRealtimeRequest(1, i+1, "gpt-4o", 1, 0, 0, false)
+		RecordRealtimeRequest(1, i+1, "gpt-4o", 1, 0, 0, false, 0)
 	}
-	RecordRealtimeRequest(1, realtimeMaxDimensionRings+1, "gpt-4o", 1000, 0, 0, false)
+	RecordRealtimeRequest(1, realtimeMaxDimensionRings+1, "gpt-4o", 1000, 0, 0, false, 0)
 
 	realtimeDimensionRegistry.mu.RLock()
 	ringCount := len(realtimeDimensionRegistry.rings)
@@ -121,7 +121,7 @@ func TestRealtimeDimensionSkipsRequestsWithoutTokenId(t *testing.T) {
 	// Some internal paths bill without a key. Such a request belongs in the
 	// account total but cannot be attributed, so it must not create a ring under
 	// a bogus key id.
-	RecordRealtimeRequest(1, 0, "gpt-4o", 100, 0, 0, false)
+	RecordRealtimeRequest(1, 0, "gpt-4o", 100, 0, 0, false, 0)
 
 	require.Equal(t, 1, windowsByLength(GetRealtimeSnapshot(1))[60].Requests)
 	realtimeDimensionRegistry.mu.RLock()
@@ -139,8 +139,8 @@ func TestRealtimeDimensionTruncatesLongModelNames(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		long += "x"
 	}
-	RecordRealtimeRequest(1, 10, long+"aaa", 100, 0, 0, false)
-	RecordRealtimeRequest(1, 10, long+"bbb", 100, 0, 0, false)
+	RecordRealtimeRequest(1, 10, long+"aaa", 100, 0, 0, false, 0)
+	RecordRealtimeRequest(1, 10, long+"bbb", 100, 0, 0, false, 0)
 
 	realtimeDimensionRegistry.mu.RLock()
 	count := len(realtimeDimensionRegistry.rings)
@@ -155,7 +155,7 @@ func TestRealtimeDimensionTruncatesLongModelNames(t *testing.T) {
 func TestRealtimeDimensionSweepReclaimsIdleRings(t *testing.T) {
 	current := setupDimensionTest(t)
 
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false, 0)
 	realtimeDimensionRegistry.mu.RLock()
 	require.Equal(t, 1, len(realtimeDimensionRegistry.rings))
 	realtimeDimensionRegistry.mu.RUnlock()
@@ -174,10 +174,10 @@ func TestRealtimeDimensionSweepReclaimsIdleRings(t *testing.T) {
 func TestRealtimeDimensionsListsOnlyActiveCombinations(t *testing.T) {
 	setupDimensionTest(t)
 
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false)
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false)
-	RecordRealtimeRequest(1, 20, "o3", 100, 0, 0, false)
-	RecordRealtimeRequest(2, 30, "gpt-4o", 100, 0, 0, false)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false, 0)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false, 0)
+	RecordRealtimeRequest(1, 20, "o3", 100, 0, 0, false, 0)
+	RecordRealtimeRequest(2, 30, "gpt-4o", 100, 0, 0, false, 0)
 
 	dims := GetRealtimeDimensions(1, 60)
 
@@ -200,7 +200,7 @@ func TestRealtimeDimensionsRecordsDisabledIsNoop(t *testing.T) {
 	setupDimensionTest(t)
 	realtimeEnabled = false
 
-	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false)
+	RecordRealtimeRequest(1, 10, "gpt-4o", 100, 0, 0, false, 0)
 
 	realtimeDimensionRegistry.mu.RLock()
 	count := len(realtimeDimensionRegistry.rings)
@@ -217,10 +217,10 @@ func BenchmarkRecordRealtimeRequest(b *testing.B) {
 	b.Cleanup(func() { realtimeEnabled = originalEnabled })
 	b.Cleanup(resetRealtimeDimensionsForTest)
 
-	RecordRealtimeRequest(1, 7, "gpt-4o", 1000, 400, 800, true)
+	RecordRealtimeRequest(1, 7, "gpt-4o", 1000, 400, 800, true, 0)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RecordRealtimeRequest(1, 7, "gpt-4o", 1000, 400, 800, true)
+		RecordRealtimeRequest(1, 7, "gpt-4o", 1000, 400, 800, true, 0)
 	}
 }
 
@@ -238,13 +238,13 @@ func BenchmarkRecordRealtimeRequestSpread(b *testing.B) {
 	}
 	for k := 1; k <= 50; k++ {
 		for _, m := range models {
-			RecordRealtimeRequest(1, k, m, 10, 0, 0, false)
+			RecordRealtimeRequest(1, k, m, 10, 0, 0, false, 0)
 		}
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RecordRealtimeRequest(1, i%50+1, models[i%10], 1000, 400, 800, true)
+		RecordRealtimeRequest(1, i%50+1, models[i%10], 1000, 400, 800, true, 0)
 	}
 }
 
