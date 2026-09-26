@@ -519,6 +519,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		cacheReadTokensForQuotaData(params),
 		inputTokensTotalForQuotaData(params),
 		params.CacheStatsAvailable,
+		params.UseTimeSeconds,
 	)
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
