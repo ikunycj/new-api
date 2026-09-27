@@ -446,7 +446,7 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 			// Merge cross-node data even when the local ring has no slots. Other
 			// nodes may have seen traffic (for this user, or this filtered
 			// dimension) that this node hasn't.
-			result := mergeFromRedis(realtimeCrossnodeField(userId, filter), window, realtimeWindowResult{})
+			result := mergeFromRedis(userId, filter, window, realtimeWindowResult{})
 			snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 		}
 		snapshot.Series = emptySeries(now, longest)
@@ -458,7 +458,7 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 		// Merge in contributions from other nodes, whether this is the
 		// account-level total or a filtered (token, model) breakdown — each
 		// node publishes both under its own key, keyed by field.
-		result = mergeFromRedis(realtimeCrossnodeField(userId, filter), window, result)
+		result = mergeFromRedis(userId, filter, window, result)
 		snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 	}
 	snapshot.Series = buildSeries(slots, now, longest)

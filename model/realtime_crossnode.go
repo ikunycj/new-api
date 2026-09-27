@@ -26,6 +26,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -80,17 +82,33 @@ func realtimeDimensionField(userId int, tokenId int, model string) string {
 	return fmt.Sprintf("%s%d:%d:%s", realtimeDimensionFieldPrefix, userId, tokenId, model)
 }
 
-// realtimeCrossnodeField picks the Redis hash field a snapshot request should
-// merge under: the account-level field for an unfiltered request, or the
-// (token, model) breakdown field for a filtered one. Centralizing the choice
-// here keeps the read path (GetRealtimeSnapshotFiltered) and the write path
-// (publishLocalSummaries) from being able to drift apart on how a field name
-// is derived from a filter.
-func realtimeCrossnodeField(userId int, filter RealtimeFilter) string {
-	if filter.IsZero() {
-		return realtimeAccountField(userId)
+// realtimeDimensionFieldMatches reports whether a hash field published by
+// publishLocalSummaries's dimension loop belongs to userId and satisfies
+// filter.
+//
+// This is needed because a filter can be partial (token_id only, or model
+// only), in which case one exact field name is not enough: the field encodes
+// one specific (token, model) pair, but the filter may match many of them.
+// realtimeDimensionSlots (the local-ring equivalent) has the same problem and
+// solves it the same way, by scanning every candidate and testing filter.matches.
+func realtimeDimensionFieldMatches(field string, userId int, filter RealtimeFilter) bool {
+	rest, ok := strings.CutPrefix(field, realtimeDimensionFieldPrefix)
+	if !ok {
+		return false
 	}
-	return realtimeDimensionField(userId, filter.TokenID, filter.Model)
+	parts := strings.SplitN(rest, ":", 3)
+	if len(parts) != 3 {
+		return false
+	}
+	fieldUserId, err := strconv.Atoi(parts[0])
+	if err != nil || fieldUserId != userId {
+		return false
+	}
+	tokenId, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	return filter.matches(realtimeDimensionKey{UserID: fieldUserId, TokenID: tokenId, Model: parts[2]})
 }
 
 // crossnodeEnabled is true when Redis is available and the cross-node loop has
@@ -211,15 +229,22 @@ func marshalRealtimeSummary(slots []realtimeSlot, now int64) ([]byte, error) {
 	return json.Marshal(summary)
 }
 
-// mergeFromRedis fetches all other nodes' summaries for one hash field
-// (either an account-level field or a (token, model) breakdown field) and
-// returns a merged realtimeWindowResult for the requested window. The local
-// node's data is already in localResult; this adds contributions from other
-// nodes.
+// mergeFromRedis fetches all other nodes' summaries matching userId/filter
+// and returns a merged realtimeWindowResult for the requested window. The
+// local node's data is already in localResult; this adds contributions from
+// other nodes.
+//
+// An unfiltered request (filter.IsZero()) merges the single account-level
+// field. A filtered request may match more than one published field — the
+// filter can be partial (only token_id, or only model) while each field
+// encodes one specific (token, model) pair — so it walks every field on each
+// remote node's hash and sums the ones realtimeDimensionFieldMatches accepts.
+// That is more Redis round trips than the single HGET the unfiltered path
+// uses, but it only runs on a filtered poll, not the common case.
 //
 // If Redis is unavailable or returns no cross-node data the function returns
 // localResult unchanged so the caller degrades gracefully to local-only data.
-func mergeFromRedis(field string, window int64, localResult realtimeWindowResult) realtimeWindowResult {
+func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult realtimeWindowResult) realtimeWindowResult {
 	if !crossnodeEnabled || !common.RedisEnabled || common.RDB == nil {
 		return localResult
 	}
@@ -233,6 +258,22 @@ func mergeFromRedis(field string, window int64, localResult realtimeWindowResult
 	merged := localResult
 	localNodeKey := realtimeCrossnodeHashPrefix + common.NodeName
 
+	fold := func(val string) {
+		var summary realtimeNodeSummary
+		if err := json.Unmarshal([]byte(val), &summary); err != nil {
+			return
+		}
+		remote, ok := summary.Windows[int(window)]
+		if !ok {
+			return
+		}
+		merged.Requests += remote.Requests
+		merged.Tokens += remote.Tokens
+		merged.CacheReadTokens += remote.CacheReadTokens
+		merged.InputTokensTotal += remote.InputTokensTotal
+		merged.BusySeconds += remote.BusySeconds
+	}
+
 	for {
 		keys, nextCursor, err := common.RDB.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
@@ -243,24 +284,27 @@ func mergeFromRedis(field string, window int64, localResult realtimeWindowResult
 				// Skip local node: already counted in localResult.
 				continue
 			}
-			val, err := common.RDB.HGet(ctx, key, field).Result()
+			if filter.IsZero() {
+				val, err := common.RDB.HGet(ctx, key, realtimeAccountField(userId)).Result()
+				if err != nil {
+					// Field not found for this node — normal, skip it.
+					continue
+				}
+				fold(val)
+				continue
+			}
+			// Filtered: the field name is not known in advance, so walk the
+			// remote node's whole hash and keep the fields that match.
+			all, err := common.RDB.HGetAll(ctx, key).Result()
 			if err != nil {
-				// Field not found for this node — normal, skip it.
 				continue
 			}
-			var summary realtimeNodeSummary
-			if err := json.Unmarshal([]byte(val), &summary); err != nil {
-				continue
+			for field, val := range all {
+				if !realtimeDimensionFieldMatches(field, userId, filter) {
+					continue
+				}
+				fold(val)
 			}
-			remote, ok := summary.Windows[int(window)]
-			if !ok {
-				continue
-			}
-			merged.Requests += remote.Requests
-			merged.Tokens += remote.Tokens
-			merged.CacheReadTokens += remote.CacheReadTokens
-			merged.InputTokensTotal += remote.InputTokensTotal
-			merged.BusySeconds += remote.BusySeconds
 		}
 		cursor = nextCursor
 		if cursor == 0 {
