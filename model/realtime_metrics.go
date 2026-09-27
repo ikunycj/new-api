@@ -92,6 +92,14 @@ type realtimeSlot struct {
 	// historical card.
 	CacheReadTokens  int32
 	InputTokensTotal int32
+	// BusySeconds accumulates the sum of UseTimeSeconds for requests that
+	// complete in this slot. Together with the window length it lets the read
+	// path estimate instantaneous concurrency via Little's Law:
+	//   concurrency ≈ Σ(busy_seconds) / window_seconds
+	// The estimate lags by roughly the median request duration (~15-30s for
+	// typical traffic) because a request's time is credited only after it
+	// finishes, so the UI labels it "~30s lag".
+	BusySeconds int32
 }
 
 // realtimeRing is a fixed-size circular buffer of slots for a single user.
@@ -113,6 +121,9 @@ type realtimeUsage struct {
 	// reported cache metadata; see realtimeSlot for why they travel together.
 	CacheReadTokens  int
 	InputTokensTotal int
+	// UseTimeSeconds is the wall-clock seconds the request took. It feeds the
+	// BusySeconds accumulator in the slot for Little's Law concurrency estimates.
+	UseTimeSeconds int
 }
 
 // add folds one request into the slot covering now.
@@ -130,6 +141,7 @@ func (r *realtimeRing) add(now int64, usage realtimeUsage) {
 	slot.Tokens += int32(usage.Tokens)
 	slot.CacheReadTokens += int32(usage.CacheReadTokens)
 	slot.InputTokensTotal += int32(usage.InputTokensTotal)
+	slot.BusySeconds += int32(usage.UseTimeSeconds)
 	r.lastSeen = now
 }
 
@@ -139,6 +151,10 @@ type realtimeWindowResult struct {
 	Tokens           int
 	CacheReadTokens  int
 	InputTokensTotal int
+	// BusySeconds is the sum of per-request use_time_seconds accumulated in
+	// the window's slots. Dividing by the window length gives an estimate of
+	// average concurrency via Little's Law.
+	BusySeconds int
 }
 
 // snapshot copies the slots covering the given window so the caller can
@@ -229,8 +245,11 @@ func RecordRealtimeCacheUsage(userId int, tokens int, cacheReadTokens int, input
 //
 // The two are recorded separately and the account ring goes first, so a
 // breakdown that is refused at its cap cannot cost the account its totals.
-func RecordRealtimeRequest(userId int, tokenId int, model string, tokens int, cacheReadTokens int, inputTokensTotal int, cacheStatsAvailable bool) {
-	usage := realtimeUsage{Tokens: tokens}
+//
+// useTimeSeconds is the wall-clock duration of the request; it accumulates into
+// BusySeconds to support Little's Law concurrency estimation on the read path.
+func RecordRealtimeRequest(userId int, tokenId int, model string, tokens int, cacheReadTokens int, inputTokensTotal int, cacheStatsAvailable bool, useTimeSeconds int) {
+	usage := realtimeUsage{Tokens: tokens, UseTimeSeconds: useTimeSeconds}
 	if cacheStatsAvailable {
 		usage.CacheReadTokens = cacheReadTokens
 		usage.InputTokensTotal = inputTokensTotal
@@ -291,6 +310,7 @@ var realtimeEnabled bool
 func InitRealtimeMetrics() {
 	realtimeEnabled = true
 	go realtimeSweepLoop()
+	initRealtimeCrossnode()
 }
 
 // realtimeSweepLoop periodically frees rings for users that stopped sending
@@ -350,6 +370,13 @@ type RealtimeWindow struct {
 	// "unknown" must not collapse to the same value, or the dashboard would
 	// render a confident 0% for a window it knows nothing about.
 	CacheHitRate *float64 `json:"cache_hit_rate"`
+	// AvgConcurrency is an estimate of average in-flight requests during the
+	// window, computed as sum(use_time_seconds) / window_seconds (Little's Law).
+	// It lags by roughly the median request duration (~30s for typical traffic)
+	// because a request contributes its time only after it completes. Clients
+	// should display this with a "~30s lag" label so users are not misled during
+	// a sudden burst that hasn't fully resolved yet.
+	AvgConcurrency float64 `json:"avg_concurrency"`
 }
 
 // RealtimeSnapshot is the payload behind the realtime cards and chart.
@@ -416,14 +443,30 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 
 	if len(slots) == 0 {
 		for _, window := range realtimeWindows {
-			snapshot.Windows = append(snapshot.Windows, buildWindow(window, realtimeWindowResult{}))
+			// For account-level (unfiltered) snapshots, merge cross-node data
+			// even when the local ring has no slots. Other nodes may have seen
+			// traffic this node hasn't.
+			result := realtimeWindowResult{}
+			if filter.IsZero() {
+				result = mergeFromRedis(userId, window, result)
+			}
+			snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 		}
 		snapshot.Series = emptySeries(now, longest)
 		return snapshot
 	}
 
 	for _, window := range realtimeWindows {
-		snapshot.Windows = append(snapshot.Windows, buildWindow(window, sumSlots(slots, now, window)))
+		result := sumSlots(slots, now, window)
+		// For account-level snapshots, merge in contributions from other nodes.
+		// Filtered (key/model) snapshots remain local-only for now: publishing
+		// per-dimension summaries per node would multiply the Redis key space by
+		// the number of (user, key, model) combinations, which is not worth the
+		// added complexity until there is evidence it is needed.
+		if filter.IsZero() {
+			result = mergeFromRedis(userId, window, result)
+		}
+		snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 	}
 	snapshot.Series = buildSeries(slots, now, longest)
 	return snapshot
@@ -557,6 +600,7 @@ func sumSlots(slots []realtimeSlot, now int64, window int64) realtimeWindowResul
 		result.Tokens += int(slot.Tokens)
 		result.CacheReadTokens += int(slot.CacheReadTokens)
 		result.InputTokensTotal += int(slot.InputTokensTotal)
+		result.BusySeconds += int(slot.BusySeconds)
 	}
 	return result
 }
@@ -605,6 +649,7 @@ func buildWindow(window int64, result realtimeWindowResult) RealtimeWindow {
 		CacheReadTokens:  result.CacheReadTokens,
 		InputTokensTotal: result.InputTokensTotal,
 		CacheHitRate:     realtimeCacheHitRate(result),
+		AvgConcurrency:   float64(result.BusySeconds) / float64(window),
 	}
 }
 
