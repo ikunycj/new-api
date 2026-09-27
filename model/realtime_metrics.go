@@ -443,13 +443,10 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 
 	if len(slots) == 0 {
 		for _, window := range realtimeWindows {
-			// For account-level (unfiltered) snapshots, merge cross-node data
-			// even when the local ring has no slots. Other nodes may have seen
-			// traffic this node hasn't.
-			result := realtimeWindowResult{}
-			if filter.IsZero() {
-				result = mergeFromRedis(userId, window, result)
-			}
+			// Merge cross-node data even when the local ring has no slots. Other
+			// nodes may have seen traffic (for this user, or this filtered
+			// dimension) that this node hasn't.
+			result := mergeFromRedis(realtimeCrossnodeField(userId, filter), window, realtimeWindowResult{})
 			snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 		}
 		snapshot.Series = emptySeries(now, longest)
@@ -458,14 +455,10 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 
 	for _, window := range realtimeWindows {
 		result := sumSlots(slots, now, window)
-		// For account-level snapshots, merge in contributions from other nodes.
-		// Filtered (key/model) snapshots remain local-only for now: publishing
-		// per-dimension summaries per node would multiply the Redis key space by
-		// the number of (user, key, model) combinations, which is not worth the
-		// added complexity until there is evidence it is needed.
-		if filter.IsZero() {
-			result = mergeFromRedis(userId, window, result)
-		}
+		// Merge in contributions from other nodes, whether this is the
+		// account-level total or a filtered (token, model) breakdown — each
+		// node publishes both under its own key, keyed by field.
+		result = mergeFromRedis(realtimeCrossnodeField(userId, filter), window, result)
 		snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 	}
 	snapshot.Series = buildSeries(slots, now, longest)
