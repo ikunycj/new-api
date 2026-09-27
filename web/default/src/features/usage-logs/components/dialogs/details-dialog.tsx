@@ -502,13 +502,35 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
   const cacheWrite = other.cache_creation_tokens || 0
   const cacheWrite5m = other.cache_creation_tokens_5m || 0
   const cacheWrite1h = other.cache_creation_tokens_1h || 0
-  const hasTokens = promptTokens > 0 || completionTokens > 0
+  const hasCache = cacheRead > 0 || cacheWrite > 0
+  const hasTokens = promptTokens > 0 || completionTokens > 0 || hasCache
 
   if (!hasTokens) return null
 
   const rows: Array<{ label: string; value: string }> = []
 
-  rows.push({ label: t('Input Tokens'), value: promptTokens.toLocaleString() })
+  // Anthropic excludes cache from prompt_tokens, so show the normalized total as
+  // the headline input and keep the uncached remainder as its own row. Without
+  // this a fully cached prompt reads as "Input 0" next to a non-zero charge.
+  const inputTotal =
+    log.cache_stats_available && log.input_tokens_total > 0
+      ? log.input_tokens_total
+      : 0
+  if (inputTotal > 0 && inputTotal !== promptTokens) {
+    rows.push({
+      label: t('Input Tokens'),
+      value: inputTotal.toLocaleString(),
+    })
+    rows.push({
+      label: t('Uncached Input'),
+      value: promptTokens.toLocaleString(),
+    })
+  } else {
+    rows.push({
+      label: t('Input Tokens'),
+      value: promptTokens.toLocaleString(),
+    })
+  }
   rows.push({
     label: t('Output Tokens'),
     value: completionTokens.toLocaleString(),

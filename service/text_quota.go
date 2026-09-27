@@ -75,6 +75,24 @@ func cacheWriteTokensTotal(summary textQuotaSummary) int {
 	return summary.CacheCreationTokens
 }
 
+// billableTokenTotal reports whether this response carries any billable volume.
+// It exists because "no usage at all" (upstream timeout, dropped body) and "zero
+// uncached input" are different facts that both leave PromptTokens at 0.
+//
+// Anthropic reports input_tokens exclusive of cache: a fully cached prompt
+// returns input_tokens=0 with the whole volume in cache_read_input_tokens, and a
+// refusal or tool-call truncation can pair that with output_tokens=0. Summing
+// only prompt+completion would call that request unbilled and waive the cache
+// read. OpenAI's prompt_tokens and Gemini's total already include cached tokens,
+// so adding cache there would double count.
+func billableTokenTotal(summary textQuotaSummary) int {
+	total := summary.PromptTokens + summary.CompletionTokens
+	if summary.IsClaudeUsageSemantic {
+		total += summary.CacheTokens + cacheWriteTokensTotal(summary)
+	}
+	return total
+}
+
 func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
 	if relayInfo == nil || usage == nil {
 		return false
@@ -260,7 +278,6 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 	summary.PromptTokens = usage.PromptTokens
 	summary.CompletionTokens = usage.CompletionTokens
-	summary.TotalTokens = usage.PromptTokens + usage.CompletionTokens
 	summary.CacheTokens = usage.PromptTokensDetails.CachedTokens
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CacheCreationTokensTotal()
 	summary.CacheCreationTokens5m = usage.ClaudeCacheCreation5mTokens
@@ -299,6 +316,10 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		}
 		summary.PromptTokens -= summary.CacheCreationTokens
 	}
+
+	// Computed after the OpenRouter adjustment above, which moves cache volume out
+	// of PromptTokens, so cache tokens are counted exactly once.
+	summary.TotalTokens = billableTokenTotal(summary)
 
 	dPromptTokens := decimal.NewFromInt(int64(summary.PromptTokens))
 	dCacheTokens := decimal.NewFromInt(int64(summary.CacheTokens))
