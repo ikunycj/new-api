@@ -507,8 +507,14 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	// The cache counters reuse the same eligibility helpers as the hourly
 	// quota_data rollup below, so the realtime card and the historical card
 	// always answer the same question over the same sample.
-	RecordRealtimeCacheUsage(
+	//
+	// The token id and model name carry the per-key / per-model breakdown. They
+	// are recorded after the account total, which is never skipped, so a
+	// breakdown refused at its ring cap cannot cost the account its numbers.
+	RecordRealtimeRequest(
 		userId,
+		params.TokenId,
+		params.ModelName,
 		params.PromptTokens+params.CompletionTokens,
 		cacheReadTokensForQuotaData(params),
 		inputTokensTotalForQuotaData(params),

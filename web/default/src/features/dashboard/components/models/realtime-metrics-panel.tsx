@@ -22,14 +22,22 @@ import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getSelfRealtimeMetrics } from '@/features/dashboard/api'
+import {
+  getSelfRealtimeDimensions,
+  getSelfRealtimeMetrics,
+} from '@/features/dashboard/api'
 import type {
   RealtimeBucket,
+  RealtimeDimensions,
   RealtimeSnapshot,
 } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatNumber } from '@/lib/format'
 
+import {
+  RealtimeFilterBar,
+  type RealtimeFilterValue,
+} from './realtime-filter-bar'
 import { RealtimeTrendChart } from './realtime-trend-chart'
 
 /**
@@ -38,6 +46,14 @@ import { RealtimeTrendChart } from './realtime-trend-chart'
  * numbers; five seconds keeps the cards feeling live without adding load.
  */
 const REALTIME_POLL_INTERVAL_MS = 5000
+
+/**
+ * How often the key / model option lists refresh. They change only when an
+ * account starts using a new key or model, so polling them as fast as the
+ * counters would spend a request every five seconds to redraw the same
+ * dropdown.
+ */
+const REALTIME_DIMENSIONS_POLL_INTERVAL_MS = 60_000
 
 /** Max characters a card value may take before it is compacted. */
 const MAX_INLINE_STAT_CHARS = 9
@@ -121,9 +137,16 @@ function dropPartialTrailingBucket(series: RealtimeBucket[]) {
 export function RealtimeMetricsPanel() {
   const { i18n, t } = useTranslation()
   const [snapshot, setSnapshot] = useState<RealtimeSnapshot | null>(null)
+  const [dimensions, setDimensions] = useState<RealtimeDimensions | null>(null)
+  const [filter, setFilter] = useState<RealtimeFilterValue>({
+    tokenId: 0,
+    model: '',
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+
+  const { tokenId, model } = filter
 
   useEffect(() => {
     let cancelled = false
@@ -132,7 +155,7 @@ export function RealtimeMetricsPanel() {
 
     const poll = async () => {
       try {
-        const res = await getSelfRealtimeMetrics()
+        const res = await getSelfRealtimeMetrics({ tokenId, model })
         if (cancelled) return
         setSnapshot(res?.data ?? null)
         setError(false)
@@ -150,9 +173,39 @@ export function RealtimeMetricsPanel() {
     }, REALTIME_POLL_INTERVAL_MS)
 
     return () => {
+      // Changing the filter tears this effect down, so an in-flight response
+      // for the previous selection resolves into a cancelled closure and is
+      // dropped rather than being rendered under the new label.
       cancelled = true
       clearInterval(timer)
       abortController.abort()
+    }
+  }, [tokenId, model])
+
+  // The option lists are fetched unfiltered and on their own schedule. Tying
+  // them to the metrics poll would let selecting a key shrink the very list the
+  // selection was made from, stranding the user with no way back.
+  useEffect(() => {
+    let cancelled = false
+
+    const loadDimensions = async () => {
+      try {
+        const res = await getSelfRealtimeDimensions()
+        if (!cancelled) setDimensions(res?.data ?? null)
+      } catch {
+        // A failed option load leaves the pickers as they were; the metrics
+        // themselves are unaffected and reporting it twice would be noise.
+      }
+    }
+
+    void loadDimensions()
+    const timer = setInterval(() => {
+      void loadDimensions()
+    }, REALTIME_DIMENSIONS_POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
     }
   }, [])
 
@@ -170,6 +223,11 @@ export function RealtimeMetricsPanel() {
 
   const hasAnyTraffic = windows.some((w) => (w.metrics?.requests ?? 0) > 0)
 
+  // The bar renders nothing without options, so the bordered strip around it
+  // would otherwise show as an empty band on accounts with a single key.
+  const hasFilterOptions =
+    (dimensions?.tokens.length ?? 0) > 0 || (dimensions?.models.length ?? 0) > 0
+
   const trendSeries = useMemo(
     () => dropPartialTrailingBucket(snapshot?.series ?? []),
     [snapshot]
@@ -184,7 +242,13 @@ export function RealtimeMetricsPanel() {
   if (error) {
     footerNote = t('Realtime data unavailable')
   } else if (!loading && !hasAnyTraffic) {
-    footerNote = t('No requests recorded in the last hour.')
+    // Distinguish "this account is idle" from "this key/model is idle", or a
+    // user who filtered to a quiet key would read it as the whole account
+    // having stopped.
+    footerNote =
+      tokenId > 0 || model
+        ? t('No requests recorded for this selection in the last hour.')
+        : t('No requests recorded in the last hour.')
   }
 
   return (
@@ -209,6 +273,16 @@ export function RealtimeMetricsPanel() {
           </span>
         ) : null}
       </div>
+
+      {hasFilterOptions ? (
+        <div className='flex flex-wrap items-center gap-2 border-b px-3 py-2 sm:px-5'>
+          <RealtimeFilterBar
+            dimensions={dimensions}
+            value={filter}
+            onChange={setFilter}
+          />
+        </div>
+      ) : null}
 
       <div className='divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
         {windows.map((entry) => {

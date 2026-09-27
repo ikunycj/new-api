@@ -16,15 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
 import type { PlanRecord } from '@/features/subscriptions/types'
+import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
   QuotaDataItem,
+  RealtimeDimensions,
   RealtimeSnapshot,
   RealtimeUsersResponse,
   UptimeGroupResult,
+  UsageStatsResult,
 } from './types'
 
 export interface PackageComparisonStat {
@@ -104,9 +106,56 @@ export async function getUserQuotaDates(
 
 // Get the calling user's own realtime throughput. The backend derives the user
 // from the session, so there is deliberately no user id parameter here.
-export async function getSelfRealtimeMetrics() {
+//
+// tokenId / model narrow the result to one key and/or model. They can only
+// narrow: the filter is applied inside the caller's own counters server-side,
+// so passing another account's key returns nothing rather than its traffic.
+export async function getSelfRealtimeMetrics(filter?: {
+  tokenId?: number
+  model?: string
+}) {
+  const params: Record<string, string | number> = {}
+  if (filter?.tokenId) params.token_id = filter.tokenId
+  if (filter?.model) params.model = filter.model
+
   const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
-    '/api/data/realtime/self'
+    '/api/data/realtime/self',
+    { params }
+  )
+  return res.data
+}
+
+// List the keys and models the calling user currently has live traffic for.
+// Only active combinations are returned, since selecting an idle key could
+// only ever produce an empty chart.
+export async function getSelfRealtimeDimensions(windowSeconds = 3600) {
+  const res = await api.get<{ success: boolean; data: RealtimeDimensions }>(
+    '/api/data/realtime/self/dimensions',
+    { params: { window_seconds: windowSeconds } }
+  )
+  return res.data
+}
+
+// Get the calling user's historical usage, including spend, over an arbitrary
+// range. This reads the hourly rollup rather than the in-memory rings, so it
+// can answer for a month but cannot resolve finer than an hour.
+export async function getSelfUsageStats(params: {
+  startTimestamp?: number
+  endTimestamp?: number
+  bucketSeconds?: number
+  tokenId?: number
+  model?: string
+}) {
+  const query: Record<string, string | number> = {}
+  if (params.startTimestamp) query.start_timestamp = params.startTimestamp
+  if (params.endTimestamp) query.end_timestamp = params.endTimestamp
+  if (params.bucketSeconds) query.bucket_seconds = params.bucketSeconds
+  if (params.tokenId) query.token_id = params.tokenId
+  if (params.model) query.model = params.model
+
+  const res = await api.get<{ success: boolean; data: UsageStatsResult }>(
+    '/api/data/usage/self',
+    { params: query }
   )
   return res.data
 }

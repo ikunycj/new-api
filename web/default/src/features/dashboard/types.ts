@@ -97,6 +97,83 @@ export interface RealtimeSnapshot {
   node_name: string
   windows: RealtimeWindow[]
   series: RealtimeBucket[]
+  // Echo of the filter this snapshot was built under. A client polling with a
+  // filter compares these against its current selection so a response that
+  // arrives after the user switched keys can be discarded rather than rendered
+  // under the wrong label.
+  token_id?: number
+  model?: string
+}
+
+// One selectable key or model, with its request count so the picker can order
+// by activity rather than alphabetically.
+export interface RealtimeDimensionOption {
+  token_id?: number
+  token_name?: string
+  model?: string
+  requests: number
+}
+
+export interface RealtimeDimensions {
+  tokens: RealtimeDimensionOption[]
+  models: RealtimeDimensionOption[]
+  // The breakdown hit its ring cap, so some combinations are missing from
+  // these lists even though their traffic is still counted in the totals.
+  truncated: boolean
+}
+
+// ----------------------------------------------------------------------------
+// Historical usage
+//
+// The long-range counterpart to the realtime snapshot. It reads the hourly
+// quota_data rollup, so it can answer for any range but cannot resolve finer
+// than an hour — which is also why spend lives here and not in the rings.
+// ----------------------------------------------------------------------------
+
+export interface UsageStatsBucket {
+  timestamp: number
+  requests: number
+  tokens: number
+  quota: number
+  cache_read_tokens: number
+  input_tokens_total: number
+  // Averages across the bucket, not peaks: an hourly bucket smooths bursts
+  // away entirely, so the realtime panel is what to read for live load.
+  rpm: number
+  tpm: number
+}
+
+export interface UsageStatsTotals {
+  requests: number
+  tokens: number
+  quota: number
+  cache_read_tokens: number
+  input_tokens_total: number
+  rpm: number
+  tpm: number
+  // null means no request in the range reported cache metadata, which is not
+  // the same as a 0% rate; see RealtimeWindow.
+  cache_hit_rate: number | null
+}
+
+export interface UsageStatsOption {
+  token_id?: number
+  token_name?: string
+  model?: string
+  requests: number
+  quota: number
+}
+
+export interface UsageStatsResult {
+  start_time: number
+  end_time: number
+  bucket_seconds: number
+  token_id?: number
+  model?: string
+  totals: UsageStatsTotals
+  series: UsageStatsBucket[]
+  tokens: UsageStatsOption[]
+  models: UsageStatsOption[]
 }
 
 export interface RealtimeUserSummary {

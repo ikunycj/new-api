@@ -197,6 +197,7 @@ func ResetRealtimeMetricsForTest() {
 	realtimeRegistry.mu.Lock()
 	realtimeRegistry.users = make(map[int]*realtimeRing)
 	realtimeRegistry.mu.Unlock()
+	resetRealtimeDimensionsForTest()
 }
 
 // RecordRealtimeUsage folds one billable request into the user's ring,
@@ -221,6 +222,21 @@ func RecordRealtimeCacheUsage(userId int, tokens int, cacheReadTokens int, input
 		usage.InputTokensTotal = inputTokensTotal
 	}
 	recordRealtimeUsage(userId, usage)
+}
+
+// RecordRealtimeRequest folds one billable request into both the account-level
+// ring and its (key, model) breakdown.
+//
+// The two are recorded separately and the account ring goes first, so a
+// breakdown that is refused at its cap cannot cost the account its totals.
+func RecordRealtimeRequest(userId int, tokenId int, model string, tokens int, cacheReadTokens int, inputTokensTotal int, cacheStatsAvailable bool) {
+	usage := realtimeUsage{Tokens: tokens}
+	if cacheStatsAvailable {
+		usage.CacheReadTokens = cacheReadTokens
+		usage.InputTokensTotal = inputTokensTotal
+	}
+	recordRealtimeUsage(userId, usage)
+	recordRealtimeDimension(userId, tokenId, model, usage)
 }
 
 // recordRealtimeUsage is the shared hot path. It is called from the relay path
@@ -284,6 +300,7 @@ func realtimeSweepLoop() {
 	defer ticker.Stop()
 	for range ticker.C {
 		sweepRealtimeRegistry()
+		sweepRealtimeDimensionRegistry()
 	}
 }
 
@@ -345,6 +362,11 @@ type RealtimeSnapshot struct {
 	NodeName string           `json:"node_name"`
 	Windows  []RealtimeWindow `json:"windows"`
 	Series   []realtimeBucket `json:"series"`
+	// TokenID and Model echo the filter the snapshot was built under, so a
+	// client polling with a filter can tell which selection a late response
+	// belongs to and discard one that arrived after the user changed it.
+	TokenID int    `json:"token_id,omitempty"`
+	Model   string `json:"model,omitempty"`
 }
 
 // realtimeWindows are the trailing windows the API reports, in seconds.
@@ -354,33 +376,51 @@ var realtimeWindows = []int64{60, 300, 3600}
 // sent traffic yields zeroes rather than an error, so the dashboard does not
 // need a special empty state.
 func GetRealtimeSnapshot(userId int) RealtimeSnapshot {
-	now := realtimeNow()
+	return GetRealtimeSnapshotFiltered(userId, RealtimeFilter{})
+}
 
-	realtimeRegistry.mu.RLock()
-	ring := realtimeRegistry.users[userId]
-	realtimeRegistry.mu.RUnlock()
+// GetRealtimeSnapshotFiltered is GetRealtimeSnapshot narrowed to one key and/or
+// model.
+//
+// An unfiltered request reads the account ring directly. Only a filtered one
+// touches the breakdown registry, so adding this capability costs the common
+// case nothing.
+func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnapshot {
+	now := realtimeNow()
+	longest := realtimeWindows[len(realtimeWindows)-1]
 
 	snapshot := RealtimeSnapshot{
 		UserID:   userId,
 		Now:      now,
 		NodeName: common.NodeName,
 		Windows:  make([]RealtimeWindow, 0, len(realtimeWindows)),
+		TokenID:  filter.TokenID,
+		Model:    filter.Model,
 	}
 
-	if ring == nil {
+	var slots []realtimeSlot
+	if filter.IsZero() {
+		realtimeRegistry.mu.RLock()
+		ring := realtimeRegistry.users[userId]
+		realtimeRegistry.mu.RUnlock()
+		if ring != nil {
+			ring.mu.Lock()
+			// The longest window drives the series, and every shorter window is
+			// folded from the same slot scan so a request reads the ring once.
+			slots = ring.snapshot(now, longest)
+			ring.mu.Unlock()
+		}
+	} else {
+		slots = realtimeDimensionSlots(userId, filter, now, longest)
+	}
+
+	if len(slots) == 0 {
 		for _, window := range realtimeWindows {
 			snapshot.Windows = append(snapshot.Windows, buildWindow(window, realtimeWindowResult{}))
 		}
-		snapshot.Series = emptySeries(now, realtimeWindows[len(realtimeWindows)-1])
+		snapshot.Series = emptySeries(now, longest)
 		return snapshot
 	}
-
-	ring.mu.Lock()
-	// The longest window drives the series, and every shorter window is folded
-	// from the same slot scan so a request reads the ring once.
-	longest := realtimeWindows[len(realtimeWindows)-1]
-	slots := ring.snapshot(now, longest)
-	ring.mu.Unlock()
 
 	for _, window := range realtimeWindows {
 		snapshot.Windows = append(snapshot.Windows, buildWindow(window, sumSlots(slots, now, window)))

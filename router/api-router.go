@@ -362,6 +362,10 @@ func SetApiRouter(router *gin.Engine) {
 		// takes the user id from the session so it can never be pointed at
 		// another account; the admin routes are the only way to read everyone.
 		dataRoute.GET("/realtime/self", middleware.UserAuth(), controller.GetSelfRealtimeMetrics)
+		dataRoute.GET("/realtime/self/dimensions", middleware.UserAuth(), controller.GetSelfRealtimeDimensions)
+		// Historical counterpart to /realtime/self: unbounded range and spend,
+		// at the hourly resolution quota_data actually stores.
+		dataRoute.GET("/usage/self", middleware.UserAuth(), controller.GetSelfUsageStats)
 		dataRoute.GET("/realtime/users", middleware.AdminAuth(), controller.GetRealtimeMetricsUsers)
 		dataRoute.GET("/realtime/users/:id", middleware.AdminAuth(), controller.GetRealtimeMetricsByUser)
 
