@@ -20,7 +20,10 @@ package model
 //     bounded by the same realtimeMaxDimensionRings cap that already limits
 //     the in-process dimension registry, so this does not add a second
 //     unbounded surface. Entries expire automatically after the retention
-//     TTL so a node that dies does not leave stale keys forever.
+//     TTL so a node that dies does not leave stale keys forever, and a field
+//     whose ring goes idle mid-lifetime is proactively deleted on the next
+//     publish cycle rather than left to rot until that TTL (see
+//     lastPublishedFields).
 
 import (
 	"context"
@@ -116,6 +119,17 @@ func realtimeDimensionFieldMatches(field string, userId int, filter RealtimeFilt
 // incur no overhead.
 var crossnodeEnabled bool
 
+// lastPublishedFields remembers the hash field names this node wrote on the
+// previous publish cycle. A field that was published before but has nothing
+// to publish this cycle (its ring emptied — idle-swept, or simply rolled out
+// of the retention window) must be deleted, not just skipped: skipping alone
+// leaves the previous cycle's numbers frozen in Redis, where every other node
+// keeps summing them into merge results long after they stopped being true.
+// That staleness is silent — nothing about it looks wrong until you compare
+// two nodes' merged totals for the same filter and find they disagree by
+// exactly the stale amount.
+var lastPublishedFields = map[string]struct{}{}
+
 // initRealtimeCrossnode starts the background publisher if Redis is available.
 // Called from InitRealtimeMetrics so the goroutine is never spawned from the
 // relay hot path.
@@ -124,7 +138,35 @@ func initRealtimeCrossnode() {
 		return
 	}
 	crossnodeEnabled = true
+	preloadLastPublishedFields()
 	go crossnodeSyncLoop()
+}
+
+// preloadLastPublishedFields seeds lastPublishedFields from whatever this node
+// already has in Redis before this process ever published anything.
+//
+// Without this, a fresh process (a restart, a redeploy) starts with an empty
+// lastPublishedFields and cannot tell a stale leftover field from a brand-new
+// one — it would treat every field already sitting under this node's own key
+// as something it never had to publish, so it would never notice it stopped
+// being live and never clean it up. That is exactly how a stale field from a
+// process that died mid-cycle can outlive its own restart and keep silently
+// skewing every other node's merge until the multi-hour Redis TTL, unrelated
+// to this node's actual uptime, finally expires it.
+func preloadLastPublishedFields() {
+	ctx := context.Background()
+	existing, err := common.RDB.HKeys(ctx, realtimeCrossnodeHashPrefix+common.NodeName).Result()
+	if err != nil {
+		// Redis hiccup on startup — worst case the first publish cycle treats
+		// genuinely-live fields as new (harmless) rather than cleaning up
+		// leftovers a cycle late. Not worth failing startup over.
+		return
+	}
+	seed := make(map[string]struct{}, len(existing))
+	for _, field := range existing {
+		seed[field] = struct{}{}
+	}
+	lastPublishedFields = seed
 }
 
 // crossnodeSyncLoop pushes local ring summaries to Redis every interval.
@@ -203,18 +245,40 @@ func publishLocalSummaries() {
 		fields[realtimeDimensionField(snap.key.UserID, snap.key.TokenID, snap.key.Model)] = b
 	}
 
-	if len(fields) == 0 {
-		return
-	}
-
 	nodeKey := realtimeCrossnodeHashPrefix + common.NodeName
 	ctx := context.Background()
 
-	// Use a pipeline: HSET all fields then reset the TTL.
+	// Fields published last cycle but absent this cycle have gone stale: their
+	// ring emptied (idle sweep, or the last slot rolled out of the retention
+	// window) so there is nothing live to overwrite them with. Delete them
+	// rather than leaving last cycle's numbers to be summed forever by every
+	// other node's merge until the whole hash key's TTL expires.
+	stale := make([]string, 0)
+	for field := range lastPublishedFields {
+		if _, stillLive := fields[field]; !stillLive {
+			stale = append(stale, field)
+		}
+	}
+
+	if len(fields) == 0 && len(stale) == 0 {
+		return
+	}
+
 	pipe := common.RDB.Pipeline()
-	pipe.HSet(ctx, nodeKey, fields)
-	pipe.Expire(ctx, nodeKey, realtimeCrossnodeKeyTTL)
+	if len(fields) > 0 {
+		pipe.HSet(ctx, nodeKey, fields)
+		pipe.Expire(ctx, nodeKey, realtimeCrossnodeKeyTTL)
+	}
+	if len(stale) > 0 {
+		pipe.HDel(ctx, nodeKey, stale...)
+	}
 	_, _ = pipe.Exec(ctx)
+
+	published := make(map[string]struct{}, len(fields))
+	for field := range fields {
+		published[field] = struct{}{}
+	}
+	lastPublishedFields = published
 }
 
 // marshalRealtimeSummary folds a slot snapshot into the three-window summary
