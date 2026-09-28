@@ -207,6 +207,9 @@ export interface ChannelTestResponse {
     response_time?: number
     ttft_ms?: number
     error?: string
+    response?: string
+    response_bytes?: number
+    finish_reason?: string
   }
 }
 

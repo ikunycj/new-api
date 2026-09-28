@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Dữ liệu tổng hợp trước thời điểm đã chọn sẽ bị xóa vĩnh viễn. Nhật ký nguồn không bị ảnh hưởng.",
     "Delete aggregation data": "Xóa dữ liệu tổng hợp",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses sang Anthropic Messages",
+    "Batch IQ test": "Kiểm tra IQ hàng loạt",
+    "IQ Test": "Kiểm tra IQ",
+    "Testing": "Đang kiểm tra",
+    "View result": "Xem kết quả",
+    "IQ test running": "Đang chạy kiểm tra IQ",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "Đã kiểm tra IQ: {{success}} thành công, {{failed}} thất bại",
+    "IQ test completed: {{count}} succeeded": "Đã kiểm tra IQ: {{count}} thành công",
+    "IQ test result": "Kết quả kiểm tra IQ",
+    "IQ test result view": "Chế độ xem kết quả kiểm tra IQ",
+    "Copy source": "Sao chép mã nguồn",
+    "No result available": "Chưa có kết quả",
+    "Run IQ test": "Chạy kiểm tra IQ",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "Đã dừng kiểm tra IQ: {{completed}}/{{total}} hoàn tất, {{success}} thành công, {{failed}} thất bại",
+    "Result not retained; run again": "Kết quả không được lưu; hãy chạy lại",
     "All channels": "Tất cả kênh"
   }
 }

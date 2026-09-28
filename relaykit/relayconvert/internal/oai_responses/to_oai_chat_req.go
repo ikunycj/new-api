@@ -98,21 +98,59 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 }
 
 func validateResponsesRequestChatUnsupportedFields(req *dto.OpenAIResponsesRequest) error {
-	unsupported := make([]string, 0, 4)
+	stateful := make([]string, 0, 4)
 	if rawJSONPresent(req.Conversation) {
-		unsupported = append(unsupported, "conversation")
+		stateful = append(stateful, "conversation")
 	}
 	if strings.TrimSpace(req.PreviousResponseID) != "" {
-		unsupported = append(unsupported, "previous_response_id")
+		stateful = append(stateful, "previous_response_id")
 	}
 	if rawJSONPresent(req.Prompt) {
-		unsupported = append(unsupported, "prompt")
+		stateful = append(stateful, "prompt")
 	}
 	if rawJSONPresent(req.ContextManagement) {
-		unsupported = append(unsupported, "context_management")
+		stateful = append(stateful, "context_management")
+	}
+	if len(stateful) > 0 {
+		return fmt.Errorf("responses to chat conversion does not support stateful fields: %s", strings.Join(stateful, ", "))
+	}
+
+	unsupported := make([]string, 0, 8)
+	// These Responses fields have no equivalent in the Chat Completions
+	// request. Reject them instead of silently changing the request semantics.
+	if rawJSONPresent(req.Include) {
+		unsupported = append(unsupported, "include")
+	}
+	if rawJSONPresent(req.Moderation) {
+		unsupported = append(unsupported, "moderation")
+	}
+	if rawJSONPresent(req.PromptCacheOptions) {
+		unsupported = append(unsupported, "prompt_cache_options")
+	}
+	if rawJSONPresent(req.Truncation) {
+		unsupported = append(unsupported, "truncation")
+	}
+	if rawJSONPresent(req.ClientMetadata) {
+		unsupported = append(unsupported, "client_metadata")
+	}
+	if rawJSONPresent(req.Preset) {
+		unsupported = append(unsupported, "preset")
+	}
+	if req.MaxToolCalls != nil {
+		unsupported = append(unsupported, "max_tool_calls")
+	}
+	if rawJSONPresent(req.ParallelToolCalls) && kitutil.GetJsonType(req.ParallelToolCalls) != "boolean" {
+		unsupported = append(unsupported, "parallel_tool_calls (must be boolean)")
+	}
+	if rawJSONPresent(req.PromptCacheKey) && kitutil.GetJsonType(req.PromptCacheKey) != "string" {
+		unsupported = append(unsupported, "prompt_cache_key (must be string)")
+	}
+	if req.Reasoning != nil && (strings.TrimSpace(req.Reasoning.Summary) != "" ||
+		rawJSONPresent(req.Reasoning.Mode) || rawJSONPresent(req.Reasoning.Context)) {
+		unsupported = append(unsupported, "reasoning.summary/mode/context")
 	}
 	if len(unsupported) > 0 {
-		return fmt.Errorf("responses to chat conversion does not support stateful fields: %s", strings.Join(unsupported, ", "))
+		return fmt.Errorf("responses to chat conversion cannot preserve fields: %s", strings.Join(unsupported, ", "))
 	}
 	return nil
 }
@@ -184,7 +222,7 @@ func responsesInputItemToChatMessages(item map[string]any, messages []dto.Messag
 		return append(messages, dto.Message{Role: "tool", ToolCallId: callID, Content: content}), nil
 	}
 
-	role := strings.TrimSpace(kitutil.Interface2String(item["role"]))
+	role := normalizeResponsesRoleForChat(kitutil.Interface2String(item["role"]))
 	if role == "" {
 		role = "user"
 	}
@@ -193,6 +231,17 @@ func responsesInputItemToChatMessages(item map[string]any, messages []dto.Messag
 		return nil, err
 	}
 	return append(messages, dto.Message{Role: role, Content: content}), nil
+}
+
+func normalizeResponsesRoleForChat(role string) string {
+	role = strings.TrimSpace(role)
+	if role == "developer" {
+		// Chat providers that do not implement the Responses role set generally
+		// accept system but reject developer. OpenAI's adaptor can still promote
+		// the first system message back to developer for models that require it.
+		return "system"
+	}
+	return role
 }
 
 func responsesInputContentToChatContent(content any) (any, error) {

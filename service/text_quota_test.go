@@ -762,6 +762,32 @@ func TestComposeTieredTextQuotaKeepsToolCallSurcharges(t *testing.T) {
 	require.Equal(t, 14000, quota)
 }
 
+func TestCalculateTextQuotaSummaryKeepsZeroTokenToolSurcharge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "alpha-search-model",
+		PriceData: types.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 1,
+			GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1},
+		},
+		ResponsesUsageInfo: &relaycommon.ResponsesUsageInfo{
+			BuiltInTools: map[string]*relaycommon.BuildInToolInfo{
+				dto.BuildInToolWebSearchPreview: {CallCount: 1},
+			},
+		},
+		StartTime: time.Now(),
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, &dto.Usage{})
+
+	require.True(t, summary.hasBillableUsage())
+	require.NotZero(t, summary.ToolCallSurchargeQuota)
+	require.Greater(t, summary.Quota, 0)
+}
+
 func TestComposeTieredTextQuotaFallbackKeepsToolCallSurcharges(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

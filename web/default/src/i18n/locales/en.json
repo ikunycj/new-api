@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.",
     "Delete aggregation data": "Delete aggregation data",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses to Anthropic Messages",
+    "Batch IQ test": "Batch IQ test",
+    "IQ Test": "IQ Test",
+    "Testing": "Testing",
+    "View result": "View result",
+    "IQ test running": "IQ test running",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "IQ test completed: {{success}} succeeded, {{failed}} failed",
+    "IQ test completed: {{count}} succeeded": "IQ test completed: {{count}} succeeded",
+    "IQ test result": "IQ test result",
+    "IQ test result view": "IQ test result view",
+    "Copy source": "Copy source",
+    "No result available": "No result available",
+    "Run IQ test": "Run IQ test",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed",
+    "Result not retained; run again": "Result not retained; run again",
     "All channels": "All channels"
   }
 }

@@ -612,11 +612,17 @@ func TestListModelsAdvertisesCodexResponseEndpoints(t *testing.T) {
 		modelsByID[item.Id] = item
 	}
 	require.Equal(t,
-		[]constant.EndpointType{constant.EndpointTypeOpenAIResponse},
+		[]constant.EndpointType{
+			constant.EndpointTypeOpenAIResponse,
+			constant.EndpointTypeOpenAIAlphaSearch,
+		},
 		modelsByID[responsesModel].SupportedEndpointTypes,
 	)
 	require.Equal(t,
-		[]constant.EndpointType{constant.EndpointTypeOpenAIResponseCompact},
+		[]constant.EndpointType{
+			constant.EndpointTypeOpenAIResponseCompact,
+			constant.EndpointTypeOpenAIAlphaSearch,
+		},
 		modelsByID[compactModel].SupportedEndpointTypes,
 	)
 }

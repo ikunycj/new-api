@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "選択した時刻より前の集計データを完全に削除します。元のログには影響しません。",
     "Delete aggregation data": "集計データを削除",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses から Anthropic Messages",
+    "Batch IQ test": "一括IQテスト",
+    "IQ Test": "IQテスト",
+    "Testing": "テスト中",
+    "View result": "結果を表示",
+    "IQ test running": "IQテストを実行中",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "IQテスト完了: {{success}}件成功、{{failed}}件失敗",
+    "IQ test completed: {{count}} succeeded": "IQテスト完了: {{count}}件成功",
+    "IQ test result": "IQテスト結果",
+    "IQ test result view": "IQテスト結果の表示",
+    "Copy source": "ソースをコピー",
+    "No result available": "結果がありません",
+    "Run IQ test": "IQテストを実行",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQテストを停止: {{completed}}/{{total}}件完了、{{success}}件成功、{{failed}}件失敗",
+    "Result not retained; run again": "結果を保持できませんでした。もう一度実行してください",
     "All channels": "すべてのチャンネル"
   }
 }

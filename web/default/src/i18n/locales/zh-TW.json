@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "這將永久刪除選取時間之前的聚合資料，不會影響來源日誌。",
     "Delete aggregation data": "刪除聚合資料",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses 到 Anthropic Messages",
+    "Batch IQ test": "批次智商測試",
+    "IQ Test": "智商測試",
+    "Testing": "測試中",
+    "View result": "查看結果",
+    "IQ test running": "智商測試進行中",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "智商測試完成：{{success}} 個成功，{{failed}} 個失敗",
+    "IQ test completed: {{count}} succeeded": "智商測試完成：{{count}} 個成功",
+    "IQ test result": "智商測試結果",
+    "IQ test result view": "智商測試結果檢視",
+    "Copy source": "複製原始碼",
+    "No result available": "目前沒有結果",
+    "Run IQ test": "執行智商測試",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "智商測試已停止：已完成 {{completed}}/{{total}}，{{success}} 個成功，{{failed}} 個失敗",
+    "Result not retained; run again": "結果未保留，請重新測試",
     "All channels": "所有頻道"
   }
 }

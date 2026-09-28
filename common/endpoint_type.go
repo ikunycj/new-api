@@ -34,9 +34,15 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIResponse}
 	case constant.ChannelTypeCodex:
 		if strings.HasSuffix(modelName, "-openai-compact") {
-			return []constant.EndpointType{constant.EndpointTypeOpenAIResponseCompact}
+			return []constant.EndpointType{
+				constant.EndpointTypeOpenAIResponseCompact,
+				constant.EndpointTypeOpenAIAlphaSearch,
+			}
 		}
-		return []constant.EndpointType{constant.EndpointTypeOpenAIResponse}
+		return []constant.EndpointType{
+			constant.EndpointTypeOpenAIResponse,
+			constant.EndpointTypeOpenAIAlphaSearch,
+		}
 	case constant.ChannelTypeSora:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAIVideo}
 	default:

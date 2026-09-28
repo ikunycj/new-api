@@ -199,6 +199,60 @@ func TestResponsesRequestToChatCompletionsRequestToolsToolChoiceAndTextFormat(t 
 	assert.True(t, gjson.GetBytes(got.ResponseFormat.JsonSchema, "strict").Bool())
 }
 
+func TestResponsesRequestToChatCompletionsRequestNormalizesDeveloperRole(t *testing.T) {
+	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
+		Model: "gpt-test",
+		Input: mustRawMessage(t, []map[string]any{
+			{"role": "developer", "content": "follow these rules"},
+			{"role": "user", "content": "hello"},
+		}),
+	})
+	require.NoError(t, err)
+	require.Len(t, got.Messages, 2)
+	assert.Equal(t, "system", got.Messages[0].Role)
+	assert.Equal(t, "user", got.Messages[1].Role)
+}
+
+func TestResponsesRequestToChatCompletionsRequestRejectsUnmappedFields(t *testing.T) {
+	tests := []struct {
+		name string
+		set  func(*dto.OpenAIResponsesRequest)
+		want string
+	}{
+		{name: "max tool calls", set: func(req *dto.OpenAIResponsesRequest) { req.MaxToolCalls = lo.ToPtr(uint(3)) }, want: "max_tool_calls"},
+		{name: "parallel tool calls wrong type", set: func(req *dto.OpenAIResponsesRequest) {
+			req.ParallelToolCalls = mustRawMessage(t, "true")
+		}, want: "parallel_tool_calls"},
+		{name: "prompt cache key wrong type", set: func(req *dto.OpenAIResponsesRequest) {
+			req.PromptCacheKey = mustRawMessage(t, 123)
+		}, want: "prompt_cache_key"},
+		{name: "include", set: func(req *dto.OpenAIResponsesRequest) {
+			req.Include = mustRawMessage(t, []string{"file_search_call.results"})
+		}, want: "include"},
+		{name: "prompt cache options", set: func(req *dto.OpenAIResponsesRequest) {
+			req.PromptCacheOptions = mustRawMessage(t, map[string]any{"retention": "24h"})
+		}, want: "prompt_cache_options"},
+		{name: "truncation", set: func(req *dto.OpenAIResponsesRequest) { req.Truncation = mustRawMessage(t, "auto") }, want: "truncation"},
+		{name: "client metadata", set: func(req *dto.OpenAIResponsesRequest) {
+			req.ClientMetadata = mustRawMessage(t, map[string]any{"trace": "abc"})
+		}, want: "client_metadata"},
+		{name: "preset", set: func(req *dto.OpenAIResponsesRequest) {
+			req.Preset = mustRawMessage(t, map[string]any{"id": "preset_1"})
+		}, want: "preset"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &dto.OpenAIResponsesRequest{Model: "gpt-test", Input: mustRawMessage(t, "hello")}
+			tt.set(req)
+			_, err := ResponsesRequestToChatCompletionsRequest(req)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.Contains(t, err.Error(), "cannot preserve fields")
+		})
+	}
+}
+
 func TestResponsesRequestToChatCompletionsRequestCustomToolCallPreservesRawShape(t *testing.T) {
 	got, err := ResponsesRequestToChatCompletionsRequest(&dto.OpenAIResponsesRequest{
 		Model: "gpt-test",

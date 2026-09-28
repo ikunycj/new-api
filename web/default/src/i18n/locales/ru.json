@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Агрегаты до выбранного времени будут удалены навсегда. Исходные логи не изменятся.",
     "Delete aggregation data": "Удалить агрегированные данные",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses в Anthropic Messages",
+    "Batch IQ test": "Пакетный IQ-тест",
+    "IQ Test": "IQ-тест",
+    "Testing": "Тестирование",
+    "View result": "Посмотреть результат",
+    "IQ test running": "Выполняется IQ-тест",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "IQ-тест завершен: успешно {{success}}, с ошибкой {{failed}}",
+    "IQ test completed: {{count}} succeeded": "IQ-тест завершен: успешно {{count}}",
+    "IQ test result": "Результат IQ-теста",
+    "IQ test result view": "Просмотр результата IQ-теста",
+    "Copy source": "Копировать исходный код",
+    "No result available": "Результат недоступен",
+    "Run IQ test": "Запустить IQ-тест",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQ-тест остановлен: завершено {{completed}}/{{total}}, успешно {{success}}, с ошибкой {{failed}}",
+    "Result not retained; run again": "Результат не сохранён; запустите тест снова",
     "All channels": "Все каналы"
   }
 }

@@ -6162,6 +6162,20 @@
     "This will permanently remove aggregation buckets before the selected timestamp. Source logs are not affected.": "Les agrégats antérieurs à l’horodatage sélectionné seront supprimés définitivement. Les journaux sources ne seront pas modifiés.",
     "Delete aggregation data": "Supprimer les données agrégées",
     "OpenAI Responses to Anthropic Messages": "OpenAI Responses vers Anthropic Messages",
+    "Batch IQ test": "Test de QI en lot",
+    "IQ Test": "Test de QI",
+    "Testing": "Test en cours",
+    "View result": "Voir le résultat",
+    "IQ test running": "Test de QI en cours",
+    "IQ test completed: {{success}} succeeded, {{failed}} failed": "Test de QI terminé : {{success}} réussi(s), {{failed}} échec(s)",
+    "IQ test completed: {{count}} succeeded": "Test de QI terminé : {{count}} réussi(s)",
+    "IQ test result": "Résultat du test de QI",
+    "IQ test result view": "Affichage du résultat du test de QI",
+    "Copy source": "Copier le code source",
+    "No result available": "Aucun résultat disponible",
+    "Run IQ test": "Lancer le test de QI",
+    "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "Test de QI arrêté : {{completed}}/{{total}} terminés, {{success}} réussis, {{failed}} échecs",
+    "Result not retained; run again": "Résultat non conservé ; relancez le test",
     "All channels": "Tous les canaux"
   }
 }

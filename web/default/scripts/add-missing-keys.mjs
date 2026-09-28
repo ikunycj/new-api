@@ -164,7 +164,8 @@ const newKeys = {
     'Select a date before clearing aggregation data.':
       'Select a date before clearing aggregation data.',
     'Failed to clean aggregation data': 'Failed to clean aggregation data',
-    '{{count}} aggregation rows removed.': '{{count}} aggregation rows removed.',
+    '{{count}} aggregation rows removed.':
+      '{{count}} aggregation rows removed.',
     'No aggregation rows matched the selected time.':
       'No aggregation rows matched the selected time.',
     'Clean aggregation data': 'Clean aggregation data',
@@ -176,7 +177,24 @@ const newKeys = {
     'Delete aggregation data': 'Delete aggregation data',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses to Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses to Anthropic Messages',
+    'Batch IQ test': 'Batch IQ test',
+    'IQ Test': 'IQ Test',
+    'Run IQ test': 'Run IQ test',
+    'View result': 'View result',
+    'IQ test running': 'IQ test running',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      'IQ test completed: {{success}} succeeded, {{failed}} failed',
+    'IQ test completed: {{count}} succeeded':
+      'IQ test completed: {{count}} succeeded',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed',
+    'IQ test result': 'IQ test result',
+    'IQ test result view': 'IQ test result view',
+    'Copy source': 'Copy source',
+    'No result available': 'No result available',
+    'Result not retained; run again': 'Result not retained; run again',
   },
   zh: {
     'Automatically disable channels when tests fail':
@@ -347,7 +365,23 @@ const newKeys = {
     'Delete aggregation data': '删除聚合数据',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '这会根据所有渠道配置重建渠道路由索引，包括支持的模型、分组和权重。重建期间路由可能短暂不完整。是否继续？',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses 到 Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses 到 Anthropic Messages',
+    'Batch IQ test': '批量智商测试',
+    'IQ Test': '智商测试',
+    'Run IQ test': '智商测试',
+    'View result': '查看结果',
+    'IQ test running': '智商测试进行中',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      '智商测试完成：{{success}} 个成功，{{failed}} 个失败',
+    'IQ test completed: {{count}} succeeded': '智商测试完成：{{count}} 个成功',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      '智商测试已停止：已完成 {{completed}}/{{total}}，{{success}} 个成功，{{failed}} 个失败',
+    'IQ test result': '智商测试结果',
+    'IQ test result view': '智商测试结果视图',
+    'Copy source': '复制源码',
+    'No result available': '暂无结果',
+    'Result not retained; run again': '结果未保留，请重新测试',
   },
   fr: {
     'Authentication email templates': 'Modèles d’e-mails d’authentification',
@@ -511,8 +545,10 @@ const newKeys = {
     'ID (Default)': 'ID (par défaut)',
     'Select a date before clearing aggregation data.':
       'Sélectionnez une date avant de supprimer les données agrégées.',
-    'Failed to clean aggregation data': 'Échec de la suppression des données agrégées',
-    '{{count}} aggregation rows removed.': '{{count}} lignes agrégées supprimées.',
+    'Failed to clean aggregation data':
+      'Échec de la suppression des données agrégées',
+    '{{count}} aggregation rows removed.':
+      '{{count}} lignes agrégées supprimées.',
     'No aggregation rows matched the selected time.':
       'Aucune ligne agrégée ne correspond à la période sélectionnée.',
     'Clean aggregation data': 'Supprimer les données agrégées',
@@ -524,7 +560,25 @@ const newKeys = {
     'Delete aggregation data': 'Supprimer les données agrégées',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Cette action reconstruit l’index de routage des canaux à partir de toutes les configurations, notamment les modèles pris en charge, les groupes et les poids. Le routage peut être brièvement incomplet pendant la reconstruction. Continuer ?',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses vers Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses vers Anthropic Messages',
+    'Batch IQ test': 'Test de QI en lot',
+    'IQ Test': 'Test de QI',
+    'Run IQ test': 'Lancer le test de QI',
+    'View result': 'Voir le résultat',
+    'IQ test running': 'Test de QI en cours',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      'Test de QI terminé : {{success}} réussi(s), {{failed}} échec(s)',
+    'IQ test completed: {{count}} succeeded':
+      'Test de QI terminé : {{count}} réussi(s)',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      'Test de QI arrêté : {{completed}}/{{total}} terminés, {{success}} réussis, {{failed}} échecs',
+    'IQ test result': 'Résultat du test de QI',
+    'IQ test result view': 'Affichage du résultat du test de QI',
+    'Copy source': 'Copier le code source',
+    'No result available': 'Aucun résultat disponible',
+    'Result not retained; run again':
+      'Résultat non conservé ; relancez le test',
   },
   ja: {
     'Authentication email templates': '認証メールテンプレート',
@@ -683,7 +737,8 @@ const newKeys = {
     'Select a date before clearing aggregation data.':
       '集計データを削除する前に日付を選択してください。',
     'Failed to clean aggregation data': '集計データの削除に失敗しました',
-    '{{count}} aggregation rows removed.': '{{count}} 件の集計データを削除しました。',
+    '{{count}} aggregation rows removed.':
+      '{{count}} 件の集計データを削除しました。',
     'No aggregation rows matched the selected time.':
       '選択した期間に一致する集計データはありません。',
     'Clean aggregation data': '集計データを削除',
@@ -695,7 +750,24 @@ const newKeys = {
     'Delete aggregation data': '集計データを削除',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'すべてのチャネル設定からルーティングインデックスを再構築します。対応モデル、グループ、重みが含まれます。再構築中はルーティングが一時的に不完全になる可能性があります。続行しますか？',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses から Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses から Anthropic Messages',
+    'Batch IQ test': '一括IQテスト',
+    'IQ Test': 'IQテスト',
+    'Run IQ test': 'IQテストを実行',
+    'View result': '結果を表示',
+    'IQ test running': 'IQテストを実行中',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      'IQテスト完了: {{success}}件成功、{{failed}}件失敗',
+    'IQ test completed: {{count}} succeeded': 'IQテスト完了: {{count}}件成功',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      'IQテストを停止: {{completed}}/{{total}}件完了、{{success}}件成功、{{failed}}件失敗',
+    'IQ test result': 'IQテスト結果',
+    'IQ test result view': 'IQテスト結果の表示',
+    'Copy source': 'ソースをコピー',
+    'No result available': '結果がありません',
+    'Result not retained; run again':
+      '結果を保持できませんでした。もう一度実行してください',
   },
   ru: {
     'Authentication email templates': 'Шаблоны писем для аутентификации',
@@ -855,8 +927,10 @@ const newKeys = {
     'ID (Default)': 'ID (по умолчанию)',
     'Select a date before clearing aggregation data.':
       'Выберите дату перед удалением агрегированных данных.',
-    'Failed to clean aggregation data': 'Не удалось удалить агрегированные данные',
-    '{{count}} aggregation rows removed.': 'Удалено агрегированных строк: {{count}}.',
+    'Failed to clean aggregation data':
+      'Не удалось удалить агрегированные данные',
+    '{{count}} aggregation rows removed.':
+      'Удалено агрегированных строк: {{count}}.',
     'No aggregation rows matched the selected time.':
       'За выбранный период агрегированные строки не найдены.',
     'Clean aggregation data': 'Удалить агрегированные данные',
@@ -868,7 +942,25 @@ const newKeys = {
     'Delete aggregation data': 'Удалить агрегированные данные',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Индекс маршрутизации каналов будет перестроен на основе всех конфигураций каналов, включая поддерживаемые модели, группы и веса. Во время перестроения маршрутизация может быть временно неполной. Продолжить?',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses в Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses в Anthropic Messages',
+    'Batch IQ test': 'Пакетный IQ-тест',
+    'IQ Test': 'IQ-тест',
+    'Run IQ test': 'Запустить IQ-тест',
+    'View result': 'Посмотреть результат',
+    'IQ test running': 'Выполняется IQ-тест',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      'IQ-тест завершен: успешно {{success}}, с ошибкой {{failed}}',
+    'IQ test completed: {{count}} succeeded':
+      'IQ-тест завершен: успешно {{count}}',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      'IQ-тест остановлен: завершено {{completed}}/{{total}}, успешно {{success}}, с ошибкой {{failed}}',
+    'IQ test result': 'Результат IQ-теста',
+    'IQ test result view': 'Просмотр результата IQ-теста',
+    'Copy source': 'Копировать исходный код',
+    'No result available': 'Результат недоступен',
+    'Result not retained; run again':
+      'Результат не сохранён; запустите тест снова',
   },
   vi: {
     'Authentication email templates': 'Mẫu email xác thực',
@@ -1040,7 +1132,24 @@ const newKeys = {
     'Delete aggregation data': 'Xóa dữ liệu tổng hợp',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       'Thao tác này sẽ xây dựng lại chỉ mục định tuyến kênh từ mọi cấu hình kênh, bao gồm mô hình được hỗ trợ, nhóm và trọng số. Định tuyến có thể tạm thời chưa đầy đủ trong quá trình xây dựng lại. Tiếp tục?',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses sang Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses sang Anthropic Messages',
+    'Batch IQ test': 'Kiểm tra IQ hàng loạt',
+    'IQ Test': 'Kiểm tra IQ',
+    'Run IQ test': 'Chạy kiểm tra IQ',
+    'View result': 'Xem kết quả',
+    'IQ test running': 'Đang chạy kiểm tra IQ',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      'Đã kiểm tra IQ: {{success}} thành công, {{failed}} thất bại',
+    'IQ test completed: {{count}} succeeded':
+      'Đã kiểm tra IQ: {{count}} thành công',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      'Đã dừng kiểm tra IQ: {{completed}}/{{total}} hoàn tất, {{success}} thành công, {{failed}} thất bại',
+    'IQ test result': 'Kết quả kiểm tra IQ',
+    'IQ test result view': 'Chế độ xem kết quả kiểm tra IQ',
+    'Copy source': 'Sao chép mã nguồn',
+    'No result available': 'Chưa có kết quả',
+    'Result not retained; run again': 'Kết quả không được lưu; hãy chạy lại',
   },
   'zh-TW': {
     'Automatically disable channels when tests fail':
@@ -1064,6 +1173,21 @@ const newKeys = {
     'Enter customer service contact information': '輸入客服聯絡資訊',
     'Information displayed to users for contacting customer service':
       '向使用者顯示的客服聯絡資訊',
+    'Batch IQ test': '批次智商測試',
+    'IQ Test': '智商測試',
+    'Run IQ test': '執行智商測試',
+    'View result': '查看結果',
+    'IQ test running': '智商測試進行中',
+    'IQ test completed: {{success}} succeeded, {{failed}} failed':
+      '智商測試完成：{{success}} 個成功，{{failed}} 個失敗',
+    'IQ test completed: {{count}} succeeded': '智商測試完成：{{count}} 個成功',
+    'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed':
+      '智商測試已停止：已完成 {{completed}}/{{total}}，{{success}} 個成功，{{failed}} 個失敗',
+    'IQ test result': '智商測試結果',
+    'IQ test result view': '智商測試結果檢視',
+    'Copy source': '複製原始碼',
+    'No result available': '目前沒有結果',
+    'Result not retained; run again': '結果未保留，請重新測試',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
     'Throughput trend': '吞吐趨勢',
@@ -1200,7 +1324,8 @@ const newKeys = {
     'Delete aggregation data': '刪除聚合資料',
     'This will rebuild the channel routing index from every channel configuration, including supported models, groups, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?':
       '這會根據所有渠道設定重建渠道路由索引，包括支援模型、分組和權重。重建期間路由可能短暫不完整。是否繼續？',
-    'OpenAI Responses to Anthropic Messages': 'OpenAI Responses 到 Anthropic Messages',
+    'OpenAI Responses to Anthropic Messages':
+      'OpenAI Responses 到 Anthropic Messages',
   },
 }
 
@@ -2660,6 +2785,12 @@ const retiredKeys = new Set([
   'decides which channels are used and which base ratio applies.',
 ])
 
+const onlyKeysArgIndex = process.argv.indexOf('--only')
+const onlyKeys =
+  onlyKeysArgIndex >= 0
+    ? new Set(process.argv[onlyKeysArgIndex + 1]?.split('|') ?? [])
+    : undefined
+
 const localeFiles = (await fs.readdir(LOCALES_DIR, { withFileTypes: true }))
   .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
   .map((entry) => entry.name)
@@ -2669,13 +2800,16 @@ for (const filename of localeFiles) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
   let changed = false
-  for (const key of retiredKeys) {
-    if (Object.hasOwn(json.translation, key)) {
-      delete json.translation[key]
-      changed = true
+  if (!onlyKeys) {
+    for (const key of retiredKeys) {
+      if (Object.hasOwn(json.translation, key)) {
+        delete json.translation[key]
+        changed = true
+      }
     }
   }
   for (const [key, value] of Object.entries(newKeys[locale] ?? {})) {
+    if (onlyKeys && !onlyKeys.has(key)) continue
     if (json.translation[key] !== value) {
       json.translation[key] = value
       changed = true
