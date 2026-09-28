@@ -27,7 +27,9 @@ import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 const groupManagementSearchSchema = z.object({
-  tab: z.enum(['pricing-groups', 'user-groups']).catch('pricing-groups'),
+  tab: z
+    .enum(['pricing-groups', 'user-groups', 'group-bench'])
+    .catch('pricing-groups'),
 })
 
 export const Route = createFileRoute('/_authenticated/group-management')({

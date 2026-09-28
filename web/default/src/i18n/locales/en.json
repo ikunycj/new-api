@@ -6559,6 +6559,26 @@
     "Normalized (recommended)": "Normalized (recommended)",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
-    "Health scores": "Health scores"
+    "Health scores": "Health scores",
+    "Group bench": "Group bench",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.",
+    "Run queued": "Run queued",
+    "Run now": "Run now",
+    "Bench round queued": "Bench round queued",
+    "Scheduled bench": "Scheduled bench",
+    "Interval (minutes)": "Interval (minutes)",
+    "Preset": "Preset",
+    "Last run": "Last run",
+    "Next run": "Next run",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.",
+    "Latest round": "Latest round",
+    "No bench results in the last 24 hours": "No bench results in the last 24 hours",
+    "History": "History",
+    "Last 7 days, newest first": "Last 7 days, newest first",
+    "Static": "Static",
+    "Animations": "Animations",
+    "Contains script": "Contains script",
+    "Truncated": "Truncated",
+    "Bench output": "Bench output"
 }
 }

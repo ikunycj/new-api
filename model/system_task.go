@@ -23,6 +23,7 @@ const (
 	SystemTaskTypeAsyncTaskPoll      = "async_task_poll"
 	SystemTaskTypeAffiliateSettle    = "affiliate_settlement"
 	SystemTaskTypeCostReconciliation = "cost_reconciliation"
+	SystemTaskTypeGroupBench         = "group_bench"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")

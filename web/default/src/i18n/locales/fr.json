@@ -6559,6 +6559,26 @@
     "Normalized (recommended)": "Normalized (recommended)",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
-    "Health scores": "Health scores"
+    "Health scores": "Health scores",
+    "Group bench": "Banc d'essai du groupe",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "Envoie périodiquement le prompt de test à chaque canal actif de ce groupe. Les échecs sont seulement enregistrés et ne désactivent jamais les canaux.",
+    "Run queued": "En file d'attente",
+    "Run now": "Lancer maintenant",
+    "Bench round queued": "Tour de test mis en file d'attente",
+    "Scheduled bench": "Test planifié",
+    "Interval (minutes)": "Intervalle (minutes)",
+    "Preset": "Préréglage",
+    "Last run": "Dernière exécution",
+    "Next run": "Prochaine exécution",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Les canaux Codex utilisent toujours OpenAI Responses. Les canaux sans ce modèle dans ce groupe sont ignorés.",
+    "Latest round": "Dernier tour",
+    "No bench results in the last 24 hours": "Aucun résultat de test au cours des dernières 24 heures",
+    "History": "Historique",
+    "Last 7 days, newest first": "7 derniers jours, plus récents en premier",
+    "Static": "Statique",
+    "Animations": "Animations",
+    "Contains script": "Contient un script",
+    "Truncated": "Tronqué",
+    "Bench output": "Résultat du test"
 }
 }

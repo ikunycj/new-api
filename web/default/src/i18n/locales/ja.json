@@ -6559,6 +6559,26 @@
     "Normalized (recommended)": "Normalized (recommended)",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
-    "Health scores": "Health scores"
+    "Health scores": "Health scores",
+    "Group bench": "グループ巡回テスト",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "このグループの有効な各チャネルへ定期的にテストプロンプトを送信します。失敗は記録のみで、チャネルを無効化することはありません。",
+    "Run queued": "キュー済み",
+    "Run now": "今すぐ実行",
+    "Bench round queued": "巡回テストをキューに追加しました",
+    "Scheduled bench": "定期テスト",
+    "Interval (minutes)": "間隔（分）",
+    "Preset": "プリセット",
+    "Last run": "前回実行",
+    "Next run": "次回実行",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Codex チャネルは常に OpenAI Responses を使用します。このグループでモデルに対応していないチャネルはスキップされます。",
+    "Latest round": "最新ラウンド",
+    "No bench results in the last 24 hours": "過去 24 時間のテスト結果はありません",
+    "History": "履歴",
+    "Last 7 days, newest first": "過去 7 日間（新しい順）",
+    "Static": "静止",
+    "Animations": "アニメーション",
+    "Contains script": "スクリプトを含む",
+    "Truncated": "切り捨て",
+    "Bench output": "テスト出力"
 }
 }

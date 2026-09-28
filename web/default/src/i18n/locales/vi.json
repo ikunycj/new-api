@@ -6559,6 +6559,26 @@
     "Normalized (recommended)": "Normalized (recommended)",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
-    "Health scores": "Health scores"
+    "Health scores": "Health scores",
+    "Group bench": "Kiểm tra nhóm",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "Định kỳ gửi đề kiểm tra tới từng kênh đang bật trong nhóm này. Lỗi chỉ được ghi lại và không bao giờ vô hiệu hóa kênh.",
+    "Run queued": "Đã xếp hàng",
+    "Run now": "Chạy ngay",
+    "Bench round queued": "Đã xếp hàng lượt kiểm tra",
+    "Scheduled bench": "Kiểm tra định kỳ",
+    "Interval (minutes)": "Khoảng thời gian (phút)",
+    "Preset": "Đề mẫu",
+    "Last run": "Lần chạy trước",
+    "Next run": "Lần chạy tiếp theo",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Kênh Codex luôn dùng OpenAI Responses. Các kênh không có mô hình này trong nhóm sẽ bị bỏ qua.",
+    "Latest round": "Lượt mới nhất",
+    "No bench results in the last 24 hours": "Không có kết quả kiểm tra trong 24 giờ qua",
+    "History": "Lịch sử",
+    "Last 7 days, newest first": "7 ngày qua, mới nhất trước",
+    "Static": "Tĩnh",
+    "Animations": "Hoạt ảnh",
+    "Contains script": "Có script",
+    "Truncated": "Bị cắt",
+    "Bench output": "Kết quả kiểm tra"
 }
 }

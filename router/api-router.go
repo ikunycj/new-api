@@ -382,6 +382,11 @@ func SetApiRouter(router *gin.Engine) {
 			groupRoute.PUT("/:name", middleware.RootAuth(), controller.UpdateManagedUserGroup)
 			groupRoute.DELETE("/:name", middleware.RootAuth(), controller.DeleteManagedUserGroup)
 			groupRoute.GET("/pricing-groups", controller.GetPricingGroups)
+			groupRoute.GET("/bench/config", middleware.RootAuth(), controller.GetGroupBenchConfig)
+			groupRoute.PUT("/bench/config", middleware.RootAuth(), controller.UpdateGroupBenchConfig)
+			groupRoute.POST("/bench/run", middleware.RootAuth(), controller.RunGroupBenchNow)
+			groupRoute.GET("/bench/runs", middleware.RootAuth(), controller.ListGroupBenchRuns)
+			groupRoute.GET("/bench/runs/:id/artifact", middleware.RootAuth(), controller.GetGroupBenchArtifact)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")

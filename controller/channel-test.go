@@ -38,6 +38,25 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	// Populated only on success.
+	respBody  []byte
+	usage     *dto.Usage
+	elapsedMs int64
+}
+
+// channelTestOverride lets callers other than the "hi" probe (e.g. group bench)
+// send their own request through the channel test path.
+type channelTestOverride struct {
+	// Request replaces the default probe request. Its model name must match testModel.
+	Request dto.Request
+	// Group, when set, bills and logs under this group instead of the test user's.
+	Group string
+	// LogLabel is the token name and content of the consume log.
+	LogLabel string
+	// QuietBody skips dumping the response body to the system log.
+	QuietBody bool
+	// MaxBodyBytes raises the captured response body limit (streams default to 8KB).
+	MaxBodyBytes int64
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
@@ -72,6 +91,10 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+	return testChannelWithOverride(ctx, channel, testUserID, testModel, endpointType, isStream, channelTestOverride{})
+}
+
+func testChannelWithOverride(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, override channelTestOverride) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -170,6 +193,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	c.Set("channel", channel.Type)
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
+	if override.Group != "" {
+		group = override.Group
+	}
 	c.Set("group", group)
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
@@ -231,7 +257,10 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 
-	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	request := override.Request
+	if request == nil {
+		request = buildTestRequest(testModel, endpointType, channel, isStream)
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -474,7 +503,14 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 	result := w.Result()
-	respBody, err := readTestResponseBody(result.Body, isStream)
+	var bodyLimit int64
+	if isStream {
+		bodyLimit = 8 << 10
+	}
+	if override.MaxBodyBytes > 0 {
+		bodyLimit = override.MaxBodyBytes
+	}
+	respBody, err := readTestResponseBody(result.Body, bodyLimit)
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -496,6 +532,10 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	milliseconds := tok.Sub(tik).Milliseconds()
 	consumedTime := float64(milliseconds) / 1000.0
 	other := buildTestLogOther(c, info, priceData, usage, tieredResult)
+	logLabel := override.LogLabel
+	if logLabel == "" {
+		logLabel = "模型测试"
+	}
 	model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
 		ChannelId:           channel.Id,
 		PromptTokens:        usage.PromptTokens,
@@ -505,19 +545,26 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		CacheWriteTokens:    usage.PromptTokensDetails.CacheCreationTokensTotal(),
 		CacheStatsAvailable: usage.UsageSource != "" && usage.InputTokens > 0,
 		ModelName:           info.OriginModelName,
-		TokenName:           "模型测试",
+		TokenName:           logLabel,
 		Quota:               quota,
-		Content:             "模型测试",
+		Content:             logLabel,
 		UseTimeSeconds:      int(consumedTime),
 		IsStream:            info.IsStream,
 		Group:               info.UsingGroup,
 		Other:               other,
 	})
-	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	if override.QuietBody {
+		common.SysLog(fmt.Sprintf("testing channel #%d, response: %d bytes", channel.Id, len(respBody)))
+	} else {
+		common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	}
 	return testResult{
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
+		respBody:    respBody,
+		usage:       usage,
+		elapsedMs:   milliseconds,
 	}
 }
 
@@ -614,11 +661,11 @@ func coerceTestUsage(usageAny any, isStream bool, estimatePromptTokens int) (*dt
 	}
 }
 
-func readTestResponseBody(body io.ReadCloser, isStream bool) ([]byte, error) {
+// readTestResponseBody reads at most limit bytes; limit <= 0 reads everything.
+func readTestResponseBody(body io.ReadCloser, limit int64) ([]byte, error) {
 	defer func() { _ = body.Close() }()
-	const maxStreamLogBytes = 8 << 10
-	if isStream {
-		return io.ReadAll(io.LimitReader(body, maxStreamLogBytes))
+	if limit > 0 {
+		return io.ReadAll(io.LimitReader(body, limit))
 	}
 	return io.ReadAll(body)
 }

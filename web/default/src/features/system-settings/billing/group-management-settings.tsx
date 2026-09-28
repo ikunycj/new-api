@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { GroupBenchSection } from '@/features/group-bench'
 
 import { SettingsPageFrame } from '../components/settings-page'
 import { getOptionValue, useSystemOptions } from '../hooks/use-system-options'
@@ -29,7 +30,10 @@ import { defaultBillingSettings } from './billing-defaults'
 import { BillingGroupPricingSection } from './group-pricing-section'
 import { UserGroupManagementSection } from './user-group-management-section'
 
-export type GroupManagementTab = 'user-groups' | 'pricing-groups'
+export type GroupManagementTab =
+  | 'user-groups'
+  | 'pricing-groups'
+  | 'group-bench'
 
 type GroupManagementSettingsProps = {
   activeTab: GroupManagementTab
@@ -84,15 +88,19 @@ export function GroupManagementSettings({
         onValueChange={(value) => onTabChange(value as GroupManagementTab)}
         className='min-h-0 gap-4'
       >
-        <TabsList className='grid w-full max-w-md grid-cols-2'>
+        <TabsList className='grid w-full max-w-lg grid-cols-3'>
           <TabsTrigger value='pricing-groups'>定价分组</TabsTrigger>
           <TabsTrigger value='user-groups'>用户分组</TabsTrigger>
+          <TabsTrigger value='group-bench'>{t('Group bench')}</TabsTrigger>
         </TabsList>
         <TabsContent value='pricing-groups' className='min-h-0'>
           <BillingGroupPricingSection settings={settings} />
         </TabsContent>
         <TabsContent value='user-groups' className='min-h-0'>
           <UserGroupManagementSection />
+        </TabsContent>
+        <TabsContent value='group-bench' className='min-h-0'>
+          <GroupBenchSection />
         </TabsContent>
       </Tabs>
     </SettingsPageFrame>

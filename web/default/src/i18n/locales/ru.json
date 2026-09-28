@@ -6559,6 +6559,26 @@
     "Normalized (recommended)": "Normalized (recommended)",
     "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.": "Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.",
     "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.": "Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.",
-    "Health scores": "Health scores"
+    "Health scores": "Health scores",
+    "Group bench": "Проверка группы",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "По расписанию отправляет тестовый запрос в каждый активный канал этой группы. Ошибки только записываются и никогда не отключают каналы.",
+    "Run queued": "В очереди",
+    "Run now": "Запустить сейчас",
+    "Bench round queued": "Раунд проверки поставлен в очередь",
+    "Scheduled bench": "Плановая проверка",
+    "Interval (minutes)": "Интервал (минуты)",
+    "Preset": "Задание",
+    "Last run": "Последний запуск",
+    "Next run": "Следующий запуск",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Каналы Codex всегда используют OpenAI Responses. Каналы без этой модели в группе пропускаются.",
+    "Latest round": "Последний раунд",
+    "No bench results in the last 24 hours": "Нет результатов проверки за последние 24 часа",
+    "History": "История",
+    "Last 7 days, newest first": "Последние 7 дней, новые сверху",
+    "Static": "Статично",
+    "Animations": "Анимации",
+    "Contains script": "Содержит скрипт",
+    "Truncated": "Обрезано",
+    "Bench output": "Результат проверки"
 }
 }

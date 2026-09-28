@@ -6580,6 +6580,26 @@
     "No requests recorded in the last hour.": "最近一小时没有请求记录。",
     "Realtime data unavailable": "实时数据不可用",
     "cached input tokens": "缓存输入 Token",
-    "No cache data reported in this window": "该时间窗内没有上游上报缓存数据"
+    "No cache data reported in this window": "该时间窗内没有上游上报缓存数据",
+    "Group bench": "分组巡检",
+    "Sends the bench prompt to every enabled channel of this group on a schedule. Failures are only recorded and never disable channels.": "按计划向本分组下每个启用的渠道发送巡检题。失败只做记录，不会禁用渠道。",
+    "Run queued": "已排队",
+    "Run now": "立即运行",
+    "Bench round queued": "巡检已加入队列",
+    "Scheduled bench": "定时巡检",
+    "Interval (minutes)": "间隔（分钟）",
+    "Preset": "题目",
+    "Last run": "上次运行",
+    "Next run": "下次运行",
+    "Codex channels always use OpenAI Responses. Channels without the model in this group are skipped.": "Codex 渠道固定使用 OpenAI Responses 协议。本分组下不支持该模型的渠道会被跳过。",
+    "Latest round": "最新一轮",
+    "No bench results in the last 24 hours": "最近 24 小时没有巡检结果",
+    "History": "历史",
+    "Last 7 days, newest first": "最近 7 天，最新在前",
+    "Static": "静态",
+    "Animations": "动画",
+    "Contains script": "含脚本",
+    "Truncated": "已截断",
+    "Bench output": "巡检产物"
 }
 }
