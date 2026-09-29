@@ -441,27 +441,28 @@ func GetRealtimeSnapshotFiltered(userId int, filter RealtimeFilter) RealtimeSnap
 		slots = realtimeDimensionSlots(userId, filter, now, longest)
 	}
 
-	if len(slots) == 0 {
-		for _, window := range realtimeWindows {
-			// Merge cross-node data even when the local ring has no slots. Other
-			// nodes may have seen traffic (for this user, or this filtered
-			// dimension) that this node hasn't.
-			result := mergeFromRedis(userId, filter, window, realtimeWindowResult{})
-			snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
-		}
-		snapshot.Series = emptySeries(now, longest)
-		return snapshot
-	}
+	// Merge in contributions from other nodes, whether this is the
+	// account-level total or a filtered (token, model) breakdown — each node
+	// publishes both under its own key, keyed by field. This runs even when
+	// the local ring has no slots: other nodes may have seen traffic (for this
+	// user, or this filtered dimension) that this node hasn't.
+	//
+	// The chart is merged along with the cards. Merging only the cards left
+	// the curve single-node, so every time the round-robin handed the poll to
+	// the other instance the whole chart changed shape while the numbers
+	// above it stayed put.
+	remotes := fetchRemoteSummaries(userId, filter)
 
 	for _, window := range realtimeWindows {
-		result := sumSlots(slots, now, window)
-		// Merge in contributions from other nodes, whether this is the
-		// account-level total or a filtered (token, model) breakdown — each
-		// node publishes both under its own key, keyed by field.
-		result = mergeFromRedis(userId, filter, window, result)
+		result := mergeRemoteWindow(sumSlots(slots, now, window), window, remotes)
 		snapshot.Windows = append(snapshot.Windows, buildWindow(window, result))
 	}
-	snapshot.Series = buildSeries(slots, now, longest)
+	if len(slots) == 0 {
+		snapshot.Series = emptySeries(now, longest)
+	} else {
+		snapshot.Series = buildSeries(slots, now, longest)
+	}
+	mergeRemoteSeries(snapshot.Series, remotes)
 	return snapshot
 }
 
