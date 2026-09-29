@@ -249,8 +249,6 @@ const FAILURE_SUMMARY_MAX_LENGTH = 96
 const BATCH_TEST_CONCURRENCY = 5
 const IQ_BATCH_CONCURRENCY = 5
 const BATCH_TEST_DELAY_MS = 100
-// Retain only a few full artifacts so a batch run cannot grow the dialog state indefinitely.
-const IQ_SOURCE_CACHE_LIMIT = 3
 
 type FailureStatusDisplay = {
   summary: string
@@ -381,6 +379,7 @@ function ChannelTestDialogContent({
   const [iqTestResults, setIQTestResults] = useState<
     Record<string, IQTestStatus>
   >({})
+  // Keep each model's latest result until the dialog session is reset.
   const iqSourceCacheRef = useRef<Map<string, IQSourceCacheEntry>>(new Map())
   const [iqTestingModels, setIQTestingModels] = useState<Set<string>>(
     () => new Set()
@@ -729,14 +728,9 @@ function ChannelTestDialogContent({
             response.data.response
           ).byteLength
           if (session === iqTestSessionRef.current) {
-            const sourceCache = iqSourceCacheRef.current
-            sourceCache.delete(normalizedModel)
-            sourceCache.set(normalizedModel, { source: response.data.response })
-            while (sourceCache.size > IQ_SOURCE_CACHE_LIMIT) {
-              const oldestModel = sourceCache.keys().next().value
-              if (oldestModel === undefined) break
-              sourceCache.delete(oldestModel)
-            }
+            iqSourceCacheRef.current.set(normalizedModel, {
+              source: response.data.response,
+            })
           }
           result = {
             status: 'success',
@@ -788,13 +782,9 @@ function ChannelTestDialogContent({
   )
 
   const openIQPreview = useCallback((model: string) => {
-    const sourceCache = iqSourceCacheRef.current
-    const entry = sourceCache.get(model)
+    const entry = iqSourceCacheRef.current.get(model)
     if (!entry) return
 
-    // Promote the selected result so it is least likely to be evicted next.
-    sourceCache.delete(model)
-    sourceCache.set(model, entry)
     setPreviewIQModel(model)
     setPreviewIQSource(entry.source)
   }, [])
