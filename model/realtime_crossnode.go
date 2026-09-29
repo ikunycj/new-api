@@ -59,7 +59,30 @@ const (
 type realtimeNodeSummary struct {
 	// Windows maps window_seconds -> aggregated result for that window.
 	Windows map[int]realtimeWindowResult `json:"w"`
+	// Series is the node's chart contribution: one-minute buckets covering the
+	// longest window, each encoded as realtimeSummaryBucket. Only non-empty
+	// buckets are sent, so an idle-ish dimension costs a few bytes instead of
+	// sixty-one zeroed objects.
+	//
+	// Each bucket carries its absolute minute-aligned timestamp rather than
+	// relying on its position in the array. Two nodes never share the same
+	// `now` — they differ by up to the publish interval plus clock skew — so
+	// merging by index would shift one node's curve a bucket sideways at every
+	// minute boundary. Aligning on the timestamp is what lets the reader drop
+	// each remote bucket into the same minute of its own series.
+	//
+	// A node running a build from before this field existed publishes no
+	// Series; the reader then just merges nothing for that node, which is the
+	// old single-node chart, so a rolling deploy needs no ordering.
+	Series []realtimeSummaryBucket `json:"s,omitempty"`
 }
+
+// realtimeSummaryBucket is one published series bucket, packed as
+// [timestamp, requests, tokens, cache_read_tokens, input_tokens_total]. An
+// array instead of an object keeps the per-field payload small: with every
+// dimension ring published every realtimeCrossnodeInterval, key names would
+// dominate the bytes.
+type realtimeSummaryBucket [5]int64
 
 // realtimeAccountFieldPrefix and realtimeDimensionFieldPrefix distinguish the
 // two kinds of hash fields a node publishes under the same node key:
@@ -282,10 +305,11 @@ func publishLocalSummaries() {
 }
 
 // marshalRealtimeSummary folds a slot snapshot into the three-window summary
-// published to Redis.
+// and the chart series published to Redis.
 func marshalRealtimeSummary(slots []realtimeSlot, now int64) ([]byte, error) {
 	summary := realtimeNodeSummary{
 		Windows: make(map[int]realtimeWindowResult, len(realtimeWindows)),
+		Series:  realtimeSummarySeries(slots, now),
 	}
 	for _, window := range realtimeWindows {
 		summary.Windows[int(window)] = sumSlots(slots, now, window)
@@ -293,24 +317,48 @@ func marshalRealtimeSummary(slots []realtimeSlot, now int64) ([]byte, error) {
 	return json.Marshal(summary)
 }
 
-// mergeFromRedis fetches all other nodes' summaries matching userId/filter
-// and returns a merged realtimeWindowResult for the requested window. The
-// local node's data is already in localResult; this adds contributions from
-// other nodes.
+// realtimeSummarySeries packs the non-empty one-minute buckets of the chart
+// series this node would draw for slots, oldest first. It reuses buildSeries
+// so the published buckets are exactly the local chart's buckets, with the
+// same span and the same minute alignment.
+func realtimeSummarySeries(slots []realtimeSlot, now int64) []realtimeSummaryBucket {
+	longest := realtimeWindows[len(realtimeWindows)-1]
+	var packed []realtimeSummaryBucket
+	for _, bucket := range buildSeries(slots, now, longest) {
+		if bucket.Requests == 0 && bucket.Tokens == 0 && bucket.CacheReadTokens == 0 && bucket.InputTokensTotal == 0 {
+			continue
+		}
+		packed = append(packed, realtimeSummaryBucket{
+			bucket.Timestamp,
+			int64(bucket.Requests),
+			int64(bucket.Tokens),
+			int64(bucket.CacheReadTokens),
+			int64(bucket.InputTokensTotal),
+		})
+	}
+	return packed
+}
+
+// fetchRemoteSummaries returns every other node's published summaries that
+// belong to userId and satisfy filter. The local node's key is skipped: its
+// data is already in the caller's local slots.
 //
-// An unfiltered request (filter.IsZero()) merges the single account-level
+// An unfiltered request (filter.IsZero()) reads the single account-level
 // field. A filtered request may match more than one published field — the
 // filter can be partial (only token_id, or only model) while each field
 // encodes one specific (token, model) pair — so it walks every field on each
-// remote node's hash and sums the ones realtimeDimensionFieldMatches accepts.
+// remote node's hash and keeps the ones realtimeDimensionFieldMatches accepts.
 // That is more Redis round trips than the single HGET the unfiltered path
 // uses, but it only runs on a filtered poll, not the common case.
 //
-// If Redis is unavailable or returns no cross-node data the function returns
-// localResult unchanged so the caller degrades gracefully to local-only data.
-func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult realtimeWindowResult) realtimeWindowResult {
+// The result is fetched once per snapshot and then folded into every window
+// and the series, rather than re-scanned per window.
+//
+// If Redis is unavailable, or no other node has data, it returns nil so the
+// caller degrades gracefully to local-only data.
+func fetchRemoteSummaries(userId int, filter RealtimeFilter) []realtimeNodeSummary {
 	if !crossnodeEnabled || !common.RedisEnabled || common.RDB == nil {
-		return localResult
+		return nil
 	}
 
 	ctx := context.Background()
@@ -319,23 +367,15 @@ func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult
 	// Scan all node keys. In production there are typically 2-4 nodes so this
 	// is a handful of round trips, all on the read path polled every 5s.
 	var cursor uint64
-	merged := localResult
+	var summaries []realtimeNodeSummary
 	localNodeKey := realtimeCrossnodeHashPrefix + common.NodeName
 
-	fold := func(val string) {
+	collect := func(val string) {
 		var summary realtimeNodeSummary
 		if err := json.Unmarshal([]byte(val), &summary); err != nil {
 			return
 		}
-		remote, ok := summary.Windows[int(window)]
-		if !ok {
-			return
-		}
-		merged.Requests += remote.Requests
-		merged.Tokens += remote.Tokens
-		merged.CacheReadTokens += remote.CacheReadTokens
-		merged.InputTokensTotal += remote.InputTokensTotal
-		merged.BusySeconds += remote.BusySeconds
+		summaries = append(summaries, summary)
 	}
 
 	for {
@@ -345,7 +385,7 @@ func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult
 		}
 		for _, key := range keys {
 			if key == localNodeKey {
-				// Skip local node: already counted in localResult.
+				// Skip local node: already counted in the local slots.
 				continue
 			}
 			if filter.IsZero() {
@@ -354,7 +394,7 @@ func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult
 					// Field not found for this node — normal, skip it.
 					continue
 				}
-				fold(val)
+				collect(val)
 				continue
 			}
 			// Filtered: the field name is not known in advance, so walk the
@@ -367,7 +407,7 @@ func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult
 				if !realtimeDimensionFieldMatches(field, userId, filter) {
 					continue
 				}
-				fold(val)
+				collect(val)
 			}
 		}
 		cursor = nextCursor
@@ -376,5 +416,52 @@ func mergeFromRedis(userId int, filter RealtimeFilter, window int64, localResult
 		}
 	}
 
+	return summaries
+}
+
+// mergeRemoteWindow adds the remote summaries' totals for window to the local
+// node's result.
+func mergeRemoteWindow(local realtimeWindowResult, window int64, remotes []realtimeNodeSummary) realtimeWindowResult {
+	merged := local
+	for _, summary := range remotes {
+		remote, ok := summary.Windows[int(window)]
+		if !ok {
+			continue
+		}
+		merged.Requests += remote.Requests
+		merged.Tokens += remote.Tokens
+		merged.CacheReadTokens += remote.CacheReadTokens
+		merged.InputTokensTotal += remote.InputTokensTotal
+		merged.BusySeconds += remote.BusySeconds
+	}
 	return merged
+}
+
+// mergeRemoteSeries adds the remote summaries' buckets into series in place,
+// matching on each bucket's timestamp rather than its position (see
+// realtimeNodeSummary.Series for why). A remote bucket whose minute falls
+// outside the local series — the remote published just before a minute
+// boundary this node has already crossed, so its oldest bucket has rolled off
+// here — is dropped, the same way the local ring's own out-of-range slots are.
+func mergeRemoteSeries(series []realtimeBucket, remotes []realtimeNodeSummary) {
+	if len(series) == 0 {
+		return
+	}
+	start := series[0].Timestamp
+	for _, summary := range remotes {
+		for _, bucket := range summary.Series {
+			offset := bucket[0] - start
+			if offset < 0 || offset%realtimeSeriesBucketSeconds != 0 {
+				continue
+			}
+			index := int(offset / realtimeSeriesBucketSeconds)
+			if index >= len(series) {
+				continue
+			}
+			series[index].Requests += int(bucket[1])
+			series[index].Tokens += int(bucket[2])
+			series[index].CacheReadTokens += int(bucket[3])
+			series[index].InputTokensTotal += int(bucket[4])
+		}
+	}
 }
