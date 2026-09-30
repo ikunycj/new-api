@@ -462,6 +462,7 @@ export function RatioSettingsCard({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
         queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing'] }),
         queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
         queryClient.invalidateQueries({ queryKey: ['pricing-group-metrics'] }),
         queryClient.invalidateQueries({ queryKey: ['user-groups'] }),

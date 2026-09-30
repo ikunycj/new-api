@@ -641,12 +641,14 @@ func GetUserModels(c *gin.Context) {
 	if err != nil {
 		id = c.GetInt("id")
 	}
-	user, err := model.GetUserCache(id)
+	// Model access follows the current account group. Bypass the user cache so
+	// an operational group change is visible before the cache expires.
+	userGroup, err := model.GetUserGroup(id, true)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserGroupPricingGroups(user.Group)
+	groups := service.GetUserGroupPricingGroups(userGroup)
 	group := c.Query("group")
 	if group != "" {
 		if _, ok := groups[group]; !ok {

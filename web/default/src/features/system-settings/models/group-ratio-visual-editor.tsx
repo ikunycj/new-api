@@ -725,6 +725,7 @@ function GroupPricingTable({
   const [monitorEditor, setMonitorEditor] = useState<{
     monitor: ChannelMonitor | null
     pricingGroupName: string
+    pricingGroupLabel: string
   } | null>(null)
   const [detailRowId, setDetailRowId] = useState<string | null>(null)
   const [deleteRowId, setDeleteRowId] = useState<string | null>(null)
@@ -1345,6 +1346,8 @@ function GroupPricingTable({
                           setMonitorEditor({
                             monitor,
                             pricingGroupName: groupName,
+                            pricingGroupLabel:
+                              row.displayName.trim() || groupName,
                           })
                         }}
                         onRetry={() => void monitorsQuery.refetch()}
@@ -1576,6 +1579,7 @@ function GroupPricingTable({
         open={monitorEditor !== null}
         monitor={monitorEditor?.monitor ?? null}
         pricingGroupName={monitorEditor?.pricingGroupName ?? ''}
+        pricingGroupLabel={monitorEditor?.pricingGroupLabel}
         onOpenChange={(open) => {
           if (!open) setMonitorEditor(null)
         }}
@@ -1871,6 +1875,9 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
               <ChannelMonitorFormCard
                 monitor={props.monitor}
                 pricingGroupName={props.row.name.trim()}
+                pricingGroupLabel={
+                  props.row.displayName.trim() || props.row.name.trim()
+                }
                 disabled={!props.isPersisted}
               />
               {!props.isPersisted && (

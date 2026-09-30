@@ -22,6 +22,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
+import { getPricingGroups } from '@/features/channels/api'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
@@ -81,6 +82,11 @@ export function ModelsTable() {
     queryKey: vendorsQueryKeys.list(),
     queryFn: () => getVendors({ page_size: 1000 }),
   })
+  const { data: pricingGroupsData } = useQuery({
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
+    staleTime: 0,
+  })
 
   const vendors = useMemo(
     () => vendorsData?.data?.items || [],
@@ -113,9 +119,9 @@ export function ModelsTable() {
   // Use search API whenever any filter is active so status/sync are applied server-side
   const shouldSearch = Boolean(
     globalFilter?.trim() ||
-      activeVendorFilter ||
-      statusFilterValue ||
-      syncFilterValue
+    activeVendorFilter ||
+    statusFilterValue ||
+    syncFilterValue
   )
 
   // Fetch models data
@@ -152,7 +158,10 @@ export function ModelsTable() {
   const vendorCounts = data?.data?.vendor_counts
 
   // Columns configuration
-  const columns = useModelsColumns(vendors)
+  const columns = useModelsColumns(
+    vendors,
+    pricingGroupsData?.display_names ?? {}
+  )
 
   // React Table instance
   const { table } = useDataTable({

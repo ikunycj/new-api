@@ -415,11 +415,13 @@ function ChannelTokenUsageCell({ channel }: { channel: Channel }) {
 export function useChannelsColumns(
   options: {
     enableSelection?: boolean
+    groupLabels?: Record<string, string>
   } = {}
 ): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
   const enableSelection = options.enableSelection ?? true
+  const groupLabels = options.groupLabels ?? {}
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
@@ -895,7 +897,9 @@ export function useChannelsColumns(
                 <GroupBadge
                   key={g}
                   group={g}
-                  label={sensitiveVisible ? undefined : SENSITIVE_MASK}
+                  // Keep the internal key in the data model while showing the
+                  // administrator-configured label in the channel table.
+                  label={sensitiveVisible ? groupLabels[g] : SENSITIVE_MASK}
                   size='sm'
                 />
               ))}
@@ -1190,6 +1194,6 @@ export function useChannelsColumns(
         meta: { pinned: 'right' as const },
       },
     ],
-    [enableSelection, t, locale, sensitiveVisible]
+    [enableSelection, groupLabels, t, locale, sensitiveVisible]
   )
 }

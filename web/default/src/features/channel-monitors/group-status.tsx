@@ -54,6 +54,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getPricingGroups } from '@/features/channels/api'
+import { useIsAdmin } from '@/hooks/use-admin'
+import { getUserGroups } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 import {
@@ -74,6 +77,19 @@ type GroupStatusPanelProps = {
 
 export function GroupStatusPanel(props: GroupStatusPanelProps) {
   const { t } = useTranslation()
+  const isAdmin = useIsAdmin()
+  const userGroupsQuery = useQuery({
+    queryKey: ['user-groups'],
+    queryFn: getUserGroups,
+    enabled: !isAdmin,
+    staleTime: 0,
+  })
+  const pricingGroupsQuery = useQuery({
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
+    enabled: isAdmin,
+    staleTime: 0,
+  })
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
   const statusQuery = useQuery({
     queryKey: ['group-status'],
@@ -98,6 +114,13 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
   const monitors = (statusQuery.data ?? []).filter(
     (monitor) => monitor.can_test
   )
+  const groupLabels = isAdmin
+    ? Object.fromEntries(
+        Object.entries(pricingGroupsQuery.data?.display_names ?? {}).map(
+          ([group, desc]) => [group, { desc }]
+        )
+      )
+    : (userGroupsQuery.data?.data ?? {})
   const operational = monitors.filter(
     (monitor) => monitor.status === 'success'
   ).length
@@ -201,6 +224,7 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
             <GroupStatusCard
               key={monitor.id}
               monitor={monitor}
+              groupLabels={groupLabels}
               periodHours={props.periodHours}
               now={now}
             />
@@ -245,6 +269,7 @@ function StatusSummary(props: StatusSummaryProps) {
 
 type GroupStatusCardProps = {
   monitor: GroupStatusMonitor
+  groupLabels: Record<string, { desc: string }>
   periodHours: number
   now: number
 }
@@ -321,7 +346,8 @@ function GroupStatusCard(props: GroupStatusCardProps) {
     <Card className='min-w-0 gap-0 py-0'>
       <CardHeader className='border-b px-4 py-4'>
         <CardTitle className='truncate'>
-          {props.monitor.pricing_group}
+          {props.groupLabels[props.monitor.pricing_group]?.desc ||
+            props.monitor.pricing_group}
         </CardTitle>
         <CardAction>
           <MonitorStatusBadge status={props.monitor.status} />

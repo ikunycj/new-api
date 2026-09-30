@@ -450,6 +450,7 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
 function ModelBackendProviderSection(props: {
   model: PricingModel
   catalogGroups: string[]
+  groupLabels: Record<string, string>
 }) {
   const { t } = useTranslation()
   const model = props.model
@@ -474,7 +475,11 @@ function ModelBackendProviderSection(props: {
   if (props.catalogGroups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
-        <CatalogPillList items={props.catalogGroups} />
+        <CatalogPillList
+          items={props.catalogGroups.map(
+            (group) => props.groupLabels[group] || group
+          )}
+        />
       </CatalogInfoCell>
     )
   }
@@ -518,6 +523,7 @@ function ModelBackendProviderSection(props: {
 function ModelBackendDetailsSection(props: {
   model: PricingModel
   catalogGroups: string[]
+  groupLabels: Record<string, string>
 }) {
   return (
     <>
@@ -526,6 +532,7 @@ function ModelBackendDetailsSection(props: {
       <ModelBackendProviderSection
         model={props.model}
         catalogGroups={props.catalogGroups}
+        groupLabels={props.groupLabels}
       />
     </>
   )
@@ -833,6 +840,7 @@ function getDynamicFormattedPricesByTier(
 function GroupPricingSection(props: {
   model: PricingModel
   groupRatio: Record<string, number>
+  groupLabels: Record<string, string>
   availableGroups: string[]
   priceRate: number
   usdExchangeRate: number
@@ -949,7 +957,11 @@ function GroupPricingSection(props: {
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
-                  <GroupBadge group={group} size='sm' />
+                  <GroupBadge
+                    group={group}
+                    label={props.groupLabels[group] || group}
+                    size='sm'
+                  />
                   <span className='text-muted-foreground font-mono text-xs'>
                     {ratio}x
                   </span>
@@ -1029,7 +1041,13 @@ function GroupPricingSection(props: {
             header: t('Group'),
             className: thClass,
             cellClassName: 'py-2.5',
-            cell: (group) => <GroupBadge group={group} size='sm' />,
+            cell: (group) => (
+              <GroupBadge
+                group={group}
+                label={props.groupLabels[group] || group}
+                size='sm'
+              />
+            ),
           },
           {
             id: 'ratio',
@@ -1162,6 +1180,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             <GroupPricingSection
               model={props.model}
               groupRatio={props.groupRatio}
+              groupLabels={props.catalogGroups}
               availableGroups={catalogGroups}
               priceRate={props.priceRate}
               usdExchangeRate={props.usdExchangeRate}
@@ -1173,17 +1192,22 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
           <ModelBackendDetailsSection
             model={props.model}
             catalogGroups={catalogGroups}
+            groupLabels={props.catalogGroups}
           />
         </TabsContent>
 
         <TabsContent value='performance' className='outline-none'>
-          <ModelDetailsPerformance model={props.model} />
+          <ModelDetailsPerformance
+            model={props.model}
+            groupLabels={props.catalogGroups}
+          />
         </TabsContent>
 
         <TabsContent value='api' className='outline-none'>
           <ModelDetailsApi
             model={props.model}
             endpointMap={props.endpointMap}
+            groupLabels={props.catalogGroups}
           />
         </TabsContent>
       </Tabs>

@@ -116,8 +116,16 @@ func enrichTokenUsage(responses []*tokenResponse) {
 }
 
 func getTokenUserGroup(c *gin.Context) (string, error) {
+	// The auth context may contain the group captured when a browser session
+	// was created. User groups can be changed later, so use the current
+	// persisted value for token permission checks instead of a stale session.
+	if userID := c.GetInt("id"); userID > 0 {
+		if user, err := model.GetUserById(userID, false); err == nil {
+			return model.NormalizeUserGroup(user.Group), nil
+		}
+	}
 	if userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup); userGroup != "" {
-		return userGroup, nil
+		return model.NormalizeUserGroup(userGroup), nil
 	}
 	return model.GetUserGroup(c.GetInt("id"), false)
 }

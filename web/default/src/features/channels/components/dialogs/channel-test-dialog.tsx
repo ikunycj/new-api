@@ -135,7 +135,6 @@ type IQTestStatus = Omit<ChannelIQTestResult, 'model' | 'response'>
 
 type IQSourceCacheEntry = {
   source: string
-  bytes: number
 }
 
 type IQTestRequest = {
@@ -250,11 +249,8 @@ const FAILURE_SUMMARY_MAX_LENGTH = 96
 const BATCH_TEST_CONCURRENCY = 5
 const IQ_BATCH_CONCURRENCY = 5
 const BATCH_TEST_DELAY_MS = 100
-// Retain only a few full artifacts, with each entry matching the server's HTML cap.
+// Retain only a few full artifacts so a batch run cannot grow the dialog state indefinitely.
 const IQ_SOURCE_CACHE_LIMIT = 3
-const IQ_SOURCE_RESULT_MAX_BYTES = 128 << 10
-const IQ_SOURCE_CACHE_MAX_BYTES =
-  IQ_SOURCE_CACHE_LIMIT * IQ_SOURCE_RESULT_MAX_BYTES
 
 type FailureStatusDisplay = {
   summary: string
@@ -334,8 +330,6 @@ function getTestTableColumnClass(columnId: string) {
       return 'w-28 min-w-28 whitespace-nowrap'
     case 'result':
       return 'w-80 min-w-80 max-w-80 whitespace-normal'
-    case 'iq_test':
-      return 'w-96 min-w-96 max-w-96 whitespace-normal'
     case 'actions':
       return 'bg-popover w-px whitespace-nowrap'
     default:
@@ -737,25 +731,11 @@ function ChannelTestDialogContent({
           if (session === iqTestSessionRef.current) {
             const sourceCache = iqSourceCacheRef.current
             sourceCache.delete(normalizedModel)
-            if (sourceBytes <= IQ_SOURCE_RESULT_MAX_BYTES) {
-              sourceCache.set(normalizedModel, {
-                source: response.data.response,
-                bytes: sourceBytes,
-              })
-            }
-            let cachedBytes = [...sourceCache.values()].reduce(
-              (total, entry) => total + entry.bytes,
-              0
-            )
-            while (
-              sourceCache.size > IQ_SOURCE_CACHE_LIMIT ||
-              cachedBytes > IQ_SOURCE_CACHE_MAX_BYTES
-            ) {
+            sourceCache.set(normalizedModel, { source: response.data.response })
+            while (sourceCache.size > IQ_SOURCE_CACHE_LIMIT) {
               const oldestModel = sourceCache.keys().next().value
               if (oldestModel === undefined) break
-              const oldestEntry = sourceCache.get(oldestModel)
               sourceCache.delete(oldestModel)
-              cachedBytes -= oldestEntry?.bytes ?? 0
             }
           }
           result = {
@@ -1232,92 +1212,25 @@ function ChannelTestDialogContent({
           const model = row.original.model
           const result = testResults[model]
           return (
-            <TestResultCell
-              result={result}
-              model={model}
-              onOpenDetails={setFailureDetails}
-            />
-          )
-        },
-        enableSorting: false,
-        size: 320,
-      },
-      {
-        id: 'iq_test',
-        header: t('IQ Test'),
-        cell: ({ row }) => {
-          const model = row.original.model
-          const result = iqTestResults[model]
-          const isTestingIQ = iqTestingModels.has(model)
-
-          if (isTestingIQ || result?.status === 'testing') {
-            return (
-              <StatusBadge variant='info' copyable={false}>
-                <Loader2 className='size-3.5 shrink-0 animate-spin' />
-                <span>{t('Testing...')}</span>
-              </StatusBadge>
-            )
-          }
-
-          if (
-            result?.status === 'success' &&
-            iqSourceCacheRef.current.has(model)
-          ) {
-            return (
-              <Button
-                variant='ghost'
-                size='sm'
-                className='h-7 gap-1.5 px-1.5'
-                onClick={() => openIQPreview(model)}
-              >
-                <Eye className='size-3.5' />
-                {t('View result')}
-              </Button>
-            )
-          }
-
-          return (
-            <div className='flex min-w-0 items-center gap-1'>
-              {result?.status === 'success' && (
-                <StatusBadge
-                  label={t('Result not retained; run again')}
-                  variant='neutral'
-                  size='sm'
-                  copyable={false}
-                />
-              )}
-              {result?.status === 'error' && (
-                <div className='flex min-w-0 flex-1 items-start gap-1.5'>
-                  <StatusBadge
-                    label={t('Failed')}
-                    variant='danger'
-                    size='sm'
-                    copyable={false}
-                    className='mt-0.5 shrink-0'
-                  />
-                  <span
-                    className='text-destructive line-clamp-2 min-w-0 flex-1 text-xs leading-4 break-words'
-                    title={result.error || t('Test failed')}
-                  >
-                    {result.error || t('Test failed')}
-                  </span>
-                </div>
-              )}
-              <Button
-                variant='ghost'
-                size='sm'
-                className='h-7 gap-1.5 px-1.5'
-                onClick={() => void testIQModel(model)}
-                disabled={isTestingIQ}
-              >
-                <Brain className='size-3.5' />
-                {t('Run IQ test')}
-              </Button>
+            <div className='flex min-w-0 flex-col gap-1'>
+              <TestResultCell
+                result={result}
+                model={model}
+                onOpenDetails={setFailureDetails}
+              />
+              <IQTestResultCell
+                result={iqTestResults[model]}
+                model={model}
+                isTesting={iqTestingModels.has(model)}
+                hasSource={iqSourceCacheRef.current.has(model)}
+                onOpenPreview={openIQPreview}
+                onRun={() => void testIQModel(model)}
+              />
             </div>
           )
         },
         enableSorting: false,
-        size: 384,
+        size: 320,
       },
       {
         id: 'actions',
@@ -1550,7 +1463,6 @@ function ChannelTestDialogContent({
                     <col className='w-auto' />
                     <col className='w-28' />
                     <col className='w-80' />
-                    <col className='w-96' />
                     <col className='w-px' />
                   </colgroup>
                 }
@@ -1650,6 +1562,72 @@ function TestStatusCell({ result }: { result?: TestResult }) {
   }
 
   return <StatusBadge label={t('Failed')} variant='danger' copyable={false} />
+}
+
+function IQTestResultCell({
+  result,
+  model,
+  isTesting,
+  hasSource,
+  onOpenPreview,
+  onRun,
+}: {
+  result?: IQTestStatus
+  model: string
+  isTesting: boolean
+  hasSource: boolean
+  onOpenPreview: (model: string) => void
+  onRun: () => void
+}) {
+  const { t } = useTranslation()
+  const isRunning = isTesting || result?.status === 'testing'
+
+  return (
+    <div className='flex min-w-0 items-start gap-1.5 text-xs'>
+      <Brain className='mt-0.5 size-3.5 shrink-0' aria-hidden='true' />
+      {isRunning && (
+        <StatusBadge variant='info' size='sm' copyable={false}>
+          <Loader2 className='size-3.5 shrink-0 animate-spin' />
+          <span>{t('Testing...')}</span>
+        </StatusBadge>
+      )}
+      {!isRunning && result?.status === 'error' && (
+        <span
+          className='text-destructive line-clamp-2 min-w-0 flex-1 break-words'
+          title={result.error || t('Test failed')}
+        >
+          {result.error || t('Test failed')}
+        </span>
+      )}
+      {!isRunning && result?.status === 'success' && hasSource && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 gap-1 px-1.5'
+          onClick={() => onOpenPreview(model)}
+        >
+          <Eye className='size-3.5' />
+          {t('View result')}
+        </Button>
+      )}
+      {!isRunning && result?.status === 'success' && !hasSource && (
+        <span className='text-muted-foreground'>
+          {t('Result not retained; run again')}
+        </span>
+      )}
+      {!isRunning && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 gap-1 px-1.5'
+          onClick={onRun}
+          disabled={isTesting}
+        >
+          {t('Run IQ test')}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 function TestResultCell({

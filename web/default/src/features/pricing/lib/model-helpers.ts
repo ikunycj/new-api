@@ -58,7 +58,8 @@ export function formatGroupRatio(
 export function expandModelsByGroup(
   models: PricingModel[],
   availableGroups: string[],
-  groupRatio: Record<string, number>
+  groupRatio: Record<string, number>,
+  groupLabels: Record<string, string> = {}
 ): PricingDisplayModel[] {
   const selectableGroups = availableGroups.filter(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
@@ -69,6 +70,7 @@ export function expandModelsByGroup(
       .filter((group) => enabledGroups.has(group))
       .map((group) => ({
         group,
+        label: groupLabels[group] || group,
         ratio: getConfiguredGroupRatio(groupRatio, group),
       }))
       .sort((a, b) => a.ratio - b.ratio || a.group.localeCompare(b.group))
@@ -80,6 +82,7 @@ export function expandModelsByGroup(
         ...model,
         key: model.key || model.model_name,
         display_group: lowest.group,
+        display_group_label: lowest.label,
         display_group_ratio: lowest.ratio,
         display_groups: groups,
       },

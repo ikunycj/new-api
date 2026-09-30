@@ -20,11 +20,10 @@ import { flexRender, type Row } from '@tanstack/react-table'
 import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupBadge } from '@/components/group-badge'
 import { cn } from '@/lib/utils'
 
 import { CHANNEL_STATUS } from '../constants'
-import { isTagAggregateRow, parseGroupsList } from '../lib'
+import { isTagAggregateRow } from '../lib'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
@@ -103,8 +102,6 @@ function ChannelCardComponent({
     last_test_ttft_ms: t('TTFT'),
   }
 
-  const groups = parseGroupsList(row.original.group ?? '')
-
   const selectCell = renderCell('select')
   const typeCell = renderCell('type')
   const nameCell = renderCell('name')
@@ -124,6 +121,7 @@ function ChannelCardComponent({
     'previous_day_probe_success_rate'
   )
   const lastTestTTFTCell = renderCell('last_test_ttft_ms')
+  const groupCell = renderCell('group')
 
   // In card view the enable/disable state is already conveyed by the inline
   // power toggle, so the plain "Enabled"/"Disabled" badge is redundant. Keep
@@ -202,23 +200,8 @@ function ChannelCardComponent({
           </div>
         </div>
 
-        {/* Last row: groups span the full width, showing every group (no label) */}
-        <div className='-mt-0.5 min-w-0'>
-          {groups.length > 0 ? (
-            <div className='-ml-1.5 flex flex-wrap gap-1'>
-              {groups.map((g) => (
-                <GroupBadge
-                  key={g}
-                  group={g}
-                  label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  size='sm'
-                />
-              ))}
-            </div>
-          ) : (
-            <span className='text-muted-foreground text-sm'>-</span>
-          )}
-        </div>
+        {/* Last row: groups span the full width and reuse the table renderer. */}
+        <div className='-mt-0.5 min-w-0'>{groupCell}</div>
       </div>
     </ChannelRowActionsLayoutContext.Provider>
   )

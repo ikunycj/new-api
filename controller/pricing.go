@@ -36,7 +36,9 @@ func GetPricing(c *gin.Context) {
 	for group := range groupRatio {
 		if _, ok := usableGroup[group]; !ok {
 			delete(groupRatio, group)
+			continue
 		}
+		usableGroup[group] = ratio_setting.GetPricingGroupDisplayNameOrName(group)
 	}
 
 	c.JSON(200, gin.H{

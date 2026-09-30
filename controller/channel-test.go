@@ -47,18 +47,11 @@ type testResult struct {
 }
 
 const (
-	modelTestTokenName    = model.ChannelTestTokenName
-	channelProbeTokenName = model.ChannelProbeTokenName
-	channelIQTestPrompt   = "Create an HTML file with an SVG 2D animation of a pelican riding a bicycle"
-	// IQ output is a self-contained artifact rather than an open-ended coding
-	// task. Keep the prompt compact, but enforce the artifact, transport, and
-	// generation budgets independently: HTML size is measured after extracting
-	// the visible answer, while the response limit also covers protocol fields
-	// and provider reasoning.
-	channelIQTestOutputContract   = "Return only one self-contained HTML document. Keep the source reasonably compact, with an inline SVG containing visible shapes and CSS or SVG animation. Do not add comments, libraries, external assets, network requests, Markdown fences, or explanations."
-	channelIQTestMaxBytes         = 128 << 10
+	modelTestTokenName            = model.ChannelTestTokenName
+	channelProbeTokenName         = model.ChannelProbeTokenName
+	channelIQTestPrompt           = "Create an HTML file with an SVG 2D animation of a pelican riding a bicycle"
+	channelIQTestOutputContract   = "Return only one self-contained HTML document with an inline SVG containing visible shapes and CSS or SVG animation. Do not add comments, libraries, external assets, network requests, Markdown fences, or explanations."
 	channelIQTestMaxResponseBytes = 512 << 10
-	channelIQTestMaxTokens        = uint(8192)
 	channelIQTestTimeout          = 90 * time.Second
 )
 
@@ -552,7 +545,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 		}
 	}
 	if prompt != "" {
-		jsonData, err = capChannelIQTestTokenFields(jsonData)
+		jsonData, err = normalizeChannelIQTestControls(jsonData)
 		if err != nil {
 			return testResult{
 				context:     c,
@@ -650,16 +643,6 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	if prompt != "" {
 		finishReason = extractChannelIQTestFinishReason(respBody)
 		generatedResponse = normalizeChannelIQTestHTML(extractChannelTestText(respBody))
-		if err := validateChannelIQTestHTMLSize(generatedResponse); err != nil {
-			return testResult{
-				context:          c,
-				localErr:         err,
-				newAPIError:      types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
-				rawResponseBytes: len(respBody),
-				responseBytes:    len(generatedResponse),
-				finishReason:     finishReason,
-			}
-		}
 		if err := validateChannelIQTestHTML(generatedResponse, finishReason); err != nil {
 			return testResult{
 				context:          c,
@@ -723,13 +706,6 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	}
 }
 
-func validateChannelIQTestHTMLSize(html string) error {
-	if len(html) > channelIQTestMaxBytes {
-		return fmt.Errorf("智商测试结果超过 %d 字节上限", channelIQTestMaxBytes)
-	}
-	return nil
-}
-
 func disableChannelIQTestThinking(request any) {
 	switch testRequest := request.(type) {
 	case *dto.ClaudeRequest:
@@ -757,9 +733,8 @@ func disableChannelIQTestThinking(request any) {
 }
 
 // finalizeChannelIQTestRequest reapplies the IQ-specific controls after
-// channel parameter overrides. Overrides are intentionally allowed to shape
-// normal requests, but they must not be able to re-enable thinking, streaming,
-// or an unbounded output budget for this diagnostic request.
+// channel parameter overrides. Overrides may choose an output budget, but they
+// must not re-enable thinking or streaming for this diagnostic request.
 func finalizeChannelIQTestRequest(jsonData []byte, request any, channel *model.Channel, modelName string) ([]byte, error) {
 	var payload map[string]any
 	if err := common.Unmarshal(jsonData, &payload); err != nil {
@@ -769,7 +744,6 @@ func finalizeChannelIQTestRequest(jsonData []byte, request any, channel *model.C
 	switch request.(type) {
 	case *dto.ClaudeRequest:
 		payload["stream"] = false
-		payload["max_tokens"] = channelIQTestMaxTokens
 		delete(payload, "max_tokens_to_sample")
 		delete(payload, "max_output_tokens")
 		delete(payload, "max_completion_tokens")
@@ -795,7 +769,6 @@ func finalizeChannelIQTestRequest(jsonData []byte, request any, channel *model.C
 			delete(generationConfig, "thinkingConfig")
 			delete(generationConfig, "thinking_config")
 		}
-		generationConfig["maxOutputTokens"] = channelIQTestMaxTokens
 		payload["generationConfig"] = generationConfig
 		delete(payload, "stream")
 		delete(payload, "max_tokens")
@@ -806,10 +779,8 @@ func finalizeChannelIQTestRequest(jsonData []byte, request any, channel *model.C
 	case *dto.GeneralOpenAIRequest:
 		payload["stream"] = false
 		if _, ok := payload["max_completion_tokens"]; ok {
-			payload["max_completion_tokens"] = channelIQTestMaxTokens
 			delete(payload, "max_tokens")
 		} else {
-			payload["max_tokens"] = channelIQTestMaxTokens
 			delete(payload, "max_completion_tokens")
 		}
 		delete(payload, "max_output_tokens")
@@ -822,7 +793,6 @@ func finalizeChannelIQTestRequest(jsonData []byte, request any, channel *model.C
 		}
 	case *dto.OpenAIResponsesRequest:
 		payload["stream"] = false
-		payload["max_output_tokens"] = channelIQTestMaxTokens
 		delete(payload, "max_tokens")
 		delete(payload, "max_completion_tokens")
 		delete(payload, "maxCompletionTokens")
@@ -967,7 +937,7 @@ func readLimitedTestResponseBody(body io.ReadCloser, maxBytes int64) ([]byte, er
 	return data, nil
 }
 
-func capChannelIQTestTokenFields(jsonData []byte) ([]byte, error) {
+func normalizeChannelIQTestControls(jsonData []byte) ([]byte, error) {
 	if len(jsonData) == 0 {
 		return jsonData, nil
 	}
@@ -975,46 +945,27 @@ func capChannelIQTestTokenFields(jsonData []byte) ([]byte, error) {
 	if err := common.Unmarshal(jsonData, &payload); err != nil {
 		return nil, fmt.Errorf("invalid IQ test request after parameter override: %w", err)
 	}
-	var normalizeFields func(any) bool
-	normalizeFields = func(value any) bool {
-		foundTokenField := false
+	var normalizeFields func(any)
+	normalizeFields = func(value any) {
 		switch object := value.(type) {
 		case map[string]any:
 			for key, field := range object {
 				switch strings.ToLower(key) {
-				case "max_tokens", "maxcompletiontokens", "max_completion_tokens", "maxoutputtokens", "max_output_tokens", "maxtokens":
-					foundTokenField = true
-					// IQ tests own their output budget. A channel override must not
-					// lower it enough to make a valid artifact impossible.
-					object[key] = channelIQTestMaxTokens
 				case "stream":
 					object[key] = false
 				case "reasoning_effort", "reasoningeffort", "reasoning", "thinking", "enable_thinking", "enablethinking", "thinkingconfig", "thinking_config", "thinkingbudget", "thinking_budget", "includethoughts", "include_thoughts", "output_config", "outputconfig", "max_tokens_to_sample", "maxtokenstosample", "budget_tokens", "budgettokens":
 					delete(object, key)
 				default:
-					if normalizeFields(field) {
-						foundTokenField = true
-					}
+					normalizeFields(field)
 				}
 			}
 		case []any:
 			for _, item := range object {
-				if normalizeFields(item) {
-					foundTokenField = true
-				}
+				normalizeFields(item)
 			}
 		}
-		return foundTokenField
 	}
-	if !normalizeFields(payload) {
-		if contents, ok := payload["contents"]; ok && contents != nil {
-			payload["generationConfig"] = map[string]any{"maxOutputTokens": channelIQTestMaxTokens}
-		} else if _, ok := payload["input"]; ok {
-			payload["max_output_tokens"] = channelIQTestMaxTokens
-		} else {
-			payload["max_tokens"] = channelIQTestMaxTokens
-		}
-	}
+	normalizeFields(payload)
 	return common.Marshal(payload)
 }
 
@@ -1174,13 +1125,6 @@ func channelIQTestInstructions(prompt string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(data)
-}
-
-func channelIQTestMaxOutputTokens(prompt string) *uint {
-	if prompt == "" {
-		return nil
-	}
-	return lo.ToPtr(channelIQTestMaxTokens)
 }
 
 func extractChannelTestText(response []byte) string {
@@ -1532,11 +1476,10 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 		case constant.EndpointTypeOpenAIResponse:
 			// 返回 OpenAIResponsesRequest
 			return &dto.OpenAIResponsesRequest{
-				Model:           model,
-				Input:           testResponsesInput,
-				Instructions:    channelIQTestInstructions(prompt),
-				MaxOutputTokens: channelIQTestMaxOutputTokens(prompt),
-				Stream:          lo.ToPtr(isStream),
+				Model:        model,
+				Input:        testResponsesInput,
+				Instructions: channelIQTestInstructions(prompt),
+				Stream:       lo.ToPtr(isStream),
 			}
 		case constant.EndpointTypeOpenAIResponseCompact:
 			// 返回 OpenAIResponsesCompactionRequest
@@ -1560,9 +1503,9 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 			}
 		case constant.EndpointTypeAnthropic, constant.EndpointTypeGemini, constant.EndpointTypeOpenAI:
 			// 返回 GeneralOpenAIRequest
-			maxTokens := lo.ToPtr(uint(16))
-			if prompt != "" {
-				maxTokens = lo.ToPtr(channelIQTestMaxTokens)
+			var maxTokens *uint
+			if prompt == "" {
+				maxTokens = lo.ToPtr(uint(16))
 			}
 			if constant.EndpointType(endpointType) == constant.EndpointTypeGemini {
 				if prompt == "" {
@@ -1620,11 +1563,10 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 	// Responses-only models (e.g. codex series)
 	if strings.Contains(strings.ToLower(model), "codex") {
 		return &dto.OpenAIResponsesRequest{
-			Model:           model,
-			Input:           testResponsesInput,
-			Instructions:    channelIQTestInstructions(prompt),
-			MaxOutputTokens: channelIQTestMaxOutputTokens(prompt),
-			Stream:          lo.ToPtr(isStream),
+			Model:        model,
+			Input:        testResponsesInput,
+			Instructions: channelIQTestInstructions(prompt),
+			Stream:       lo.ToPtr(isStream),
 		}
 	}
 
@@ -1645,29 +1587,21 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 	}
 
 	if dto.IsOpenAIReasoningOModel(model) {
-		if prompt != "" {
-			testRequest.MaxCompletionTokens = lo.ToPtr(channelIQTestMaxTokens)
-		} else {
+		if prompt == "" {
 			testRequest.MaxCompletionTokens = lo.ToPtr(uint(16))
 		}
 	} else if strings.Contains(model, "thinking") {
 		if !strings.Contains(model, "claude") || prompt != "" {
-			if prompt != "" {
-				testRequest.MaxTokens = lo.ToPtr(channelIQTestMaxTokens)
-			} else {
+			if prompt == "" {
 				testRequest.MaxTokens = lo.ToPtr(uint(50))
 			}
 		}
 	} else if strings.Contains(model, "gemini") {
-		maxTokens := uint(3000)
-		if prompt != "" {
-			maxTokens = channelIQTestMaxTokens
+		if prompt == "" {
+			testRequest.MaxTokens = lo.ToPtr(uint(3000))
 		}
-		testRequest.MaxTokens = lo.ToPtr(maxTokens)
 	} else {
-		if prompt != "" {
-			testRequest.MaxTokens = lo.ToPtr(channelIQTestMaxTokens)
-		} else {
+		if prompt == "" {
 			testRequest.MaxTokens = lo.ToPtr(uint(16))
 		}
 	}

@@ -98,9 +98,8 @@ func TestValidateChannelIQTestHTML(t *testing.T) {
 
 	largePrefix := `<html><body><svg data-padding="`
 	largeSuffix := `"><circle /><animate attributeName="x" values="0;10" dur="1s" repeatCount="indefinite" /></svg></body></html>`
-	largeDocument := largePrefix + strings.Repeat("x", channelIQTestMaxBytes-len(largePrefix)-len(largeSuffix)) + largeSuffix
-	assert.Len(t, largeDocument, channelIQTestMaxBytes)
-	assert.NoError(t, validateChannelIQTestHTMLSize(largeDocument))
+	largeDocument := largePrefix + strings.Repeat("x", (256<<10)-len(largePrefix)-len(largeSuffix)) + largeSuffix
+	assert.Greater(t, len(largeDocument), 128<<10)
 	assert.NoError(t, validateChannelIQTestHTML(largeDocument, "stop"))
 
 	assert.ErrorContains(t, validateChannelIQTestHTML(complete, "length"), "生成被截断")
@@ -108,7 +107,6 @@ func TestValidateChannelIQTestHTML(t *testing.T) {
 	assert.ErrorContains(t, validateChannelIQTestHTML("<html><svg></svg>", "stop"), "缺少 </html>")
 	assert.ErrorContains(t, validateChannelIQTestHTML("```html\n"+complete, "stop"), "代码围栏未闭合")
 	assert.ErrorContains(t, validateChannelIQTestHTML("", "incomplete"), "生成被截断")
-	assert.ErrorContains(t, validateChannelIQTestHTMLSize(strings.Repeat("x", channelIQTestMaxBytes+1)), "超过")
 	assert.ErrorContains(t, validateChannelIQTestHTML(`<html><body><svg><circle /></svg></body></html>`, "stop"), "未检测到 SVG 动画")
 	assert.ErrorContains(t, validateChannelIQTestHTML(`<html><body><svg><circle /><animate /></svg></body></html><script>fetch('https://example.com')</script>`, "stop"), "外部资源")
 	assert.ErrorContains(t, validateChannelIQTestHTML(`<html><body><svg onclick="fetch('https://example.com')"><circle /><animate /></svg></body></html>`, "stop"), "事件处理器")
@@ -127,14 +125,12 @@ func TestBuildChannelIQTestRequest(t *testing.T) {
 	assert.Equal(t, channelIQTestOutputContract, chatRequest.Messages[0].Content)
 	assert.Equal(t, "user", chatRequest.Messages[1].Role)
 	assert.Equal(t, channelIQTestPrompt, chatRequest.Messages[1].Content)
-	require.NotNil(t, chatRequest.MaxTokens)
-	assert.Equal(t, channelIQTestMaxTokens, *chatRequest.MaxTokens)
+	assert.Nil(t, chatRequest.MaxTokens)
 
 	responsesRequest, ok := buildTestRequest("codex-mini", "", nil, false, channelIQTestPrompt).(*dto.OpenAIResponsesRequest)
 	require.True(t, ok)
 	assert.Contains(t, string(responsesRequest.Input), channelIQTestPrompt)
-	require.NotNil(t, responsesRequest.MaxOutputTokens)
-	assert.Equal(t, channelIQTestMaxTokens, *responsesRequest.MaxOutputTokens)
+	assert.Nil(t, responsesRequest.MaxOutputTokens)
 }
 
 func TestBuildChannelAlphaSearchTestRequestBodyPreservesInput(t *testing.T) {
@@ -149,12 +145,12 @@ func TestBuildChannelAlphaSearchTestRequestBodyPreservesInput(t *testing.T) {
 }
 
 func TestDisableChannelIQTestThinking(t *testing.T) {
-	maxTokens := uint(channelIQTestMaxTokens)
+	maxTokens := uint(4096)
 	request := &dto.ClaudeRequest{MaxTokens: &maxTokens}
 
 	disableChannelIQTestThinking(request)
 	assert.Nil(t, request.Thinking)
-	assert.Equal(t, channelIQTestMaxTokens, *request.MaxTokens)
+	assert.Equal(t, uint(4096), *request.MaxTokens)
 	assert.Nil(t, request.OutputConfig)
 }
 
@@ -181,12 +177,12 @@ func TestFinalizeChannelIQTestRequestForClaudeRoutes(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			input := []byte(`{"model":"deepseek-flash","max_tokens":2048,"max_completion_tokens":99,"stream":true,"thinking":{"type":"enabled","budget_tokens":4096},"output_config":{"effort":"high"},"reasoning_effort":"high"}`)
-			capped, err := capChannelIQTestTokenFields(input)
+			normalized, err := normalizeChannelIQTestControls(input)
 			require.NoError(t, err)
-			output, err := finalizeChannelIQTestRequest(capped, &dto.ClaudeRequest{}, test.channel, "deepseek-flash")
+			output, err := finalizeChannelIQTestRequest(normalized, &dto.ClaudeRequest{}, test.channel, "deepseek-flash")
 			require.NoError(t, err)
 
-			assert.Equal(t, channelIQTestMaxTokens, uint(gjson.GetBytes(output, "max_tokens").Uint()))
+			assert.Equal(t, uint64(2048), gjson.GetBytes(output, "max_tokens").Uint())
 			assert.True(t, gjson.GetBytes(output, "stream").Exists())
 			assert.False(t, gjson.GetBytes(output, "stream").Bool())
 			assert.Equal(t, "disabled", gjson.GetBytes(output, "thinking.type").String())
@@ -201,12 +197,12 @@ func TestFinalizeChannelIQTestRequestForClaudeRoutes(t *testing.T) {
 func TestFinalizeChannelIQTestRequestDisablesDeepSeekOpenAIThinking(t *testing.T) {
 	channel := &model.Channel{Type: constant.ChannelTypeDeepSeek}
 	input := []byte(`{"max_tokens":2048,"stream":true,"thinking":{"type":"enabled"},"reasoning_effort":"high"}`)
-	capped, err := capChannelIQTestTokenFields(input)
+	normalized, err := normalizeChannelIQTestControls(input)
 	require.NoError(t, err)
-	output, err := finalizeChannelIQTestRequest(capped, &dto.GeneralOpenAIRequest{}, channel, "deepseek-flash")
+	output, err := finalizeChannelIQTestRequest(normalized, &dto.GeneralOpenAIRequest{}, channel, "deepseek-flash")
 	require.NoError(t, err)
 
-	assert.Equal(t, channelIQTestMaxTokens, uint(gjson.GetBytes(output, "max_tokens").Uint()))
+	assert.Equal(t, uint64(2048), gjson.GetBytes(output, "max_tokens").Uint())
 	assert.True(t, gjson.GetBytes(output, "stream").Exists())
 	assert.False(t, gjson.GetBytes(output, "stream").Bool())
 	assert.Equal(t, "disabled", gjson.GetBytes(output, "thinking.type").String())
@@ -234,15 +230,15 @@ func TestReadLimitedChannelIQTestResponseBody(t *testing.T) {
 	assert.ErrorContains(t, err, "exceeds")
 }
 
-func TestCapChannelIQTestTokenFields(t *testing.T) {
+func TestNormalizeChannelIQTestControls(t *testing.T) {
 	input := `{"max_tokens":100000,"stream":true,"generation_config":{"max_output_tokens":9000,"thinking_config":{"thinking_budget":1000}},"extra":{"maxCompletionTokens":100000,"reasoning_effort":"high"}}`
-	output, err := capChannelIQTestTokenFields([]byte(input))
+	output, err := normalizeChannelIQTestControls([]byte(input))
 	require.NoError(t, err)
 	assert.NotContains(t, string(output), "thinking_config")
 	assert.NotContains(t, string(output), "reasoning_effort")
-	assert.Equal(t, uint64(channelIQTestMaxTokens), gjson.GetBytes(output, "max_tokens").Uint())
-	assert.Equal(t, uint64(channelIQTestMaxTokens), gjson.GetBytes(output, "generation_config.max_output_tokens").Uint())
-	assert.Equal(t, uint64(channelIQTestMaxTokens), gjson.GetBytes(output, "extra.maxCompletionTokens").Uint())
+	assert.Equal(t, uint64(100000), gjson.GetBytes(output, "max_tokens").Uint())
+	assert.Equal(t, uint64(9000), gjson.GetBytes(output, "generation_config.max_output_tokens").Uint())
+	assert.Equal(t, uint64(100000), gjson.GetBytes(output, "extra.maxCompletionTokens").Uint())
 	assert.Contains(t, string(output), `"stream":false`)
 }
 

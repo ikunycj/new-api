@@ -56,13 +56,15 @@ describe('model group display entries', () => {
         vip: 0.8,
         enterprise: 1.2,
         pro: 1.5,
-      }
+      },
+      { vip: 'ChatGPT企业' }
     )
 
     assert.deepEqual(
       result.map((model) => [
         model.model_name,
         model.display_group,
+        model.display_group_label,
         model.display_group_ratio,
         model.key,
         model.display_groups,
@@ -71,13 +73,14 @@ describe('model group display entries', () => {
         [
           'grouped-model',
           'vip',
+          'ChatGPT企业',
           0.8,
           'grouped-model',
           [
-            { group: 'vip', ratio: 0.8 },
-            { group: 'default', ratio: 1 },
-            { group: 'enterprise', ratio: 1.2 },
-            { group: 'pro', ratio: 1.5 },
+            { group: 'vip', label: 'ChatGPT企业', ratio: 0.8 },
+            { group: 'default', label: 'default', ratio: 1 },
+            { group: 'enterprise', label: 'enterprise', ratio: 1.2 },
+            { group: 'pro', label: 'pro', ratio: 1.5 },
           ],
         ],
       ]
@@ -91,9 +94,10 @@ describe('model group display entries', () => {
       result.map((model) => [
         model.model_name,
         model.display_group,
+        model.display_group_label,
         model.display_group_ratio,
       ]),
-      [['grouped-model', 'default', 1]]
+      [['grouped-model', 'default', 'default', 1]]
     )
   })
 
@@ -106,7 +110,10 @@ describe('model group display entries', () => {
 
     assert.deepEqual(
       result.map((model) => model.display_groups),
-      [[{ group: 'default', ratio: 1 }], [{ group: 'all', ratio: 0.1 }]]
+      [
+        [{ group: 'default', label: 'default', ratio: 1 }],
+        [{ group: 'all', label: 'all', ratio: 0.1 }],
+      ]
     )
   })
 

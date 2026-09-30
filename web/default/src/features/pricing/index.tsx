@@ -111,8 +111,13 @@ export function Pricing() {
 
   const displayModels = useMemo(
     () =>
-      expandModelsByGroup(filteredModels, availableGroups, groupRatio || {}),
-    [availableGroups, filteredModels, groupRatio]
+      expandModelsByGroup(
+        filteredModels,
+        availableGroups,
+        groupRatio || {},
+        catalogGroups || {}
+      ),
+    [availableGroups, catalogGroups, filteredModels, groupRatio]
   )
 
   const handleClearAll = useCallback(() => {

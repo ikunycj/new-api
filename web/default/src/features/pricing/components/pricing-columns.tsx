@@ -447,6 +447,7 @@ export function usePricingColumns(
         <BadgeCell>
           <GroupBadge
             group={row.original.display_group}
+            label={row.original.display_group_label}
             ratio={row.original.display_group_ratio}
             size='sm'
           />

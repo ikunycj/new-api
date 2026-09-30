@@ -135,7 +135,10 @@ func GetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]interface{})
 	userGroup := ""
 	userId := c.GetInt("id")
-	userGroup, _ = model.GetUserGroup(userId, false)
+	// Group permissions can be changed outside the application (for example
+	// during an operational SSH repair). Read the persisted value here so the
+	// API-key selector does not keep serving a stale Redis group.
+	userGroup, _ = model.GetUserGroup(userId, true)
 	pricingGroups := service.GetUserGroupPricingGroups(userGroup)
 	for order, groupName := range ratio_setting.GetPricingGroupOrder() {
 		if _, ok := pricingGroups[groupName]; ok {

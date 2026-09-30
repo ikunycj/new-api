@@ -471,6 +471,7 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
+  groupLabels: Record<string, string>
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -684,7 +685,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
           {(props.log.group || other?.group) && (
             <DetailRow
               label={t('Group')}
-              value={props.log.group || other?.group || ''}
+              value={
+                props.groupLabels[props.log.group || other?.group || ''] ||
+                props.log.group ||
+                other?.group ||
+                ''
+              }
               mono
             />
           )}

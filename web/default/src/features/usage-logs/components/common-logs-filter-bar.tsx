@@ -41,6 +41,7 @@ import {
 import { getLogFilterOptions } from '../api'
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
+import { usePricingGroupLabels } from '../lib/pricing-group-labels'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
@@ -114,6 +115,7 @@ export function CommonLogsFilterBar<TData>(
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const { isAdminView } = useLogsViewScope()
   const showAdminFilters = isAdminView && routeParams.section === 'call'
+  const groupLabels = usePricingGroupLabels(showAdminFilters)
   const targetSection = routeParams.section === 'call' ? 'call' : 'common'
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
 
@@ -244,10 +246,10 @@ export function CommonLogsFilterBar<TData>(
       { value: ALL_GROUPS_VALUE, label: '全部定价分组' },
       ...(filterOptions?.data?.groups ?? []).map((group) => ({
         value: group,
-        label: group,
+        label: groupLabels[group] || group,
       })),
     ],
-    [filterOptions?.data?.groups]
+    [filterOptions?.data?.groups, groupLabels]
   )
   const channelItems = useMemo(
     () => [

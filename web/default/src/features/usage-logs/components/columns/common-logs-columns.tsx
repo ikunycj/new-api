@@ -50,6 +50,7 @@ import {
   isViolationFeeLog,
   renderAuditContent,
 } from '../../lib/format'
+import { usePricingGroupLabels } from '../../lib/pricing-group-labels'
 import {
   isDisplayableLogType,
   isTimingLogType,
@@ -307,6 +308,7 @@ function buildTypeDetailSegments(
 
 export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
+  const groupLabels = usePricingGroupLabels(isAdmin)
   const columns: ColumnDef<UsageLog>[] = [
     {
       accessorKey: 'created_at',
@@ -688,7 +690,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               {group ? (
                 <GroupBadge
                   group={group}
-                  label={sensitiveVisible ? undefined : '••••'}
+                  label={
+                    sensitiveVisible ? groupLabels[group] || group : '••••'
+                  }
                   type='text'
                   size='sm'
                   className='inline align-baseline text-xs leading-none [&>span]:leading-none'
@@ -932,6 +936,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             <DetailsDialog
               log={log}
               isAdmin={isAdmin}
+              groupLabels={groupLabels}
               open={dialogOpen}
               onOpenChange={setDialogOpen}
             />

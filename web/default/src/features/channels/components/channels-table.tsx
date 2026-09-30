@@ -344,7 +344,10 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupLabels: groupsData?.display_names,
+  })
 
   // React Table instance
   const { table } = useDataTable({

@@ -23,6 +23,7 @@ import {
   ReloadIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -48,6 +49,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { getUserGroups } from '@/lib/api'
 import { getPreferredModelOrder } from '@/lib/model-preferences'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -161,13 +163,19 @@ function createInitialDrafts(
   }
 }
 
-function getRoutingLabel(t: TFunction, apiKey: ApiKey | null): string {
+function getRoutingLabel(
+  t: TFunction,
+  apiKey: ApiKey | null,
+  groupLabels: Record<string, string>
+): string {
   if (!apiKey) return t('Not available')
   if (apiKey.group_candidates.length > 0) {
-    return apiKey.group_candidates.join(' -> ')
+    return apiKey.group_candidates
+      .map((group) => groupLabels[group] || group)
+      .join(' -> ')
   }
   if (apiKey.group === 'auto') return t('System routing')
-  if (apiKey.group) return apiKey.group
+  if (apiKey.group) return groupLabels[apiKey.group] || apiKey.group
   return t('User group')
 }
 
@@ -204,6 +212,18 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     enabled: props.open && isConfigurationReady,
     tokenKey: props.tokenKey,
   })
+  const groupsQuery = useQuery({
+    queryKey: ['user-groups'],
+    queryFn: getUserGroups,
+    enabled: props.open,
+    staleTime: 0,
+  })
+  const groupLabels = Object.fromEntries(
+    Object.entries(groupsQuery.data?.data ?? {}).map(([group, info]) => [
+      group,
+      info.desc || group,
+    ])
+  )
   const currentConfig = APP_CONFIGS[app]
   const currentDefaultName = getDefaultName(t, app, props.apiKey?.name)
   const currentDraft = drafts[app]
@@ -409,7 +429,7 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
             {props.apiKey?.name ?? t('API Key')}
           </div>
           <div className='text-muted-foreground mt-0.5 truncate text-xs'>
-            {getRoutingLabel(t, props.apiKey)}
+            {getRoutingLabel(t, props.apiKey, groupLabels)}
           </div>
         </div>
         <div className='flex shrink-0 items-center gap-2' aria-live='polite'>

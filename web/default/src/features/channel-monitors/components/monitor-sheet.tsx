@@ -82,6 +82,7 @@ type ChannelMonitorSheetProps = {
   open: boolean
   monitor: ChannelMonitor | null
   pricingGroupName: string
+  pricingGroupLabel?: string
   onOpenChange: (open: boolean) => void
   embedded?: boolean
   disabled?: boolean
@@ -90,6 +91,7 @@ type ChannelMonitorSheetProps = {
 type ChannelMonitorFormCardProps = {
   monitor: ChannelMonitor | null
   pricingGroupName: string
+  pricingGroupLabel?: string
   disabled?: boolean
 }
 
@@ -99,6 +101,7 @@ export function ChannelMonitorFormCard(props: ChannelMonitorFormCardProps) {
       open
       monitor={props.monitor}
       pricingGroupName={props.pricingGroupName}
+      pricingGroupLabel={props.pricingGroupLabel}
       onOpenChange={() => undefined}
       embedded
       disabled={props.disabled}
@@ -136,6 +139,7 @@ function buildFormDefaults(
 export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
   const queryClient = useQueryClient()
   const pricingGroupName = props.pricingGroupName.trim()
+  const pricingGroupLabel = props.pricingGroupLabel?.trim() || pricingGroupName
   const form = useForm<
     ChannelMonitorFormInput,
     unknown,
@@ -466,7 +470,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
         <CardHeader className='border-b px-4 py-3'>
           <CardTitle className='text-sm'>监控功能</CardTitle>
           <p className='text-muted-foreground text-xs'>
-            系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
+            系统将使用“{pricingGroupLabel}”分组内的渠道凭据测试可用性
           </p>
         </CardHeader>
         <CardContent className='p-0'>{formContent}</CardContent>
@@ -482,7 +486,7 @@ export function ChannelMonitorSheet(props: ChannelMonitorSheetProps) {
             {props.monitor ? '编辑监控功能' : '配置监控功能'}
           </SheetTitle>
           <SheetDescription>
-            系统将使用“{props.pricingGroupName}”分组内的渠道凭据测试可用性
+            系统将使用“{pricingGroupLabel}”分组内的渠道凭据测试可用性
           </SheetDescription>
         </SheetHeader>
         {formContent}

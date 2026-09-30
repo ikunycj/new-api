@@ -665,7 +665,10 @@ function ParamRangeCell(props: { param: SupportedParameter }) {
 // Rate-limits table
 // ---------------------------------------------------------------------------
 
-function RateLimitsSection(props: { model: PricingModel }) {
+function RateLimitsSection(props: {
+  model: PricingModel
+  groupLabels: Record<string, string>
+}) {
   const { t } = useTranslation()
   const limits = useMemo(() => buildRateLimits(props.model), [props.model])
 
@@ -686,7 +689,7 @@ function RateLimitsSection(props: { model: PricingModel }) {
             header: t('Group'),
             className: 'h-9',
             cellClassName: 'py-2 font-mono',
-            cell: (limit) => limit.group,
+            cell: (limit) => props.groupLabels[limit.group] || limit.group,
           },
           {
             id: 'rpm',
@@ -761,13 +764,14 @@ function AuthSection() {
 export function ModelDetailsApi(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
+  groupLabels: Record<string, string>
 }) {
   return (
     <div className='space-y-6'>
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />
-      <RateLimitsSection model={props.model} />
+      <RateLimitsSection model={props.model} groupLabels={props.groupLabels} />
     </div>
   )
 }

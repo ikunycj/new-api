@@ -449,6 +449,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 >
                   <GroupBadge
                     group={group.group}
+                    label={group.label}
                     ratio={group.ratio}
                     size='sm'
                   />
