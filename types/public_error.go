@@ -62,6 +62,11 @@ const (
 	publicMessageServiceUnavailable = "Service temporarily unavailable, please retry later"
 	publicMessageRateLimited        = "Rate limit exceeded, please retry later"
 	publicMessageModelUnavailable   = "The requested model is not available"
+	// publicMessageInvalidRequest covers a request the upstream rejected on its
+	// merits. The status tells the caller it is theirs to fix; the text stays
+	// constant because the upstream's own wording is not safe to forward (it
+	// echoes request content and sometimes names our supplier).
+	publicMessageInvalidRequest = "The request was rejected as invalid, please check the request parameters"
 )
 
 // publicExposedCodes are the classification codes whose message may be shown to
@@ -239,6 +244,13 @@ func publicCategoryForCode(code int, rawCode ErrorCode) PublicErrorCategory {
 	case code == 104001, code == 204001:
 		return PublicErrorCategoryRateLimit
 
+	// The upstream rejected the request body on its merits (201001). The caller
+	// owns the fix, so the 400 survives the projection even though the verdict
+	// was reached upstream. The message is still replaced: see
+	// publicMessageInvalidRequest.
+	case code == 201001:
+		return PublicErrorCategoryInvalidRequest
+
 	// Request-shape errors (301xxx) and protocol conversion errors (308xxx)
 	// are the caller's to fix.
 	case code >= 301000 && code < 302000:
@@ -297,6 +309,8 @@ func publicMessageFor(category PublicErrorCategory) string {
 		return publicMessageRateLimited
 	case PublicErrorCategoryModel:
 		return publicMessageModelUnavailable
+	case PublicErrorCategoryInvalidRequest:
+		return publicMessageInvalidRequest
 	default:
 		return publicMessageServiceUnavailable
 	}
