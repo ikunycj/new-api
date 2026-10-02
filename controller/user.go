@@ -411,6 +411,22 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
+func GetAccessToken(c *gin.Context) {
+	id := c.GetInt("id")
+	user, err := model.GetUserById(id, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// Read-only: return the current access token without rotating it.
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    user.GetAccessToken(),
+	})
+	return
+}
+
 func GetAffCode(c *gin.Context) {
 	id := c.GetInt("id")
 	if err := model.EnsureAffiliateProfile(id); err != nil {
