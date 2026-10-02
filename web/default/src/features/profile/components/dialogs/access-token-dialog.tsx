@@ -43,15 +43,22 @@ export function AccessTokenDialog({
   onOpenChange,
 }: AccessTokenDialogProps) {
   const { t } = useTranslation()
-  const { token, generating, generate } = useAccessToken()
+  const { token, generating, loading, fetchToken, generate } = useAccessToken()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  // Auto-generate token when dialog opens if no token exists
+  // Load the current token when dialog opens (first open must NOT rotate it)
   useEffect(() => {
-    if (open && !token) {
-      generate()
+    if (open) {
+      fetchToken()
     }
-  }, [open, token, generate])
+  }, [open, fetchToken])
+
+  // Confirm dialog copy differs when there is no token to invalidate yet
+  const hasToken = Boolean(token)
+  let actionLabel = hasToken ? t('Regenerate') : t('Generate')
+  if (generating) {
+    actionLabel = t('Generating...')
+  }
 
   return (
     <>
@@ -77,7 +84,7 @@ export function AccessTokenDialog({
             <Button
               type='button'
               onClick={() => setConfirmOpen(true)}
-              disabled={generating}
+              disabled={generating || loading}
               className='gap-2'
             >
               {generating ? (
@@ -85,7 +92,7 @@ export function AccessTokenDialog({
               ) : (
                 <RefreshCw className='h-4 w-4' />
               )}
-              {generating ? t('Generating...') : t('Regenerate')}
+              {actionLabel}
             </Button>
           </>
         }
@@ -99,8 +106,13 @@ export function AccessTokenDialog({
                 type='text'
                 value={token}
                 readOnly
+                disabled={loading && !token}
                 className='font-mono text-xs'
-                placeholder={t('Click "Generate" to create a token')}
+                placeholder={
+                  loading
+                    ? t('Loading...')
+                    : t('Click "Generate" to create a token')
+                }
               />
               <CopyButton
                 value={token}
@@ -120,12 +132,16 @@ export function AccessTokenDialog({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={t('Regenerate Access Token')}
-        desc={t(
-          'Regenerating will immediately invalidate the current token, and API requests using it will stop working. This action cannot be undone.'
-        )}
-        confirmText={generating ? t('Generating...') : t('Regenerate')}
-        destructive
+        title={hasToken ? t('Regenerate Access Token') : t('Generate Access Token')}
+        desc={
+          hasToken
+            ? t(
+                'Regenerating will immediately invalidate the current token, and API requests using it will stop working. This action cannot be undone.'
+              )
+            : t("You don't have an access token yet. Generate one now?")
+        }
+        confirmText={actionLabel}
+        destructive={hasToken}
         isLoading={generating}
         handleConfirm={async () => {
           const success = await generate()
