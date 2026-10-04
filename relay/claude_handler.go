@@ -132,6 +132,12 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		}
 	}
 
+	// 模型规格预校验：在通道选择/转发之前拦截 max_tokens 与上下文超限。
+	// 该步骤不依赖上游，透传模式下同样生效。
+	if err := validateClaudeModelSpec(request); err != nil {
+		return err
+	}
+
 	if !model_setting.GetGlobalSettings().PassThroughRequestEnabled &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&
 		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName) {
