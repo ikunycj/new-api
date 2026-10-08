@@ -473,7 +473,7 @@ func TestConvertRequestResponsesToClaudeUsesDirectConverter(t *testing.T) {
 	}
 	stream := true
 	parallelToolCalls := false
-	maxOutputTokens := uint(512)
+	maxOutputTokens := uint(8192)
 	req := &dto.OpenAIResponsesRequest{
 		Model:             "claude-test",
 		Instructions:      mustRawMessage(t, "system rules"),

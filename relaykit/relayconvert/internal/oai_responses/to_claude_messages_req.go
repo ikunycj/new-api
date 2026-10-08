@@ -1,10 +1,10 @@
 package oairesponses
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"context"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert/convmeta"
 	relaymedia "github.com/QuantumNous/new-api/relaykit/relayconvert/internal/media"
@@ -27,20 +27,20 @@ func OpenAIResponsesRequestToClaudeMessages(c context.Context, info convmeta.Met
 	if req.Model == "" {
 		return nil, fmt.Errorf("model is required")
 	}
-	if err := ValidateRequestChatUnsupportedFields(req); err != nil {
-		return nil, err
-	}
-
+	// Build a Messages request from supported fields rather than rejecting
+	// Responses-only hints. Output/cache/client metadata is intentionally omitted,
+	// as are server-side state references (previous_response_id, conversation,
+	// prompt): this converter can only use history explicitly supplied in input.
 	claudeRequest := &dto.ClaudeRequest{
 		Model:       req.Model,
 		Temperature: req.Temperature,
 		TopP:        req.TopP,
 		Stream:      req.Stream,
 	}
-	if req.MaxOutputTokens != nil && *req.MaxOutputTokens > 0 {
+	if req.MaxOutputTokens != nil {
 		claudeRequest.MaxTokens = kitutil.GetPointer(*req.MaxOutputTokens)
 	}
-	if claudeRequest.MaxTokens == nil || *claudeRequest.MaxTokens == 0 {
+	if claudeRequest.MaxTokens == nil {
 		if defaultMaxTokens, configured := convmeta.OptionsOf(info).Claude.DefaultMaxTokensFor(req.Model); configured {
 			value := uint(defaultMaxTokens)
 			claudeRequest.MaxTokens = &value
@@ -53,14 +53,27 @@ func OpenAIResponsesRequestToClaudeMessages(c context.Context, info convmeta.Met
 	}
 	if len(functions) > 0 {
 		claudeRequest.Tools = responsesFunctionDeclarationsToClaudeTools(functions)
-	}
-
-	toolChoice, err := RequestToolChoiceToChat(req.ToolChoice)
-	if err != nil {
-		return nil, err
-	}
-	if toolChoice != nil || RawJSONPresent(req.ParallelToolCalls) {
-		claudeRequest.ToolChoice = sharedclaude.MapOpenAIToolChoice(toolChoice, ParallelToolCalls(req.ParallelToolCalls))
+		// Invalid or unmappable selection hints fall back to Claude's automatic
+		// selection. Never emit a choice for tools that were dropped above.
+		toolChoice, _ := RequestToolChoiceToChat(req.ToolChoice)
+		parallelToolCalls := ParallelToolCalls(req.ParallelToolCalls)
+		choice := sharedclaude.MapOpenAIToolChoice(toolChoice, parallelToolCalls)
+		if choice != nil && choice.Type == "tool" {
+			matched := false
+			for _, function := range functions {
+				if function.Name == choice.Name {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				choice = sharedclaude.MapOpenAIToolChoice(nil, parallelToolCalls)
+			}
+		}
+		// Assigning a nil *ClaudeToolChoice to an interface would emit JSON null.
+		if choice != nil {
+			claudeRequest.ToolChoice = choice
+		}
 	}
 	applyResponsesReasoningToClaude(req, claudeRequest)
 
@@ -162,23 +175,89 @@ func responsesFunctionParametersToClaudeInputSchema(parameters any) map[string]i
 
 func applyResponsesReasoningToClaude(req *dto.OpenAIResponsesRequest, claudeRequest *dto.ClaudeRequest) {
 	effort := ReasoningEffort(req)
-	switch effort {
-	case "low":
-		claudeRequest.Thinking = &dto.Thinking{
-			Type:         "enabled",
-			BudgetTokens: kitutil.GetPointer(1280),
-		}
-	case "medium":
-		claudeRequest.Thinking = &dto.Thinking{
-			Type:         "enabled",
-			BudgetTokens: kitutil.GetPointer(2048),
-		}
-	case "high":
-		claudeRequest.Thinking = &dto.Thinking{
-			Type:         "enabled",
-			BudgetTokens: kitutil.GetPointer(4096),
+	model := claudeRequest.Model
+	adaptive := false
+	// Match the mapped upstream model, including dated variants. Keep the more
+	// specific 5.5 names before 5; unknown/older models retain manual thinking.
+	for _, family := range []string{
+		"claude-opus-5-5", "claude-opus-5",
+		"claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6",
+		"claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6",
+	} {
+		if model == family || strings.HasPrefix(model, family+"-") {
+			model = family
+			adaptive = true
+			break
 		}
 	}
+	if adaptive {
+		// Newer models reject sampling parameters even when thinking is omitted
+		// or disabled. Do not mutate the caller's Responses request.
+		if model != "claude-opus-4-6" && model != "claude-sonnet-4-6" {
+			claudeRequest.Temperature = nil
+			claudeRequest.TopP = nil
+		}
+		switch effort {
+		case "none":
+			switch model {
+			case "claude-opus-5-5":
+				// Thinking is always on; low is the closest supported intent.
+				effort = "low"
+			case "claude-sonnet-5-5":
+				claudeRequest.Thinking = &dto.Thinking{Type: "between_tools"}
+				return
+			default:
+				claudeRequest.Thinking = &dto.Thinking{Type: "disabled"}
+				return
+			}
+		case "minimal":
+			effort = "low"
+		case "low", "medium", "high", "xhigh", "max":
+		default:
+			// Missing or unmappable effort uses the provider's model default.
+			return
+		}
+		if effort == "xhigh" && (model == "claude-opus-4-6" || model == "claude-sonnet-4-6") {
+			effort = "high"
+		}
+		claudeRequest.Thinking = &dto.Thinking{Type: "adaptive"}
+		if req.Reasoning != nil {
+			switch req.Reasoning.Summary {
+			case "auto", "concise", "detailed":
+				claudeRequest.Thinking.Display = "summarized"
+			}
+		}
+		claudeRequest.OutputConfig, _ = kitutil.Marshal(dto.OutputConfigForEffort{Effort: effort})
+		// Adaptive thinking has no budget_tokens, and the older 4.6 models also
+		// disallow custom sampling while thinking is active.
+		claudeRequest.Temperature = nil
+		claudeRequest.TopP = nil
+		return
+	}
+
+	var budget int
+	switch effort {
+	case "minimal", "low":
+		budget = 1280
+	case "medium":
+		budget = 2048
+	case "high", "xhigh", "max":
+		budget = 4096
+	default:
+		return
+	}
+	// Manual thinking requires 1024 <= budget_tokens < max_tokens. Prefer
+	// omitting an optional thinking hint over increasing the user's output
+	// limit (or turning an otherwise valid short request into an upstream 400).
+	if claudeRequest.MaxTokens == nil || *claudeRequest.MaxTokens <= 1024 {
+		return
+	}
+	if *claudeRequest.MaxTokens <= uint(budget) {
+		budget = int(*claudeRequest.MaxTokens - 1)
+	}
+	claudeRequest.Thinking = &dto.Thinking{Type: "enabled", BudgetTokens: &budget}
+	claudeRequest.Temperature = nil
+	claudeRequest.TopP = nil
 }
 
 func responsesInputContentToClaudeMediaMessages(c context.Context, content any) ([]dto.ClaudeMediaMessage, error) {

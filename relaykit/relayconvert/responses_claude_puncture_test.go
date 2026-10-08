@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,14 +19,26 @@ import (
 
 func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 	stream := true
-	maxOutputTokens := uint(512)
+	maxOutputTokens := uint(8192)
 	req := &dto.OpenAIResponsesRequest{
-		Model:           "claude-sonnet-test",
-		Instructions:    mustPunctureRawMessage(t, "Answer with the available tools."),
-		Input:           mustPunctureRawMessage(t, []map[string]any{{"role": "user", "content": "look up the weather"}}),
-		MaxOutputTokens: &maxOutputTokens,
-		Reasoning:       &dto.Reasoning{Effort: "medium"},
-		Stream:          &stream,
+		Model:              "claude-opus-5-5",
+		Instructions:       mustPunctureRawMessage(t, "Answer with the available tools."),
+		Input:              mustPunctureRawMessage(t, []map[string]any{{"role": "user", "content": "look up the weather"}}),
+		MaxOutputTokens:    &maxOutputTokens,
+		Include:            mustPunctureRawMessage(t, []string{"reasoning.encrypted_content", "file_search_call.results"}),
+		ClientMetadata:     mustPunctureRawMessage(t, []string{"unsupported metadata shape"}),
+		PreviousResponseID: "resp_not_retrievable",
+		Conversation:       mustPunctureRawMessage(t, "conv_not_retrievable"),
+		Prompt:             mustPunctureRawMessage(t, map[string]any{"id": "pmpt_not_retrievable"}),
+		ToolChoice:         mustPunctureRawMessage(t, []any{}),
+		ParallelToolCalls:  mustPunctureRawMessage(t, false),
+		Reasoning: &dto.Reasoning{
+			Effort:  "medium",
+			Summary: "auto",
+			Mode:    mustPunctureRawMessage(t, "standard"),
+			Context: mustPunctureRawMessage(t, "all_turns"),
+		},
+		Stream: &stream,
 		Tools: mustPunctureRawMessage(t, []map[string]any{{
 			"type":        "function",
 			"name":        "lookup_weather",
@@ -38,20 +51,41 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 		}}),
 	}
 
-	claudeReq, err := OpenAIResponsesRequestToClaudeMessages(context.Background(), nil, req)
+	convertedRequest, err := ConvertRequest(context.Background(), nil, types.RelayFormatClaude, req)
 	require.NoError(t, err)
+	claudeReq, ok := convertedRequest.Value.(*dto.ClaudeRequest)
+	require.True(t, ok)
 	require.Len(t, claudeReq.Messages, 1)
 	assert.Equal(t, "user", claudeReq.Messages[0].Role)
-	assert.Equal(t, "claude-sonnet-test", claudeReq.Model)
+	assert.Equal(t, "claude-opus-5-5", claudeReq.Model)
 	require.NotNil(t, claudeReq.MaxTokens)
-	assert.Equal(t, uint(512), *claudeReq.MaxTokens)
+	assert.Equal(t, uint(8192), *claudeReq.MaxTokens)
 	require.NotNil(t, claudeReq.Thinking)
-	assert.Equal(t, 2048, claudeReq.Thinking.GetBudgetTokens())
+	assert.Equal(t, "adaptive", claudeReq.Thinking.Type)
+	assert.Nil(t, claudeReq.Thinking.BudgetTokens)
 
-	var received dto.ClaudeRequest
+	const expectedRequest = `{
+		"model": "claude-opus-5-5",
+		"system": [{"type":"text","text":"Answer with the available tools."}],
+		"messages": [{"role":"user","content":[{"type":"text","text":"look up the weather"}]}],
+		"tools": [{"name":"lookup_weather","description":"Look up current weather.","input_schema":{
+			"type":"object","properties":{"city":{"type":"string"}},"required":["city"]
+		}}],
+		"tool_choice": {"type":"auto","disable_parallel_tool_use":true},
+		"max_tokens": 8192,
+		"thinking": {"type":"adaptive","display":"summarized"},
+		"output_config": {"effort":"medium"},
+		"stream": true
+	}`
+	receivedBody := make(chan []byte, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/messages", r.URL.Path)
-		require.NoError(t, kitutil.DecodeJson(r.Body, &received))
+		raw, err := io.ReadAll(r.Body)
+		if !assert.NoError(t, err) || !assert.Equal(t, "/v1/messages", r.URL.Path) ||
+			!assert.JSONEq(t, expectedRequest, string(raw)) {
+			http.Error(w, "invalid Messages request", http.StatusBadRequest)
+			return
+		}
+		receivedBody <- raw
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 
@@ -61,7 +95,7 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 				Id:    "msg_puncture_1",
 				Type:  "message",
 				Role:  "assistant",
-				Model: "claude-sonnet-test",
+				Model: "claude-opus-5-5",
 				Usage: &dto.ClaudeUsage{InputTokens: 7},
 			},
 		})
@@ -102,14 +136,17 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var received dto.ClaudeRequest
+	require.NoError(t, kitutil.Unmarshal(<-receivedBody, &received))
 
 	state, err := NewResponseStreamState(types.RelayFormatClaude, types.RelayFormatOpenAIResponses, ResponseStreamOptions{
 		ID:    "msg_puncture_1",
-		Model: "claude-sonnet-test",
+		Model: "claude-opus-5-5",
 	})
 	require.NoError(t, err)
 
 	var events []ChatToResponsesStreamEvent
+	claudeInfo := &ClaudeResponseInfo{Usage: &dto.Usage{}}
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -118,6 +155,7 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 		}
 		var claudeEvent dto.ClaudeResponse
 		require.NoError(t, kitutil.UnmarshalJsonStr(strings.TrimSpace(strings.TrimPrefix(line, "data:")), &claudeEvent))
+		FormatClaudeResponseInfo(&claudeEvent, nil, claudeInfo)
 		results, convertErr := ConvertStreamResponseChunk(context.Background(), nil, state, &claudeEvent)
 		require.NoError(t, convertErr)
 		for _, result := range results {
@@ -128,6 +166,8 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 
+	// Match the host: accumulate partial Claude usage before finalizing Responses.
+	state.SetUsage(UsageFromClaudeUsage(claudeInfo.Usage))
 	finalResults, err := FinalizeStreamResponse(context.Background(), nil, state)
 	require.NoError(t, err)
 	for _, result := range finalResults {
@@ -137,7 +177,7 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 	}
 
 	assert.Equal(t, "Answer with the available tools.", claudeReq.ParseSystem()[0].GetText())
-	assert.Equal(t, "claude-sonnet-test", received.Model)
+	assert.Equal(t, "claude-opus-5-5", received.Model)
 	require.NotNil(t, received.Stream)
 	assert.True(t, *received.Stream)
 	require.Len(t, received.Messages, 1)
@@ -170,7 +210,9 @@ func TestPunctureResponsesClaudeThroughMockMessagesSSE(t *testing.T) {
 	}
 	assert.True(t, sawTool)
 	require.NotNil(t, state.Usage())
-	t.Logf("converted usage: prompt=%d completion=%d total=%d", state.Usage().PromptTokens, state.Usage().CompletionTokens, state.Usage().TotalTokens)
+	assert.Equal(t, 7, state.Usage().PromptTokens)
+	assert.Equal(t, 5, state.Usage().CompletionTokens)
+	assert.Equal(t, 12, state.Usage().TotalTokens)
 }
 
 func writePunctureClaudeEvent(t *testing.T, w http.ResponseWriter, event dto.ClaudeResponse) {
