@@ -442,3 +442,95 @@ func TestFailoverWrapperDoesNotLeakTheCause(t *testing.T) {
 		t.Error("error ref should still be available internally")
 	}
 }
+
+// TestUpstreamRequestRejectionReachesTheCaller pins the behaviour reported by an
+// acceptance run against a live Claude channel: the upstream answered 400 with
+// "`temperature` and `top_p` cannot both be specified for this model", and the
+// caller was handed 503 "Service temporarily unavailable". The verdict was
+// correct, actionable and entirely the caller's to fix, and the projection
+// turned it into a transient server fault that invited a pointless retry.
+//
+// A rejection of the request body must keep its 4xx so the caller can act on
+// it, while the upstream's own wording stays hidden.
+func TestUpstreamRequestRejectionReachesTheCaller(t *testing.T) {
+	withNormalizedMode(t)
+
+	for _, status := range []int{
+		http.StatusBadRequest,
+		http.StatusRequestEntityTooLarge,
+		http.StatusUnprocessableEntity,
+	} {
+		lastErr := channelUpstreamFailure(
+			"`temperature` and `top_p` cannot both be specified for this model.", status)
+
+		if got := lastErr.AlltokenCode(); got != 201001 {
+			t.Fatalf("status %d: classification = %d, want 201001", status, got)
+		}
+		// A rejected body is not a channel fault: replaying it against the rest
+		// of the pool cannot change the verdict.
+		if action := lastErr.ErrorAction(); action != "none" {
+			t.Errorf("status %d: action = %q, want none", status, action)
+		}
+		// The projection collapses the whole category onto 400. The exact
+		// upstream status (413, 422) is itself a detail of how that supplier
+		// words its rejection, and the closed public set is the point of the
+		// projection; what matters is that the caller is told the request was
+		// refused rather than that the service broke.
+		if got := lastErr.PublicStatusCode(); got != http.StatusBadRequest {
+			t.Errorf("status %d: PublicStatusCode() = %d, want 400", status, got)
+		}
+
+		// The same must hold once failover gives up and wraps the failure.
+		wrapped := NewUpstreamExhaustedError(lastErr, 1)
+		if got := wrapped.PublicStatusCode(); got != http.StatusBadRequest {
+			t.Errorf("status %d: wrapped PublicStatusCode() = %d, want 400", status, got)
+		}
+		if got := publicCategoryFor(wrapped); got != PublicErrorCategoryInvalidRequest {
+			t.Errorf("status %d: wrapped category = %q, want invalid_request", status, got)
+		}
+
+		projected := wrapped.ToPublicClaudeError()
+		if projected.Message != publicMessageInvalidRequest {
+			t.Errorf("status %d: message = %q, want the generic invalid-request constant",
+				status, projected.Message)
+		}
+		// The upstream text names the model's parameter contract; it is not ours
+		// to forward verbatim.
+		if strings.Contains(projected.Message, "temperature") {
+			t.Errorf("status %d: upstream wording leaked: %s", status, projected.Message)
+		}
+	}
+}
+
+// TestUpstreamCredentialFailureStaysOpaque is the other half of the 4xx split.
+//
+// Not every upstream 4xx belongs to the caller. A 401/403 means our own
+// credential was rejected and a 404 means the model or route is missing on that
+// channel; both describe our supply, must keep switching channels, and must
+// still collapse into the generic 503.
+func TestUpstreamCredentialFailureStaysOpaque(t *testing.T) {
+	withNormalizedMode(t)
+
+	for _, status := range []int{
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusNotFound,
+	} {
+		lastErr := channelUpstreamFailure("invalid x-api-key for acct_9f31", status)
+
+		if action := lastErr.ErrorAction(); action != "switch_channel" {
+			t.Errorf("status %d: action = %q, want switch_channel", status, action)
+		}
+
+		wrapped := NewUpstreamExhaustedError(lastErr, 2)
+		if got := wrapped.PublicStatusCode(); got != http.StatusServiceUnavailable {
+			t.Errorf("status %d: PublicStatusCode() = %d, want 503", status, got)
+		}
+		projected := wrapped.ToPublicClaudeError()
+		if projected.Message != publicMessageServiceUnavailable {
+			t.Errorf("status %d: message = %q, want the generic 503 constant",
+				status, projected.Message)
+		}
+		assertNoInternalLeak(t, projected.Message)
+	}
+}
