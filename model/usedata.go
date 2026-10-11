@@ -202,13 +202,14 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64, tokenName 
 	return quotaDatas, err
 }
 
-func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
+func GetQuotaDataGroupByUser(startTime int64, endTime int64, tokenName string, modelName string) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
-	err = DB.Table("quota_data").
+	tx := DB.Table("quota_data").
 		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
 		Where("created_at >= ? and created_at <= ?", startTime, endTime).
-		Group("username, created_at").
-		Find(&quotaDatas).Error
+		Group("username, created_at")
+	tx = quotaDataFilteredBy(tx, tokenName, modelName)
+	err = tx.Find(&quotaDatas).Error
 	return quotaDatas, err
 }
 
