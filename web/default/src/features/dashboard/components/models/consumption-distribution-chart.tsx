@@ -183,60 +183,82 @@ export function ConsumptionDistributionChart(
         <div className='flex w-full items-center gap-2 sm:w-auto'>
           {canFilterInline && (
             <>
-              <Select
-                items={[ALL_KEY_ENTRY, ...(dimsQuery.data?.keys ?? []).map((name) => ({
-                  value: name,
-                  label: name,
-                }))]}
-                value={inlineFilters?.token_name || ALL_KEY}
-                onValueChange={(value) =>
-                  setInlineDimension('token_name', value === ALL_KEY ? '' : value)
-                }
-              >
-                <SelectTrigger size='sm' className='max-w-[200px]'>
-                  <span className='text-muted-foreground shrink-0 text-xs'>
-                    {t('Key')}:
-                  </span>
-                  <SelectValue placeholder={t('All keys')} />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
-                    <SelectItem value={ALL_KEY}>{t('All keys')}</SelectItem>
-                    {(dimsQuery.data?.keys ?? []).map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Select
-                items={[ALL_MODEL_ENTRY, ...(dimsQuery.data?.models ?? []).map((name) => ({
-                  value: name,
-                  label: name,
-                }))]}
-                value={inlineFilters?.model_name || ALL_KEY}
-                onValueChange={(value) =>
-                  setInlineDimension('model_name', value === ALL_KEY ? '' : value)
-                }
-              >
-                <SelectTrigger size='sm' className='max-w-[200px]'>
-                  <span className='text-muted-foreground shrink-0 text-xs'>
-                    {t('Model')}:
-                  </span>
-                  <SelectValue placeholder={t('All models')} />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
-                    <SelectItem value={ALL_KEY}>{t('All models')}</SelectItem>
-                    {(dimsQuery.data?.models ?? []).map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <div className='bg-muted/60 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-lg border p-0.5 sm:h-8'>
+                <Select
+                  items={[
+                    ALL_KEY_ENTRY,
+                    ...(dimsQuery.data?.keys ?? []).map((name) => ({
+                      value: name,
+                      label: name,
+                    })),
+                  ]}
+                  value={inlineFilters?.token_name || ALL_KEY}
+                  onValueChange={(value) =>
+                    setInlineDimension(
+                      'token_name',
+                      value === ALL_KEY ? '' : value
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    size='sm'
+                    className='max-w-[190px] border-none bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent'
+                  >
+                    <span className='text-muted-foreground shrink-0 text-xs'>
+                      {t('Key')}:
+                    </span>
+                    <SelectValue placeholder={t('All keys')} />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      <SelectItem value={ALL_KEY}>{t('All keys')}</SelectItem>
+                      {(dimsQuery.data?.keys ?? []).map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='bg-muted/60 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-lg border p-0.5 sm:h-8'>
+                <Select
+                  items={[
+                    ALL_MODEL_ENTRY,
+                    ...(dimsQuery.data?.models ?? []).map((name) => ({
+                      value: name,
+                      label: name,
+                    })),
+                  ]}
+                  value={inlineFilters?.model_name || ALL_KEY}
+                  onValueChange={(value) =>
+                    setInlineDimension(
+                      'model_name',
+                      value === ALL_KEY ? '' : value
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    size='sm'
+                    className='max-w-[190px] border-none bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent'
+                  >
+                    <span className='text-muted-foreground shrink-0 text-xs'>
+                      {t('Model')}:
+                    </span>
+                    <SelectValue placeholder={t('All models')} />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      <SelectItem value={ALL_KEY}>{t('All models')}</SelectItem>
+                      {(dimsQuery.data?.models ?? []).map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
             </>
           )}
           <div className='bg-muted/60 inline-flex h-7 w-full min-w-0 flex-1 overflow-x-auto rounded-lg border p-0.5 sm:h-8 sm:w-auto sm:flex-none'>
