@@ -62,6 +62,41 @@ func GetQuotaDatesByUser(c *gin.Context) {
 	})
 }
 
+// GetAdminQuotaDataDimensions serves the dashboard quick-filter dropdowns: the
+// key names and models that actually have consumption rows in the requested
+// window. Mounted admin-only next to the aggregate /api/data route; the self
+// variant scopes to the calling user.
+func GetAdminQuotaDataDimensions(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	dims, err := model.GetQuotaDataDimensions(startTimestamp, endTimestamp, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    dims,
+	})
+}
+
+func GetSelfQuotaDataDimensions(c *gin.Context) {
+	userId := c.GetInt("id")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	dims, err := model.GetQuotaDataDimensions(startTimestamp, endTimestamp, userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    dims,
+	})
+}
+
 func GetUserQuotaDates(c *gin.Context) {
 	userId := c.GetInt("id")
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
