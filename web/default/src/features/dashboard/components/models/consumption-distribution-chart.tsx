@@ -74,6 +74,8 @@ const CHART_TYPE_ICONS: Record<
 // Sentinel for the "no filter" option, since an empty-string Select value
 // collides with the unset placeholder state.
 const ALL_KEY = '__all__'
+const ALL_KEY_ENTRY = { value: ALL_KEY, label: 'All keys' }
+const ALL_MODEL_ENTRY = { value: ALL_KEY, label: 'All models' }
 
 export function ConsumptionDistributionChart(
   props: ConsumptionDistributionChartProps
@@ -182,16 +184,19 @@ export function ConsumptionDistributionChart(
           {canFilterInline && (
             <>
               <Select
-                items={(dimsQuery.data?.keys ?? []).map((name) => ({
+                items={[ALL_KEY_ENTRY, ...(dimsQuery.data?.keys ?? []).map((name) => ({
                   value: name,
                   label: name,
-                }))}
+                }))]}
                 value={inlineFilters?.token_name || ALL_KEY}
                 onValueChange={(value) =>
                   setInlineDimension('token_name', value === ALL_KEY ? '' : value)
                 }
               >
-                <SelectTrigger className='h-7 max-w-[170px] sm:h-8'>
+                <SelectTrigger size='sm' className='max-w-[200px]'>
+                  <span className='text-muted-foreground shrink-0 text-xs'>
+                    {t('Key')}:
+                  </span>
                   <SelectValue placeholder={t('All keys')} />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
@@ -206,16 +211,19 @@ export function ConsumptionDistributionChart(
                 </SelectContent>
               </Select>
               <Select
-                items={(dimsQuery.data?.models ?? []).map((name) => ({
+                items={[ALL_MODEL_ENTRY, ...(dimsQuery.data?.models ?? []).map((name) => ({
                   value: name,
                   label: name,
-                }))}
+                }))]}
                 value={inlineFilters?.model_name || ALL_KEY}
                 onValueChange={(value) =>
                   setInlineDimension('model_name', value === ALL_KEY ? '' : value)
                 }
               >
-                <SelectTrigger className='h-7 max-w-[170px] sm:h-8'>
+                <SelectTrigger size='sm' className='max-w-[200px]'>
+                  <span className='text-muted-foreground shrink-0 text-xs'>
+                    {t('Model')}:
+                  </span>
                   <SelectValue placeholder={t('All models')} />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
