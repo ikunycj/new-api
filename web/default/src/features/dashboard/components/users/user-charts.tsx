@@ -189,65 +189,6 @@ export function UserCharts(props: UserChartsProps) {
   return (
     <div className='space-y-3'>
       <div className='flex items-center gap-1.5 overflow-x-auto pb-1 sm:gap-2'>
-        <Tabs
-          value={String(selectedRange)}
-          onValueChange={(value) => handleRangeChange(Number(value))}
-          className='shrink-0'
-        >
-          <TabsList>
-            {TIME_RANGE_PRESETS.map((preset) => (
-              <TabsTrigger
-                key={preset.days}
-                value={String(preset.days)}
-                className='px-2.5 text-xs'
-              >
-                {t(preset.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Tabs
-          value={timeGranularity}
-          onValueChange={(value) =>
-            handleGranularityChange(value as TimeGranularity)
-          }
-          className='shrink-0'
-        >
-          <TabsList>
-            {TIME_GRANULARITY_OPTIONS.map((opt) => (
-              <TabsTrigger
-                key={opt.value}
-                value={opt.value}
-                className='px-2.5 text-xs'
-              >
-                {t(opt.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Tabs
-          value={String(topUserLimit)}
-          onValueChange={(value) => handleTopUserLimitChange(Number(value))}
-          className='shrink-0'
-        >
-          <TabsList>
-            <span className='text-muted-foreground px-2 text-xs font-medium whitespace-nowrap'>
-              {t('Top Users')}
-            </span>
-            {TOP_USER_LIMIT_OPTIONS.map((limit) => (
-              <TabsTrigger
-                key={limit}
-                value={String(limit)}
-                className='px-2.5 text-xs'
-              >
-                {t('Top {{count}}', { count: limit })}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
         <Select
           items={[
             { value: ALL_DIMENSION, label: t('All keys') },
@@ -309,6 +250,65 @@ export function UserCharts(props: UserChartsProps) {
             </SelectGroup>
           </SelectContent>
         </Select>
+
+        <Tabs
+          value={String(selectedRange)}
+          onValueChange={(value) => handleRangeChange(Number(value))}
+          className='shrink-0'
+        >
+          <TabsList>
+            {TIME_RANGE_PRESETS.map((preset) => (
+              <TabsTrigger
+                key={preset.days}
+                value={String(preset.days)}
+                className='px-2.5 text-xs'
+              >
+                {t(preset.label)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <Tabs
+          value={timeGranularity}
+          onValueChange={(value) =>
+            handleGranularityChange(value as TimeGranularity)
+          }
+          className='shrink-0'
+        >
+          <TabsList>
+            {TIME_GRANULARITY_OPTIONS.map((opt) => (
+              <TabsTrigger
+                key={opt.value}
+                value={opt.value}
+                className='px-2.5 text-xs'
+              >
+                {t(opt.label)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <Tabs
+          value={String(topUserLimit)}
+          onValueChange={(value) => handleTopUserLimitChange(Number(value))}
+          className='shrink-0'
+        >
+          <TabsList>
+            <span className='text-muted-foreground px-2 text-xs font-medium whitespace-nowrap'>
+              {t('Top Users')}
+            </span>
+            {TOP_USER_LIMIT_OPTIONS.map((limit) => (
+              <TabsTrigger
+                key={limit}
+                value={String(limit)}
+                className='px-2.5 text-xs'
+              >
+                {t('Top {{count}}', { count: limit })}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {isLoading && (
           <Loader2 className='text-muted-foreground size-4 animate-spin' />
