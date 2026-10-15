@@ -86,8 +86,12 @@ export function DocsClientModels() {
             {
               content: (
                 <>
-                  创建 API Key
-                  时选择多个分组，并按需要调整顺序。相同模型会按照分组顺序从上到下优先使用；不同模型不互相排斥，可以同时使用。
+                  <span className='block'>
+                    创建 API Key 时选择多个分组，并按需要调整顺序。
+                  </span>
+                  <span className='text-muted-foreground mt-1 block text-sm leading-6'>
+                    相同模型会按照分组顺序从上到下优先使用；不同模型不互相排斥，可以同时使用。
+                  </span>
                 </>
               ),
               screenshots: [CLIENT_MODELS_SCREENSHOTS.modelGroups],

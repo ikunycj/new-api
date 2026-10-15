@@ -6176,7 +6176,7 @@
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "智商测试已停止：已完成 {{completed}}/{{total}}，{{success}} 个成功，{{failed}} 个失败",
     "Result not retained; run again": "结果未保留，请重新测试",
     "Configure multi-provider models in your client": "客户端配置多厂商模型",
-    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex、Claude Code等任意客户端可以接入任意模型，无需本地路由转换",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "在Codex中也能使用Claude等模型",
     "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "本站的所有模型，均可接入任意接口协议的客户端，无需本地路由转发",
     "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "如右图，在codex客户端里面同时使用deepseek、claude、gpt三家厂商的模型",
     "All channels": "所有渠道"
