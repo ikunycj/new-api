@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "Tokens en entrée : <200K / ≥200K",
     "Official price": "Prix officiel",
     "One gateway interface connects every model": "Une seule interface de passerelle pour tous les modèles",
-    "Connect models from leading providers to the agent tools you already use.": "Connectez les modèles des principaux fournisseurs aux outils agent que vous utilisez déjà.",
     "Model group routing": "Routage par groupe de modèles",
     "One API key, multiple model groups": "Une clé API, plusieurs groupes de modèles",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "Sélectionnez plusieurs groupes lors de la création d’une clé. Les requêtes utilisent les groupes compatibles dans l’ordre et basculent automatiquement si nécessaire.",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "Lancer le test de QI",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "Test de QI arrêté : {{completed}}/{{total}} terminés, {{success}} réussis, {{failed}} échecs",
     "Result not retained; run again": "Résultat non conservé ; relancez le test",
+    "Configure multi-provider models in your client": "Configurer plusieurs fournisseurs dans votre client",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex, Claude Code et tout client peuvent se connecter à n’importe quel modèle sans routage local",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "Tous les modèles de ce site sont utilisables dans des clients avec n’importe quel protocole API, sans routage ni transfert local.",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "Comme illustré à droite, utilisez simultanément DeepSeek, Claude et GPT de trois fournisseurs dans Codex.",
     "All channels": "Tous les canaux"
   }
 }

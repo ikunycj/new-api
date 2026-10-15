@@ -2099,6 +2099,14 @@ const homeLandingTranslations = {
     'Usage documentation': 'Usage documentation',
     'Various prices at a glance': 'Various prices at a glance',
     'View more in Model Square': 'View more in Model Square',
+    'Configure multi-provider models in your client':
+      'Configure multi-provider models in your client',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex, Claude Code, and any other client can connect to any model without local routing conversion',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      'All models on this site can be used in clients using any API protocol, without local routing or forwarding.',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.',
   },
   zh: {
     'Model gateway address': '模型网关地址',
@@ -2110,6 +2118,13 @@ const homeLandingTranslations = {
     'Usage documentation': '使用文档',
     'Various prices at a glance': '各种价格一目了然',
     'View more in Model Square': '去模型广场查看更多',
+    'Configure multi-provider models in your client': '客户端配置多厂商模型',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex、Claude Code等任意客户端可以接入任意模型，无需本地路由转换',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      '本站的所有模型，均可接入任意接口协议的客户端，无需本地路由转发',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      '如右图，在codex客户端里面同时使用deepseek、claude、gpt三家厂商的模型',
   },
   'zh-TW': {
     'Model gateway address': '模型閘道位址',
@@ -2121,6 +2136,13 @@ const homeLandingTranslations = {
     'Usage documentation': '使用文件',
     'Various prices at a glance': '各種價格一目了然',
     'View more in Model Square': '前往模型廣場查看更多',
+    'Configure multi-provider models in your client': '用戶端配置多廠商模型',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex、Claude Code 等任意用戶端皆可接入任意模型，無需本地路由轉換',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      '本站的所有模型，均可接入使用任意介面協定的用戶端，無需本地路由轉發',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      '如右圖，在 Codex 用戶端中同時使用 DeepSeek、Claude、GPT 三家廠商的模型',
   },
   fr: {
     'Model gateway address': 'Adresse de la passerelle de modèles',
@@ -2132,6 +2154,14 @@ const homeLandingTranslations = {
     'Usage documentation': 'Guide d’utilisation',
     'Various prices at a glance': 'Aperçu des différents prix',
     'View more in Model Square': 'Voir plus dans la place des modèles',
+    'Configure multi-provider models in your client':
+      'Configurer plusieurs fournisseurs dans votre client',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex, Claude Code et tout client peuvent se connecter à n’importe quel modèle sans routage local',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      'Tous les modèles de ce site sont utilisables dans des clients avec n’importe quel protocole API, sans routage ni transfert local.',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      'Comme illustré à droite, utilisez simultanément DeepSeek, Claude et GPT de trois fournisseurs dans Codex.',
   },
   ja: {
     'Model gateway address': 'モデルゲートウェイのアドレス',
@@ -2143,6 +2173,14 @@ const homeLandingTranslations = {
     'Usage documentation': '利用ガイド',
     'Various prices at a glance': 'さまざまな価格をひと目で確認',
     'View more in Model Square': 'モデル広場でもっと見る',
+    'Configure multi-provider models in your client':
+      'クライアントで複数プロバイダーのモデルを設定',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex、Claude Code など任意のクライアントで、ローカルルーティングなしに任意のモデルへ接続',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      'このサイトのすべてのモデルは、任意の API プロトコルを使用するクライアントから、ローカルルーティングや転送なしで利用できます。',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      '右図のように、Codex クライアントで 3 社の DeepSeek、Claude、GPT を同時に利用できます。',
   },
   ru: {
     'Model gateway address': 'Адрес шлюза моделей',
@@ -2154,6 +2192,14 @@ const homeLandingTranslations = {
     'Usage documentation': 'Руководство',
     'Various prices at a glance': 'Разные цены с первого взгляда',
     'View more in Model Square': 'Подробнее на витрине моделей',
+    'Configure multi-provider models in your client':
+      'Настройка моделей разных поставщиков в клиенте',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex, Claude Code и любой клиент могут подключаться к любой модели без локальной маршрутизации',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      'Все модели на этом сайте доступны в клиентах с любым протоколом API без локальной маршрутизации или перенаправления.',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      'Как показано справа, в клиенте Codex можно одновременно использовать DeepSeek, Claude и GPT от трех поставщиков.',
   },
   vi: {
     'Model gateway address': 'Địa chỉ cổng mô hình',
@@ -2165,6 +2211,14 @@ const homeLandingTranslations = {
     'Usage documentation': 'Hướng dẫn sử dụng',
     'Various prices at a glance': 'Các mức giá khác nhau trong nháy mắt',
     'View more in Model Square': 'Xem thêm trong Model Square',
+    'Configure multi-provider models in your client':
+      'Cấu hình mô hình nhiều nhà cung cấp trong ứng dụng',
+    'Codex, Claude Code, and any other client can connect to any model without local routing conversion':
+      'Codex, Claude Code và mọi ứng dụng đều có thể kết nối với bất kỳ mô hình nào mà không cần định tuyến cục bộ',
+    'All models on this site can be used in clients using any API protocol, without local routing or forwarding.':
+      'Tất cả mô hình trên trang này đều có thể dùng trong ứng dụng sử dụng bất kỳ giao thức API nào mà không cần định tuyến hoặc chuyển tiếp cục bộ.',
+    'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.':
+      'Như hình bên phải, có thể dùng đồng thời DeepSeek, Claude và GPT từ ba nhà cung cấp trong ứng dụng Codex.',
   },
 }
 
@@ -2423,42 +2477,28 @@ const gatewaySectionTranslations = {
   en: {
     'One gateway interface connects every model':
       'One gateway interface connects every model',
-    'Connect models from leading providers to the agent tools you already use.':
-      'Connect models from leading providers to the agent tools you already use.',
   },
   zh: {
     'One gateway interface connects every model': '一个网关接口，贯通所有模型',
-    'Connect models from leading providers to the agent tools you already use.':
-      '将各家主流模型接入您常用的 Agent 工具。',
   },
   'zh-TW': {
     'One gateway interface connects every model': '一個閘道介面，串聯所有模型',
-    'Connect models from leading providers to the agent tools you already use.':
-      '將各家主流模型接入您常用的 Agent 工具。',
   },
   fr: {
     'One gateway interface connects every model':
       'Une seule interface de passerelle pour tous les modèles',
-    'Connect models from leading providers to the agent tools you already use.':
-      'Connectez les modèles des principaux fournisseurs aux outils agent que vous utilisez déjà.',
   },
   ja: {
     'One gateway interface connects every model':
       '1 つのゲートウェイで、あらゆるモデルへ',
-    'Connect models from leading providers to the agent tools you already use.':
-      '主要プロバイダーのモデルを、普段お使いの Agent ツールに接続します。',
   },
   ru: {
     'One gateway interface connects every model':
       'Один интерфейс шлюза для всех моделей',
-    'Connect models from leading providers to the agent tools you already use.':
-      'Подключайте модели ведущих поставщиков к привычным агентским инструментам.',
   },
   vi: {
     'One gateway interface connects every model':
       'Một giao diện cổng kết nối mọi mô hình',
-    'Connect models from leading providers to the agent tools you already use.':
-      'Kết nối mô hình từ các nhà cung cấp hàng đầu với những công cụ agent bạn đang sử dụng.',
   },
 }
 
@@ -2567,6 +2607,10 @@ for (const [locale, translations] of Object.entries(
 }
 
 const retiredKeys = new Set([
+  'Use any provider in Codex or Claude Code',
+  'Use DeepSeek or Claude in Codex, and GPT or Gemini in Claude Code. Choose a model available on this site; the gateway handles protocol conversion.',
+  'Connect Codex or Claude Code to DeepSeek, Claude, OpenAI, Gemini, and other providers through one gateway.',
+  'Connect models from leading providers to the agent tools you already use.',
   // Remove malformed locale-key entries from an earlier homepage pricing pass.
   '各種價格一目了然',
   '前往模型廣場查看更多',
@@ -2800,12 +2844,11 @@ for (const filename of localeFiles) {
   const file = path.join(LOCALES_DIR, `${locale}.json`)
   const json = JSON.parse(await fs.readFile(file, 'utf8'))
   let changed = false
-  if (!onlyKeys) {
-    for (const key of retiredKeys) {
-      if (Object.hasOwn(json.translation, key)) {
-        delete json.translation[key]
-        changed = true
-      }
+  for (const key of retiredKeys) {
+    if (onlyKeys && !onlyKeys.has(key)) continue
+    if (Object.hasOwn(json.translation, key)) {
+      delete json.translation[key]
+      changed = true
     }
   }
   for (const [key, value] of Object.entries(newKeys[locale] ?? {})) {

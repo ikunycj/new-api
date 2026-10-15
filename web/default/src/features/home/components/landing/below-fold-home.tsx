@@ -60,11 +60,11 @@ function DeferredLandingSection(props: {
 export function BelowFoldHome(props: BelowFoldHomeProps) {
   return (
     <>
-      <FeaturedModelsSection catalogAvailable={props.catalogAvailable} />
-      <AiClientsSection />
       <DeferredLandingSection placeholderClassName='min-h-[132rem] bg-transparent md:min-h-[96rem]'>
         <GatewaySection />
       </DeferredLandingSection>
+      <FeaturedModelsSection catalogAvailable={props.catalogAvailable} />
+      <AiClientsSection />
       <DeferredLandingSection placeholderClassName='min-h-[60rem] bg-transparent'>
         <ConsolePreviewSection />
       </DeferredLandingSection>

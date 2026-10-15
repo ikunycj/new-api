@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "輸入 Token：<200K / ≥200K",
     "Official price": "官方原價",
     "One gateway interface connects every model": "一個閘道介面，串聯所有模型",
-    "Connect models from leading providers to the agent tools you already use.": "將各家主流模型接入您常用的 Agent 工具。",
     "Model group routing": "模型分組路由",
     "One API key, multiple model groups": "一個 API 金鑰，多種模型分組選擇",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "建立金鑰時可選擇多個分組；請求會依序比對支援該模型的分組，並在需要時自動備援。",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "執行智商測試",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "智商測試已停止：已完成 {{completed}}/{{total}}，{{success}} 個成功，{{failed}} 個失敗",
     "Result not retained; run again": "結果未保留，請重新測試",
+    "Configure multi-provider models in your client": "用戶端配置多廠商模型",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex、Claude Code 等任意用戶端皆可接入任意模型，無需本地路由轉換",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "本站的所有模型，均可接入使用任意介面協定的用戶端，無需本地路由轉發",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "如右圖，在 Codex 用戶端中同時使用 DeepSeek、Claude、GPT 三家廠商的模型",
     "All channels": "所有頻道"
   }
 }

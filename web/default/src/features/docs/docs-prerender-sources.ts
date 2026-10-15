@@ -24,6 +24,7 @@ import { DocsApiMultimodal } from './api-multimodal'
 import { DocsApiTextChat } from './api-text-chat'
 import { DocsCcSwitch } from './cc-switch-guide'
 import { DocsClaudeCode } from './claude-code-guide'
+import { DocsClientModels } from './client-models'
 import { DocsCodex } from './codex-guide'
 import type { DocsRoutePath } from './docs-config'
 import { DocsErrorSelfCheck } from './error-self-check'
@@ -40,6 +41,7 @@ import { DocsReferralRewards } from './referral-rewards'
 export const DOCS_PRERENDER_SOURCES = {
   '/docs': DocsOverview,
   '/docs/quick-start': DocsQuickStart,
+  '/docs/client-models': DocsClientModels,
   '/docs/model-pricing': DocsModelPricing,
   '/docs/referral-rewards': DocsReferralRewards,
   '/docs/error-self-check': DocsErrorSelfCheck,

@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "Token đầu vào: <200K / ≥200K",
     "Official price": "Giá gốc chính thức",
     "One gateway interface connects every model": "Một giao diện cổng kết nối mọi mô hình",
-    "Connect models from leading providers to the agent tools you already use.": "Kết nối mô hình từ các nhà cung cấp hàng đầu với những công cụ agent bạn đang sử dụng.",
     "Model group routing": "Định tuyến theo nhóm mô hình",
     "One API key, multiple model groups": "Một API key, nhiều nhóm mô hình",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "Chọn nhiều nhóm khi tạo khóa. Yêu cầu sẽ lần lượt khớp với các nhóm hỗ trợ mô hình và tự động chuyển dự phòng khi cần.",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "Chạy kiểm tra IQ",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "Đã dừng kiểm tra IQ: {{completed}}/{{total}} hoàn tất, {{success}} thành công, {{failed}} thất bại",
     "Result not retained; run again": "Kết quả không được lưu; hãy chạy lại",
+    "Configure multi-provider models in your client": "Cấu hình mô hình nhiều nhà cung cấp trong ứng dụng",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex, Claude Code và mọi ứng dụng đều có thể kết nối với bất kỳ mô hình nào mà không cần định tuyến cục bộ",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "Tất cả mô hình trên trang này đều có thể dùng trong ứng dụng sử dụng bất kỳ giao thức API nào mà không cần định tuyến hoặc chuyển tiếp cục bộ.",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "Như hình bên phải, có thể dùng đồng thời DeepSeek, Claude và GPT từ ba nhà cung cấp trong ứng dụng Codex.",
     "All channels": "Tất cả kênh"
   }
 }

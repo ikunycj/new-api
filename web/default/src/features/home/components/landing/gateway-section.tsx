@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ApiGatewayIcon } from '@hugeicons/core-free-icons'
+import { ApiGatewayIcon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import Claude from '@lobehub/icons/es/Claude'
 import ClaudeCode from '@lobehub/icons/es/ClaudeCode'
@@ -35,9 +35,12 @@ import type { IconType } from '@lobehub/icons/es/types'
 import Windsurf from '@lobehub/icons/es/Windsurf'
 import XAI from '@lobehub/icons/es/XAI'
 import Zhipu from '@lobehub/icons/es/Zhipu'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import clientModelsBackdrop from '@/assets/home/client-models-backdrop.webp'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
 
@@ -137,18 +140,78 @@ export function GatewaySection() {
   const displayLogo = logo || '/logo.png'
 
   return (
-    <section className='px-4 py-20 sm:px-6 sm:py-24 lg:py-28'>
+    <section className='px-4 py-16 sm:px-6 sm:py-20 lg:py-24'>
       <div className='mx-auto w-full max-w-6xl'>
         <SectionHeading
           eyebrow={t('Unified gateway')}
           title={t('One gateway interface connects every model')}
-          description={t(
-            'Connect models from leading providers to the agent tools you already use.'
-          )}
           centered
         />
 
-        <div className='border-border relative isolate grid min-h-[31rem] items-center gap-7 border-y py-12 md:grid-cols-[1fr_13rem_1fr] md:gap-14 md:px-12'>
+        <div className='border-border bg-card grid overflow-hidden rounded-xl border shadow-sm lg:grid-cols-[0.9fr_1.1fr]'>
+          <div className='flex min-w-0 flex-col justify-center p-6 sm:p-8 lg:p-10'>
+            <div className='text-foreground flex flex-wrap items-center gap-x-5 gap-y-3 text-sm font-semibold'>
+              <span className='inline-flex items-center gap-2'>
+                <Codex.Color width={24} height={24} aria-hidden='true' />
+                Codex
+              </span>
+              <span className='inline-flex items-center gap-2'>
+                <ClaudeCode.Color width={24} height={24} aria-hidden='true' />
+                Claude Code
+              </span>
+            </div>
+            <h3 className='text-foreground mt-6 text-3xl leading-tight font-semibold text-balance sm:text-4xl'>
+              {t(
+                'Codex, Claude Code, and any other client can connect to any model without local routing conversion'
+              )}
+            </h3>
+            <ul className='text-muted-foreground mt-5 list-disc space-y-2 pl-5 text-sm leading-7 sm:text-base'>
+              <li>
+                {t(
+                  'All models on this site can be used in clients using any API protocol, without local routing or forwarding.'
+                )}
+              </li>
+              <li>
+                {t(
+                  'As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.'
+                )}
+              </li>
+            </ul>
+            <p className='text-muted-foreground mt-5 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5'>
+              <span>OpenAI Chat / Responses</span>
+              <span>Anthropic Messages</span>
+              <span>Gemini generateContent</span>
+            </p>
+            <div className='mt-8'>
+              <Button
+                size='lg'
+                nativeButton={false}
+                className='h-auto min-h-11 max-w-full px-4 py-3 whitespace-normal'
+                render={<Link to='/docs/client-models' />}
+              >
+                {t('Configure multi-provider models in your client')}
+                <HugeiconsIcon
+                  icon={ArrowRight01Icon}
+                  data-icon='inline-end'
+                  aria-hidden='true'
+                />
+              </Button>
+            </div>
+          </div>
+          <div className='border-border bg-muted/30 relative aspect-[827/750] overflow-hidden border-t lg:aspect-auto lg:border-t-0 lg:border-l'>
+            <img
+              src={clientModelsBackdrop}
+              alt=''
+              width={1654}
+              height={1500}
+              loading='lazy'
+              decoding='async'
+              className='absolute inset-0 size-full object-cover object-bottom'
+            />
+          </div>
+        </div>
+
+        <div className='border-border relative isolate mt-8 grid min-h-[31rem] items-center gap-7 border-y py-12 md:grid-cols-[1fr_13rem_1fr] md:gap-14 md:px-5'>
           <GatewayLogoGrid nodes={MODEL_PROVIDERS} direction='to-gateway' />
 
           <div className='border-primary/60 bg-card after:text-primary/45 relative z-10 mx-auto flex min-h-36 w-full max-w-52 flex-col items-center justify-center rounded-lg border p-5 text-center shadow-xs after:absolute after:top-full after:left-1/2 after:h-7 after:w-px after:bg-current after:content-[""] md:after:hidden'>

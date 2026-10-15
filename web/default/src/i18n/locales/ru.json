@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "Входные токены: <200K / ≥200K",
     "Official price": "Официальная цена",
     "One gateway interface connects every model": "Один интерфейс шлюза для всех моделей",
-    "Connect models from leading providers to the agent tools you already use.": "Подключайте модели ведущих поставщиков к привычным агентским инструментам.",
     "Model group routing": "Маршрутизация по группам моделей",
     "One API key, multiple model groups": "Один API-ключ, несколько групп моделей",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "При создании ключа выберите несколько групп. Запросы последовательно используют совместимые группы и автоматически переключаются при необходимости.",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "Запустить IQ-тест",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQ-тест остановлен: завершено {{completed}}/{{total}}, успешно {{success}}, с ошибкой {{failed}}",
     "Result not retained; run again": "Результат не сохранён; запустите тест снова",
+    "Configure multi-provider models in your client": "Настройка моделей разных поставщиков в клиенте",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex, Claude Code и любой клиент могут подключаться к любой модели без локальной маршрутизации",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "Все модели на этом сайте доступны в клиентах с любым протоколом API без локальной маршрутизации или перенаправления.",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "Как показано справа, в клиенте Codex можно одновременно использовать DeepSeek, Claude и GPT от трех поставщиков.",
     "All channels": "Все каналы"
   }
 }

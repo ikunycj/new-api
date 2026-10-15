@@ -138,6 +138,10 @@ const developmentDocsLoaders = import.meta.env.DEV
         import('./quick-start').then((module) => ({
           default: module.DocsQuickStart,
         })),
+      '/docs/client-models': () =>
+        import('./client-models').then((module) => ({
+          default: module.DocsClientModels,
+        })),
       '/docs/integrations': () =>
         import('./integration-guide').then((module) => ({
           default: module.DocsIntegrationGuide,

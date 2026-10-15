@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "Input tokens: <200K / ≥200K",
     "Official price": "Official price",
     "One gateway interface connects every model": "One gateway interface connects every model",
-    "Connect models from leading providers to the agent tools you already use.": "Connect models from leading providers to the agent tools you already use.",
     "Model group routing": "Model group routing",
     "One API key, multiple model groups": "One API key, multiple model groups",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "Run IQ test",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed",
     "Result not retained; run again": "Result not retained; run again",
+    "Configure multi-provider models in your client": "Configure multi-provider models in your client",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex, Claude Code, and any other client can connect to any model without local routing conversion",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "All models on this site can be used in clients using any API protocol, without local routing or forwarding.",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.",
     "All channels": "All channels"
   }
 }

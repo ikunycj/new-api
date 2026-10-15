@@ -6129,7 +6129,6 @@
     "Input tokens: <200K / ≥200K": "入力トークン：<200K / ≥200K",
     "Official price": "公式価格",
     "One gateway interface connects every model": "1 つのゲートウェイで、あらゆるモデルへ",
-    "Connect models from leading providers to the agent tools you already use.": "主要プロバイダーのモデルを、普段お使いの Agent ツールに接続します。",
     "Model group routing": "モデルグループルーティング",
     "One API key, multiple model groups": "1 つの API キーで複数のモデルグループを選択",
     "Choose multiple groups when creating a key. Requests match compatible groups in order and fall back automatically when needed.": "キー作成時に複数のグループを選択できます。リクエストは対応グループを順番に照合し、必要に応じて自動的にフォールバックします。",
@@ -6176,6 +6175,10 @@
     "Run IQ test": "IQテストを実行",
     "IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed": "IQテストを停止: {{completed}}/{{total}}件完了、{{success}}件成功、{{failed}}件失敗",
     "Result not retained; run again": "結果を保持できませんでした。もう一度実行してください",
+    "Configure multi-provider models in your client": "クライアントで複数プロバイダーのモデルを設定",
+    "Codex, Claude Code, and any other client can connect to any model without local routing conversion": "Codex、Claude Code など任意のクライアントで、ローカルルーティングなしに任意のモデルへ接続",
+    "All models on this site can be used in clients using any API protocol, without local routing or forwarding.": "このサイトのすべてのモデルは、任意の API プロトコルを使用するクライアントから、ローカルルーティングや転送なしで利用できます。",
+    "As shown on the right, use DeepSeek, Claude, and GPT from three providers in Codex at the same time.": "右図のように、Codex クライアントで 3 社の DeepSeek、Claude、GPT を同時に利用できます。",
     "All channels": "すべてのチャンネル"
   }
 }

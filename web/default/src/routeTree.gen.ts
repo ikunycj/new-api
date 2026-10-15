@@ -42,6 +42,7 @@ import { Route as DocsQuickStartIndexRouteImport } from './routes/docs/quick-sta
 import { Route as DocsModelPricingIndexRouteImport } from './routes/docs/model-pricing/index'
 import { Route as DocsIntegrationsIndexRouteImport } from './routes/docs/integrations/index'
 import { Route as DocsErrorSelfCheckIndexRouteImport } from './routes/docs/error-self-check/index'
+import { Route as DocsClientModelsIndexRouteImport } from './routes/docs/client-models/index'
 import { Route as DocsAiModelIndexRouteImport } from './routes/docs/ai-model/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
@@ -253,6 +254,11 @@ const DocsIntegrationsIndexRoute = DocsIntegrationsIndexRouteImport.update({
 const DocsErrorSelfCheckIndexRoute = DocsErrorSelfCheckIndexRouteImport.update({
   id: '/docs/error-self-check/',
   path: '/docs/error-self-check/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsClientModelsIndexRoute = DocsClientModelsIndexRouteImport.update({
+  id: '/docs/client-models/',
+  path: '/docs/client-models/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsAiModelIndexRoute = DocsAiModelIndexRouteImport.update({
@@ -558,6 +564,7 @@ export interface FileRoutesByFullPath {
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/client-models/': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
@@ -635,6 +642,7 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersIndexRoute
   '/wallet': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model': typeof DocsAiModelIndexRoute
+  '/docs/client-models': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing': typeof DocsModelPricingIndexRoute
@@ -716,6 +724,7 @@ export interface FileRoutesById {
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/client-models/': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
@@ -796,6 +805,7 @@ export interface FileRouteTypes {
     | '/users/'
     | '/wallet/'
     | '/docs/ai-model/'
+    | '/docs/client-models/'
     | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
@@ -873,6 +883,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/wallet'
     | '/docs/ai-model'
+    | '/docs/client-models'
     | '/docs/error-self-check'
     | '/docs/integrations'
     | '/docs/model-pricing'
@@ -953,6 +964,7 @@ export interface FileRouteTypes {
     | '/_authenticated/users/'
     | '/_authenticated/wallet/'
     | '/docs/ai-model/'
+    | '/docs/client-models/'
     | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
@@ -1004,6 +1016,7 @@ export interface RootRouteChildren {
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   DocsAiModelIndexRoute: typeof DocsAiModelIndexRoute
+  DocsClientModelsIndexRoute: typeof DocsClientModelsIndexRoute
   DocsErrorSelfCheckIndexRoute: typeof DocsErrorSelfCheckIndexRoute
   DocsIntegrationsIndexRoute: typeof DocsIntegrationsIndexRoute
   DocsModelPricingIndexRoute: typeof DocsModelPricingIndexRoute
@@ -1254,6 +1267,13 @@ declare module '@tanstack/react-router' {
       path: '/docs/error-self-check'
       fullPath: '/docs/error-self-check/'
       preLoaderRoute: typeof DocsErrorSelfCheckIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/client-models/': {
+      id: '/docs/client-models/'
+      path: '/docs/client-models'
+      fullPath: '/docs/client-models/'
+      preLoaderRoute: typeof DocsClientModelsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/ai-model/': {
@@ -1728,6 +1748,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   DocsAiModelIndexRoute: DocsAiModelIndexRoute,
+  DocsClientModelsIndexRoute: DocsClientModelsIndexRoute,
   DocsErrorSelfCheckIndexRoute: DocsErrorSelfCheckIndexRoute,
   DocsIntegrationsIndexRoute: DocsIntegrationsIndexRoute,
   DocsModelPricingIndexRoute: DocsModelPricingIndexRoute,
