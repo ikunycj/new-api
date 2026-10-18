@@ -6,7 +6,6 @@
     "request_timeout": "120s",
     "model_list_timeout": "30s",
     "request": {
-      "temperature": 0,
       "message": "Return a deterministic load-test response."
     },
     "pacing": {
