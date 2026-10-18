@@ -25,6 +25,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/pkg/traj_record"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
@@ -209,6 +210,10 @@ func main() {
 		common.SysError("failed to init relay trace: " + err.Error())
 	}
 
+	if err := traj_record.Init(traj_record.ConfigFromEnv()); err != nil {
+		common.SysError("failed to init traj record: " + err.Error())
+	}
+
 	// 设置路由
 	router.SetRouter(server, router.ThemeAssets{
 		DefaultBuildFS:   buildFS,
@@ -253,6 +258,7 @@ func main() {
 		model.SaveQuotaDataCache()
 	}
 	// 落盘缓冲区中剩余的 trace 记录，避免重启丢失已接收的审计数据
+	traj_record.Close()
 	relaytrace.Close()
 	common.SysLog("server exited")
 }
