@@ -87,6 +87,10 @@ CAPACITY_STAGE_DURATION=30s \
 
 For a capacity result suitable for planning, keep each step for at least two minutes and repeat the highest passing rate for 30 minutes. Do not point this profile at a paid or production provider until the account, cost ceiling, rate limit, and maintenance window have been approved.
 
+### Real-model load tests
+
+For load tests against the production gateway with real models (claude-sonnet-4-6, claude-opus-5, gpt-6-sol), see [MODEL_LOADTEST.md](MODEL_LOADTEST.md).
+
 ### Local k6 against a remote API
 
 The load generator can run locally while the target API is remote. Use dedicated remote test tokens and an explicit confirmation gate:

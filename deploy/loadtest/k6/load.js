@@ -32,7 +32,10 @@ const capacityGracefulStop = workloadConfig.capacity?.graceful_stop || '1m';
 const requestTimeout = workloadConfig.request_timeout || '120s';
 const modelListTimeout = workloadConfig.model_list_timeout || '30s';
 const maxOutputTokens = numberEnv('MAX_OUTPUT_TOKENS', workloadConfig.max_output_tokens || 256);
-const requestTemperature = numberValue('REQUEST_TEMPERATURE', requestConfig.temperature ?? 0);
+// Omitted unless set: Opus 4.7+/Opus 5/Sonnet 5 reject non-default temperature.
+const requestTemperature = (__ENV.REQUEST_TEMPERATURE ?? requestConfig.temperature) === undefined
+  ? undefined
+  : numberValue('REQUEST_TEMPERATURE', requestConfig.temperature);
 const requestMessage = __ENV.LOADTEST_MESSAGE || requestConfig.message || 'Return a deterministic load-test response.';
 
 const applicationErrors = new Rate('new_api_application_errors');

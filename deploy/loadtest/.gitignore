@@ -1,3 +1,7 @@
 .env
 results/*.json
 !results/.gitkeep
+keys*.txt
+results/*.log
+*.zip
+.DS_Store
