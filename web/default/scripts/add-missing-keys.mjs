@@ -2606,6 +2606,1039 @@ for (const [locale, translations] of Object.entries(
   Object.assign(newKeys[locale], translations)
 }
 
+// Illustrated Codex tutorial, imported from the archived article.
+const codexTutorialTranslations = {
+  en: {
+    'ChatGPT download': 'ChatGPT download',
+    'Windows version': 'Windows version',
+    'Standard download': 'Standard download',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.',
+    'Tutorial note': 'Tutorial note',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.',
+    'Codex website:': 'Codex website:',
+    'ChatGPT desktop website': 'ChatGPT desktop website',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      'If the problem persists, use the second method below to install the Codex package directly.',
+    'The download has started. Wait for the progress bar to finish.':
+      'The download has started. Wait for the progress bar to finish.',
+    'Download a Microsoft installation package':
+      'Download a Microsoft installation package',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.',
+    'Desktop shortcut': 'Desktop shortcut',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      'Why is there no ChatGPT desktop shortcut on Windows?',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      'The icon is in Microsoft Store, so you need to search for it when opening the app.',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.',
+    'Press Win+R to open the Run dialog.':
+      'Press Win+R to open the Run dialog.',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.',
+    'macOS version': 'macOS version',
+    'Downloading the macOS version is simpler.':
+      'Downloading the macOS version is simpler.',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.',
+    'ChatGPT sign-in': 'ChatGPT sign-in',
+    '1. Sign in with an official ChatGPT account':
+      '1. Sign in with an official ChatGPT account',
+    'Click Continue to sign in.': 'Click Continue to sign in.',
+    '2. Sign in with the official ChatGPT API':
+      '2. Sign in with the official ChatGPT API',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      'Click Use another sign-in method below, then enter your official OpenAI API key.',
+    '3. Sign in with a third-party API or gateway':
+      '3. Sign in with a third-party API or gateway',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      'Click Use another sign-in method and enter an arbitrary value.',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.',
+    'Configure a third-party API in ChatGPT':
+      'Configure a third-party API in ChatGPT',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.',
+    '1. One-click import with CC Switch': '1. One-click import with CC Switch',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.',
+    '1.1 Install CC Switch': '1.1 Install CC Switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      'Download and install the app from the <a0>CC Switch releases page</a0>.',
+    '1.2 Create an API key': '1.2 Create an API key',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.',
+    '1.3 Configure before importing': '1.3 Configure before importing',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.',
+    'Name: the configuration name.': 'Name: the configuration name.',
+    'Primary model: the default model for new windows. You can change it later.':
+      'Primary model: the default model for new windows. You can change it later.',
+    '1.4 Confirm the configuration in CC Switch':
+      '1.4 Confirm the configuration in CC Switch',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.',
+    '1.5 Restart the client': '1.5 Restart the client',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.',
+    'Manual import in CC Switch': 'Manual import in CC Switch',
+    '2.1 Add a provider': '2.1 Add a provider',
+    'Click Add provider.': 'Click Add provider.',
+    'Then choose Custom configuration.': 'Then choose Custom configuration.',
+    '2.2 Custom configuration': '2.2 Custom configuration',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      'Fill in the fields as prompted. Make sure the API key and API request URL are correct.',
+    '3. Edit auth.json and config.toml': '3. Edit auth.json and config.toml',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.',
+    '3.1 Edit auth.json': '3.1 Edit auth.json',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.',
+    '3.2 Edit config.toml': '3.2 Edit config.toml',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.',
+    'Conversation history issues': 'Conversation history issues',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.',
+    '3.3 Restart and verify': '3.3 Restart and verify',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>',
+    'ChatGPT beginner installation guide':
+      'ChatGPT beginner installation guide',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      'Download, install, sign in, and configure third-party APIs with this illustrated guide.',
+    'The Codex website': 'The Codex website',
+    'The ChatGPT desktop website': 'The ChatGPT desktop website',
+    'Run the Windows installer': 'Run the Windows installer',
+    'Wait for the installation to finish':
+      'Wait for the installation to finish',
+    'Microsoft Store package download': 'Microsoft Store package download',
+    'Open shell:AppsFolder': 'Open shell:AppsFolder',
+    'Create a desktop shortcut': 'Create a desktop shortcut',
+    'Install ChatGPT on macOS': 'Install ChatGPT on macOS',
+    'ChatGPT sign-in screen': 'ChatGPT sign-in screen',
+    'API key sign-in screen': 'API key sign-in screen',
+    'CC Switch release downloads': 'CC Switch release downloads',
+    'Create and import an API key': 'Create and import an API key',
+    'Configure the Codex import': 'Configure the Codex import',
+    'Confirm the provider in CC Switch': 'Confirm the provider in CC Switch',
+    'Enable the provider and restart the client':
+      'Enable the provider and restart the client',
+    'Add a provider in CC Switch': 'Add a provider in CC Switch',
+    'Choose a custom provider': 'Choose a custom provider',
+    'Enter the API key and request URL': 'Enter the API key and request URL',
+  },
+  zh: {
+    'ChatGPT download': 'ChatGPT下载',
+    'Windows version': 'Windows版',
+    'Standard download': '常规方法下载',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      '访问OpenAI官网下载ChatGPT安装器，前往<a0>Codex官网：https://openai.com/zh-Hans-CN/codex/</a0>、<a1>ChatGPT桌面客户端官网：https://chatgpt.com/zh-Hans-CN/download/</a1>均可下载',
+    'Tutorial note': '注意',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex和ChatGPT客户端已经合二为一，Codex注重编程能力，ChatGPT桌面客户端注重日常办公，用户可自行切换模式',
+    'Codex website:': 'Codex官网：',
+    'ChatGPT desktop website': 'ChatGPT桌面客户端官网',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      '找到下载好的ChatGPT安装器，双击执行下载（必须开启全局代理）',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      '目前 Windows 中的 Codex 和 ChatGPT 都只能在微软商店中下载，下载后也只能默认安装在 C 盘中',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      '必须开启全局代理，因为安装器是通过微软应用商城下载ChatGPT，而中国版本的微软应用商城是会根据你的使用地点检测你是否有下载权限的',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      '如果后续遇到“ChatGPT客户端不可用、禁用”等问题，很大概率是ChatGPT通过微软应用商城检测到了你的真实使用地址，这时候开启全局代理就能解决。',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      '如果实在无法解决，请使用第二个下载安装方法——直接安装Codex安装包',
+    'The download has started. Wait for the progress bar to finish.':
+      '此时已经开始下载，等待进度条结束就成功了',
+    'Download a Microsoft installation package': '微软安装包下载',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'Codex APP Windows版本默认只能通过微软商店进行安装，由于不同电脑的设置、网络等差异，可能会导致大家在使用微软商店的时候遇到各种各样的错误，要么报错要么一直重试然后安装失败，今天就教大家怎么直接安装Codex，不经过微软商店。',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      '打开网站：<a0>https://store.rg-adguard.net</a0> ，下拉框选择Productld，输入微软产品代码 <code>9PLM9XGG6VKS</code>，右边选择RP，点击勾',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      '下载 <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0> 这个版本()，下载下来之后就是msi直接安装包，直接安装即可',
+    'Desktop shortcut': '桌面图标',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      '为什么Windows版ChatGPT没有桌面图标？',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      '因为图标在微软应用市场里面！平时使用需要额外搜索',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      '目前 Windows 中的 Codex 和 ChatGPT 都只能在微软商店中下载，默认也就只能从微软应用商城打开！',
+    'Press Win+R to open the Run dialog.': '同时按住Win+R，打开资源管理器',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      '输入<code>shell:AppsFolder</code>（如下图），然后按回车',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      '在打开的页面中，找到ChatGPT图标，右键单单击，点击创建快捷方式',
+    'macOS version': 'Mac版',
+    'Downloading the macOS version is simpler.': 'Mac版本的下载就简单多了',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      '下载完成后，双击文件，将ChatGPT/Codex拖入Applications里面，即可完成安装',
+    'ChatGPT sign-in': 'ChatGPT登录',
+    '1. Sign in with an official ChatGPT account': '1.ChatGPT官方账号登录',
+    'Click Continue to sign in.': '直接点击继续登录即可',
+    '2. Sign in with the official ChatGPT API': '2.ChatGPT官方API登录',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      '点击下方使用其他方式登录，然后输入OpenAI官方API密钥即可',
+    '3. Sign in with a third-party API or gateway': '3.第三方API、中转站登录',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      '点击使用其他方式登录，然后胡乱输入一些乱七八糟的',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      '下载CC Switch（一款管理各种主流智能体配置的插件）或者自行修改config.toml，详情看下文《ChatGPT配置》',
+    'Configure a third-party API in ChatGPT': 'ChatGPT配置第三方API',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      '可选择使用 CC Switch 一键配置，或手动编辑 <code>auth.json</code> 和 <code>config.toml</code> 接入 Codex。',
+    '1. One-click import with CC Switch': '1. 使用 CC Switch 一键导入',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch 可以导入 API Key、所选模型和 Codex 服务地址，无需手动编辑 TOML。',
+    '1.1 Install CC Switch': '1.1 安装cc switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      '从 <a0>CC Switch 发布页</a0> 下载并安装应用',
+    '1.2 Create an API key': '1.2 创建密钥',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      '打开模型服务商/中转站的API key页面，创建密钥，并一键导入。（大部分中转站可以一键导入，少部分需要手动把密钥的base url 和 key自己放入cc switch的配置，手动导入参考<a0>cc switch官方快速上手文档</a0>）',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      '第三方API需要支持Response协议，一般中转站/模型厂商都会支持，只有Claude官方可能不支持',
+    '1.3 Configure before importing': '1.3 导入前配置',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      '选择 Codex，再选择当前 API Key 可用的主模型，并保留自动生成的 <code>/v1</code> 地址。',
+    'Name: the configuration name.': '名称：配置名',
+    'Primary model: the default model for new windows. You can change it later.':
+      '主模型：新开窗口默认的模型，可以后期自己调整',
+    '1.4 Confirm the configuration in CC Switch': '1.4 CC Switch侧确认配置',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      '确认浏览器打开链接的提示，然后在 CC Switch 中检查、保存并启用导入的服务商。',
+    '1.5 Restart the client': '1.5 重启客户端',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      '导入内容包含所选 API Key、主模型和以 <code>/v1</code> 结尾的服务地址。请只在自己的设备上确认导入。',
+    'Manual import in CC Switch': '手动导入CC Switch',
+    '2.1 Add a provider': '2.1 添加供应商',
+    'Click Add provider.': '点击添加供应商',
+    'Then choose Custom configuration.': '然后点击自定义配置',
+    '2.2 Custom configuration': '2.2 自定义配置',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      '根据提示进行填写，重点是API Key和API请求地址不要填写错误',
+    '3. Edit auth.json and config.toml':
+      '3. 编辑 <code>auth.json</code> 和 <code>config.toml</code>',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex 从用户目录中的 <code>auth.json</code> 读取认证凭据，从 <code>config.toml</code> 读取服务商、模型和接口设置。',
+    '3.1 Edit auth.json': '3.1编辑 <code>auth.json</code>',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      '在用户级 <code>auth.json</code> 中写入 API Key。如果文件中已有其他认证字段，只更新 <code>OPENAI_API_KEY</code>，不要覆盖整个文件。',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      '文件模式下的 <code>auth.json</code> 包含明文密钥，请只保存在自己的设备上，不要提交到 Git 或发送给他人。密钥保存在 <code>auth.json</code>；<code>config.toml</code> 只用于服务商、模型和接口设置，不要依赖当前终端的临时设置。',
+    '3.2 Edit config.toml': '3.2编辑 <code>config.toml</code>',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      '保留现有 Codex 配置，并合并下面的服务商配置块。已有 <code>cli_auth_credentials_store</code> 时将它改为 <code>"file"</code>，不要重复添加。按 API Key 的可用模型替换示例模型。',
+    'Conversation history issues': '会话历史相关问题',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      '如果原有对话历史没有显示，检查当前 <code>config.toml</code> 中的 <code>model_provider</code> 是否与创建对话时使用的值完全一致（包括大小写）。改回原值并重启 Codex 后，可运行 <code>codex resume</code> 查找历史；这通常不代表记录已被删除。',
+    '3.3 Restart and verify': '3.3重启并验证',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      '保存 <code>auth.json</code> 和 <code>config.toml</code>，重启正在运行的 Codex 应用或 IDE 扩展。',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      '在终端运行 <code>codex</code> 并发起一个测试任务；认证信息由 <code>auth.json</code> 提供。',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      '如启动失败，运行 <code>codex doctor</code> 检查认证文件是否被读取，再检查模型名称和 Base URL。',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      '请保持 <code>wire_api = "responses"</code>，并确保 Base URL 以 <code>/v1</code> 结尾。<code>cli_auth_credentials_store = "file"</code> 让 Codex 使用 <code>auth.json</code> 保存和读取凭据；<code>requires_openai_auth = true</code> 让自定义服务商使用该凭据。',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      '参考：<a0>Codex 认证说明</a0> · <a1>Codex 配置参考</a1>',
+    'ChatGPT beginner installation guide': 'ChatGPT保姆级安装教程',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      '下载、安装、登录和第三方 API 配置完整图文教程。',
+    'The Codex website': 'Codex 官网',
+    'The ChatGPT desktop website': 'ChatGPT 桌面客户端官网',
+    'Run the Windows installer': '运行 Windows 安装器',
+    'Wait for the installation to finish': '等待安装完成',
+    'Microsoft Store package download': '微软商店安装包下载',
+    'Open shell:AppsFolder': '打开 shell:AppsFolder',
+    'Create a desktop shortcut': '创建桌面快捷方式',
+    'Install ChatGPT on macOS': '在 macOS 中安装 ChatGPT',
+    'ChatGPT sign-in screen': 'ChatGPT 登录界面',
+    'API key sign-in screen': 'API Key 登录界面',
+    'CC Switch release downloads': 'CC Switch 发布页安装包列表',
+    'Create and import an API key': '创建并导入 API Key',
+    'Configure the Codex import': '配置 Codex 导入信息',
+    'Confirm the provider in CC Switch': '在 CC Switch 中确认服务商',
+    'Enable the provider and restart the client': '启用服务商并重启客户端',
+    'Add a provider in CC Switch': '在 CC Switch 中添加供应商',
+    'Choose a custom provider': '选择自定义供应商',
+    'Enter the API key and request URL': '填写 API Key 和 API 请求地址',
+  },
+  fr: {
+    'ChatGPT download': 'Télécharger ChatGPT',
+    'Windows version': 'Version Windows',
+    'Standard download': 'Téléchargement standard',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      'Téléchargez le programme d’installation de ChatGPT depuis le <a0>site officiel de Codex : https://openai.com/zh-Hans-CN/codex/</a0> ou le <a1>site de ChatGPT pour ordinateur : https://chatgpt.com/zh-Hans-CN/download/</a1>.',
+    'Tutorial note': 'Remarque',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex et ChatGPT sont réunis dans un même client. Codex privilégie la programmation, tandis que ChatGPT se concentre sur le travail quotidien. Vous pouvez changer de mode.',
+    'Codex website:': 'Site officiel de Codex :',
+    'ChatGPT desktop website': 'Site de ChatGPT pour ordinateur',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      'Retrouvez le programme d’installation téléchargé et double-cliquez dessus pour lancer le téléchargement. Le mode proxy global doit être activé.',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      'Sous Windows, Codex et ChatGPT ne se téléchargent actuellement que dans le Microsoft Store et s’installent par défaut sur le disque C:.',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      'Activez le mode proxy global : le programme d’installation télécharge ChatGPT via le Microsoft Store, dont la version chinoise vérifie votre droit au téléchargement selon votre localisation.',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      'Si ChatGPT indique ensuite que le client est indisponible ou désactivé, le Microsoft Store a peut-être détecté votre position réelle. Le mode proxy global peut résoudre ce problème.',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      'Si le problème persiste, utilisez la deuxième méthode ci-dessous pour installer directement le paquet Codex.',
+    'The download has started. Wait for the progress bar to finish.':
+      'Le téléchargement a commencé. Attendez que la barre de progression soit terminée.',
+    'Download a Microsoft installation package':
+      'Télécharger un paquet d’installation Microsoft',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'L’application Codex pour Windows s’installe normalement via le Microsoft Store. Les paramètres des ordinateurs et les réseaux peuvent provoquer des erreurs, des tentatives répétées ou des échecs d’installation. Cette méthode installe Codex directement, sans passer par le Store.',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      'Ouvrez <a0>https://store.rg-adguard.net</a0>, choisissez ProductId, saisissez le code produit Microsoft <code>9PLM9XGG6VKS</code>, choisissez RP à droite, puis cliquez sur la coche.',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      'Téléchargez <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. Le fichier téléchargé est un programme d’installation autonome ; ouvrez-le pour installer l’application.',
+    'Desktop shortcut': 'Raccourci sur le bureau',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      'Pourquoi ChatGPT n’a-t-il pas de raccourci sur le bureau sous Windows ?',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      'L’icône se trouve dans le Microsoft Store ; il faut donc la rechercher pour ouvrir l’application.',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      'Sous Windows, Codex et ChatGPT se téléchargent actuellement via le Microsoft Store et s’ouvrent normalement depuis celui-ci.',
+    'Press Win+R to open the Run dialog.':
+      'Appuyez sur Win+R pour ouvrir la boîte de dialogue Exécuter.',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      'Saisissez <code>shell:AppsFolder</code>, comme ci-dessous, puis appuyez sur Entrée.',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      'Dans la fenêtre qui s’ouvre, trouvez ChatGPT, faites un clic droit, puis choisissez Créer un raccourci.',
+    'macOS version': 'Version macOS',
+    'Downloading the macOS version is simpler.':
+      'Le téléchargement de la version macOS est plus simple.',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      'Après le téléchargement, double-cliquez sur le fichier et faites glisser ChatGPT/Codex dans Applications pour terminer l’installation.',
+    'ChatGPT sign-in': 'Connexion à ChatGPT',
+    '1. Sign in with an official ChatGPT account':
+      '1. Se connecter avec un compte ChatGPT officiel',
+    'Click Continue to sign in.': 'Cliquez sur Continuer pour vous connecter.',
+    '2. Sign in with the official ChatGPT API':
+      '2. Se connecter avec l’API officielle de ChatGPT',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      'Cliquez sur Utiliser une autre méthode de connexion, puis saisissez votre clé API OpenAI officielle.',
+    '3. Sign in with a third-party API or gateway':
+      '3. Se connecter avec une API tierce ou une passerelle',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      'Cliquez sur Utiliser une autre méthode de connexion et saisissez une valeur quelconque.',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      'Téléchargez CC Switch, un gestionnaire de configuration pour les agents courants, ou modifiez vous-même config.toml. Consultez la section de configuration ci-dessous.',
+    'Configure a third-party API in ChatGPT':
+      'Configurer une API tierce dans ChatGPT',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      'Utilisez CC Switch pour une configuration en un clic ou modifiez manuellement <code>auth.json</code> et <code>config.toml</code> pour connecter Codex.',
+    '1. One-click import with CC Switch':
+      '1. Importer en un clic avec CC Switch',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch importe votre clé API, le modèle choisi et l’URL du service Codex sans modification manuelle du TOML.',
+    '1.1 Install CC Switch': '1.1 Installer CC Switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      'Téléchargez et installez l’application depuis la <a0>page des versions de CC Switch</a0>.',
+    '1.2 Create an API key': '1.2 Créer une clé API',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      'Ouvrez la page des clés API de votre fournisseur ou passerelle, créez une clé et importez-la en un clic. La plupart des passerelles le permettent ; pour les autres, saisissez manuellement l’URL de base et la clé dans CC Switch. Consultez le <a0>guide de démarrage officiel de CC Switch</a0> pour l’importation manuelle.',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      'L’API tierce doit prendre en charge le protocole Responses. La plupart des passerelles et fournisseurs le font ; l’API officielle de Claude peut ne pas le prendre en charge.',
+    '1.3 Configure before importing': '1.3 Configurer avant l’importation',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      'Sélectionnez Codex, choisissez un modèle principal accessible avec cette clé API et conservez l’URL <code>/v1</code> générée automatiquement.',
+    'Name: the configuration name.': 'Nom : le nom de la configuration.',
+    'Primary model: the default model for new windows. You can change it later.':
+      'Modèle principal : le modèle par défaut des nouvelles fenêtres. Vous pourrez le modifier ultérieurement.',
+    '1.4 Confirm the configuration in CC Switch':
+      '1.4 Confirmer la configuration dans CC Switch',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      'Acceptez la demande du navigateur pour ouvrir le lien, puis vérifiez, enregistrez et activez le fournisseur importé dans CC Switch.',
+    '1.5 Restart the client': '1.5 Redémarrer le client',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      'L’importation comprend la clé API choisie, le modèle principal et une URL de service se terminant par <code>/v1</code>. Confirmez l’importation uniquement sur votre propre appareil.',
+    'Manual import in CC Switch': 'Importation manuelle dans CC Switch',
+    '2.1 Add a provider': '2.1 Ajouter un fournisseur',
+    'Click Add provider.': 'Cliquez sur Ajouter un fournisseur.',
+    'Then choose Custom configuration.':
+      'Choisissez ensuite Configuration personnalisée.',
+    '2.2 Custom configuration': '2.2 Configuration personnalisée',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      'Remplissez les champs indiqués. Vérifiez surtout la clé API et l’URL de requête de l’API.',
+    '3. Edit auth.json and config.toml': '3. Modifier auth.json et config.toml',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex lit les identifiants dans <code>auth.json</code>, dans votre dossier utilisateur, et les paramètres de fournisseur, de modèle et d’API dans <code>config.toml</code>.',
+    '3.1 Edit auth.json': '3.1 Modifier auth.json',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      'Saisissez votre clé API dans le fichier utilisateur <code>auth.json</code>. S’il contient déjà d’autres champs d’authentification, modifiez uniquement <code>OPENAI_API_KEY</code> sans écraser tout le fichier.',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      'En mode fichier, <code>auth.json</code> contient une clé API en clair. Conservez-le uniquement sur votre appareil, ne le partagez pas et ne le publiez jamais dans Git. Stockez la clé dans <code>auth.json</code> et réservez <code>config.toml</code> aux paramètres de fournisseur, de modèle et d’API, sans dépendre des réglages temporaires du terminal.',
+    '3.2 Edit config.toml': '3.2 Modifier config.toml',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      'Conservez vos paramètres Codex existants et fusionnez le bloc fournisseur ci-dessous. Si <code>cli_auth_credentials_store</code> existe déjà, remplacez sa valeur par <code>"file"</code> sans ajouter de doublon. Remplacez le modèle d’exemple par un modèle accessible avec votre clé API.',
+    'Conversation history issues': 'Problèmes d’historique des conversations',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      'Si vos anciennes conversations n’apparaissent pas, vérifiez que <code>model_provider</code> dans <code>config.toml</code> correspond exactement à la valeur utilisée lors de leur création, majuscules comprises. Rétablissez cette valeur, redémarrez Codex et utilisez <code>codex resume</code> pour retrouver l’historique. Les données ne sont généralement pas supprimées.',
+    '3.3 Restart and verify': '3.3 Redémarrer et vérifier',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      'Enregistrez <code>auth.json</code> et <code>config.toml</code>, puis redémarrez l’application Codex ou l’extension IDE en cours d’exécution.',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      'Exécutez <code>codex</code> dans un terminal et lancez une tâche de test. Les identifiants proviennent de <code>auth.json</code>.',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      'Si le démarrage échoue, exécutez <code>codex doctor</code> pour vérifier la lecture du fichier d’identifiants, puis contrôlez le nom du modèle et l’URL de base.',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      'Conservez <code>wire_api = "responses"</code> et une URL de base se terminant par <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> permet à Codex de lire et d’enregistrer les identifiants dans <code>auth.json</code> ; <code>requires_openai_auth = true</code> indique au fournisseur personnalisé de les utiliser.',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      'Références : <a0>Authentification Codex</a0> · <a1>Référence de configuration Codex</a1>',
+    'ChatGPT beginner installation guide':
+      'Guide d’installation de ChatGPT pour débutants',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      'Guide illustré pour télécharger, installer et configurer les API tierces, et se connecter.',
+    'The Codex website': 'Le site officiel de Codex',
+    'The ChatGPT desktop website': 'Le site de ChatGPT pour ordinateur',
+    'Run the Windows installer': 'Exécuter le programme d’installation Windows',
+    'Wait for the installation to finish': 'Attendre la fin de l’installation',
+    'Microsoft Store package download':
+      'Téléchargement du paquet Microsoft Store',
+    'Open shell:AppsFolder': 'Ouvrir shell:AppsFolder',
+    'Create a desktop shortcut': 'Créer un raccourci sur le bureau',
+    'Install ChatGPT on macOS': 'Installer ChatGPT sur macOS',
+    'ChatGPT sign-in screen': 'Écran de connexion à ChatGPT',
+    'API key sign-in screen': 'Écran de connexion par clé API',
+    'CC Switch release downloads': 'Paquets d’installation de CC Switch',
+    'Create and import an API key': 'Créer et importer une clé API',
+    'Configure the Codex import': 'Configurer l’importation Codex',
+    'Confirm the provider in CC Switch':
+      'Confirmer le fournisseur dans CC Switch',
+    'Enable the provider and restart the client':
+      'Activer le fournisseur et redémarrer le client',
+    'Add a provider in CC Switch': 'Ajouter un fournisseur dans CC Switch',
+    'Choose a custom provider': 'Choisir un fournisseur personnalisé',
+    'Enter the API key and request URL':
+      'Saisir la clé API et l’URL de requête',
+  },
+  ja: {
+    'ChatGPT download': 'ChatGPT のダウンロード',
+    'Windows version': 'Windows 版',
+    'Standard download': '通常のダウンロード方法',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      '公式の <a0>Codex サイト：https://openai.com/zh-Hans-CN/codex/</a0> または <a1>ChatGPT デスクトップ版サイト：https://chatgpt.com/zh-Hans-CN/download/</a1> から ChatGPT インストーラーをダウンロードします。',
+    'Tutorial note': '注意',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex と ChatGPT は一つのクライアントに統合されています。Codex はコーディング、ChatGPT は日常業務を重視しており、モードを切り替えて利用できます。',
+    'Codex website:': 'Codex 公式サイト：',
+    'ChatGPT desktop website': 'ChatGPT デスクトップ版公式サイト',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      'ダウンロードした ChatGPT インストーラーをダブルクリックして、ダウンロードを開始します。プロキシのグローバルモードを有効にしてください。',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      'Windows の Codex と ChatGPT は、現在 Microsoft Store からのみダウンロードでき、標準では C ドライブにインストールされます。',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      'グローバルプロキシを有効にしてください。インストーラーは Microsoft Store 経由で ChatGPT をダウンロードし、中国版のストアは利用場所に基づいてダウンロード資格を確認します。',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      'その後 ChatGPT が利用不可または無効と表示された場合、Microsoft Store が実際の利用場所を検出した可能性があります。グローバルプロキシを有効にすると解決する場合があります。',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      '解決しない場合は、以下の二つ目の方法で Codex のパッケージを直接インストールしてください。',
+    'The download has started. Wait for the progress bar to finish.':
+      'ダウンロードが始まりました。進行状況バーが完了するまで待ちます。',
+    'Download a Microsoft installation package':
+      'Microsoft インストールパッケージのダウンロード',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'Windows 版 Codex アプリは通常 Microsoft Store からインストールします。PC の設定やネットワークの違いによって、エラー、繰り返しの再試行、インストール失敗が発生することがあります。ここではストアを使わずに直接インストールします。',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      '<a0>https://store.rg-adguard.net</a0> を開き、ProductId を選択して製品コード <code>9PLM9XGG6VKS</code> を入力します。右側で RP を選び、チェックマークをクリックします。',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      '<a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0> をダウンロードします。単体のインストールファイルなので、開いてインストールできます。',
+    'Desktop shortcut': 'デスクトップショートカット',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      'Windows 版 ChatGPT にデスクトップショートカットがないのはなぜですか？',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      'アイコンは Microsoft Store にあるため、普段は検索してアプリを開く必要があります。',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      'Windows の Codex と ChatGPT は現在 Microsoft Store からダウンロードし、通常はストアから起動します。',
+    'Press Win+R to open the Run dialog.':
+      'Win+R を押して「ファイル名を指定して実行」を開きます。',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      '下図のように <code>shell:AppsFolder</code> を入力し、Enter を押します。',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      '開いたウィンドウで ChatGPT を探し、右クリックして「ショートカットの作成」を選びます。',
+    'macOS version': 'macOS 版',
+    'Downloading the macOS version is simpler.':
+      'macOS 版のダウンロードは簡単です。',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      'ダウンロードしたファイルをダブルクリックし、ChatGPT/Codex を Applications にドラッグするとインストール完了です。',
+    'ChatGPT sign-in': 'ChatGPT へのログイン',
+    '1. Sign in with an official ChatGPT account':
+      '1. 公式 ChatGPT アカウントでログイン',
+    'Click Continue to sign in.': '「続ける」をクリックしてログインします。',
+    '2. Sign in with the official ChatGPT API':
+      '2. 公式 ChatGPT API でログイン',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      '下部の「別の方法でログイン」をクリックし、公式 OpenAI API キーを入力します。',
+    '3. Sign in with a third-party API or gateway':
+      '3. サードパーティ API・ゲートウェイでログイン',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      '「別の方法でログイン」をクリックし、任意の値を入力します。',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      '主要なエージェントの設定を管理する CC Switch をダウンロードするか、config.toml を直接編集します。以下の設定セクションを参照してください。',
+    'Configure a third-party API in ChatGPT':
+      'ChatGPT にサードパーティ API を設定',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      'CC Switch でワンクリック設定するか、<code>auth.json</code> と <code>config.toml</code> を手動編集して Codex に接続します。',
+    '1. One-click import with CC Switch':
+      '1. CC Switch でワンクリックインポート',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch は API キー、選択したモデル、Codex のサービス URL をインポートでき、TOML の手動編集は不要です。',
+    '1.1 Install CC Switch': '1.1 CC Switch のインストール',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      '<a0>CC Switch のリリースページ</a0>からアプリをダウンロードしてインストールします。',
+    '1.2 Create an API key': '1.2 API キーの作成',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      'モデルプロバイダーまたはゲートウェイの API キーページを開き、キーを作成してワンクリックでインポートします。多くのゲートウェイが対応していますが、一部ではベース URL とキーを CC Switch に手動入力します。手動の場合は <a0>CC Switch 公式クイックスタート</a0>を参照してください。',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      'サードパーティ API は Responses プロトコルに対応している必要があります。通常はゲートウェイやモデルプロバイダーが対応していますが、公式 Claude API は未対応の場合があります。',
+    '1.3 Configure before importing': '1.3 インポート前の設定',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      'Codex を選択し、API キーで利用できるメインモデルを選びます。自動生成された <code>/v1</code> URL はそのままにします。',
+    'Name: the configuration name.': '名前：設定の名前です。',
+    'Primary model: the default model for new windows. You can change it later.':
+      'メインモデル：新しいウィンドウで使う標準モデルです。後から変更できます。',
+    '1.4 Confirm the configuration in CC Switch':
+      '1.4 CC Switch 側で設定を確認',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      'リンクを開くブラウザーの確認に同意し、CC Switch でインポートされたプロバイダーを確認・保存して有効にします。',
+    '1.5 Restart the client': '1.5 クライアントを再起動',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      'インポートには、選択した API キー、メインモデル、<code>/v1</code> で終わるサービス URL が含まれます。必ず自分の端末でのみ承認してください。',
+    'Manual import in CC Switch': 'CC Switch への手動インポート',
+    '2.1 Add a provider': '2.1 プロバイダーの追加',
+    'Click Add provider.': '「プロバイダーを追加」をクリックします。',
+    'Then choose Custom configuration.': '続いて「カスタム設定」を選びます。',
+    '2.2 Custom configuration': '2.2 カスタム設定',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      '案内に従って入力します。特に API キーと API リクエスト URL に間違いがないことを確認してください。',
+    '3. Edit auth.json and config.toml': '3. auth.json と config.toml の編集',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex はユーザーディレクトリ内の <code>auth.json</code> から認証情報を、<code>config.toml</code> からプロバイダー・モデル・API の設定を読み込みます。',
+    '3.1 Edit auth.json': '3.1 auth.json の編集',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      'ユーザー単位の <code>auth.json</code> に API キーを入力します。他の認証項目が既にある場合は、<code>OPENAI_API_KEY</code> だけを更新し、ファイル全体を上書きしないでください。',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      'ファイルモードの <code>auth.json</code> には平文の API キーが含まれます。自分の端末だけに保存し、Git にコミットしたり他人に送ったりしないでください。キーは <code>auth.json</code> に保存し、<code>config.toml</code> はプロバイダー・モデル・API の設定だけに使用します。一時的なターミナル設定に依存しないでください。',
+    '3.2 Edit config.toml': '3.2 config.toml の編集',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      '既存の Codex 設定を残し、以下のプロバイダーブロックを統合します。<code>cli_auth_credentials_store</code> が既にあれば、重複追加せず <code>"file"</code> に変更します。サンプルのモデル名は API キーで利用可能なものに置き換えてください。',
+    'Conversation history issues': '会話履歴に関する問題',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      '以前の会話が表示されない場合、<code>config.toml</code> 内の <code>model_provider</code> が会話作成時の値と大文字・小文字も含めて一致しているか確認します。元の値に戻して Codex を再起動し、<code>codex resume</code> で履歴を探してください。通常、記録自体が削除されたわけではありません。',
+    '3.3 Restart and verify': '3.3 再起動して確認',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      '<code>auth.json</code> と <code>config.toml</code> を保存し、実行中の Codex アプリまたは IDE 拡張を再起動します。',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      'ターミナルで <code>codex</code> を実行し、テストタスクを開始します。認証情報は <code>auth.json</code> から提供されます。',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      '起動できない場合は <code>codex doctor</code> を実行し、認証ファイルが読み込まれているか確認してから、モデル名と Base URL を確認します。',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      '<code>wire_api = "responses"</code> を維持し、Base URL を <code>/v1</code> で終わらせてください。<code>cli_auth_credentials_store = "file"</code> は <code>auth.json</code> での認証情報の保存・読み込みを指定し、<code>requires_openai_auth = true</code> はカスタムプロバイダーでその情報を使用するよう指定します。',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      '参考：<a0>Codex 認証ガイド</a0> · <a1>Codex 設定リファレンス</a1>',
+    'ChatGPT beginner installation guide':
+      'ChatGPT 初心者向けインストールガイド',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      'ダウンロード、インストール、ログイン、サードパーティ API 設定を画像付きで解説します。',
+    'The Codex website': 'Codex 公式サイト',
+    'The ChatGPT desktop website': 'ChatGPT デスクトップ版公式サイト',
+    'Run the Windows installer': 'Windows インストーラーを実行',
+    'Wait for the installation to finish': 'インストールの完了を待つ',
+    'Microsoft Store package download':
+      'Microsoft Store パッケージのダウンロード',
+    'Open shell:AppsFolder': 'shell:AppsFolder を開く',
+    'Create a desktop shortcut': 'デスクトップショートカットを作成',
+    'Install ChatGPT on macOS': 'macOS に ChatGPT をインストール',
+    'ChatGPT sign-in screen': 'ChatGPT のログイン画面',
+    'API key sign-in screen': 'API キーのログイン画面',
+    'CC Switch release downloads': 'CC Switch のリリースファイル一覧',
+    'Create and import an API key': 'API キーを作成してインポート',
+    'Configure the Codex import': 'Codex のインポート設定',
+    'Confirm the provider in CC Switch': 'CC Switch でプロバイダーを確認',
+    'Enable the provider and restart the client':
+      'プロバイダーを有効にしてクライアントを再起動',
+    'Add a provider in CC Switch': 'CC Switch にプロバイダーを追加',
+    'Choose a custom provider': 'カスタムプロバイダーを選択',
+    'Enter the API key and request URL': 'API キーとリクエスト URL を入力',
+  },
+  ru: {
+    'ChatGPT download': 'Скачивание ChatGPT',
+    'Windows version': 'Версия для Windows',
+    'Standard download': 'Обычное скачивание',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      'Скачайте установщик ChatGPT с <a0>официального сайта Codex: https://openai.com/zh-Hans-CN/codex/</a0> или с <a1>сайта настольного ChatGPT: https://chatgpt.com/zh-Hans-CN/download/</a1>.',
+    'Tutorial note': 'Примечание',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex и ChatGPT объединены в одном клиенте. Codex предназначен прежде всего для программирования, а ChatGPT — для повседневной работы. Режимы можно переключать.',
+    'Codex website:': 'Официальный сайт Codex:',
+    'ChatGPT desktop website': 'Официальный сайт настольного ChatGPT',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      'Найдите скачанный установщик ChatGPT и запустите его двойным щелчком. Должен быть включён глобальный режим прокси.',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      'В Windows Codex и ChatGPT сейчас доступны для скачивания только через Microsoft Store и по умолчанию устанавливаются на диск C:.',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      'Включите глобальный режим прокси: установщик скачивает ChatGPT через Microsoft Store, а китайская версия магазина проверяет доступность скачивания по вашему местоположению.',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      'Если позже ChatGPT сообщает, что клиент недоступен или отключён, Microsoft Store мог определить ваше реальное местоположение. Глобальный режим прокси может помочь.',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      'Если проблему не удалось решить, воспользуйтесь вторым способом ниже и установите пакет Codex напрямую.',
+    'The download has started. Wait for the progress bar to finish.':
+      'Скачивание началось. Дождитесь заполнения индикатора выполнения.',
+    'Download a Microsoft installation package':
+      'Скачивание установочного пакета Microsoft',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'Обычно Codex для Windows устанавливается через Microsoft Store. Различия в настройках компьютера и сети могут вызывать ошибки, повторные попытки и сбои установки. Этот способ позволяет установить Codex напрямую, без магазина.',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      'Откройте <a0>https://store.rg-adguard.net</a0>, выберите ProductId, введите код продукта Microsoft <code>9PLM9XGG6VKS</code>, справа выберите RP и нажмите галочку.',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      'Скачайте <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. Это самостоятельный установочный файл; откройте его для установки.',
+    'Desktop shortcut': 'Ярлык на рабочем столе',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      'Почему в Windows нет ярлыка ChatGPT на рабочем столе?',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      'Значок находится в Microsoft Store, поэтому для запуска приложения его обычно приходится искать.',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      'В Windows Codex и ChatGPT сейчас скачиваются через Microsoft Store и обычно запускаются оттуда.',
+    'Press Win+R to open the Run dialog.':
+      'Нажмите Win+R, чтобы открыть окно «Выполнить».',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      'Введите <code>shell:AppsFolder</code>, как показано ниже, и нажмите Enter.',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      'В открывшемся окне найдите ChatGPT, нажмите правой кнопкой и выберите «Создать ярлык».',
+    'macOS version': 'Версия для macOS',
+    'Downloading the macOS version is simpler.':
+      'Скачать версию для macOS проще.',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      'После скачивания откройте файл двойным щелчком и перетащите ChatGPT/Codex в Applications, чтобы завершить установку.',
+    'ChatGPT sign-in': 'Вход в ChatGPT',
+    '1. Sign in with an official ChatGPT account':
+      '1. Вход с официальным аккаунтом ChatGPT',
+    'Click Continue to sign in.': 'Нажмите «Продолжить», чтобы войти.',
+    '2. Sign in with the official ChatGPT API':
+      '2. Вход через официальный API ChatGPT',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      'Нажмите внизу «Другой способ входа», затем введите официальный API-ключ OpenAI.',
+    '3. Sign in with a third-party API or gateway':
+      '3. Вход через сторонний API или шлюз',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      'Нажмите «Другой способ входа» и введите произвольное значение.',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      'Скачайте CC Switch — менеджер конфигурации популярных агентов — или отредактируйте config.toml вручную. См. раздел настройки ниже.',
+    'Configure a third-party API in ChatGPT':
+      'Настройка стороннего API в ChatGPT',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      'Используйте CC Switch для настройки в один клик или вручную измените <code>auth.json</code> и <code>config.toml</code> для подключения Codex.',
+    '1. One-click import with CC Switch':
+      '1. Импорт в один клик через CC Switch',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch импортирует API-ключ, выбранную модель и адрес сервиса Codex без ручного редактирования TOML.',
+    '1.1 Install CC Switch': '1.1 Установка CC Switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      'Скачайте и установите приложение со <a0>страницы релизов CC Switch</a0>.',
+    '1.2 Create an API key': '1.2 Создание API-ключа',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      'Откройте страницу API-ключей провайдера или шлюза, создайте ключ и импортируйте его одним нажатием. Большинство шлюзов поддерживает такой импорт; в остальных случаях базовый URL и ключ вводятся в CC Switch вручную. См. <a0>официальное краткое руководство CC Switch</a0>.',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      'Сторонний API должен поддерживать протокол Responses. Большинство шлюзов и провайдеров его поддерживает; официальный API Claude может не поддерживать.',
+    '1.3 Configure before importing': '1.3 Настройка перед импортом',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      'Выберите Codex и основную модель, доступную вашему API-ключу. Сохраните автоматически сформированный адрес <code>/v1</code>.',
+    'Name: the configuration name.': 'Имя: название конфигурации.',
+    'Primary model: the default model for new windows. You can change it later.':
+      'Основная модель: модель по умолчанию для новых окон. Её можно изменить позже.',
+    '1.4 Confirm the configuration in CC Switch':
+      '1.4 Подтверждение конфигурации в CC Switch',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      'Подтвердите запрос браузера на открытие ссылки, затем проверьте, сохраните и включите импортированного провайдера в CC Switch.',
+    '1.5 Restart the client': '1.5 Перезапуск клиента',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      'Импорт включает выбранный API-ключ, основную модель и адрес сервиса с окончанием <code>/v1</code>. Подтверждайте импорт только на своём устройстве.',
+    'Manual import in CC Switch': 'Ручной импорт в CC Switch',
+    '2.1 Add a provider': '2.1 Добавление провайдера',
+    'Click Add provider.': 'Нажмите «Добавить провайдера».',
+    'Then choose Custom configuration.':
+      'Затем выберите «Пользовательская конфигурация».',
+    '2.2 Custom configuration': '2.2 Пользовательская конфигурация',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      'Заполните поля по подсказкам. Особенно внимательно проверьте API-ключ и URL запросов API.',
+    '3. Edit auth.json and config.toml':
+      '3. Редактирование auth.json и config.toml',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex читает учётные данные из <code>auth.json</code> в каталоге пользователя, а настройки провайдера, модели и API — из <code>config.toml</code>.',
+    '3.1 Edit auth.json': '3.1 Редактирование auth.json',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      'Укажите API-ключ в пользовательском файле <code>auth.json</code>. Если в нём уже есть другие поля аутентификации, измените только <code>OPENAI_API_KEY</code>, не перезаписывая весь файл.',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      'В файловом режиме <code>auth.json</code> содержит API-ключ открытым текстом. Храните его только на своём устройстве, не публикуйте в Git и не передавайте другим. Ключ хранится в <code>auth.json</code>; <code>config.toml</code> нужен только для настроек провайдера, модели и API. Не полагайтесь на временные настройки терминала.',
+    '3.2 Edit config.toml': '3.2 Редактирование config.toml',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      'Сохраните имеющиеся настройки Codex и добавьте блок провайдера ниже. Если <code>cli_auth_credentials_store</code> уже задан, измените его на <code>"file"</code>, не создавая дубликат. Замените пример модели на доступную вашему API-ключу.',
+    'Conversation history issues': 'Проблемы с историей диалогов',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      'Если старые диалоги не отображаются, проверьте, что <code>model_provider</code> в <code>config.toml</code> точно совпадает со значением при их создании, включая регистр. Верните прежнее значение, перезапустите Codex и найдите историю через <code>codex resume</code>. Обычно записи при этом не удалены.',
+    '3.3 Restart and verify': '3.3 Перезапуск и проверка',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      'Сохраните <code>auth.json</code> и <code>config.toml</code>, затем перезапустите работающий клиент Codex или расширение IDE.',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      'Запустите <code>codex</code> в терминале и начните тестовую задачу. Учётные данные берутся из <code>auth.json</code>.',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      'При ошибке запуска выполните <code>codex doctor</code>, чтобы проверить чтение файла учётных данных, а затем проверьте имя модели и Base URL.',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      'Сохраните <code>wire_api = "responses"</code> и Base URL с окончанием <code>/v1</code>. Параметр <code>cli_auth_credentials_store = "file"</code> задаёт хранение и чтение учётных данных в <code>auth.json</code>; <code>requires_openai_auth = true</code> включает их использование пользовательским провайдером.',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      'Ссылки: <a0>Аутентификация Codex</a0> · <a1>Справочник конфигурации Codex</a1>',
+    'ChatGPT beginner installation guide':
+      'Руководство по установке ChatGPT для начинающих',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      'Иллюстрированное руководство: скачивание, установка, вход и настройка сторонних API.',
+    'The Codex website': 'Официальный сайт Codex',
+    'The ChatGPT desktop website': 'Сайт настольного ChatGPT',
+    'Run the Windows installer': 'Запуск установщика Windows',
+    'Wait for the installation to finish': 'Ожидание завершения установки',
+    'Microsoft Store package download': 'Скачивание пакета Microsoft Store',
+    'Open shell:AppsFolder': 'Открытие shell:AppsFolder',
+    'Create a desktop shortcut': 'Создание ярлыка на рабочем столе',
+    'Install ChatGPT on macOS': 'Установка ChatGPT на macOS',
+    'ChatGPT sign-in screen': 'Экран входа в ChatGPT',
+    'API key sign-in screen': 'Экран входа с API-ключом',
+    'CC Switch release downloads': 'Установочные пакеты CC Switch',
+    'Create and import an API key': 'Создание и импорт API-ключа',
+    'Configure the Codex import': 'Настройка импорта Codex',
+    'Confirm the provider in CC Switch': 'Подтверждение провайдера в CC Switch',
+    'Enable the provider and restart the client':
+      'Включение провайдера и перезапуск клиента',
+    'Add a provider in CC Switch': 'Добавление провайдера в CC Switch',
+    'Choose a custom provider': 'Выбор пользовательского провайдера',
+    'Enter the API key and request URL': 'Ввод API-ключа и URL запроса',
+  },
+  vi: {
+    'ChatGPT download': 'Tải ChatGPT',
+    'Windows version': 'Phiên bản Windows',
+    'Standard download': 'Cách tải thông thường',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      'Tải trình cài đặt ChatGPT từ <a0>trang Codex chính thức: https://openai.com/zh-Hans-CN/codex/</a0> hoặc <a1>trang ChatGPT cho máy tính: https://chatgpt.com/zh-Hans-CN/download/</a1>.',
+    'Tutorial note': 'Lưu ý',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex và ChatGPT đã được hợp nhất trong một ứng dụng. Codex tập trung vào lập trình, còn ChatGPT tập trung vào công việc hằng ngày. Bạn có thể chuyển đổi chế độ.',
+    'Codex website:': 'Trang Codex chính thức:',
+    'ChatGPT desktop website': 'Trang chính thức của ChatGPT cho máy tính',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      'Tìm trình cài đặt ChatGPT đã tải và nhấp đúp để bắt đầu tải. Phải bật chế độ proxy toàn cục.',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      'Trên Windows, hiện chỉ có thể tải Codex và ChatGPT qua Microsoft Store và mặc định cài đặt vào ổ C:.',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      'Bật proxy toàn cục: trình cài đặt tải ChatGPT qua Microsoft Store, còn phiên bản cửa hàng Trung Quốc kiểm tra quyền tải theo vị trí của bạn.',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      'Nếu ChatGPT báo ứng dụng không khả dụng hoặc bị vô hiệu hóa, Microsoft Store có thể đã phát hiện vị trí thực của bạn. Bật proxy toàn cục có thể khắc phục vấn đề này.',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      'Nếu vẫn không khắc phục được, hãy dùng cách thứ hai bên dưới để cài trực tiếp gói Codex.',
+    'The download has started. Wait for the progress bar to finish.':
+      'Quá trình tải đã bắt đầu. Hãy đợi thanh tiến trình hoàn tất.',
+    'Download a Microsoft installation package': 'Tải gói cài đặt Microsoft',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'Ứng dụng Codex cho Windows thường được cài qua Microsoft Store. Khác biệt về cấu hình máy và mạng có thể gây lỗi, thử lại liên tục hoặc cài đặt thất bại. Cách này cài Codex trực tiếp mà không qua cửa hàng.',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      'Mở <a0>https://store.rg-adguard.net</a0>, chọn ProductId, nhập mã sản phẩm Microsoft <code>9PLM9XGG6VKS</code>, chọn RP ở bên phải rồi nhấp dấu tích.',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      'Tải <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. Đây là tệp cài đặt độc lập; hãy mở tệp để cài ứng dụng.',
+    'Desktop shortcut': 'Lối tắt trên màn hình',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      'Tại sao ChatGPT trên Windows không có lối tắt trên màn hình?',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      'Biểu tượng nằm trong Microsoft Store nên bạn thường phải tìm kiếm để mở ứng dụng.',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      'Codex và ChatGPT trên Windows hiện được tải qua Microsoft Store và thường được mở từ cửa hàng.',
+    'Press Win+R to open the Run dialog.': 'Nhấn Win+R để mở hộp thoại Run.',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      'Nhập <code>shell:AppsFolder</code> như hình bên dưới rồi nhấn Enter.',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      'Trong cửa sổ vừa mở, tìm ChatGPT, nhấp chuột phải rồi chọn Create shortcut.',
+    'macOS version': 'Phiên bản macOS',
+    'Downloading the macOS version is simpler.':
+      'Tải phiên bản macOS đơn giản hơn.',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      'Sau khi tải xong, nhấp đúp vào tệp và kéo ChatGPT/Codex vào Applications để hoàn tất cài đặt.',
+    'ChatGPT sign-in': 'Đăng nhập ChatGPT',
+    '1. Sign in with an official ChatGPT account':
+      '1. Đăng nhập bằng tài khoản ChatGPT chính thức',
+    'Click Continue to sign in.': 'Nhấp Continue để đăng nhập.',
+    '2. Sign in with the official ChatGPT API':
+      '2. Đăng nhập bằng API ChatGPT chính thức',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      'Nhấp Use another sign-in method ở bên dưới rồi nhập khóa API OpenAI chính thức.',
+    '3. Sign in with a third-party API or gateway':
+      '3. Đăng nhập bằng API bên thứ ba hoặc cổng chuyển tiếp',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      'Nhấp Use another sign-in method rồi nhập một giá trị bất kỳ.',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      'Tải CC Switch, công cụ quản lý cấu hình cho các agent phổ biến, hoặc tự chỉnh sửa config.toml. Xem phần cấu hình bên dưới.',
+    'Configure a third-party API in ChatGPT':
+      'Cấu hình API bên thứ ba trong ChatGPT',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      'Dùng CC Switch để cấu hình bằng một lần nhấp hoặc chỉnh sửa thủ công <code>auth.json</code> và <code>config.toml</code> để kết nối Codex.',
+    '1. One-click import with CC Switch':
+      '1. Nhập bằng một lần nhấp với CC Switch',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch nhập khóa API, mô hình đã chọn và URL dịch vụ Codex mà không cần sửa TOML thủ công.',
+    '1.1 Install CC Switch': '1.1 Cài đặt CC Switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      'Tải và cài ứng dụng từ <a0>trang phát hành CC Switch</a0>.',
+    '1.2 Create an API key': '1.2 Tạo khóa API',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      'Mở trang khóa API của nhà cung cấp mô hình hoặc cổng chuyển tiếp, tạo khóa rồi nhập bằng một lần nhấp. Đa số cổng hỗ trợ cách này; một số cần nhập thủ công Base URL và khóa vào CC Switch. Với cách nhập thủ công, xem <a0>hướng dẫn bắt đầu nhanh chính thức của CC Switch</a0>.',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      'API bên thứ ba phải hỗ trợ giao thức Responses. Hầu hết cổng chuyển tiếp và nhà cung cấp mô hình đều hỗ trợ; API Claude chính thức có thể không hỗ trợ.',
+    '1.3 Configure before importing': '1.3 Cấu hình trước khi nhập',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      'Chọn Codex, chọn mô hình chính mà khóa API được phép dùng và giữ URL <code>/v1</code> được tạo tự động.',
+    'Name: the configuration name.': 'Tên: tên cấu hình.',
+    'Primary model: the default model for new windows. You can change it later.':
+      'Mô hình chính: mô hình mặc định cho cửa sổ mới. Bạn có thể thay đổi sau.',
+    '1.4 Confirm the configuration in CC Switch':
+      '1.4 Xác nhận cấu hình trong CC Switch',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      'Xác nhận yêu cầu mở liên kết của trình duyệt, sau đó kiểm tra, lưu và bật nhà cung cấp đã nhập trong CC Switch.',
+    '1.5 Restart the client': '1.5 Khởi động lại ứng dụng',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      'Dữ liệu nhập gồm khóa API đã chọn, mô hình chính và URL dịch vụ kết thúc bằng <code>/v1</code>. Chỉ xác nhận nhập trên thiết bị của bạn.',
+    'Manual import in CC Switch': 'Nhập thủ công trong CC Switch',
+    '2.1 Add a provider': '2.1 Thêm nhà cung cấp',
+    'Click Add provider.': 'Nhấp Add provider.',
+    'Then choose Custom configuration.': 'Sau đó chọn Custom configuration.',
+    '2.2 Custom configuration': '2.2 Cấu hình tùy chỉnh',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      'Điền các trường theo hướng dẫn. Đặc biệt kiểm tra khóa API và URL yêu cầu API cho chính xác.',
+    '3. Edit auth.json and config.toml':
+      '3. Chỉnh sửa auth.json và config.toml',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex đọc thông tin xác thực từ <code>auth.json</code> trong thư mục người dùng, còn cấu hình nhà cung cấp, mô hình và API được đọc từ <code>config.toml</code>.',
+    '3.1 Edit auth.json': '3.1 Chỉnh sửa auth.json',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      'Nhập khóa API vào tệp <code>auth.json</code> cấp người dùng. Nếu tệp đã có các trường xác thực khác, chỉ cập nhật <code>OPENAI_API_KEY</code>, không ghi đè toàn bộ tệp.',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      'Ở chế độ tệp, <code>auth.json</code> chứa khóa API dạng văn bản thuần. Chỉ lưu trên thiết bị của bạn, không đưa vào Git hoặc chia sẻ. Lưu khóa trong <code>auth.json</code>; <code>config.toml</code> chỉ dành cho cấu hình nhà cung cấp, mô hình và API, không dựa vào thiết lập tạm thời của terminal.',
+    '3.2 Edit config.toml': '3.2 Chỉnh sửa config.toml',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      'Giữ cấu hình Codex hiện có và hợp nhất khối nhà cung cấp bên dưới. Nếu đã có <code>cli_auth_credentials_store</code>, đổi thành <code>"file"</code> thay vì thêm trùng. Thay mô hình mẫu bằng mô hình mà khóa API có thể sử dụng.',
+    'Conversation history issues': 'Vấn đề về lịch sử hội thoại',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      'Nếu hội thoại cũ không hiển thị, hãy kiểm tra <code>model_provider</code> trong <code>config.toml</code> có khớp chính xác giá trị khi tạo hội thoại, kể cả chữ hoa và chữ thường. Khôi phục giá trị đó, khởi động lại Codex và dùng <code>codex resume</code> để tìm lịch sử. Thông thường dữ liệu chưa bị xóa.',
+    '3.3 Restart and verify': '3.3 Khởi động lại và kiểm tra',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      'Lưu <code>auth.json</code> và <code>config.toml</code>, rồi khởi động lại ứng dụng Codex hoặc tiện ích IDE đang chạy.',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      'Chạy <code>codex</code> trong terminal và bắt đầu một tác vụ thử nghiệm. Thông tin xác thực được lấy từ <code>auth.json</code>.',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      'Nếu không khởi động được, chạy <code>codex doctor</code> để kiểm tra việc đọc tệp xác thực, rồi kiểm tra tên mô hình và Base URL.',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      'Giữ <code>wire_api = "responses"</code> và Base URL kết thúc bằng <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> cho phép Codex lưu và đọc thông tin xác thực trong <code>auth.json</code>; <code>requires_openai_auth = true</code> cho phép nhà cung cấp tùy chỉnh sử dụng thông tin đó.',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      'Tham khảo: <a0>Xác thực Codex</a0> · <a1>Tài liệu cấu hình Codex</a1>',
+    'ChatGPT beginner installation guide':
+      'Hướng dẫn cài đặt ChatGPT cho người mới',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      'Hướng dẫn bằng hình ảnh về tải xuống, cài đặt, đăng nhập và cấu hình API bên thứ ba.',
+    'The Codex website': 'Trang Codex chính thức',
+    'The ChatGPT desktop website': 'Trang ChatGPT cho máy tính',
+    'Run the Windows installer': 'Chạy trình cài đặt Windows',
+    'Wait for the installation to finish': 'Đợi cài đặt hoàn tất',
+    'Microsoft Store package download': 'Tải gói cài đặt Microsoft Store',
+    'Open shell:AppsFolder': 'Mở shell:AppsFolder',
+    'Create a desktop shortcut': 'Tạo lối tắt trên màn hình',
+    'Install ChatGPT on macOS': 'Cài ChatGPT trên macOS',
+    'ChatGPT sign-in screen': 'Màn hình đăng nhập ChatGPT',
+    'API key sign-in screen': 'Màn hình đăng nhập bằng khóa API',
+    'CC Switch release downloads': 'Danh sách bản cài đặt CC Switch',
+    'Create and import an API key': 'Tạo và nhập khóa API',
+    'Configure the Codex import': 'Cấu hình nhập Codex',
+    'Confirm the provider in CC Switch':
+      'Xác nhận nhà cung cấp trong CC Switch',
+    'Enable the provider and restart the client':
+      'Bật nhà cung cấp và khởi động lại ứng dụng',
+    'Add a provider in CC Switch': 'Thêm nhà cung cấp trong CC Switch',
+    'Choose a custom provider': 'Chọn nhà cung cấp tùy chỉnh',
+    'Enter the API key and request URL': 'Nhập khóa API và URL yêu cầu',
+  },
+  'zh-TW': {
+    'ChatGPT download': 'ChatGPT下載',
+    'Windows version': 'Windows版',
+    'Standard download': '常規方法下載',
+    'Download the ChatGPT installer from the official <a0>Codex website: https://openai.com/zh-Hans-CN/codex/</a0> or the <a1>ChatGPT desktop website: https://chatgpt.com/zh-Hans-CN/download/</a1>.':
+      '訪問OpenAI官網下載ChatGPT安裝器，前往<a0>Codex官網：https://openai.com/zh-Hans-CN/codex/</a0>、<a1>ChatGPT桌面客戶端官網：https://chatgpt.com/zh-Hans-CN/download/</a1>均可下載',
+    'Tutorial note': '注意',
+    'Codex and ChatGPT have been combined into one client. Codex focuses on coding, while ChatGPT focuses on everyday work. You can switch between modes.':
+      'Codex和ChatGPT客戶端已經合二為一，Codex注重編程能力，ChatGPT桌面客戶端注重日常辦公，用戶可自行切換模式',
+    'Codex website:': 'Codex官網：',
+    'ChatGPT desktop website': 'ChatGPT桌面客戶端官網',
+    'Find the downloaded ChatGPT installer and double-click it to start the download. Global proxy mode must be enabled.':
+      '找到下載好的ChatGPT安裝器，雙擊執行下載（必須開啓全局代理）',
+    'On Windows, Codex and ChatGPT can currently only be downloaded through Microsoft Store, and installation defaults to the C: drive.':
+      '目前 Windows 中的 Codex 和 ChatGPT 都只能在微軟商店中下載，下載後也只能默認安裝在 C 盤中',
+    'Enable global proxy mode: the installer downloads ChatGPT through Microsoft Store, and the Chinese version of the store checks download eligibility based on your location.':
+      '必須開啓全局代理，因為安裝器是通過微軟應用商城下載ChatGPT，而中國版本的微軟應用商城是會根據你的使用地點檢測你是否有下載權限的',
+    'If ChatGPT later reports that the client is unavailable or disabled, Microsoft Store may have detected your real location. Enabling global proxy mode may resolve this.':
+      '如果後續遇到“ChatGPT客戶端不可用、禁用”等問題，很大概率是ChatGPT通過微軟應用商城檢測到了你的真實使用地址，這時候開啓全局代理就能解決。',
+    'If the problem persists, use the second method below to install the Codex package directly.':
+      '如果實在無法解決，請使用第二個下載安裝方法——直接安裝Codex安裝包',
+    'The download has started. Wait for the progress bar to finish.':
+      '此時已經開始下載，等待進度條結束就成功了',
+    'Download a Microsoft installation package': '微軟安裝包下載',
+    'The Windows Codex app normally installs through Microsoft Store. Differences in computer settings and networks can cause errors, repeated retries, or failed installations. This method installs Codex directly without using the store.':
+      'Codex APP Windows版本默認只能通過微軟商店進行安裝，由於不同電腦的設置、網絡等差異，可能會導致大家在使用微軟商店的時候遇到各種各樣的錯誤，要麼報錯要麼一直重試然後安裝失敗，今天就教大家怎麼直接安裝Codex，不經過微軟商店。',
+    'Open <a0>https://store.rg-adguard.net</a0>, select ProductId, enter the Microsoft product code <code>9PLM9XGG6VKS</code>, select RP on the right, and click the check mark.':
+      '打開網站：<a0>https://store.rg-adguard.net</a0> ，下拉框選擇Productld，輸入微軟產品代碼 <code>9PLM9XGG6VKS</code>，右邊選擇RP，點擊勾',
+    'Download <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0>. The downloaded file is a standalone installer; open it to install.':
+      '下載 <a0>OpenAI.Codex_26.1013.3656.0_x64__2p2nqsd0c76g0.msix</a0> 這個版本()，下載下來之後就是msi直接安裝包，直接安裝即可',
+    'Desktop shortcut': '桌面圖標',
+    'Why is there no ChatGPT desktop shortcut on Windows?':
+      '為什麼Windows版ChatGPT沒有桌面圖標？',
+    'The icon is in Microsoft Store, so you need to search for it when opening the app.':
+      '因為圖標在微軟應用市場裡面！平時使用需要額外搜索',
+    'Codex and ChatGPT on Windows currently download through Microsoft Store and normally open from there.':
+      '目前 Windows 中的 Codex 和 ChatGPT 都只能在微軟商店中下載，默認也就只能從微軟應用商城打開！',
+    'Press Win+R to open the Run dialog.': '同時按住Win+R，打開資源管理器',
+    'Enter <code>shell:AppsFolder</code>, as shown below, and press Enter.':
+      '輸入<code>shell:AppsFolder</code>（如下圖），然後按回車',
+    'Find ChatGPT in the window that opens, right-click it, and choose Create shortcut.':
+      '在打開的頁面中，找到ChatGPT圖標，右鍵單單擊，點擊創建快捷方式',
+    'macOS version': 'Mac版',
+    'Downloading the macOS version is simpler.': 'Mac版本的下載就簡單多了',
+    'After downloading, double-click the file and drag ChatGPT/Codex into Applications to finish installation.':
+      '下載完成後，雙擊文件，將ChatGPT/Codex拖入Applications裡面，即可完成安裝',
+    'ChatGPT sign-in': 'ChatGPT登錄',
+    '1. Sign in with an official ChatGPT account': '1.ChatGPT官方賬號登錄',
+    'Click Continue to sign in.': '直接點擊繼續登錄即可',
+    '2. Sign in with the official ChatGPT API': '2.ChatGPT官方API登錄',
+    'Click Use another sign-in method below, then enter your official OpenAI API key.':
+      '點擊下方使用其他方式登錄，然後輸入OpenAI官方API密鑰即可',
+    '3. Sign in with a third-party API or gateway': '3.第三方API、中轉站登錄',
+    'Click Use another sign-in method and enter an arbitrary value.':
+      '點擊使用其他方式登錄，然後胡亂輸入一些亂七八糟的',
+    'Download CC Switch, a configuration manager for popular agents, or edit config.toml yourself. See the configuration section below.':
+      '下載CC Switch（一款管理各種主流智能體配置的插件）或者自行修改config.toml，詳情看下文《ChatGPT配置》',
+    'Configure a third-party API in ChatGPT': 'ChatGPT配置第三方API',
+    'Use CC Switch for one-click setup, or edit <code>auth.json</code> and <code>config.toml</code> manually to connect Codex.':
+      '可選擇使用 CC Switch 一鍵配置，或手動編輯 <code>auth.json</code> 和 <code>config.toml</code> 接入 Codex。',
+    '1. One-click import with CC Switch': '1. 使用 CC Switch 一鍵導入',
+    'CC Switch imports your API key, selected model, and Codex service URL without requiring manual TOML editing.':
+      'CC Switch 可以導入 API Key、所選模型和 Codex 服務地址，無需手動編輯 TOML。',
+    '1.1 Install CC Switch': '1.1 安裝cc switch',
+    'Download and install the app from the <a0>CC Switch releases page</a0>.':
+      '從 <a0>CC Switch 發佈頁</a0> 下載並安裝應用',
+    '1.2 Create an API key': '1.2 創建密鑰',
+    'Open your model provider or gateway API key page, create a key, and import it with one click. Most gateways support one-click import; others require entering the base URL and key in CC Switch manually. For manual import, see the <a0>official CC Switch quick-start guide</a0>.':
+      '打開模型服務商/中轉站的API key頁面，創建密鑰，並一鍵導入。（大部分中轉站可以一鍵導入，少部分需要手動把密鑰的base url 和 key自己放入cc switch的配置，手動導入參考<a0>cc switch官方快速上手文檔</a0>）',
+    'The third-party API must support the Responses protocol. Most gateways and model providers support it; the official Claude API may not.':
+      '第三方API需要支持Response協議，一般中轉站/模型廠商都會支持，只有Claude官方可能不支持',
+    '1.3 Configure before importing': '1.3 導入前配置',
+    'Select Codex, choose a primary model available to this API key, and keep the automatically generated <code>/v1</code> URL.':
+      '選擇 Codex，再選擇當前 API Key 可用的主模型，並保留自動生成的 <code>/v1</code> 地址。',
+    'Name: the configuration name.': '名稱：配置名',
+    'Primary model: the default model for new windows. You can change it later.':
+      '主模型：新開窗口默認的模型，可以後期自己調整',
+    '1.4 Confirm the configuration in CC Switch': '1.4 CC Switch側確認配置',
+    'Confirm the browser prompt to open the link, then review, save, and enable the imported provider in CC Switch.':
+      '確認瀏覽器打開鏈接的提示，然後在 CC Switch 中檢查、保存並啓用導入的服務商。',
+    '1.5 Restart the client': '1.5 重啓客戶端',
+    'The import includes the selected API key, primary model, and a service URL ending in <code>/v1</code>. Confirm the import only on your own device.':
+      '導入內容包含所選 API Key、主模型和以 <code>/v1</code> 結尾的服務地址。請只在自己的設備上確認導入。',
+    'Manual import in CC Switch': '手動導入CC Switch',
+    '2.1 Add a provider': '2.1 添加供應商',
+    'Click Add provider.': '點擊添加供應商',
+    'Then choose Custom configuration.': '然後點擊自定義配置',
+    '2.2 Custom configuration': '2.2 自定義配置',
+    'Fill in the fields as prompted. Make sure the API key and API request URL are correct.':
+      '根據提示進行填寫，重點是API Key和API請求地址不要填寫錯誤',
+    '3. Edit auth.json and config.toml':
+      '3. 編輯 <code>auth.json</code> 和 <code>config.toml</code>',
+    'Codex reads credentials from <code>auth.json</code> in your user directory, and provider, model, and API settings from <code>config.toml</code>.':
+      'Codex 從用戶目錄中的 <code>auth.json</code> 讀取認證憑據，從 <code>config.toml</code> 讀取服務商、模型和接口設置。',
+    '3.1 Edit auth.json': '3.1編輯 <code>auth.json</code>',
+    'Enter your API key in the user-level <code>auth.json</code>. If it already contains other authentication fields, update only <code>OPENAI_API_KEY</code>; do not overwrite the entire file.':
+      '在用戶級 <code>auth.json</code> 中寫入 API Key。如果文件中已有其他認證字段，只更新 <code>OPENAI_API_KEY</code>，不要覆蓋整個文件。',
+    'In file mode, <code>auth.json</code> contains a plaintext API key. Keep it only on your own device, never commit it to Git or share it. Store the key in <code>auth.json</code>; use <code>config.toml</code> only for provider, model, and API settings, not temporary terminal settings.':
+      '文件模式下的 <code>auth.json</code> 包含明文密鑰，請只保存在自己的設備上，不要提交到 Git 或發送給他人。密鑰保存在 <code>auth.json</code>；<code>config.toml</code> 只用於服務商、模型和接口設置，不要依賴當前終端的臨時設置。',
+    '3.2 Edit config.toml': '3.2編輯 <code>config.toml</code>',
+    'Preserve your existing Codex settings and merge the provider block below. If <code>cli_auth_credentials_store</code> already exists, change it to <code>"file"</code> instead of adding a duplicate. Replace the example model with one available to your API key.':
+      '保留現有 Codex 配置，並合併下面的服務商配置塊。已有 <code>cli_auth_credentials_store</code> 時將它改為 <code>"file"</code>，不要重復添加。按 API Key 的可用模型替換示例模型。',
+    'Conversation history issues': '會話歷史相關問題',
+    'If earlier conversations are missing, check that <code>model_provider</code> in <code>config.toml</code> exactly matches the value used to create them, including capitalization. Restore that value, restart Codex, and use <code>codex resume</code> to find the history. The records are usually not deleted.':
+      '如果原有對話歷史沒有顯示，檢查當前 <code>config.toml</code> 中的 <code>model_provider</code> 是否與創建對話時使用的值完全一致（包括大小寫）。改回原值並重啓 Codex 後，可運行 <code>codex resume</code> 查找歷史；這通常不代表記錄已被刪除。',
+    '3.3 Restart and verify': '3.3重啓並驗證',
+    'Save <code>auth.json</code> and <code>config.toml</code>, then restart any running Codex app or IDE extension.':
+      '保存 <code>auth.json</code> 和 <code>config.toml</code>，重啓正在運行的 Codex 應用或 IDE 擴展。',
+    'Run <code>codex</code> in a terminal and start a test task. Credentials are provided by <code>auth.json</code>.':
+      '在終端運行 <code>codex</code> 併發起一個測試任務；認證信息由 <code>auth.json</code> 提供。',
+    'If startup fails, run <code>codex doctor</code> to check whether the credentials file is being read, then check the model name and Base URL.':
+      '如啓動失敗，運行 <code>codex doctor</code> 檢查認證文件是否被讀取，再檢查模型名稱和 Base URL。',
+    'Keep <code>wire_api = "responses"</code> and a Base URL ending in <code>/v1</code>. <code>cli_auth_credentials_store = "file"</code> makes Codex save and read credentials in <code>auth.json</code>; <code>requires_openai_auth = true</code> makes the custom provider use those credentials.':
+      '請保持 <code>wire_api = "responses"</code>，並確保 Base URL 以 <code>/v1</code> 結尾。<code>cli_auth_credentials_store = "file"</code> 讓 Codex 使用 <code>auth.json</code> 保存和讀取憑據；<code>requires_openai_auth = true</code> 讓自定義服務商使用該憑據。',
+    'References: <a0>Codex authentication</a0> · <a1>Codex configuration reference</a1>':
+      '參考：<a0>Codex 認證說明</a0> · <a1>Codex 配置參考</a1>',
+    'ChatGPT beginner installation guide': 'ChatGPT保姆級安裝教程',
+    'Download, install, sign in, and configure third-party APIs with this illustrated guide.':
+      '下載、安裝、登錄和第三方 API 配置完整圖文教程。',
+    'The Codex website': 'Codex 官網',
+    'The ChatGPT desktop website': 'ChatGPT 桌面客戶端官網',
+    'Run the Windows installer': '運行 Windows 安裝器',
+    'Wait for the installation to finish': '等待安裝完成',
+    'Microsoft Store package download': '微軟商店安裝包下載',
+    'Open shell:AppsFolder': '打開 shell:AppsFolder',
+    'Create a desktop shortcut': '創建桌面快捷方式',
+    'Install ChatGPT on macOS': '在 macOS 中安裝 ChatGPT',
+    'ChatGPT sign-in screen': 'ChatGPT 登錄界面',
+    'API key sign-in screen': 'API Key 登錄界面',
+    'CC Switch release downloads': 'CC Switch 發佈頁安裝包列表',
+    'Create and import an API key': '創建並導入 API Key',
+    'Configure the Codex import': '配置 Codex 導入信息',
+    'Confirm the provider in CC Switch': '在 CC Switch 中確認服務商',
+    'Enable the provider and restart the client': '啓用服務商並重啓客戶端',
+    'Add a provider in CC Switch': '在 CC Switch 中添加供應商',
+    'Choose a custom provider': '選擇自定義供應商',
+    'Enter the API key and request URL': '填寫 API Key 和 API 請求地址',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  codexTutorialTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const retiredKeys = new Set([
   'Use any provider in Codex or Claude Code',
   'Use DeepSeek or Claude in Codex, and GPT or Gemini in Claude Code. Choose a model available on this site; the gateway handles protocol conversion.',
@@ -2857,6 +3890,13 @@ for (const filename of localeFiles) {
       json.translation[key] = value
       changed = true
     }
+  }
+  const sortedTranslations = Object.fromEntries(
+    Object.entries(json.translation).sort(([a], [b]) => a.localeCompare(b))
+  )
+  if (JSON.stringify(json.translation) !== JSON.stringify(sortedTranslations)) {
+    json.translation = sortedTranslations
+    changed = true
   }
   if (changed) {
     await fs.writeFile(file, `${JSON.stringify(json, null, 2)}\n`, 'utf8')
