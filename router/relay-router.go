@@ -4,6 +4,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/pkg/traj_record"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/types"
 
@@ -86,6 +87,7 @@ func SetRelayRouter(router *gin.Engine) {
 		// must run after TokenAuth so user/token ids are available. No-op unless
 		// RELAY_TRACE_ENABLED is set.
 		httpRouter.Use(middleware.RelayTrace())
+		httpRouter.Use(traj_record.Middleware())
 		httpRouter.Use(middleware.Distribute())
 
 		// claude related routes
