@@ -1328,6 +1328,19 @@ func (user *User) FillUserByLinuxDOId() error {
 	return err
 }
 
+func IsFeishuIdAlreadyTaken(feishuId string) bool {
+	var user User
+	err := DB.Unscoped().Where("feishu_id = ?", feishuId).First(&user).Error
+	return !errors.Is(err, gorm.ErrRecordNotFound)
+}
+
+func (user *User) FillUserByFeishuId() error {
+	if user.FeishuId == "" {
+		return errors.New("feishu id is empty")
+	}
+	return DB.Where("feishu_id = ?", user.FeishuId).First(user).Error
+}
+
 func RootUserExists() bool {
 	var user User
 	err := DB.Where("role = ?", common.RoleRootUser).First(&user).Error
