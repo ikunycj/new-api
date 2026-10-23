@@ -83,6 +83,8 @@ export interface UserProfile {
   linux_do_id?: string
   /** Parent account ID (0 = no parent / is a parent or standalone account) */
   parent_id?: number
+  /** Whether this account has sub-accounts (children) */
+  has_children?: boolean
 }
 
 /**
