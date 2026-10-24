@@ -1084,8 +1084,6 @@ func GetUserSetting(id int, fromDB bool) (settingMap dto.UserSetting, err error)
 	return userBase.GetSetting(), nil
 }
 
-// SetUserParentId sets or clears the parent account for a user.
-// parentId == 0 clears the relationship.
 func SetUserParentId(userId, parentId int) error {
 	return DB.Model(&User{}).Where("id = ?", userId).Update("parent_id", parentId).Error
 }
@@ -1102,6 +1100,21 @@ func HasChildren(userId int) (bool, error) {
 	var count int64
 	err := DB.Model(&User{}).Where("parent_id = ?", userId).Count(&count).Error
 	return count > 0, err
+}
+
+// GetTeamUsageSummary returns the aggregate used_quota and request_count for
+// the given set of user ids (a parent account + its children).
+func GetTeamUsageSummary(userIds []int) (usedQuota int64, requestCount int64, err error) {
+	type result struct {
+		UsedQuota    int64
+		RequestCount int64
+	}
+	var r result
+	err = DB.Model(&User{}).
+		Select("COALESCE(SUM(used_quota), 0) AS used_quota, COALESCE(SUM(request_count), 0) AS request_count").
+		Where("id IN ?", userIds).
+		Scan(&r).Error
+	return r.UsedQuota, r.RequestCount, err
 }
 
 // GetBillingUserId returns the user ID whose quota should be charged for a
@@ -1324,17 +1337,3 @@ func RootUserExists() bool {
 	return true
 }
 
-// GetTeamUsageSummary returns the aggregate used_quota and request_count for
-// the given set of user ids (a parent account + its children).
-func GetTeamUsageSummary(userIds []int) (usedQuota int64, requestCount int64, err error) {
-	type result struct {
-		UsedQuota    int64
-		RequestCount int64
-	}
-	var r result
-	err = DB.Model(&User{}).
-		Select("COALESCE(SUM(used_quota), 0) AS used_quota, COALESCE(SUM(request_count), 0) AS request_count").
-		Where("id IN ?", userIds).
-		Scan(&r).Error
-	return r.UsedQuota, r.RequestCount, err
-}
