@@ -102,6 +102,30 @@ export async function getUserQuotaDates(
   return res.data
 }
 
+// Get quota data for the calling user's team (parent + all children).
+// Only available to parent accounts; children and admins are rejected by the backend.
+export async function getTeamQuotaDates(params: {
+  start_timestamp: number
+  end_timestamp: number
+  default_time?: string
+}) {
+  const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
+    '/api/data/team',
+    { params }
+  )
+  return res.data
+}
+
+// Get aggregate used_quota and request_count for the calling user's team.
+// Only callable by a parent account (parent_id = 0 with children).
+export async function getTeamSummaryStats() {
+  const res = await api.get<{
+    success: boolean
+    data?: { used_quota: number; request_count: number }
+  }>('/api/data/team/summary')
+  return res.data
+}
+
 // Distinct key names / models that have consumption rows in the window. Used
 // by the consumption chart's inline quick filters.
 export async function getQuotaDataDimensions(
@@ -168,6 +192,41 @@ export async function getSelfRealtimeKeyBreakdown() {
   return res.data
 }
 
+// Get the parent account's team aggregate realtime throughput
+// (parent + currently-bound children). Only callable by a parent account.
+export async function getTeamRealtimeMetrics() {
+  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
+    '/api/data/realtime/team'
+  )
+  return res.data
+}
+
+// Get the parent account's team per-key realtime breakdown.
+// Keys from the parent and all currently-bound children are merged.
+export async function getTeamRealtimeKeyBreakdown() {
+  const res = await api.get<{ success: boolean; data: RealtimeKeyBreakdowns }>(
+    '/api/data/realtime/team/keys'
+  )
+  return res.data
+}
+
+// Get the parent account's per-key historical spend for the team.
+// Children's rows are included only during binding periods.
+export async function getTeamTokenUsage(params: {
+  start_timestamp: number
+  end_timestamp: number
+  token_name?: string
+  model_name?: string
+  limit?: number
+}) {
+  const res = await api.get<{
+    success: boolean
+    data?: TokenUsageItem[]
+    message?: string
+  }>('/api/data/team/token-usage', { params })
+  return res.data
+}
+
 // Get the calling user's historical usage, including spend, over an arbitrary
 // range. This reads the hourly rollup rather than the in-memory rings, so it
 // can answer for a month but cannot resolve finer than an hour.
@@ -223,6 +282,21 @@ export async function getUserQuotaDataByUsers(params: {
     '/api/data/users',
     { params }
   )
+  return res.data
+}
+
+// Get flow distribution data for the parent account's team (parent + bound children).
+// Returns admin-style rows with user/group/model/channel breakdown.
+export async function getTeamFlowQuotaDates(params: {
+  start_timestamp: number
+  end_timestamp: number
+  default_time?: string
+}) {
+  const res = await api.get<{
+    success: boolean
+    data?: FlowQuotaDataItem[]
+    message?: string
+  }>('/api/data/team/flow', { params })
   return res.data
 }
 

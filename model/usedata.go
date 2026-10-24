@@ -350,6 +350,18 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64, tokenName 
 	return quotaDatas, err
 }
 
+// GetQuotaDataByUserIds returns hourly quota data for a parent + children set.
+func GetQuotaDataByUserIds(userIds []int, startTime int64, endTime int64, tokenName string, modelName string) (quotaData []*QuotaData, err error) {
+	var quotaDatas []*QuotaData
+	tx := DB.Table("quota_data").
+		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(input_tokens_total) as input_tokens_total").
+		Where("user_id IN ? AND created_at >= ? AND created_at <= ?", userIds, startTime, endTime).
+		Group("user_id, username, model_name, created_at")
+	tx = quotaDataFilteredBy(tx, tokenName, modelName)
+	err = tx.Find(&quotaDatas).Error
+	return quotaDatas, err
+}
+
 func GetQuotaDataGroupByUser(startTime int64, endTime int64, tokenName string, modelName string) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
 	tx := DB.Table("quota_data").
@@ -436,4 +448,50 @@ func GetQuotaDataDimensions(startTime int64, endTime int64, userId int) (dims Qu
 	}
 	dims.Models = filteredModels
 	return dims, nil
+}
+
+// GetTeamUsageSummaryByBindings returns aggregate (used_quota, request_count)
+// for a parent account's team:
+//   - Parent's own used_quota and request_count (all time, from users table)
+//   - Children's quota and count from quota_data, summed only for rows whose
+//     created_at falls inside at least one binding window in user_parent_bindings
+//
+// This correctly excludes a child's usage from before it was bound, and any
+// usage produced while it was unbound between two binding periods.
+func GetTeamUsageSummaryByBindings(parentId int) (usedQuota int64, requestCount int64, err error) {
+	// 1. Parent's own historical totals (stored on the user row).
+	var parent User
+	if err = DB.Select("used_quota, request_count").
+		Where("id = ?", parentId).
+		First(&parent).Error; err != nil {
+		return 0, 0, err
+	}
+
+	// 2. Children's usage during binding periods, via quota_data JOIN.
+	type childTotals struct {
+		Quota int64
+		Count int64
+	}
+	var ct childTotals
+	err = DB.Table("quota_data").
+		Select(
+			"COALESCE(SUM(quota_data.quota), 0) AS quota, " +
+				"COALESCE(SUM(quota_data.count), 0) AS count",
+		).
+		Joins(
+			"JOIN user_parent_bindings upb"+
+				" ON quota_data.user_id = upb.child_id"+
+				" AND upb.parent_id = ?"+
+				" AND quota_data.created_at >= upb.bound_at"+
+				" AND (upb.unbound_at = 0 OR quota_data.created_at < upb.unbound_at)",
+			parentId,
+		).
+		Scan(&ct).Error
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return int64(parent.UsedQuota) + ct.Quota,
+		int64(parent.RequestCount) + ct.Count,
+		nil
 }
