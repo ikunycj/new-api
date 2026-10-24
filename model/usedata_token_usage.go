@@ -102,6 +102,37 @@ func GetTokenUsageRanking(startTime int64, endTime int64, userId int, username s
 	return rows, nil
 }
 
+// GetTeamTokenUsageRanking is the team-scoped counterpart to GetTokenUsageRanking.
+// It includes the parent's own quota_data rows plus all current children's rows.
+func GetTeamTokenUsageRanking(parentId int, startTime int64, endTime int64, tokenName string, modelName string, limit int) ([]TokenUsageRow, error) {
+	if limit <= 0 || limit > tokenUsageMaxRows {
+		limit = tokenUsageMaxRows
+	}
+	startTime = startTime - (startTime % 3600)
+	tx := DB.Table("quota_data").
+		Select("token_id, user_id, max(username) as username, sum(count) as count, sum(quota) as quota, sum(raw_quota) as raw_quota, sum(charge_usd_micros) as charge_usd_micros, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(input_tokens_total) as input_tokens_total, max(created_at) as last_used").
+		Where("token_id > 0 AND created_at >= ? AND created_at <= ?", startTime, endTime).
+		Where(
+			"user_id = ? OR user_id IN (SELECT id FROM users WHERE parent_id = ?)",
+			parentId, parentId,
+		)
+	if tokenName != "" {
+		tx = tx.Where("token_id IN (?)",
+			DB.Table("tokens").Select("id").Where("name = ? AND deleted_at IS NULL", tokenName),
+		)
+	}
+	if modelName != "" {
+		tx = tx.Where("model_name = ?", modelName)
+	}
+	rows := make([]TokenUsageRow, 0, 64)
+	if err := tx.Group("token_id, user_id").Order("quota DESC").Limit(limit).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	resolveTokenUsageNames(rows)
+	fillTokenUsageMoneyFields(rows)
+	return rows, nil
+}
+
 // usdToCNYRate reads the admin-configured billing exchange rate (系统设置 ->
 // 货币与展示 -> 计费汇率), the same value the relay path itself uses to turn
 // USD cost into CNY quota. Falls back to 1 the same way GetBillingUSDToCNYRate
