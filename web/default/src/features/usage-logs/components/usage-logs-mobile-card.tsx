@@ -193,16 +193,6 @@ function MobileTokensField({ log }: { log: UsageLog }) {
 
   if (!isDisplayableLogType(log.type)) return null
 
-  const promptTokens = log.prompt_tokens || 0
-  const completionTokens = log.completion_tokens || 0
-  if (promptTokens === 0 && completionTokens === 0) {
-    return (
-      <div className='bg-muted/20 min-w-0 rounded-md px-2 py-1.5'>
-        <span className='text-muted-foreground text-xs'>-</span>
-      </div>
-    )
-  }
-
   const other = parseLogOther(log.other)
   const cacheReadTokens = other?.cache_tokens || 0
   const cacheWrite5m = other?.cache_creation_tokens_5m || 0
@@ -212,6 +202,21 @@ function MobileTokensField({ log }: { log: UsageLog }) {
     ? cacheWrite5m + cacheWrite1h
     : other?.cache_creation_tokens || 0
   const showCache = cacheReadTokens > 0 || cacheWriteTokens > 0
+
+  // Anthropic reports prompt_tokens exclusive of cache, so prefer the normalized
+  // input total when the backend marked it reliable.
+  const promptTokens =
+    log.cache_stats_available && log.input_tokens_total > 0
+      ? log.input_tokens_total
+      : log.prompt_tokens || 0
+  const completionTokens = log.completion_tokens || 0
+  if (promptTokens === 0 && completionTokens === 0 && !showCache) {
+    return (
+      <div className='bg-muted/20 min-w-0 rounded-md px-2 py-1.5'>
+        <span className='text-muted-foreground text-xs'>-</span>
+      </div>
+    )
+  }
 
   return (
     <div className='bg-muted/20 min-w-0 rounded-md px-2 py-1.5'>
