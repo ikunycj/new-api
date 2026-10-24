@@ -66,6 +66,19 @@ func classifyChannelError(rawCode string, statusCode int) errorDefinition {
 		return errorDefinition{205001, "upstream", "channel", "switch_channel"}
 	case strings.Contains(rawCode, "timeout"):
 		return errorDefinition{210001, "network", "channel", "switch_channel"}
+	case statusCode == 400 || statusCode == 413 || statusCode == 422:
+		// The upstream rejected the request body itself: an out-of-range
+		// parameter, a field the model does not accept, a payload that is too
+		// large. The caller is the only one who can fix it, so the failure is
+		// scoped to the request and must not switch channels — replaying the
+		// same invalid body against every remaining channel burns the pool and
+		// marks healthy channels as failing, while the verdict never changes.
+		//
+		// Only these three statuses are treated this way. A 401/403 is an
+		// upstream credential problem and a 404 is a routing or model-mapping
+		// problem; both describe our own supply and keep falling through to the
+		// generic channel classification below.
+		return errorDefinition{201001, "request", "request", "none"}
 	case statusCode >= 500:
 		// A generic 5xx is scoped to the current channel. Route policy may retry
 		// it or continue with the next configured channel.
