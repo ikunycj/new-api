@@ -3,16 +3,19 @@ package traj_record
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
+	"strings"
 	"unicode/utf8"
 )
 
-// client describes one recorded agent client. The recorder itself knows
+// client is a legacy-named protocol adapter; name is a storage dialect alias. The recorder itself knows
 // nothing about any API: it stores a request as a history array deduplicated
 // by raw prefix, a few blobs stored once per file, and the remaining top-level
 // keys as params. A client only says where those parts live, and how to pull
 // linking clues out of its requests and responses.
 type client struct {
-	name string
+	name      string // legacy storage dialect, not agent identity
+	apiFamily string
 	// paths are the gateway routes the client calls.
 	paths []string
 	// uaPrefixes identify the client by User-Agent, unless overridden by
@@ -24,19 +27,19 @@ type client struct {
 	// blobKeys are large top-level values that rarely change within a
 	// session; each distinct value is stored once per file.
 	blobKeys []string
-	// requestIds fills the linking ids found in the parsed request and returns
-	// the dedup scope, normally the session id. "" falls back to the API token.
+	// requestIds extracts optional client identity clues from the request.
+	// These clues do not decide whether an unknown client is captured.
 	requestIds func(rec *callRecord, top map[string]json.RawMessage) string
 	// summarize derives searchable fields from the raw response. The response
 	// itself is always stored verbatim.
 	summarize func(rec *callRecord, resp []byte)
 }
 
-var clients = []*client{claudeClient, codexClient}
+var clients = []*client{claudeClient, codexClient, chatClient}
 
 func clientByName(name string) *client {
 	for _, cl := range clients {
-		if cl.name == name {
+		if cl.name == name || cl.apiFamily == name {
 			return cl
 		}
 	}
@@ -84,4 +87,8 @@ func storeResponse(rec *callRecord, resp []byte) {
 	} else {
 		rec.RespB64 = resp
 	}
+}
+
+func matchesUA(rt route, ua string) bool {
+	return slices.ContainsFunc(rt.uaPrefixes, func(p string) bool { return strings.HasPrefix(ua, p) })
 }

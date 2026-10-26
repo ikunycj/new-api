@@ -4,9 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/QuantumNous/new-api/common"
 	"net/http"
 	"strconv"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // sampleRequest uses a stable session bucket, independent of request order,
@@ -28,8 +29,9 @@ func (r *recorder) sampleRequest(cl *client, userID int, headers http.Header, bo
 	cl.requestIds(&rec, top)
 	// A thread id alone cannot establish the root session of a child. Do not
 	// independently sample unidentified calls and produce partial families.
+	// Keep unknown sessions in full; zero above remains an absolute off switch.
 	if rec.SessionId == "" {
-		return false
+		return true // Unknown sessions are retained; request-level sampling would fragment them.
 	}
 	key, _ := common.Marshal([]string{"traj-session-v1", cl.name, strconv.Itoa(userID), rec.SessionId})
 	sum := sha256.Sum256(key)

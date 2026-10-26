@@ -80,19 +80,24 @@ func process(r *recorder, rid string, body []byte) {
 }
 
 type storedLine struct {
-	Type       string                     `json:"type"`
-	Rid        string                     `json:"rid"`
-	Hash       string                     `json:"hash"`
-	Data       json.RawMessage            `json:"data"`
-	ParentRid  string                     `json:"parent_rid"`
-	PrefixLen  int                        `json:"prefix_len"`
-	HistoryKey string                     `json:"history_key"`
-	Refs       map[string]string          `json:"refs"`
-	KeyOrder   []string                   `json:"key_order"`
-	ReqSha256  string                     `json:"req_sha256"`
-	Params     map[string]json.RawMessage `json:"params"`
-	Append     []json.RawMessage          `json:"append"`
-	Resp       string                     `json:"resp"`
+	ReqSize       int                        `json:"req_size"`
+	ReqCompacted  bool                       `json:"req_compacted"`
+	RespComplete  bool                       `json:"resp_complete"`
+	RespTruncated bool                       `json:"resp_truncated"`
+	Type          string                     `json:"type"`
+	Rid           string                     `json:"rid"`
+	Hash          string                     `json:"hash"`
+	Data          json.RawMessage            `json:"data"`
+	ParentRid     string                     `json:"parent_rid"`
+	PrefixLen     int                        `json:"prefix_len"`
+	HistoryKey    string                     `json:"history_key"`
+	Refs          map[string]string          `json:"refs"`
+	KeyOrder      []string                   `json:"key_order"`
+	ReqSha256     string                     `json:"req_sha256"`
+	Params        map[string]json.RawMessage `json:"params"`
+	Append        []json.RawMessage          `json:"append"`
+	Resp          string                     `json:"resp"`
+	ReqRaw        string                     `json:"req_raw"`
 }
 
 // reconstruct replays one file the way offline tooling would and returns every
@@ -125,6 +130,7 @@ func reconstruct(t *testing.T, data []byte) (map[string][]byte, map[string]store
 			history[l.Rid] = msgs
 			calls[l.Rid] = l
 			if l.KeyOrder == nil {
+				bodies[l.Rid] = []byte(l.ReqRaw)
 				continue
 			}
 			body := []byte{'{'}
@@ -261,13 +267,14 @@ func TestNonCanonicalBodies(t *testing.T) {
 	bodies, calls := reconstruct(t, data)
 
 	assert.Nil(t, calls["spaced"].KeyOrder, "whitespace cannot be reproduced")
-	assert.Len(t, calls["spaced"].Append, 1)
+	assert.Empty(t, calls["spaced"].Append)
+	assert.Equal(t, string(spaced), string(bodies["spaced"]))
 
 	var compact bytes.Buffer
 	require.NoError(t, json.Compact(&compact, pretty))
-	assert.Equal(t, compact.String(), string(bodies["pretty"]))
+	assert.Equal(t, string(pretty), string(bodies["pretty"]))
 	assert.Equal(t, sha(pretty), calls["pretty"].ReqSha256, "hash covers the bytes the client sent")
-	assert.Contains(t, string(data), `"req_compacted":true`)
+	assert.NotContains(t, string(data), `"req_compacted":true`)
 
 	assert.Contains(t, string(data), `"req_raw":"not json"`)
 
@@ -437,8 +444,8 @@ func TestCodexHeaderIds(t *testing.T) {
 		recs[rec.Rid] = rec
 	}
 	assert.Equal(t, [2]string{"S-new", "T-new"}, [2]string{recs["new"].SessionId, recs["new"].ThreadId})
-	assert.Equal(t, [2]string{"S-old", "PCK"}, [2]string{recs["old"].SessionId, recs["old"].ThreadId})
-	assert.Equal(t, [2]string{"", "PCK"}, [2]string{recs["none"].SessionId, recs["none"].ThreadId})
+	assert.Equal(t, [2]string{"S-old", ""}, [2]string{recs["old"].SessionId, recs["old"].ThreadId})
+	assert.Equal(t, [2]string{"", ""}, [2]string{recs["none"].SessionId, recs["none"].ThreadId})
 }
 
 func TestClientCanceled(t *testing.T) {
@@ -550,11 +557,11 @@ func TestMiddleware(t *testing.T) {
 	Close()
 	data, err := os.ReadFile(filepath.Join(dir, activeFileName))
 	require.NoError(t, err)
-	assert.Equal(t, 2, bytes.Count(data, []byte(`"type":"call"`)), "only each path's own client is recorded")
+	assert.Equal(t, 4, bytes.Count(data, []byte(`"type":"call"`)), "protocol routes accept all clients")
 	assert.NotContains(t, string(data), "sk-secret")
 
 	bodies, calls := reconstruct(t, data)
-	require.Len(t, calls, 2)
+	require.Len(t, calls, 4)
 	recs := map[string]callRecord{}
 	for line := range bytes.Lines(data) {
 		var rec callRecord

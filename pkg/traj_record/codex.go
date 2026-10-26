@@ -15,6 +15,7 @@ import (
 // messages. The tool list travels inside input as an additional_tools item.
 var codexClient = &client{
 	name:       "codex",
+	apiFamily:  "responses",
 	paths:      []string{"/v1/responses", "/v1/responses/compact"},
 	uaPrefixes: []string{"codex_"},
 	historyKey: "input",
@@ -43,9 +44,6 @@ func codexRequestIds(rec *callRecord, top map[string]json.RawMessage) string {
 	// Session-Id and Thread-Id since 0.15x.
 	rec.SessionId = cmp.Or(rec.SessionId, rec.Headers["Session-Id"], rec.Headers["Session_id"])
 	rec.ThreadId = cmp.Or(rec.ThreadId, rec.Headers["Thread-Id"])
-	if rec.ThreadId == "" && top["prompt_cache_key"] != nil {
-		_ = common.Unmarshal(top["prompt_cache_key"], &rec.ThreadId)
-	}
 	return cmp.Or(rec.SessionId, rec.ThreadId)
 }
 

@@ -39,8 +39,9 @@ func TestTrajectoryRelayTraceCoexistence(t *testing.T) {
 		{"both enabled", true, true, 1, "claude-cli/test", "/v1/messages", 100, true},
 		{"trace sampled out", true, true, 1, "claude-cli/test", "/v1/messages", 0, true},
 		{"trajectory sampled out", true, true, 0, "claude-cli/test", "/v1/messages", 100, false},
-		{"unrecognized client", true, true, 1, "curl/test", "/v1/messages", 100, false},
-		{"unrecorded route", true, true, 1, "claude-cli/test", "/v1/chat/completions", 100, false},
+		{"unrecognized client", true, true, 1, "curl/test", "/v1/messages", 100, true},
+		{"chat completions", true, true, 1, "opencode/test", "/v1/chat/completions", 100, true},
+		{"unrecorded route", true, true, 1, "curl/test", "/v1/embeddings", 100, false},
 		{"codex responses", true, true, 1, "codex_exec/test", "/v1/responses", 100, true},
 		{"codex compaction", true, true, 1, "codex_exec/test", "/v1/responses/compact", 100, true},
 	} {

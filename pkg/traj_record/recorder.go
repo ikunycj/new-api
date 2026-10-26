@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,12 +20,13 @@ import (
 
 // recordVersion 2 added client and history_key, and replaced system_ref and
 // tools_ref with refs.
-const recordVersion = 2
+const recordVersion = 3
 
 // job is one finished request handed from the request goroutine to the writer.
 // Full parsing happens on the writer side; partial sampling reads session IDs
 // on the request path before copying bytes.
 type job struct {
+	ws     *wsRecord
 	client *client
 	rec    callRecord
 	body   []byte
@@ -36,12 +38,15 @@ type job struct {
 // request parts ("params", "append") are spliced in after marshaling, see
 // write.
 type callRecord struct {
-	V        int    `json:"v"`
-	Type     string `json:"type"`
-	Rid      string `json:"rid"`
-	Instance string `json:"instance"`
-	Seq      int64  `json:"seq"`
-	Client   string `json:"client"`
+	V         int    `json:"v"`
+	Type      string `json:"type"`
+	Rid       string `json:"rid"`
+	Instance  string `json:"instance"`
+	Seq       int64  `json:"seq"`
+	Client    string `json:"client"` // legacy protocol alias, not identity
+	APIFamily string `json:"api_family"`
+	Agent     string `json:"agent,omitempty"`
+	Transport string `json:"transport,omitempty"`
 
 	TsStart     int64 `json:"ts_start"`
 	TsFirstByte int64 `json:"ts_first_byte,omitempty"`
@@ -93,8 +98,8 @@ type callRecord struct {
 	// body byte for byte, so offline code can verify it against ReqSha256.
 	KeyOrder []string `json:"key_order,omitempty"`
 	// Set only when the body is not a JSON object with a history array.
-	ReqRaw    string `json:"req_raw,omitempty"`
-	ReqRawB64 []byte `json:"req_raw_b64,omitempty"`
+	ReqRaw    *string `json:"req_raw,omitempty"`
+	ReqRawB64 []byte  `json:"req_raw_b64,omitempty"`
 
 	RespContentType string `json:"resp_content_type,omitempty"`
 	RespSize        int    `json:"resp_size"`
@@ -330,11 +335,39 @@ func (r *recorder) process(j *job) {
 			r.resetFileState()
 		}
 	}
+	if j.ws != nil {
+		line, err := common.Marshal(j.ws)
+		if err == nil {
+			err = r.fw.writeLines(line)
+		}
+		if err != nil {
+			if errors.Is(err, errDiskLow) {
+				r.diskPaused.Add(1)
+			} else {
+				r.failed.Add(1)
+			}
+			r.warnf("traj record websocket write failed: %v", err)
+		} else {
+			r.written.Add(1)
+		}
+		return
+	}
 	r.seq++
 	rec := &j.rec
 	cl := j.client
 	rec.V, rec.Type, rec.Instance, rec.Seq = recordVersion, "call", r.cfg.Instance, r.seq
-	rec.Client, rec.HistoryKey = cl.name, cl.historyKey
+	rec.Client, rec.HistoryKey, rec.APIFamily = cl.name, cl.historyKey, cl.apiFamily
+	if rec.Transport == "" {
+		rec.Transport = "http"
+	}
+	ua := rec.Headers["User-Agent"]
+	for _, known := range clients {
+		for _, prefix := range known.uaPrefixes {
+			if prefix != "" && strings.HasPrefix(ua, prefix) {
+				rec.Agent = known.name
+			}
+		}
+	}
 	storeResponse(rec, j.resp)
 	cl.summarize(rec, j.resp)
 
@@ -342,22 +375,22 @@ func (r *recorder) process(j *job) {
 	rec.ReqSize = len(body)
 	sum := sha256.Sum256(body)
 	rec.ReqSha256 = hex.EncodeToString(sum[:])
-	// Raw parts are spliced into the line verbatim, so a pretty-printed body
-	// would break the one-record-per-line format. Agents send compact JSON;
-	// anything else is compacted and flagged.
-	if bytes.ContainsAny(body, "\r\n") {
-		var buf bytes.Buffer
-		if json.Compact(&buf, body) == nil {
-			body = buf.Bytes()
-			rec.ReqCompacted = true
-		}
-	}
 
 	var top map[string]json.RawMessage
 	var history []json.RawMessage
-	if common.Unmarshal(body, &top) != nil || top[cl.historyKey] == nil || common.Unmarshal(top[cl.historyKey], &history) != nil {
+	parsed := utf8.Valid(body) && common.Unmarshal(body, &top) == nil
+	if parsed {
+		cl.requestIds(rec, top)
+	}
+	if parsed && top[cl.historyKey] != nil && common.Unmarshal(top[cl.historyKey], &history) == nil {
+		rec.KeyOrder = keyOrder(body, top, cl.historyKey, history)
+	}
+	// Only decompose bodies that can be reconstructed byte for byte. This
+	// also preserves whitespace, duplicate keys and string-valued input.
+	if rec.KeyOrder == nil {
 		if utf8.Valid(j.body) {
-			rec.ReqRaw = string(j.body)
+			raw := string(j.body)
+			rec.ReqRaw = &raw
 		} else {
 			rec.ReqRawB64 = j.body
 		}
@@ -365,14 +398,13 @@ func (r *recorder) process(j *job) {
 		return
 	}
 	rec.NHistory = len(history)
-	rec.KeyOrder = keyOrder(body, top, cl.historyKey, history)
-
-	// Scope the index by session so identical openings in unrelated sessions
-	// are never linked. Without a session id, fall back to the API token.
-	scope := fmt.Sprintf("%s:token:%d", cl.name, rec.TokenId)
-	if id := cl.requestIds(rec, top); id != "" {
-		scope = cl.name + ":session:" + id
+	// Storage references are not conversation edges. Isolate by authenticated
+	// user/token and protocol, optionally narrowed by explicit session metadata.
+	scope := fmt.Sprintf("%s:user:%d:token:%d", cl.apiFamily, rec.UserId, rec.TokenId)
+	if rec.SessionId != "" {
+		scope += ":session:" + rec.SessionId
 	}
+
 	hashes := prefixHashes(scope, history)
 	rec.ParentRid, rec.PrefixLen = r.idx.match(hashes)
 

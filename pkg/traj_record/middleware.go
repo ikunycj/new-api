@@ -77,7 +77,7 @@ func Middleware() gin.HandlerFunc {
 		}
 		rt, ok := r.routes[c.Request.URL.Path]
 		ua := c.Request.UserAgent()
-		if !ok || !slices.ContainsFunc(rt.uaPrefixes, func(p string) bool { return strings.HasPrefix(ua, p) }) {
+		if !ok || !matchesUA(rt, ua) {
 			c.Next()
 			return
 		}

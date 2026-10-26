@@ -11,6 +11,7 @@ import (
 // claudeClient is Claude Code on the Anthropic Messages API.
 var claudeClient = &client{
 	name:       "claude",
+	apiFamily:  "messages",
 	paths:      []string{"/v1/messages"},
 	uaPrefixes: []string{"claude-cli/"},
 	historyKey: "messages",

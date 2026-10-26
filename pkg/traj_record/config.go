@@ -1,9 +1,5 @@
-// Package traj_record stores coding-agent trajectories passing through the
-// gateway: every call of a recorded client (Claude Code on /v1/messages, Codex
-// on /v1/responses) with its raw response, the conversation history
-// deduplicated against earlier requests of the same session.
-//
-// The design rationale lives in README.md next to this file.
+// Package traj_record records API calls with exact request reconstruction,
+// raw responses and optional client identity clues.
 package traj_record
 
 import (
@@ -30,8 +26,8 @@ type Config struct {
 	Instance string
 
 	// Clients maps each recorded client (see clients.go) to the User-Agent
-	// prefixes that identify it. Defaults to every known client with its
-	// default prefixes.
+	// prefixes that optionally filter it. Defaults to every API family with
+	// an empty prefix (all UAs). Legacy names remain for compatibility.
 	Clients map[string][]string
 
 	// Users optionally restricts capture to these user ids. Empty records all.
@@ -84,6 +80,7 @@ const (
 	EnvDir             = "TRAJ_RECORD_DIR"
 	EnvInstance        = "TRAJ_RECORD_INSTANCE"
 	EnvClients         = "TRAJ_RECORD_CLIENTS"
+	EnvAPIFamilies     = "TRAJ_RECORD_API_FAMILIES"
 	EnvUsers           = "TRAJ_RECORD_USERS"
 	EnvSampleRate      = "TRAJ_RECORD_SAMPLE_RATE"
 	EnvQueueSize       = "TRAJ_RECORD_QUEUE_SIZE"
@@ -134,11 +131,12 @@ func ConfigFromEnv() Config {
 		}
 		cfg.SampleRate = &rate
 	}
+	cfg.Clients = map[string][]string{}
 	allNames := make([]string, len(clients))
 	for i, cl := range clients {
-		allNames[i] = cl.name
+		allNames[i] = cl.apiFamily
 	}
-	for _, name := range splitList(common.GetEnvOrDefaultString(EnvClients, strings.Join(allNames, ","))) {
+	for _, name := range splitList(common.GetEnvOrDefaultString(EnvAPIFamilies, common.GetEnvOrDefaultString(EnvClients, strings.Join(allNames, ",")))) {
 		cl := clientByName(name)
 		if cl == nil {
 			common.SysError("traj record: unknown client " + name)
@@ -147,7 +145,10 @@ func ConfigFromEnv() Config {
 		if cfg.Clients == nil {
 			cfg.Clients = map[string][]string{}
 		}
-		cfg.Clients[name] = splitList(common.GetEnvOrDefaultString(uaPrefixesEnv(name), strings.Join(cl.uaPrefixes, ",")))
+		cfg.Clients[cl.name] = []string{""}
+		if raw, ok := os.LookupEnv(uaPrefixesEnv(cl.name)); ok {
+			cfg.Clients[cl.name] = splitList(raw)
+		}
 	}
 	for _, s := range splitList(common.GetEnvOrDefaultString(EnvUsers, "")) {
 		if id, err := strconv.Atoi(s); err == nil {
@@ -176,10 +177,10 @@ func (c *Config) normalize() {
 	if c.Instance == "" {
 		c.Instance, _ = os.Hostname()
 	}
-	if len(c.Clients) == 0 {
+	if c.Clients == nil {
 		c.Clients = map[string][]string{}
 		for _, cl := range clients {
-			c.Clients[cl.name] = cl.uaPrefixes
+			c.Clients[cl.name] = []string{""}
 		}
 	}
 	if c.QueueSize <= 0 {

@@ -39,8 +39,8 @@ func TestSessionSampling(t *testing.T) {
 		wantClaude := r.sampleRequest(claudeClient, 7, nil, claudeBody(session))
 		require.Equal(t, wantClaude, r.sampleRequest(claudeClient, 7, nil, claudeBody(session, `{"role":"user","content":"summary or child"}`)))
 	}
-	require.False(t, r.sampleRequest(codexClient, 7, nil, codexBody("", "child", "root")))
-	require.False(t, r.sampleRequest(claudeClient, 7, nil, []byte(`invalid`)))
+	require.True(t, r.sampleRequest(codexClient, 7, nil, codexBody("", "child", "root")))
+	require.True(t, r.sampleRequest(claudeClient, 7, nil, []byte(`invalid`)))
 }
 
 func TestSamplingConfig(t *testing.T) {
