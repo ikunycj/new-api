@@ -66,6 +66,7 @@ const AUTH_SECTIONS = [
           'feishu.enabled': settings['feishu.enabled'],
           'feishu.app_id': settings['feishu.app_id'],
           'feishu.app_secret': settings['feishu.app_secret'],
+          'feishu.org_parent_id': settings['feishu.org_parent_id'],
           TelegramOAuthEnabled: settings.TelegramOAuthEnabled,
           TelegramBotToken: settings.TelegramBotToken,
           TelegramBotName: settings.TelegramBotName,

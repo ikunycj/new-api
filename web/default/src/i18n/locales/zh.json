@@ -6476,6 +6476,8 @@
     "Your Discord OAuth Client Secret": "您的 Discord OAuth 客户端密钥",
     "Your Feishu App ID": "您的飞书 App ID",
     "Your Feishu App Secret": "您的飞书 App Secret",
+    "Organization Parent Account ID": "组织父账户 ID",
+    "Feishu users are automatically bound as children of this account on login. Set to 0 to disable auto-binding.": "飞书登录的用户将自动绑定为该账户的子账户。设为 0 则不自动绑定。",
     "Your GitHub OAuth Client ID": "您的 GitHub OAuth 客户端 ID",
     "Your GitHub OAuth Client Secret": "您的 GitHub OAuth 客户端密钥",
     "Your new backup codes are ready": "您的新备份代码已准备就绪",

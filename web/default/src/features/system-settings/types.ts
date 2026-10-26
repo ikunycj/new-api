@@ -145,6 +145,7 @@ export type AuthSettings = {
   'feishu.enabled': boolean
   'feishu.app_id': string
   'feishu.app_secret': string
+  'feishu.org_parent_id': number
   TelegramOAuthEnabled: boolean
   TelegramBotToken: string
   TelegramBotName: string

@@ -83,6 +83,7 @@ const oauthSchema = z.object({
     enabled: z.boolean(),
     app_id: z.string(),
     app_secret: z.string(),
+    org_parent_id: z.coerce.number().int().min(0),
   }),
   TelegramOAuthEnabled: z.boolean(),
   TelegramBotToken: z.string(),
@@ -116,6 +117,7 @@ type FlatOAuthDefaults = {
   'feishu.enabled': boolean
   'feishu.app_id': string
   'feishu.app_secret': string
+  'feishu.org_parent_id': number
   TelegramOAuthEnabled: boolean
   TelegramBotToken: string
   TelegramBotName: string
@@ -203,6 +205,7 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
     enabled: defaults['feishu.enabled'],
     app_id: defaults['feishu.app_id'] ?? '',
     app_secret: defaults['feishu.app_secret'] ?? '',
+    org_parent_id: defaults['feishu.org_parent_id'] ?? 0,
   },
   TelegramOAuthEnabled: defaults.TelegramOAuthEnabled,
   TelegramBotToken: defaults.TelegramBotToken ?? '',
@@ -234,6 +237,7 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   'feishu.enabled': values.feishu.enabled,
   'feishu.app_id': values.feishu.app_id,
   'feishu.app_secret': values.feishu.app_secret,
+  'feishu.org_parent_id': values.feishu.org_parent_id,
   TelegramOAuthEnabled: values.TelegramOAuthEnabled,
   TelegramBotToken: values.TelegramBotToken,
   TelegramBotName: values.TelegramBotName,
@@ -879,6 +883,37 @@ export function OAuthSection(props: OAuthSectionProps) {
                           onChange={(event) =>
                             field.onChange(event.target.value)
                           }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='feishu.org_parent_id'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Organization Parent Account ID')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Feishu users are automatically bound as children of this account on login. Set to 0 to disable auto-binding.'
+                        )}
+                      </FormDescription>
+                      <FormControl>
+                        <Input
+                          type='number'
+                          min={0}
+                          placeholder='0'
+                          value={field.value ?? 0}
+                          onChange={(event) => {
+                            const v = parseInt(event.target.value, 10)
+                            field.onChange(isNaN(v) ? field.value : v)
+                          }}
                           name={field.name}
                           onBlur={field.onBlur}
                           ref={field.ref}

@@ -49,6 +49,7 @@ const defaultAuthSettings: AuthSettings = {
   'feishu.enabled': false,
   'feishu.app_id': '',
   'feishu.app_secret': '',
+  'feishu.org_parent_id': 0,
   TelegramOAuthEnabled: false,
   TelegramBotToken: '',
   TelegramBotName: '',

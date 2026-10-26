@@ -6468,6 +6468,8 @@
     "Your Discord OAuth Client Secret": "Your Discord OAuth Client Secret",
     "Your Feishu App ID": "Your Feishu App ID",
     "Your Feishu App Secret": "Your Feishu App Secret",
+    "Organization Parent Account ID": "Organization Parent Account ID",
+    "Feishu users are automatically bound as children of this account on login. Set to 0 to disable auto-binding.": "Feishu users are automatically bound as children of this account on login. Set to 0 to disable auto-binding.",
     "Your GitHub OAuth Client ID": "Your GitHub OAuth Client ID",
     "Your GitHub OAuth Client Secret": "Your GitHub OAuth Client Secret",
     "Your new backup codes are ready": "Your new backup codes are ready",
