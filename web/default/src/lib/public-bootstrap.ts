@@ -30,6 +30,7 @@ export interface PublicStatus {
   display_token_stat_enabled?: boolean
   logo?: string
   customer_service?: string
+  footer_html?: string
   quota_display_type?: CurrencyDisplayType
   quota_per_unit?: number
   server_address?: string

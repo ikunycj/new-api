@@ -28,10 +28,19 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.',
     'Customer Service': 'Customer Service',
+    'Contact us': 'Contact us',
+    Explore: 'Explore',
+    Legal: 'Legal',
     'Enter customer service contact information':
       'Enter customer service contact information',
     'Information displayed to users for contacting customer service':
       'Information displayed to users for contacting customer service',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe',
+    'Contact information has not been configured yet.':
+      'Contact information has not been configured yet.',
+    'Contact page content configured in System Information.':
+      'Contact page content configured in System Information.',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (thousands)',
     'Throughput trend': 'Throughput trend',
@@ -219,9 +228,17 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       '新规则将应用于该用户的后续奖励事件。已生成的奖励和解冻时间不会重新计算。',
     'Customer Service': '客服信息',
+    'Contact us': '联系我们',
+    Explore: '探索',
+    Legal: '法律信息',
     'Enter customer service contact information': '输入客服联系方式',
     'Information displayed to users for contacting customer service':
       '向用户展示的客服联系方式',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      '输入 HTML 代码（例如 <p>联系方式...</p>）或完整 URL（例如 https://example.com），并将其嵌入为 iframe',
+    'Contact information has not been configured yet.': '尚未配置联系信息。',
+    'Contact page content configured in System Information.':
+      '在系统信息中配置的联系我们页面内容。',
     'Copy ready-to-run curl': '复制命令到本地终端测试',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千）',
@@ -406,10 +423,19 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       'La nouvelle règle s’applique aux futurs événements de récompense de cet utilisateur. Les récompenses et dates de déblocage existantes ne seront pas recalculées.',
     'Customer Service': 'Service client',
+    'Contact us': 'Nous contacter',
+    Explore: 'Découvrir',
+    Legal: 'Mentions légales',
     'Enter customer service contact information':
       'Saisissez les coordonnées du service client',
     'Information displayed to users for contacting customer service':
       'Informations affichées aux utilisateurs pour contacter le service client',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      'Saisissez du code HTML (par ex. <p>Coordonnées...</p>) ou une URL pour l’intégrer dans un iframe',
+    'Contact information has not been configured yet.':
+      'Aucune information de contact n’a encore été configurée.',
+    'Contact page content configured in System Information.':
+      'Contenu de la page de contact configuré dans les informations système.',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (milliers)',
     'Throughput trend': 'Tendance du débit',
@@ -601,10 +627,19 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       '新しいルールはこのユーザーの今後の報酬イベントに適用されます。既存の報酬と解除日時は再計算されません。',
     'Customer Service': 'カスタマーサービス',
+    'Contact us': 'お問い合わせ',
+    Explore: 'サイト案内',
+    Legal: '法的情報',
     'Enter customer service contact information':
       'カスタマーサービスの連絡先を入力',
     'Information displayed to users for contacting customer service':
       'ユーザーに表示するカスタマーサービスの連絡先情報',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      'HTMLコード（例：<p>連絡先...</p>）またはURLを入力してiframeに埋め込みます',
+    'Contact information has not been configured yet.':
+      '連絡先情報はまだ設定されていません。',
+    'Contact page content configured in System Information.':
+      'システム情報で設定するお問い合わせページの内容。',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS（千単位）',
     'Throughput trend': 'スループット推移',
@@ -790,10 +825,19 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       'Новое правило применяется к будущим событиям наград для этого пользователя. Существующие награды и сроки разблокировки не пересчитываются.',
     'Customer Service': 'Служба поддержки',
+    'Contact us': 'Связаться с нами',
+    Explore: 'Разделы',
+    Legal: 'Правовая информация',
     'Enter customer service contact information':
       'Введите контактную информацию службы поддержки',
     'Information displayed to users for contacting customer service':
       'Информация для пользователей о связи со службой поддержки',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      'Введите HTML-код (например, <p>Контакты...</p>) или URL для встраивания через iframe',
+    'Contact information has not been configured yet.':
+      'Контактная информация еще не настроена.',
+    'Contact page content configured in System Information.':
+      'Содержимое страницы контактов в системной информации.',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (тыс.)',
     'Throughput trend': 'Тренд пропускной способности',
@@ -983,10 +1027,19 @@ const newKeys = {
     'The new rule applies to future reward events for this user. Existing rewards and unlock times will not be recalculated.':
       'Quy tắc mới áp dụng cho các sự kiện thưởng trong tương lai của người dùng này. Phần thưởng và thời gian mở khóa hiện có sẽ không được tính lại.',
     'Customer Service': 'Chăm sóc khách hàng',
+    'Contact us': 'Liên hệ',
+    Explore: 'Khám phá',
+    Legal: 'Pháp lý',
     'Enter customer service contact information':
       'Nhập thông tin liên hệ bộ phận chăm sóc khách hàng',
     'Information displayed to users for contacting customer service':
       'Thông tin hiển thị cho người dùng để liên hệ bộ phận chăm sóc khách hàng',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      'Nhập mã HTML (ví dụ: <p>Thông tin liên hệ...</p>) hoặc URL để nhúng bằng iframe',
+    'Contact information has not been configured yet.':
+      'Chưa cấu hình thông tin liên hệ.',
+    'Contact page content configured in System Information.':
+      'Nội dung trang liên hệ được cấu hình trong Thông tin hệ thống.',
     QPS: 'QPS',
     'TPS (thousands)': 'TPS (nghìn)',
     'Throughput trend': 'Xu hướng thông lượng',
@@ -1170,9 +1223,17 @@ const newKeys = {
     'Priority: High to Low': '優先級：從高到低',
     'Priority: Low to High': '優先級：從低到高',
     'Customer Service': '客服資訊',
+    'Contact us': '聯絡我們',
+    Explore: '探索',
+    Legal: '法律資訊',
     'Enter customer service contact information': '輸入客服聯絡資訊',
     'Information displayed to users for contacting customer service':
       '向使用者顯示的客服聯絡資訊',
+    'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe':
+      '輸入 HTML 程式碼（例如 <p>聯絡資訊...</p>）或 URL，並將其嵌入為 iframe',
+    'Contact information has not been configured yet.': '尚未設定聯絡資訊。',
+    'Contact page content configured in System Information.':
+      '在系統資訊中設定的聯絡我們頁面內容。',
     'Batch IQ test': '批次智商測試',
     'IQ Test': '智商測試',
     'Run IQ test': '執行智商測試',
@@ -3640,6 +3701,9 @@ for (const [locale, translations] of Object.entries(
 }
 
 const retiredKeys = new Set([
+  'No About Content Set',
+  'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.',
+  'Static page describing the platform.',
   'Use any provider in Codex or Claude Code',
   'Use DeepSeek or Claude in Codex, and GPT or Gemini in Claude Code. Choose a model available on this site; the gateway handles protocol conversion.',
   'Connect Codex or Claude Code to DeepSeek, Claude, OpenAI, Gemini, and other providers through one gateway.',
@@ -3663,6 +3727,7 @@ const retiredKeys = new Set([
   'Common error directory',
   'Error index',
   'Common errors',
+  'Support',
 
   // API keys no longer carry per-group retry overrides.
   'A request uses the selected groups in order; after a group reaches its retry count, it can continue to the next group.',

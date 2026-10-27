@@ -45,6 +45,7 @@ import { routeTree } from './routeTree.gen'
 const PRERENDER_STATUS = {
   HeaderNavModules: '',
   customer_service: '',
+  footer_html: '',
   logo: '__NEW_API_LOGO__',
   server_address: '__NEW_API_SERVER_ADDRESS__',
   system_name: '__NEW_API_SYSTEM_NAME__',

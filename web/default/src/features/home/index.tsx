@@ -66,7 +66,7 @@ export function Home() {
 
   if (!isLoaded) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showSiteFooter>
         <main className='flex min-h-screen items-center justify-center'>
           <div className='text-muted-foreground'>{t('Loading...')}</div>
         </main>
@@ -77,7 +77,7 @@ export function Home() {
   if (content) {
     if (isUrl) {
       return (
-        <PublicLayout showMainContainer={false}>
+        <PublicLayout showMainContainer={false} showSiteFooter>
           {/*
             allow-top-navigation-by-user-activation: the custom home page URL is
             admin-configured (trusted); this lets its target="_top" nav/menu links
@@ -102,7 +102,7 @@ export function Home() {
 
     if (contentIsHtml) {
       return (
-        <PublicLayout showMainContainer={false}>
+        <PublicLayout showMainContainer={false} showSiteFooter>
           <Suspense fallback={null}>
             <RichContent
               mode='html'
@@ -116,7 +116,7 @@ export function Home() {
     }
 
     return (
-      <PublicLayout>
+      <PublicLayout showSiteFooter>
         <div className='mx-auto max-w-6xl px-4 py-8'>
           <Suspense fallback={null}>
             <RichContent
@@ -131,7 +131,7 @@ export function Home() {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} showSiteFooter>
       <DefaultHome isAuthenticated={isAuthenticated} />
     </PublicLayout>
   )

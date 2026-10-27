@@ -88,9 +88,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Docs'), href: '/docs' })
   }
 
-  // About
+  // Contact
   if (modules?.about !== false) {
-    links.push({ title: t('About'), href: '/about' })
+    links.push({ title: t('Contact us'), href: '/about' })
   }
 
   return links

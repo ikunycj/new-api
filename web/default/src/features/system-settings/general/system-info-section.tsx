@@ -225,11 +225,11 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                 name='About'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('About')}</FormLabel>
+                    <FormLabel>{t('Contact us')}</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder={t(
-                          'Enter HTML code (e.g., <p>About us...</p>) or a URL (e.g., https://example.com) to embed as iframe'
+                          'Enter HTML code (e.g., <p>Contact details...</p>) or a URL (e.g., https://example.com) to embed it as an iframe'
                         )}
                         rows={4}
                         {...field}

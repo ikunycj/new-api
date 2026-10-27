@@ -27,7 +27,7 @@ import { isHttpUrl, isLikelyHtml } from '@/lib/content-format'
 
 import { getAboutContent } from './api'
 
-function EmptyAboutState() {
+function EmptyContactState() {
   const { t } = useTranslation()
 
   return (
@@ -37,11 +37,9 @@ function EmptyAboutState() {
           <Construction className='text-muted-foreground h-24 w-24' />
         </div>
         <div className='space-y-2'>
-          <h2 className='text-2xl font-bold'>{t('No About Content Set')}</h2>
+          <h2 className='text-2xl font-bold'>{t('Contact us')}</h2>
           <p className='text-muted-foreground'>
-            {t(
-              'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.'
-            )}
+            {t('Contact information has not been configured yet.')}
           </p>
         </div>
       </div>
@@ -63,7 +61,7 @@ export function About() {
 
   if (isLoading) {
     return (
-      <PublicLayout>
+      <PublicLayout showSiteFooter>
         <div className='mx-auto flex max-w-4xl flex-col gap-4 py-12'>
           <Skeleton className='h-8 w-[45%]' />
           <Skeleton className='h-4 w-full' />
@@ -76,19 +74,19 @@ export function About() {
 
   if (!hasContent) {
     return (
-      <PublicLayout>
-        <EmptyAboutState />
+      <PublicLayout showSiteFooter>
+        <EmptyContactState />
       </PublicLayout>
     )
   }
 
   if (isUrl) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showSiteFooter>
         <iframe
           src={rawContent}
           className='h-[calc(100vh-3.5rem)] w-full border-0'
-          title={t('About')}
+          title={t('Contact us')}
           sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
         />
       </PublicLayout>
@@ -97,7 +95,7 @@ export function About() {
 
   if (contentIsHtml) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showSiteFooter>
         <RichContent
           mode='html'
           htmlVariant='isolated'
@@ -109,7 +107,7 @@ export function About() {
   }
 
   return (
-    <PublicLayout>
+    <PublicLayout showSiteFooter>
       <div className='mx-auto max-w-6xl px-4 py-8'>
         <RichContent
           mode='markdown'

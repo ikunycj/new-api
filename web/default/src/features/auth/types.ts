@@ -98,6 +98,7 @@ export interface SystemStatus {
     start_time?: number
     system_name?: string
     customer_service?: string
+    footer_html?: string
     preferred_models?: string[]
     logo?: string
     github_oauth?: boolean
@@ -148,6 +149,7 @@ export interface SystemStatus {
   start_time?: number
   system_name?: string
   customer_service?: string
+  footer_html?: string
   logo?: string
   github_oauth?: boolean
   github_client_id?: string

@@ -122,6 +122,9 @@ export const STATIC_I18N_KEYS = [
   'Rankings',
   'Docs',
   'About',
+  'Contact us',
+  'Explore',
+  'Legal',
 
   // Sidebar views (drill-in workspaces)
   'System Settings',
