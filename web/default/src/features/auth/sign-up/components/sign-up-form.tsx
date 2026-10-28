@@ -338,7 +338,7 @@ export function SignUpForm({
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription className='text-muted-foreground text-xs'>
+                  <FormDescription className='text-foreground text-sm font-bold'>
                     {t(
                       'If you do not receive the email, please check your spam folder'
                     )}

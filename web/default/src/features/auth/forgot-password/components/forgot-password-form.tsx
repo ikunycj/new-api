@@ -80,7 +80,12 @@ export function ForgotPasswordForm({
       if (res?.success) {
         form.reset()
         startCountdown()
-        toast.success(t('Reset email sent, please check your inbox'))
+        toast.success(t('Reset email sent, please check your inbox'), {
+          description: t(
+            'If you do not receive the email, please check your spam folder'
+          ),
+          descriptionClassName: 'text-foreground font-bold',
+        })
       } else {
         toast.error(res?.message || t('Failed to send reset email'))
       }
@@ -107,7 +112,7 @@ export function ForgotPasswordForm({
               <FormControl>
                 <Input placeholder='name@example.com' {...field} />
               </FormControl>
-              <FormDescription className='text-muted-foreground text-xs'>
+              <FormDescription className='text-foreground text-sm font-bold'>
                 {t(
                   'If you do not receive the email, please check your spam folder'
                 )}
