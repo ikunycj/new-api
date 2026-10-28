@@ -16,14 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  ArrowUpDown,
-  Check,
-  ChevronDown,
-  Filter,
-  Grid2X2,
-  Table2,
-} from 'lucide-react'
+import { ArrowUpDown, Check, Filter, Grid2X2, Table2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -52,18 +45,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
 import {
-  FILTER_ALL,
   PRICING_CURRENCIES,
   VIEW_MODES,
-  getModelTypeLabels,
   getSortLabels,
   type PricingCurrency,
   type SortOption,
   type ViewMode,
 } from '../constants'
+import { formatGroupRatio, getConfiguredGroupRatio } from '../lib/model-helpers'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 import { SearchBar } from './search-bar'
@@ -89,26 +82,23 @@ export interface PricingToolbarProps {
   onViewModeChange: (value: ViewMode) => void
   quotaTypeFilter: string
   endpointTypeFilter: string
-  vendorFilter: string
-  modelTypeFilter: string
+  vendorFilters: string[]
+  groupFilters: string[]
   tagFilter: string
   onQuotaTypeChange: (value: string) => void
   onEndpointTypeChange: (value: string) => void
-  onVendorChange: (value: string) => void
-  onModelTypeChange: (value: string) => void
+  onVendorToggle: (value: string) => void
+  onGroupToggle: (value: string) => void
   onTagChange: (value: string) => void
   vendors: PricingVendor[]
   groups: string[]
+  groupLabels: Record<string, string>
+  groupRatios: Record<string, number>
   tags: string[]
   models: PricingModel[]
   hasActiveFilters: boolean
   activeFilterCount: number
   onClearFilters: () => void
-}
-
-type FilterDropdownOption = {
-  value: string
-  label: string
 }
 
 function SegmentedControl(props: {
@@ -162,65 +152,10 @@ function SegmentedControl(props: {
   )
 }
 
-function FilterDropdown(props: {
-  label: string
-  value: string
-  options: FilterDropdownOption[]
-  onChange: (value: string) => void
-}) {
-  const selectedLabel =
-    props.options.find((option) => option.value === props.value)?.label ||
-    props.options[0]?.label ||
-    props.label
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type='button'
-            variant='outline'
-            className='h-10 w-full justify-between px-3 font-normal'
-          />
-        }
-      >
-        <span className='flex min-w-0 items-center gap-2'>
-          <span className='text-muted-foreground shrink-0 text-xs'>
-            {props.label}
-          </span>
-          <span className='truncate text-sm font-medium'>{selectedLabel}</span>
-        </span>
-        <ChevronDown data-icon='inline-end' />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align='start'
-        className='min-w-[var(--anchor-width)]'
-      >
-        <DropdownMenuGroup>
-          {props.options.map((option) => (
-            <DropdownMenuItem
-              key={option.value}
-              onClick={() => props.onChange(option.value)}
-            >
-              <Check
-                className={cn(
-                  props.value === option.value ? 'opacity-100' : 'opacity-0'
-                )}
-              />
-              <span className='truncate'>{option.label}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export function PricingToolbar(props: PricingToolbarProps) {
   const { t } = useTranslation()
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const sortLabels = getSortLabels(t)
-  const modelTypeLabels = getModelTypeLabels(t)
 
   const handleTokenUnitChange = (value: string) => {
     props.onTokenUnitChange(value as TokenUnit)
@@ -234,37 +169,15 @@ export function PricingToolbar(props: PricingToolbarProps) {
     props.onCurrencyChange(value as PricingCurrency)
   }
 
-  const vendorOptions: FilterDropdownOption[] = [
-    { value: FILTER_ALL, label: t('All Vendors') },
-    ...props.vendors.map((vendor) => ({
-      value: vendor.name,
-      label: vendor.name,
-    })),
-  ]
-  const modelTypeOptions = Object.entries(modelTypeLabels).map(
-    ([value, label]) => ({ value, label })
-  )
   return (
     <section className='flex flex-col gap-3'>
-      <div className='grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(280px,1fr)_220px_220px_auto]'>
+      <div className='grid gap-3 md:grid-cols-[minmax(280px,1fr)_auto]'>
         <SearchBar
           value={props.searchInput}
           onChange={props.onSearchChange}
           onClear={props.onClearSearch}
           placeholder={t('Search models, providers, and groups')}
-          className='md:col-span-2 lg:col-span-1'
-        />
-        <FilterDropdown
-          label={t('Provider')}
-          value={props.vendorFilter}
-          options={vendorOptions}
-          onChange={props.onVendorChange}
-        />
-        <FilterDropdown
-          label={t('Model Type')}
-          value={props.modelTypeFilter}
-          options={modelTypeOptions}
-          onChange={props.onModelTypeChange}
+          className='min-w-0'
         />
         <Tooltip>
           <TooltipTrigger
@@ -288,6 +201,90 @@ export function PricingToolbar(props: PricingToolbarProps) {
           </TooltipTrigger>
           <TooltipContent>{t('More filters')}</TooltipContent>
         </Tooltip>
+      </div>
+
+      <div className='border-border/70 flex flex-col gap-3 border-t pt-3'>
+        <section aria-label={t('Provider')} className='space-y-2'>
+          <h2 className='text-muted-foreground text-xs font-semibold'>
+            {t('Provider')}
+          </h2>
+          <div className='flex flex-wrap gap-2' role='group'>
+            {props.vendors.map((vendor) => {
+              const selected = props.vendorFilters.includes(vendor.name)
+              const count = props.models.filter(
+                (model) => model.vendor_name === vendor.name
+              ).length
+              if (count === 0) return null
+              return (
+                <button
+                  key={vendor.id}
+                  type='button'
+                  aria-pressed={selected}
+                  onClick={() => props.onVendorToggle(vendor.name)}
+                  className={cn(
+                    'inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
+                    selected
+                      ? 'border-primary/50 bg-primary/10 text-foreground'
+                      : 'border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )}
+                >
+                  {vendor.icon && (
+                    <span className='shrink-0'>
+                      {getLobeIcon(vendor.icon, 18)}
+                    </span>
+                  )}
+                  <span className='max-w-40 truncate'>{vendor.name}</span>
+                  <span className='text-xs tabular-nums opacity-70'>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <section aria-label={t('Pricing group')} className='space-y-2'>
+          <h2 className='text-muted-foreground text-xs font-semibold'>
+            {t('Pricing group')}
+          </h2>
+          <div className='flex flex-wrap gap-2' role='group'>
+            {props.groups.map((group) => {
+              const selected = props.groupFilters.includes(group)
+              const count = props.models.filter((model) =>
+                model.enable_groups?.includes(group)
+              ).length
+              const ratio = formatGroupRatio(
+                getConfiguredGroupRatio(props.groupRatios, group)
+              )
+              return (
+                <button
+                  key={group}
+                  type='button'
+                  aria-pressed={selected}
+                  onClick={() => props.onGroupToggle(group)}
+                  className={cn(
+                    'inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
+                    selected
+                      ? 'border-primary/50 bg-primary/10 text-foreground'
+                      : 'border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )}
+                >
+                  <span className='max-w-48 truncate'>
+                    {props.groupLabels[group] || group}
+                  </span>
+                  {ratio && (
+                    <span className='bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs tabular-nums'>
+                      {ratio}
+                    </span>
+                  )}
+                  <span className='text-xs tabular-nums opacity-70'>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
       </div>
 
       <div className='border-border/70 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-end'>
@@ -378,14 +375,10 @@ export function PricingToolbar(props: PricingToolbarProps) {
             <PricingSidebar
               quotaTypeFilter={props.quotaTypeFilter}
               endpointTypeFilter={props.endpointTypeFilter}
-              vendorFilter={props.vendorFilter}
               tagFilter={props.tagFilter}
               onQuotaTypeChange={props.onQuotaTypeChange}
               onEndpointTypeChange={props.onEndpointTypeChange}
-              onVendorChange={props.onVendorChange}
               onTagChange={props.onTagChange}
-              vendors={props.vendors}
-              groups={props.groups}
               tags={props.tags}
               models={props.models}
               hasActiveFilters={props.hasActiveFilters}

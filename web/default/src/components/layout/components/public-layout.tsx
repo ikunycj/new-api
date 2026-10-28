@@ -31,11 +31,19 @@ type PublicLayoutProps = {
   showAuthButtons?: boolean
   showNotifications?: boolean
   showSiteFooter?: boolean
+  showCustomerServiceInfo?: boolean
   logo?: React.ReactNode
   siteName?: string
 }
 
 export function PublicLayout(props: PublicLayoutProps) {
+  let footer: React.ReactNode = null
+  if (props.showSiteFooter) {
+    footer = <PublicFooter />
+  } else if (props.showCustomerServiceInfo !== false) {
+    footer = <CustomerServiceInfo />
+  }
+
   return (
     <div className='bg-background text-foreground relative flex min-h-svh flex-col overflow-x-clip'>
       <PublicHeader
@@ -57,7 +65,7 @@ export function PublicLayout(props: PublicLayoutProps) {
         <div className='flex-1'>{props.children}</div>
       )}
 
-      {props.showSiteFooter ? <PublicFooter /> : <CustomerServiceInfo />}
+      {footer}
     </div>
   )
 }

@@ -23,8 +23,6 @@ import {
   QUOTA_TYPES,
   QUOTA_TYPE_VALUES,
   ENDPOINT_TYPES,
-  MODEL_TYPES,
-  type ModelTypeOption,
 } from '../constants'
 import type { PricingModel } from '../types'
 
@@ -52,37 +50,16 @@ export function filterBySearch(
   )
 }
 
-export function getModelType(model: PricingModel): ModelTypeOption {
-  const endpoints = model.supported_endpoint_types || []
-  if (endpoints.includes(ENDPOINT_TYPES.OPENAI_VIDEO)) {
-    return MODEL_TYPES.VIDEO
-  }
-  if (endpoints.includes(ENDPOINT_TYPES.IMAGE_GENERATION)) {
-    return MODEL_TYPES.IMAGE
-  }
-  if (model.audio_ratio != null || model.audio_completion_ratio != null) {
-    return MODEL_TYPES.AUDIO
-  }
-  return MODEL_TYPES.TEXT
-}
-
-export function filterByModelType(
-  models: PricingModel[],
-  modelType: string
-): PricingModel[] {
-  if (modelType === MODEL_TYPES.ALL) return models
-  return models.filter((model) => getModelType(model) === modelType)
-}
-
 /**
  * Filter models by vendor
  */
 export function filterByVendor(
   models: PricingModel[],
-  vendor: string
+  vendors: readonly string[]
 ): PricingModel[] {
-  if (vendor === FILTER_ALL) return models
-  return models.filter((m) => m.vendor_name === vendor)
+  if (vendors.length === 0) return models
+  const selectedVendors = new Set(vendors)
+  return models.filter((model) => selectedVendors.has(model.vendor_name || ''))
 }
 
 /**
@@ -90,10 +67,13 @@ export function filterByVendor(
  */
 export function filterByGroup(
   models: PricingModel[],
-  group: string
+  groups: readonly string[]
 ): PricingModel[] {
-  if (group === FILTER_ALL) return models
-  return models.filter((model) => model.enable_groups?.includes(group))
+  if (groups.length === 0) return models
+  const selectedGroups = new Set(groups)
+  return models.filter((model) =>
+    model.enable_groups?.some((group) => selectedGroups.has(group))
+  )
 }
 
 /**
@@ -181,9 +161,8 @@ export function filterAndSortModels(
   models: PricingModel[],
   filters: {
     search: string
-    vendor: string
-    group: string
-    modelType: string
+    vendors: readonly string[]
+    groups: readonly string[]
     quotaType: string
     endpointType: string
     tag: string
@@ -192,9 +171,8 @@ export function filterAndSortModels(
   preferredModelOrder = getPreferredModelOrder()
 ): PricingModel[] {
   let result = filterBySearch(models, filters.search)
-  result = filterByVendor(result, filters.vendor)
-  result = filterByGroup(result, filters.group)
-  result = filterByModelType(result, filters.modelType)
+  result = filterByVendor(result, filters.vendors)
+  result = filterByGroup(result, filters.groups)
   result = filterByQuotaType(result, filters.quotaType)
   result = filterByEndpointType(result, filters.endpointType)
   result = filterByTag(result, filters.tag)

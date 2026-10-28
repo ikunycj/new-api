@@ -51,12 +51,12 @@ export function PublicFooter() {
   return (
     <footer
       aria-label={t('Contact us')}
-      className='border-border/70 bg-muted/20 scroll-mt-24 border-t'
+      className='border-border/70 bg-muted/20 scroll-mt-24 border-t text-center'
     >
       <div className='container mx-auto w-full max-w-7xl px-4 py-12 md:px-6 md:py-14'>
         <div
           className={cn(
-            'grid gap-10 sm:grid-cols-2',
+            'grid justify-items-center gap-10 sm:grid-cols-2',
             customerService
               ? 'lg:grid-cols-[minmax(0,1.4fr)_minmax(12rem,0.7fr)_minmax(15rem,1fr)]'
               : 'lg:grid-cols-[minmax(0,1.4fr)_minmax(12rem,0.7fr)]'
@@ -66,7 +66,7 @@ export function PublicFooter() {
             <Link
               to='/'
               aria-label={t('Go to home')}
-              className='inline-flex max-w-full items-center gap-3'
+              className='inline-flex max-w-full items-center justify-center gap-3'
             >
               <HeaderLogo
                 src={logo}
@@ -85,7 +85,7 @@ export function PublicFooter() {
             <h2 className='text-sm font-semibold'>{t('Explore')}</h2>
             <nav
               aria-label={t('Explore')}
-              className='mt-4 flex flex-col items-start gap-3'
+              className='mt-4 flex flex-col items-center gap-3'
             >
               {navLinks.map((link) =>
                 link.external ? (
@@ -121,8 +121,14 @@ export function PublicFooter() {
 
           {customerService && (
             <section aria-labelledby='public-footer-contact-title'>
-              <h2 id='public-footer-contact-title' className='text-sm font-semibold'>
-                <Link to='/about' className='hover:text-primary transition-colors'>
+              <h2
+                id='public-footer-contact-title'
+                className='text-sm font-semibold'
+              >
+                <Link
+                  to='/about'
+                  className='hover:text-primary transition-colors'
+                >
                   {t('Contact us')}
                 </Link>
               </h2>
@@ -134,13 +140,13 @@ export function PublicFooter() {
         </div>
 
         {(footerHtml || legalLinks.length > 0) && (
-          <div className='border-border/70 mt-10 flex flex-col gap-4 border-t pt-5 text-sm sm:flex-row sm:items-center sm:justify-between'>
+          <div className='border-border/70 mt-10 flex flex-col items-center justify-center gap-4 border-t pt-5 text-sm'>
             {footerHtml &&
               (isLikelyHtml(footerHtml) ? (
                 <RichContent
                   mode='html'
                   content={footerHtml}
-                  className='text-muted-foreground max-w-3xl text-sm leading-6 [&_a]:text-primary [&_a]:underline [&_p]:my-0 [&_p+p]:mt-2'
+                  className='text-muted-foreground [&_a]:text-primary max-w-3xl text-sm leading-6 [&_a]:underline [&_p]:my-0 [&_p+p]:mt-2'
                 />
               ) : (
                 <p className='text-muted-foreground max-w-3xl text-sm leading-6 whitespace-pre-wrap'>
@@ -150,7 +156,7 @@ export function PublicFooter() {
             {legalLinks.length > 0 && (
               <nav
                 aria-label={t('Legal')}
-                className='flex flex-wrap items-center gap-x-5 gap-y-2'
+                className='flex flex-wrap items-center justify-center gap-x-5 gap-y-2'
               >
                 {legalLinks.map((link) => (
                   <Link

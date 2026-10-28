@@ -60,8 +60,8 @@ export function Pricing() {
   const {
     searchInput,
     sortBy,
-    vendorFilter,
-    modelTypeFilter,
+    vendorFilters,
+    groupFilters,
     quotaTypeFilter,
     endpointTypeFilter,
     tagFilter,
@@ -70,8 +70,8 @@ export function Pricing() {
     viewMode,
     setSearchInput,
     setSortBy,
-    setVendorFilter,
-    setModelTypeFilter,
+    toggleVendorFilter,
+    toggleGroupFilter,
     setQuotaTypeFilter,
     setEndpointTypeFilter,
     setTagFilter,
@@ -163,7 +163,7 @@ export function Pricing() {
 
   if (isLoading) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
         <div className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 sm:pt-24 lg:px-8'>
           <LoadingSkeleton viewMode={viewMode} />
         </div>
@@ -172,7 +172,7 @@ export function Pricing() {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
       <PageTransition className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 sm:pt-24 lg:px-8'>
         <header className='mb-8 pt-5 sm:mb-10 sm:pt-8'>
           <h1 className='text-3xl leading-tight font-bold sm:text-4xl'>
@@ -195,16 +195,18 @@ export function Pricing() {
             onViewModeChange={setViewMode}
             quotaTypeFilter={quotaTypeFilter}
             endpointTypeFilter={endpointTypeFilter}
-            vendorFilter={vendorFilter}
-            modelTypeFilter={modelTypeFilter}
+            vendorFilters={vendorFilters}
+            groupFilters={groupFilters}
             tagFilter={tagFilter}
             onQuotaTypeChange={setQuotaTypeFilter}
             onEndpointTypeChange={setEndpointTypeFilter}
-            onVendorChange={setVendorFilter}
-            onModelTypeChange={setModelTypeFilter}
+            onVendorToggle={toggleVendorFilter}
+            onGroupToggle={toggleGroupFilter}
             onTagChange={setTagFilter}
             vendors={vendors || []}
             groups={availableGroups}
+            groupLabels={catalogGroups || {}}
+            groupRatios={groupRatio || {}}
             tags={availableTags}
             models={models || []}
             hasActiveFilters={hasActiveFilters}

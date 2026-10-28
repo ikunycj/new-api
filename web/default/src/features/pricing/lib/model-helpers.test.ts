@@ -158,7 +158,7 @@ describe('model group display entries', () => {
 
   test('filters models by their enabled groups', () => {
     assert.deepEqual(
-      filterByGroup(models, 'vip').map((model) => model.model_name),
+      filterByGroup(models, ['vip']).map((model) => model.model_name),
       ['grouped-model']
     )
   })

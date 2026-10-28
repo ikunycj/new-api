@@ -22,7 +22,6 @@ import { describe, test } from 'node:test'
 import {
   ENDPOINT_TYPES,
   FILTER_ALL,
-  MODEL_TYPES,
   QUOTA_TYPES,
   SORT_OPTIONS,
 } from '../constants'
@@ -88,7 +87,13 @@ const models: PricingModel[] = [
 
 describe('pricing model sorting', () => {
   test('promotes configured models in merchandising order', () => {
-    const result = sortModels(models, SORT_OPTIONS.RECOMMENDED)
+    const preferredOrder = [
+      'claude-fable-5',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+    ]
+    const result = sortModels(models, SORT_OPTIONS.RECOMMENDED, preferredOrder)
 
     assert.deepEqual(
       result.map((model) => model.model_name),
@@ -104,16 +109,19 @@ describe('pricing model sorting', () => {
   })
 
   test('filters before applying promoted model priority', () => {
-    const result = filterAndSortModels(models, {
-      search: '',
-      vendor: 'OpenAI',
-      group: FILTER_ALL,
-      modelType: MODEL_TYPES.ALL,
-      quotaType: QUOTA_TYPES.ALL,
-      endpointType: ENDPOINT_TYPES.ALL,
-      tag: FILTER_ALL,
-      sortBy: SORT_OPTIONS.RECOMMENDED,
-    })
+    const result = filterAndSortModels(
+      models,
+      {
+        search: '',
+        vendors: ['OpenAI'],
+        groups: [],
+        quotaType: QUOTA_TYPES.ALL,
+        endpointType: ENDPOINT_TYPES.ALL,
+        tag: FILTER_ALL,
+        sortBy: SORT_OPTIONS.RECOMMENDED,
+      },
+      ['claude-fable-5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']
+    )
 
     assert.deepEqual(
       result.map((model) => model.model_name),
@@ -124,9 +132,8 @@ describe('pricing model sorting', () => {
   test('searches model names, providers, and pricing groups', () => {
     const byModel = filterAndSortModels(models, {
       search: 'fable',
-      vendor: FILTER_ALL,
-      group: FILTER_ALL,
-      modelType: MODEL_TYPES.ALL,
+      vendors: [],
+      groups: [],
       quotaType: QUOTA_TYPES.ALL,
       endpointType: ENDPOINT_TYPES.ALL,
       tag: FILTER_ALL,
@@ -134,9 +141,8 @@ describe('pricing model sorting', () => {
     })
     const byVendor = filterAndSortModels(models, {
       search: 'anthro',
-      vendor: FILTER_ALL,
-      group: FILTER_ALL,
-      modelType: MODEL_TYPES.ALL,
+      vendors: [],
+      groups: [],
       quotaType: QUOTA_TYPES.ALL,
       endpointType: ENDPOINT_TYPES.ALL,
       tag: FILTER_ALL,
@@ -146,9 +152,8 @@ describe('pricing model sorting', () => {
       [{ ...models[0], enable_groups: ['ChatGPT Plus'] }],
       {
         search: 'plus',
-        vendor: FILTER_ALL,
-        group: FILTER_ALL,
-        modelType: MODEL_TYPES.ALL,
+        vendors: [],
+        groups: [],
         quotaType: QUOTA_TYPES.ALL,
         endpointType: ENDPOINT_TYPES.ALL,
         tag: FILTER_ALL,
@@ -167,7 +172,7 @@ describe('pricing model sorting', () => {
     assert.equal(byGroup.length, 1)
   })
 
-  test('filters text, audio, image, and video models by capability', () => {
+  test('does not hide models based on model type', () => {
     const typedModels: PricingModel[] = [
       models[0],
       { ...models[1], audio_ratio: 8 },
@@ -181,28 +186,17 @@ describe('pricing model sorting', () => {
       },
     ]
 
-    for (const [modelType, expected] of [
-      [MODEL_TYPES.TEXT, 'zeta-model'],
-      [MODEL_TYPES.AUDIO, 'gpt-5.6-luna'],
-      [MODEL_TYPES.IMAGE, 'claude-fable-5'],
-      [MODEL_TYPES.VIDEO, 'gpt-5.6-terra'],
-    ] as const) {
-      const result = filterAndSortModels(typedModels, {
-        search: '',
-        vendor: FILTER_ALL,
-        group: FILTER_ALL,
-        modelType,
-        quotaType: QUOTA_TYPES.ALL,
-        endpointType: ENDPOINT_TYPES.ALL,
-        tag: FILTER_ALL,
-        sortBy: SORT_OPTIONS.NAME,
-      })
+    const result = filterAndSortModels(typedModels, {
+      search: '',
+      vendors: [],
+      groups: [],
+      quotaType: QUOTA_TYPES.ALL,
+      endpointType: ENDPOINT_TYPES.ALL,
+      tag: FILTER_ALL,
+      sortBy: SORT_OPTIONS.NAME,
+    })
 
-      assert.deepEqual(
-        result.map((model) => model.model_name),
-        [expected]
-      )
-    }
+    assert.equal(result.length, typedModels.length)
   })
 
   test('keeps explicit name and price sorting semantics', () => {
@@ -232,12 +226,34 @@ describe('pricing model group filtering', () => {
       group_ratio: { default: 1, vip: 0.8 },
     }
 
-    assert.deepEqual(filterByGroup([model], 'vip'), [])
+    assert.deepEqual(filterByGroup([model], ['vip']), [])
     assert.deepEqual(
-      filterByGroup([{ ...models[0], enable_groups: ['vip'] }], 'vip').map(
+      filterByGroup([{ ...models[0], enable_groups: ['vip'] }], ['vip']).map(
         (item) => item.model_name
       ),
       ['zeta-model']
+    )
+  })
+
+  test('matches any selected pricing group within the selected vendors', () => {
+    const candidates: PricingModel[] = [
+      { ...models[0], vendor_name: 'OpenAI', enable_groups: ['standard'] },
+      { ...models[1], vendor_name: 'Anthropic', enable_groups: ['vip'] },
+      { ...models[2], vendor_name: 'Google', enable_groups: ['standard'] },
+    ]
+    const result = filterAndSortModels(candidates, {
+      search: '',
+      vendors: ['OpenAI', 'Anthropic'],
+      groups: ['vip', 'enterprise'],
+      quotaType: QUOTA_TYPES.ALL,
+      endpointType: ENDPOINT_TYPES.ALL,
+      tag: FILTER_ALL,
+      sortBy: SORT_OPTIONS.NAME,
+    })
+
+    assert.deepEqual(
+      result.map((model) => model.model_name),
+      ['gpt-5.6-luna']
     )
   })
 })

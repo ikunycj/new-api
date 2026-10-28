@@ -85,7 +85,7 @@ function DocsLoadingSkeleton(props: { error?: boolean; onRetry?: () => void }) {
 
   if (props.error && props.onRetry) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
         <main className='flex min-h-svh items-center justify-center px-4 pt-16'>
           <div className='flex flex-col items-center gap-3'>
             <p className='text-muted-foreground text-sm'>
@@ -101,7 +101,7 @@ function DocsLoadingSkeleton(props: { error?: boolean; onRetry?: () => void }) {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
       <main
         aria-busy='true'
         aria-label={t('Loading...')}
@@ -474,7 +474,7 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
       <div className='relative'>
         <div
           aria-busy={isLoading || hasError}
