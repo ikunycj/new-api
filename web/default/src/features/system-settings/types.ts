@@ -142,6 +142,10 @@ export type AuthSettings = {
   'oidc.authorization_endpoint': string
   'oidc.token_endpoint': string
   'oidc.user_info_endpoint': string
+  'feishu.enabled': boolean
+  'feishu.app_id': string
+  'feishu.app_secret': string
+  'feishu.org_parent_id': number
   TelegramOAuthEnabled: boolean
   TelegramBotToken: string
   TelegramBotName: string

@@ -52,6 +52,8 @@ type User struct {
 	InviterId         int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
 	DeletedAt         gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId         string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	FeishuId          string                     `json:"feishu_id" gorm:"column:feishu_id;index"`
+	ParentId          int                        `json:"parent_id" gorm:"column:parent_id;index;default:0"`
 	Setting           string                     `json:"setting" gorm:"type:text;column:setting"`
 	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer    string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
@@ -1082,6 +1084,54 @@ func GetUserSetting(id int, fromDB bool) (settingMap dto.UserSetting, err error)
 	return userBase.GetSetting(), nil
 }
 
+func SetUserParentId(userId, parentId int) error {
+	return DB.Model(&User{}).Where("id = ?", userId).Update("parent_id", parentId).Error
+}
+
+// GetUserChildren returns all users whose parent_id equals parentId.
+func GetUserChildren(parentId int) ([]*User, error) {
+	var users []*User
+	err := DB.Where("parent_id = ?", parentId).Find(&users).Error
+	return users, err
+}
+
+// HasChildren reports whether a user already has sub-accounts.
+func HasChildren(userId int) (bool, error) {
+	var count int64
+	err := DB.Model(&User{}).Where("parent_id = ?", userId).Count(&count).Error
+	return count > 0, err
+}
+
+// GetTeamUsageSummary returns the aggregate used_quota and request_count for
+// the given set of user ids (a parent account + its children).
+func GetTeamUsageSummary(userIds []int) (usedQuota int64, requestCount int64, err error) {
+	type result struct {
+		UsedQuota    int64
+		RequestCount int64
+	}
+	var r result
+	err = DB.Model(&User{}).
+		Select("COALESCE(SUM(used_quota), 0) AS used_quota, COALESCE(SUM(request_count), 0) AS request_count").
+		Where("id IN ?", userIds).
+		Scan(&r).Error
+	return r.UsedQuota, r.RequestCount, err
+}
+
+// GetBillingUserId returns the user ID whose quota should be charged for a
+// request. If the user belongs to a parent account (ParentId != 0), the parent
+// is the billing target; otherwise the user bills themselves.
+func GetBillingUserId(userId int) (int, error) {
+	var parentId int
+	err := DB.Model(&User{}).Where("id = ?", userId).Select("parent_id").Scan(&parentId).Error
+	if err != nil {
+		return userId, err
+	}
+	if parentId != 0 {
+		return parentId, nil
+	}
+	return userId, nil
+}
+
 func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
@@ -1278,6 +1328,19 @@ func (user *User) FillUserByLinuxDOId() error {
 	return err
 }
 
+func IsFeishuIdAlreadyTaken(feishuId string) bool {
+	var user User
+	err := DB.Unscoped().Where("feishu_id = ?", feishuId).First(&user).Error
+	return !errors.Is(err, gorm.ErrRecordNotFound)
+}
+
+func (user *User) FillUserByFeishuId() error {
+	if user.FeishuId == "" {
+		return errors.New("feishu id is empty")
+	}
+	return DB.Where("feishu_id = ?", user.FeishuId).First(user).Error
+}
+
 func RootUserExists() bool {
 	var user User
 	err := DB.Where("role = ?", common.RoleRootUser).First(&user).Error
@@ -1286,3 +1349,4 @@ func RootUserExists() bool {
 	}
 	return true
 }
+

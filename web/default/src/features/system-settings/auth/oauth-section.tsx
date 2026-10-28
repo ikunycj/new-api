@@ -79,6 +79,12 @@ const oauthSchema = z.object({
     token_endpoint: z.string(),
     user_info_endpoint: z.string(),
   }),
+  feishu: z.object({
+    enabled: z.boolean(),
+    app_id: z.string(),
+    app_secret: z.string(),
+    org_parent_id: z.coerce.number().int().min(0),
+  }),
   TelegramOAuthEnabled: z.boolean(),
   TelegramBotToken: z.string(),
   TelegramBotName: z.string(),
@@ -108,6 +114,10 @@ type FlatOAuthDefaults = {
   'oidc.authorization_endpoint': string
   'oidc.token_endpoint': string
   'oidc.user_info_endpoint': string
+  'feishu.enabled': boolean
+  'feishu.app_id': string
+  'feishu.app_secret': string
+  'feishu.org_parent_id': number
   TelegramOAuthEnabled: boolean
   TelegramBotToken: string
   TelegramBotName: string
@@ -191,6 +201,12 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
     token_endpoint: defaults['oidc.token_endpoint'] ?? '',
     user_info_endpoint: defaults['oidc.user_info_endpoint'] ?? '',
   },
+  feishu: {
+    enabled: defaults['feishu.enabled'],
+    app_id: defaults['feishu.app_id'] ?? '',
+    app_secret: defaults['feishu.app_secret'] ?? '',
+    org_parent_id: defaults['feishu.org_parent_id'] ?? 0,
+  },
   TelegramOAuthEnabled: defaults.TelegramOAuthEnabled,
   TelegramBotToken: defaults.TelegramBotToken ?? '',
   TelegramBotName: defaults.TelegramBotName ?? '',
@@ -218,6 +234,10 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   'oidc.authorization_endpoint': values.oidc.authorization_endpoint,
   'oidc.token_endpoint': values.oidc.token_endpoint,
   'oidc.user_info_endpoint': values.oidc.user_info_endpoint,
+  'feishu.enabled': values.feishu.enabled,
+  'feishu.app_id': values.feishu.app_id,
+  'feishu.app_secret': values.feishu.app_secret,
+  'feishu.org_parent_id': values.feishu.org_parent_id,
   TelegramOAuthEnabled: values.TelegramOAuthEnabled,
   TelegramBotToken: values.TelegramBotToken,
   TelegramBotName: values.TelegramBotName,
@@ -259,6 +279,11 @@ export function OAuthSection(props: OAuthSectionProps) {
   const linuxDOCallbackUrl = buildOAuthCallbackUrl(
     props.serverAddress,
     'linuxdo',
+    t('Site URL')
+  )
+  const feishuCallbackUrl = buildOAuthCallbackUrl(
+    props.serverAddress,
+    'feishu',
     t('Site URL')
   )
 
@@ -374,10 +399,11 @@ export function OAuthSection(props: OAuthSectionProps) {
             <FormDirtyIndicator isDirty={form.formState.isDirty} />
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className='grid w-full grid-cols-6'>
+              <TabsList className='grid w-full grid-cols-7'>
                 <TabsTrigger value='github'>{t('GitHub')}</TabsTrigger>
                 <TabsTrigger value='discord'>{t('Discord')}</TabsTrigger>
                 <TabsTrigger value='oidc'>{t('OIDC')}</TabsTrigger>
+                <TabsTrigger value='feishu'>{t('Feishu')}</TabsTrigger>
                 <TabsTrigger value='telegram'>{t('Telegram')}</TabsTrigger>
                 <TabsTrigger value='linuxdo'>{t('LinuxDO')}</TabsTrigger>
                 <TabsTrigger value='wechat'>{t('WeChat')}</TabsTrigger>
@@ -761,6 +787,133 @@ export function OAuthSection(props: OAuthSectionProps) {
                           onChange={(event) =>
                             field.onChange(event.target.value)
                           }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value='feishu' className={oauthTabContentClassName}>
+                <OAuthSetupGuide
+                  title={t('Setup guide')}
+                  description={t(
+                    'Set these values in the provider application before enabling login.'
+                  )}
+                  rows={[
+                    {
+                      label: t('Authorization callback URL'),
+                      value: feishuCallbackUrl,
+                      copyLabel: t('Copy callback URL'),
+                    },
+                  ]}
+                >
+                  <a
+                    href='https://open.feishu.cn/app'
+                    target='_blank'
+                    rel='noreferrer'
+                    className='text-primary inline-flex w-fit items-center gap-1 underline underline-offset-3 hover:no-underline'
+                  >
+                    {t('Manage your Feishu app')}
+                    <ExternalLink className='size-3' aria-hidden='true' />
+                  </a>
+                </OAuthSetupGuide>
+
+                <FormField
+                  control={form.control}
+                  name='feishu.enabled'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Enable Feishu OAuth')}</FormLabel>
+                        <FormDescription>
+                          {t('Allow users to sign in with Feishu / Lark')}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='feishu.app_id'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('App ID')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('Your Feishu App ID')}
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='feishu.app_secret'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('App Secret')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='password'
+                          placeholder={t('Your Feishu App Secret')}
+                          autoComplete='new-password'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='feishu.org_parent_id'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Organization Parent Account ID')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Feishu users are automatically bound as children of this account on login. Set to 0 to disable auto-binding.'
+                        )}
+                      </FormDescription>
+                      <FormControl>
+                        <Input
+                          type='number'
+                          min={0}
+                          placeholder='0'
+                          value={field.value ?? 0}
+                          onChange={(event) => {
+                            const v = parseInt(event.target.value, 10)
+                            field.onChange(isNaN(v) ? field.value : v)
+                          }}
                           name={field.name}
                           onBlur={field.onBlur}
                           ref={field.ref}

@@ -157,6 +157,11 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/checkin", controller.GetCheckinStatus)
 				selfRoute.POST("/checkin", middleware.TurnstileCheck(), controller.DoCheckin)
 
+				// Sub-account (parent-child) management
+				selfRoute.GET("/self/children", controller.GetSelfChildren)
+				selfRoute.POST("/self/children", controller.AddSelfChild)
+				selfRoute.GET("/self/parent", controller.GetSelfParent)
+
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
@@ -172,6 +177,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)
+				adminRoute.PUT("/:id/parent", controller.AdminSetUserParent)
 				adminRoute.GET("/:id", controller.GetUser)
 				adminRoute.POST("/", controller.CreateUser)
 				adminRoute.POST("/manage", controller.ManageUser)
@@ -346,6 +352,8 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
+		logRoute.GET("/team", middleware.UserAuth(), controller.GetTeamLogs)
+		logRoute.GET("/team/stat", middleware.UserAuth(), controller.GetTeamLogsStat)
 
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())
@@ -369,6 +377,10 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/dimensions", middleware.AdminAuth(), controller.GetAdminQuotaDataDimensions)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 		dataRoute.GET("/self/dimensions", middleware.UserAuth(), controller.GetSelfQuotaDataDimensions)
+		dataRoute.GET("/team", middleware.UserAuth(), controller.GetTeamQuotaDates)
+		dataRoute.GET("/team/summary", middleware.UserAuth(), controller.GetTeamSummaryStats)
+		dataRoute.GET("/team/token-usage", middleware.UserAuth(), controller.GetTeamTokenUsage)
+		dataRoute.GET("/team/flow", middleware.UserAuth(), controller.GetTeamFlowQuotaDates)
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
 		// Per-key spend ranking over a time range. The self variant scopes to
@@ -381,6 +393,8 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/realtime/self", middleware.UserAuth(), controller.GetSelfRealtimeMetrics)
 		dataRoute.GET("/realtime/self/dimensions", middleware.UserAuth(), controller.GetSelfRealtimeDimensions)
 		dataRoute.GET("/realtime/self/keys", middleware.UserAuth(), controller.GetSelfRealtimeKeyBreakdown)
+		dataRoute.GET("/realtime/team", middleware.UserAuth(), controller.GetTeamRealtimeMetrics)
+		dataRoute.GET("/realtime/team/keys", middleware.UserAuth(), controller.GetTeamRealtimeKeyBreakdown)
 		// Historical counterpart to /realtime/self: unbounded range and spend,
 		// at the hourly resolution quota_data actually stores.
 		dataRoute.GET("/usage/self", middleware.UserAuth(), controller.GetSelfUsageStats)
@@ -423,6 +437,7 @@ func SetApiRouter(router *gin.Engine) {
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)
+			taskRoute.GET("/team", middleware.UserAuth(), controller.GetTeamTask)
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
 		}
 

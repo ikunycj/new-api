@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	feishusetting "github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -122,6 +123,20 @@ func HandleOAuth(c *gin.Context) {
 			common.ApiError(c, err)
 		}
 		return
+	}
+
+	// 7b. Auto-bind Feishu org users to the configured parent account.
+	if _, isFeishu := provider.(*oauth.FeishuProvider); isFeishu {
+		if orgParentId := feishusetting.GetFeishuSettings().OrgParentId; orgParentId > 0 && user.Id != orgParentId && user.ParentId != orgParentId {
+			// Skip a misconfigured parent id instead of writing a dangling parent_id.
+			if _, err := model.GetUserById(orgParentId, false); err != nil {
+				common.SysError(fmt.Sprintf("[OAuth/Feishu] org parent %d does not exist, skip binding user %d: %s", orgParentId, user.Id, err.Error()))
+			} else if err := model.SetUserParentId(user.Id, orgParentId); err != nil {
+				common.SysError(fmt.Sprintf("[OAuth/Feishu] failed to set org parent for user %d: %s", user.Id, err.Error()))
+			} else {
+				user.ParentId = orgParentId
+			}
+		}
 	}
 
 	// 8. Check user status
@@ -321,6 +336,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 				"discord_id":  user.DiscordId,
 				"oidc_id":     user.OidcId,
 				"linux_do_id": user.LinuxDOId,
+				"feishu_id":   user.FeishuId,
 				"wechat_id":   user.WeChatId,
 				"telegram_id": user.TelegramId,
 			}).Error; err != nil {
