@@ -38,6 +38,8 @@ export const playgroundConfigSchema = z.object({
   imageSize: z.string().optional(),
   imageQuality: z.string().optional(),
   imageN: z.number().optional(),
+  conversationContext: z.boolean().optional(),
+  contextWindowTokens: z.number().optional(),
 })
 
 export const parameterEnabledSchema = z.object({

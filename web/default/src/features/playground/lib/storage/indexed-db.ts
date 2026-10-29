@@ -16,6 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+export type PlaygroundConversationRecord = {
+  id: string
+  title: string
+  updatedAt: number
+  data: unknown
+  summary: string
+}
+
 export type PlaygroundMessagesRecord = {
   version: number
   data: unknown
@@ -28,9 +36,10 @@ export type PlaygroundMessagesReadResult =
   | { status: 'empty' | 'error' | 'unavailable' | 'unsupported' }
 
 const DATABASE_NAME = 'new-api-playground'
-const DATABASE_VERSION = 1
+const DATABASE_VERSION = 2
 const MESSAGES_STORE_NAME = 'messages'
 const CURRENT_MESSAGES_KEY = 'current'
+const CONVERSATIONS_STORE_NAME = 'conversations'
 
 function openPlaygroundDatabase(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null)
@@ -54,6 +63,11 @@ function openPlaygroundDatabase(): Promise<IDBDatabase | null> {
         const database = request.result
         if (!database.objectStoreNames.contains(MESSAGES_STORE_NAME)) {
           database.createObjectStore(MESSAGES_STORE_NAME)
+        }
+        if (!database.objectStoreNames.contains(CONVERSATIONS_STORE_NAME)) {
+          database.createObjectStore(CONVERSATIONS_STORE_NAME, {
+            keyPath: 'id',
+          })
         }
       })
       request.addEventListener('success', () => finish(request.result))
@@ -157,4 +171,72 @@ export function clearPlaygroundMessages(
   return mutatePlaygroundMessages((store) => {
     store.put(record, CURRENT_MESSAGES_KEY)
   })
+}
+
+export function savePlaygroundConversation(
+  conversation: PlaygroundConversationRecord
+): Promise<boolean> {
+  return mutatePlaygroundStore(CONVERSATIONS_STORE_NAME, (store) => {
+    store.put(conversation)
+  })
+}
+
+export function deletePlaygroundConversation(id: string): Promise<boolean> {
+  return mutatePlaygroundStore(CONVERSATIONS_STORE_NAME, (store) => {
+    store.delete(id)
+  })
+}
+
+async function mutatePlaygroundStore(
+  storeName: string,
+  operation: (store: IDBObjectStore) => void
+): Promise<boolean> {
+  const database = await openPlaygroundDatabase()
+  if (!database) return false
+
+  try {
+    return await new Promise<boolean>((resolve) => {
+      try {
+        const transaction = database.transaction(storeName, 'readwrite')
+        operation(transaction.objectStore(storeName))
+        transaction.addEventListener('complete', () => resolve(true))
+        transaction.addEventListener('error', () => resolve(false))
+        transaction.addEventListener('abort', () => resolve(false))
+      } catch {
+        resolve(false)
+      }
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export async function loadPlaygroundConversations(): Promise<
+  PlaygroundConversationRecord[]
+> {
+  const database = await openPlaygroundDatabase()
+  if (!database) return []
+
+  try {
+    return await new Promise((resolve) => {
+      try {
+        const transaction = database.transaction(
+          CONVERSATIONS_STORE_NAME,
+          'readonly'
+        )
+        const request = transaction
+          .objectStore(CONVERSATIONS_STORE_NAME)
+          .getAll()
+        request.addEventListener('success', () => {
+          resolve(request.result as PlaygroundConversationRecord[])
+        })
+        request.addEventListener('error', () => resolve([]))
+        transaction.addEventListener('abort', () => resolve([]))
+      } catch {
+        resolve([])
+      }
+    })
+  } finally {
+    database.close()
+  }
 }

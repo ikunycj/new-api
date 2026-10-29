@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { PromptInputButton } from '@/components/ai-elements/prompt-input'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import {
   Popover,
   PopoverContent,
@@ -37,10 +38,6 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select'
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -48,6 +45,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
+import { isImageGenerationModel } from '../../lib'
 import {
   getParameterControlValueText,
   normalizeParameterNumberValue,
@@ -55,7 +53,6 @@ import {
   PLAYGROUND_PARAMETER_PANEL_SCROLL_CLASS,
   type PlaygroundParameterKey,
 } from '../../lib/parameters/playground-parameters'
-import { isImageGenerationModel } from '../../lib'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
 
 type PlaygroundParameterPanelProps = {
@@ -106,33 +103,98 @@ function PlaygroundParameterContent({
         compact ? 'px-4 pb-4' : 'p-1'
       )}
     >
+      <div className='border-border/70 bg-background/60 grid gap-3 rounded-lg border p-3'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0 space-y-1'>
+            <div className='text-sm font-semibold'>
+              {t('Conversation context')}
+            </div>
+            <div className='text-muted-foreground text-xs leading-4'>
+              {config.conversationContext
+                ? t('Keep recent exchanges as context')
+                : t('Conversation context is disabled')}
+            </div>
+          </div>
+          <Switch
+            aria-label={t('Conversation context')}
+            checked={config.conversationContext}
+            disabled={disabled}
+            onCheckedChange={(checked) =>
+              onConfigChange('conversationContext', checked)
+            }
+            size='sm'
+          />
+        </div>
+        {config.conversationContext && (
+          <label
+            className='grid gap-1.5 text-sm'
+            htmlFor='playground-context-window'
+          >
+            <span className='font-medium'>{t('Context window (tokens)')}</span>
+            <Input
+              disabled={disabled}
+              id='playground-context-window'
+              inputMode='numeric'
+              min={1024}
+              onChange={(event) => {
+                const value = Number.parseInt(event.target.value, 10)
+                onConfigChange(
+                  'contextWindowTokens',
+                  Number.isFinite(value) ? Math.max(0, value) : 0
+                )
+              }}
+              placeholder={t('Auto')}
+              type='number'
+              value={config.contextWindowTokens || ''}
+            />
+          </label>
+        )}
+      </div>
       {isImageGenerationModel(config.model) && (
         <div className='border-border/70 bg-background/60 grid gap-3 rounded-lg border p-3'>
           <div className='space-y-1'>
-            <div className='text-sm font-semibold'>{t('Image generation settings')}</div>
+            <div className='text-sm font-semibold'>
+              {t('Image generation settings')}
+            </div>
             <div className='text-muted-foreground text-xs leading-4'>
               {t('Configure the output before generating an image.')}
             </div>
           </div>
-          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-size'>
+          <label
+            className='grid gap-1.5 text-sm'
+            htmlFor='playground-image-size'
+          >
             <span className='font-medium'>{t('Image size')}</span>
             <NativeSelect
               disabled={disabled}
               id='playground-image-size'
-              onChange={(event) => onConfigChange('imageSize', event.target.value)}
+              onChange={(event) =>
+                onConfigChange('imageSize', event.target.value)
+              }
               value={config.imageSize}
             >
-              <NativeSelectOption value='1024x1024'>1024x1024</NativeSelectOption>
-              <NativeSelectOption value='1536x1024'>1536x1024</NativeSelectOption>
-              <NativeSelectOption value='1024x1536'>1024x1536</NativeSelectOption>
+              <NativeSelectOption value='1024x1024'>
+                1024x1024
+              </NativeSelectOption>
+              <NativeSelectOption value='1536x1024'>
+                1536x1024
+              </NativeSelectOption>
+              <NativeSelectOption value='1024x1536'>
+                1024x1536
+              </NativeSelectOption>
             </NativeSelect>
           </label>
-          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-quality'>
+          <label
+            className='grid gap-1.5 text-sm'
+            htmlFor='playground-image-quality'
+          >
             <span className='font-medium'>{t('Image quality')}</span>
             <NativeSelect
               disabled={disabled}
               id='playground-image-quality'
-              onChange={(event) => onConfigChange('imageQuality', event.target.value)}
+              onChange={(event) =>
+                onConfigChange('imageQuality', event.target.value)
+              }
               value={config.imageQuality}
             >
               <NativeSelectOption value='auto'>Auto</NativeSelectOption>
@@ -141,7 +203,10 @@ function PlaygroundParameterContent({
               <NativeSelectOption value='high'>High</NativeSelectOption>
             </NativeSelect>
           </label>
-          <label className='grid gap-1.5 text-sm' htmlFor='playground-image-count'>
+          <label
+            className='grid gap-1.5 text-sm'
+            htmlFor='playground-image-count'
+          >
             <span className='font-medium'>{t('Number of images')}</span>
             <Input
               disabled={disabled}
@@ -150,7 +215,10 @@ function PlaygroundParameterContent({
               min={1}
               onChange={(event) => {
                 const value = Number.parseInt(event.target.value, 10)
-                onConfigChange('imageN', Number.isFinite(value) ? Math.min(4, Math.max(1, value)) : 1)
+                onConfigChange(
+                  'imageN',
+                  Number.isFinite(value) ? Math.min(4, Math.max(1, value)) : 1
+                )
               }}
               type='number'
               value={config.imageN}
@@ -255,9 +323,10 @@ function PlaygroundParameterContent({
 export function PlaygroundParameterPanel(props: PlaygroundParameterPanelProps) {
   const { t } = useTranslation()
   const isMobile = useIsMobile()
-  const activeCount = PLAYGROUND_PARAMETER_CONTROLS.filter(
-    (control) => props.parameterEnabled[control.key]
-  ).length + (isImageGenerationModel(props.config.model) ? 1 : 0)
+  const activeCount =
+    PLAYGROUND_PARAMETER_CONTROLS.filter(
+      (control) => props.parameterEnabled[control.key]
+    ).length + (isImageGenerationModel(props.config.model) ? 1 : 0)
 
   const trigger = (
     <PromptInputButton

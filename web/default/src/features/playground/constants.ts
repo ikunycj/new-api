@@ -54,6 +54,8 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
   frequency_penalty: 0,
   presence_penalty: 0,
   seed: null,
+  conversationContext: true,
+  contextWindowTokens: 0,
   stream: true,
   imageSize: '1024x1024',
   imageQuality: 'auto',

@@ -193,7 +193,7 @@ function removeOldestImage(messages: Message[]): Message[] | null {
   return null
 }
 
-function prepareMessagesForIndexedDb(messages: Message[]): Message[] {
+export function prepareMessagesForIndexedDb(messages: Message[]): Message[] {
   let prepared = messages
 
   if (getSerializedByteLength(prepared) <= MAX_INDEXED_DB_MESSAGES_BYTES) {
