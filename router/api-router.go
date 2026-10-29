@@ -445,6 +445,7 @@ func SetApiRouter(router *gin.Engine) {
 		teamRoute.Use(middleware.UserAuth(), middleware.TeamOwnerAuth())
 		{
 			teamRoute.GET("/members", controller.GetTeamMembers)
+			teamRoute.GET("/groups", controller.GetTeamGroups)
 		}
 
 		vendorRoute := apiRouter.Group("/vendors")

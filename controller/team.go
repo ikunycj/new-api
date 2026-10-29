@@ -48,9 +48,59 @@ func GetTeamMembers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": views})
 }
 
+// GetTeamGroups returns the usable groups for a team member (or the parent
+// itself when user_id is omitted). Sub-accounts share the same group
+// eligibility rules as their parent, so we resolve against the queried user's
+// own group assignment.
+// GET /api/team/groups?user_id=<int>
+func GetTeamGroups(c *gin.Context) {
+	parentId := c.GetInt("id")
+	targetId := parentId
+	if raw := c.Query("user_id"); raw != "" {
+		uid, err := strconv.Atoi(raw)
+		if err != nil || uid <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "无效的 user_id"})
+			return
+		}
+		if !middleware.AssertChildOf(c, parentId, uid) {
+			return
+		}
+		targetId = uid
+	}
+
+	userGroup, _ := model.GetUserGroup(targetId, false)
+	isToBUser := false
+	if user, err := model.GetUserById(targetId, false); err == nil {
+		isToBUser = user.IsToB()
+	}
+	userUsableGroups := service.GetUserUsableGroups(userGroup)
+	pricingGroups, err := model.GetPricingGroupNames()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	usableGroups := make(map[string]map[string]interface{})
+	for _, groupName := range pricingGroups {
+		if isToBUser && !model.IsBillingGroupToB(groupName) {
+			continue
+		}
+		if desc, ok := userUsableGroups[groupName]; ok {
+			usableGroups[groupName] = map[string]interface{}{
+				"ratio": service.GetUserGroupRatio(userGroup, groupName),
+				"desc":  desc,
+			}
+		}
+	}
+	if !isToBUser {
+		if _, ok := userUsableGroups["auto"]; ok {
+			usableGroups["auto"] = map[string]interface{}{
+				"ratio": "自动",
+				"desc":  setting.GetUsableGroupDescription("auto"),
+			}
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": usableGroups})
+}
+
 // placeholder — following interfaces added in subsequent commits
-var _ = strconv.Atoi
-var _ = service.GetUserUsableGroups
-var _ = setting.GetUsableGroupDescription
 var _ = operation_setting.GetMaxUserTokens
-var _ = middleware.AssertChildOf
