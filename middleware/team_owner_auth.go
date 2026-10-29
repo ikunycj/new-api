@@ -40,9 +40,9 @@ func TeamOwnerAuth() func(c *gin.Context) {
 	}
 }
 
-// assertChildOf verifies that targetUserId is a direct child of parentId.
+// AssertChildOf verifies that targetUserId is a direct child of parentId.
 // Returns false and writes a 403 response if the check fails.
-func assertChildOf(c *gin.Context, parentId, targetUserId int) bool {
+func AssertChildOf(c *gin.Context, parentId, targetUserId int) bool {
 	target, err := model.GetUserById(targetUserId, false)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "用户不存在"})
