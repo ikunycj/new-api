@@ -449,6 +449,7 @@ func SetApiRouter(router *gin.Engine) {
 			teamRoute.GET("/tokens", controller.GetTeamTokens)
 			teamRoute.POST("/token/:id/key", controller.GetTeamTokenKey)
 			teamRoute.PUT("/token/status", controller.UpdateTeamTokenStatus)
+			teamRoute.POST("/token", controller.CreateTeamToken)
 		}
 
 		vendorRoute := apiRouter.Group("/vendors")
