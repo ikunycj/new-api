@@ -175,5 +175,42 @@ func GetTeamTokenKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": gin.H{"key": token.GetFullKey()}})
 }
 
+// UpdateTeamTokenStatus enables or disables a token owned by a team member.
+// PUT /api/team/token/status  body: {"id": <int>, "status": <1|2>}
+func UpdateTeamTokenStatus(c *gin.Context) {
+	parentId := c.GetInt("id")
+	var body struct {
+		Id     int `json:"id" binding:"required"`
+		Status int `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if body.Status != 1 && body.Status != 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "status 只能为 1（启用）或 2（停用）"})
+		return
+	}
+	token, err := model.GetTokenById(body.Id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Token 不存在"})
+		return
+	}
+	if !middleware.AssertChildOf(c, parentId, token.UserId) {
+		return
+	}
+	token.Status = body.Status
+	if err := token.SelectUpdate(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAuditFor(c, token.UserId, "team.token_status", map[string]interface{}{
+		"token_id":   token.Id,
+		"token_name": token.Name,
+		"status":     body.Status,
+	})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+}
+
 // placeholder — following interfaces added in subsequent commits
 var _ = operation_setting.GetMaxUserTokens
