@@ -113,6 +113,22 @@ func GetAllUserTokens(userId int, startIdx int, num int) ([]*Token, error) {
 	return tokens, err
 }
 
+// GetTokensByUserIds returns paginated tokens owned by any of the given user IDs.
+func GetTokensByUserIds(userIds []int, startIdx int, num int) ([]*Token, int64, error) {
+	var tokens []*Token
+	var total int64
+	if len(userIds) == 0 {
+		return tokens, 0, nil
+	}
+	tx := DB.Model(&Token{}).Where("user_id IN ?", userIds)
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := tx.Order("id desc").Limit(num).Offset(startIdx).Find(&tokens).Error
+	return tokens, total, err
+}
+
+
 // sanitizeLikePattern 校验并清洗用户输入的 LIKE 搜索模式。
 // 规则：
 //  1. 转义 ! 和 _（使用 ! 作为 ESCAPE 字符，兼容 MySQL/PostgreSQL/SQLite）
