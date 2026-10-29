@@ -151,5 +151,29 @@ func GetTeamTokens(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+// GetTeamTokenKey returns the plaintext key of a token owned by a team member.
+// POST /api/team/token/:id/key
+func GetTeamTokenKey(c *gin.Context) {
+	parentId := c.GetInt("id")
+	tokenId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || tokenId <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "无效的 token id"})
+		return
+	}
+	token, err := model.GetTokenById(tokenId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Token 不存在"})
+		return
+	}
+	if !middleware.AssertChildOf(c, parentId, token.UserId) {
+		return
+	}
+	recordManageAuditFor(c, token.UserId, "team.token_key_view", map[string]interface{}{
+		"token_id":   token.Id,
+		"token_name": token.Name,
+	})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": gin.H{"key": token.GetFullKey()}})
+}
+
 // placeholder — following interfaces added in subsequent commits
 var _ = operation_setting.GetMaxUserTokens
