@@ -102,5 +102,54 @@ func GetTeamGroups(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": usableGroups})
 }
 
+// GetTeamTokens lists tokens owned by one member (user_id param) or all team
+// members (no user_id). Includes tokens with no usage history.
+// GET /api/team/tokens?user_id=<int>
+func GetTeamTokens(c *gin.Context) {
+	parentId := c.GetInt("id")
+	pageInfo := common.GetPageQuery(c)
+
+	if raw := c.Query("user_id"); raw != "" {
+		uid, err := strconv.Atoi(raw)
+		if err != nil || uid <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "无效的 user_id"})
+			return
+		}
+		if !middleware.AssertChildOf(c, parentId, uid) {
+			return
+		}
+		tokens, err := model.GetAllUserTokens(uid, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		total, _ := model.CountUserTokens(uid)
+		pageInfo.SetTotal(int(total))
+		pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+		common.ApiSuccess(c, pageInfo)
+		return
+	}
+
+	// No user_id: list tokens for the whole team (parent + all children).
+	children, err := model.GetUserChildren(parentId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userIds := make([]int, 0, len(children)+1)
+	userIds = append(userIds, parentId)
+	for _, ch := range children {
+		userIds = append(userIds, ch.Id)
+	}
+	tokens, total, err := model.GetTokensByUserIds(userIds, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	common.ApiSuccess(c, pageInfo)
+}
+
 // placeholder — following interfaces added in subsequent commits
 var _ = operation_setting.GetMaxUserTokens
