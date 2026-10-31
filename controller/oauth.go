@@ -139,6 +139,13 @@ func HandleOAuth(c *gin.Context) {
 		}
 	}
 
+	// 7c. Persist Feishu union_id / user_id for cross-app identity resolution.
+	if feishuProvider, isFeishu := provider.(*oauth.FeishuProvider); isFeishu {
+		if err := feishuProvider.PersistIdentity(user, oauthUser); err != nil {
+			common.SysError(fmt.Sprintf("[OAuth/Feishu] failed to persist identity for user %d: %s", user.Id, err.Error()))
+		}
+	}
+
 	// 8. Check user status
 	if user.Status != common.UserStatusEnabled {
 		common.ApiErrorI18n(c, i18n.MsgOAuthUserBanned)
@@ -209,6 +216,13 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		if err != nil {
 			common.ApiError(c, err)
 			return
+		}
+	}
+
+	// Persist Feishu union_id / user_id so team members resolve across apps.
+	if feishuProvider, isFeishu := provider.(*oauth.FeishuProvider); isFeishu {
+		if err := feishuProvider.PersistIdentity(&user, oauthUser); err != nil {
+			common.SysError(fmt.Sprintf("[OAuth/Feishu] failed to persist identity for user %d: %s", user.Id, err.Error()))
 		}
 	}
 
