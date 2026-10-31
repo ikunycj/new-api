@@ -53,6 +53,8 @@ type User struct {
 	DeletedAt         gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId         string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	FeishuId          string                     `json:"feishu_id" gorm:"column:feishu_id;index"`
+	FeishuUnionId     string                     `json:"feishu_union_id" gorm:"column:feishu_union_id;index"`
+	FeishuUserId      string                     `json:"feishu_user_id" gorm:"column:feishu_user_id;index"`
 	ParentId          int                        `json:"parent_id" gorm:"column:parent_id;index;default:0"`
 	Setting           string                     `json:"setting" gorm:"type:text;column:setting"`
 	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
@@ -1339,6 +1341,23 @@ func (user *User) FillUserByFeishuId() error {
 		return errors.New("feishu id is empty")
 	}
 	return DB.Where("feishu_id = ?", user.FeishuId).First(user).Error
+}
+
+// UpdateFeishuIdentity persists Feishu's union_id and user_id for a user when
+// present. Empty values are skipped so a user whose Feishu app lacks the
+// corresponding scope is not overwritten with blanks.
+func UpdateFeishuIdentity(userId int, unionId, feishuUserId string) error {
+	updates := map[string]interface{}{}
+	if unionId != "" {
+		updates["feishu_union_id"] = unionId
+	}
+	if feishuUserId != "" {
+		updates["feishu_user_id"] = feishuUserId
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return DB.Model(&User{}).Where("id = ?", userId).Updates(updates).Error
 }
 
 func RootUserExists() bool {

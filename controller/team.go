@@ -15,13 +15,15 @@ import (
 
 // teamMemberView is the per-member payload returned by GET /api/team/members.
 type teamMemberView struct {
-	Id          int    `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email"`
-	FeishuId    string `json:"feishu_id"`
-	UsedQuota   int    `json:"used_quota"`
-	Status      int    `json:"status"`
+	Id           int    `json:"id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	Email        string `json:"email"`
+	FeishuId     string `json:"feishu_id"`
+	UnionId      string `json:"union_id"`
+	FeishuUserId string `json:"feishu_user_id"`
+	UsedQuota    int    `json:"used_quota"`
+	Status       int    `json:"status"`
 }
 
 // GetTeamMembers lists all sub-accounts belonging to the calling parent account.
@@ -36,13 +38,15 @@ func GetTeamMembers(c *gin.Context) {
 	views := make([]teamMemberView, 0, len(children))
 	for _, u := range children {
 		views = append(views, teamMemberView{
-			Id:          u.Id,
-			Username:    u.Username,
-			DisplayName: u.DisplayName,
-			Email:       u.Email,
-			FeishuId:    u.FeishuId,
-			UsedQuota:   u.UsedQuota,
-			Status:      u.Status,
+			Id:           u.Id,
+			Username:     u.Username,
+			DisplayName:  u.DisplayName,
+			Email:        u.Email,
+			FeishuId:     u.FeishuId,
+			UnionId:      u.FeishuUnionId,
+			FeishuUserId: u.FeishuUserId,
+			UsedQuota:    u.UsedQuota,
+			Status:       u.Status,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": views})
