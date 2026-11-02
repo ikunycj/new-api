@@ -20,6 +20,10 @@ type OAuthUser struct {
 	DisplayName string
 	// Email is the email from the OAuth provider
 	Email string
+	// UnionId is the provider-wide stable ID shared across apps (Feishu only)
+	UnionId string
+	// UserId is the provider's enterprise user ID (Feishu only)
+	UserId string
 	// Extra contains any additional provider-specific data
 	Extra map[string]any
 }

@@ -58,10 +58,12 @@ type feishuUserInfo struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data struct {
-		OpenId string `json:"open_id"`
-		Name   string `json:"name"`
-		EnName string `json:"en_name"`
-		Email  string `json:"email"`
+		OpenId  string `json:"open_id"`
+		UnionId string `json:"union_id"`
+		UserId  string `json:"user_id"`
+		Name    string `json:"name"`
+		EnName  string `json:"en_name"`
+		Email   string `json:"email"`
 	} `json:"data"`
 }
 
@@ -213,14 +215,22 @@ func (p *FeishuProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*O
 		name = user.Data.EnName
 	}
 
-	logger.LogDebug(ctx, "[OAuth-Feishu] GetUserInfo success: openId=%s name=%s", user.Data.OpenId, name)
+	logger.LogDebug(ctx, "[OAuth-Feishu] GetUserInfo success: openId=%s unionId=%s userId=%s name=%s", user.Data.OpenId, user.Data.UnionId, user.Data.UserId, name)
 
 	return &OAuthUser{
 		ProviderUserID: user.Data.OpenId,
 		Username:       name,
 		DisplayName:    name,
 		Email:          user.Data.Email,
+		UnionId:        user.Data.UnionId,
+		UserId:         user.Data.UserId,
 	}, nil
+}
+
+// PersistIdentity writes the Feishu union_id and user_id carried in oauthUser
+// onto the user record. It is a no-op when neither field is present.
+func (p *FeishuProvider) PersistIdentity(user *model.User, oauthUser *OAuthUser) error {
+	return model.UpdateFeishuIdentity(user.Id, oauthUser.UnionId, oauthUser.UserId)
 }
 
 func (p *FeishuProvider) IsUserIDTaken(providerUserID string) bool {
