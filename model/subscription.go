@@ -33,6 +33,12 @@ const (
 	SubscriptionResetCustom  = "custom"
 )
 
+// Subscription quota display mode (how users see their plan quota)
+const (
+	SubscriptionQuotaDisplayAmount  = "amount"
+	SubscriptionQuotaDisplayPercent = "percent"
+)
+
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
@@ -185,6 +191,9 @@ type SubscriptionPlan struct {
 	QuotaResetPeriod        string `json:"quota_reset_period" gorm:"type:varchar(16);default:'never'"`
 	QuotaResetCustomSeconds int64  `json:"quota_reset_custom_seconds" gorm:"type:bigint;default:0"`
 
+	// How users see the plan quota: "amount" shows dollar amounts, "percent" only shows usage percentage
+	QuotaDisplay string `json:"quota_display" gorm:"type:varchar(16);default:'amount'"`
+
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
 }
@@ -202,6 +211,7 @@ func (p *SubscriptionPlan) BeforeUpdate(tx *gorm.DB) error {
 }
 
 func (p *SubscriptionPlan) NormalizeDefaults() {
+	p.QuotaDisplay = NormalizeQuotaDisplay(p.QuotaDisplay)
 	if p.AllowBalancePay == nil {
 		p.AllowBalancePay = common.GetPointer(true)
 	}
@@ -294,6 +304,9 @@ func (s *UserSubscription) BeforeUpdate(tx *gorm.DB) error {
 
 type SubscriptionSummary struct {
 	Subscription *UserSubscription `json:"subscription"`
+	// QuotaDisplay / UsagePercent are filled for user-facing responses
+	QuotaDisplay string  `json:"quota_display,omitempty"`
+	UsagePercent float64 `json:"usage_percent"`
 }
 
 type SubscriptionResetResult struct {
@@ -339,6 +352,25 @@ func NormalizeResetPeriod(period string) string {
 	default:
 		return SubscriptionResetNever
 	}
+}
+
+func NormalizeQuotaDisplay(mode string) string {
+	if strings.TrimSpace(mode) == SubscriptionQuotaDisplayPercent {
+		return SubscriptionQuotaDisplayPercent
+	}
+	return SubscriptionQuotaDisplayAmount
+}
+
+// SubscriptionUsagePercent returns used/total as a percentage rounded to 2 decimals (0 when unlimited).
+func SubscriptionUsagePercent(used int64, total int64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	if used < 0 {
+		used = 0
+	}
+	percent, _ := decimal.NewFromInt(used).Mul(decimal.NewFromInt(100)).Div(decimal.NewFromInt(total)).Round(2).Float64()
+	return percent
 }
 
 func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) int64 {
@@ -893,6 +925,33 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 		subCopy := sub
 		result = append(result, SubscriptionSummary{
 			Subscription: &subCopy,
+		})
+	}
+	return result
+}
+
+// ApplyUserQuotaDisplay prepares subscription summaries for the owning user: it fills
+// usage_percent and, for plans in percent display mode, hides the raw quota amounts.
+func ApplyUserQuotaDisplay(summaries []SubscriptionSummary) []SubscriptionSummary {
+	result := make([]SubscriptionSummary, 0, len(summaries))
+	for _, summary := range summaries {
+		if summary.Subscription == nil {
+			continue
+		}
+		sub := *summary.Subscription
+		display := SubscriptionQuotaDisplayAmount
+		if plan, err := GetSubscriptionPlanById(sub.PlanId); err == nil && plan != nil {
+			display = NormalizeQuotaDisplay(plan.QuotaDisplay)
+		}
+		usagePercent := SubscriptionUsagePercent(sub.AmountUsed, sub.AmountTotal)
+		if display == SubscriptionQuotaDisplayPercent {
+			sub.AmountTotal = 0
+			sub.AmountUsed = 0
+		}
+		result = append(result, SubscriptionSummary{
+			Subscription: &sub,
+			QuotaDisplay: display,
+			UsagePercent: usagePercent,
 		})
 	}
 	return result
@@ -1453,8 +1512,9 @@ func CleanupSubscriptionPreConsumeRecords(olderThanSeconds int64) (int64, error)
 }
 
 type SubscriptionPlanInfo struct {
-	PlanId    int
-	PlanTitle string
+	PlanId       int
+	PlanTitle    string
+	QuotaDisplay string
 }
 
 func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*SubscriptionPlanInfo, error) {
@@ -1474,8 +1534,9 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 		return nil, err
 	}
 	info := &SubscriptionPlanInfo{
-		PlanId:    sub.PlanId,
-		PlanTitle: plan.Title,
+		PlanId:       sub.PlanId,
+		PlanTitle:    plan.Title,
+		QuotaDisplay: NormalizeQuotaDisplay(plan.QuotaDisplay),
 	}
 	_ = getSubscriptionPlanInfoCache().SetWithTTL(cacheKey, *info, subscriptionPlanInfoCacheTTL())
 	return info, nil

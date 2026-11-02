@@ -6579,6 +6579,11 @@
     "Animations": "Animations",
     "Contains script": "Contient un script",
     "Truncated": "Tronqué",
-    "Bench output": "Résultat du test"
+    "Bench output": "Résultat du test",
+    "Show quota to users as percentage": "Afficher le quota en pourcentage aux utilisateurs",
+    "Users only see the used percentage of the plan quota; dollar amounts are hidden.": "Les utilisateurs ne voient que le pourcentage utilisé du quota ; les montants en dollars sont masqués.",
+    "Usage shown as percentage": "Utilisation affichée en pourcentage",
+    "Plan usage this period": "Utilisation du forfait sur la période",
+    "Shown as %": "Affiché en %"
 }
 }

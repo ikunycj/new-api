@@ -6579,6 +6579,11 @@
     "Animations": "アニメーション",
     "Contains script": "スクリプトを含む",
     "Truncated": "切り捨て",
-    "Bench output": "テスト出力"
+    "Bench output": "テスト出力",
+    "Show quota to users as percentage": "ユーザーにはクォータを割合で表示",
+    "Users only see the used percentage of the plan quota; dollar amounts are hidden.": "ユーザーにはプランのクォータ使用率のみが表示され、ドル金額は非表示になります。",
+    "Usage shown as percentage": "使用量を割合で表示",
+    "Plan usage this period": "今期のプラン使用量",
+    "Shown as %": "% 表示"
 }
 }

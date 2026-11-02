@@ -169,6 +169,9 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
           return (
             <span className='text-muted-foreground'>
               {total > 0 ? formatQuota(total) : t('Unlimited')}
+              {row.original.plan.quota_display === 'percent' && (
+                <span className='ml-1.5 text-xs'>({t('Shown as %')})</span>
+              )}
             </span>
           )
         },

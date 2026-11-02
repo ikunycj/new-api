@@ -17,6 +17,8 @@ import (
 
 type SubscriptionPlanDTO struct {
 	Plan model.SubscriptionPlan `json:"plan"`
+	// QuotaLimited tells users a percent-display plan has a quota cap even though the amount is hidden
+	QuotaLimited bool `json:"quota_limited,omitempty"`
 }
 
 type BillingPreferenceRequest struct {
@@ -43,8 +45,14 @@ func GetSubscriptionPlans(c *gin.Context) {
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
 		p.NormalizeDefaults()
+		quotaLimited := p.TotalAmount > 0
+		// Percent display plans never expose the raw quota amount to users
+		if p.QuotaDisplay == model.SubscriptionQuotaDisplayPercent {
+			p.TotalAmount = 0
+		}
 		result = append(result, SubscriptionPlanDTO{
-			Plan: p,
+			Plan:         p,
+			QuotaLimited: quotaLimited,
 		})
 	}
 	common.ApiSuccess(c, result)
@@ -69,8 +77,8 @@ func GetSubscriptionSelf(c *gin.Context) {
 
 	common.ApiSuccess(c, gin.H{
 		"billing_preference": pref,
-		"subscriptions":      activeSubscriptions, // all active subscriptions
-		"all_subscriptions":  allSubscriptions,    // all subscriptions including expired
+		"subscriptions":      model.ApplyUserQuotaDisplay(activeSubscriptions), // all active subscriptions
+		"all_subscriptions":  model.ApplyUserQuotaDisplay(allSubscriptions),    // all subscriptions including expired
 	})
 }
 
@@ -199,6 +207,7 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	req.Plan.QuotaDisplay = model.NormalizeQuotaDisplay(req.Plan.QuotaDisplay)
 	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
 	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
@@ -273,6 +282,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	req.Plan.QuotaDisplay = model.NormalizeQuotaDisplay(req.Plan.QuotaDisplay)
 	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
 	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
@@ -300,6 +310,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"downgrade_group":            req.Plan.DowngradeGroup,
 			"quota_reset_period":         req.Plan.QuotaResetPeriod,
 			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
+			"quota_display":              req.Plan.QuotaDisplay,
 			"updated_at":                 common.GetTimestamp(),
 		}
 		if req.Plan.AllowBalancePay != nil {

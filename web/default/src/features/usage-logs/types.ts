@@ -121,6 +121,10 @@ export interface LogOtherData {
     admin_id?: number | string
     admin_role?: number
     auth_method?: 'session' | 'access_token' | string
+    // Raw subscription amounts for percent-display plans (admin only)
+    subscription_total?: number
+    subscription_used?: number
+    subscription_remain?: number
     // Quota saturation marker: set when a quota conversion clamped at the
     // int32 bound (overflow/underflow) or hit a NaN fallback while computing
     // this request's charge. Admin-only (nested under admin_info).
@@ -229,6 +233,9 @@ export interface LogOtherData {
   subscription_consumed?: number
   subscription_remain?: number
   subscription_total?: number
+  // Set for percent-display plans; raw amounts are then admin-only
+  subscription_quota_display?: 'amount' | 'percent'
+  subscription_used_percent?: number
   cost_reconciliation?: {
     version?: number
     status?: 'estimated' | 'unavailable' | string
