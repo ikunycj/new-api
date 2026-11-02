@@ -578,6 +578,11 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const isTopup = props.log.type === 1
   const isManage = props.log.type === 3
   const isSubscription = other?.billing_source === 'subscription'
+  // Percent-display plans keep raw amounts under admin_info (only sent to admins)
+  const subscriptionRemain =
+    other?.subscription_remain ?? other?.admin_info?.subscription_remain
+  const subscriptionTotal =
+    other?.subscription_total ?? other?.admin_info?.subscription_total
   const isTieredBilling =
     isConsume &&
     !isViolation &&
@@ -1294,15 +1299,22 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 mono
               />
             )}
-            {other.subscription_remain != null && (
+            {other.subscription_used_percent != null && (
+              <DetailRow
+                label={t('Plan usage this period')}
+                value={`${other.subscription_used_percent}%`}
+                mono
+              />
+            )}
+            {subscriptionRemain != null && (
               <DetailRow
                 label={t('Remaining')}
-                value={`${formatUsageLogQuotaUSD(other.subscription_remain, {
+                value={`${formatUsageLogQuotaUSD(subscriptionRemain, {
                   billingUSDToCNYRate: other.billing_usd_to_cny_rate,
                   quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
                 })}${
-                  other.subscription_total != null
-                    ? ` / ${formatUsageLogQuotaUSD(other.subscription_total, {
+                  subscriptionTotal != null
+                    ? ` / ${formatUsageLogQuotaUSD(subscriptionTotal, {
                         billingUSDToCNYRate: other.billing_usd_to_cny_rate,
                         quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
                       })}`

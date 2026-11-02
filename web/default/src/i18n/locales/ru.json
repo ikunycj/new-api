@@ -6579,6 +6579,11 @@
     "Animations": "Анимации",
     "Contains script": "Содержит скрипт",
     "Truncated": "Обрезано",
-    "Bench output": "Результат проверки"
+    "Bench output": "Результат проверки",
+    "Show quota to users as percentage": "Показывать квоту пользователям в процентах",
+    "Users only see the used percentage of the plan quota; dollar amounts are hidden.": "Пользователи видят только процент использования квоты тарифа; суммы в долларах скрыты.",
+    "Usage shown as percentage": "Использование в процентах",
+    "Plan usage this period": "Использование тарифа за период",
+    "Shown as %": "В %"
 }
 }

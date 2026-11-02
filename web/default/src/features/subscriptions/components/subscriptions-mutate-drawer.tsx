@@ -578,6 +578,33 @@ export function SubscriptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name='quota_display'
+                  render={({ field }) => (
+                    <FormItem className={sideDrawerSwitchItemClassName()}>
+                      <div className='space-y-0.5'>
+                        <FormLabel className='!mt-0'>
+                          {t('Show quota to users as percentage')}
+                        </FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Users only see the used percentage of the plan quota; dollar amounts are hidden.'
+                          )}
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value === 'percent'}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked ? 'percent' : 'amount')
+                          }
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </div>
             </SideDrawerSection>
 

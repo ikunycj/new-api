@@ -6607,6 +6607,11 @@
     "Animations": "Animations",
     "Contains script": "Contains script",
     "Truncated": "Truncated",
-    "Bench output": "Bench output"
+    "Bench output": "Bench output",
+    "Show quota to users as percentage": "Show quota to users as percentage",
+    "Users only see the used percentage of the plan quota; dollar amounts are hidden.": "Users only see the used percentage of the plan quota; dollar amounts are hidden.",
+    "Usage shown as percentage": "Usage shown as percentage",
+    "Plan usage this period": "Plan usage this period",
+    "Shown as %": "Shown as %"
 }
 }

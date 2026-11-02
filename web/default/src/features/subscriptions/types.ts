@@ -33,6 +33,7 @@ export const subscriptionPlanSchema = z.object({
   custom_seconds: z.number().optional(),
   quota_reset_period: z.enum(['never', 'daily', 'weekly', 'monthly', 'custom']),
   quota_reset_custom_seconds: z.number().optional(),
+  quota_display: z.enum(['amount', 'percent']).optional().default('amount'),
   enabled: z.boolean(),
   sort_order: z.number(),
   allow_balance_pay: z.boolean().optional().default(true),
@@ -50,6 +51,8 @@ export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>
 
 export interface PlanRecord {
   plan: SubscriptionPlan
+  // Set on user-facing plan lists: the plan has a quota cap even when its amount is hidden
+  quota_limited?: boolean
 }
 
 // ============================================================================
@@ -73,6 +76,9 @@ export type UserSubscription = z.infer<typeof userSubscriptionSchema>
 
 export interface UserSubscriptionRecord {
   subscription: UserSubscription
+  // 'percent' means amounts are hidden from the user and only usage_percent is meaningful
+  quota_display?: 'amount' | 'percent'
+  usage_percent?: number
 }
 
 // ============================================================================

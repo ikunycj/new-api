@@ -229,6 +229,9 @@ export function SubscriptionPlansCard({
   }
 
   const getUsagePercent = (sub: UserSubscriptionRecord) => {
+    if (sub?.quota_display === 'percent') {
+      return Number(sub.usage_percent || 0)
+    }
     const total = Number(sub?.subscription?.amount_total || 0)
     const used = Number(sub?.subscription?.amount_used || 0)
     if (total <= 0) return 0
@@ -407,6 +410,9 @@ export function SubscriptionPlansCard({
                     planTitleMap.get(subscription?.plan_id) || ''
                   const remainDays = getRemainingDays(sub)
                   const usagePercent = getUsagePercent(sub)
+                  const percentDisplay = sub.quota_display === 'percent'
+                  // Percent plans hide raw amounts; amount_total is 0 so infer the cap from the flag
+                  const hasQuotaCap = percentDisplay || totalAmount > 0
                   const now = Date.now() / 1000
                   const isExpired = (subscription?.end_time || 0) < now
                   const isCancelled = subscription?.status === 'cancelled'
@@ -479,6 +485,17 @@ export function SubscriptionPlansCard({
                           {new Date(nextResetTime * 1000).toLocaleString()}
                         </div>
                       )}
+                      {percentDisplay ? (
+                        <div className='mt-1.5 flex items-baseline justify-between gap-2'>
+                          <span className='text-muted-foreground'>
+                            {t('Plan usage this period')}
+                          </span>
+                          <span className='text-foreground font-medium tabular-nums'>
+                            {t('Used')} {usagePercent}% · {t('Remaining')}{' '}
+                            {Math.max(0, Math.round((100 - usagePercent) * 100) / 100)}%
+                          </span>
+                        </div>
+                      ) : (
                       <div className='text-muted-foreground mt-1'>
                         {t('Total Quota')}:{' '}
                         {totalAmount > 0 ? (
@@ -504,7 +521,8 @@ export function SubscriptionPlansCard({
                           </span>
                         )}
                       </div>
-                      {totalAmount > 0 && isActive && (
+                      )}
+                      {hasQuotaCap && isActive && (
                         <Progress value={usagePercent} className='mt-2 h-1.5' />
                       )}
                     </div>
@@ -528,6 +546,12 @@ export function SubscriptionPlansCard({
               const plan = p?.plan
               if (!plan) return null
               const totalAmount = Number(plan.total_amount || 0)
+              let planQuotaBenefit = `${t('Total Quota')}: ${t('Unlimited')}`
+              if (plan.quota_display === 'percent' && p.quota_limited) {
+                planQuotaBenefit = `${t('Total Quota')}: ${t('Usage shown as percentage')}`
+              } else if (totalAmount > 0) {
+                planQuotaBenefit = `${t('Total Quota')}: ${formatQuota(totalAmount)}`
+              }
               const price = Number(plan.price_amount || 0).toFixed(2)
               const isPopular = index === 0 && plans.length > 1
               const limit = Number(plan.max_purchase_per_user || 0)
@@ -539,9 +563,7 @@ export function SubscriptionPlansCard({
                 formatResetPeriod(plan, t) !== t('No Reset')
                   ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
                   : null,
-                totalAmount > 0
-                  ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
-                  : `${t('Total Quota')}: ${t('Unlimited')}`,
+                planQuotaBenefit,
                 limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
                 plan.upgrade_group
                   ? `${t('Upgrade Group')}: ${plan.upgrade_group}`

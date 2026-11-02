@@ -98,6 +98,13 @@ export function SubscriptionPurchaseDialog(props: Props) {
     selectedEpayMethod ||
     t('Select payment method')
   const totalAmount = Number(plan.total_amount || 0)
+  const percentDisplay = plan.quota_display === 'percent'
+  let planQuotaLabel = totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')
+  if (percentDisplay) {
+    planQuotaLabel = props.plan?.quota_limited
+      ? t('Usage shown as percentage')
+      : t('Unlimited')
+  }
   const price = Number(plan.price_amount || 0).toFixed(2)
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
@@ -303,7 +310,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
             </span>
             <span className='flex items-center gap-1 text-sm'>
               <Package className='h-3.5 w-3.5' />
-              {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+              {planQuotaLabel}
             </span>
           </div>
           {plan.upgrade_group && (

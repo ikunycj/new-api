@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
@@ -194,9 +195,22 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 			if remain < 0 {
 				remain = 0
 			}
-			other["subscription_total"] = relayInfo.SubscriptionAmountTotal
-			other["subscription_used"] = usedFinal
-			other["subscription_remain"] = remain
+			subscriptionQuota := other
+			if relayInfo.SubscriptionQuotaDisplay == model.SubscriptionQuotaDisplayPercent {
+				// Percent display plans only show the usage percentage to users;
+				// raw amounts go to admin_info, which is stripped for non-admin viewers.
+				other["subscription_quota_display"] = model.SubscriptionQuotaDisplayPercent
+				other["subscription_used_percent"] = model.SubscriptionUsagePercent(usedFinal, relayInfo.SubscriptionAmountTotal)
+				adminInfo, ok := other["admin_info"].(map[string]interface{})
+				if !ok || adminInfo == nil {
+					adminInfo = map[string]interface{}{}
+					other["admin_info"] = adminInfo
+				}
+				subscriptionQuota = adminInfo
+			}
+			subscriptionQuota["subscription_total"] = relayInfo.SubscriptionAmountTotal
+			subscriptionQuota["subscription_used"] = usedFinal
+			subscriptionQuota["subscription_remain"] = remain
 		}
 		if consumed > 0 {
 			other["subscription_consumed"] = consumed

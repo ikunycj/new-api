@@ -6579,6 +6579,11 @@
     "Animations": "Hoạt ảnh",
     "Contains script": "Có script",
     "Truncated": "Bị cắt",
-    "Bench output": "Kết quả kiểm tra"
+    "Bench output": "Kết quả kiểm tra",
+    "Show quota to users as percentage": "Hiển thị hạn mức cho người dùng dạng phần trăm",
+    "Users only see the used percentage of the plan quota; dollar amounts are hidden.": "Người dùng chỉ thấy phần trăm hạn mức đã dùng; số tiền đô la bị ẩn.",
+    "Usage shown as percentage": "Hiển thị mức dùng theo phần trăm",
+    "Plan usage this period": "Mức dùng gói trong kỳ này",
+    "Shown as %": "Hiển thị %"
 }
 }
