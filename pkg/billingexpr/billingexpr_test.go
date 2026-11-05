@@ -3,6 +3,7 @@ package billingexpr_test
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -1050,6 +1051,66 @@ func TestGPT56Terra12HourCachePricing(t *testing.T) {
 			assert.Equal(t, tc.quota, result.ActualQuotaAfterGroup)
 			assert.Equal(t, tc.crossed, result.CrossedTier)
 			assert.Nil(t, result.Clamp)
+		})
+	}
+}
+
+func TestDeepSeekFlashTimeTierSettlementMatchesCurrentUTCWindow(t *testing.T) {
+	const expression = `weekday("UTC") >= 1 && weekday("UTC") <= 5 && ((hour("UTC") >= 1 && hour("UTC") < 4) || (hour("UTC") >= 6 && hour("UTC") < 10)) ? tier("peak", p * 0.3 + cr * 0.006 + c * 1.2) : tier("off_peak", p * 0.15 + cr * 0.003 + c * 0.6)`
+	params := billingexpr.TokenParams{P: 100000, C: 10000, CR: 2000, Len: 112000}
+	snapshot := &billingexpr.BillingSnapshot{
+		ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+		GroupRatio: 0.5, QuotaPerUnit: 500000, BillingUSDToCNYRate: 8,
+		EstimatedTier: "off_peak",
+	}
+	before := time.Now().UTC()
+	result, err := billingexpr.ComputeTieredQuota(snapshot, params)
+	after := time.Now().UTC()
+	require.NoError(t, err)
+	if before.Weekday() != after.Weekday() || before.Hour() != after.Hour() {
+		t.Skip("UTC billing window changed while the expression was evaluated")
+	}
+
+	isPeak := before.Weekday() >= time.Monday && before.Weekday() <= time.Friday &&
+		((before.Hour() >= 1 && before.Hour() < 4) || (before.Hour() >= 6 && before.Hour() < 10))
+	expectedTier := "off_peak"
+	expectedCost := float64(21006)
+	if isPeak {
+		expectedTier = "peak"
+		expectedCost = 42012
+	}
+	assert.Equal(t, expectedTier, result.MatchedTier)
+	assert.Equal(t, expectedCost*4, result.ActualQuotaBeforeGroup)
+	assert.Equal(t, int(expectedCost*2), result.ActualQuotaAfterGroup)
+}
+
+func TestDeepSeekFlashSettlementPricesBothTiers(t *testing.T) {
+	const peakPrice = `tier("peak", p * 0.3 + cr * 0.006 + c * 1.2)`
+	const offPeakPrice = `tier("off_peak", p * 0.15 + cr * 0.003 + c * 0.6)`
+
+	for _, tc := range []struct {
+		name string
+		when string
+		tier string
+		cost float64
+	}{
+		{name: "peak", when: "true", tier: "peak", cost: 42012},
+		{name: "off peak", when: "false", tier: "off_peak", cost: 21006},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expression := tc.when + " ? " + peakPrice + " : " + offPeakPrice
+			snapshot := &billingexpr.BillingSnapshot{
+				ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+				GroupRatio: 0.5, QuotaPerUnit: 500000, BillingUSDToCNYRate: 8,
+				EstimatedTier: tc.tier,
+			}
+			result, err := billingexpr.ComputeTieredQuota(snapshot, billingexpr.TokenParams{
+				P: 100000, C: 10000, CR: 2000, Len: 112000,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.tier, result.MatchedTier)
+			assert.Equal(t, tc.cost*4, result.ActualQuotaBeforeGroup)
+			assert.Equal(t, int(tc.cost*2), result.ActualQuotaAfterGroup)
 		})
 	}
 }

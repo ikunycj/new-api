@@ -38,6 +38,7 @@ import { StaticDataTable } from '@/components/data-table'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -63,6 +64,8 @@ import { usePricingData } from '../hooks/use-pricing-data'
 import {
   formatBillingPriceUnit,
   formatBillingVarLabel,
+  formatTierLabel,
+  formatTierTimeCondition,
 } from '../lib/billing-expr'
 import {
   getDynamicPriceEntries,
@@ -672,6 +675,58 @@ function PriceSection(props: {
       )
     }
 
+    if (dynamicSummary.tierEntries.length > 1) {
+      return (
+        <section>
+          <SectionTitle>{t('Base Price')}</SectionTitle>
+          <div className='space-y-2'>
+            {dynamicSummary.tierEntries.map(({ tier, entries }) => (
+              <div key={tier.label} className='rounded-lg border p-3'>
+                <div className='mb-2 flex items-center gap-2'>
+                  <Badge variant='secondary'>
+                    {formatTierLabel(tier.label, t) || t('Default')}
+                  </Badge>
+                </div>
+                {tier.conditionExpression || tier.conditions.length > 0 ? (
+                  <code className='text-muted-foreground mb-3 block text-[10px] leading-snug break-words'>
+                    {formatTierTimeCondition(tier, t) ??
+                      tier.conditionExpression ??
+                      tier.conditions
+                        .map(
+                          (condition) =>
+                            `${condition.var} ${condition.op} ${condition.value}`
+                        )
+                        .join(' && ')}
+                  </code>
+                ) : null}
+                <div className='grid grid-cols-2 gap-2'>
+                  {entries.map((entry) => (
+                    <div key={entry.key} className='min-w-0'>
+                      <div className='text-muted-foreground truncate text-xs'>
+                        {formatBillingVarLabel(entry.variable, t)}
+                      </div>
+                      <div className='text-foreground mt-1 truncate font-mono text-sm font-semibold tabular-nums'>
+                        {entry.formatted}
+                        <span className='text-muted-foreground/40 ml-1 text-[10px] font-normal'>
+                          /{' '}
+                          {formatBillingPriceUnit(
+                            entry.billingUnit,
+                            entry.imageCount,
+                            t,
+                            props.tokenUnit
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
     return (
       <section>
         <SectionTitle>{t('Base Price')}</SectionTitle>
@@ -1003,7 +1058,26 @@ function GroupPricingSection(props: {
                       header: t('Tier'),
                       className: thClass,
                       cellClassName: 'text-muted-foreground py-2.5',
-                      cell: (tier) => tier.label || t('Default'),
+                      cell: (tier) => (
+                        <div className='min-w-40'>
+                          <div>
+                            {formatTierLabel(tier.label, t) || t('Default')}
+                          </div>
+                          {tier.conditionExpression ||
+                          tier.conditions.length > 0 ? (
+                            <code className='text-muted-foreground/70 mt-1 block text-[10px] leading-snug break-words'>
+                              {formatTierTimeCondition(tier, t) ??
+                                tier.conditionExpression ??
+                                tier.conditions
+                                  .map(
+                                    (condition) =>
+                                      `${condition.var} ${condition.op} ${condition.value}`
+                                  )
+                                  .join(' && ')}
+                            </code>
+                          ) : null}
+                        </div>
+                      ),
                     },
                     ...priceFields.map((fieldEntry) => ({
                       id: fieldEntry.field,

@@ -29,6 +29,7 @@ import {
   BILLING_PRICING_VARS,
   FIXED_PRICE_VAR,
   formatBillingPriceUnit,
+  formatTierLabel,
   formatBillingVarLabel,
   MATCH_CONTAINS,
   MATCH_EQ,
@@ -37,6 +38,7 @@ import {
   MATCH_LT,
   MATCH_RANGE,
   SOURCE_TIME,
+  formatTierTimeCondition,
   normalizeTierLabel,
   parseTiersFromExpr,
   splitBillingExprAndRequestRules,
@@ -44,7 +46,6 @@ import {
   type ParsedTier,
   type RequestCondition,
   type RequestRuleGroup,
-  type TierCondition,
 } from '../lib/billing-expr'
 
 type DynamicPricingBreakdownProps = {
@@ -105,10 +106,13 @@ function formatTokenHint(value: string | number): string {
 }
 
 function formatConditionSummary(
-  conditions: TierCondition[],
+  tier: ParsedTier,
   t: (key: string) => string
 ): string {
-  return conditions
+  const scheduleSummary = formatTierTimeCondition(tier, t)
+  if (scheduleSummary) return scheduleSummary
+  if (tier.conditionExpression) return tier.conditionExpression
+  return tier.conditions
     .map((c) => {
       const varLabel = t(VAR_LABELS[c.var] || c.var)
       const hint = formatTokenHint(c.value)
@@ -290,7 +294,7 @@ export function DynamicPricingBreakdown({
           </div>
           <div className='space-y-1.5 sm:hidden'>
             {tiers.map((tier) => {
-              const condSummary = formatConditionSummary(tier.conditions, t)
+              const condSummary = formatConditionSummary(tier, t)
               const isMatched =
                 matchedTierLabel != null &&
                 matchedTierLabel !== '' &&
@@ -308,7 +312,7 @@ export function DynamicPricingBreakdown({
                       variant='secondary'
                       className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                     >
-                      {tier.label || t('Default')}
+                      {formatTierLabel(tier.label, t) || t('Default')}
                     </Badge>
                     {isMatched && (
                       <Badge
@@ -383,7 +387,7 @@ export function DynamicPricingBreakdown({
                 ),
                 cellClassName: cn('align-top', compact ? 'py-2' : 'py-2.5'),
                 cell: (tier) => {
-                  const condSummary = formatConditionSummary(tier.conditions, t)
+                  const condSummary = formatConditionSummary(tier, t)
                   const isMatched =
                     normalizedMatchedTierLabel !== '' &&
                     normalizeTierLabel(tier.label) ===
@@ -395,7 +399,7 @@ export function DynamicPricingBreakdown({
                           variant='secondary'
                           className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                         >
-                          {tier.label || t('Default')}
+                          {formatTierLabel(tier.label, t) || t('Default')}
                         </Badge>
                         {isMatched && (
                           <Badge

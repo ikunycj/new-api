@@ -53,6 +53,7 @@ export type DynamicPriceEntry = {
 
 export type DynamicPricingSummary = {
   tiers: ParsedTier[]
+  tierEntries: Array<{ tier: ParsedTier; entries: DynamicPriceEntry[] }>
   tier: ParsedTier | null
   tierCount: number
   hasRequestRules: boolean
@@ -162,11 +163,16 @@ export function getDynamicPricingSummary(
 
   const tiers = getDynamicPricingTiers(model)
   const tier = tiers[0] || null
-  const entries = getDynamicPriceEntries(tier, options)
+  const tierEntries = tiers.map((pricingTier) => ({
+    tier: pricingTier,
+    entries: getDynamicPriceEntries(pricingTier, options),
+  }))
+  const entries = tierEntries[0]?.entries ?? []
   const rawExpression = model.billing_expr || ''
 
   return {
     tiers,
+    tierEntries,
     tier,
     tierCount: tiers.length,
     hasRequestRules: hasDynamicRequestRules(model),

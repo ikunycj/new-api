@@ -30,6 +30,8 @@ import {
   BILLING_EXTRA_VARS,
   formatBillingPriceUnit,
   formatBillingVarLabel,
+  formatTierLabel,
+  formatTierTimeCondition,
   parseTiersFromExpr,
 } from './billing-expr'
 import {
@@ -184,6 +186,72 @@ const imageExpression = 'tier("image", fixed(0.0035)) * image_count'
 const translate = (key: string) => `translated:${key}`
 
 describe('upstream billing expression protocol', () => {
+  test('parses time-based peak and off-peak tiers for model-square display', () => {
+    const expression =
+      'weekday("UTC") >= 1 && weekday("UTC") <= 5 && ((hour("UTC") >= 1 && hour("UTC") < 4) || (hour("UTC") >= 6 && hour("UTC") < 10)) ? tier("peak", p * 0.3 + cr * 0.006 + c * 1.2) : tier("off_peak", p * 0.15 + cr * 0.003 + c * 0.6)'
+    const tiers = parseTiersFromExpr(expression)
+
+    assert.deepEqual(
+      tiers.map((tier) => tier.label),
+      ['peak', 'off_peak']
+    )
+    assert.equal(tiers[0].inputPrice, 0.3)
+    assert.equal(tiers[0].cacheReadPrice, 0.006)
+    assert.equal(tiers[0].outputPrice, 1.2)
+    assert.match(tiers[0].conditionExpression || '', /^\(weekday\("UTC"\) >= 1/)
+    assert.equal(tiers[1].inputPrice, 0.15)
+    assert.equal(tiers[1].cacheReadPrice, 0.003)
+    assert.equal(tiers[1].outputPrice, 0.6)
+    assert.match(tiers[1].conditionExpression || '', /^\(!\(/)
+    assert.equal(
+      formatTierTimeCondition(tiers[0], (key) => key),
+      'Monday to Friday, 01:00–04:00, 06:00–10:00 (UTC)'
+    )
+    assert.equal(
+      formatTierTimeCondition(tiers[1], (key) => key),
+      'All other times (UTC)'
+    )
+    assert.equal(
+      formatTierLabel(tiers[0].label, (key) => key),
+      'Peak period'
+    )
+    assert.equal(
+      formatTierLabel(tiers[1].label, (key) => key),
+      'Off-peak period'
+    )
+
+    const summary = getDynamicPricingSummary(
+      { ...dynamicModel, billing_expr: expression },
+      { tokenUnit: 'M' }
+    )
+    assert.equal(summary?.isSpecialExpression, false)
+    assert.equal(summary?.tierCount, 2)
+    assert.deepEqual(
+      summary?.tierEntries.map(({ tier, entries }) => ({
+        label: tier.label,
+        prices: entries.map((entry) => [entry.key, entry.value]),
+      })),
+      [
+        {
+          label: 'peak',
+          prices: [
+            ['p', 0.3],
+            ['c', 1.2],
+            ['cr', 0.006],
+          ],
+        },
+        {
+          label: 'off_peak',
+          prices: [
+            ['p', 0.15],
+            ['c', 0.6],
+            ['cr', 0.003],
+          ],
+        },
+      ]
+    )
+  })
+
   test('prices cc12h separately and includes it in full input length', () => {
     const expression =
       'len <= 100 ? tier("short", p * 2 + c * 4 + cc * 3 + cc1h * 6 + cc12h * 5) : tier("long", p * 4 + c * 8 + cc * 6 + cc1h * 12 + cc12h * 10)'

@@ -53,10 +53,11 @@ func TestFetchUpstreamRatiosRejectsUnavailableOrInvalidPrices(t *testing.T) {
 
 func TestUpstreamBillingAcceptsCurrentPresetContracts(t *testing.T) {
 	data := map[string]any{
-		"billing_mode": map[string]string{"gpt-5.6-terra": "tiered_expr", "image-01": "tiered_expr"},
+		"billing_mode": map[string]string{"gpt-5.6-terra": "tiered_expr", "image-01": "tiered_expr", "deepseek-flash": "tiered_expr"},
 		"billing_expr": map[string]string{
-			"gpt-5.6-terra": `len <= 272000 ? tier("0_272k", p * 2 + cr * 0.2 + cc * 2.5 + cc12h * 5 + c * 12) : tier("272k_plus", p * 4 + cr * 0.4 + cc * 5 + cc12h * 10 + c * 18)`,
-			"image-01":      `tier("image", fixed(0.0035)) * image_count`,
+			"gpt-5.6-terra":  `len <= 272000 ? tier("0_272k", p * 2 + cr * 0.2 + cc * 2.5 + cc12h * 5 + c * 12) : tier("272k_plus", p * 4 + cr * 0.4 + cc * 5 + cc12h * 10 + c * 18)`,
+			"image-01":       `tier("image", fixed(0.0035)) * image_count`,
+			"deepseek-flash": `weekday("UTC") >= 1 && weekday("UTC") <= 5 && ((hour("UTC") >= 1 && hour("UTC") < 4) || (hour("UTC") >= 6 && hour("UTC") < 10)) ? tier("peak", p * 0.3 + cr * 0.006 + c * 1.2) : tier("off_peak", p * 0.15 + cr * 0.003 + c * 0.6)`,
 		},
 	}
 	require.NoError(t, validateUpstreamBilling(data))

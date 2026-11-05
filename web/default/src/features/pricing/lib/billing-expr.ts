@@ -273,6 +273,14 @@ export type TierCondition = {
   value: number
 }
 
+export type TierTimeSchedule = {
+  timezone: string
+  weekdayStart: number
+  weekdayEnd: number
+  windows: Array<{ start: number; end: number }>
+  inverted: boolean
+}
+
 type ParsedTierPrice = {
   billingUnit: BillingUnit
   fixedPrice?: number
@@ -282,6 +290,8 @@ type ParsedTierPrice = {
 export type ParsedTier = ParsedTierPrice & {
   label: string
   conditions: TierCondition[]
+  conditionExpression?: string
+  timeSchedule?: TierTimeSchedule
   imageCount?: boolean
 }
 
@@ -318,7 +328,7 @@ function parseTierBody(bodyStr: string): ParsedTierPrice | null {
     if (match[1] in coeffs || !Number.isFinite(price) || price < 0) return null
     coeffs[match[1]] = price
   }
-  const skeleton = bodyStr.replace(re, 'T')
+  const skeleton = bodyStr.replaceAll(re, 'T')
   if (!/^T(?:\s*\+\s*T)*$/.test(skeleton.trim())) return null
   const tier: ParsedTierPrice = {
     billingUnit: 'token',
@@ -327,6 +337,294 @@ function parseTierBody(bodyStr: string): ParsedTierPrice | null {
     tier[field] = coeffs[varName] ?? 0
   }
   return tier
+}
+
+function splitTopLevelConditional(
+  expression: string
+): { condition: string; whenTrue: string; whenFalse: string } | null {
+  let depth = 0
+  let quote = ''
+  let escaped = false
+  let question = -1
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (character === '?' && depth === 0) {
+      question = index
+      break
+    }
+  }
+
+  if (question < 0) return null
+
+  depth = 0
+  quote = ''
+  escaped = false
+  let nestedQuestions = 0
+  for (let index = question + 1; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (depth === 0 && character === '?') nestedQuestions += 1
+    else if (depth === 0 && character === ':') {
+      if (nestedQuestions === 0) {
+        const condition = expression.slice(0, question).trim()
+        const whenTrue = expression.slice(question + 1, index).trim()
+        const whenFalse = expression.slice(index + 1).trim()
+        if (!condition || !whenTrue || !whenFalse) return null
+        return { condition, whenTrue, whenFalse }
+      }
+      nestedQuestions -= 1
+    }
+  }
+
+  return null
+}
+
+function splitTopLevelOr(expression: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let depth = 0
+  let quote = ''
+  let escaped = false
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") quote = character
+    else if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (depth === 0 && expression.slice(index, index + 4) === ' || ') {
+      parts.push(expression.slice(start, index).trim())
+      start = index + 4
+      index += 3
+    }
+  }
+
+  parts.push(expression.slice(start).trim())
+  return parts.filter(Boolean)
+}
+
+function combineTierConditions(parent: string[], next: string): string[] {
+  return [...parent, `(${next})`]
+}
+
+function parseTierTimeSchedule(expression: string): TierTimeSchedule | null {
+  let body = unwrapOuterParens(expression)
+  let inverted = false
+  if (body.startsWith('!(') && hasFullOuterParens(body.slice(1))) {
+    inverted = true
+    body = unwrapOuterParens(body.slice(1))
+  }
+
+  const parts = splitTopLevelAnd(body)
+  if (parts.length !== 3) return null
+
+  const weekdayStartMatch = unwrapOuterParens(parts[0]).match(
+    /^weekday\("([^"\\]+)"\)\s*>=\s*([\d.eE+-]+)$/
+  )
+  const weekdayEndMatch = unwrapOuterParens(parts[1]).match(
+    /^weekday\("([^"\\]+)"\)\s*<=\s*([\d.eE+-]+)$/
+  )
+  if (
+    !weekdayStartMatch ||
+    !weekdayEndMatch ||
+    weekdayStartMatch[1] !== weekdayEndMatch[1]
+  ) {
+    return null
+  }
+
+  const weekdayStart = Number(weekdayStartMatch[2])
+  const weekdayEnd = Number(weekdayEndMatch[2])
+  if (
+    !Number.isInteger(weekdayStart) ||
+    !Number.isInteger(weekdayEnd) ||
+    weekdayStart < 0 ||
+    weekdayEnd > 6 ||
+    weekdayStart > weekdayEnd
+  ) {
+    return null
+  }
+
+  const windowParts = splitTopLevelOr(unwrapOuterParens(parts[2]))
+  if (windowParts.length === 0) return null
+
+  const windows: TierTimeSchedule['windows'] = []
+  for (const windowPart of windowParts) {
+    const bounds = splitTopLevelAnd(unwrapOuterParens(windowPart))
+    if (bounds.length !== 2) return null
+
+    const startMatch = unwrapOuterParens(bounds[0]).match(
+      /^hour\("([^"\\]+)"\)\s*>=\s*([\d.eE+-]+)$/
+    )
+    const endMatch = unwrapOuterParens(bounds[1]).match(
+      /^hour\("([^"\\]+)"\)\s*<\s*([\d.eE+-]+)$/
+    )
+    if (
+      !startMatch ||
+      !endMatch ||
+      startMatch[1] !== weekdayStartMatch[1] ||
+      endMatch[1] !== weekdayStartMatch[1]
+    ) {
+      return null
+    }
+
+    const start = Number(startMatch[2])
+    const end = Number(endMatch[2])
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end > 24 ||
+      start >= end
+    ) {
+      return null
+    }
+    windows.push({ start, end })
+  }
+
+  return {
+    timezone: weekdayStartMatch[1],
+    weekdayStart,
+    weekdayEnd,
+    windows,
+    inverted,
+  }
+}
+
+export function formatTierTimeCondition(
+  tier: ParsedTier,
+  t: (key: string) => string
+): string | null {
+  const schedule = tier.timeSchedule
+  if (!schedule) return null
+
+  if (schedule.inverted) {
+    return `${t('All other times')} (${schedule.timezone})`
+  }
+  if (schedule.weekdayStart !== 1 || schedule.weekdayEnd !== 5) return null
+
+  const windows = schedule.windows
+    .map(
+      ({ start, end }) =>
+        `${String(start).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00`
+    )
+    .join(', ')
+  return `${t('Monday to Friday')}, ${windows} (${schedule.timezone})`
+}
+
+export function formatTierLabel(
+  label: string,
+  t: (key: string) => string
+): string {
+  if (label === 'peak') return t('Peak period')
+  if (label === 'off_peak') return t('Off-peak period')
+  return label
+}
+
+function parseSimpleTierConditions(expression: string): TierCondition[] | null {
+  const parts = splitTopLevelAnd(expression)
+  const conditions: TierCondition[] = []
+  for (const part of parts) {
+    const match = unwrapOuterParens(part).match(
+      /^(p|c|len)\s*(<=|<|>=|>)\s*([\d.eE+]+)$/
+    )
+    if (!match || !Number.isFinite(Number(match[3]))) return null
+    conditions.push({
+      var: match[1] as TierCondition['var'],
+      op: match[2] as TierCondition['op'],
+      value: Number(match[3]),
+    })
+  }
+  return conditions.length > 0 ? conditions : null
+}
+
+function parseTierLeaf(
+  expression: string,
+  globalImageCount: boolean
+): ParsedTier | null {
+  let body = unwrapOuterParens(expression)
+  let imageCount = globalImageCount
+  const factors = splitTopLevelMultiply(body)
+  if (factors.includes('image_count')) {
+    if (factors.at(-1) !== 'image_count') return null
+    factors.pop()
+    body = factors.join(' * ')
+    imageCount = true
+  }
+
+  const match = body.match(/^tier\("((?:[^"\\]|\\.)*)",\s*([\s\S]+)\)$/)
+  if (!match) return null
+
+  let label: string
+  try {
+    label = JSON.parse(`"${match[1]}"`) as string
+  } catch {
+    return null
+  }
+  const prices = parseTierBody(match[2].trim())
+  if (!prices) return null
+  return { ...prices, label, conditions: [], imageCount }
+}
+
+function parseConditionalTierExpression(
+  expression: string,
+  globalImageCount: boolean,
+  parentConditions: string[] = []
+): ParsedTier[] | null {
+  const body = unwrapOuterParens(expression)
+  const conditional = splitTopLevelConditional(body)
+  if (conditional) {
+    const whenTrue = parseConditionalTierExpression(
+      conditional.whenTrue,
+      globalImageCount,
+      combineTierConditions(parentConditions, conditional.condition)
+    )
+    const whenFalse = parseConditionalTierExpression(
+      conditional.whenFalse,
+      globalImageCount,
+      combineTierConditions(parentConditions, `!(${conditional.condition})`)
+    )
+    return whenTrue && whenFalse ? [...whenTrue, ...whenFalse] : null
+  }
+
+  const tier = parseTierLeaf(body, globalImageCount)
+  if (!tier) return null
+  if (parentConditions.length > 0) {
+    const conditionExpression = parentConditions.join(' && ')
+    const conditions = parseSimpleTierConditions(conditionExpression)
+    if (conditions) tier.conditions = conditions
+    else tier.conditionExpression = conditionExpression
+    tier.timeSchedule = parseTierTimeSchedule(conditionExpression) ?? undefined
+  }
+  return [tier]
 }
 
 export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
@@ -373,9 +671,12 @@ export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
     }
     // Only a chain of supported conditional leaves is structured pricing.
     // Unknown arithmetic/functions must keep the raw-expression fallback.
-    const skeleton = body.replace(tierRe, (_full, cond) => (cond ? '?T' : 'T'))
+    const skeleton = body.replaceAll(tierRe, (_full, cond) =>
+      cond ? '?T' : 'T'
+    )
     const supportedShape = /^(?:\?T\s*:\s*)*(?:T|p\s*\*\s*0\s*\+\s*c\s*\*\s*0)$/
-    return supportedShape.test(skeleton.trim()) ? tiers : []
+    if (tiers.length > 0 && supportedShape.test(skeleton.trim())) return tiers
+    return parseConditionalTierExpression(body, globalImageCount) ?? []
   } catch {
     return []
   }
