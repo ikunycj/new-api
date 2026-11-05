@@ -24,13 +24,6 @@ import { RichContent } from '@/components/rich-content'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty'
-import {
   Popover,
   PopoverContent,
   PopoverHeader,
@@ -60,7 +53,8 @@ interface NotificationPopoverProps {
   onTabChange: (tab: 'notice' | 'announcements') => void
   notice: string
   announcements: AnnouncementItem[]
-  loading: boolean
+  noticeLoading: boolean
+  announcementsLoading: boolean
   className?: string
 }
 
@@ -151,34 +145,57 @@ function getAnnouncementRenderKey(announcement: AnnouncementItem): string {
 }
 
 /**
- * Empty state component
+ * Render an announcement card, or empty/loading state, in the notification popover.
  */
-function EmptyState({
-  icon,
-  title,
-  description,
+function AnnouncementCardContent({
+  announcement,
+  loading,
+  t,
+  emptyTitle,
 }: {
-  icon: React.ReactNode
-  title: string
-  description?: string
+  announcement?: AnnouncementItem
+  loading: boolean
+  t: TFunction
+  emptyTitle: string
 }) {
+  if (loading) {
+    return <p className='text-muted-foreground text-sm'>{t('Loading...')}</p>
+  }
+
+  if (!announcement) {
+    return <p className='text-muted-foreground text-sm'>{t(emptyTitle)}</p>
+  }
+
+  const publishDate = announcement.publishDate
+    ? new Date(announcement.publishDate)
+    : null
+  const relativeTime = publishDate ? getRelativeTime(publishDate, t) : ''
+  const absoluteTime = publishDate ? formatDateTimeObject(publishDate) : ''
+
   return (
-    <Empty className='min-h-48 border-0 p-4'>
-      <EmptyHeader>
-        <EmptyMedia variant='icon'>{icon}</EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description ? (
-          <EmptyDescription>{description}</EmptyDescription>
+    <div className='flex items-start gap-3'>
+      <AnnouncementDot type={announcement.type} />
+      <div className='flex min-w-0 flex-1 flex-col gap-2'>
+        <div className='text-sm'>
+          <RichContent breaks content={announcement.content || ''} />
+        </div>
+        {announcement.extra ? (
+          <div className='text-muted-foreground text-xs'>
+            <RichContent breaks content={announcement.extra} />
+          </div>
         ) : null}
-      </EmptyHeader>
-    </Empty>
+        {absoluteTime ? (
+          <div className='text-muted-foreground text-xs'>
+            {relativeTime ? `${relativeTime} • ` : null}
+            {absoluteTime}
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
-/**
- * Notice tab content
- */
-function NoticeContent({
+function SystemNoticeContent({
   notice,
   loading,
   t,
@@ -188,31 +205,20 @@ function NoticeContent({
   t: TFunction
 }) {
   if (loading) {
-    return (
-      <EmptyState
-        icon={<Bell />}
-        title={t('Loading...')}
-        description={t('Latest platform updates and notices')}
-      />
-    )
+    return <p className='text-muted-foreground text-sm'>{t('Loading...')}</p>
   }
 
   if (!notice) {
     return (
-      <EmptyState icon={<Bell />} title={t('No announcements at this time')} />
+      <p className='text-muted-foreground text-sm'>
+        {t('No announcements at this time')}
+      </p>
     )
   }
 
-  return (
-    <ScrollArea className='h-[min(52vh,28rem)] pr-3'>
-      <RichContent breaks content={notice} />
-    </ScrollArea>
-  )
+  return <RichContent breaks content={notice} />
 }
 
-/**
- * Announcements tab content
- */
 function AnnouncementsContent({
   announcements,
   loading,
@@ -224,72 +230,41 @@ function AnnouncementsContent({
 }) {
   if (loading) {
     return (
-      <EmptyState
-        icon={<Megaphone />}
-        title={t('Loading...')}
-        description={t('Latest platform updates and notices')}
-      />
+      <p className='text-muted-foreground py-8 text-center text-sm'>
+        {t('Loading...')}
+      </p>
     )
   }
 
   if (announcements.length === 0) {
     return (
-      <EmptyState icon={<Megaphone />} title={t('No system announcements')} />
+      <p className='text-muted-foreground py-8 text-center text-sm'>
+        {t('No system announcements')}
+      </p>
     )
   }
 
   return (
     <ScrollArea className='h-[min(52vh,28rem)] pr-3'>
       <div className='flex flex-col'>
-        {announcements.map((item, idx) => {
-          const announcementKey = getAnnouncementRenderKey(item)
-          const publishDate = item.publishDate
-            ? new Date(item.publishDate)
-            : null
-          const relativeTime = publishDate
-            ? getRelativeTime(publishDate, t)
-            : ''
-          const absoluteTime = publishDate
-            ? formatDateTimeObject(publishDate)
-            : ''
-
-          return (
-            <div key={announcementKey}>
-              <div className='py-3'>
-                <div className='flex items-start gap-3'>
-                  <AnnouncementDot type={item.type} />
-                  <div className='flex min-w-0 flex-1 flex-col gap-2'>
-                    <div className='text-sm'>
-                      <RichContent breaks content={item.content || ''} />
-                    </div>
-
-                    {item.extra ? (
-                      <div className='text-muted-foreground text-xs'>
-                        <RichContent breaks content={item.extra} />
-                      </div>
-                    ) : null}
-
-                    {absoluteTime ? (
-                      <div className='text-muted-foreground text-xs'>
-                        {relativeTime ? `${relativeTime} • ` : null}
-                        {absoluteTime}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              {idx < announcements.length - 1 ? <Separator /> : null}
+        {announcements.map((announcement, index) => (
+          <div key={getAnnouncementRenderKey(announcement)}>
+            <div className='py-3'>
+              <AnnouncementCardContent
+                announcement={announcement}
+                loading={false}
+                t={t}
+                emptyTitle='No system announcements'
+              />
             </div>
-          )
-        })}
+            {index < announcements.length - 1 ? <Separator /> : null}
+          </div>
+        ))}
       </div>
     </ScrollArea>
   )
 }
 
-/**
- * Notification popover with Notice and Announcements tabs
- */
 export function NotificationPopover({
   open,
   onOpenChange,
@@ -298,7 +273,8 @@ export function NotificationPopover({
   onTabChange,
   notice,
   announcements,
-  loading,
+  noticeLoading,
+  announcementsLoading,
   className,
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
@@ -308,13 +284,16 @@ export function NotificationPopover({
         render={
           <Button
             variant='ghost'
-            size='icon'
-            className={cn('relative size-9', className)}
-            aria-label={t('Notifications')}
+            size='sm'
+            className={cn('relative h-9 px-2', className)}
+            aria-label={t('Announcements')}
           />
         }
       >
-        <Bell className='size-[1.2rem]' />
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
+          <Bell className='size-4' />
+          {t('Announcements')}
+        </span>
         {unreadCount > 0 ? (
           <Badge
             variant='destructive'
@@ -331,12 +310,11 @@ export function NotificationPopover({
         className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
       >
         <PopoverHeader className='gap-1 px-1'>
-          <PopoverTitle>{t('System Announcements')}</PopoverTitle>
+          <PopoverTitle>{t('Announcements')}</PopoverTitle>
           <p className='text-muted-foreground text-xs'>
             {t('Latest platform updates and notices')}
           </p>
         </PopoverHeader>
-
         <Tabs
           value={activeTab}
           onValueChange={onTabChange as (value: string) => void}
@@ -344,22 +322,46 @@ export function NotificationPopover({
           <TabsList className='grid w-full grid-cols-2'>
             <TabsTrigger value='notice' className='gap-1.5'>
               <Bell className='size-3.5' />
-              {t('Notice')}
+              {t('Announcements')}
             </TabsTrigger>
             <TabsTrigger value='announcements' className='gap-1.5'>
               <Megaphone className='size-3.5' />
               {t('Timeline')}
             </TabsTrigger>
           </TabsList>
-
           <TabsContent value='notice' className='mt-2'>
-            <NoticeContent notice={notice} loading={loading} t={t} />
+            <ScrollArea className='max-h-[min(64vh,36rem)] pr-3'>
+              <div className='flex flex-col gap-3'>
+                <section className='rounded-md border p-3'>
+                  <div className='mb-2 flex items-center gap-2 text-sm font-medium'>
+                    <Megaphone className='size-4' />
+                    {t('Latest Announcement')}
+                  </div>
+                  <AnnouncementCardContent
+                    announcement={announcements[0]}
+                    loading={announcementsLoading}
+                    t={t}
+                    emptyTitle='No system announcements'
+                  />
+                </section>
+                <section className='rounded-md border p-3'>
+                  <div className='mb-2 flex items-center gap-2 text-sm font-medium'>
+                    <Bell className='size-4' />
+                    {t('System Notice')}
+                  </div>
+                  <SystemNoticeContent
+                    notice={notice}
+                    loading={noticeLoading}
+                    t={t}
+                  />
+                </section>
+              </div>
+            </ScrollArea>
           </TabsContent>
-
           <TabsContent value='announcements' className='mt-2'>
             <AnnouncementsContent
               announcements={announcements}
-              loading={loading}
+              loading={announcementsLoading}
               t={t}
             />
           </TabsContent>

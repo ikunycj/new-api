@@ -87,10 +87,7 @@ export function useNotifications() {
   const announcements = useMemo(
     () =>
       announcementsEnabled
-        ? ((status?.announcements || []) as Record<string, unknown>[]).slice(
-            0,
-            20
-          )
+        ? ((status?.announcements || []) as Record<string, unknown>[])
         : [],
     [announcementsEnabled, status?.announcements]
   )
@@ -109,10 +106,29 @@ export function useNotifications() {
     : ''
 
   useEffect(() => {
-    if (popoverOpen && noticeContent) {
+    if (!popoverOpen) return
+
+    if (noticeContent) {
       markNoticeRead(noticeContent)
     }
-  }, [markNoticeRead, noticeContent, popoverOpen])
+
+    const visibleAnnouncements =
+      activeTab === 'announcements' ? announcements : announcements.slice(0, 1)
+    if (visibleAnnouncements.length > 0) {
+      markAnnouncementsRead(
+        visibleAnnouncements.map((announcement) =>
+          getAnnouncementKey(announcement)
+        )
+      )
+    }
+  }, [
+    activeTab,
+    announcements,
+    markAnnouncementsRead,
+    markNoticeRead,
+    noticeContent,
+    popoverOpen,
+  ])
 
   // Calculate unread counts
   const unreadCounts = useMemo(() => {
@@ -120,10 +136,7 @@ export function useNotifications() {
       noticeContent && noticeContent !== lastReadNotice ? 1 : 0
 
     const announcementsUnread = announcements.filter(
-      (item: Record<string, unknown>) => {
-        const key = getAnnouncementKey(item)
-        return !isAnnouncementRead(key)
-      }
+      (announcement) => !isAnnouncementRead(getAnnouncementKey(announcement))
     ).length
 
     return {
@@ -133,55 +146,28 @@ export function useNotifications() {
     }
   }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
 
-  const markAnnouncementsAsRead = () => {
-    if (announcements.length > 0) {
-      const allKeys = announcements.map((item: Record<string, unknown>) =>
-        getAnnouncementKey(item)
-      )
-      markAnnouncementsRead(allKeys)
-    }
-  }
-
-  // Handle popover open
-  const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
-    const nextTab = tab || activeTab
+  const openPopover = () => {
     setNoticeEnabled(true)
-
-    // Mark currently visible content as read when opening the notification center
-    if (noticeContent) {
-      markNoticeRead(noticeContent)
-    }
-    if (nextTab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
-
-    setActiveTab(nextTab)
     setPopoverOpen(true)
   }
 
   const handlePopoverOpenChange = (open: boolean) => {
     if (open) {
-      handleOpenPopover(activeTab)
-      return
+      setNoticeEnabled(true)
     }
-
-    setPopoverOpen(false)
+    setPopoverOpen(open)
   }
 
-  // Handle tab change - mark announcements as read when switching to that tab
   const handleTabChange = (tab: 'notice' | 'announcements') => {
     setActiveTab(tab)
-
-    if (tab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
   }
 
   return {
     // Data
     notice: noticeContent,
     announcements,
-    loading: noticeLoading || statusLoading,
+    noticeLoading,
+    announcementsLoading: statusLoading,
 
     // Unread counts
     unreadCount: unreadCounts.total,
@@ -195,7 +181,7 @@ export function useNotifications() {
     setActiveTab: handleTabChange,
 
     // Actions
-    openPopover: handleOpenPopover,
+    openPopover,
     closePopover: () => setPopoverOpen(false),
     refetchNotice,
   }

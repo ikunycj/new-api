@@ -135,7 +135,8 @@ export function AppHeader({
                 onTabChange={notifications.setActiveTab}
                 notice={notifications.notice}
                 announcements={notifications.announcements}
-                loading={notifications.loading}
+                noticeLoading={notifications.noticeLoading}
+                announcementsLoading={notifications.announcementsLoading}
               />
             )}
             <LanguageSwitcher />

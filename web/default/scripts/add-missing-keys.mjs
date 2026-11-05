@@ -3700,6 +3700,22 @@ for (const [locale, translations] of Object.entries(
   Object.assign(newKeys[locale], translations)
 }
 
+const announcementCenterTranslations = {
+  en: { 'Latest Announcement': 'Latest Announcement' },
+  zh: { 'Latest Announcement': '最新公告' },
+  'zh-TW': { 'Latest Announcement': '最新公告' },
+  fr: { 'Latest Announcement': 'Dernière annonce' },
+  ja: { 'Latest Announcement': '最新のお知らせ' },
+  ru: { 'Latest Announcement': 'Последнее объявление' },
+  vi: { 'Latest Announcement': 'Thông báo mới nhất' },
+}
+
+for (const [locale, translations] of Object.entries(
+  announcementCenterTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const retiredKeys = new Set([
   'No About Content Set',
   'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.',

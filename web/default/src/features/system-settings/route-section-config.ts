@@ -40,7 +40,6 @@ export const BILLING_DEFAULT_SECTION = 'quota'
 
 export const CONTENT_SECTION_IDS: readonly string[] = [
   'dashboard',
-  'announcements',
   'api-info',
   'faq',
   'uptime-kuma',
