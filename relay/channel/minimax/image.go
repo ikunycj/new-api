@@ -198,6 +198,7 @@ func miniMaxImageHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
 	}
+	info.SetBillingImageCount(len(openAIResponse.Data))
 	jsonResponse, err := common.Marshal(openAIResponse)
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)

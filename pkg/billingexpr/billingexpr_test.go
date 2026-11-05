@@ -4,7 +4,11 @@ import (
 	"math"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ---------------------------------------------------------------------------
@@ -1008,4 +1012,320 @@ func BenchmarkExprRunCached(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		billingexpr.RunExpr(benchComplexExpr, params)
 	}
+}
+
+func TestGPT56Terra12HourCachePricing(t *testing.T) {
+	const expression = `len <= 272000 ? tier("0_272k", p * 2 + cr * 0.2 + cc * 2.5 + cc12h * 5 + c * 12) : tier("272k_plus", p * 4 + cr * 0.4 + cc * 5 + cc12h * 10 + c * 18)`
+	for _, tc := range []struct {
+		name    string
+		prompt  float64
+		length  float64
+		cost    float64
+		tier    string
+		quota   int
+		crossed bool
+	}{
+		{"below boundary", 199999, 271999, 473998, "0_272k", 947996, false},
+		{"at boundary", 200000, 272000, 474000, "0_272k", 948000, false},
+		{"above boundary", 200001, 272001, 942004, "272k_plus", 1884008, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := billingexpr.TokenParams{P: tc.prompt, C: 1000, Len: tc.length, CR: 60000, CC: 4000, CC12h: 8000}
+			cost, trace, err := billingexpr.RunExpr(expression, params)
+			require.NoError(t, err)
+			assert.Equal(t, tc.cost, cost)
+			assert.Equal(t, tc.cost, trace.Cost)
+			assert.Equal(t, tc.tier, trace.MatchedTier)
+			assert.Equal(t, billingexpr.BillingUnitToken, trace.BillingUnit)
+			assert.Nil(t, trace.FixedPrice)
+			assert.True(t, billingexpr.UsedVars(expression)["cc12h"])
+
+			snapshot := &billingexpr.BillingSnapshot{
+				ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+				QuotaPerUnit: 500000, BillingUSDToCNYRate: 8, GroupRatio: 0.5, EstimatedTier: "0_272k",
+			}
+			result, err := billingexpr.ComputeTieredQuota(snapshot, params)
+			require.NoError(t, err)
+			assert.Equal(t, tc.cost*4, result.ActualQuotaBeforeGroup)
+			assert.Equal(t, tc.quota, result.ActualQuotaAfterGroup)
+			assert.Equal(t, tc.crossed, result.CrossedTier)
+			assert.Nil(t, result.Clamp)
+		})
+	}
+}
+
+func TestFixedImagePriceQuantityAndCNYSettlement(t *testing.T) {
+	const expression = `tier("image", fixed(0.0035)) * image_count`
+	for _, tc := range []struct {
+		name   string
+		count  *int
+		images int
+		cost   float64
+		before float64
+		quota  int
+	}{
+		{"default one", nil, 1, 3500, 14000, 7000},
+		{"explicit one", common.GetPointer(1), 1, 3500, 14000, 7000},
+		{"three images", common.GetPointer(3), 3, 10500, 42000, 21000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := billingexpr.RequestInput{ImageCount: tc.count}
+			cost, trace, err := billingexpr.RunExprWithRequest(expression, billingexpr.TokenParams{P: 99999}, request)
+			require.NoError(t, err)
+			assert.Equal(t, tc.cost, cost)
+			assert.Equal(t, cost, trace.Cost, "trace includes the image multiplier outside tier")
+			assert.Equal(t, billingexpr.BillingUnitRequest, trace.BillingUnit)
+			require.NotNil(t, trace.FixedPrice)
+			assert.Equal(t, 0.0035, *trace.FixedPrice)
+			require.NotNil(t, trace.ImageCount)
+			assert.Equal(t, tc.images, *trace.ImageCount)
+
+			snapshot := &billingexpr.BillingSnapshot{
+				ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+				QuotaPerUnit: 500000, BillingUSDToCNYRate: 8, GroupRatio: 0.5, EstimatedTier: "image",
+				EstimatedImageCount: common.GetPointer(1), EstimatedBillingUnit: billingexpr.BillingUnitRequest,
+				EstimatedFixedPrice: common.GetPointer(0.0035),
+			}
+			result, err := billingexpr.ComputeTieredQuotaWithRequest(snapshot, billingexpr.TokenParams{}, request)
+			require.NoError(t, err)
+			assert.Equal(t, tc.before, result.ActualQuotaBeforeGroup)
+			assert.Equal(t, tc.quota, result.ActualQuotaAfterGroup)
+			assert.Equal(t, trace.BillingUnit, result.BillingUnit)
+			assert.Equal(t, trace.FixedPrice, result.FixedPrice)
+			assert.Equal(t, trace.ImageCount, result.ImageCount)
+			assert.Equal(t, "image", result.MatchedTier)
+			assert.False(t, result.CrossedTier)
+			assert.Nil(t, result.Clamp)
+			assert.Equal(t, 1, *snapshot.EstimatedImageCount, "actual count must not overwrite the frozen estimate")
+		})
+	}
+}
+
+func TestFixedAndTokenBranchBillingMetadata(t *testing.T) {
+	const expression = `(len <= 32000 ? tier("request", fixed(0.0035)) : tier("tokens", p * 2 + c * 8)) * image_count * (param("fast") == true ? 2 : 1)`
+	for _, tc := range []struct {
+		name   string
+		params billingexpr.TokenParams
+		cost   float64
+		tier   string
+		unit   billingexpr.BillingUnit
+		fixed  *float64
+	}{
+		{"zero usage still charges", billingexpr.TokenParams{}, 21000, "request", billingexpr.BillingUnitRequest, common.GetPointer(0.0035)},
+		{"fixed ignores tokens", billingexpr.TokenParams{P: 32000, C: 9000, Len: 32000}, 21000, "request", billingexpr.BillingUnitRequest, common.GetPointer(0.0035)},
+		{"token branch uses tokens", billingexpr.TokenParams{P: 32001, C: 100, Len: 32001}, 388812, "tokens", billingexpr.BillingUnitToken, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := billingexpr.RequestInput{Body: []byte(`{"fast":true}`), ImageCount: common.GetPointer(3)}
+			cost, trace, err := billingexpr.RunExprWithRequest(expression, tc.params, request)
+			require.NoError(t, err)
+			assert.Equal(t, tc.cost, cost)
+			assert.Equal(t, cost, trace.Cost, "trace includes all request multipliers")
+			assert.Equal(t, tc.tier, trace.MatchedTier)
+			assert.Equal(t, tc.unit, trace.BillingUnit)
+			assert.Equal(t, tc.fixed, trace.FixedPrice)
+
+			snapshot := &billingexpr.BillingSnapshot{
+				ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+				QuotaPerUnit: 1000000, GroupRatio: 1, EstimatedTier: "request",
+			}
+			result, err := billingexpr.ComputeTieredQuotaWithRequest(snapshot, tc.params, request)
+			require.NoError(t, err)
+			assert.Equal(t, tc.unit, result.BillingUnit)
+			assert.Equal(t, tc.fixed, result.FixedPrice)
+			assert.Equal(t, tc.cost, result.ActualQuotaBeforeGroup)
+			assert.Equal(t, tc.tier != "request", result.CrossedTier)
+		})
+	}
+}
+
+func TestFixedPriceAllowsRequestMultipliers(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		expression string
+		cost       float64
+	}{
+		{"header and body", `(param("fast") == true ? 2 : 1) * (tier("request", fixed(0.0035)) * (has(header("x-mode"), "fast") ? 2.5 : 1))`, 17500},
+		{"unmatched rule", `tier("request", fixed(0.0035)) * (param("missing") == true ? 2 : 1)`, 3500},
+		{"zero multiplier", `tier("request", fixed(0.0035)) * (param("fast") == true ? 0 : 1)`, 0},
+		{"time conditions", `tier("request", fixed(0.0035)) * (hour("UTC") >= 0 ? 2 : 1) * (minute("UTC") >= 0 ? 2 : 1) * (weekday("UTC") >= 0 ? 2 : 1) * (month("UTC") >= 1 ? 2 : 1) * (day("UTC") >= 1 ? 2 : 1)`, 112000},
+		{"quantity on left", `image_count * tier("request", fixed(0.0035))`, 10500},
+		{"nested pricing branches", `param("fast") == true ? (len <= 1 ? tier("short", fixed(0.0035)) : tier("long", fixed(0.007))) : tier("tokens", p)`, 3500},
+		{"integer literal", `tier("request", fixed(1))`, 1000000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cost, trace, err := billingexpr.RunExprWithRequest(tc.expression, billingexpr.TokenParams{}, billingexpr.RequestInput{
+				Body: []byte(`{"fast":true}`), Headers: map[string]string{"X-Mode": "fast"}, ImageCount: common.GetPointer(3),
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.cost, cost)
+			assert.Equal(t, cost, trace.Cost)
+			assert.Equal(t, billingexpr.BillingUnitRequest, trace.BillingUnit)
+		})
+	}
+}
+
+func TestFixedPriceRejectsInvalidOriginalAST(t *testing.T) {
+	for _, expression := range []string{
+		`true ? tier("ok", p) : tier("bad", fixed(-0.01))`,
+		`false ? tier("bad", fixed(p)) : tier("ok", p)`,
+		`tier("bad", fixed(0.01 + 0.02))`,
+		`tier("bad", fixed(param("price")))`,
+		`tier("bad", fixed(1e308))`,
+		`tier("bad", fixed(1e309))`,
+		`tier("bad", fixed(0.01) + p * 2)`,
+		`tier("bad", p * fixed(0.01))`,
+		`tier("a", fixed(0.01)) + tier("b", p * 2)`,
+		`tier("a", fixed(0.01)) * tier("b", fixed(0.02))`,
+		`tier("outer", tier("inner", fixed(0.01)))`,
+		`fixed(0.01)`,
+		`tier("bad", fixed(0.01)) * p`,
+		`tier("bad", fixed(0.01)) * 2`,
+		`tier("bad", fixed(0.01)) * (param("fast") == true ? -2 : 1)`,
+		`tier("bad", fixed(0.01)) * (param("fast") == true ? 2 : 0)`,
+		`tier("bad", fixed(0.01)) * (param("fast") == true ? p : 1)`,
+		`tier("bad", fixed(0.01)) * (len > 1 ? 2 : 1)`,
+		`tier("bad", fixed(0.01)) * (param("fast") == true ? 1e309 : 1)`,
+		`tier("condition", p) > 0 ? tier("a", fixed(0.01)) : tier("b", p)`,
+		`fixed(0.01) > 0 ? tier("a", p) : tier("b", p)`,
+		`tier("bad", fixed(0.01)) * (param("fast") == true && tier("condition", p) > 0 ? 2 : 1)`,
+		`tier("bad", param("fast") == true ? fixed(0.01) : p)`,
+		`tier("bad", fixed())`,
+		`tier("bad", fixed(0.01, 0.02))`,
+	} {
+		t.Run(expression, func(t *testing.T) {
+			_, err := billingexpr.CompileFromCache(expression)
+			require.Error(t, err, "invalid leaves must be rejected before optimizer removes unreachable branches")
+		})
+	}
+}
+
+func TestImageQuantityValidationUsesOriginalAST(t *testing.T) {
+	for _, expression := range []string{
+		`tier("image", fixed(0.0035)) * image_count`,
+		`tier("tokens", p * 2) * image_count`,
+		`true ? tier("tokens", p) : tier("image", fixed(0.0035)) * image_count`,
+	} {
+		t.Run(expression, func(t *testing.T) {
+			hash := billingexpr.ExprHashString(expression)
+			_, err := billingexpr.CompileFromCacheByHash(expression, hash)
+			require.NoError(t, err)
+			assert.True(t, billingexpr.UsedVarsByHash(expression, hash)["image_count"])
+			for _, count := range []int{0, -1, dto.MaxImageN + 1} {
+				request := billingexpr.RequestInput{ImageCount: &count}
+				cost, trace, err := billingexpr.RunExprByHashWithRequest(expression, hash, billingexpr.TokenParams{P: 100}, request)
+				require.ErrorContains(t, err, "image_count")
+				assert.Zero(t, cost, "invalid count must not participate in billing")
+				assert.Empty(t, trace.MatchedTier, "validation precedes execution")
+				assert.Nil(t, trace.FixedPrice)
+
+				_, err = billingexpr.ComputeTieredQuotaWithRequest(&billingexpr.BillingSnapshot{
+					ExprString: expression, ExprHash: hash, QuotaPerUnit: 500000, GroupRatio: 1,
+				}, billingexpr.TokenParams{P: 100}, request)
+				require.ErrorContains(t, err, "image_count")
+			}
+		})
+	}
+	count := dto.MaxImageN
+	cost, trace, err := billingexpr.RunExprWithRequest(`tier("image", fixed(0.0035)) * image_count`, billingexpr.TokenParams{}, billingexpr.RequestInput{ImageCount: &count})
+	require.NoError(t, err)
+	assert.Equal(t, float64(dto.MaxImageN)*3500, cost)
+	require.NotNil(t, trace.ImageCount)
+	assert.Equal(t, dto.MaxImageN, *trace.ImageCount)
+}
+
+func TestOriginalFixedBranchesRemainVisibleThroughCache(t *testing.T) {
+	const expression = `v1:true ? tier("tokens", p) : tier("request", fixed(0.0035)) * image_count`
+	hash := billingexpr.ExprHashString(expression)
+	for _, invalidate := range []bool{false, true} {
+		if invalidate {
+			billingexpr.InvalidateCache()
+		}
+		assert.True(t, billingexpr.UsesFixedPricing(expression))
+		assert.True(t, billingexpr.UsesFixedPricingByHash(expression, hash))
+		assert.True(t, billingexpr.UsedVarsByHash(expression, hash)["image_count"])
+		cost, trace, err := billingexpr.RunExprByHash(expression, hash, billingexpr.TokenParams{P: 10})
+		require.NoError(t, err)
+		assert.Equal(t, float64(10), cost)
+		assert.Equal(t, billingexpr.BillingUnitToken, trace.BillingUnit)
+		assert.Nil(t, trace.FixedPrice, "unselected fixed branch must not change the actual unit")
+		require.NotNil(t, trace.ImageCount)
+		assert.Equal(t, 1, *trace.ImageCount)
+	}
+	assert.False(t, billingexpr.UsesFixedPricing(`tier("tokens", p)`))
+}
+
+func TestCacheUnawarePricingIgnoresNewOptionalInputs(t *testing.T) {
+	const expression = `tier("tokens", p * 2 + c * 8)`
+	cost, trace, err := billingexpr.RunExprWithRequest(expression, billingexpr.TokenParams{
+		P: 100, C: 10, CR: 1000, CC: 2000, CC1h: 3000, CC12h: 4000,
+	}, billingexpr.RequestInput{ImageCount: common.GetPointer(-1)})
+	require.NoError(t, err, "unused image_count must not validate unrelated request data")
+	assert.Equal(t, float64(280), cost)
+	assert.Equal(t, cost, trace.Cost)
+	assert.Equal(t, billingexpr.BillingUnitToken, trace.BillingUnit)
+	assert.Nil(t, trace.ImageCount)
+	assert.Nil(t, trace.FixedPrice)
+	assert.False(t, billingexpr.UsedVars(expression)["cc12h"])
+}
+
+func TestZeroFixedPriceJSONContract(t *testing.T) {
+	const expression = `tier("free", fixed(0)) * image_count`
+	cost, trace, err := billingexpr.RunExprWithRequest(expression, billingexpr.TokenParams{P: 1000}, billingexpr.RequestInput{ImageCount: common.GetPointer(3)})
+	require.NoError(t, err)
+	assert.Zero(t, cost)
+	require.NotNil(t, trace.FixedPrice)
+	assert.Zero(t, *trace.FixedPrice)
+	data, err := common.Marshal(trace)
+	require.NoError(t, err)
+	var traceJSON map[string]interface{}
+	require.NoError(t, common.Unmarshal(data, &traceJSON))
+	assert.Equal(t, "request", traceJSON["billing_unit"])
+	assert.Equal(t, float64(0), traceJSON["fixed_price"], "explicit zero must not be omitted")
+	assert.Equal(t, float64(3), traceJSON["image_count"])
+
+	snapshot := &billingexpr.BillingSnapshot{
+		ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+		QuotaPerUnit: 500000, GroupRatio: 1, BillingUSDToCNYRate: 8, EstimatedTier: "free",
+		EstimatedImageCount: trace.ImageCount, EstimatedBillingUnit: trace.BillingUnit, EstimatedFixedPrice: trace.FixedPrice,
+	}
+	data, err = common.Marshal(snapshot)
+	require.NoError(t, err)
+	var snapshotJSON map[string]interface{}
+	require.NoError(t, common.Unmarshal(data, &snapshotJSON))
+	assert.Equal(t, "request", snapshotJSON["estimated_billing_unit"])
+	assert.Equal(t, float64(0), snapshotJSON["estimated_fixed_price"])
+	assert.Equal(t, float64(3), snapshotJSON["estimated_image_count"])
+	assert.Equal(t, float64(8), snapshotJSON["billing_usd_to_cny_rate"])
+	var restored billingexpr.BillingSnapshot
+	require.NoError(t, common.Unmarshal(data, &restored))
+	assert.Equal(t, *snapshot, restored)
+
+	result, err := billingexpr.ComputeTieredQuotaWithRequest(&restored, billingexpr.TokenParams{}, billingexpr.RequestInput{ImageCount: common.GetPointer(3)})
+	require.NoError(t, err)
+	assert.Zero(t, result.ActualQuotaAfterGroup)
+	assert.Equal(t, billingexpr.BillingUnitRequest, result.BillingUnit)
+	require.NotNil(t, result.FixedPrice)
+	assert.Zero(t, *result.FixedPrice)
+	assert.Nil(t, result.Clamp)
+	data, err = common.Marshal(result)
+	require.NoError(t, err)
+	var resultJSON map[string]interface{}
+	require.NoError(t, common.Unmarshal(data, &resultJSON))
+	assert.Equal(t, "request", resultJSON["billing_unit"])
+	assert.Equal(t, float64(0), resultJSON["fixed_price"])
+	assert.Equal(t, float64(3), resultJSON["image_count"])
+}
+
+func TestFixedPriceSaturationRemainsAuditable(t *testing.T) {
+	const expression = `tier("huge", fixed(1e20)) * image_count`
+	result, err := billingexpr.ComputeTieredQuotaWithRequest(&billingexpr.BillingSnapshot{
+		ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+		QuotaPerUnit: 500000, GroupRatio: 1, BillingUSDToCNYRate: 8,
+	}, billingexpr.TokenParams{}, billingexpr.RequestInput{ImageCount: common.GetPointer(3)})
+	require.NoError(t, err)
+	assert.Equal(t, math.MaxInt32, result.ActualQuotaAfterGroup, "oversized fixed prices must never wrap into credits")
+	require.NotNil(t, result.Clamp)
+	assert.Equal(t, common.QuotaClampOverflow, result.Clamp.Kind)
+	assert.Equal(t, billingexpr.BillingUnitRequest, result.BillingUnit)
 }

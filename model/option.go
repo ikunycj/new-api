@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/performance_setting"
@@ -389,6 +390,11 @@ func UpdateOption(key string, value string) error {
 	if isPricingGroupOptionKey(key) {
 		return errPricingGroupOptionRequiresAtomicUpdate
 	}
+	if key == "billing_setting.billing_expr" {
+		if err := billing_setting.ValidateBillingExpressionsJSON(value); err != nil {
+			return err
+		}
+	}
 
 	// Save to database first
 	option := Option{
@@ -479,6 +485,11 @@ func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrde
 func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
+	}
+	if value, ok := values["billing_setting.billing_expr"]; ok {
+		if err := billing_setting.ValidateBillingExpressionsJSON(value); err != nil {
+			return err
+		}
 	}
 	for key := range values {
 		if isRetiredOptionKey(key) {

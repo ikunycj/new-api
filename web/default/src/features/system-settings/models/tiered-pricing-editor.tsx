@@ -73,6 +73,7 @@ import {
   createEmptyCondition,
   createEmptyRuleGroup,
   createEmptyTimeCondition,
+  formatBillingVarLabel,
   getRequestRuleMatchOptions,
   splitBillingExprAndRequestRules,
   tryParseRequestRuleExpr,
@@ -93,6 +94,7 @@ import {
   createDefaultVisualConfig,
   evalExprLocally,
   exprUsesExtraVars,
+  exprUsesImageCount,
   generateExprFromVisualConfig,
   getTierCacheMode,
   normalizeVisualConfig,
@@ -583,6 +585,8 @@ function VisualTierCard({
       cache_mode: mode,
       cache_create_1h_unit_cost:
         mode === CACHE_MODE_TIMED ? (tier.cache_create_1h_unit_cost ?? 0) : 0,
+      cache_create_12h_unit_cost:
+        mode === CACHE_MODE_TIMED ? (tier.cache_create_12h_unit_cost ?? 0) : 0,
     })
   }
 
@@ -607,7 +611,7 @@ function VisualTierCard({
     return (
       <PriceField
         key={variable.key}
-        label={t(variable.label)}
+        label={formatBillingVarLabel(variable, t, false)}
         value={value}
         onChange={(next) => handlePriceChange(fieldKey, priceToUnitCost(next))}
       />
@@ -727,7 +731,10 @@ function VisualTierCard({
             </div>
             <div className='flex flex-wrap gap-x-4 gap-y-2'>
               {CACHE_PRICE_VARS.map((variable) => {
-                if (variable.key === 'cc1h' && cacheMode !== CACHE_MODE_TIMED) {
+                if (
+                  (variable.key === 'cc1h' || variable.key === 'cc12h') &&
+                  cacheMode !== CACHE_MODE_TIMED
+                ) {
                   return null
                 }
                 return renderPriceVariable(variable)
@@ -891,14 +898,15 @@ function RawExprEditor({ exprString, onChange }: RawExprEditorProps) {
           <div>
             {t('Variables')}: <code>len</code>, <code>p</code>, <code>c</code>,{' '}
             <code>cr</code>, <code>cc</code>, <code>cc1h</code>,{' '}
-            <code>img</code>, <code>img_o</code>, <code>ai</code>,{' '}
-            <code>ao</code>
+            <code>cc12h</code>, <code>img</code>, <code>img_o</code>,{' '}
+            <code>ai</code>, <code>ao</code>, <code>image_count</code>
           </div>
           <div>
-            {t('Functions')}: <code>tier(name, value)</code>, <code>max</code>,{' '}
-            <code>min</code>, <code>ceil</code>, <code>floor</code>,{' '}
-            <code>abs</code>, <code>header(name)</code>,{' '}
-            <code>param(path)</code>, <code>has(source, text)</code>
+            {t('Functions')}: <code>tier(name, value)</code>,{' '}
+            <code>fixed(amount)</code>, <code>max</code>, <code>min</code>,{' '}
+            <code>ceil</code>, <code>floor</code>, <code>abs</code>,{' '}
+            <code>header(name)</code>, <code>param(path)</code>,{' '}
+            <code>has(source, text)</code>
           </div>
         </AlertDescription>
       </Alert>
@@ -1360,21 +1368,27 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
     cacheReadTokens: 0,
     cacheCreateTokens: 0,
     cacheCreate1hTokens: 0,
+    cacheCreate12hTokens: 0,
     imageTokens: 0,
     imageOutputTokens: 0,
     audioInputTokens: 0,
     audioOutputTokens: 0,
   })
 
-  const usesExtras = useMemo(
-    () => exprUsesExtraVars(effectiveExpr),
-    [effectiveExpr]
-  )
+  const [imageCount, setImageCount] = useState(1)
+  const usesExtras = exprUsesExtraVars(effectiveExpr)
+  const usesImageCount = exprUsesImageCount(effectiveExpr)
 
   const result = useMemo(
     () =>
-      evalExprLocally(effectiveExpr, promptTokens, completionTokens, extras),
-    [effectiveExpr, promptTokens, completionTokens, extras]
+      evalExprLocally(
+        effectiveExpr,
+        promptTokens,
+        completionTokens,
+        extras,
+        imageCount
+      ),
+    [effectiveExpr, promptTokens, completionTokens, extras, imageCount]
   )
 
   return (
@@ -1418,7 +1432,9 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
             ) as keyof ExtraTokenValues
             return (
               <div key={variable.key} className='space-y-1'>
-                <Label className='text-xs'>{t(variable.shortLabel)}</Label>
+                <Label className='text-xs'>
+                  {formatBillingVarLabel(variable, t)}
+                </Label>
                 <DraftNumberInput
                   min={0}
                   value={extras[stateKey]}
@@ -1433,6 +1449,21 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
             )
           })}
         </div>
+      )}
+      {usesImageCount && (
+        <Field>
+          <FieldLabel htmlFor='billing-preview-image-count' className='text-xs'>
+            image_count (1..128)
+          </FieldLabel>
+          <DraftNumberInput
+            id='billing-preview-image-count'
+            min={1}
+            max={128}
+            step={1}
+            value={imageCount}
+            onValueChange={setImageCount}
+          />
+        </Field>
       )}
       <div
         className={cn(
@@ -1449,7 +1480,12 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
         ) : (
           <div className='flex items-center gap-2'>
             <span className='font-medium'>
-              {t('Estimated quota cost')}: {result.cost.toLocaleString()}
+              {t('Estimated cost')}:{' '}
+              {(result.cost / 1_000_000).toLocaleString(undefined, {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 8,
+              })}
             </span>
             {result.matchedTier && (
               <Badge variant='outline' className='text-xs'>
@@ -1479,8 +1515,10 @@ Input side:
 - p — input token count (for pricing). Automatically excludes sub-categories priced separately (e.g., if cr is used, cache tokens are deducted from p)
 - len — total input context length (for condition checks). Not affected by auto-exclusion; always reflects the full input length. Use in tier conditions
 - cr — cache-hit (read) token count
-- cc — cache-create token count (5-min TTL)
+- cc — cache-create token count (5-min TTL for Claude, 30-min TTL for OpenAI)
 - cc1h — cache-create token count (1-hour TTL, Claude-specific)
+- cc12h — cache-create token count (12-hour TTL, OpenAI-specific)
+- image_count — validated image quantity, default 1, range 1..128
 - img — image input token count
 - ai — audio input token count
 
@@ -1493,11 +1531,12 @@ Output side:
 
 p and c are fallback variables representing all tokens not separately priced in the expression. If the expression uses a sub-category variable (e.g., cr), those tokens are deducted from p to avoid double-billing. Unused sub-category tokens remain in p/c at base price.
 
-Important: len is NOT affected by auto-exclusion. Tier conditions should use len instead of p to prevent cache hits from lowering p and misidentifying the tier.
+Important: len is NOT affected by auto-exclusion. Tier conditions should use len instead of p to prevent cache hits from lowering p and misidentifying the tier. Without an explicit cc12h price, OpenAI 12-hour writes are billed at twice the cc price; if cc is also unpriced, the extra count is included in p.
 
 ### Built-in Functions
 
 - tier(name, value) — labels the billing tier; must wrap the cost expression
+- fixed(amount) — non-negative finite literal USD price per request; use tier(name, fixed(amount)), optionally multiplied by image_count. Do not combine fixed and token charges in one leaf
 - max(a, b), min(a, b) — maximum/minimum
 - ceil(x), floor(x), abs(x) — ceiling, floor, absolute value
 - header(name) — reads a request header
@@ -1633,7 +1672,9 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   onRequestRuleExprChange,
 }: TieredPricingEditorProps) {
   const { t } = useTranslation()
-  const [editorMode, setEditorMode] = useState<EditorMode>('visual')
+  const [editorMode, setEditorMode] = useState<EditorMode>(() =>
+    currentExpr && !tryParseVisualConfig(currentExpr) ? 'raw' : 'visual'
+  )
   const [visualConfig, setVisualConfig] = useState<VisualConfig | null>(() =>
     tryParseVisualConfig(currentExpr)
   )

@@ -166,6 +166,8 @@ type RelayInfo struct {
 	// captured at pre-consume time. Non-nil only when billing mode is "tiered_expr".
 	TieredBillingSnapshot *billingexpr.BillingSnapshot
 	BillingRequestInput   *billingexpr.RequestInput
+	ImageRequestCount     int
+	BillingImageCount     *int
 
 	Request dto.Request
 
@@ -188,6 +190,17 @@ type RelayInfo struct {
 	*ResponsesUsageInfo
 	*ChannelMeta
 	*TaskRelayInfo
+}
+
+func (info *RelayInfo) SetBillingImageCount(count int) {
+	if count < 1 || count > dto.MaxImageN {
+		return
+	}
+	if snap := info.TieredBillingSnapshot; snap != nil && snap.EstimatedImageCount != nil {
+		info.BillingImageCount = &count
+	} else if info.PriceData.UsePrice {
+		info.PriceData.AddOtherRatio("n", float64(count))
+	}
 }
 
 func (info *RelayInfo) InitChannelMeta(c *gin.Context) {

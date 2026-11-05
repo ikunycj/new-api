@@ -8,6 +8,7 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/parser"
 	"github.com/expr-lang/expr/vm"
 )
 
@@ -39,30 +40,33 @@ var (
 
 // compileEnvPrototypeV1 is the v1 type-checking prototype used at compile time.
 var compileEnvPrototypeV1 = map[string]interface{}{
-	"p":       float64(0),
-	"c":       float64(0),
-	"len":     float64(0),
-	"cr":      float64(0),
-	"cc":      float64(0),
-	"cc1h":    float64(0),
-	"img":     float64(0),
-	"img_o":   float64(0),
-	"ai":      float64(0),
-	"ao":      float64(0),
-	"tier":    func(string, float64) float64 { return 0 },
-	"header":  func(string) string { return "" },
-	"param":   func(string) interface{} { return nil },
-	"has":     func(interface{}, string) bool { return false },
-	"hour":    func(string) int { return 0 },
-	"minute":  func(string) int { return 0 },
-	"weekday": func(string) int { return 0 },
-	"month":   func(string) int { return 0 },
-	"day":     func(string) int { return 0 },
-	"max":     math.Max,
-	"min":     math.Min,
-	"abs":     math.Abs,
-	"ceil":    math.Ceil,
-	"floor":   math.Floor,
+	"image_count": float64(1),
+	"p":           float64(0),
+	"c":           float64(0),
+	"len":         float64(0),
+	"cr":          float64(0),
+	"cc":          float64(0),
+	"cc1h":        float64(0),
+	"cc12h":       float64(0),
+	"img":         float64(0),
+	"img_o":       float64(0),
+	"ai":          float64(0),
+	"ao":          float64(0),
+	"tier":        func(string, float64) float64 { return 0 },
+	"fixed":       func(float64) float64 { return 0 },
+	"header":      func(string) string { return "" },
+	"param":       func(string) interface{} { return nil },
+	"has":         func(interface{}, string) bool { return false },
+	"hour":        func(string) int { return 0 },
+	"minute":      func(string) int { return 0 },
+	"weekday":     func(string) int { return 0 },
+	"month":       func(string) int { return 0 },
+	"day":         func(string) int { return 0 },
+	"max":         math.Max,
+	"min":         math.Min,
+	"abs":         math.Abs,
+	"ceil":        math.Ceil,
+	"floor":       math.Floor,
 }
 
 func getCompileEnv(version int) map[string]interface{} {
@@ -85,29 +89,47 @@ func CompileFromCacheByHash(exprStr, hash string) (*vm.Program, error) {
 }
 
 func compileFromCacheByHash(exprStr, hash string) (*vm.Program, error) {
+	entry, err := compileEntryFromCacheByHash(exprStr, hash)
+	if err != nil {
+		return nil, err
+	}
+	return entry.prog, nil
+}
+
+func compileEntryFromCacheByHash(exprStr, hash string) (*cachedEntry, error) {
 	cacheMu.RLock()
 	if entry, ok := cache[hash]; ok {
 		cacheMu.RUnlock()
-		return entry.prog, nil
+		return entry, nil
 	}
 	cacheMu.RUnlock()
 
 	version, body := ParseExprVersion(exprStr)
+	// Validate before optimization so unreachable pricing branches cannot bypass checks.
+	tree, err := parser.Parse(body)
+	if err != nil {
+		return nil, fmt.Errorf("expr compile error: %w", err)
+	}
+	vars := extractUsedVars(tree.Node)
+	if vars["fixed"] {
+		if err := validateFixedPricingTree(tree.Node); err != nil {
+			return nil, fmt.Errorf("expr compile error: %w", err)
+		}
+	}
 	prog, err := expr.Compile(body, expr.Env(getCompileEnv(version)), expr.AsFloat64())
 	if err != nil {
 		return nil, fmt.Errorf("expr compile error: %w", err)
 	}
 
-	vars := extractUsedVars(prog)
-
+	entry := &cachedEntry{prog: prog, usedVars: vars, version: version}
 	cacheMu.Lock()
 	if len(cache) >= maxCacheSize {
 		cache = make(map[string]*cachedEntry, 64)
 	}
-	cache[hash] = &cachedEntry{prog: prog, usedVars: vars, version: version}
+	cache[hash] = entry
 	cacheMu.Unlock()
 
-	return prog, nil
+	return entry, nil
 }
 
 // ExprVersion returns the version of a cached expression. Returns DefaultExprVersion
@@ -127,9 +149,8 @@ func ExprVersion(exprStr string) int {
 	return v
 }
 
-func extractUsedVars(prog *vm.Program) map[string]bool {
+func extractUsedVars(node ast.Node) map[string]bool {
 	vars := make(map[string]bool)
-	node := prog.Node()
 	ast.Find(node, func(n ast.Node) bool {
 		if id, ok := n.(*ast.IdentifierNode); ok {
 			vars[id.Value] = true
@@ -139,31 +160,22 @@ func extractUsedVars(prog *vm.Program) map[string]bool {
 	return vars
 }
 
-// UsedVars returns the set of identifier names referenced by an expression.
+// UsedVars returns identifiers from the original, unoptimized expression AST.
 // The result is cached alongside the compiled program. Returns nil for empty input.
 func UsedVars(exprStr string) map[string]bool {
+	return UsedVarsByHash(exprStr, ExprHashString(exprStr))
+}
+
+// UsedVarsByHash reuses the digest captured in a billing snapshot.
+func UsedVarsByHash(exprStr, hash string) map[string]bool {
 	if exprStr == "" {
 		return nil
 	}
-	hash := ExprHashString(exprStr)
-	cacheMu.RLock()
-	if entry, ok := cache[hash]; ok {
-		cacheMu.RUnlock()
-		return entry.usedVars
-	}
-	cacheMu.RUnlock()
-
-	// Compile (and cache) to populate usedVars
-	if _, err := compileFromCacheByHash(exprStr, hash); err != nil {
+	entry, err := compileEntryFromCacheByHash(exprStr, hash)
+	if err != nil {
 		return nil
 	}
-	cacheMu.RLock()
-	entry, ok := cache[hash]
-	cacheMu.RUnlock()
-	if ok {
-		return entry.usedVars
-	}
-	return nil
+	return entry.usedVars
 }
 
 // InvalidateCache clears the compiled-expression cache.

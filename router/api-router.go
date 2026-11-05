@@ -252,6 +252,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
+			ratioSyncRoute.POST("/apply", controller.ApplyUpstreamPrices)
 		}
 		registerChannelRoutes(apiRouter)
 		registerChannelMonitorRoutes(apiRouter)

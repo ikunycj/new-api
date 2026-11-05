@@ -29,6 +29,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
+import { formatBillingPriceUnit } from '../lib/billing-expr'
 import {
   getDynamicPricingSummary,
   getOfficialDynamicPricingSummary,
@@ -179,7 +180,13 @@ export function usePricingColumns(
               official={officialValue}
               unit={
                 <>
-                  / {tokenUnitLabel} tokens
+                  /{' '}
+                  {formatBillingPriceUnit(
+                    primaryEntries[0].billingUnit,
+                    primaryEntries[0].imageCount,
+                    t,
+                    tokenUnit
+                  )}
                   {dynamicSummary.tierCount > 1 &&
                     ` · ${t('{{count}} tiers', {
                       count: dynamicSummary.tierCount,

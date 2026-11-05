@@ -61,6 +61,10 @@ import { cn } from '@/lib/utils'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { usePricingData } from '../hooks/use-pricing-data'
 import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '../lib/billing-expr'
+import {
   getDynamicPriceEntries,
   getDynamicPricingSummary,
   getDynamicPricingTiers,
@@ -679,12 +683,18 @@ function PriceSection(props: {
                 className='bg-muted/20 rounded-lg border p-3'
               >
                 <div className='text-muted-foreground text-xs'>
-                  {t(entry.shortLabel)}
+                  {formatBillingVarLabel(entry.variable, t)}
                 </div>
                 <div className='text-foreground mt-1 font-mono text-base font-semibold tabular-nums'>
                   {entry.formatted}
                   <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
-                    / {tokenUnitLabel}
+                    /{' '}
+                    {formatBillingPriceUnit(
+                      entry.billingUnit,
+                      entry.imageCount,
+                      t,
+                      props.tokenUnit
+                    )}
                   </span>
                 </div>
               </div>
@@ -704,12 +714,18 @@ function PriceSection(props: {
                   className='flex items-baseline justify-between gap-4'
                 >
                   <span className='text-muted-foreground/70 text-sm'>
-                    {t(entry.shortLabel)}
+                    {formatBillingVarLabel(entry.variable, t)}
                   </span>
                   <span className='text-muted-foreground font-mono text-sm tabular-nums'>
                     {entry.formatted}
                     <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
-                      / {tokenUnitLabel}
+                      /{' '}
+                      {formatBillingPriceUnit(
+                        entry.billingUnit,
+                        entry.imageCount,
+                        t,
+                        props.tokenUnit
+                      )}
                     </span>
                   </span>
                 </div>
@@ -818,7 +834,8 @@ function getDynamicPriceFields(
 
 function getDynamicFormattedPricesByTier(
   tiers: DynamicPricingTier[],
-  options: DynamicPriceOptions
+  options: DynamicPriceOptions,
+  t: (key: string) => string
 ): DynamicFormattedPricesByTier {
   return new Map(
     tiers.map((tier) => [
@@ -826,7 +843,9 @@ function getDynamicFormattedPricesByTier(
       new Map(
         getDynamicPriceEntries(tier, options).map((entry) => [
           entry.field,
-          entry.formatted,
+          entry.billingUnit === 'request'
+            ? `${entry.formatted} / ${formatBillingPriceUnit(entry.billingUnit, entry.imageCount, t)}`
+            : entry.formatted,
         ])
       ),
     ])
@@ -933,13 +952,17 @@ function GroupPricingSection(props: {
         const ratio = getConfiguredGroupRatio(props.groupRatio, group)
         return [
           group,
-          getDynamicFormattedPricesByTier(dynamicTiers, {
-            tokenUnit: props.tokenUnit,
-            showRechargePrice,
-            priceRate: props.priceRate,
-            usdExchangeRate: props.usdExchangeRate,
-            groupRatioMultiplier: ratio,
-          }),
+          getDynamicFormattedPricesByTier(
+            dynamicTiers,
+            {
+              tokenUnit: props.tokenUnit,
+              showRechargePrice,
+              priceRate: props.priceRate,
+              usdExchangeRate: props.usdExchangeRate,
+              groupRatioMultiplier: ratio,
+            },
+            t
+          ),
         ] as const
       })
     )
@@ -984,7 +1007,10 @@ function GroupPricingSection(props: {
                     },
                     ...priceFields.map((fieldEntry) => ({
                       id: fieldEntry.field,
-                      header: t(fieldEntry.shortLabel),
+                      header:
+                        fieldEntry.billingUnit === 'request'
+                          ? formatBillingVarLabel(fieldEntry.variable, t)
+                          : `${formatBillingVarLabel(fieldEntry.variable, t)} / ${formatBillingPriceUnit(fieldEntry.billingUnit, false, t, props.tokenUnit)}`,
                       className: `${thClass} text-right`,
                       cellClassName: 'py-2.5 text-right font-mono',
                       cell: (tier: (typeof dynamicTiers)[number]) =>
@@ -997,9 +1023,6 @@ function GroupPricingSection(props: {
               </div>
             )
           })}
-          <p className='text-muted-foreground/40 mt-1.5 text-[10px]'>
-            {t('Prices shown per')} {tokenUnitLabel} tokens
-          </p>
         </div>
       </section>
     )

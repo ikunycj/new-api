@@ -288,6 +288,15 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	if err != nil {
 		return types.PriceData{}, err
 	}
+	if billingexpr.UsedVars(exprStr)["image_count"] {
+		requestInput, err = ResolveImageBillingRequestInput(info, requestInput)
+		if err != nil {
+			return types.PriceData{}, err
+		}
+	}
+	if info.RelayFormat == types.RelayFormatOpenAIRealtime && billingexpr.UsesFixedPricing(exprStr) {
+		return types.PriceData{}, fmt.Errorf("fixed pricing is not supported for Realtime requests")
+	}
 
 	rawCost, trace, err := billingexpr.RunExprWithRequest(exprStr, billingexpr.TokenParams{
 		P:   float64(promptTokens),
@@ -315,6 +324,9 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 
 	exprHash := billingexpr.ExprHashString(exprStr)
 	snapshot := &billingexpr.BillingSnapshot{
+		EstimatedImageCount:       trace.ImageCount,
+		EstimatedBillingUnit:      trace.BillingUnit,
+		EstimatedFixedPrice:       trace.FixedPrice,
 		BillingMode:               billing_setting.BillingModeTieredExpr,
 		ModelName:                 info.OriginModelName,
 		ExprString:                exprStr,

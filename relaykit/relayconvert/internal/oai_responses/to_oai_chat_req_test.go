@@ -11,6 +11,18 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func TestResponsesToChatPreservesTwelveHourCacheOptions(t *testing.T) {
+	request := &dto.OpenAIResponsesRequest{
+		Model: "gpt-5.6-terra", Input: mustRawMessage(t, "hello"),
+		PromptCacheOptions: mustRawMessage(t, map[string]any{"ttl": "12h"}),
+	}
+	chat, err := ResponsesRequestToChatCompletionsRequest(request)
+	require.NoError(t, err)
+	encoded, err := kitutil.Marshal(chat)
+	require.NoError(t, err)
+	assert.Equal(t, "12h", gjson.GetBytes(encoded, "prompt_cache_options.ttl").String())
+}
+
 func TestResponsesRequestToChatCompletionsRequestInstructionsAndScalarInput(t *testing.T) {
 	stream := true
 	temperature := 0.0
@@ -229,9 +241,6 @@ func TestResponsesRequestToChatCompletionsRequestRejectsUnmappedFields(t *testin
 		{name: "include", set: func(req *dto.OpenAIResponsesRequest) {
 			req.Include = mustRawMessage(t, []string{"file_search_call.results"})
 		}, want: "include"},
-		{name: "prompt cache options", set: func(req *dto.OpenAIResponsesRequest) {
-			req.PromptCacheOptions = mustRawMessage(t, map[string]any{"retention": "24h"})
-		}, want: "prompt_cache_options"},
 		{name: "truncation", set: func(req *dto.OpenAIResponsesRequest) { req.Truncation = mustRawMessage(t, "auto") }, want: "truncation"},
 		{name: "client metadata", set: func(req *dto.OpenAIResponsesRequest) {
 			req.ClientMetadata = mustRawMessage(t, map[string]any{"trace": "abc"})

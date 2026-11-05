@@ -162,6 +162,7 @@ export interface LogOtherData {
   cache_creation_tokens?: number
   cache_creation_tokens_5m?: number
   cache_creation_tokens_1h?: number
+  cache_creation_tokens_12h?: number
   claude?: boolean
   model_ratio?: number
   completion_ratio?: number
@@ -173,6 +174,7 @@ export interface LogOtherData {
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number
   cache_creation_ratio_1h?: number
+  cache_creation_ratio_12h?: number
   is_model_mapped?: boolean
   upstream_model_name?: string
   audio_ratio?: number
@@ -182,6 +184,9 @@ export interface LogOtherData {
   // billing_mode === 'tiered_expr'. expr_b64 is the base64-encoded billing
   // expression and matched_tier is the label of the tier that fired.
   billing_mode?: string
+  billing_unit?: 'token' | 'request'
+  fixed_price?: number
+  image_count?: number
   expr_b64?: string
   matched_tier?: string
   reasoning_effort?: string

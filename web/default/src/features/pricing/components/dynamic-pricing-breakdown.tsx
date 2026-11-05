@@ -27,6 +27,9 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   BILLING_PRICING_VARS,
+  FIXED_PRICE_VAR,
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
   MATCH_CONTAINS,
   MATCH_EQ,
   MATCH_EXISTS,
@@ -245,13 +248,16 @@ export function DynamicPricingBreakdown({
     )
   }
 
-  const visiblePriceFields = BILLING_PRICING_VARS.filter((v) => {
-    if (!hasTiers) return false
-    if (hideCacheColumns && v.group === 'cache') return false
-    return tiers.some(
-      (tier) => Number(tier[v.field as string as keyof ParsedTier] || 0) > 0
-    )
-  })
+  const visiblePriceFields = [...BILLING_PRICING_VARS, FIXED_PRICE_VAR].filter(
+    (v) => {
+      if (hideCacheColumns && v.group === 'cache') return false
+      return tiers.some((tier) => {
+        const value = tier[v.field as string]
+        if (value == null) return false
+        return v.key === 'fixed' ? Number(value) >= 0 : Number(value) > 0
+      })
+    }
+  )
 
   return (
     <section className={cn('min-w-0', !compact && 'py-3 sm:py-4')}>
@@ -320,13 +326,15 @@ export function DynamicPricingBreakdown({
                   )}
                   <div className='grid grid-cols-2 gap-x-3 gap-y-1.5'>
                     {visiblePriceFields.map((v) => {
-                      const value = Number(
-                        tier[v.field as string as keyof ParsedTier] || 0
-                      )
+                      const raw = tier[v.field as string]
+                      const value = Number(raw)
+                      const hasPrice =
+                        raw != null &&
+                        (value > 0 || (v.key === 'fixed' && value === 0))
                       return (
                         <div key={v.field} className='min-w-0'>
                           <div className='text-muted-foreground truncate text-[10px] font-medium tracking-wider uppercase'>
-                            {t(v.shortLabel)}
+                            {formatBillingVarLabel(v, t)}
                           </div>
                           <div
                             className={cn(
@@ -334,8 +342,8 @@ export function DynamicPricingBreakdown({
                               compact ? 'text-xs' : 'text-sm font-semibold'
                             )}
                           >
-                            {value > 0
-                              ? `${symbol}${(value * rate).toFixed(4)}`
+                            {hasPrice
+                              ? `${symbol}${(value * rate).toFixed(4)} / ${formatBillingPriceUnit(tier.billingUnit, tier.imageCount, t)}`
                               : '-'}
                           </div>
                         </div>
@@ -409,7 +417,7 @@ export function DynamicPricingBreakdown({
               },
               ...visiblePriceFields.map((v, index) => ({
                 id: v.field ?? `price-${index}`,
-                header: t(v.shortLabel),
+                header: formatBillingVarLabel(v, t),
                 className: cn(
                   'text-muted-foreground py-2 text-right font-medium',
                   compact && 'h-8'
@@ -419,12 +427,14 @@ export function DynamicPricingBreakdown({
                   compact ? 'py-2' : 'py-2.5'
                 ),
                 cell: (tier: ParsedTier) => {
-                  const value = Number(
-                    tier[v.field as string as keyof ParsedTier] || 0
-                  )
-                  return value > 0 ? (
+                  const raw = tier[v.field as string]
+                  const value = Number(raw)
+                  const hasPrice =
+                    raw != null &&
+                    (value > 0 || (v.key === 'fixed' && value === 0))
+                  return hasPrice ? (
                     <span className={cn(!compact && 'font-semibold')}>
-                      {`${symbol}${(value * rate).toFixed(4)}`}
+                      {`${symbol}${(value * rate).toFixed(4)} / ${formatBillingPriceUnit(tier.billingUnit, tier.imageCount, t)}`}
                     </span>
                   ) : (
                     '-'

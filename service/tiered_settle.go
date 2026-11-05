@@ -9,6 +9,8 @@ import (
 // TieredResultWrapper wraps billingexpr.TieredResult for use at the service layer.
 type TieredResultWrapper = billingexpr.TieredResult
 
+const openAICacheCreation12hMultiplier = 2.0
+
 // BuildTieredTokenParams constructs billingexpr.TokenParams from a dto.Usage,
 // normalizing P and C so they mean "tokens not separately priced by the
 // expression". Sub-categories (cache, image, audio) are only subtracted
@@ -22,12 +24,13 @@ func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVa
 	p := float64(usage.PromptTokens)
 	c := float64(usage.CompletionTokens)
 	cr := float64(usage.PromptTokensDetails.CachedTokens)
-	cc5m := float64(usage.PromptTokensDetails.CacheCreationTokensTotal())
+	cc := float64(usage.PromptTokensDetails.CacheCreationTokensTotal())
 	cc1h := float64(0)
+	cc12h := float64(0)
 
 	if usage.UsageSemantic == "anthropic" {
 		cc1h = float64(usage.ClaudeCacheCreation1hTokens)
-		cc5m = float64(usage.ClaudeCacheCreation5mTokens)
+		cc = float64(usage.ClaudeCacheCreation5mTokens)
 	}
 
 	img := float64(usage.PromptTokensDetails.ImageTokens)
@@ -40,15 +43,28 @@ func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVa
 	// Claude: input_tokens is text-only, so add cache read + cache creation.
 	inputLen := p
 	if isClaudeUsageSemantic {
-		inputLen = p + cr + cc5m + cc1h
+		inputLen = p + cr + cc + cc1h
 	}
 
 	if !isClaudeUsageSemantic {
 		if usedVars["cr"] {
 			p -= cr
 		}
+		cc12h = float64(usage.PromptTokensDetails.CacheWrite12hTokens())
+		cc -= cc12h
+		cacheWriteTokens := cc
+		if usedVars["cc12h"] {
+			p -= cc12h
+		} else {
+			cacheWriteTokens += cc12h
+			cc += cc12h * openAICacheCreation12hMultiplier
+			cc12h = 0
+		}
 		if usedVars["cc"] {
-			p -= cc5m
+			p -= cacheWriteTokens
+		} else {
+			p += cc - cacheWriteTokens
+			cc = 0
 		}
 		if usedVars["cc1h"] {
 			p -= cc1h
@@ -77,16 +93,17 @@ func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVa
 	}
 
 	return billingexpr.TokenParams{
-		P:    p,
-		C:    c,
-		Len:  inputLen,
-		CR:   cr,
-		CC:   cc5m,
-		CC1h: cc1h,
-		Img:  img,
-		ImgO: imgO,
-		AI:   ai,
-		AO:   ao,
+		P:     p,
+		C:     c,
+		Len:   inputLen,
+		CR:    cr,
+		CC:    cc,
+		CC1h:  cc1h,
+		CC12h: cc12h,
+		Img:   img,
+		ImgO:  imgO,
+		AI:    ai,
+		AO:    ao,
 	}
 }
 
@@ -119,6 +136,11 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 	if relayInfo.BillingRequestInput != nil {
 		requestInput = *relayInfo.BillingRequestInput
 	}
+	if relayInfo.BillingImageCount != nil {
+		requestInput.ImageCount = relayInfo.BillingImageCount
+	} else if snap.EstimatedImageCount != nil {
+		requestInput.ImageCount = snap.EstimatedImageCount
+	}
 
 	tr, err := billingexpr.ComputeTieredQuotaWithRequest(snap, params, requestInput)
 	if err != nil {
@@ -135,4 +157,12 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 	noteQuotaClamp(relayInfo, tr.Clamp)
 
 	return true, tr.ActualQuotaAfterGroup, &tr
+}
+
+func isFixedPriceSettlement(info *relaycommon.RelayInfo, result *billingexpr.TieredResult) bool {
+	if result != nil {
+		return result.BillingUnit == billingexpr.BillingUnitRequest
+	}
+	snap := info.TieredBillingSnapshot
+	return snap != nil && snap.EstimatedBillingUnit == billingexpr.BillingUnitRequest
 }

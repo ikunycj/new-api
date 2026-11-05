@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,25 @@ func TestResolveIncomingBillingExprRequestInput(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, body, input.Body)
 	require.Equal(t, "application/json", input.Headers["Content-Type"])
+}
+
+func TestImageBillingQuantityPreservesRequestPricingConditions(t *testing.T) {
+	for _, body := range [][]byte{nil, []byte(`{"model":"image-01","prompt":"premium image","n":3,"quality":"hd"}`)} {
+		count := uint(3)
+		info := &relaycommon.RelayInfo{Request: &dto.ImageRequest{Model: "image-01", Prompt: "premium image", N: &count, Quality: "hd"}}
+		input, err := ResolveImageBillingRequestInput(info, billingexpr.RequestInput{Body: body})
+		require.NoError(t, err)
+		require.Equal(t, "premium image", gjson.GetBytes(input.Body, "prompt").String())
+		if body != nil {
+			require.Equal(t, body, input.Body)
+		}
+		const expression = `tier("image", fixed(0.0035)) * image_count * (has(param("prompt"), "premium") ? 2 : 1)`
+		result, err := billingexpr.ComputeTieredQuotaWithRequest(&billingexpr.BillingSnapshot{
+			ExprString: expression, ExprHash: billingexpr.ExprHashString(expression), GroupRatio: 1, QuotaPerUnit: 500000, BillingUSDToCNYRate: 1,
+		}, billingexpr.TokenParams{}, input)
+		require.NoError(t, err)
+		require.Equal(t, 10500, result.ActualQuotaAfterGroup)
+	}
 }
 
 func TestBuildBillingExprRequestInputFromRequest(t *testing.T) {

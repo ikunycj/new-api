@@ -35,6 +35,10 @@ import { cn } from '@/lib/utils'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '../lib/billing-expr'
+import {
   getDynamicPricingSummary,
   getOfficialDynamicPricingSummary,
 } from '../lib/dynamic-price'
@@ -132,6 +136,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     label: string
     value: string
     officialValue?: string
+    unit?: string
   }[] = []
   let specialPricingExpression = ''
   if (dynamicSummary) {
@@ -149,9 +154,15 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           const officialValue = officialEntries.get(entry.key)
           return {
             key: entry.key,
-            label: t(entry.shortLabel),
+            label: formatBillingVarLabel(entry.variable, t),
             value: entry.formatted,
             officialValue,
+            unit: formatBillingPriceUnit(
+              entry.billingUnit,
+              entry.imageCount,
+              t,
+              tokenUnit
+            ),
           }
         })
       )
@@ -249,6 +260,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     })
   }
 
+  const hasOnlyRequestTiers =
+    dynamicSummary != null &&
+    dynamicSummary.tierCount > 0 &&
+    dynamicSummary.tiers.every((tier) => tier.billingUnit === 'request')
   const metadata: { key: string; label: string; value: string }[] = []
   if (props.model.context_length && props.model.context_length > 0) {
     metadata.push({
@@ -289,7 +304,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     metadata.push({
       key: 'pricing-type',
       label: t('Pricing Type'),
-      value: isTokenBased ? t('Token-based') : t('Per Request'),
+      value:
+        hasOnlyRequestTiers || !isTokenBased
+          ? t('Per Request')
+          : t('Token-based'),
     })
   }
 
@@ -321,7 +339,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           currentClassName='font-semibold'
         />
         <span className='text-muted-foreground self-start pt-0.5 text-xs'>
-          / {priceUnit}
+          / {row.unit ?? priceUnit}
         </span>
       </div>
     ))

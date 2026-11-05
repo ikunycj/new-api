@@ -19,6 +19,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func mergeEstimatedOpenAIUsage(current, estimate *dto.Usage) *dto.Usage {
+	if current == nil || current.BillingUsage == nil || current.BillingUsage.OpenAIUsage == nil {
+		return dto.MergeUsageNonZero(current, estimate)
+	}
+	incoming := *estimate
+	native := *estimate
+	native.InputTokens = native.PromptTokens
+	native.OutputTokens = native.CompletionTokens
+	incoming.BillingUsage = &dto.BillingUsage{
+		Source: current.BillingUsage.Source, Semantic: current.BillingUsage.Semantic,
+		Estimated: true, OpenAIUsage: &native,
+	}
+	return dto.MergeUsageNonZero(current, &incoming)
+}
+
 // 辅助函数
 func HandleStreamFormat(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
 	info.SendResponseCount++
@@ -146,9 +161,11 @@ func handleLastResponse(lastStreamData string, responseId *string, createAt *int
 	*systemFingerprint = lastStreamResponse.GetSystemFingerprint()
 	*model = lastStreamResponse.Model
 
+	if dto.HasOpenAIUsageTokens(lastStreamResponse.Usage) {
+		*usage = dto.MergeUsageNonZero(*usage, lastStreamResponse.Usage)
+	}
 	if service.ValidUsage(lastStreamResponse.Usage) {
 		*containStreamUsage = true
-		*usage = lastStreamResponse.Usage
 		if !info.ShouldIncludeUsage {
 			*shouldSendLastResp = lo.SomeBy(lastStreamResponse.Choices, func(choice dto.ChatCompletionsStreamResponseChoice) bool {
 				return choice.Delta.GetContentString() != "" || choice.Delta.GetReasoningContent() != ""

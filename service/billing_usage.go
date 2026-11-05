@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 )
 
 const (
@@ -102,6 +103,15 @@ func usageFromBillingUsage(usage *dto.Usage) (*dto.Usage, bool) {
 
 func usageFromOpenAIBillingUsage(billingUsage *dto.BillingUsage) *dto.Usage {
 	usage := *billingUsage.OpenAIUsage
+	if strings.EqualFold(billingUsage.Source, dto.BillingUsageSourceOAIResponses) {
+		usage = *relayconvert.UsageFromResponsesUsage(billingUsage.OpenAIUsage)
+	} else {
+		usage.PromptTokensDetails = usage.PromptTokensDetails.Clone()
+		if usage.InputTokensDetails != nil {
+			details := usage.InputTokensDetails.Clone()
+			usage.InputTokensDetails = &details
+		}
+	}
 	if usage.PromptTokens == 0 && usage.InputTokens > 0 {
 		usage.PromptTokens = usage.InputTokens
 	}

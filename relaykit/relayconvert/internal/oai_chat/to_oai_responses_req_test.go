@@ -37,6 +37,16 @@ func TestChatCompletionsRequestToResponsesRequestInstructionsAndTools(t *testing
 	assert.Equal(t, "function_call_output", gjson.GetBytes(got.Input, "3.type").String())
 }
 
+func TestChatToResponsesPreservesTwelveHourCacheOptions(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{
+		Model: "gpt-5.6-terra", Messages: []dto.Message{{Role: "user", Content: "hello"}},
+		PromptCacheOptions: []byte(`{"ttl":"12h"}`),
+	}
+	response, err := ChatCompletionsRequestToResponsesRequest(request)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"ttl":"12h"}`, string(response.PromptCacheOptions))
+}
+
 func TestChatCompletionsRequestToResponsesRequestRejectsMultipleChoices(t *testing.T) {
 	_, err := ChatCompletionsRequestToResponsesRequest(&dto.GeneralOpenAIRequest{
 		Model: "gpt-test",

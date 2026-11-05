@@ -40,6 +40,10 @@ import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Label } from '@/components/ui/label'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
+import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '@/features/pricing/lib/billing-expr'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
@@ -232,10 +236,17 @@ function BillingBreakdown(props: {
         })
       }
       for (const entry of tieredSummary.priceEntries) {
+        const unit =
+          entry.billingUnit === 'request'
+            ? formatBillingPriceUnit(entry.billingUnit, entry.imageCount, t)
+            : 'M'
         rows.push({
-          label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}/M`,
+          label: formatBillingVarLabel(entry.variable, t),
+          value: `${fmtPrice(entry.price)}/${unit}`,
         })
+      }
+      if (other.image_count != null) {
+        rows.push({ label: 'image_count', value: String(other.image_count) })
       }
     } else {
       rows.push({
@@ -321,6 +332,15 @@ function BillingBreakdown(props: {
       rows.push({
         label: t('Cache Creation (1h)'),
         value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
+      })
+    }
+    if (
+      other.cache_creation_ratio_12h != null &&
+      other.cache_creation_ratio_12h !== 0
+    ) {
+      rows.push({
+        label: `${t('Cache Write')} (cc12h)`,
+        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
       })
     }
   }
@@ -412,7 +432,9 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
   const cacheWrite = other.cache_creation_tokens || 0
   const cacheWrite5m = other.cache_creation_tokens_5m || 0
   const cacheWrite1h = other.cache_creation_tokens_1h || 0
-  const hasTokens = promptTokens > 0 || completionTokens > 0
+  const cacheWrite12h = other.cache_creation_tokens_12h || 0
+  const hasTokens =
+    promptTokens > 0 || completionTokens > 0 || hasAnyCacheTokens(other)
 
   if (!hasTokens) return null
 
@@ -431,7 +453,12 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
     })
   }
 
-  if (cacheWrite > 0 && cacheWrite5m === 0 && cacheWrite1h === 0) {
+  if (
+    cacheWrite > 0 &&
+    cacheWrite5m === 0 &&
+    cacheWrite1h === 0 &&
+    cacheWrite12h === 0
+  ) {
     rows.push({
       label: t('Cache Write'),
       value: cacheWrite.toLocaleString(),
@@ -449,6 +476,13 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
     rows.push({
       label: t('Cache Write (1h)'),
       value: cacheWrite1h.toLocaleString(),
+    })
+  }
+
+  if (cacheWrite12h > 0) {
+    rows.push({
+      label: `${t('Cache Write')} (cc12h)`,
+      value: cacheWrite12h.toLocaleString(),
     })
   }
 

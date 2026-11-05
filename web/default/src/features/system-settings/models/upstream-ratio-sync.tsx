@@ -25,9 +25,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
 import {
+  applyUpstreamPrices,
   fetchUpstreamRatios,
   getUpstreamChannels,
-  updateSystemOption,
 } from '../api'
 import type {
   DifferencesMap,
@@ -162,6 +162,10 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
 
   const fetchMutation = useMutation({
     mutationFn: fetchUpstreamRatios,
+    onMutate: () => {
+      setDifferences({})
+      setResolutions({})
+    },
     onSuccess: (data) => {
       if (!data.success) {
         toast.error(data.message || t('Failed to fetch upstream prices'))
@@ -193,11 +197,7 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
   })
 
   const { mutate: syncMutate, isPending: isSyncPending } = useMutation({
-    mutationFn: async (updates: Array<{ key: string; value: string }>) => {
-      for (const update of updates) {
-        await updateSystemOption(update)
-      }
-    },
+    mutationFn: applyUpstreamPrices,
     onSuccess: () => {
       toast.success(t('Prices synced successfully'))
       queryClient.invalidateQueries({ queryKey: ['system-options'] })

@@ -80,27 +80,41 @@ func TestResponseOpenAI2ClaudeUsageCarriesOpenAIBillingUsage(t *testing.T) {
 }
 
 func TestBuildClaudeUsageFromOpenAICacheWriteUsage(t *testing.T) {
-	usage := buildClaudeUsageFromOpenAIUsage(&dto.Usage{
-		PromptTokens:     3619,
-		CompletionTokens: 36,
-		TotalTokens:      3655,
-		PromptTokensDetails: dto.InputTokenDetails{
-			CachedTokens:     2921,
-			CacheWriteTokens: 3616,
-		},
-	})
-
-	require.NotNil(t, usage)
-	// Claude semantics reports input_tokens excluding cache read/write; the
-	// overlapping unadjusted prefixes drive the remainder negative, clamp to 0.
-	assert.Equal(t, 0, usage.InputTokens)
-	assert.Equal(t, 2921, usage.CacheReadInputTokens)
-	assert.Equal(t, 3616, usage.CacheCreationInputTokens)
-	assert.Equal(t, 36, usage.OutputTokens)
-	require.NotNil(t, usage.BillingUsage)
-	require.NotNil(t, usage.BillingUsage.OpenAIUsage)
-	assert.Equal(t, dto.BillingUsageSemanticOpenAI, usage.BillingUsage.Semantic)
-	assert.Equal(t, 3616, usage.BillingUsage.OpenAIUsage.PromptTokensDetails.CacheWriteTokens)
+	tests := []struct {
+		name       string
+		prompt     int
+		details    dto.InputTokenDetails
+		input      int
+		cacheWrite int
+	}{
+		{name: "overlapping native prefixes clamp input", prompt: 3619, details: dto.InputTokenDetails{CachedTokens: 2921, CacheWriteTokens: 3616}, cacheWrite: 3616},
+		{name: "explicit cache alias", prompt: 30, details: dto.InputTokenDetails{CachedTokens: 3, CacheCreationInputTokens: 12}, input: 15, cacheWrite: 12},
+		{name: "aliases are not summed", prompt: 30, details: dto.InputTokenDetails{CachedTokens: 3, CachedCreationTokens: 8, CacheWriteTokens: 10, CacheCreationInputTokens: 12, CacheWriteTokensDetails: &dto.CacheWriteTokenDetails{TTL30mTokens: 5, TTL12hTokens: 7}}, input: 15, cacheWrite: 12},
+		{name: "legacy Claude cache leaves input semantics unchanged", prompt: 30, details: dto.InputTokenDetails{CachedTokens: 3, CachedCreationTokens: 8}, input: 30, cacheWrite: 8},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usage := buildClaudeUsageFromOpenAIUsage(&dto.Usage{
+				PromptTokens:        tt.prompt,
+				CompletionTokens:    36,
+				TotalTokens:         tt.prompt + 36,
+				PromptTokensDetails: tt.details,
+			})
+			require.NotNil(t, usage)
+			assert.Equal(t, tt.input, usage.InputTokens)
+			assert.Equal(t, tt.details.CachedTokens, usage.CacheReadInputTokens)
+			assert.Equal(t, tt.cacheWrite, usage.CacheCreationInputTokens)
+			assert.Equal(t, 36, usage.OutputTokens)
+			require.NotNil(t, usage.BillingUsage)
+			require.NotNil(t, usage.BillingUsage.OpenAIUsage)
+			assert.Equal(t, dto.BillingUsageSemanticOpenAI, usage.BillingUsage.Semantic)
+			assert.Equal(t, tt.details, usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+			if tt.details.CacheWriteTokensDetails != nil {
+				tt.details.CacheWriteTokensDetails.TTL12hTokens = 99
+				assert.Equal(t, 7, usage.BillingUsage.OpenAIUsage.PromptTokensDetails.CacheWrite12hTokens())
+			}
+		})
+	}
 }
 
 func TestStreamResponseOpenAI2ClaudeClosesTextThinkingAndToolBlocks(t *testing.T) {

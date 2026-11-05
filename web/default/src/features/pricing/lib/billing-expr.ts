@@ -99,6 +99,15 @@ export const BILLING_VARS: BillingVar[] = [
     group: 'cache',
   },
   {
+    key: 'cc12h',
+    field: 'cacheCreate12hPrice',
+    tierField: 'cache_create_12h_unit_cost',
+    label: 'Cache create price',
+    shortLabel: 'Cache Write',
+    side: 'input',
+    group: 'cache',
+  },
+  {
     key: 'img',
     field: 'imagePrice',
     tierField: 'image_unit_cost',
@@ -136,6 +145,37 @@ export const BILLING_VARS: BillingVar[] = [
   },
 ]
 
+export type BillingUnit = 'token' | 'request'
+
+// A pricing function, not a token variable or a visual-editor condition.
+export const FIXED_PRICE_VAR: BillingVar = {
+  key: 'fixed',
+  field: 'fixedPrice',
+  tierField: null,
+  label: 'Fixed price (USD)',
+  shortLabel: 'Fixed price',
+  side: 'input',
+}
+
+export function formatBillingVarLabel(
+  variable: BillingVar,
+  t: (key: string) => string,
+  short = true
+): string {
+  const label = t(short ? variable.shortLabel : variable.label)
+  return variable.key === 'cc12h' ? `${label} (cc12h)` : label
+}
+
+export function formatBillingPriceUnit(
+  unit: BillingUnit,
+  imageCount: boolean | undefined,
+  t: (key: string) => string,
+  tokenUnit: 'K' | 'M' = 'M'
+): string {
+  if (unit === 'request') return imageCount ? t('Image') : t('request')
+  return `1${tokenUnit} ${t('tokens')}`
+}
+
 /** Vars that have real price fields (excludes condition-only vars like `len`) */
 export const BILLING_PRICING_VARS: BillingVar[] = BILLING_VARS.filter(
   (v) => !v.isConditionOnly
@@ -160,7 +200,7 @@ export const BILLING_CACHE_VAR_MAP = BILLING_EXTRA_VARS.map((v) => ({
 }))
 
 const BILLING_VAR_REGEX = new RegExp(
-  `\\b(${BILLING_PRICING_VARS.map((v) => v.key).join('|')})\\s*\\*\\s*([\\d.eE+-]+)`,
+  `\\b(${BILLING_PRICING_VARS.map((v) => v.key).join('|')})\\s*\\*\\s*(-?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)`,
   'g'
 )
 
@@ -233,10 +273,16 @@ export type TierCondition = {
   value: number
 }
 
-export type ParsedTier = {
+type ParsedTierPrice = {
+  billingUnit: BillingUnit
+  fixedPrice?: number
+  [field: string]: unknown
+}
+
+export type ParsedTier = ParsedTierPrice & {
   label: string
   conditions: TierCondition[]
-  [field: string]: unknown
+  imageCount?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -250,16 +296,35 @@ function stripExprVersion(exprStr: string): { version: number; body: string } {
   return { version: 1, body: exprStr }
 }
 
-function parseTierBody(bodyStr: string): Record<string, number> {
+function parseTierBody(bodyStr: string): ParsedTierPrice | null {
+  const fixed = bodyStr.trim().match(/^fixed\(\s*([^()]+)\s*\)$/)
+  if (fixed) {
+    const literal = fixed[1].trim()
+    const amount = Number(literal)
+    if (
+      !NUMERIC_LITERAL_REGEX.test(literal) ||
+      amount < 0 ||
+      !Number.isFinite(amount * 1_000_000)
+    ) {
+      return null
+    }
+    return { billingUnit: 'request', fixedPrice: amount }
+  }
+
   const coeffs: Record<string, number> = {}
   const re = new RegExp(BILLING_VAR_REGEX.source, 'g')
-  let m
-  while ((m = re.exec(bodyStr)) !== null) {
-    if (!(m[1] in coeffs)) coeffs[m[1]] = Number(m[2])
+  for (const match of bodyStr.matchAll(re)) {
+    const price = Number(match[2])
+    if (match[1] in coeffs || !Number.isFinite(price) || price < 0) return null
+    coeffs[match[1]] = price
   }
-  const tier: Record<string, number> = {}
+  const skeleton = bodyStr.replace(re, 'T')
+  if (!/^T(?:\s*\+\s*T)*$/.test(skeleton.trim())) return null
+  const tier: ParsedTierPrice = {
+    billingUnit: 'token',
+  }
   for (const [varName, field] of Object.entries(BILLING_VAR_KEY_TO_FIELD)) {
-    tier[field] = coeffs[varName] || 0
+    tier[field] = coeffs[varName] ?? 0
   }
   return tier
 }
@@ -267,37 +332,50 @@ function parseTierBody(bodyStr: string): Record<string, number> {
 export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
   if (!exprStr) return []
   try {
-    const { body } = stripExprVersion(exprStr)
+    const split = splitBillingExprAndRequestRules(exprStr)
+    const versioned = stripExprVersion(split.billingExpr)
+    if (versioned.version !== 1) return []
+    let body = unwrapOuterParens(versioned.body)
+    let globalImageCount = false
+    const imageFactor = body.match(/^([\s\S]+)\s*\*\s*image_count$/)
+    if (imageFactor && hasFullOuterParens(imageFactor[1].trim())) {
+      body = unwrapOuterParens(imageFactor[1])
+      globalImageCount = true
+    }
     const condGroup =
-      `((?:(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)` +
-      `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`
+      `((?:(?:p|c|len)\\s*(?:<=|<|>=|>)\\s*[\\d.eE+]+)` +
+      `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<=|<|>=|>)\\s*[\\d.eE+]+)*)`
     const tierRe = new RegExp(
-      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*([^)]+)\\)`,
+      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*(fixed\\(\\s*[^()]+\\s*\\)|[^()]+)\\)(\\s*\\*\\s*image_count)?`,
       'g'
     )
     const tiers: ParsedTier[] = []
-    let m
-    while ((m = tierRe.exec(body)) !== null) {
-      const condStr = m[1] || ''
+    for (const match of body.matchAll(tierRe)) {
+      const prices = parseTierBody(match[3])
+      if (!prices) return []
       const conditions: TierCondition[] = []
-      if (condStr) {
-        for (const cp of condStr.split(/\s*&&\s*/)) {
-          const cm = cp.trim().match(/^(p|c|len)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/)
-          if (cm) {
-            conditions.push({
-              var: cm[1] as TierCondition['var'],
-              op: cm[2] as TierCondition['op'],
-              value: Number(cm[3]),
-            })
-          }
-        }
+      for (const cp of (match[1] || '').split(/\s*&&\s*/).filter(Boolean)) {
+        const cm = cp.trim().match(/^(p|c|len)\s*(<=|<|>=|>)\s*([\d.eE+]+)$/)
+        if (!cm || !Number.isFinite(Number(cm[3]))) return []
+        conditions.push({
+          var: cm[1] as TierCondition['var'],
+          op: cm[2] as TierCondition['op'],
+          value: Number(cm[3]),
+        })
       }
-      const tier = parseTierBody(m[3]) as ParsedTier
-      tier.label = m[2]
-      tier.conditions = conditions
-      tiers.push(tier)
+      tiers.push({
+        ...prices,
+        billingUnit: prices.billingUnit,
+        label: match[2],
+        conditions,
+        imageCount: globalImageCount || Boolean(match[4]),
+      })
     }
-    return tiers
+    // Only a chain of supported conditional leaves is structured pricing.
+    // Unknown arithmetic/functions must keep the raw-expression fallback.
+    const skeleton = body.replace(tierRe, (_full, cond) => (cond ? '?T' : 'T'))
+    const supportedShape = /^(?:\?T\s*:\s*)*(?:T|p\s*\*\s*0\s*\+\s*c\s*\*\s*0)$/
+    return supportedShape.test(skeleton.trim()) ? tiers : []
   } catch {
     return []
   }
@@ -480,6 +558,9 @@ function tryParseRuleGroupFactor(part: string): RequestRuleGroup | null {
 
   const conditionStr = m[1]
   const multiplier = m[2]
+  if (!Number.isFinite(Number(multiplier)) || Number(multiplier) < 0) {
+    return null
+  }
 
   const andParts = splitTopLevelAnd(conditionStr)
   const conditions: RequestCondition[] = []
@@ -553,12 +634,13 @@ export function splitBillingExprAndRequestRules(expr: string): {
     }
   })
 
-  if (ruleParts.length === 0 || baseParts.length !== 1) {
+  const pricingParts = baseParts.filter((part) => part !== 'image_count')
+  if (ruleParts.length === 0 || pricingParts.length !== 1) {
     return { billingExpr: trimmed, requestRuleExpr: '' }
   }
 
   return {
-    billingExpr: unwrapOuterParens(baseParts[0]),
+    billingExpr: unwrapOuterParens(baseParts.join(' * ')),
     requestRuleExpr: ruleParts.join(' * '),
   }
 }

@@ -35,6 +35,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '@/features/pricing/lib/billing-expr'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
@@ -186,12 +190,18 @@ function buildTypeDetailSegments(
 
       const cacheEntries = tieredSummary.priceEntries
         .filter((entry) =>
-          ['cacheReadPrice', 'cacheCreatePrice', 'cacheCreate1hPrice'].includes(
-            entry.field
-          )
+          [
+            'cacheReadPrice',
+            'cacheCreatePrice',
+            'cacheCreate1hPrice',
+            'cacheCreate12hPrice',
+          ].includes(entry.field)
         )
         .map((entry) => {
-          return formatPriceCompact(entry.price)
+          const price = formatPriceCompact(entry.price)
+          return entry.key === 'cc12h'
+            ? `${formatBillingVarLabel(entry.variable, t)} ${price}`
+            : price
         })
       if (cacheEntries.length > 0) {
         segments.push({
@@ -209,9 +219,16 @@ function buildTypeDetailSegments(
               'cacheReadPrice',
               'cacheCreatePrice',
               'cacheCreate1hPrice',
+              'cacheCreate12hPrice',
             ].includes(entry.field)
         )
-        .map((entry) => `${t(entry.shortLabel)} ${formatPrice(entry.price)}`)
+        .map((entry) => {
+          const price =
+            entry.billingUnit === 'request'
+              ? `${formatPriceCompact(entry.price)}/${formatBillingPriceUnit(entry.billingUnit, entry.imageCount, t)}`
+              : formatPrice(entry.price)
+          return `${formatBillingVarLabel(entry.variable, t)} ${price}`
+        })
       if (otherEntries.length > 0) {
         segments.push({
           text: otherEntries.join(' · '),
@@ -254,6 +271,10 @@ function buildTypeDetailSegments(
           other.cache_creation_ratio_1h != null &&
           other.cache_creation_ratio_1h !== 0
             ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
+            : null,
+          other.cache_creation_ratio_12h != null &&
+          other.cache_creation_ratio_12h !== 0
+            ? `${t('Cache Write')} (cc12h) ${formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_12h)}`
             : null,
         ].filter(Boolean) as string[]
 

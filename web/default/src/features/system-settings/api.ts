@@ -127,7 +127,26 @@ export async function getSystemOptions(config?: ApiRequestConfig) {
 }
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
-  const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  const res = await api.put<UpdateOptionResponse>('/api/option/', request, {
+    skipBusinessError: true,
+  })
+  if (!res.data.success) throw new Error(res.data.message || '保存设置失败')
+  return res.data
+}
+
+export async function applyUpstreamPrices(
+  updates: Array<{ key: string; value: string }>
+) {
+  const res = await api.post<UpdateOptionResponse>(
+    '/api/ratio_sync/apply',
+    {
+      updates: Object.fromEntries(
+        updates.map((update) => [update.key, update.value])
+      ),
+    },
+    { skipBusinessError: true, skipErrorHandler: true }
+  )
+  if (!res.data.success) throw new Error(res.data.message || '价格同步失败')
   return res.data
 }
 
@@ -212,7 +231,8 @@ export async function getUpstreamChannels() {
 export async function fetchUpstreamRatios(request: FetchUpstreamRatiosRequest) {
   const res = await api.post<UpstreamRatiosResponse>(
     '/api/ratio_sync/fetch',
-    request
+    request,
+    { skipBusinessError: true, skipErrorHandler: true }
   )
   return res.data
 }

@@ -49,8 +49,9 @@ func OaiChatToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	usage := convertResult.Usage
 	if usage == nil || usage.TotalTokens == 0 {
 		text := service.ExtractOutputTextFromResponses(responsesResp)
-		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
-		responsesResp.Usage = relayconvert.UsageFromChatUsage(usage)
+		estimatedUsage := service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = mergeEstimatedOpenAIUsage(usage, relayconvert.UsageFromChatUsage(estimatedUsage))
+		responsesResp.Usage = usage
 	}
 
 	responseBody, err := common.Marshal(responsesResp)
@@ -136,7 +137,7 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 	usage := state.Usage()
 	if usage == nil || usage.TotalTokens == 0 {
-		usage = service.ResponseText2Usage(c, state.UsageText(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = mergeEstimatedOpenAIUsage(usage, service.ResponseText2Usage(c, state.UsageText(), info.UpstreamModelName, info.GetEstimatePromptTokens()))
 		state.SetUsage(usage)
 	}
 

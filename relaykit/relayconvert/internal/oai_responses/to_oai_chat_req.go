@@ -74,6 +74,7 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 		PromptCacheRetention: req.PromptCacheRetention,
 		EnableThinking:       req.EnableThinking,
 	}
+	out.PromptCacheOptions = req.PromptCacheOptions
 
 	if req.Reasoning != nil {
 		out.ReasoningEffort = req.Reasoning.Effort
@@ -123,9 +124,6 @@ func validateResponsesRequestChatUnsupportedFields(req *dto.OpenAIResponsesReque
 	}
 	if rawJSONPresent(req.Moderation) {
 		unsupported = append(unsupported, "moderation")
-	}
-	if rawJSONPresent(req.PromptCacheOptions) {
-		unsupported = append(unsupported, "prompt_cache_options")
 	}
 	if rawJSONPresent(req.Truncation) {
 		unsupported = append(unsupported, "truncation")

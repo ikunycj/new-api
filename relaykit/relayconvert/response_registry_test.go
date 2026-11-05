@@ -5,6 +5,7 @@ import (
 
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert/convmeta"
+	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -610,6 +611,160 @@ func TestResponseUsageMatrixChatAndResponsesDetails(t *testing.T) {
 	assert.Equal(t, 4, result.Usage.CompletionTokenDetails.TextTokens)
 	assert.Equal(t, 1, result.Usage.CompletionTokenDetails.AudioTokens)
 	assert.Equal(t, 3, result.Usage.CompletionTokenDetails.ImageTokens)
+}
+
+func TestOpenAICacheUsageConversionRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		details string
+	}{
+		{name: "explicit cache alias only", details: `{"cache_creation_input_tokens":12}`},
+		{name: "cache lifetime only", details: `{"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":7}}`},
+		{name: "explicit zero lifetimes", details: `{"cache_write_tokens_details":{"ttl_30m_tokens":0,"ttl_12h_tokens":0}}`},
+		{name: "all aliases", details: `{"cached_tokens":3,"cached_creation_tokens":8,"cache_write_tokens":10,"cache_creation_input_tokens":12,"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":7}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var chat dto.OpenAITextResponse
+			require.NoError(t, kitutil.Unmarshal([]byte(`{"id":"chatcmpl_cache","model":"gpt-test","usage":{"prompt_tokens":30,"completion_tokens":2,"total_tokens":32,"usage_semantic":"openai","usage_source":"oai_chat","claude_cache_creation_5_m_tokens":2,"claude_cache_creation_1_h_tokens":6,"prompt_tokens_details":`+tt.details+`}}`), &chat))
+			expected := chat.Usage.PromptTokensDetails.Clone()
+
+			toResponses, err := ConvertResponse(nil, nil, types.RelayFormatOpenAIResponses, &chat)
+			require.NoError(t, err)
+			require.IsType(t, &dto.OpenAIResponsesResponse{}, toResponses.Value)
+			responses := toResponses.Value.(*dto.OpenAIResponsesResponse)
+			require.NotNil(t, responses.Usage.InputTokensDetails)
+			assert.Equal(t, expected, *responses.Usage.InputTokensDetails)
+			require.NotNil(t, responses.Usage.BillingUsage)
+			require.NotNil(t, responses.Usage.BillingUsage.OpenAIUsage)
+			assert.Equal(t, expected, responses.Usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+
+			wire, err := kitutil.Marshal(responses)
+			require.NoError(t, err)
+			var decoded dto.OpenAIResponsesResponse
+			require.NoError(t, kitutil.Unmarshal(wire, &decoded))
+			toChat, err := ConvertResponse(nil, nil, types.RelayFormatOpenAI, &decoded)
+			require.NoError(t, err)
+			assert.Equal(t, expected, toChat.Usage.PromptTokensDetails)
+			assert.Equal(t, "openai", toChat.Usage.UsageSemantic)
+			assert.Equal(t, "oai_chat", toChat.Usage.UsageSource)
+			assert.Equal(t, 30, toChat.Usage.PromptTokens)
+			assert.Equal(t, 32, toChat.Usage.TotalTokens)
+			assert.Equal(t, 2, toChat.Usage.ClaudeCacheCreation5mTokens)
+			assert.Equal(t, 6, toChat.Usage.ClaudeCacheCreation1hTokens)
+			require.NotNil(t, toChat.Usage.BillingUsage.OpenAIUsage)
+			assert.Equal(t, dto.BillingUsageSourceOAIChat, toChat.Usage.BillingUsage.Source)
+			assert.Equal(t, expected, toChat.Usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+
+			back, err := ConvertResponse(nil, nil, types.RelayFormatOpenAIResponses, toChat.Value)
+			require.NoError(t, err)
+			assert.Equal(t, expected, *back.Usage.InputTokensDetails)
+			if expected.CacheWriteTokensDetails != nil {
+				require.NotSame(t, chat.Usage.PromptTokensDetails.CacheWriteTokensDetails, responses.Usage.InputTokensDetails.CacheWriteTokensDetails)
+				require.NotSame(t, decoded.Usage.InputTokensDetails.CacheWriteTokensDetails, toChat.Usage.PromptTokensDetails.CacheWriteTokensDetails)
+				require.NotSame(t, toChat.Usage.PromptTokensDetails.CacheWriteTokensDetails, back.Usage.InputTokensDetails.CacheWriteTokensDetails)
+				responses.Usage.InputTokensDetails.CacheWriteTokensDetails.TTL12hTokens = 99
+				back.Usage.InputTokensDetails.CacheWriteTokensDetails.TTL12hTokens = 98
+				assert.Equal(t, expected, chat.Usage.PromptTokensDetails)
+				assert.Equal(t, expected, toChat.Usage.PromptTokensDetails)
+				assert.Equal(t, expected, responses.Usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+				assert.Equal(t, expected, back.Usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+			}
+		})
+	}
+}
+
+func TestOpenAICacheBillingSnapshotSurvivesClaudeAndGeminiRoundTrip(t *testing.T) {
+	for _, target := range []types.RelayFormat{types.RelayFormatClaude, types.RelayFormatGemini} {
+		t.Run(string(target), func(t *testing.T) {
+			chat := &dto.OpenAITextResponse{
+				Id:    "chatcmpl_cache",
+				Model: "gpt-test",
+				Usage: dto.Usage{
+					PromptTokens:     30,
+					CompletionTokens: 2,
+					TotalTokens:      32,
+					PromptTokensDetails: dto.InputTokenDetails{
+						CacheCreationInputTokens: 12,
+						CacheWriteTokensDetails:  &dto.CacheWriteTokenDetails{TTL30mTokens: 5, TTL12hTokens: 7},
+					},
+				},
+			}
+			info := &convmeta.Values{ChannelMetaAttached: true, UpstreamModelName: "gpt-test"}
+			converted, err := ConvertResponse(nil, info, target, chat)
+			require.NoError(t, err)
+			wire, err := kitutil.Marshal(converted.Value)
+			require.NoError(t, err)
+			var decoded any
+			if target == types.RelayFormatClaude {
+				decoded = &dto.ClaudeResponse{}
+			} else {
+				decoded = &dto.GeminiChatResponse{}
+			}
+			require.NoError(t, kitutil.Unmarshal(wire, decoded))
+			back, err := ConvertResponse(nil, info, types.RelayFormatOpenAI, decoded)
+			require.NoError(t, err)
+			require.NotNil(t, back.Usage.BillingUsage)
+			require.NotNil(t, back.Usage.BillingUsage.OpenAIUsage)
+			snapshot := back.Usage.BillingUsage.OpenAIUsage
+			assert.Equal(t, dto.BillingUsageSemanticOpenAI, back.Usage.BillingUsage.Semantic)
+			assert.Equal(t, 30, snapshot.PromptTokens)
+			assert.Equal(t, 32, snapshot.TotalTokens)
+			assert.Equal(t, chat.Usage.PromptTokensDetails, snapshot.PromptTokensDetails)
+			chat.Usage.PromptTokensDetails.CacheWriteTokensDetails.TTL12hTokens = 99
+			assert.Equal(t, 7, snapshot.PromptTokensDetails.CacheWrite12hTokens())
+		})
+	}
+}
+
+func TestOpenAIStreamCacheUsageMergeAndRoundTrip(t *testing.T) {
+	state, err := NewResponseStreamState(types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses, ResponseStreamOptions{ID: "resp_cache", Model: "gpt-test"})
+	require.NoError(t, err)
+	for _, raw := range []string{
+		`{"choices":[],"usage":{"prompt_tokens":30,"total_tokens":30,"prompt_tokens_details":{"cache_write_tokens":10,"cache_creation_input_tokens":12,"cache_write_tokens_details":{"ttl_30m_tokens":3,"ttl_12h_tokens":7}}}}`,
+		`{"choices":[],"usage":{"completion_tokens":2,"prompt_tokens_details":{"cache_write_tokens_details":{"ttl_30m_tokens":5,"ttl_12h_tokens":0}}}}`,
+	} {
+		var chunk dto.ChatCompletionsStreamResponse
+		require.NoError(t, kitutil.Unmarshal([]byte(raw), &chunk))
+		_, err = ConvertStreamResponseChunk(nil, nil, state, &chunk)
+		require.NoError(t, err)
+	}
+	results, err := FinalizeStreamResponse(nil, nil, state)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	event, ok := results[len(results)-1].Value.(ChatToResponsesStreamEvent)
+	require.True(t, ok)
+	assert.Equal(t, "response.completed", event.Type)
+	require.NotNil(t, event.Payload.Response.Usage.InputTokensDetails)
+	expected := dto.InputTokenDetails{CacheWriteTokens: 10, CacheCreationInputTokens: 12, CacheWriteTokensDetails: &dto.CacheWriteTokenDetails{TTL30mTokens: 5, TTL12hTokens: 7}}
+	assert.Equal(t, expected, *event.Payload.Response.Usage.InputTokensDetails)
+	assert.Equal(t, 12, event.Payload.Response.Usage.InputTokensDetails.CacheCreationTokensTotal())
+
+	back, err := NewResponseStreamState(types.RelayFormatOpenAIResponses, types.RelayFormatOpenAI, ResponseStreamOptions{IncludeUsage: true})
+	require.NoError(t, err)
+	// An earlier Responses snapshot reports the prompt and cache counters.
+	var created dto.ResponsesStreamResponse
+	require.NoError(t, kitutil.Unmarshal([]byte(`{"type":"response.created","response":{"usage":{"input_tokens":30,"input_tokens_details":{"cache_creation_input_tokens":12,"cache_write_tokens_details":{"ttl_30m_tokens":5,"ttl_12h_tokens":7}}}}}`), &created))
+	_, err = ConvertStreamResponseChunk(nil, nil, back, &created)
+	require.NoError(t, err)
+	wire, err := kitutil.Marshal(event.Payload)
+	require.NoError(t, err)
+	var terminal dto.ResponsesStreamResponse
+	require.NoError(t, kitutil.Unmarshal(wire, &terminal))
+	chunks, err := ConvertStreamResponseChunk(nil, nil, back, &terminal)
+	require.NoError(t, err)
+	require.NotEmpty(t, chunks)
+	chunk, ok := chunks[len(chunks)-1].Value.(dto.ChatCompletionsStreamResponse)
+	require.True(t, ok)
+	require.NotNil(t, chunk.Usage)
+	assert.Equal(t, 30, chunk.Usage.PromptTokens)
+	assert.Equal(t, 2, chunk.Usage.CompletionTokens)
+	assert.Equal(t, 32, chunk.Usage.TotalTokens)
+	assert.Equal(t, expected, chunk.Usage.PromptTokensDetails)
+	require.NotNil(t, chunk.Usage.BillingUsage.OpenAIUsage)
+	assert.Equal(t, expected, chunk.Usage.BillingUsage.OpenAIUsage.PromptTokensDetails)
+	terminal.Response.Usage.InputTokensDetails.CacheWriteTokensDetails.TTL12hTokens = 1
+	assert.Equal(t, 7, chunk.Usage.PromptTokensDetails.CacheWrite12hTokens())
 }
 
 func textRegistryChatResponse() *dto.OpenAITextResponse {

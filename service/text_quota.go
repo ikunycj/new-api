@@ -29,6 +29,7 @@ type textQuotaSummary struct {
 	CacheCreationTokens      int
 	CacheCreationTokens5m    int
 	CacheCreationTokens1h    int
+	CacheCreationTokens12h   int
 	InputTokensTotal         int
 	CacheStatsAvailable      bool
 	ImageTokens              int
@@ -258,6 +259,9 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CacheCreationTokensTotal()
 	summary.CacheCreationTokens5m = usage.ClaudeCacheCreation5mTokens
 	summary.CacheCreationTokens1h = usage.ClaudeCacheCreation1hTokens
+	if !summary.IsClaudeUsageSemantic {
+		summary.CacheCreationTokens12h = usage.PromptTokensDetails.CacheWrite12hTokens()
+	}
 	if inputTokens, ok := cacheStatsInputTokens(relayInfo, usage); ok {
 		summary.InputTokensTotal = inputTokens
 		summary.CacheStatsAvailable = true
@@ -319,7 +323,10 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		if !dCachedCreationTokens.IsZero() || hasSplitCacheCreationTokens {
 			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
 				baseTokens = baseTokens.Sub(dCachedCreationTokens)
-				cachedCreationTokensWithRatio = dCachedCreationTokens.Mul(dCacheCreationRatio)
+				dLongCacheWrites := decimal.NewFromInt(int64(summary.CacheCreationTokens12h))
+				cachedCreationTokensWithRatio = dCachedCreationTokens.Sub(dLongCacheWrites).
+					Add(dLongCacheWrites.Mul(decimal.NewFromFloat(openAICacheCreation12hMultiplier))).
+					Mul(dCacheCreationRatio)
 			} else {
 				remaining := summary.CacheCreationTokens - summary.CacheCreationTokens5m - summary.CacheCreationTokens1h
 				if remaining < 0 {
@@ -411,7 +418,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	var tieredResult *billingexpr.TieredResult
 	tieredBillingApplied := false
-	if originUsage != nil {
+	if originUsage != nil || relayInfo.TieredBillingSnapshot != nil && billingexpr.UsesFixedPricing(relayInfo.TieredBillingSnapshot.ExprString) {
+		if billingUsage == nil {
+			billingUsage = &dto.Usage{}
+		}
 		var tieredUsedVars map[string]bool
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			tieredUsedVars = billingexpr.UsedVars(snap.ExprString)
@@ -440,7 +450,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).Mul(decimal.NewFromFloat(summary.BillingUSDToCNYRate)).String()))
 	}
 
-	if !summary.hasBillableUsage() {
+	fixedPriceSettlement := tieredBillingApplied && isFixedPriceSettlement(relayInfo, tieredResult)
+	if !summary.hasBillableUsage() && !fixedPriceSettlement {
 		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
@@ -519,6 +530,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if summary.CacheCreationTokens1h > 0 {
 		other["cache_creation_tokens_1h"] = summary.CacheCreationTokens1h
 		other["cache_creation_ratio_1h"] = summary.CacheCreationRatio1h
+	}
+	if summary.CacheCreationTokens12h > 0 {
+		other["cache_creation_tokens_12h"] = summary.CacheCreationTokens12h
+		other["cache_creation_ratio_12h"] = summary.CacheCreationRatio * openAICacheCreation12hMultiplier
 	}
 	cacheWriteTokens := cacheWriteTokensTotal(summary)
 	if cacheWriteTokens > 0 {

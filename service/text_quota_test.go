@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -600,6 +601,29 @@ func TestCalculateTextQuotaSummaryBillsOpenAICacheWriteTokens(t *testing.T) {
 		// max(3619-2921-3616, 0) + 2921*0.1 + 3616*1.25 + 36*2 = 4884.1 => 4884
 		require.Equal(t, 4884, summary.Quota)
 	})
+}
+
+func TestCalculateTextQuotaSummaryPricesTwelveHourCacheWrites(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.6-terra",
+		PriceData: types.PriceData{
+			ModelRatio: 1, CompletionRatio: 6, CacheRatio: 0.1, CacheCreationRatio: 1.25,
+			BillingUSDToCNYRate: 1, GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+	usage := &dto.Usage{
+		PromptTokens: 1000, CompletionTokens: 100,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 100, CacheWriteTokens: 400, CacheCreationInputTokens: 300,
+			CacheWriteTokensDetails: &dto.CacheWriteTokenDetails{TTL30mTokens: 200, TTL12hTokens: 200},
+		},
+	}
+	summary := calculateTextQuotaSummary(ctx, info, usage)
+	assert.Equal(t, 400, summary.CacheCreationTokens)
+	assert.Equal(t, 200, summary.CacheCreationTokens12h)
+	assert.Equal(t, 1860, summary.Quota)
 }
 
 func TestCalculateTextQuotaSummarySeparatesOpenRouterCacheReadFromPromptBilling(t *testing.T) {

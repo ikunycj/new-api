@@ -386,7 +386,7 @@ func (s *ResponseStreamState) SetUsage(usage *dto.Usage) {
 	for _, state := range s.stepStates {
 		switch typed := state.(type) {
 		case *ChatToResponsesStreamState:
-			typed.Usage = UsageFromChatUsage(usage)
+			typed.Usage = dto.MergeUsageNonZero(typed.Usage, UsageFromChatUsage(usage))
 		case *ResponsesToChatStreamState:
 			typed.Usage = usage
 		}

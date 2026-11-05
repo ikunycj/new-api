@@ -86,7 +86,9 @@ func HasOpenAIUsageTokens(usage *Usage) bool {
 		usage.ClaudeCacheCreation1hTokens != 0 {
 		return true
 	}
-	if usage.PromptTokensDetails.CachedTokens != 0 ||
+	if usage.PromptTokensDetails.CacheWriteTokensDetails.HasTokens() ||
+		usage.PromptTokensDetails.CacheCreationInputTokens != 0 ||
+		usage.PromptTokensDetails.CachedTokens != 0 ||
 		usage.PromptTokensDetails.CachedCreationTokens != 0 ||
 		usage.PromptTokensDetails.CacheWriteTokens != 0 ||
 		usage.PromptTokensDetails.TextTokens != 0 ||
@@ -100,7 +102,17 @@ func HasOpenAIUsageTokens(usage *Usage) bool {
 		usage.CompletionTokenDetails.AudioTokens != 0 {
 		return true
 	}
-	return usage.InputTokensDetails != nil
+	if usage.InputTokensDetails == nil {
+		return false
+	}
+	return usage.InputTokensDetails.CacheWriteTokensDetails.HasTokens() ||
+		usage.InputTokensDetails.CacheCreationInputTokens != 0 ||
+		usage.InputTokensDetails.CachedTokens != 0 ||
+		usage.InputTokensDetails.CachedCreationTokens != 0 ||
+		usage.InputTokensDetails.CacheWriteTokens != 0 ||
+		usage.InputTokensDetails.TextTokens != 0 ||
+		usage.InputTokensDetails.ImageTokens != 0 ||
+		usage.InputTokensDetails.AudioTokens != 0
 }
 
 func NewGeminiChatBillingUsage(metadata *GeminiUsageMetadata) *BillingUsage {
@@ -155,8 +167,9 @@ func cloneOpenAIUsage(usage *Usage) *Usage {
 	}
 	clone := *usage
 	clone.BillingUsage = nil
+	clone.PromptTokensDetails = usage.PromptTokensDetails.Clone()
 	if usage.InputTokensDetails != nil {
-		inputTokensDetails := *usage.InputTokensDetails
+		inputTokensDetails := usage.InputTokensDetails.Clone()
 		clone.InputTokensDetails = &inputTokensDetails
 	}
 	return &clone

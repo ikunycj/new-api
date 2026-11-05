@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -63,6 +64,38 @@ func TestModelPriceHelperTieredUsesPreloadedRequestInput(t *testing.T) {
 	require.Equal(t, "stream", info.TieredBillingSnapshot.EstimatedTier)
 	require.Equal(t, billing_setting.BillingModeTieredExpr, info.TieredBillingSnapshot.BillingMode)
 	require.Equal(t, common.QuotaPerUnit, info.TieredBillingSnapshot.QuotaPerUnit)
+}
+
+func TestModelPriceHelperFixedImageReservesValidatedQuantity(t *testing.T) {
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() { require.NoError(t, config.GlobalConfig.LoadFromDB(saved)) })
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode":    `{"image-01":"tiered_expr"}`,
+		"billing_setting.billing_expr":    `{"image-01":"tier(\"image\", fixed(0.0035)) * image_count"}`,
+		"group_ratio_setting.group_ratio": `{"default":1}`,
+	}))
+	for _, count := range []uint{1, 3, 0, dto.MaxImageN + 1} {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+		ctx.Set("group", "default")
+		info := &relaycommon.RelayInfo{
+			OriginModelName: "image-01", UserGroup: "default", UsingGroup: "default",
+			Request: &dto.ImageRequest{Model: "image-01", N: &count, Prompt: "test"},
+		}
+		price, err := ModelPriceHelperWithBillingRate(ctx, info, 1000, &types.TokenCountMeta{MaxTokens: 8192}, 1)
+		if count == 0 || count > dto.MaxImageN {
+			require.Error(t, err)
+			continue
+		}
+		require.NoError(t, err)
+		require.Equal(t, 1750*int(count), price.QuotaToPreConsume)
+		require.NotNil(t, info.TieredBillingSnapshot.EstimatedImageCount)
+		require.Equal(t, int(count), *info.TieredBillingSnapshot.EstimatedImageCount)
+	}
 }
 
 func TestModelPriceHelperTieredPreConsumeMaxTokensFallback(t *testing.T) {

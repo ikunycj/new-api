@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,6 +35,32 @@ func ResolveIncomingBillingExprRequestInput(c *gin.Context, info *relaycommon.Re
 	return input, nil
 }
 
+func ResolveImageBillingRequestInput(info *relaycommon.RelayInfo, input billingexpr.RequestInput) (billingexpr.RequestInput, error) {
+	request, ok := info.Request.(*dto.ImageRequest)
+	if !ok {
+		return input, nil
+	}
+	count := uint(1)
+	if request.N != nil {
+		count = *request.N
+	}
+	if count < 1 || count > dto.MaxImageN {
+		return input, fmt.Errorf("image_count must be between 1 and %d", dto.MaxImageN)
+	}
+	quantity := int(count)
+	if len(input.Body) == 0 {
+		body, err := common.Marshal(map[string]any{
+			"model": request.Model, "prompt": request.Prompt, "n": quantity, "size": request.Size, "quality": request.Quality,
+		})
+		if err != nil {
+			return input, err
+		}
+		input.Body = body
+	}
+	input.ImageCount = &quantity
+	return input, nil
+}
+
 func BuildBillingExprRequestInputFromRequest(request dto.Request, headers map[string]string) (billingexpr.RequestInput, error) {
 	input := billingexpr.RequestInput{
 		Headers: cloneStringMap(headers),
@@ -64,6 +91,10 @@ func readIncomingBillingExprBody(c *gin.Context) ([]byte, error) {
 func cloneRequestInput(src billingexpr.RequestInput) billingexpr.RequestInput {
 	input := billingexpr.RequestInput{
 		Headers: cloneStringMap(src.Headers),
+	}
+	if src.ImageCount != nil {
+		count := *src.ImageCount
+		input.ImageCount = &count
 	}
 	if len(src.Body) > 0 {
 		input.Body = append([]byte(nil), src.Body...)

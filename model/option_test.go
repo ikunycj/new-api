@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
+	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,6 +48,63 @@ func preservePricingGroupConfiguration(t *testing.T) {
 		ratio_setting.ApplyPricingGroupConfiguration(&configuration)
 		common.OptionMapRWMutex.Unlock()
 	})
+}
+
+func TestPricingOptionsBulkValidatesAndPersistsTogetherPostgres(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Option{})
+	optionKeys := []string{"billing_setting.billing_mode", "billing_setting.billing_expr"}
+	previousValues := map[string]string{}
+	previousExists := map[string]bool{}
+	common.OptionMapRWMutex.RLock()
+	for _, key := range optionKeys {
+		previousValues[key], previousExists[key] = common.OptionMap[key]
+	}
+	common.OptionMapRWMutex.RUnlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		for _, key := range optionKeys {
+			if previousExists[key] {
+				common.OptionMap[key] = previousValues[key]
+			} else {
+				delete(common.OptionMap, key)
+			}
+		}
+	})
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() { require.NoError(t, config.GlobalConfig.LoadFromDB(saved)) })
+	const mode = `{"image-01":"tiered_expr"}`
+	const expression = `{"image-01":"tier(\"image\", fixed(0.0035)) * image_count"}`
+	require.NoError(t, UpdateOptionsBulk(map[string]string{
+		"billing_setting.billing_mode": mode,
+		"billing_setting.billing_expr": expression,
+	}))
+	assert.Equal(t, "tiered_expr", billing_setting.GetBillingMode("image-01"))
+	actual, ok := billing_setting.GetBillingExpr("image-01")
+	assert.True(t, ok)
+	assert.Equal(t, `tier("image", fixed(0.0035)) * image_count`, actual)
+	var options []Option
+	require.NoError(t, DB.Find(&options).Error)
+	persisted := map[string]string{}
+	for _, option := range options {
+		persisted[option.Key] = option.Value
+	}
+	assert.Equal(t, map[string]string{"billing_setting.billing_mode": mode, "billing_setting.billing_expr": expression}, persisted)
+	err := UpdateOptionsBulk(map[string]string{
+		"billing_setting.billing_expr": `{"image-01":"tier(\"image\", invalid_cache)"}`,
+		"ModelRatio":                   `{"image-01":99}`,
+	})
+	require.ErrorContains(t, err, "invalid_cache")
+	var count int64
+	require.NoError(t, DB.Model(&Option{}).Count(&count).Error)
+	assert.EqualValues(t, 2, count)
+	var unchanged Option
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", "billing_setting.billing_expr").First(&unchanged).Error)
+	assert.Equal(t, expression, unchanged.Value)
 }
 
 func TestRetiredOptionsAreRemovedAndCannotBeRestored(t *testing.T) {
