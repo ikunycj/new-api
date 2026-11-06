@@ -10,8 +10,8 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,9 +52,6 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
-	providerBaseCostUSD := info.PriceData.ApplyOtherRatiosToFloat(info.PriceData.ModelPrice)
-	providerCostAvailable := providerBaseCostUSD >= 0
-	other["cost_reconciliation"] = BuildCostReconciliationSnapshot(c, info, 0, 0, info.PriceData.Quota, providerBaseCostUSD, providerCostAvailable, "fixed_request_price_x_channel_cost_factor", info.PriceData.EffectiveBillingUSDToCNYRate())
 	attachQuotaSaturation(c, info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
@@ -95,10 +92,15 @@ func taskAdjustFunding(task *model.Task, delta int) error {
 	if taskIsSubscription(task) {
 		return model.PostConsumeUserSubscriptionDelta(task.PrivateData.SubscriptionId, int64(delta))
 	}
-	if delta > 0 {
-		return model.DecreaseUserQuota(task.UserId, delta, false)
+	billingUserId := task.PrivateData.BillingUserId
+	if billingUserId == 0 {
+		// Tasks created before billing snapshots charged their task owner.
+		billingUserId = task.UserId
 	}
-	return model.IncreaseUserQuota(task.UserId, -delta, false)
+	if delta > 0 {
+		return model.DecreaseUserQuota(billingUserId, delta, false)
+	}
+	return model.IncreaseUserQuota(billingUserId, -delta, false)
 }
 
 // taskAdjustTokenQuota 调整任务的令牌额度，delta > 0 表示扣费，delta < 0 表示退还。
@@ -313,9 +315,6 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 			return
 		}
 		finalGroupRatio = ratio_setting.GetGroupRatio(group)
-		if legacySpecialRatio, ok := ratio_setting.GetGroupGroupRatio(group, group); ok {
-			finalGroupRatio = legacySpecialRatio
-		}
 	}
 	if modelRatio <= 0 {
 		return

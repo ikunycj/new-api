@@ -3136,9 +3136,6 @@
                   "new_tag": {
                     "type": "string"
                   },
-                  "priority": {
-                    "type": "integer"
-                  },
                   "weight": {
                     "type": "integer"
                   }
@@ -4964,9 +4961,6 @@
           },
           "groups": {
             "type": "string"
-          },
-          "priority": {
-            "type": "integer"
           },
           "weight": {
             "type": "integer"

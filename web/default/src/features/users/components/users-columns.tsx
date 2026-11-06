@@ -30,7 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota, formatTimestamp } from '@/lib/format'
+import { formatQuota } from '@/lib/format'
 
 import {
   USER_STATUS,
@@ -41,6 +41,7 @@ import {
 import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { UserQuotaCell } from './user-quota-cell'
+import { UserTimeCell } from './user-time-cell'
 
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
@@ -166,6 +167,34 @@ export function useUsersColumns(): ColumnDef<User>[] {
       enableSorting: false,
       size: 120,
       meta: { mobileBadge: true },
+    },
+    {
+      accessorKey: 'current_concurrency',
+      header: '当前并发',
+      cell: ({ row }) => {
+        const user = row.original
+        if (user.concurrency_degraded || user.current_concurrency == null) {
+          return (
+            <span
+              className='text-warning text-sm'
+              title='并发统计暂不可用，请稍后刷新'
+            >
+              暂不可用
+            </span>
+          )
+        }
+        return (
+          <span
+            className='text-sm tabular-nums'
+            title='当前正在处理的请求数，刷新列表后更新'
+          >
+            {user.current_concurrency}
+          </span>
+        )
+      },
+      enableSorting: false,
+      size: 120,
+      meta: { mobileOrder: 35 },
     },
     {
       id: 'quota',
@@ -304,11 +333,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Created At'),
       cell: ({ row }) => {
         const ts = row.getValue('created_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
+        return <UserTimeCell timestamp={ts} ip={row.original.created_ip} />
       },
       size: 180,
       meta: { mobileHidden: true },
@@ -318,11 +343,17 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Last Login'),
       cell: ({ row }) => {
         const ts = row.getValue('last_login_at') as number | undefined
-        return (
-          <span className='text-muted-foreground text-sm'>
-            {ts ? formatTimestamp(ts) : '-'}
-          </span>
-        )
+        return <UserTimeCell timestamp={ts} ip={row.original.last_login_ip} />
+      },
+      size: 180,
+      meta: { mobileHidden: true },
+    },
+    {
+      accessorKey: 'last_used_at',
+      header: t('Last Used'),
+      cell: ({ row }) => {
+        const ts = row.getValue('last_used_at') as number | undefined
+        return <UserTimeCell timestamp={ts} ip={row.original.last_used_ip} />
       },
       size: 180,
       meta: { mobileHidden: true },

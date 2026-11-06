@@ -234,12 +234,15 @@ export function PublicHeader(props: PublicHeaderProps) {
     <Button
       type='button'
       variant='ghost'
-      size='icon'
-      className='relative size-9'
-      aria-label={t('Notifications')}
+      size='sm'
+      className='relative h-9 px-2'
+      aria-label={t('Announcements')}
       onClick={() => notifications.openPopover()}
     >
-      <Bell className='size-[1.2rem]' />
+      <span className='flex items-center gap-1.5 px-1 text-xs font-medium'>
+        <Bell className='size-4' />
+        {t('Announcements')}
+      </span>
       {notifications.unreadCount > 0 ? (
         <span className='bg-destructive text-destructive-foreground absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums'>
           {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
@@ -339,7 +342,8 @@ export function PublicHeader(props: PublicHeaderProps) {
                       onTabChange={notifications.setActiveTab}
                       notice={notifications.notice}
                       announcements={notifications.announcements}
-                      loading={notifications.loading}
+                      noticeLoading={notifications.noticeLoading}
+                      announcementsLoading={notifications.announcementsLoading}
                     />
                   </Suspense>
                 ) : (

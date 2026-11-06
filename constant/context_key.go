@@ -3,17 +3,6 @@ package constant
 type ContextKey string
 
 const (
-	// MockLoadTestHeader marks requests created by the managed load-test agent.
-	// It is used to constrain channel selection to channels explicitly enabled
-	// for mock load tests.
-	MockLoadTestHeader = "X-Alltoken-Mock-Load-Test"
-	// MockLoadTestTokenHeader authenticates a managed load-test request. The
-	// signature is minted when the agent claims a run and binds the run,
-	// token, and mock configuration together so clients cannot enable the
-	// free in-process executor by merely setting the legacy marker header.
-	MockLoadTestTokenHeader = "X-Alltoken-Mock-Token"
-	MockLoadTestRunHeader   = "X-Load-Test-ID"
-
 	ContextKeyTokenCountMeta  ContextKey = "token_count_meta"
 	ContextKeyPromptTokens    ContextKey = "prompt_tokens"
 	ContextKeyEstimatedTokens ContextKey = "estimated_tokens"
@@ -55,15 +44,15 @@ const (
 	ContextKeyAutoGroupRetryIndex ContextKey = "auto_group_retry_index"
 
 	/* user related keys */
-	ContextKeyUserId        ContextKey = "id"
-	ContextKeyBillingUserId ContextKey = "billing_user_id" // parent account ID when sub-account, else same as UserId
-	ContextKeyUserSetting   ContextKey = "user_setting"
-	ContextKeyUserQuota     ContextKey = "user_quota"
-	ContextKeyUserStatus    ContextKey = "user_status"
-	ContextKeyUserEmail     ContextKey = "user_email"
-	ContextKeyUserGroup     ContextKey = "user_group"
-	ContextKeyUsingGroup    ContextKey = "group"
-	ContextKeyUserName      ContextKey = "username"
+	ContextKeyUserId      ContextKey = "id"
+	ContextKeyBillingUserId ContextKey = "billing_user_id"
+	ContextKeyUserSetting ContextKey = "user_setting"
+	ContextKeyUserQuota   ContextKey = "user_quota"
+	ContextKeyUserStatus  ContextKey = "user_status"
+	ContextKeyUserEmail   ContextKey = "user_email"
+	ContextKeyUserGroup   ContextKey = "user_group"
+	ContextKeyUsingGroup  ContextKey = "group"
+	ContextKeyUserName    ContextKey = "username"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

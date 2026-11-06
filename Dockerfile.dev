@@ -13,7 +13,8 @@ ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB} GOTOOLCHAIN=${GOTOOLCHAIN}
 
 WORKDIR /build
 
-ADD go.mod go.sum ./
+COPY go.mod go.sum ./
+COPY relaykit/go.mod relaykit/go.sum ./relaykit/
 RUN go env GOPROXY GOSUMDB GOTOOLCHAIN && go mod download
 
 COPY . .

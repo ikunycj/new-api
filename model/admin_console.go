@@ -1,19 +1,13 @@
 package model
 
 import (
-	"sync"
+	"errors"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 )
 
-const adminConsoleStatsCacheTTL = time.Minute
-
-var adminConsoleStatsCache = struct {
-	sync.Mutex
-	expiresAt time.Time
-	stats     AdminConsoleStats
-}{}
+const adminConsoleMaxRangeSeconds = int64(90 * 24 * time.Hour / time.Second)
 
 type AdminConsoleKeyStats struct {
 	Total   int64 `json:"total"`
@@ -33,6 +27,11 @@ type AdminConsolePeriodStats struct {
 	Total int64 `json:"total"`
 }
 
+type AdminConsoleTokenStats struct {
+	AdminConsolePeriodStats
+	CacheHitRate float64 `json:"cache_hit_rate"`
+}
+
 type AdminConsoleUserStats struct {
 	Today       int64 `json:"today"`
 	Total       int64 `json:"total"`
@@ -48,6 +47,7 @@ type AdminConsoleRevenueStats struct {
 }
 
 type AdminConsolePerformanceStats struct {
+	AverageResponseSeconds  float64 `json:"average_response_seconds"`
 	TodayResponseP50Seconds float64 `json:"today_response_p50_seconds"`
 	TodayResponseP90Seconds float64 `json:"today_response_p90_seconds"`
 	TodayResponseP99Seconds float64 `json:"today_response_p99_seconds"`
@@ -57,6 +57,9 @@ type AdminConsolePerformanceStats struct {
 	TodayTPMP50             float64 `json:"today_tpm_p50"`
 	TodayTPMP90             float64 `json:"today_tpm_p90"`
 	TodayTPMP99             float64 `json:"today_tpm_p99"`
+	ConcurrencyP50          int64   `json:"concurrency_p50"`
+	ConcurrencyP90          int64   `json:"concurrency_p90"`
+	ConcurrencyP99          int64   `json:"concurrency_p99"`
 	MonthConcurrencyP50     int64   `json:"month_concurrency_p50"`
 	MonthConcurrencyP90     int64   `json:"month_concurrency_p90"`
 	MonthConcurrencyP95     int64   `json:"month_concurrency_p95"`
@@ -80,7 +83,7 @@ type AdminConsoleStats struct {
 	Channels    AdminConsoleChannelStats     `json:"channels"`
 	Requests    AdminConsolePeriodStats      `json:"requests"`
 	Users       AdminConsoleUserStats        `json:"users"`
-	Tokens      AdminConsolePeriodStats      `json:"tokens"`
+	Tokens      AdminConsoleTokenStats       `json:"tokens"`
 	Quota       AdminConsolePeriodStats      `json:"quota"`
 	Revenue     AdminConsoleRevenueStats     `json:"revenue"`
 	Performance AdminConsolePerformanceStats `json:"performance"`
@@ -107,6 +110,8 @@ type adminConsoleLogRow struct {
 	TokensToday             int64   `gorm:"column:tokens_today"`
 	TokensMonth             int64   `gorm:"column:tokens_month"`
 	TokensTotal             int64   `gorm:"column:tokens_total"`
+	CacheInputTokensToday   int64   `gorm:"column:cache_input_tokens_today"`
+	CacheReadTokensToday    int64   `gorm:"column:cache_read_tokens_today"`
 	QuotaToday              int64   `gorm:"column:quota_today"`
 	QuotaMonth              int64   `gorm:"column:quota_month"`
 	QuotaTotal              int64   `gorm:"column:quota_total"`
@@ -114,6 +119,7 @@ type adminConsoleLogRow struct {
 	ActiveUsersToday        int64   `gorm:"column:active_users_today"`
 	ActiveUsersWeek         int64   `gorm:"column:active_users_week"`
 	ActiveUsersMonth        int64   `gorm:"column:active_users_month"`
+	ResponseAverageSeconds  float64 `gorm:"column:response_average_seconds"`
 	ResponseP50SecondsToday float64 `gorm:"column:response_p50_seconds_today"`
 	ResponseP90SecondsToday float64 `gorm:"column:response_p90_seconds_today"`
 	ResponseP99SecondsToday float64 `gorm:"column:response_p99_seconds_today"`
@@ -132,6 +138,7 @@ type adminConsoleConcurrencyRow struct {
 	P50 int64 `gorm:"column:p50"`
 	P90 int64 `gorm:"column:p90"`
 	P95 int64 `gorm:"column:p95"`
+	P99 int64 `gorm:"column:p99"`
 }
 
 type adminConsoleRealtimeRow struct {
@@ -150,18 +157,61 @@ func adminConsoleTimeBounds(now time.Time) (todayStart, tomorrowStart, weekStart
 		time.Date(localNow.Year(), localNow.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
 }
 
-func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
-	// The optimized analytics query below uses PostgreSQL FILTER, casts,
-	// generate_series, and percentile_cont. Keep it for PostgreSQL, but route
-	// SQLite/MySQL (and mixed main/log deployments) through the portable
-	// implementation so the new console does not break the supported dialects.
-	if common.MainDatabaseType() != common.DatabaseTypePostgreSQL ||
-		common.LogDatabaseType() != common.DatabaseTypePostgreSQL {
-		return getAdminConsoleStatsPortable(now)
+const adminConsoleMaxInt64 = int64(^uint64(0) >> 1)
+
+type adminConsoleTimeRange struct {
+	startTimestamp       int64
+	endTimestamp         int64
+	analysisEndTimestamp int64
+	custom               bool
+}
+
+func normalizeAdminConsoleTimeRange(now time.Time, startTimestamp, endTimestamp int64) (adminConsoleTimeRange, error) {
+	if startTimestamp <= 0 || endTimestamp <= 0 || endTimestamp < startTimestamp || endTimestamp == adminConsoleMaxInt64 {
+		return adminConsoleTimeRange{}, errors.New("invalid admin console time range")
 	}
+	if endTimestamp-startTimestamp > adminConsoleMaxRangeSeconds {
+		return adminConsoleTimeRange{}, errors.New("admin console time range cannot exceed 90 days")
+	}
+
+	endExclusive := endTimestamp + 1
+	analysisEnd := endExclusive
+	nowExclusive := now.Unix() + 1
+	if startTimestamp < nowExclusive && analysisEnd > nowExclusive {
+		analysisEnd = nowExclusive
+	}
+	return adminConsoleTimeRange{
+		startTimestamp:       startTimestamp,
+		endTimestamp:         endExclusive,
+		analysisEndTimestamp: analysisEnd,
+		custom:               true,
+	}, nil
+}
+
+func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
+	return getAdminConsoleStatsAtRange(now, adminConsoleTimeRange{})
+}
+
+func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRange) (AdminConsoleStats, error) {
 	var stats AdminConsoleStats
 	todayStart, tomorrowStart, weekStart, rollingMonthStart, monthStart := adminConsoleTimeBounds(now)
-	metricEnd := now.Unix()
+	metricStart, metricEnd := todayStart, tomorrowStart
+	monthMetricStart, monthMetricEnd := monthStart, tomorrowStart
+	weekMetricStart, weekMetricEnd := weekStart, tomorrowStart
+	rollingMonthMetricStart, rollingMonthMetricEnd := rollingMonthStart, tomorrowStart
+	analysisStart, analysisEnd := todayStart, now.Unix()
+	concurrencyStart, concurrencyEnd := monthStart, now.Unix()
+	if selectedRange.custom {
+		metricStart = selectedRange.startTimestamp
+		metricEnd = selectedRange.endTimestamp
+		monthMetricStart, monthMetricEnd = metricStart, metricEnd
+		weekMetricStart, weekMetricEnd = metricStart, metricEnd
+		rollingMonthMetricStart, rollingMonthMetricEnd = metricStart, metricEnd
+		analysisStart = selectedRange.startTimestamp
+		analysisEnd = selectedRange.analysisEndTimestamp
+		concurrencyStart = selectedRange.startTimestamp
+		concurrencyEnd = selectedRange.analysisEndTimestamp
+	}
 
 	var mainRow adminConsoleMainRow
 	mainQuery := `
@@ -190,12 +240,12 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		common.TokenStatusEnabled,
 		common.ChannelStatusEnabled,
 		common.ChannelStatusAutoDisabled,
-		todayStart,
-		tomorrowStart,
-		todayStart,
-		tomorrowStart,
-		monthStart,
-		tomorrowStart,
+		metricStart,
+		metricEnd,
+		metricStart,
+		metricEnd,
+		monthMetricStart,
+		monthMetricEnd,
 		common.TopUpStatusSuccess,
 		PaymentMethodBalance,
 	).Scan(&mainRow).Error; err != nil {
@@ -211,6 +261,8 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_today,
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_month,
 			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint), 0) AS tokens_total,
+			COALESCE(SUM(input_tokens_total) FILTER (WHERE cache_stats_available = TRUE AND created_at >= ? AND created_at < ?), 0) AS cache_input_tokens_today,
+			COALESCE(SUM(cache_read_tokens) FILTER (WHERE cache_stats_available = TRUE AND created_at >= ? AND created_at < ?), 0) AS cache_read_tokens_today,
 			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_today,
 			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_month,
 			COALESCE(SUM(quota), 0) AS quota_total,
@@ -218,6 +270,7 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_today,
 			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_week,
 			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_month,
+			COALESCE(AVG(use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_average_seconds,
 			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p50_seconds_today,
 			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p90_seconds_today,
 			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p99_seconds_today
@@ -225,26 +278,29 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		WHERE type = ?`
 	if err := LOG_DB.Raw(
 		logQuery,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		weekStart, tomorrowStart,
-		rollingMonthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
+		metricStart, metricEnd,
+		monthMetricStart, monthMetricEnd,
+		metricStart, metricEnd,
+		monthMetricStart, monthMetricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
+		monthMetricStart, monthMetricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
+		weekMetricStart, weekMetricEnd,
+		rollingMonthMetricStart, rollingMonthMetricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
+		metricStart, metricEnd,
 		LogTypeConsume,
 	).Scan(&logRow).Error; err != nil {
 		return stats, err
 	}
 
 	var throughputRow adminConsoleThroughputRow
-	// Include every elapsed minute so the percentiles represent today, including
+	// Include every elapsed minute in the selected analysis range, including
 	// periods with no traffic.
 	throughputQuery := `
 		WITH minutes AS (
@@ -277,18 +333,18 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		FROM minute_buckets`
 	if err := LOG_DB.Raw(
 		throughputQuery,
-		todayStart,
-		metricEnd,
+		analysisStart,
+		analysisEnd,
 		LogTypeConsume,
-		todayStart,
-		metricEnd,
+		analysisStart,
+		analysisEnd,
 	).Scan(&throughputRow).Error; err != nil {
 		return stats, err
 	}
 
 	var concurrencyRow adminConsoleConcurrencyRow
 	// Consume logs are written at completion, so rebuild time-weighted request
-	// intervals and include the zero-concurrency segments from month start to now.
+	// intervals and include the zero-concurrency segments across the selected range.
 	concurrencyQuery := `
 		WITH request_intervals AS (
 			SELECT
@@ -297,8 +353,8 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			FROM logs
 			WHERE type = ?
 				AND use_time > 0
-				AND created_at >= ?
-				AND created_at < ?
+				AND created_at > ?
+				AND created_at - use_time < ?
 		),
 		events AS (
 			SELECT ?::bigint AS event_at, 0::bigint AS delta
@@ -344,17 +400,18 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		SELECT
 			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.50), 0) AS p50,
 			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.90), 0) AS p90,
-			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.95), 0) AS p95
+			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.95), 0) AS p95,
+			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.99), 0) AS p99
 		FROM ranked`
 	if err := LOG_DB.Raw(
 		concurrencyQuery,
-		monthStart,
-		metricEnd,
+		concurrencyStart,
+		concurrencyEnd,
 		LogTypeConsume,
-		monthStart,
-		metricEnd,
-		monthStart,
-		metricEnd,
+		concurrencyStart,
+		concurrencyEnd,
+		concurrencyStart,
+		concurrencyEnd,
 	).Scan(&concurrencyRow).Error; err != nil {
 		return stats, err
 	}
@@ -366,10 +423,14 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		Today: mainRow.UsersToday, Total: mainRow.UsersTotal,
 		ActiveToday: logRow.ActiveUsersToday, ActiveWeek: logRow.ActiveUsersWeek, ActiveMonth: logRow.ActiveUsersMonth,
 	}
-	stats.Tokens = AdminConsolePeriodStats{Today: logRow.TokensToday, Month: logRow.TokensMonth, Total: logRow.TokensTotal}
+	stats.Tokens = AdminConsoleTokenStats{AdminConsolePeriodStats: AdminConsolePeriodStats{Today: logRow.TokensToday, Month: logRow.TokensMonth, Total: logRow.TokensTotal}}
+	if logRow.CacheInputTokensToday > 0 {
+		stats.Tokens.CacheHitRate = float64(logRow.CacheReadTokensToday) / float64(logRow.CacheInputTokensToday) * 100
+	}
 	stats.Quota = AdminConsolePeriodStats{Today: logRow.QuotaToday, Month: logRow.QuotaMonth, Total: logRow.QuotaTotal}
 	stats.Revenue = AdminConsoleRevenueStats{Today: mainRow.RevenueToday, Month: mainRow.RevenueMonth, Total: mainRow.RevenueTotal}
 	stats.Performance = AdminConsolePerformanceStats{
+		AverageResponseSeconds:  logRow.ResponseAverageSeconds,
 		TodayResponseP50Seconds: logRow.ResponseP50SecondsToday,
 		TodayResponseP90Seconds: logRow.ResponseP90SecondsToday,
 		TodayResponseP99Seconds: logRow.ResponseP99SecondsToday,
@@ -379,6 +440,9 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		TodayTPMP50:             throughputRow.TPMP50,
 		TodayTPMP90:             throughputRow.TPMP90,
 		TodayTPMP99:             throughputRow.TPMP99,
+		ConcurrencyP50:          concurrencyRow.P50,
+		ConcurrencyP90:          concurrencyRow.P90,
+		ConcurrencyP99:          concurrencyRow.P99,
 		MonthConcurrencyP50:     concurrencyRow.P50,
 		MonthConcurrencyP90:     concurrencyRow.P90,
 		MonthConcurrencyP95:     concurrencyRow.P95,
@@ -389,24 +453,25 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 
 func GetAdminConsoleStats() (AdminConsoleStats, error) {
 	now := time.Now()
-	adminConsoleStatsCache.Lock()
-	defer adminConsoleStatsCache.Unlock()
-	if now.Before(adminConsoleStatsCache.expiresAt) {
-		return adminConsoleStatsCache.stats, nil
-	}
-	stats, err := getAdminConsoleStatsAt(now)
+	todayStart, tomorrowStart, _, _, _ := adminConsoleTimeBounds(now)
+	return getAdminConsoleStatsAtRange(now, adminConsoleTimeRange{
+		startTimestamp: todayStart,
+		endTimestamp:   tomorrowStart,
+	})
+}
+
+// GetAdminConsoleStatsForRange returns console metrics for the inclusive Unix
+// timestamp range. The range is normalized to an exclusive end internally.
+func GetAdminConsoleStatsForRange(startTimestamp, endTimestamp int64) (AdminConsoleStats, error) {
+	now := time.Now()
+	selectedRange, err := normalizeAdminConsoleTimeRange(now, startTimestamp, endTimestamp)
 	if err != nil {
 		return AdminConsoleStats{}, err
 	}
-	adminConsoleStatsCache.stats = stats
-	adminConsoleStatsCache.expiresAt = now.Add(adminConsoleStatsCacheTTL)
-	return stats, nil
+	return getAdminConsoleStatsAtRange(now, selectedRange)
 }
 
 func getAdminConsoleRealtimeStatsAt(now time.Time) (AdminConsoleRealtimeStats, error) {
-	if common.LogDatabaseType() != common.DatabaseTypePostgreSQL {
-		return getAdminConsoleRealtimeStatsPortable(now)
-	}
 	var row adminConsoleRealtimeRow
 	nowTimestamp := now.Unix()
 	query := `
@@ -435,8 +500,17 @@ func GetAdminConsoleRealtimeStats() (AdminConsoleRealtimeStats, error) {
 	return getAdminConsoleRealtimeStatsAt(time.Now())
 }
 
+// GetAdminConsoleRealtimeStatsForRange validates the selected range while
+// retaining the realtime endpoint's rolling 60-second snapshot semantics.
+func GetAdminConsoleRealtimeStatsForRange(startTimestamp, endTimestamp int64) (AdminConsoleRealtimeStats, error) {
+	if _, err := normalizeAdminConsoleTimeRange(time.Now(), startTimestamp, endTimestamp); err != nil {
+		return AdminConsoleRealtimeStats{}, err
+	}
+	return GetAdminConsoleRealtimeStats()
+}
+
 func GetAdminConsoleSystemLoad() AdminConsoleSystemLoad {
-	return getAdminConsoleSystemLoad(true)
+	return getAdminConsoleSystemLoad(false)
 }
 
 func getAdminConsoleSystemLoad(refresh bool) AdminConsoleSystemLoad {

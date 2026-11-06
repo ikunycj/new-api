@@ -3,26 +3,28 @@ package model
 import (
 	"testing"
 
-	"github.com/glebarez/sqlite"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
-func TestGetPricingGroupNamesIncludesRoutedGroups(t *testing.T) {
-	previousDB := DB
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	DB = db
-	t.Cleanup(func() { DB = previousDB })
-	require.NoError(t, db.AutoMigrate(&BillingGroupRoute{}))
-	require.NoError(t, db.Create(&BillingGroupRoute{
-		BillingGroup: "通用套餐",
-		Enabled:      true,
-	}).Error)
+func TestGetPricingGroupNamesUsesConfiguredGroupsOnly(t *testing.T) {
+	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
+	previousGroupEnabled := ratio_setting.PricingGroupEnabled2JSONString()
+	previousGroupOrder := ratio_setting.PricingGroupOrder2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(previousGroupEnabled))
+		require.NoError(t, ratio_setting.UpdatePricingGroupOrderByJSONString(previousGroupOrder))
+	})
+
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"configured-ratio":0.5,"shared":1,"auto":0.8}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupEnabledByJSONString(`{"configured-ratio":false,"shared":true,"auto":true}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupOrderByJSONString(`["shared","auto","configured-ratio"]`))
 
 	groups, err := GetPricingGroupNames()
 	require.NoError(t, err)
-
-	assert.Contains(t, groups, "通用套餐")
+	assert.Equal(t, []string{"shared", "configured-ratio"}, groups)
+	assert.Contains(t, groups, "configured-ratio", "管理员目录必须保留已关闭的分组")
+	assert.NotContains(t, groups, "auto")
 }

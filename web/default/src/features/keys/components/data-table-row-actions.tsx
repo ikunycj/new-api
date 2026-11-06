@@ -184,13 +184,13 @@ export function DataTableRowActions<TData>({
   }
 
   return (
-    <div className='-ml-1.5 flex items-center gap-1'>
+    <div className='-ml-1.5 flex max-w-full flex-wrap items-center justify-end gap-x-0.5 gap-y-1 sm:flex-nowrap sm:gap-1'>
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
               variant='ghost'
-              size='icon-sm'
+              size='sm'
               onClick={() => void handleOpenCCSwitch()}
               disabled={isRealKeyLoading}
               aria-label={t('Import to CC Switch')}
@@ -198,18 +198,20 @@ export function DataTableRowActions<TData>({
           }
         >
           {resolvingAction === 'cc-switch' ? (
-            <Loader2 className='size-4 animate-spin' />
+            <Loader2 data-icon='inline-start' className='size-4 animate-spin' />
           ) : (
             <img
               src={ccSwitchLogo}
               alt=''
               width={16}
               height={16}
+              data-icon='inline-start'
               aria-hidden='true'
               decoding='async'
               className='size-4 rounded-[3px] object-contain'
             />
           )}
+          {t('One-click import')}
         </TooltipTrigger>
         <TooltipContent>{t('Import to CC Switch')}</TooltipContent>
       </Tooltip>
@@ -226,12 +228,17 @@ export function DataTableRowActions<TData>({
         >
           <Button
             variant='ghost'
-            size='icon-sm'
+            size='sm'
             onClick={handleOpenApiTest}
             disabled={isApiTestDisabled}
             aria-label={t('Test API availability')}
           >
-            <HugeiconsIcon icon={DashboardSpeed01Icon} aria-hidden='true' />
+            <HugeiconsIcon
+              icon={DashboardSpeed01Icon}
+              data-icon='inline-start'
+              aria-hidden='true'
+            />
+            {t('Test')}
           </Button>
         </TooltipTrigger>
         <TooltipContent>{apiTestTooltip}</TooltipContent>
@@ -242,7 +249,7 @@ export function DataTableRowActions<TData>({
           render={
             <Button
               variant='ghost'
-              size='icon-sm'
+              size='sm'
               onClick={() => {
                 setCurrentRow(apiKey)
                 setOpen('update')
@@ -251,7 +258,8 @@ export function DataTableRowActions<TData>({
             />
           }
         >
-          <Edit />
+          <Edit data-icon='inline-start' aria-hidden='true' />
+          {t('Edit')}
         </TooltipTrigger>
         <TooltipContent>{t('Edit')}</TooltipContent>
       </Tooltip>

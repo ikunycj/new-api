@@ -2,15 +2,11 @@ package router
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"testing"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/service/authz"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,14 +16,6 @@ func TestChannelStatusRoutesUseOperatePermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodPost, "/:id/status", authz.ChannelOperate, controller.UpdateChannelStatus)
 	assertChannelRoutePermission(t, http.MethodPost, "/status/batch", authz.ChannelOperate, controller.BatchUpdateChannelStatus)
 	assertChannelRoutePermission(t, http.MethodPut, "/", authz.ChannelWrite, controller.UpdateChannel)
-	assertChannelRoutePermission(t, http.MethodPatch, "/failover/config/group-type", authz.ChannelWrite, controller.UpdateBillingGroupType)
-}
-
-func TestFailoverMutationRoutesUseChannelWritePermission(t *testing.T) {
-	assertChannelRoutePermission(t, http.MethodPut, "/failover/config/error-mappings", authz.ChannelWrite, controller.UpdateFailoverErrorMappings)
-	assertChannelRoutePermission(t, http.MethodPut, "/failover/config/route", authz.ChannelWrite, controller.UpdateFailoverRoute)
-	assertChannelRoutePermission(t, http.MethodDelete, "/failover/config/route/:id", authz.ChannelWrite, controller.DeleteFailoverRoute)
-	assertChannelRoutePermission(t, http.MethodPost, "/failover/config/cleanup-stale", authz.ChannelWrite, controller.CleanupStaleFailoverRoutes)
 }
 
 func TestChannelDeleteRoutesUseSensitiveWritePermission(t *testing.T) {
@@ -49,56 +37,6 @@ func TestChannelStatusRoutesRegisterWithoutConflict(t *testing.T) {
 	})
 }
 
-func TestFailoverGrafanaAuthRouteRegistersBeforeRateLimitedAPIGroup(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-
-	require.NotPanics(t, func() {
-		registerFailoverGrafanaAuthRoute(engine)
-	})
-
-	for _, route := range engine.Routes() {
-		if route.Method == http.MethodGet && route.Path == "/api/channel/failover/grafana-auth" {
-			assert.Contains(t, route.Handler, "GetFailoverGrafanaAuth")
-			return
-		}
-	}
-	t.Fatal("Grafana auth route was not registered")
-}
-
-func TestFailoverGrafanaAuthRouteBypassesGlobalAPIRateLimit(t *testing.T) {
-	previousEnabled := common.GlobalApiRateLimitEnable
-	previousLimit := common.GlobalApiRateLimitNum
-	previousDuration := common.GlobalApiRateLimitDuration
-	previousRedisEnabled := common.RedisEnabled
-	common.GlobalApiRateLimitEnable = true
-	common.GlobalApiRateLimitNum = 1
-	common.GlobalApiRateLimitDuration = 60
-	common.RedisEnabled = false
-	t.Cleanup(func() {
-		common.GlobalApiRateLimitEnable = previousEnabled
-		common.GlobalApiRateLimitNum = previousLimit
-		common.GlobalApiRateLimitDuration = previousDuration
-		common.RedisEnabled = previousRedisEnabled
-	})
-
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	engine.Use(sessions.Sessions("session", cookie.NewStore([]byte("grafana-auth-rate-limit-test"))))
-	SetApiRouter(engine)
-
-	for range 3 {
-		request, err := http.NewRequest(http.MethodGet, "/api/channel/failover/grafana-auth", nil)
-		require.NoError(t, err)
-		request.RemoteAddr = "192.0.2.77:1234"
-		recorder := httptest.NewRecorder()
-
-		engine.ServeHTTP(recorder, request)
-
-		assert.Equal(t, http.StatusUnauthorized, recorder.Code)
-	}
-}
-
 func assertChannelRoutePermission(t *testing.T, method string, path string, permission authz.Permission, handler any) {
 	t.Helper()
 	for _, route := range channelPermissionRoutes {
@@ -109,11 +47,4 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 		}
 	}
 	t.Fatalf("route %s %s not found", method, path)
-}
-
-// Channel health is read-only telemetry and must never require write access,
-// but it still exposes per-channel operational data and stays behind auth.
-func TestChannelHealthRouteUsesReadPermission(t *testing.T) {
-	assertChannelRoutePermission(t, http.MethodGet, "/failover/health", authz.ChannelRead, controller.GetChannelHealth)
-	assertChannelRoutePermission(t, http.MethodGet, "/failover/health/history", authz.ChannelRead, controller.GetChannelHealthHistory)
 }

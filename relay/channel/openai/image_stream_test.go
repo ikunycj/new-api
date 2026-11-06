@@ -9,10 +9,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -251,6 +255,42 @@ func TestOpenaiImageStreamHandlerClientDisconnectKeepsRequestedCount(t *testing.
 // TestOpenaiImageStreamHandlerClientDisconnectRaisesCount covers the other
 // direction of the abort guard: when completed events already exceed the
 // recorded n, the higher actual count is billed even though the client aborted.
+func TestFixedImageStreamQuantitySettlesOnlyTrustedCompletion(t *testing.T) {
+	previousTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = previousTimeout })
+	for _, aborted := range []bool{false, true} {
+		body := "data: {\"type\":\"image_generation.completed\",\"b64_json\":\"first\"}\n\n"
+		var c *gin.Context
+		var resp *http.Response
+		var info *relaycommon.RelayInfo
+		if aborted {
+			c, _, resp, info = newDisconnectingImageStream(t, body, "first")
+		} else {
+			c, _, resp, info = newImageTestContext(t, body+"data: [DONE]\n\n", "text/event-stream", true)
+		}
+		const expression = `tier("image", fixed(0.0035)) * image_count`
+		info.ImageRequestCount = 3
+		info.TieredBillingSnapshot = &billingexpr.BillingSnapshot{
+			BillingMode: "tiered_expr", ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+			GroupRatio: 1, QuotaPerUnit: 500000, BillingUSDToCNYRate: 1,
+			EstimatedImageCount: common.GetPointer(3), EstimatedBillingUnit: billingexpr.BillingUnitRequest,
+		}
+		_, apiErr := OpenaiImageStreamHandler(c, info, resp)
+		require.Nil(t, apiErr)
+		ok, quota, result := service.TryTieredSettle(info, billingexpr.TokenParams{})
+		require.True(t, ok)
+		require.NotNil(t, result)
+		if aborted {
+			assert.Equal(t, 5250, quota)
+			assert.Equal(t, 3, *result.ImageCount)
+		} else {
+			assert.Equal(t, 1750, quota)
+			assert.Equal(t, 1, *result.ImageCount)
+		}
+	}
+}
+
 func TestOpenaiImageStreamHandlerClientDisconnectRaisesCount(t *testing.T) {
 	oldMode := gin.Mode()
 	gin.SetMode(gin.TestMode)

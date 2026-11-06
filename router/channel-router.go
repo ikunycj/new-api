@@ -16,15 +16,6 @@ type permissionRoute struct {
 	handler    gin.HandlerFunc
 }
 
-func registerFailoverGrafanaAuthRoute(router gin.IRoutes) {
-	router.GET("/api/channel/failover/grafana-auth",
-		middleware.RouteTag("api"),
-		middleware.AdminSessionAuth(),
-		middleware.RequirePermission(authz.ChannelRead),
-		controller.GetFailoverGrafanaAuth,
-	)
-}
-
 func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 	channelRoute := apiRouter.Group("/channel")
 	channelRoute.Use(middleware.AdminAuth())
@@ -50,18 +41,6 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/search", permission: authz.ChannelRead, handler: controller.SearchChannels},
 	{method: http.MethodGet, path: "/models", permission: authz.ChannelRead, handler: controller.ChannelListModels},
 	{method: http.MethodGet, path: "/models_enabled", permission: authz.ChannelRead, handler: controller.EnabledListModels},
-	{method: http.MethodGet, path: "/ops", permission: authz.ChannelRead, handler: controller.GetChannelOps},
-	{method: http.MethodGet, path: "/failover/config", permission: authz.ChannelRead, handler: controller.GetFailoverConfig},
-	{method: http.MethodGet, path: "/failover/monitoring", permission: authz.ChannelRead, handler: controller.GetFailoverMonitoring},
-	{method: http.MethodGet, path: "/failover/health", permission: authz.ChannelRead, handler: controller.GetChannelHealth},
-	{method: http.MethodGet, path: "/failover/health/history", permission: authz.ChannelRead, handler: controller.GetChannelHealthHistory},
-	{method: http.MethodPut, path: "/failover/config", permission: authz.ChannelWrite, handler: controller.UpdateFailoverConfig},
-	{method: http.MethodPut, path: "/failover/config/error-mappings", permission: authz.ChannelWrite, handler: controller.UpdateFailoverErrorMappings},
-	{method: http.MethodPut, path: "/failover/config/route", permission: authz.ChannelWrite, handler: controller.UpdateFailoverRoute},
-	{method: http.MethodDelete, path: "/failover/config/route/:id", permission: authz.ChannelWrite, handler: controller.DeleteFailoverRoute},
-	{method: http.MethodPost, path: "/failover/config/cleanup-stale", permission: authz.ChannelWrite, handler: controller.CleanupStaleFailoverRoutes},
-	{method: http.MethodPatch, path: "/failover/config/group-type", permission: authz.ChannelWrite, handler: controller.UpdateBillingGroupType},
-	{method: http.MethodGet, path: "/probe/events", permission: authz.ChannelRead, handler: controller.StreamChannelProbeEvents},
 	{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetChannel},
 	{method: http.MethodGet, path: "/:id/reconciliation", permission: authz.ChannelRead, handler: controller.GetChannelReconciliation},
 	{method: http.MethodPost, path: "/:id/reconciliation/costs", permission: authz.ChannelWrite, handler: controller.CreateChannelCostEntry},

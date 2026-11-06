@@ -45,6 +45,13 @@ func TestChannelHasSensitiveChanges(t *testing.T) {
 		assert.True(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"key": updated.Key}))
 	})
 
+	t.Run("blank key is unchanged", func(t *testing.T) {
+		updated := PatchChannel{Channel: *origin}
+		updated.Key = "  \n\t "
+
+		assert.False(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"key": updated.Key}))
+	})
+
 	t.Run("base url change", func(t *testing.T) {
 		updated := PatchChannel{Channel: *origin}
 		newBaseURL := "https://leak.example.com"
@@ -61,12 +68,11 @@ func TestChannelHasSensitiveChanges(t *testing.T) {
 		assert.True(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"header_override": newHeaderOverride}))
 	})
 
-	t.Run("omitted sensitive fields do not use zero values", func(t *testing.T) {
+	t.Run("unknown routing field is rejected", func(t *testing.T) {
 		updated := PatchChannel{}
 		updated.Id = origin.Id
-		updated.Priority = origin.Priority
 
-		assert.False(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"priority": 10}))
+		assert.True(t, channelHasSensitiveChanges(&updated, origin, map[string]any{"retired_route_field": 10}))
 	})
 
 	t.Run("unknown field fails closed", func(t *testing.T) {
@@ -97,26 +103,35 @@ func TestChannelHasSensitiveChanges(t *testing.T) {
 }
 
 func TestClearChannelReadOnlyFields(t *testing.T) {
+	cost := 5.33
 	channel := PatchChannel{Channel: model.Channel{
-		CreatedTime:        11,
-		TestTime:           22,
-		ResponseTime:       33,
-		Balance:            44.5,
-		BalanceUpdatedTime: 55,
-		UsedQuota:          66,
-		Models:             "gpt-4o",
-		Group:              "default",
+		CreatedTime:              11,
+		TestTime:                 22,
+		ResponseTime:             33,
+		Balance:                  44.5,
+		BalanceUpdatedTime:       55,
+		UsedQuota:                66,
+		DailyCostCNY:             &cost,
+		TotalCostCNY:             &cost,
+		PreviousDayAverageTTFTMs: 77,
+		LastTestTTFTMs:           88,
+		Models:                   "gpt-4o",
+		Group:                    "default",
 	}}
 
 	clearChannelReadOnlyFields(&channel, map[string]any{
-		"created_time":         channel.CreatedTime,
-		"test_time":            channel.TestTime,
-		"response_time":        channel.ResponseTime,
-		"balance":              channel.Balance,
-		"balance_updated_time": channel.BalanceUpdatedTime,
-		"used_quota":           channel.UsedQuota,
-		"models":               channel.Models,
-		"group":                channel.Group,
+		"created_time":                 channel.CreatedTime,
+		"test_time":                    channel.TestTime,
+		"response_time":                channel.ResponseTime,
+		"balance":                      channel.Balance,
+		"balance_updated_time":         channel.BalanceUpdatedTime,
+		"used_quota":                   channel.UsedQuota,
+		"daily_cost_cny":               channel.DailyCostCNY,
+		"total_cost_cny":               channel.TotalCostCNY,
+		"previous_day_average_ttft_ms": channel.PreviousDayAverageTTFTMs,
+		"last_test_ttft_ms":            channel.LastTestTTFTMs,
+		"models":                       channel.Models,
+		"group":                        channel.Group,
 	})
 
 	assert.Zero(t, channel.CreatedTime)
@@ -125,8 +140,138 @@ func TestClearChannelReadOnlyFields(t *testing.T) {
 	assert.Zero(t, channel.Balance)
 	assert.Zero(t, channel.BalanceUpdatedTime)
 	assert.Zero(t, channel.UsedQuota)
+	assert.Nil(t, channel.DailyCostCNY)
+	assert.Nil(t, channel.TotalCostCNY)
+	assert.Zero(t, channel.PreviousDayAverageTTFTMs)
+	assert.Zero(t, channel.LastTestTTFTMs)
 	assert.Equal(t, "gpt-4o", channel.Models)
 	assert.Equal(t, "default", channel.Group)
+}
+
+func TestChannelProbePolicyRequestContract(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		requestData := map[string]any{
+			"auto_probe_enabled":         enabled,
+			"probe_period_minutes":       3,
+			"probe_random_delay_enabled": true,
+			"probe_stream_enabled":       true,
+			"probe_failure_auto_ban":     "retired",
+			"probe_success_auto_enable":  !enabled,
+			"models":                     "gpt-4o", "test_model": "gpt-4o", "group": "default",
+		}
+		body, err := common.Marshal(requestData)
+		require.NoError(t, err)
+		var request PatchChannel
+		require.NoError(t, common.Unmarshal(body, &request))
+		require.NoError(t, validateChannel(&request.Channel, false))
+		assert.Equal(t, enabled, request.ShouldAutoProbe())
+		response, err := common.Marshal(request.Channel)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, common.Unmarshal(response, &fields))
+		assert.Equal(t, enabled, fields["auto_probe_enabled"])
+		assert.Equal(t, float64(3), fields["probe_period_minutes"])
+		assert.Equal(t, true, fields["probe_random_delay_enabled"])
+		assert.Equal(t, true, fields["probe_stream_enabled"])
+		assert.NotContains(t, fields, "probe_failure_auto_ban")
+		assert.NotContains(t, fields, "probe_success_auto_enable")
+		assert.ElementsMatch(t, []string{
+			"auto_probe_enabled", "probe_period_minutes", "probe_random_delay_enabled", "probe_stream_enabled",
+			"models", "test_model", "group",
+		}, channelUpdateColumns(requestData))
+	}
+}
+
+func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
+	columns := channelUpdateColumns(map[string]any{
+		"auto_probe_enabled":         false,
+		"probe_period_minutes":       0,
+		"probe_random_delay_enabled": false,
+		"probe_stream_enabled":       false,
+		"price_multiplier":           0,
+		"price_multiplier_mode":      "",
+		"multi_key_mode":             "single",
+		"name":                       "updated",
+		"balance":                    0,
+		"key_mode":                   "replace",
+	})
+
+	assert.ElementsMatch(t, []string{
+		"auto_probe_enabled",
+		"probe_period_minutes",
+		"probe_random_delay_enabled",
+		"probe_stream_enabled",
+		"price_multiplier",
+		"price_multiplier_mode",
+		"channel_info",
+		"name",
+	}, columns)
+}
+
+func TestChannelUpdateColumnsPersistMultiKeyMetadataForKeyOperations(t *testing.T) {
+	assert.ElementsMatch(t, []string{"key", "channel_info"}, channelUpdateColumns(map[string]any{
+		"key": "new-key",
+	}))
+	assert.ElementsMatch(t, []string{"channel_info"}, channelUpdateColumns(map[string]any{
+		"key_mode": "append",
+	}))
+	for name, value := range map[string]any{
+		"empty":      "",
+		"whitespace": "  \n\t ",
+		"null":       nil,
+	} {
+		t.Run(name+" key is unchanged", func(t *testing.T) {
+			assert.Empty(t, channelUpdateColumns(map[string]any{"key": value}))
+		})
+	}
+}
+
+func TestValidateChannelRequiresPricingGroup(t *testing.T) {
+	tests := []struct {
+		name  string
+		group string
+		valid bool
+	}{
+		{name: "empty", group: "", valid: false},
+		{name: "whitespace", group: "  ", valid: false},
+		{name: "empty list", group: ",,", valid: false},
+		{name: "single group", group: "standard", valid: true},
+		{name: "multiple groups", group: "standard, premium", valid: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channel := &model.Channel{Key: "test-key", Models: "gpt-4o", TestModel: common.GetPointer("gpt-4o"), Group: tt.group}
+			err := validateChannel(channel, true)
+			if tt.valid {
+				require.NoError(t, err)
+				assert.Equal(t, strings.ReplaceAll(tt.group, " ", ""), channel.Group)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "pricing group")
+			}
+		})
+	}
+}
+
+func TestValidateChannelRequiresAtLeastOneModel(t *testing.T) {
+	for name, models := range map[string]string{
+		"empty":      "",
+		"whitespace": "  ",
+		"empty list": " , , ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := validateChannel(&model.Channel{Key: "test-key", Models: models, TestModel: common.GetPointer("gpt-4o"), Group: "default"}, true)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "at least one model")
+		})
+	}
+}
+
+func TestValidateChannelRequiresTestModel(t *testing.T) {
+	err := validateChannel(&model.Channel{Key: "test-key", Models: "gpt-4o", Group: "default"}, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "test model")
 }
 
 func TestUpdateChannelRejectsStatusField(t *testing.T) {

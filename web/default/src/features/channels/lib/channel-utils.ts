@@ -493,24 +493,9 @@ export function formatQuota(quota: number): string {
 }
 
 // ============================================================================
-// Priority & Weight Utilities
+// Weight Utilities
 // ============================================================================
 
-/**
- * Get priority display value
- */
-export function getPriorityDisplay(
-  priority: number | null | undefined
-): string {
-  if (priority === null || priority === undefined) {
-    return '0'
-  }
-  return String(priority)
-}
-
-/**
- * Get weight display value
- */
 export function getWeightDisplay(weight: number | null | undefined): string {
   if (weight === null || weight === undefined) {
     return '0'
@@ -624,6 +609,7 @@ export function aggregateChannelsByTag(
   channels: Channel[]
 ): (Channel | TagRow)[] {
   const tagMap = new Map<string, TagRow>()
+  const ttftStatsByTag = new Map<string, { sum: number; count: number }>()
   const result: (Channel | TagRow)[] = []
 
   for (const channel of channels) {
@@ -641,17 +627,27 @@ export function aggregateChannelsByTag(
         status: undefined as unknown as number,
         group: '',
         used_quota: 0,
+        daily_tokens: 0,
+        total_tokens: 0,
+        daily_cost_cny: 0,
+        total_cost_cny: 0,
         response_time: 0,
-        priority: -1 as unknown as number | null,
         weight: -1 as unknown as number | null,
         balance: 0,
         test_time: 0,
+        last_test_time: 0,
+        last_test_is_auto: false,
+        last_test_ttft_ms: 0,
         created_time: 0,
         balance_updated_time: 0,
         models: '',
+        previous_day_probe_success_rate: 0,
+        previous_day_average_ttft_ms: 0,
+        priority_score: null,
         children: [],
       } as TagRow
       tagMap.set(tag, tagRow)
+      ttftStatsByTag.set(tag, { sum: 0, count: 0 })
       result.push(tagRow)
     }
 
@@ -666,17 +662,43 @@ export function aggregateChannelsByTag(
 
     // Aggregate used_quota (sum)
     tagRow.used_quota += channel.used_quota
+    tagRow.daily_tokens += channel.daily_tokens
+    tagRow.total_tokens += channel.total_tokens
+    tagRow.daily_cost_cny =
+      tagRow.daily_cost_cny == null || channel.daily_cost_cny == null
+        ? null
+        : tagRow.daily_cost_cny + channel.daily_cost_cny
+    tagRow.total_cost_cny =
+      tagRow.total_cost_cny == null || channel.total_cost_cny == null
+        ? null
+        : tagRow.total_cost_cny + channel.total_cost_cny
 
     // Aggregate response_time (average)
     tagRow.response_time =
       (tagRow.response_time * (childCount - 1) + channel.response_time) /
       childCount
 
-    // Aggregate priority (same value or null if different)
-    if (tagRow.priority === -1) {
-      tagRow.priority = channel.priority
-    } else if (tagRow.priority !== channel.priority) {
-      tagRow.priority = null
+    const probeRate = Number.isFinite(channel.previous_day_probe_success_rate)
+      ? channel.previous_day_probe_success_rate
+      : 100
+    tagRow.previous_day_probe_success_rate =
+      (tagRow.previous_day_probe_success_rate * (childCount - 1) + probeRate) /
+      childCount
+
+    const ttft = channel.previous_day_average_ttft_ms
+    const ttftStats = ttftStatsByTag.get(tag)
+    if (ttftStats && Number.isFinite(ttft) && ttft > 0) {
+      ttftStats.sum += ttft
+      ttftStats.count += 1
+      tagRow.previous_day_average_ttft_ms = ttftStats.sum / ttftStats.count
+    }
+
+    const channelTestTime =
+      channel.last_test_time > 0 ? channel.last_test_time : channel.test_time
+    if (channelTestTime >= tagRow.last_test_time) {
+      tagRow.last_test_time = channelTestTime
+      tagRow.last_test_is_auto = channel.last_test_is_auto
+      tagRow.last_test_ttft_ms = channel.last_test_ttft_ms
     }
 
     // Aggregate weight (same value or null if different)

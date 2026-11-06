@@ -22,7 +22,6 @@ import z from 'zod'
 import { Pricing } from '@/features/pricing'
 import { SORT_OPTION_VALUES } from '@/features/pricing/constants'
 import { getFreshModuleAccess } from '@/lib/nav-modules'
-import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 const pricingSearchSchema = z.object({
@@ -30,7 +29,6 @@ const pricingSearchSchema = z.object({
   sort: z.enum(SORT_OPTION_VALUES).optional().catch(undefined),
   vendor: z.string().optional(),
   group: z.string().optional(),
-  modelType: z.string().optional(),
   quotaType: z.string().optional(),
   endpointType: z.string().optional(),
   tag: z.string().optional(),
@@ -43,20 +41,18 @@ const pricingSearchSchema = z.object({
 export const Route = createFileRoute('/pricing/')({
   validateSearch: pricingSearchSchema,
   beforeLoad: async ({ location }) => {
-    const { auth } = useAuthStore.getState()
-    if (!auth.user) {
-      throw redirect({
-        to: '/sign-in',
-        search: { redirect: location.href },
-      })
-    }
-    if (auth.user.role < ROLE.ADMIN) {
-      throw redirect({ to: '/403' })
-    }
-
     const access = await getFreshModuleAccess('pricing')
     if (!access.enabled) {
       throw redirect({ to: '/' })
+    }
+    if (access.requireAuth) {
+      const { auth } = useAuthStore.getState()
+      if (!auth.user) {
+        throw redirect({
+          to: '/sign-in',
+          search: { redirect: location.href },
+        })
+      }
     }
   },
   component: Pricing,

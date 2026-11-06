@@ -12,11 +12,6 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
-	// Grafana loads many assets through auth_request. Keep this cheap, read-only
-	// session check outside the global API rate limiter so asset bursts do not
-	// turn a valid embedded dashboard into an OpenResty 500 response.
-	registerFailoverGrafanaAuthRoute(router)
-
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -28,41 +23,15 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/setup", anonymousRequestBodyLimit, controller.PostSetup)
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/uptime/status", controller.GetUptimeKumaStatus)
-		apiRouter.GET("/admin/analytics/package-comparison", middleware.AdminAuth(), controller.GetPackageComparison)
 		apiRouter.GET("/admin/console", middleware.AdminAuth(), controller.GetAdminConsole)
 		apiRouter.GET("/admin/realtime", middleware.AdminAuth(), controller.GetAdminConsoleRealtime)
 		apiRouter.GET("/admin/system-load", middleware.AdminAuth(), controller.GetAdminConsoleSystemLoad)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
-		apiRouter.GET("/loadtest/config", middleware.UserAuth(), controller.GetLoadTestConfig)
-		loadTestRoute := apiRouter.Group("/loadtest")
-		loadTestRoute.Use(middleware.UserAuth())
-		{
-			loadTestRoute.GET("/state", controller.GetLoadTestState)
-			loadTestRoute.POST("/agents/pairing", controller.CreateLoadTestAgentPairing)
-			loadTestRoute.POST("/managed-agents/pairing", middleware.AdminAuth(), controller.CreateManagedLoadTestAgentPairing)
-			loadTestRoute.GET("/agents", controller.ListLoadTestAgents)
-			loadTestRoute.DELETE("/agents/:id", controller.DeleteLoadTestAgent)
-			loadTestRoute.DELETE("/managed-agents/:id", middleware.AdminAuth(), controller.DeleteManagedLoadTestAgent)
-			loadTestRoute.PUT("/managed-agents/:id/capacity", middleware.AdminAuth(), controller.UpdateManagedLoadTestAgentCapacity)
-			loadTestRoute.POST("/runs", controller.CreateLoadTestRun)
-			loadTestRoute.GET("/runs", controller.ListLoadTestRuns)
-			loadTestRoute.GET("/runs/:id", controller.GetLoadTestRun)
-			loadTestRoute.POST("/runs/:id/cancel", controller.CancelLoadTestRun)
-		}
-		loadTestAgentRoute := apiRouter.Group("/loadtest-agent")
-		{
-			loadTestAgentRoute.POST("/pair", controller.PairLoadTestAgent)
-			loadTestAgentRoute.POST("/poll", controller.PollLoadTestAgent)
-			loadTestAgentRoute.POST("/runs/:id/progress", controller.UpdateLoadTestRunProgress)
-			loadTestAgentRoute.POST("/runs/:id/complete", controller.FinishLoadTestRun)
-			loadTestAgentRoute.GET("/runs/:id/token-stats", controller.GetLoadTestAgentTokenStats)
-		}
 		apiRouter.GET("/status/test", middleware.AdminAuth(), controller.TestStatus)
 		apiRouter.GET("/notice", controller.GetNotice)
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)
 		apiRouter.GET("/privacy-policy", controller.GetPrivacyPolicy)
 		apiRouter.GET("/about", controller.GetAbout)
-		apiRouter.GET("/affiliate/campaign", controller.GetAffiliateCampaign)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
@@ -115,16 +84,13 @@ func SetApiRouter(router *gin.Engine) {
 			selfRoute.Use(middleware.UserAuth())
 			{
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
-				selfRoute.GET("/self/channels", controller.GetSelfChannels)
-				selfRoute.GET("/self/channels/:id", controller.GetSelfChannel)
-				selfRoute.GET("/self/channels/:id/test", controller.TestSelfChannel)
 				selfRoute.GET("/self", controller.GetSelf)
+				selfRoute.GET("/self/in-flight", controller.GetUserInFlight)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), controller.UpdateSelf)
 				selfRoute.PUT("/self/onboarding", controller.CompleteOnboarding)
 				selfRoute.DELETE("/self", controller.DeleteSelf)
 				selfRoute.GET("/token", controller.GenerateAccessToken)
-				selfRoute.GET("/access-token", controller.GetAccessToken)
 				selfRoute.GET("/passkey", controller.PasskeyStatus)
 				selfRoute.POST("/passkey/register/begin", controller.PasskeyRegisterBegin)
 				selfRoute.POST("/passkey/register/finish", controller.PasskeyRegisterFinish)
@@ -156,8 +122,6 @@ func SetApiRouter(router *gin.Engine) {
 				// Check-in routes
 				selfRoute.GET("/checkin", controller.GetCheckinStatus)
 				selfRoute.POST("/checkin", middleware.TurnstileCheck(), controller.DoCheckin)
-
-				// Sub-account (parent-child) management
 				selfRoute.GET("/self/children", controller.GetSelfChildren)
 				selfRoute.POST("/self/children", controller.AddSelfChild)
 				selfRoute.GET("/self/parent", controller.GetSelfParent)
@@ -203,8 +167,6 @@ func SetApiRouter(router *gin.Engine) {
 		affiliateAdminRoute := apiRouter.Group("/affiliate/admin")
 		affiliateAdminRoute.Use(middleware.AdminAuth())
 		{
-			affiliateAdminRoute.GET("/campaign", controller.AdminGetAffiliateCampaign)
-			affiliateAdminRoute.PUT("/campaign", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateCampaign)
 			affiliateAdminRoute.GET("/settings", controller.AdminGetAffiliateSettings)
 			affiliateAdminRoute.PUT("/settings", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateSettings)
 			affiliateAdminRoute.GET("/user-overrides", controller.AdminGetAffiliateUserOverrides)
@@ -256,6 +218,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			optionRoute.GET("/", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
+			optionRoute.PUT("/pricing-groups", controller.UpdatePricingGroupConfiguration)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
@@ -293,6 +256,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
+			ratioSyncRoute.POST("/apply", controller.ApplyUpstreamPrices)
 		}
 		registerChannelRoutes(apiRouter)
 		registerChannelMonitorRoutes(apiRouter)
@@ -308,7 +272,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.PUT("/", controller.UpdateToken)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
-			tokenRoute.POST("/batch/keys", middleware.TokenKeyRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
+			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
 		usageRoute := apiRouter.Group("/usage")
@@ -318,16 +282,6 @@ func SetApiRouter(router *gin.Engine) {
 			tokenUsageRoute.Use(middleware.TokenAuthReadOnly())
 			{
 				tokenUsageRoute.GET("/", controller.GetTokenUsage)
-			}
-			realtimeUsageRoute := usageRoute.Group("/realtime")
-			realtimeUsageRoute.Use(middleware.TokenAuthReadOnly())
-			{
-				// The empty path serves the bare /api/usage/realtime URL;
-				// registering it alongside "/" spares script callers the
-				// trailing-slash redirect.
-				realtimeUsageRoute.GET("", controller.GetTokenRealtimeMetrics)
-				realtimeUsageRoute.GET("/", controller.GetTokenRealtimeMetrics)
-				realtimeUsageRoute.GET("/keys", controller.GetTokenRealtimeKeyBreakdown)
 			}
 		}
 
@@ -345,20 +299,22 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
+		logRoute.GET("/analytics", middleware.AdminAuth(), controller.GetLogAnalytics)
+		logRoute.GET("/cache-trend", middleware.AdminAuth(), controller.GetLogCacheTrend)
+		logRoute.GET("/options", middleware.AdminAuth(), controller.GetLogFilterOptions)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
-		logRoute.POST("/self/loadtest-stats", middleware.UserAuth(), controller.GetLoadTestChannelStats)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
-		logRoute.GET("/cost-reconciliation", middleware.AdminAuth(), controller.GetCostReconciliation)
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
-		logRoute.GET("/team", middleware.UserAuth(), controller.GetTeamLogs)
-		logRoute.GET("/team/stat", middleware.UserAuth(), controller.GetTeamLogsStat)
+		logRoute.GET("/team", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamLogs)
+		logRoute.GET("/team/stat", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamLogsStat)
 
 		systemTaskRoute := apiRouter.Group("/system-task")
 		systemTaskRoute.Use(middleware.RootAuth())
 		{
 			systemTaskRoute.POST("/log-cleanup", controller.CreateLogCleanupSystemTask)
+			systemTaskRoute.DELETE("/log-rollup", controller.DeleteLogUsageRollups)
 			systemTaskRoute.GET("/list", controller.ListSystemTasks)
 			systemTaskRoute.GET("/current", controller.GetCurrentSystemTask)
 			systemTaskRoute.GET("/:task_id", controller.GetSystemTask)
@@ -374,32 +330,13 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
-		dataRoute.GET("/dimensions", middleware.AdminAuth(), controller.GetAdminQuotaDataDimensions)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
-		dataRoute.GET("/self/dimensions", middleware.UserAuth(), controller.GetSelfQuotaDataDimensions)
-		dataRoute.GET("/team", middleware.UserAuth(), controller.GetTeamQuotaDates)
-		dataRoute.GET("/team/summary", middleware.UserAuth(), controller.GetTeamSummaryStats)
-		dataRoute.GET("/team/token-usage", middleware.UserAuth(), controller.GetTeamTokenUsage)
-		dataRoute.GET("/team/flow", middleware.UserAuth(), controller.GetTeamFlowQuotaDates)
+		dataRoute.GET("/self/summary", middleware.UserAuth(), controller.GetUserQuotaSummary)
+		dataRoute.GET("/team", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamQuotaDates)
+		dataRoute.GET("/team/summary", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamSummaryStats)
+		dataRoute.GET("/team/flow", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamFlowQuotaDates)
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
-		// Per-key spend ranking over a time range. The self variant scopes to
-		// the session account; the admin variant covers everyone.
-		dataRoute.GET("/token-usage", middleware.AdminAuth(), controller.GetAdminTokenUsage)
-		dataRoute.GET("/self/token-usage", middleware.UserAuth(), controller.GetSelfTokenUsage)
-		// Realtime throughput reads in-process counters only. The self route
-		// takes the user id from the session so it can never be pointed at
-		// another account; the admin routes are the only way to read everyone.
-		dataRoute.GET("/realtime/self", middleware.UserAuth(), controller.GetSelfRealtimeMetrics)
-		dataRoute.GET("/realtime/self/dimensions", middleware.UserAuth(), controller.GetSelfRealtimeDimensions)
-		dataRoute.GET("/realtime/self/keys", middleware.UserAuth(), controller.GetSelfRealtimeKeyBreakdown)
-		dataRoute.GET("/realtime/team", middleware.UserAuth(), controller.GetTeamRealtimeMetrics)
-		dataRoute.GET("/realtime/team/keys", middleware.UserAuth(), controller.GetTeamRealtimeKeyBreakdown)
-		// Historical counterpart to /realtime/self: unbounded range and spend,
-		// at the hourly resolution quota_data actually stores.
-		dataRoute.GET("/usage/self", middleware.UserAuth(), controller.GetSelfUsageStats)
-		dataRoute.GET("/realtime/users", middleware.AdminAuth(), controller.GetRealtimeMetricsUsers)
-		dataRoute.GET("/realtime/users/:id", middleware.AdminAuth(), controller.GetRealtimeMetricsByUser)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
@@ -414,11 +351,6 @@ func SetApiRouter(router *gin.Engine) {
 			groupRoute.PUT("/:name", middleware.RootAuth(), controller.UpdateManagedUserGroup)
 			groupRoute.DELETE("/:name", middleware.RootAuth(), controller.DeleteManagedUserGroup)
 			groupRoute.GET("/pricing-groups", controller.GetPricingGroups)
-			groupRoute.GET("/bench/config", middleware.RootAuth(), controller.GetGroupBenchConfig)
-			groupRoute.PUT("/bench/config", middleware.RootAuth(), controller.UpdateGroupBenchConfig)
-			groupRoute.POST("/bench/run", middleware.RootAuth(), controller.RunGroupBenchNow)
-			groupRoute.GET("/bench/runs", middleware.RootAuth(), controller.ListGroupBenchRuns)
-			groupRoute.GET("/bench/runs/:id/artifact", middleware.RootAuth(), controller.GetGroupBenchArtifact)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")
@@ -437,7 +369,8 @@ func SetApiRouter(router *gin.Engine) {
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)
-			taskRoute.GET("/team", middleware.UserAuth(), controller.GetTeamTask)
+			taskRoute.GET("/:task_id/media", middleware.TokenOrUserAuth(), controller.TaskMedia)
+			taskRoute.GET("/team", middleware.UserAuth(), middleware.TeamOwnerAuth(), controller.GetTeamTask)
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
 		}
 

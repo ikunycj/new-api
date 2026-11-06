@@ -22,7 +22,7 @@ const TaskSuccessCode = "success"
 type TaskResponse[T TaskData] struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Data    T      `json:"data"`
+	Data    T      `json:"data,omitempty"`
 }
 
 func (t *TaskResponse[T]) IsSuccess() bool {
@@ -37,7 +37,7 @@ type TaskDto struct {
 	Platform   string          `json:"platform"`
 	UserId     int             `json:"user_id"`
 	Group      string          `json:"group"`
-	ChannelId  int             `json:"channel_id"`
+	ChannelId  int             `json:"channel_id,omitempty"`
 	Quota      int             `json:"quota"`
 	Action     string          `json:"action"`
 	Status     string          `json:"status"`
@@ -49,7 +49,7 @@ type TaskDto struct {
 	Progress   string          `json:"progress"`
 	Properties any             `json:"properties"`
 	Username   string          `json:"username,omitempty"`
-	Data       json.RawMessage `json:"data"`
+	Data       json.RawMessage `json:"data,omitempty"`
 }
 
 type FetchReq struct {

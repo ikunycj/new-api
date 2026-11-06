@@ -1,125 +1,61 @@
-# AllToken 渠道路由、错误码与监控规范
+# 网关渠道路由、错误码与监控规范
 
 ## 1. 目标架构
 
-AllToken 保留商业权益和请求计费两类独立维度：
+网关只保留以下业务关系：
 
 ```text
-用户 -> 用户组（users.group）-> 可用计费组 -> Token 计费组（tokens.group）-> 渠道 -> 上游服务
+用户 -> 用户分组 -> 计费分组 -> 渠道 -> 上游服务
 ```
 
 - **用户**：登录账号与 API Key 的所有者。
-- **用户组**：复用 `users.group`，表示账号的商业权益层级，并决定该用户可选择哪些计费组。
+- **用户分组**：复用 `users.group`，用于用户侧权限和账务规则。
 - **计费分组**：API Key 授权的计费与模型能力边界，复用 Token、Ability 和 Channel 已有的 `group`。
-- **渠道**：一个可独立请求、计费、重试、熔断和监控的上游入口。
+- **渠道**：一个可独立请求、计费、重试和监控的上游入口。
 
-AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号池属于上游实现细节；AllToken 收到的上游错误统一归因到实际请求渠道，并在计费分组内直接切换渠道。
+上游系统内部是否存在账号池属于上游实现细节。网关收到的上游错误归因到实际请求渠道，并在计费分组内重新选择渠道。
 
-## 2. 路由配置
+## 2. 渠道选择
 
-每个计费分组最多配置一条启用的路由。路由由 `billing_group_routes` 和 `billing_group_channels` 两张表组成。
+可选的路由成员关系保存在 `billing_group_routes` 和 `billing_group_channels` 两张表中。它们只负责确定计费分组是否有显式渠道集合，以及为动态选择提供稳定的优先级和权重。
 
-### 2.1 路由策略
-
-| 策略 | 用途 | 默认总尝试次数 | 默认总超时 | 默认熔断阈值 |
-| --- | --- | ---: | ---: | ---: |
-| `cost_first` | 允许在低成本渠道上多尝试后再切换 | 6 | 45 秒 | 8 |
-| `balanced` | 在成本与稳定性之间折中 | 4 | 30 秒 | 5 |
-| `stability_first` | 更快离开异常渠道 | 3 | 20 秒 | 3 |
-
-策略默认值可以在管理后台逐项覆盖：
-
-- `max_total_attempts`：一次客户端请求允许的全部上游尝试数。
-- `total_timeout_ms`：整个渠道切换过程的时间预算，不是单个模型响应超时。
-- `circuit_failure_threshold`：窗口内触发渠道熔断的失败数。
-- `circuit_window_seconds`：熔断统计窗口。
-- `circuit_cooldown_seconds`：渠道熔断后的冷却时间。
-- `circuit_half_open_requests`：半开状态允许的探测请求数。
-
-### 2.2 熔断总开关与统一配置
-
-熔断默认关闭。管理员在“系统设置 -> 模型设置 -> 路由可靠性”中通过
-`ChannelCircuitEnabled` 统一启用或关闭，不需要删除路由或渠道配置。
-
-- 关闭时，所有候选渠道跳过熔断检查，成功和失败都不会写入熔断状态或指标。
-- 开关状态或统一配置发生变化时，进程内状态、Redis 中的
-  `alltoken:channel:circuit:*` 状态以及熔断 Prometheus 指标会被清理。
-- 自动禁用、健康探测、请求重试、权重/优先级调度和利润保护不受该开关影响。
-
-所有模式默认值和快捷预设统一保存在现有 `options` 表的
-`ChannelCircuitConfig` JSON 中，结构如下：
-
-```json
-{
-  "default": {
-    "failure_threshold": 5,
-    "window_seconds": 60,
-    "cooldown_seconds": 60,
-    "half_open_requests": 1
-  },
-  "modes": {
-    "cost_first": {
-      "failure_threshold": 8,
-      "window_seconds": 60,
-      "cooldown_seconds": 60,
-      "half_open_requests": 1
-    },
-    "stability_first": {
-      "failure_threshold": 3,
-      "window_seconds": 60,
-      "cooldown_seconds": 90,
-      "half_open_requests": 1
-    }
-  },
-  "presets": [
-    {
-      "key": "standard",
-      "label": "Standard",
-      "failure_threshold": 20,
-      "window_seconds": 60,
-      "cooldown_seconds": 30,
-      "half_open_requests": 1
-    }
-  ]
-}
-```
-
-接口会拒绝缺字段、重复预设键和越界数值。数据库中没有该选项或旧值无效时，
-后端使用同结构的安全内置默认值；前端不维护第二份熔断默认配置。请求重试、总超时
-和利润保护仍使用原有路由配置，不属于该 JSON。已有路由中明确保存的单路由熔断参数
-仍优先于统一默认值，以保持历史配置兼容。
-
-### 2.3 渠道顺序
-
-每条渠道配置包含：
+### 2.1 路由成员字段
 
 | 字段 | 含义 |
 | --- | --- |
 | `channel_id` | 渠道永久 ID，也是错误与监控定位键 |
-| `priority` | 仅用于定价分组显式选择“优先级策略”时的兼容顺序；普通渠道调度不读取该字段 |
-| `weight` | 渠道长期流量权重；0 按默认权重 1 处理 |
-| `max_attempts` | 切换前在该渠道最多尝试多少次 |
-| `cost_factor` | 压测成本估算使用的渠道成本系数 |
-| `enabled` | 是否参加路由 |
+| `priority` | 动态评分完全相同时用于稳定打破平局；强制优先渠道用它表达强制层级 |
+| `weight` | 近似最高分候选之间的长期流量权重；配置为 0 表示不承接普通流量 |
+| `enabled` | 是否参加该计费分组的路由 |
 
-渠道必须属于同一个计费分组并支持请求模型。普通渠道统一按 Weight 分流；只有定价分组明确选择兼容的“优先级策略”时，才使用该路由内部顺序。
+路由成员不再保存单渠道尝试上限、总尝试上限、总超时或成本系数。普通渠道不按 `priority` 形成硬层级；只有启用强制优先的渠道才会先于动态评分。
 
-未配置或停用计费分组路由时，系统使用 Channel/Ability 的健康状态与 Weight 逻辑；遗留 `priority` 仅作为兼容数据保留。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生。
+### 2.2 重试设置
 
-## 3. 切流过程
+重试设置属于当前渠道和当前计费分组的业务配置，不属于旧路由表字段：
+
+- 渠道 `upstream_max_retries` 表示首个上游请求之后允许的额外重试次数，实际该渠道最多请求 `upstream_max_retries + 1` 次。
+- 定价分组的固定重试模式中，`PricingGroupRetryPolicy.retry_times` 表示该分组首个请求之后允许的额外分组尝试次数，分组预算为 `retry_times + 1`。
+- 跟随渠道模式（配置值 `follow_channels`，旧值 `active_channels` 会自动归一化）按当前可用渠道跟随计算，分组预算为每个渠道的 `1 + upstream_max_retries` 之和。
+
+因此，固定模式的 `retry_times: 0` 或 `upstream_max_retries: 0` 都表示对应预算只允许一次请求，不表示“失败后再重试一次”；跟随渠道模式不使用 `retry_times`。API Key 不单独覆盖分组重试预算。
+
+系统在完整能力候选集中先执行权限、能力、凭证和并发硬过滤，再按定价分组配置的价格、可用性、负载和 TTFT 策略评分。候选池内才应用权重做平滑分流。跨计费分组重试仅在 API Key 使用 `auto` 分组并明确开启 `cross_group_retry` 时发生。
+
+## 3. 选择和切换过程
 
 一次请求的处理顺序如下：
 
 1. 根据用户和 API Key 确定允许使用的计费分组。
 2. 根据计费分组、模型和请求路径过滤可用渠道。
-3. 按渠道健康状态、并发和 Weight 选择渠道；兼容优先级策略仅在定价分组显式启用时生效。
-4. 全局熔断开启时检查该渠道的熔断状态；关闭时直接放行。
+3. 在跨组场景先选择定价分组，再在组内按动态策略建立候选池。
+4. 在真正发送前原子预占并发名额。
 5. 发起请求并记录渠道尝试结果。
-6. 对可重试错误，在 `max_attempts` 和全局预算内重试当前渠道。
-7. 当前渠道达到尝试上限、被错误规则要求切换或被熔断时，选择下一渠道。
-8. 所有候选渠道或预算耗尽后，对客户端返回最终错误。
+6. 失败后先检查当前渠道是否仍有 `upstream_max_retries` 预算；没有预算时再选择其他渠道。
+7. 分组预算耗尽后，只有允许跨组的 API Key 才能进入下一个计费分组。
+8. 所有候选渠道耗尽后，对客户端返回最终错误。
 
-渠道熔断按 `channel_id + route` 统计。Redis 可用时多个 AllToken 实例共享状态；Redis 不可用时退化为进程内状态。请求参数错误、内容策略错误和客户端主动取消不应计入渠道熔断。需要紧急回退时只需关闭总开关；无需删除配置或回滚数据库。
+每次切换都会重新计算剩余候选，并保留已确认失败渠道的排除状态。请求参数错误、内容策略错误和客户端主动取消不触发渠道切换。
 
 ## 4. 错误分层
 
@@ -129,9 +65,9 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 | --- | --- | --- |
 | `openai` | 官方 OpenAI 或兼容官方协议的明确原始错误 | `1xxxxx` |
 | `channel` | 当前渠道或其上游返回的错误 | `2xxxxx` |
-| `alltoken` | AllToken 网关自身生成的错误 | `3xxxxx` |
+| 空值 | 网关自身生成的错误 | `3xxxxx` |
 
-历史输入中的 `cluster` 和 `ikun` 只作为兼容别名读取，输出一律规范化为 `channel`。不要使用字符串包含匹配来决定切流，应优先使用六位 `alltoken_code`、`failure_scope`、`action` 和 `retryable`。
+上游错误来源只接受 `openai` 和 `channel`。网关自身生成的错误不设置来源。错误分类由内置错误目录依据错误来源、原始错误码和 HTTP 状态码完成。
 
 ### 4.1 六位数字格式
 
@@ -139,19 +75,13 @@ AllToken 不再维护 Cluster 和号池。上游系统内部是否存在账号�
 SCCDDD
 ```
 
-- `S`：来源层，1=OpenAI，2=渠道，3=AllToken。
+- `S`：来源层，1=OpenAI，2=渠道，3=网关。
 - `CC`：错误类别。
 - `DDD`：该类别下可扩展的具体编号。
 
-`alltoken_code` 是稳定分类，不编码某个具体渠道。具体失败渠道通过独立的 `channel_id` 和 `channel_name` 表达。
+`stable_code` 是稳定分类，不编码具体渠道。具体失败渠道通过 `channel_id` 和 `channel_name` 表达。
 
-`error_ref` 是一条可检索的错误记录引用：
-
-```text
-204001-CH38
-```
-
-其中 `204001` 是错误格式中的稳定分类，`CH38` 表示这次错误实际发生在渠道 38。它不是“第 38 条错误”。
+`error_ref` 是一条可检索的错误记录引用，例如 `204001-CH38`，其中 `CH38` 表示实际失败渠道。
 
 ### 4.2 主要错误码
 
@@ -163,28 +93,28 @@ SCCDDD
 | `105xxx` | 官方 5xx/不可用 | `switch_channel` |
 | `202xxx` | 渠道凭证错误 | `switch_channel` |
 | `204001` | 渠道 429 | `switch_channel` |
-| `205xxx` | 渠道上游不可用或无健康账号 | `switch_channel` |
+| `205xxx` | 渠道上游不可用 | `switch_channel` |
 | `210001` | 渠道超时 | `switch_channel` |
 | `301xxx` | 客户端请求格式错误 | `none` |
-| `302xxx` | AllToken 鉴权错误 | `none` |
+| `302xxx` | 网关鉴权错误 | `none` |
 | `303xxx` | 用户额度或预扣费失败 | `none` |
 | `305001` | 所有候选渠道已耗尽 | `retry_later` |
-| `306xxx` | AllToken 检测到的渠道配置/Key 错误 | `switch_channel` |
+| `306xxx` | 网关检测到的渠道配置/Key 错误 | `switch_channel` |
 | `307xxx` | 内容策略错误 | `none` 或 `manual` |
 | `308xxx` | 协议转换或响应解析错误 | 按作用域处理 |
-| `309xxx` | AllToken 内部错误 | 通常不切流 |
-| `310xxx` | AllToken 到渠道的网络错误 | `switch_channel` |
+| `309xxx` | 网关内部错误 | 通常不切流 |
+| `310xxx` | 网关到渠道的网络错误 | `switch_channel` |
 | `311001` | 渠道不支持模型 | `switch_channel` |
 
 ## 5. 错误记录
 
-内部上游尝试和内部调用方使用同一结构。示例：
+客户端最终错误和内部上游尝试使用同一结构。示例：
 
 ```json
 {
   "source": "channel",
   "source_code": "channel.rate_limit_error",
-  "alltoken_code": 204001,
+  "stable_code": 204001,
   "error_ref": "204001-CH38",
   "category": "rate_limit",
   "channel_id": 38,
@@ -199,42 +129,22 @@ SCCDDD
 
 响应头同步提供：
 
-- `X-Alltoken-Error-Source`
-- `X-Alltoken-Error-Code`
-- `X-Alltoken-Code`
-- `X-Alltoken-Error-Ref`
-- `X-Alltoken-Retryable`
+- `X-Error-Source`
+- `X-Error-Source-Code`
+- `X-Error-Stable-Code`
+- `X-Error-Ref`
+- `X-Error-Retryable`
 
-### 5.0 对外错误口径
+具体失败渠道通过 `channel_id` 和 `channel_name` 表达；旧版本的产品前缀字段和错误映射配置不再生成或解析。
 
-上面的结构包含 `channel_id`、`channel_name`、`error_ref` 等运营态字段，**只对内部调用方开放**。控制项 `PublicErrorMode` 决定外部调用方拿到什么：
-
-| 取值 | 行为 |
-| --- | --- |
-| `passthrough`（默认） | 保持旧行为：上游错误体与 `X-Alltoken-*` 响应头原样返回给所有调用方 |
-| `normalized` | 对外投影：按 `alltoken_code` 归类后返回稳定错误，并附 `request id`；`X-Alltoken-*` 响应头只对内部调用方下发 |
-
-`normalized` 的投影规则：
-
-- **按 `alltoken_code` 归类，不按 HTTP 状态码**。同一个状态码可能来自不同层，例如上游凭证失效返回的 401 不能表现为调用方自身的鉴权问题，因此归类只使用六位码。
-- **上游运营态一律折叠**。余额不足、号池耗尽、渠道状态码等任何 5xx 语义统一映射为 `503 Service temporarily unavailable, please retry later`；上游限流保留 `429`，因为它是调用方可直接消费的重试信号。
-- **调用方自身错误原样保留**。请求格式、鉴权、模型不存在、内容策略、用户自身额度不足等属于调用方问题，消息与状态码保持原样（但状态码仍只取 4xx；内部附着的 5xx 不会被带出）。
-- **错误信息附 `request id`**，支持凭 request id 从 `logs` 表反查到渠道，`error_ref` 不下发。
-
-内部调用方的判定依据是压测 token 的 HMAC 签名（`VerifyMockLoadTestRequest`），签名校验通过后才标记为内部请求；仅携带客户端可伪造的标识头不算。
-
-流式响应已开始写出时，错误按传输格式以帧内事件返回（OpenAI 兼容流为 `data: ...`，Claude 为 `event: error`），不再重写 HTTP 状态码。
-
-### 5.1 作用域
+### 5.1 作用域和动作
 
 | `failure_scope` | 含义 |
 | --- | --- |
 | `request` | 当前请求本身有问题，不应切流 |
-| `credential` | 当前渠道凭证失败，可按配置重试/切换 |
+| `credential` | 当前渠道凭证失败，可重试或切换 |
 | `channel` | 当前渠道失败，切换到下一渠道 |
 | `provider` | 上游服务级故障，当前渠道记失败并切换 |
-
-### 5.2 动作
 
 | `action` | 含义 |
 | --- | --- |
@@ -245,59 +155,11 @@ SCCDDD
 | `abort` | 立即终止 |
 | `manual` | 需要人工检查 |
 
-### 5.3 自定义映射
+## 6. 验收清单
 
-`channel_error_mappings` 可按以下维度把不同上游格式映射到稳定错误码：
-
-1. 精确 `channel_id`
-2. `channel_type`
-3. 原始 `raw_code`
-4. HTTP `status_code`
-
-匹配越具体优先级越高。`channel_id=0`、`channel_type=0`、`status_code=0` 和 `raw_code=*` 表示通配。映射必须指定六位数字错误码、作用域、动作和是否可重试。
-
-## 6. 监控与告警
-
-渠道路由只暴露有界标签，避免把 URL、Key、请求正文或用户内容写入指标。
-
-```text
-alltoken_channel_requests_total{channel_id,outcome}
-alltoken_channel_switch_total{from_channel,to_channel,mode}
-alltoken_channel_circuit_state{channel_id,route,state}
-alltoken_error_events_total{event_kind,alltoken_code,category,channel_id}
-alltoken_final_errors_total{alltoken_code,category,channel_id}
-alltoken_failover_duration_seconds{outcome,mode}
-```
-
-Grafana 以渠道为筛选和归因维度，至少展示：
-
-- 各渠道请求量与失败率。
-- 渠道之间的切换次数。
-- 打开/半开的渠道熔断器。
-- 按渠道和六位错误码聚合的错误量。
-- 最终对外成功率、P95 延迟和耗尽错误。
-- 数据库、Redis、ECS 和应用资源指标。
-
-核心告警包括渠道熔断、渠道切换激增、最终错误率过高和所有候选渠道耗尽。Alertmanager 按 `channel_id` 聚合告警。
-
-## 7. 数据迁移与回滚
-
-新运行时只迁移和读写：
-
-- `billing_group_routes`
-- `billing_group_channels`
-- `channel_error_mappings`
-
-旧 Cluster、号池和旧切流策略表不再迁移、不再读取，但本次改造不会主动删除这些物理表或历史数据。需要回滚旧版本时，原始数据仍可供旧代码读取；确认新架构稳定并完成数据备份后，才能单独安排物理清理。
-
-## 8. 验收清单
-
-1. 只有管理员可以看到并调用 Load-test Demo 专用统计接口；访问结果不受 `users.group` 取值影响。
-2. 一个计费分组只能保存一条路由，且只能选择属于该分组的渠道。
-3. Weight 较高的健康渠道获得更高长期流量，不会因遗留 Channel.priority 形成硬分层。
-4. 当前渠道 429、5xx 或超时后，按 `max_attempts` 重试并切到下一渠道。
-5. 错误记录包含正确的 `alltoken_code`、`channel_id` 和 `error_ref`。
-6. 开启熔断后，渠道熔断时不再接收新请求，冷却后半开探测成功可恢复；关闭时渠道始终通过熔断检查。
-7. Grafana 能按 `channel_id` 看到请求、失败、切换和熔断；不再依赖 Cluster/号池指标。
-8. 所有候选渠道耗尽时返回 `305001`，并触发对应告警。
-9. `PublicErrorMode=normalized` 时，外部调用方在余额不足、号池耗尽、上游 5xx 场景下拿到的响应不含余额、号池、渠道名或上游地址；上游限流仍为 429；内部签名调用方仍能读到完整 `X-Alltoken-*` 分类。
+1. 动态候选只能来自用户和 API Key 有权使用的计费分组及渠道。
+2. 高评分渠道成功时不会访问后续渠道。
+3. `upstream_max_retries` 控制单渠道首请求后的额外请求次数。
+4. `PricingGroupRetryPolicy.retry_times` 控制定价分组级预算。
+5. 错误记录包含正确的 `stable_code`、`channel_id` 和 `error_ref`。
+6. 所有候选渠道耗尽时返回 `305001`。

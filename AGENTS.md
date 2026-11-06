@@ -22,7 +22,7 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 
 - **Backend**: Go 1.22+, Gin web framework, GORM v2 ORM
 - **Frontend**: React 19, TypeScript, Rsbuild, Base UI, Tailwind CSS
-- **Databases**: SQLite, MySQL, PostgreSQL (all three must be supported)
+- **Database**: PostgreSQL >= 9.6
 - **Cache**: Redis (go-redis) + in-memory cache
 - **Auth**: JWT, WebAuthn/Passkeys, OAuth (GitHub, Discord, OIDC, etc.)
 - **Frontend package manager**: Bun (preferred over npm/yarn/pnpm)
@@ -65,15 +65,28 @@ web/             — Frontend container
 - Usage: `useTranslation()` hook, call `t('English key')` in components
 - CLI tools: `bun run i18n:sync` (from `web/default/`)
 
+### Administrator-only UI exception
+- Internal pages, menus, controls, and messages that are exclusively visible to administrators or super administrators do not require multilingual translations; the default language is Chinese. Do not leave English source keys or fallback text in the Chinese administrator UI.
+- Shared components, regular-user-visible content, public pages, and external API responses must still follow the normal i18n rules.
+
 ## Rules
 
 ### Common Code Quality
 
 - New code should stay direct and readable. Prefer early returns, clear branches, and well-named local variables to deep nesting or layered control flow.
+- Do not invent backward-compatibility behavior. Legacy redirects, retired routes, duplicate fields, fallback reads, or preservation of removed data require an explicit user request, documented external contract, or active regression test. When none exists, remove the obsolete code and data cleanly.
 - Minimize nested function definitions. Use them only when required by a callback API or when keeping the closure local is clearly simpler than adding another symbol.
 - Avoid adding package-level or module-level helper functions that have only one caller and do not express a stable business concept. Inline that logic at the call site instead.
 - A separate function is appropriate when it represents reusable behavior, a required interface/framework callback, an exported API, a test fixture, or complex business logic that deserves direct tests.
 - If a single-use helper is kept, its name must describe a durable domain concept rather than a mechanical step extracted only to shorten the caller.
+
+### Naming and namespace rules
+
+- Do not use a product, deployment, customer, or project nickname as a generic code namespace, protocol field, error source, metric namespace, database column, or naming convention. Names such as `ikun` and `alltoken` are not valid defaults for reusable code.
+- Prefer domain-neutral names that describe the behavior or data contract, such as `gateway`, `routing`, `stable_code`, or `error_source`.
+- A product name may appear only where it is explicitly part of an external product-facing contract (for example, a branded URL, deployment target, or compatibility identifier). Do not introduce new internal aliases or propagate such branding into generic APIs.
+- A historical migration may mention an old product-specific identifier only to rename or remove it; the old name must not remain in the current model, JSON, HTTP, metric, database, or default-configuration contract.
+- When removing or renaming a product-specific internal namespace, update the emitted JSON, HTTP headers, persistence fields, metrics, tests, and documentation together; do not retain the old name merely as a new default.
 
 ### Backend Rules
 
@@ -87,19 +100,27 @@ web/             — Frontend container
 
 Do NOT directly import or call `encoding/json` in business code. `json.RawMessage`, `json.Number`, and other type definitions from `encoding/json` may still be referenced as types, but actual marshal/unmarshal calls must go through `common.*`.
 
-**Database compatibility:** All database code MUST work with SQLite, MySQL >= 5.7.8, and PostgreSQL >= 9.6 simultaneously.
+**Database:** The project targets PostgreSQL >= 9.6. New or modified database code, migrations, and tests only need to be validated against PostgreSQL; do not add SQLite/MySQL compatibility branches unless a task explicitly requires maintaining an existing compatibility path.
 
 - Prefer GORM methods (`Create`, `Find`, `Where`, `Updates`, etc.) over raw SQL.
-- Let GORM handle primary key generation; do not use `AUTO_INCREMENT` or `SERIAL` directly.
-- Standard `SELECT ... FOR UPDATE` row locks built with GORM query methods in `model/` MUST use `lockForUpdate(tx)`. Do not use the legacy GORM v1 pattern `tx.Set("gorm:query_option", "FOR UPDATE")`, because GORM v2 silently ignores it and no lock is acquired. Do not duplicate `clause.Locking{Strength: "UPDATE"}` at call sites; the shared helper emits `FOR UPDATE` for MySQL/PostgreSQL and skips it for SQLite, where the syntax is unsupported. Dialect-specific locking with different semantics (for example, a MySQL next-key/gap lock) may use raw SQL only behind explicit database-type branches with valid fallbacks for every supported database.
-- When raw SQL is unavoidable, account for dialect differences:
-  - PostgreSQL uses `"column"` quoting, while MySQL/SQLite use `` `column` ``.
-  - Use `commonGroupCol`, `commonKeyCol` from `model/main.go` for reserved-word columns like `group` and `key`.
-  - Use `commonTrueVal`/`commonFalseVal` for boolean values.
-  - Use `common.UsingMainDatabase(...)` for primary database branches and `common.UsingLogDatabase(...)` for log database branches.
-- Do not use database-specific features without cross-DB fallback, including MySQL-only functions, PostgreSQL-only operators, SQLite-unsupported `ALTER COLUMN`, or database-specific JSON column types without a `TEXT` fallback.
-- Migrations must work on all three databases. For SQLite, use `ALTER TABLE ... ADD COLUMN` instead of `ALTER COLUMN` (see `model/main.go` for patterns).
-- Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. MySQL and PostgreSQL can normalize boolean defaults differently, causing GORM `AutoMigrate` to repeatedly issue `ALTER TABLE` on restart. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic; do not replace `default:true` with `default:1` unless the behavior is verified across SQLite, MySQL, and PostgreSQL.
+- Let GORM handle primary key generation; do not use database-specific auto-increment syntax directly.
+- Standard `SELECT ... FOR UPDATE` row locks built with GORM query methods in `model/` MUST use `lockForUpdate(tx)`. Do not use the legacy GORM v1 pattern `tx.Set("gorm:query_option", "FOR UPDATE")`, because GORM v2 silently ignores it and no lock is acquired. Do not duplicate `clause.Locking{Strength: "UPDATE"}` at call sites.
+- When raw SQL is unavoidable, use PostgreSQL syntax and double-quote reserved identifiers such as `group` and `key`. Use `commonGroupCol` and `commonKeyCol` from `model/main.go` where applicable.
+- Use `common.UsingMainDatabase(...)` for primary database branches and `common.UsingLogDatabase(...)` for log database branches.
+- PostgreSQL-specific features are allowed when they make the implementation clearer; do not add SQLite/MySQL fallback branches.
+- Migrations only need to support PostgreSQL. Use PostgreSQL `ALTER TABLE` and other PostgreSQL-native migration syntax where appropriate.
+- Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic.
+
+### One-Time Log Aggregation Database Repair
+
+When AI assistance starts or deploys the project, first check whether the PostgreSQL log database actually used by the application contains `log_rollup_state` and `channel_usage_rollups`. If either table is missing or has an incomplete schema, create a temporary SQL file or run equivalent one-time SQL to repair it. Delete the temporary SQL and repair code immediately after verification; do not add this repair to the application startup path.
+
+- Use the separate log database when `LOG_SQL_DSN` is set; otherwise use the primary database from `SQL_DSN`.
+- Before and after execution, verify only the database name, schema, tables, and indexes. Never print DSNs, passwords, or other secrets.
+- One-time SQL may only create or complete `log_rollup_state`, `channel_usage_rollups`, and their query indexes. It must not delete logs, drop existing tables, reset aggregation state, or manually insert a state row.
+- Execute with `psql -v ON_ERROR_STOP=1` or an existing PostgreSQL driver from the project. After execution, confirm the database name, schema, tables, and indexes from the results.
+- After the repair, delete the temporary SQL, temporary executor, and temporary startup migration code, then check `git status` again.
+- Do not add `migrateLOGDB()` back to the primary-database reuse path for this repair. That path is fixed through a one-time operational action.
 
 **Relay and provider behavior:**
 
@@ -142,14 +163,14 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
   - `bun run dev` for development server
   - `bun run build` for production build
   - `bun run i18n:*` for i18n tooling
-- Frontend UI text must support i18n with `i18next`/`react-i18next`. Use flat JSON locale files in `web/default/src/i18n/locales/{lang}.json`, with English source strings as keys.
-- In React components, use `useTranslation()` and call `t('English key')` for user-facing text.
+- Frontend UI text for regular users and public pages must support i18n with `i18next`/`react-i18next`. Internal administrator-only UI defaults to Chinese and may omit multilingual translations. Use flat JSON locale files in `web/default/src/i18n/locales/{lang}.json`, with English source strings as keys when i18n is required.
+- In React components that contain regular-user or public-facing text, use `useTranslation()` and call `t('English key')`. Administrator-only internal text defaults to Chinese and must not render English fallback keys in the Chinese UI.
 - Follow `web/default/AGENTS.md` for detailed frontend conventions, including TypeScript, component structure, styling, accessibility, testing, and build checks.
 
 ### Local Development Ports
 
 - The Go backend uses `http://127.0.0.1:3000`.
-- Frontend development ports are branch-scoped: use `http://localhost:5174` for the `ikun.love` branch, `http://localhost:5173` for the main-style branch (`feature/docs-perfect`), and `http://localhost:5713` when no branch-specific port is specified.
+- Frontend development ports are branch-scoped: use `http://localhost:5173` for the main-style branch (`feature/docs-perfect`) and `http://localhost:5173` when no branch-specific port is specified.
 - Start the frontend from `web/default/` with `bun run dev` and keep `strictPort: true`; do not silently fall through to another port.
 - Before starting the frontend, check the port assigned to the current branch and reuse a healthy server for this workspace. If it is occupied by an unrelated or unhealthy process, identify the owning process and report the conflict. Do not terminate a user-owned process or switch ports without explicit approval.
 - Do not start a frontend server for checks that only require tests, type checking, linting, formatting, or a production build. When browser verification is required, use the branch-assigned URL above and keep it running for user review. No exceptions.

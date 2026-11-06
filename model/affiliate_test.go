@@ -70,13 +70,27 @@ func createAffiliateTopUp(t *testing.T, inviteeID int, tradeNo string, money flo
 	return topUp
 }
 
+func createAffiliateUserOverride(t *testing.T, userID int, updatedBy int, override AffiliateUserOverride) *AffiliateUserOverride {
+	t.Helper()
+	override.ID = 0
+	override.UserID = userID
+	override.UpdatedBy = updatedBy
+	require.NoError(t, DB.Create(&override).Error)
+	return &override
+}
+
 func enableAffiliateCampaignForTest(t *testing.T, startsAt int64, endsAt int64, holdSeconds int64) *AffiliateCampaign {
 	t.Helper()
-	campaign, err := UpdateAffiliateCampaign(AffiliateCampaign{
-		Name: "Test referral campaign", Enabled: true, StartsAt: startsAt, EndsAt: endsAt,
-		InviterCashbackRateBps: 2500, InviteeBonusRateBps: 2000, HoldSeconds: holdSeconds,
-	})
+	campaign, err := getAffiliateCampaignWithTx(DB)
 	require.NoError(t, err)
+	campaign.Name = "Test referral campaign"
+	campaign.Enabled = true
+	campaign.StartsAt = startsAt
+	campaign.EndsAt = endsAt
+	campaign.InviterCashbackRateBps = 2500
+	campaign.InviteeBonusRateBps = 2000
+	campaign.HoldSeconds = holdSeconds
+	require.NoError(t, DB.Save(campaign).Error)
 	return campaign
 }
 
@@ -181,23 +195,6 @@ func TestAffiliateCampaignCashReleaseAndTransfer(t *testing.T) {
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
 	assert.Zero(t, account.AvailableCents)
 	assert.Equal(t, int64(2500), account.TransferredCents)
-}
-
-func TestAffiliateCampaignPresentationMigrationIsIdempotent(t *testing.T) {
-	truncateTables(t)
-	common.OptionMap = map[string]string{}
-	require.NoError(t, DB.Create(&Option{Key: "affiliate_setting.reward_rate_bps", Value: "500"}).Error)
-	require.NoError(t, DB.Create(&Option{Key: "About", Value: "Support QQ: 1223288505"}).Error)
-
-	migrateAffiliateCampaignPresentationOptions()
-	migrateAffiliateCampaignPresentationOptions()
-
-	var rate Option
-	require.NoError(t, DB.First(&rate, "key = ?", "affiliate_setting.reward_rate_bps").Error)
-	assert.Equal(t, "2500", rate.Value)
-	var about Option
-	require.NoError(t, DB.First(&about, "key = ?", "About").Error)
-	assert.Equal(t, "Support QQ: 3812160108、1223288505", about.Value)
 }
 
 func TestAffiliateEveryTopUpUsesCumulativeFirstRewardThenCurrentPayment(t *testing.T) {
@@ -360,11 +357,10 @@ func TestAffiliateOverrideAffectsExistingReferralFutureTopUps(t *testing.T) {
 	require.NoError(t, ProcessAffiliateTopUp(first.Id))
 
 	rate := int64(5000)
-	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
 		RewardRateBps: &rate,
 		ChangeReason:  "partner agreement",
 	})
-	require.NoError(t, err)
 	second := createAffiliateTopUp(t, invitee.Id, "affiliate-override-rate", 10, TopUpCompletionSourceOnlineWallet)
 	require.NoError(t, ProcessAffiliateTopUp(second.Id))
 
@@ -376,17 +372,134 @@ func TestAffiliateOverrideAffectsExistingReferralFutureTopUps(t *testing.T) {
 	assert.NotEqual(t, rewards[0].RuleVersionID, rewards[1].RuleVersionID)
 }
 
-func TestAffiliateOverrideRequiresChangeReason(t *testing.T) {
+func TestAffiliateUserOverrideSearchSupportsCustomizedAndUncustomizedUsers(t *testing.T) {
+	truncateTables(t)
+	configureAffiliateTest(t, nil)
+	inviter, invitee := createAffiliateUsers(t, "")
+	rate := int64(5000)
+	legacyRewardMode := operation_setting.AffiliateRewardModeFixed
+	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
+		RewardRateBps: &rate,
+		ChangeReason:  "partner agreement",
+	})
+	createAffiliateUserOverride(t, invitee.Id, inviter.Id, AffiliateUserOverride{
+		RewardMode:   &legacyRewardMode,
+		ChangeReason: "legacy rule override",
+	})
+
+	items, total, err := SearchAffiliateUserOverrides("", 0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, items, 1)
+	assert.Equal(t, inviter.Id, items[0].UserID)
+	require.NotNil(t, items[0].Override)
+	require.NotNil(t, items[0].Override.RewardRateBps)
+	assert.Equal(t, rate, *items[0].Override.RewardRateBps)
+	assert.Equal(t, inviter.Username, items[0].UpdatedByUsername)
+
+	items, total, err = SearchAffiliateUserOverrides(invitee.Username, 0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, items, 1)
+	assert.Equal(t, invitee.Id, items[0].UserID)
+	assert.Nil(t, items[0].Override)
+	assert.Equal(t, "global", items[0].EffectiveRule.Source)
+
+	items, total, err = SearchAffiliateUserOverrides("affiliate-", 0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	require.Len(t, items, 2)
+	assert.Equal(t, inviter.Id, items[0].UserID)
+	assert.NotNil(t, items[0].Override)
+	assert.Equal(t, invitee.Id, items[1].UserID)
+	assert.Nil(t, items[1].Override)
+}
+
+func TestAffiliateUserOverrideSaveAndDelete(t *testing.T) {
 	truncateTables(t)
 	configureAffiliateTest(t, nil)
 	inviter, _ := createAffiliateUsers(t, "")
-	rate := int64(1500)
-
 	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
-		RewardRateBps: &rate,
-		ChangeReason:  "   ",
+		ChangeReason: "   ",
 	})
-	assert.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+	require.ErrorIs(t, DeleteAffiliateUserOverride(0), ErrAffiliateRuleInvalid)
+
+	rate := int64(5000)
+	view, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		RewardRateBps: &rate,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, view.Override)
+	require.NotNil(t, view.Override.RewardRateBps)
+	assert.Equal(t, rate, *view.Override.RewardRateBps)
+	assert.Empty(t, view.Override.ChangeReason)
+
+	require.NoError(t, DeleteAffiliateUserOverride(inviter.Id))
+	view, err = GetAffiliateUserOverrideView(inviter.Id)
+	require.NoError(t, err)
+	assert.Nil(t, view.Override)
+	assert.Equal(t, "global", view.EffectiveRule.Source)
+}
+
+func TestAffiliateUserOverrideSaveRejectsPreferencesAndRules(t *testing.T) {
+	truncateTables(t)
+	configureAffiliateTest(t, nil)
+	inviter, _ := createAffiliateUsers(t, "")
+	rate := int64(5000)
+
+	enabled := true
+	registrationTrigger := operation_setting.AffiliateRegistrationTriggerRegistrationSuccess
+	cashbackFrequency := operation_setting.AffiliateCashbackFrequencyEveryTopUp
+	rewardMode := operation_setting.AffiliateRewardModeFixed
+	unlimited := true
+	minimumTransfer := int64(common.QuotaPerUnit)
+	showInviteeTopUps := true
+	tests := []struct {
+		name   string
+		mutate func(*AffiliateUserOverride)
+	}{
+		{name: "enabled", mutate: func(override *AffiliateUserOverride) { override.Enabled = &enabled }},
+		{name: "registration reward trigger", mutate: func(override *AffiliateUserOverride) {
+			override.RegistrationRewardTrigger = &registrationTrigger
+		}},
+		{name: "cashback frequency", mutate: func(override *AffiliateUserOverride) {
+			override.CashbackFrequency = &cashbackFrequency
+		}},
+		{name: "reward mode", mutate: func(override *AffiliateUserOverride) {
+			override.RewardMode = &rewardMode
+		}},
+		{name: "unlimited reward", mutate: func(override *AffiliateUserOverride) {
+			override.UnlimitedReward = &unlimited
+		}},
+		{name: "minimum transfer", mutate: func(override *AffiliateUserOverride) {
+			override.MinimumTransferQuota = &minimumTransfer
+		}},
+		{name: "show invitee top ups", mutate: func(override *AffiliateUserOverride) {
+			override.ShowInviteeTopUps = &showInviteeTopUps
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			override := AffiliateUserOverride{RewardRateBps: &rate}
+			test.mutate(&override)
+			_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, override)
+			require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+		})
+	}
+
+	fixedReward := int64(common.QuotaPerUnit)
+	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		FixedRewardQuota: &fixedReward,
+	})
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+
+	setting := operation_setting.GetAffiliateSetting()
+	setting.RewardMode = operation_setting.AffiliateRewardModeFixed
+	_, err = SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+		RewardRateBps: &rate,
+	})
+	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
 }
 
 func TestAffiliateAdminCompletedTopUpIsExcluded(t *testing.T) {
@@ -443,11 +556,10 @@ func TestAffiliateInviteeTopUpsMasksEmailAndHonorsVisibilityOverride(t *testing.
 	assert.Equal(t, "a***e@example.com", items[0].MaskedEmail)
 
 	visible := false
-	_, err = SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
+	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
 		ShowInviteeTopUps: &visible,
 		ChangeReason:      "privacy request",
 	})
-	require.NoError(t, err)
 	_, _, err = GetAffiliateInviteeTopUps(inviter.Id, "", "", 0, 0, 0, 10)
 	assert.ErrorIs(t, err, ErrAffiliateTopUpsHidden)
 }

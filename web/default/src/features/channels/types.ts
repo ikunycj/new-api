@@ -37,45 +37,52 @@ export type ChannelInfo = z.infer<typeof channelInfoSchema>
 export const channelSchema = z.object({
   id: z.number(),
   type: z.number(),
-  key: z.string(),
+  key: z.string().optional(),
   openai_organization: z.string().nullish(),
   test_model: z.string().nullish(),
-  status: z.number(), // 1: enabled, 0: manual disabled, 2: auto disabled
+  status: z.number(), // 1: enabled, 2: manual disabled, 3: auto disabled
   name: z.string(),
   weight: z.number().nullish(),
   created_time: z.number(),
   test_time: z.number(),
   last_test_time: z.number().default(0),
   last_test_is_auto: z.boolean().default(false),
+  last_test_ttft_ms: z.number().default(0),
   response_time: z.number(), // in milliseconds
   base_url: z.string().nullish(),
   other: z.string().default(''),
   balance: z.number().default(0), // in USD
   balance_updated_time: z.number(),
   models: z.string().default(''),
-  group: z.string().default('default'),
+  group: z.string().default(''),
   used_quota: z.number().default(0),
   model_mapping: z.string().nullish(),
   status_code_mapping: z.string().nullish(),
-  priority: z.number().nullish(),
   auto_ban: z.number().nullish(),
   auto_probe_enabled: z.boolean().nullish(),
-  probe_interval_seconds: z.number().default(120),
-  auto_disabled_probe_interval_seconds: z.number().default(10),
-  probe_failure_auto_ban: z.boolean().nullish(),
-  probe_success_auto_enable: z.boolean().nullish(),
+  probe_period_minutes: z.number().default(5),
+  probe_random_delay_enabled: z.boolean().default(false),
+  probe_stream_enabled: z.boolean().default(false),
   upstream_max_retries: z.number().nullish(),
   max_concurrency: z.number().nullish(),
   current_concurrency: z.number().default(0),
   price_multiplier: z.number().default(1),
-  price_multiplier_mode: z.string().default('usd'),
+  price_multiplier_mode: z
+    .enum(['usd', 'cny'])
+    .or(z.literal(''))
+    .default('usd'),
   daily_tokens: z.number().default(0),
-  monthly_tokens: z.number().default(0),
-  daily_cost_usd: z.number().default(0),
-  monthly_cost_usd: z.number().default(0),
+  total_tokens: z.number().default(0),
+  daily_cost_cny: z.number().nullable().default(null),
+  total_cost_cny: z.number().nullable().default(null),
+  priority_score: z.number().nullish(),
   force_priority: z.boolean().nullish(),
-  force_priority_scope: z.string().nullish(),
+  force_priority_scope: z
+    .enum(['group', 'cross_group'])
+    .or(z.literal(''))
+    .default('group'),
   previous_day_probe_success_rate: z.number().default(100),
+  previous_day_average_ttft_ms: z.number().default(0),
   other_info: z.string().default(''),
   tag: z.string().nullish(),
   setting: z.string().nullish(),
@@ -108,7 +115,6 @@ export interface ChannelSettings {
 }
 
 export interface ChannelOtherSettings {
-  tob_display_url?: string
   azure_responses_version?: string
   vertex_key_type?: 'json' | 'api_key'
   openrouter_enterprise?: boolean
@@ -153,6 +159,7 @@ export type AdvancedCustomConverter =
   | 'openai_chat_completions_to_anthropic_messages'
   | 'openai_chat_completions_to_openai_responses'
   | 'openai_responses_to_openai_chat_completions'
+  | 'openai_responses_to_claude_messages'
   | 'openai_responses_to_gemini_generate_content'
   | 'gemini_generate_content_to_openai_chat_completions'
   | 'openai_chat_completions_to_gemini_generate_content'
@@ -191,14 +198,6 @@ export interface GetChannelResponse {
   data?: Channel
 }
 
-export interface ChannelOpsResponse {
-  success: boolean
-  message?: string
-  data?: {
-    retry_times: number
-  }
-}
-
 export interface ChannelTestResponse {
   success: boolean
   message?: string
@@ -206,7 +205,11 @@ export interface ChannelTestResponse {
   time?: number
   data?: {
     response_time?: number
+    ttft_ms?: number
     error?: string
+    response?: string
+    response_bytes?: number
+    finish_reason?: string
   }
 }
 
@@ -331,10 +334,10 @@ export interface MultiKeyStatusResponse {
 export type ChannelSortBy =
   | 'id'
   | 'name'
-  | 'priority'
   | 'balance'
   | 'response_time'
   | 'test_time'
+  | 'priority'
 
 export type ChannelSortOrder = 'asc' | 'desc'
 
@@ -401,7 +404,6 @@ export interface BatchSetTagParams {
 export interface TagOperationParams {
   tag: string
   new_tag?: string
-  priority?: number
   weight?: number
   model_mapping?: string
   models?: string
@@ -421,10 +423,19 @@ export interface ChannelFormData {
   models: string
   group: string
   model_mapping?: string
-  priority?: number
   weight?: number
   test_model?: string
   auto_ban?: number
+  auto_probe_enabled?: boolean
+  probe_period_minutes?: number
+  probe_random_delay_enabled?: boolean
+  probe_stream_enabled?: boolean
+  upstream_max_retries?: number | null
+  max_concurrency?: number | null
+  price_multiplier?: number
+  price_multiplier_mode?: 'usd' | 'cny'
+  force_priority?: boolean
+  force_priority_scope?: 'group' | 'cross_group'
   status: number
   status_code_mapping?: string
   tag?: string

@@ -21,7 +21,6 @@ import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
-import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 export type TopNavLink = {
@@ -56,7 +55,7 @@ export function useTopNavLinks(): TopNavLink[] {
     )
   }, [status])
 
-  const isAdmin = (auth?.user?.role ?? ROLE.GUEST) >= ROLE.ADMIN
+  const isAuthed = !!auth?.user
 
   const links: TopNavLink[] = []
 
@@ -72,14 +71,15 @@ export function useTopNavLinks(): TopNavLink[] {
 
   // Pricing
   const pricing = modules?.pricing
-  if (pricing && typeof pricing === 'object' && pricing.enabled && isAdmin) {
-    links.push({ title: t('Model Square'), href: '/pricing' })
+  if (pricing && typeof pricing === 'object' && pricing.enabled) {
+    const requiresAuth = pricing.requireAuth && !isAuthed
+    links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
   }
 
   // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
-    const requiresAuth = rankings.requireAuth && !auth?.user
+    const requiresAuth = rankings.requireAuth && !isAuthed
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
@@ -88,9 +88,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Docs'), href: '/docs' })
   }
 
-  // About
+  // Contact
   if (modules?.about !== false) {
-    links.push({ title: t('About'), href: '/about' })
+    links.push({ title: t('Contact us'), href: '/about' })
   }
 
   return links

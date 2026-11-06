@@ -9,87 +9,48 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
 
-// RegisterScheduledSystemTasks wires the periodic channel test, upstream model
-// update, and async task polling (Midjourney / Suno / video) jobs into the
-// system task framework so a DB lease dedups execution across multiple master
-// instances and each run is recorded as one task row. Call this before
+// RegisterScheduledSystemTasks wires background jobs and the on-demand channel
+// test handler into the system task framework. Call this before
 // service.StartSystemTaskRunner.
 func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(channelTestHandler{})
+	service.RegisterSystemTaskHandler(channelProbeHandler{})
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
-	service.RegisterSystemTaskHandler(costReconciliationHandler{})
-	service.RegisterSystemTaskHandler(groupBenchHandler{})
+	service.RegisterSystemTaskHandler(logRollupHandler{})
 }
 
-type costReconciliationHandler struct{}
+type logRollupHandler struct{}
 
-func (costReconciliationHandler) Type() string { return model.SystemTaskTypeCostReconciliation }
-func (costReconciliationHandler) Enabled() bool {
-	return common.GetEnvOrDefaultBool("COST_RECONCILIATION_ENABLED", true)
-}
-func (costReconciliationHandler) Interval() time.Duration { return time.Minute }
-func (costReconciliationHandler) NewPayload() any {
-	now := common.GetTimestamp()
-	return costReconciliationPayload{StartTimestamp: now - int64((15 * time.Minute).Seconds()), EndTimestamp: now}
+func (logRollupHandler) Type() string { return model.SystemTaskTypeLogRollup }
+
+func (logRollupHandler) Enabled() bool {
+	return common.UsingLogDatabase(common.DatabaseTypePostgreSQL) &&
+		common.GetEnvOrDefaultBool("LOG_ROLLUP_ENABLED", true)
 }
 
-type costReconciliationPayload struct {
-	StartTimestamp int64 `json:"start_timestamp"`
-	EndTimestamp   int64 `json:"end_timestamp"`
-}
+func (logRollupHandler) Interval() time.Duration { return 5 * time.Minute }
+func (logRollupHandler) NewPayload() any         { return nil }
 
-func (costReconciliationHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	payload := costReconciliationPayload{}
-	if err := task.DecodePayload(&payload); err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
-	}
-	if payload.EndTimestamp <= payload.StartTimestamp {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, fmt.Errorf("invalid cost reconciliation task window"))
-		return
-	}
-	count, err := model.RebuildCostReconciliationRollup(payload.StartTimestamp, payload.EndTimestamp)
+func (logRollupHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	result, err := model.RunLogRollup(ctx, 30*time.Second)
 	if err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
 		return
 	}
-	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, map[string]interface{}{"rollup_count": count}, nil)
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
-// channelTestHandler runs the scheduled "test all channels" job. Enablement and
-// cadence still come from the monitor settings; only the execution path moved
-// into the system task runner.
+// channelTestHandler runs an on-demand "test all channels" task.
 type channelTestHandler struct{}
 
 func (channelTestHandler) Type() string { return model.SystemTaskTypeChannelTest }
 
-func (channelTestHandler) Enabled() bool {
-	return operation_setting.GetMonitorSetting().AutoTestChannelEnabled
-}
-
-func (channelTestHandler) Interval() time.Duration {
-	minutes := operation_setting.GetMonitorSetting().AutoTestChannelMinutes
-	if minutes <= 0 {
-		minutes = 10
-	}
-	return time.Duration(minutes * float64(time.Minute))
-}
-
-func (channelTestHandler) NewPayload() any { return nil }
-
-// channelTestTaskPayload controls one channel_test run. A nil/empty payload is a
-// scheduled run, which uses the configured monitor ChannelTestMode and does not
-// notify. A manual "test all channels" trigger sets Mode=scheduled_all and
-// Notify=true to reproduce the legacy manual behavior (test every channel and
-// notify root on completion).
 type channelTestTaskPayload struct {
-	Mode   string `json:"mode,omitempty"`
-	Notify bool   `json:"notify,omitempty"`
+	Manual bool `json:"manual"`
 }
 
 func (channelTestHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
@@ -98,7 +59,11 @@ func (channelTestHandler) Run(ctx context.Context, task *model.SystemTask, runne
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
 	}
-	summary, err := runChannelTestTask(ctx, payload.Mode, payload.Notify, service.NewSystemTaskProgressReporter(task, runnerID))
+	if !payload.Manual {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, fmt.Errorf("scheduled channel tests have been retired"))
+		return
+	}
+	summary, err := runChannelTestTask(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return

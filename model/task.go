@@ -8,8 +8,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 )
 
 type TaskStatus string
@@ -97,6 +97,7 @@ func (m Properties) Value() (driver.Value, error) {
 }
 
 type TaskPrivateData struct {
+	BillingUserId  int    `json:"billing_user_id,omitempty"` // Wallet owner captured when the task is submitted.
 	Key            string `json:"key,omitempty"`
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
 	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）

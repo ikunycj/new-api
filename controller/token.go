@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -23,7 +24,30 @@ type tokenRequest struct {
 
 type tokenResponse struct {
 	*model.Token
-	GroupCandidates []string `json:"group_candidates"`
+	GroupCandidates     []string `json:"group_candidates"`
+	DailyTokens         int64    `json:"daily_tokens"`
+	TotalTokens         int64    `json:"total_tokens"`
+	DailyQuota          int64    `json:"daily_quota"`
+	TotalQuota          int64    `json:"total_quota"`
+	CurrentConcurrency  int      `json:"current_concurrency"`
+	ConcurrencyDegraded bool     `json:"concurrency_degraded"`
+}
+
+func tokenConcreteGroups(token *model.Token) ([]string, error) {
+	if token == nil {
+		return nil, nil
+	}
+	groups, err := token.GetGroupCandidates()
+	if err != nil {
+		return nil, err
+	}
+	if len(groups) > 0 {
+		return groups, nil
+	}
+	if token.Group != "" && token.Group != "auto" {
+		return []string{token.Group}, nil
+	}
+	return []string{}, nil
 }
 
 func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
@@ -32,13 +56,10 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 	}
 	maskedToken := *token
 	maskedToken.Key = token.GetMaskedKey()
-	groupCandidates, err := token.GetGroupCandidates()
+	groupCandidates, err := tokenConcreteGroups(token)
 	if err != nil {
 		common.SysLog("failed to decode token group candidates: " + err.Error())
 		groupCandidates = []string{}
-	}
-	if len(groupCandidates) == 0 && token.Group != "" && token.Group != "auto" {
-		groupCandidates = []string{token.Group}
 	}
 	return &tokenResponse{
 		Token:           &maskedToken,
@@ -54,33 +75,111 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	return maskedTokens
 }
 
+// enrichTokenUsage adds usage and in-flight request metrics to already-authorized,
+// masked responses. Log availability should not make the API key list unusable,
+// so failures are logged and the response keeps its zero values.
+func enrichTokenUsage(responses []*tokenResponse) {
+	tokenIDs := make([]int, 0, len(responses))
+	for _, response := range responses {
+		if response != nil && response.Token != nil && response.Id > 0 {
+			tokenIDs = append(tokenIDs, response.Id)
+		}
+	}
+	if len(tokenIDs) == 0 {
+		return
+	}
+
+	usageByToken, err := model.GetTokenUsageMetricsAt(tokenIDs, time.Now())
+	if err != nil {
+		common.SysLog("failed to load token usage: " + err.Error())
+	} else {
+		for _, response := range responses {
+			if response == nil || response.Token == nil {
+				continue
+			}
+			usage := usageByToken[response.Id]
+			response.DailyTokens = usage.DailyTokens
+			response.TotalTokens = usage.TotalTokens
+			response.DailyQuota = usage.DailyQuota
+			response.TotalQuota = usage.TotalQuota
+		}
+	}
+
+	concurrencyByToken, concurrencyDegraded := service.GetTokenInFlightRequests(tokenIDs)
+	for _, response := range responses {
+		if response == nil || response.Token == nil {
+			continue
+		}
+		response.CurrentConcurrency = concurrencyByToken[response.Id]
+		response.ConcurrencyDegraded = concurrencyDegraded
+	}
+}
+
 func getTokenUserGroup(c *gin.Context) (string, error) {
+	// The auth context may contain the group captured when a browser session
+	// was created. User groups can be changed later, so use the current
+	// persisted value for token permission checks instead of a stale session.
+	if userID := c.GetInt("id"); userID > 0 {
+		if user, err := model.GetUserById(userID, false); err == nil {
+			return model.NormalizeUserGroup(user.Group), nil
+		}
+	}
 	if userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup); userGroup != "" {
-		return userGroup, nil
+		return model.NormalizeUserGroup(userGroup), nil
 	}
 	return model.GetUserGroup(c.GetInt("id"), false)
 }
 
 func applyTokenGroupSelection(token *model.Token, userGroup string, candidates *[]string) error {
-	if candidates == nil || len(*candidates) == 0 {
+	var groups []string
+	if candidates != nil && len(*candidates) > 0 {
+		if err := service.ValidateTokenGroupCandidates(userGroup, *candidates); err != nil {
+			return err
+		}
+		groups = append([]string(nil), (*candidates)...)
+		if len(groups) == 1 {
+			token.Group = groups[0]
+			token.CrossGroupRetry = false
+			if err := token.SetGroupCandidates(nil); err != nil {
+				return err
+			}
+		} else {
+			token.Group = "auto"
+			token.CrossGroupRetry = true
+			if err := token.SetGroupCandidates(groups); err != nil {
+				return err
+			}
+		}
+	} else if token.Group == "auto" {
+		if candidates != nil {
+			return fmt.Errorf("请选择至少一个模型计费分组")
+		}
+		var err error
+		groups, err = token.GetGroupCandidates()
+		if err != nil {
+			return err
+		}
+		if len(groups) == 0 {
+			return fmt.Errorf("请选择至少一个模型计费分组")
+		}
+		if err := service.ValidateTokenGroupCandidates(userGroup, groups); err != nil {
+			return err
+		}
+		token.CrossGroupRetry = len(groups) > 1
+	} else {
 		if err := service.ValidateTokenGroup(userGroup, token.Group); err != nil {
 			return err
 		}
-		if token.Group != "auto" {
-			token.CrossGroupRetry = false
+		if token.Group != "" {
+			groups = []string{token.Group}
 		}
-		return token.SetGroupCandidates(nil)
-	}
-	if err := service.ValidateTokenGroupCandidates(userGroup, *candidates); err != nil {
-		return err
-	}
-	if len(*candidates) == 1 {
-		token.Group = (*candidates)[0]
 		token.CrossGroupRetry = false
-		return token.SetGroupCandidates(nil)
+		if err := token.SetGroupCandidates(nil); err != nil {
+			return err
+		}
 	}
-	token.Group = "auto"
-	return token.SetGroupCandidates(*candidates)
+
+	return nil
 }
 
 func GetAllTokens(c *gin.Context) {
@@ -93,7 +192,9 @@ func GetAllTokens(c *gin.Context) {
 	}
 	total, _ := model.CountUserTokens(userId)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	responses := buildMaskedTokenResponses(tokens)
+	enrichTokenUsage(responses)
+	pageInfo.SetItems(responses)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -111,7 +212,9 @@ func SearchTokens(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	responses := buildMaskedTokenResponses(tokens)
+	enrichTokenUsage(responses)
+	pageInfo.SetItems(responses)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -127,7 +230,9 @@ func GetToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, buildMaskedTokenResponse(token))
+	response := buildMaskedTokenResponse(token)
+	enrichTokenUsage([]*tokenResponse{response})
+	common.ApiSuccess(c, response)
 }
 
 func GetTokenKey(c *gin.Context) {
@@ -246,6 +351,10 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if (request.GroupCandidates == nil || len(*request.GroupCandidates) == 0) && strings.TrimSpace(token.Group) == "" {
+		common.ApiError(c, fmt.Errorf("请选择至少一个模型计费分组"))
+		return
+	}
 	if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
 		common.ApiError(c, err)
 		return
@@ -359,34 +468,18 @@ func UpdateToken(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
-		if request.GroupCandidates != nil {
-			if err := applyTokenGroupSelection(&token, userGroup, request.GroupCandidates); err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			cleanToken.Group = token.Group
-			cleanToken.GroupCandidates = token.GroupCandidates
-		} else if token.Group != cleanToken.Group {
-			if err := service.ValidateTokenGroup(userGroup, token.Group); err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			cleanToken.Group = token.Group
-			cleanToken.GroupCandidates = ""
-		} else if cleanToken.GroupCandidates != "" {
-			groupCandidates, err := cleanToken.GetGroupCandidates()
-			if err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			if err := service.ValidateTokenGroupCandidates(userGroup, groupCandidates); err != nil {
-				common.ApiError(c, err)
-				return
-			}
-		} else if err := service.ValidateTokenGroup(userGroup, cleanToken.Group); err != nil {
+		selection := *cleanToken
+		if token.Group != "" {
+			selection.Group = token.Group
+		}
+		selection.CrossGroupRetry = token.CrossGroupRetry
+		if err := applyTokenGroupSelection(&selection, userGroup, request.GroupCandidates); err != nil {
 			common.ApiError(c, err)
 			return
 		}
+		cleanToken.Group = selection.Group
+		cleanToken.GroupCandidates = selection.GroupCandidates
+		cleanToken.CrossGroupRetry = selection.CrossGroupRetry
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name
 		cleanToken.ExpiredTime = token.ExpiredTime
@@ -395,20 +488,18 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
 		cleanToken.ModelLimits = token.ModelLimits
 		cleanToken.AllowIps = token.AllowIps
-		cleanToken.CrossGroupRetry = token.CrossGroupRetry
-		if cleanToken.Group != "auto" {
-			cleanToken.CrossGroupRetry = false
-		}
 	}
 	err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	response := buildMaskedTokenResponse(cleanToken)
+	enrichTokenUsage([]*tokenResponse{response})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    buildMaskedTokenResponse(cleanToken),
+		"data":    response,
 	})
 }
 

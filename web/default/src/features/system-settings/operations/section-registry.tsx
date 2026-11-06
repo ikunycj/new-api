@@ -18,15 +18,17 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
+import { SMTP_EMAIL_TEMPLATE_DEFAULTS } from '../integrations/email-template-defaults'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
 import { PerformanceSection } from '../maintenance/performance-section'
-import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
-import { LoadTestSettingsSection } from './loadtest-settings-section'
-import { TimeoutSettingsSection } from './timeout-settings-section'
+
+function resolveSMTPTemplate(value: string, defaultValue: string) {
+  return value.trim() === '' ? defaultValue : value
+}
 
 const OPERATIONS_SECTIONS = [
   {
@@ -72,6 +74,22 @@ const OPERATIONS_SECTIONS = [
           SMTPAccount: settings.SMTPAccount,
           SMTPFrom: settings.SMTPFrom,
           SMTPToken: settings.SMTPToken,
+          SMTPVerificationSubject: resolveSMTPTemplate(
+            settings.SMTPVerificationSubject,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPVerificationSubject
+          ),
+          SMTPVerificationContent: resolveSMTPTemplate(
+            settings.SMTPVerificationContent,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPVerificationContent
+          ),
+          SMTPPasswordResetSubject: resolveSMTPTemplate(
+            settings.SMTPPasswordResetSubject,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPPasswordResetSubject
+          ),
+          SMTPPasswordResetContent: resolveSMTPTemplate(
+            settings.SMTPPasswordResetContent,
+            SMTP_EMAIL_TEMPLATE_DEFAULTS.SMTPPasswordResetContent
+          ),
           SMTPSSLEnabled: settings.SMTPSSLEnabled,
           SMTPStartTLSEnabled: settings.SMTPStartTLSEnabled,
           SMTPInsecureSkipVerify: settings.SMTPInsecureSkipVerify,
@@ -121,52 +139,11 @@ const OPERATIONS_SECTIONS = [
             settings['performance_setting.monitor_enabled'] ?? false,
           'performance_setting.monitor_cpu_threshold':
             settings['performance_setting.monitor_cpu_threshold'] ?? 90,
-          'performance_setting.monitor_iowait_threshold':
-            settings['performance_setting.monitor_iowait_threshold'] ?? 95,
           'performance_setting.monitor_memory_threshold':
             settings['performance_setting.monitor_memory_threshold'] ?? 90,
           'performance_setting.monitor_disk_threshold':
             settings['performance_setting.monitor_disk_threshold'] ?? 95,
         }}
-      />
-    ),
-  },
-  {
-    id: 'loadtest',
-    titleKey: 'Load Test Limits',
-    build: (settings: OperationsSettings) => (
-      <LoadTestSettingsSection
-        defaultValues={{
-          'loadtest_setting.max_duration_seconds':
-            settings['loadtest_setting.max_duration_seconds'] ?? 600,
-          'loadtest_setting.max_rps':
-            settings['loadtest_setting.max_rps'] ?? 20,
-          'loadtest_setting.max_concurrency':
-            settings['loadtest_setting.max_concurrency'] ?? 10,
-          'loadtest_setting.max_output_tokens':
-            settings['loadtest_setting.max_output_tokens'] ?? 256,
-          'loadtest_setting.request_timeout_seconds':
-            settings['loadtest_setting.request_timeout_seconds'] ?? 120,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'timeouts',
-    titleKey: 'Timeouts',
-    build: (settings: OperationsSettings) => <TimeoutSettingsSection defaultValues={{ RelayTimeout: settings.RelayTimeout, StreamingTimeout: settings.StreamingTimeout, RelayIdleConnTimeout: settings.RelayIdleConnTimeout, StreamClientWriteTimeout: settings.StreamClientWriteTimeout, ShutdownTimeoutSeconds: settings.ShutdownTimeoutSeconds }} />,
-  },
-  {
-    id: 'update-checker',
-    titleKey: 'System maintenance',
-    build: (
-      _settings: OperationsSettings,
-      currentVersion?: string | null,
-      startTime?: number | null
-    ) => (
-      <UpdateCheckerSection
-        currentVersion={currentVersion}
-        startTime={startTime}
       />
     ),
   },
@@ -176,8 +153,7 @@ export type OperationsSectionId = (typeof OPERATIONS_SECTIONS)[number]['id']
 
 const operationsRegistry = createSectionRegistry<
   OperationsSectionId,
-  OperationsSettings,
-  [string | null | undefined, number | null | undefined]
+  OperationsSettings
 >({
   sections: OPERATIONS_SECTIONS,
   defaultSection: 'behavior',

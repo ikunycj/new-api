@@ -83,7 +83,7 @@ const oauthSchema = z.object({
     enabled: z.boolean(),
     app_id: z.string(),
     app_secret: z.string(),
-    org_parent_id: z.coerce.number().int().min(0),
+    org_parent_id: z.number().int().min(0),
   }),
   TelegramOAuthEnabled: z.boolean(),
   TelegramBotToken: z.string(),

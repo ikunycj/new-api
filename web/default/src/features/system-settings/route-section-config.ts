@@ -32,7 +32,6 @@ export const BILLING_SECTION_IDS: readonly string[] = [
   'quota',
   'currency',
   'model-pricing',
-  'group-pricing',
   'payment',
   'affiliate',
   'checkin',
@@ -41,7 +40,6 @@ export const BILLING_DEFAULT_SECTION = 'quota'
 
 export const CONTENT_SECTION_IDS: readonly string[] = [
   'dashboard',
-  'announcements',
   'api-info',
   'faq',
   'uptime-kuma',
@@ -68,8 +66,6 @@ export const OPERATIONS_SECTION_IDS: readonly string[] = [
   'worker',
   'logs',
   'performance',
-  'loadtest',
-  'update-checker',
 ]
 export const OPERATIONS_DEFAULT_SECTION = 'behavior'
 

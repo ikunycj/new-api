@@ -19,14 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
+import type { TFunction } from 'i18next'
+
 import type { ApiKey } from '../types'
 import {
+  getApiKeyFormSchema,
   getApiKeyFormDefaultValues,
-  SYSTEM_ROUTING_VALUE,
   transformApiKeyToFormDefaults,
   transformFormDataToPayload,
   type ApiKeyFormValues,
 } from './api-key-form'
+
+const identityT = ((key: unknown) => String(key)) as TFunction
 
 function formValues(
   groupCandidates: string[],
@@ -57,6 +61,12 @@ function apiKey(overrides: Partial<ApiKey>): ApiKey {
     remain_quota: 0,
     unlimited_quota: true,
     used_quota: 0,
+    daily_tokens: 0,
+    total_tokens: 0,
+    daily_quota: 0,
+    total_quota: 0,
+    current_concurrency: 0,
+    concurrency_degraded: false,
     model_limits_enabled: false,
     model_limits: '',
     allow_ips: '',
@@ -68,46 +78,69 @@ function apiKey(overrides: Partial<ApiKey>): ApiKey {
 }
 
 describe('API key routing form mapping', () => {
-  test('starts new keys without a default group or cross-group retry', () => {
+  test('requires at least one model billing group', () => {
+    const result = getApiKeyFormSchema(identityT).safeParse(formValues([]))
+
+    assert.equal(result.success, false)
+    if (result.success) return
+
+    const groupIssue = result.error.issues.find(
+      (issue) => issue.path[0] === 'group_candidates'
+    )
+    assert.equal(
+      groupIssue?.message,
+      'Please select at least one model billing group'
+    )
+  })
+
+  test('allows up to sixteen model billing groups', () => {
+    const maximumGroups = Array.from(
+      { length: 16 },
+      (_, index) => `group-${index}`
+    )
+    const accepted = getApiKeyFormSchema(identityT).safeParse(
+      formValues(maximumGroups)
+    )
+    assert.equal(accepted.success, true)
+
+    const rejected = getApiKeyFormSchema(identityT).safeParse(
+      formValues([...maximumGroups, 'group-16'])
+    )
+    assert.equal(rejected.success, false)
+    if (rejected.success) return
+
+    const groupIssue = rejected.error.issues.find(
+      (issue) => issue.path[0] === 'group_candidates'
+    )
+    assert.equal(groupIssue?.message, 'Select no more than {{count}} groups')
+  })
+
+  test('starts new keys without a default group', () => {
     const defaults = getApiKeyFormDefaultValues()
 
     assert.deepEqual(defaults.group_candidates, [])
     assert.equal(defaults.cross_group_retry, false)
   })
 
-  test('maps fixed, ordered, and system routing to the API contract', () => {
-    const fixed = transformFormDataToPayload(formValues(['openai-low']))
+  test('maps one selected group', () => {
+    const fixed = transformFormDataToPayload(formValues(['openai-low'], true))
+
     assert.equal(fixed.group, 'openai-low')
     assert.deepEqual(fixed.group_candidates, ['openai-low'])
     assert.equal(fixed.cross_group_retry, false)
+  })
 
+  test('maps ordered groups and always enables cross-group continuation', () => {
     const ordered = transformFormDataToPayload(
-      formValues(['openai-low', 'claude-low'])
+      formValues(['openai-low', 'claude-low'], false)
     )
+
     assert.equal(ordered.group, 'auto')
     assert.deepEqual(ordered.group_candidates, ['openai-low', 'claude-low'])
     assert.equal(ordered.cross_group_retry, true)
-
-    const system = transformFormDataToPayload(
-      formValues([SYSTEM_ROUTING_VALUE])
-    )
-    assert.equal(system.group, 'auto')
-    assert.deepEqual(system.group_candidates, [])
-    assert.equal(system.cross_group_retry, true)
   })
 
-  test('preserves legacy system routing without freezing global candidates', () => {
-    const defaults = transformApiKeyToFormDefaults(
-      apiKey({ group: 'auto', group_candidates: [] })
-    )
-    assert.deepEqual(defaults.group_candidates, [SYSTEM_ROUTING_VALUE])
-
-    const payload = transformFormDataToPayload(defaults)
-    assert.equal(payload.group, 'auto')
-    assert.deepEqual(payload.group_candidates, [])
-  })
-
-  test('maps a legacy account-group key to a visible concrete group', () => {
+  test('uses the account group when the API key has no selected group', () => {
     const defaults = transformApiKeyToFormDefaults(
       apiKey({ group: '', group_candidates: [] }),
       'openai-low'
@@ -116,15 +149,16 @@ describe('API key routing form mapping', () => {
     assert.deepEqual(defaults.group_candidates, ['openai-low'])
   })
 
-  test('keeps the API candidate order when editing a multi-group key', () => {
+  test('keeps candidate order when editing', () => {
     const defaults = transformApiKeyToFormDefaults(
       apiKey({
         group: 'auto',
         group_candidates: ['claude-low', 'openai-low'],
-        cross_group_retry: true,
+        cross_group_retry: false,
       })
     )
     assert.deepEqual(defaults.group_candidates, ['claude-low', 'openai-low'])
+    assert.equal(defaults.cross_group_retry, true)
 
     const payload = transformFormDataToPayload(defaults)
     assert.deepEqual(payload.group_candidates, ['claude-low', 'openai-low'])

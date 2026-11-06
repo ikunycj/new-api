@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/common/relaytrace"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/i18n"
@@ -24,9 +23,9 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
-	"github.com/QuantumNous/new-api/pkg/monitoring"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
+	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
@@ -50,6 +49,10 @@ var indexPage []byte
 
 func main() {
 	startTime := time.Now()
+	kitutil.SetLogging(common.SysLog, func(message string) {
+		logger.LogError(nil, message)
+	})
+	kitutil.SetSystemErrorLogging(common.SysError)
 
 	err := InitResources()
 	if err != nil {
@@ -64,6 +67,8 @@ func main() {
 	if common.DebugEnabled {
 		common.SysLog("running in debug mode")
 	}
+
+	kitutil.Debug.Store(common.DebugEnabled)
 
 	defer func() {
 		err := model.CloseDB()
@@ -111,9 +116,6 @@ func main() {
 	// 数据看板
 	go model.UpdateQuotaData()
 
-	// 实时吞吐量计数器（进程内环形缓冲，不落库）
-	model.InitRealtimeMetrics()
-
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))
 		if err != nil {
@@ -127,18 +129,6 @@ func main() {
 
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
-
-	// Channel health probes reuse the existing channel test implementation and
-	// only run for channels that real traffic has not exercised recently. Both
-	// the executor registration and the loop are inert until an operator enables
-	// ChannelHealthEnabled and ChannelHealthProbeEnabled.
-	controller.RegisterChannelHealthProbeExecutor()
-	controller.RegisterChannelHealthScoreInjection()
-	service.StartChannelHealthProbeTask()
-	// Persist the score time series so the dashboard trend survives a page
-	// reload, a different browser or a restart. Inert until the operator enables
-	// ChannelHealthHistoryEnabled.
-	service.StartChannelHealthHistoryTask()
 
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.
@@ -162,7 +152,7 @@ func main() {
 	// switch are enforced inside the runner and each handler's Enabled().
 	controller.RegisterScheduledSystemTasks()
 	service.StartSystemTaskRunner()
-	service.StartChannelMonitorRunner()
+	service.StartChannelMonitorRunner(controller.ProbePricingGroupChannel)
 
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
 		common.BatchUpdateEnabled = true
@@ -189,7 +179,7 @@ func main() {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
-				"message": fmt.Sprintf("Panic detected, error: %v. Please submit a issue here: https://github.com/Calcium-Ion/new-api", err),
+				"message": fmt.Sprintf("Panic detected, error: %v", err),
 				"type":    "new_api_panic",
 			},
 		})
@@ -197,7 +187,6 @@ func main() {
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
-	server.Use(monitoring.HTTPMiddleware())
 	server.Use(middleware.Version())
 	server.Use(middleware.I18n())
 	middleware.SetUpLogger(server)
@@ -215,25 +204,11 @@ func main() {
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()
 
-	// 初始化中转请求/响应 JSONL 落盘（默认关闭，由 RELAY_TRACE_ENABLED 控制）。
-	// 失败只告警不阻断启动：审计日志不可用不应导致网关无法提供服务。
-	if err := relaytrace.Init(relaytrace.ConfigFromEnv()); err != nil {
-		common.SysError("failed to init relay trace: " + err.Error())
-	}
-
 	// 设置路由
 	router.SetRouter(server, router.WebAssets{
 		BuildFS:   buildFS,
 		IndexPage: indexPage,
 	})
-	metricsServer, err := monitoring.Start()
-	if err != nil {
-		common.FatalLog("failed to start metrics server: " + err.Error())
-		return
-	}
-	if metricsServer != nil {
-		common.SysLog("Prometheus metrics enabled on " + metricsServer.Addr)
-	}
 	var port = os.Getenv("PORT")
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
@@ -260,23 +235,16 @@ func main() {
 	common.SysLog(fmt.Sprintf("received signal: %v, shutting down...", sig))
 
 	// SSE streams may run for minutes; give them time to finish before forced exit
-	shutdownTimeout := time.Duration(common.ShutdownTimeoutSeconds) * time.Second
+	shutdownTimeout := time.Duration(common.GetEnvOrDefault("SHUTDOWN_TIMEOUT_SECONDS", 120)) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		common.SysError(fmt.Sprintf("server forced to shutdown: %v", err))
 	}
-	if metricsServer != nil {
-		if err := metricsServer.Shutdown(ctx); err != nil {
-			common.SysError(fmt.Sprintf("metrics server forced to shutdown: %v", err))
-		}
-	}
 	// 内存中的看板数据保存入库，避免重启丢失未落库数据 (issue #5679)
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
 	}
-	// 落盘缓冲区中剩余的 trace 记录，避免重启丢失已接收的审计数据
-	relaytrace.Close()
 	common.SysLog("server exited")
 }
 

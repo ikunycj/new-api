@@ -62,8 +62,6 @@ interface MultiSelectProps {
   id?: string
   /** Disable the entire control. */
   disabled?: boolean
-  /** Include currently selected values in the dropdown even when absent from options. */
-  includeSelectedItems?: boolean
   /**
    * Limits rendered chips while keeping all values selected.
    * Hidden values remain searchable/removable from the dropdown.
@@ -160,22 +158,14 @@ export function MultiSelect(props: MultiSelectProps) {
   // user can still see the chip labels mapped correctly.
   const items = React.useMemo(() => {
     const set = new Set<string>(props.options.map((option) => option.value))
-    if (props.includeSelectedItems !== false) {
-      for (const value of props.selected) {
-        set.add(value)
-      }
+    for (const value of props.selected) {
+      set.add(value)
     }
     if (canCreate) {
       set.add(trimmedInput)
     }
     return [...set]
-  }, [
-    props.options,
-    props.selected,
-    props.includeSelectedItems,
-    canCreate,
-    trimmedInput,
-  ])
+  }, [props.options, props.selected, canCreate, trimmedInput])
 
   const addValues = React.useCallback(
     (values: string[]) => {

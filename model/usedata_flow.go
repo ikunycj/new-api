@@ -91,20 +91,6 @@ func getRootFlowQuotaData(startTime int64, endTime int64, username string) ([]*F
 	return rows, fillFlowChannelNames(rows)
 }
 
-func GetTeamFlowQuotaData(userIds []int, startTime int64, endTime int64) ([]*FlowQuotaData, error) {
-	rows := make([]*FlowQuotaData, 0)
-	err := flowQuotaBaseQuery(startTime, endTime).
-		Select("user_id, username, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("user_id IN ?", userIds).
-		Group("user_id, username, use_group, model_name, channel_id").
-		Order("quota DESC").
-		Find(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	return rows, fillFlowChannelNames(rows)
-}
-
 func fillFlowTokenNames(rows []*FlowQuotaData) error {
 	tokenIDSet := make(map[int]struct{})
 	tokenIDs := make([]int, 0)
@@ -189,4 +175,18 @@ func fillFlowChannelNames(rows []*FlowQuotaData) error {
 		}
 	}
 	return nil
+}
+
+func GetTeamFlowQuotaData(userIds []int, startTime int64, endTime int64) ([]*FlowQuotaData, error) {
+	rows := make([]*FlowQuotaData, 0)
+	err := flowQuotaBaseQuery(startTime, endTime).
+		Select("user_id, username, token_id, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Where("user_id IN ?", userIds).
+		Group("user_id, username, token_id, use_group, model_name").
+		Order("quota DESC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, fillFlowTokenNames(rows)
 }

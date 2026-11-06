@@ -24,7 +24,6 @@ var (
 func printHelp() {
 	fmt.Println("NewAPI(Based OneAPI) " + Version + " - The next-generation LLM gateway and AI asset management system supports multiple languages.")
 	fmt.Println("Original Project: OneAPI by JustSong - https://github.com/songquanpeng/one-api")
-	fmt.Println("Maintainer: QuantumNous - https://github.com/QuantumNous/new-api")
 	fmt.Println("Usage: newapi [--port <port>] [--log-dir <log directory>] [--version] [--help]")
 }
 
@@ -83,9 +82,6 @@ func InitEnv() {
 
 	// Initialize variables from constants.go that were using environment variables
 	DebugEnabled = os.Getenv("DEBUG") == "true"
-	MonitoringEnabled = GetEnvOrDefaultBool("MONITORING_ENABLED", true)
-	ObservabilityEventLogEnabled = GetEnvOrDefaultBool("OBSERVABILITY_EVENT_LOG_ENABLED", true)
-	SetAccessLogSuccessSampleRate(parseFloatEnv("ACCESS_LOG_SUCCESS_SAMPLE_RATE", 1))
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 	initNodeNameIdentity()
@@ -111,8 +107,6 @@ func InitEnv() {
 	BatchUpdateInterval = GetEnvOrDefault("BATCH_UPDATE_INTERVAL", 5)
 	RelayTimeout = GetEnvOrDefault("RELAY_TIMEOUT", 0)
 	RelayIdleConnTimeout = GetEnvOrDefault("RELAY_IDLE_CONN_TIMEOUT", 90)
-	StreamClientWriteTimeout = GetEnvOrDefault("STREAM_CLIENT_WRITE_TIMEOUT", 30)
-	ShutdownTimeoutSeconds = GetEnvOrDefault("SHUTDOWN_TIMEOUT_SECONDS", 120)
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
@@ -137,18 +131,6 @@ func InitEnv() {
 	SearchRateLimitNum = GetEnvOrDefault("SEARCH_RATE_LIMIT", 10)
 	SearchRateLimitDuration = int64(GetEnvOrDefault("SEARCH_RATE_LIMIT_DURATION", 60))
 	initConstantEnv()
-}
-
-func parseFloatEnv(name string, fallback float64) float64 {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return fallback
-	}
-	return parsed
 }
 
 func initConstantEnv() {

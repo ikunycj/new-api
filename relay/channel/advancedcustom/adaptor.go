@@ -9,16 +9,16 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/claude"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/relayconvert"
-	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -133,6 +133,16 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 			return nil, fmt.Errorf("expected OpenAI chat completions request, got %T", result.Value)
 		}
 		return a.convertOpenAICompatibleRequest(c, info, chatRequest)
+	case relayconvert.ConverterOpenAIResponsesToClaude:
+		result, err := service.ConvertRequestByID(c, info, converter, request)
+		if err != nil {
+			return nil, err
+		}
+		claudeRequest, ok := result.Value.(*dto.ClaudeRequest)
+		if !ok {
+			return nil, fmt.Errorf("expected Anthropic Messages request, got %T", result.Value)
+		}
+		return claudeRequest, nil
 	case relayconvert.ConverterOpenAIResponsesToGemini:
 		result, err := service.ConvertRequestByID(c, info, converter, request)
 		if err != nil {
@@ -256,6 +266,8 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 		return a.geminiAdaptor.DoResponse(c, resp, info)
 	case relayconvert.ConverterOpenAIResponsesToGemini:
 		return a.geminiAdaptor.DoResponse(c, resp, info)
+	case relayconvert.ConverterOpenAIResponsesToClaude:
+		return a.claudeAdaptor.DoResponse(c, resp, info)
 	case relayconvert.ConverterOpenAIChatToOpenAIResponses:
 		if info.IsStream {
 			return openai.OaiResponsesToChatStreamHandler(c, info, resp)
@@ -440,6 +452,7 @@ func useGeminiStreamGenerateContentURL(parsedURL *url.URL) {
 
 func shouldApplyClaudeHeaders(converter string, info *relaycommon.RelayInfo) bool {
 	return converter == relayconvert.ConverterOpenAIChatToClaudeMessages ||
+		converter == relayconvert.ConverterOpenAIResponsesToClaude ||
 		(converter == relayconvert.ConverterNone && info != nil && info.RelayFormat == types.RelayFormatClaude)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,15 +12,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -66,10 +66,64 @@ func parseStatusFilter(statusParam string) int {
 }
 
 func clearChannelInfo(channel *model.Channel) {
+	if channel == nil {
+		return
+	}
 	if channel.ChannelInfo.IsMultiKey {
 		channel.ChannelInfo.MultiKeyDisabledReason = nil
 		channel.ChannelInfo.MultiKeyDisabledTime = nil
 	}
+}
+
+func enrichCurrentChannelConcurrency(channels []*model.Channel) {
+	for _, channel := range channels {
+		if channel != nil {
+			channel.CurrentConcurrency = service.CurrentChannelConcurrency(channel.Id)
+		}
+	}
+}
+
+func enrichChannelRuntimeMetrics(channels []*model.Channel) {
+	for _, channel := range channels {
+		clearChannelInfo(channel)
+	}
+	ids := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			ids = append(ids, channel.Id)
+		}
+	}
+	runtimeMetrics, err := model.GetChannelRuntimeMetrics(ids, time.Now())
+	if err != nil {
+		common.SysLog("failed to load channel runtime metrics: " + err.Error())
+	}
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		metrics := runtimeMetrics[channel.Id]
+		channel.LastTestTime = channel.TestTime
+		channel.LastTestIsAuto = false
+		if metrics.LastProbeAt > channel.TestTime {
+			channel.LastTestTime = metrics.LastProbeAt
+			channel.LastTestIsAuto = true
+		}
+		channel.LastTestTTFTMs = metrics.LastTestTTFTMs
+		channel.PreviousDayProbeSuccessRate = metrics.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = metrics.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = metrics.PreviousDayAverageTTFTMs
+		channel.DailyTokens = metrics.Usage.DailyTokens
+		channel.TotalTokens = metrics.Usage.TotalTokens
+		channel.DailyCostCNY = nil
+		channel.TotalCostCNY = nil
+		if !metrics.Usage.DailyCostIncomplete {
+			channel.DailyCostCNY = channel.EstimateCostCNY(metrics.Usage.DailyBaseCostUSD, metrics.Usage.DailyBaseCostCNY)
+		}
+		if !metrics.Usage.TotalCostIncomplete {
+			channel.TotalCostCNY = channel.EstimateCostCNY(metrics.Usage.TotalBaseCostUSD, metrics.Usage.TotalBaseCostCNY)
+		}
+	}
+	enrichCurrentChannelConcurrency(channels)
 }
 
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
@@ -92,50 +146,35 @@ func buildChannelListQuery(group string, statusFilter int, typeFilter int) *gorm
 	return query
 }
 
-func GetChannelOps(c *gin.Context) {
-	common.ApiSuccess(c, gin.H{
-		"retry_times": common.RetryTimes,
-	})
+// loadChannelPriorityReference loads every channel in the selected billing
+// group (and optional model filter). The result list may be paginated or
+// narrowed by name/type/status, but the score baseline must remain complete.
+func loadChannelPriorityReference(group string, modelName string) ([]*model.Channel, error) {
+	group = model.NormalizeChannelGroupFilter(group)
+	if group == "" {
+		return nil, nil
+	}
+	channels, err := model.SearchChannels("", group, modelName, false)
+	if err != nil {
+		return nil, err
+	}
+	enrichChannelRuntimeMetrics(channels)
+	return channels, nil
 }
 
-func enrichChannelListMetrics(channels []*model.Channel) {
-	ids := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		if channel != nil && channel.Id > 0 {
-			ids = append(ids, channel.Id)
-		}
+func channelPageSlice(channels []*model.Channel, page int, pageSize int) []*model.Channel {
+	if page < 1 || pageSize <= 0 || len(channels) == 0 {
+		return channels[:0]
 	}
-	if len(ids) == 0 {
-		return
+	start := (page - 1) * pageSize
+	if start < 0 || start >= len(channels) {
+		return channels[len(channels):]
 	}
-	probeTimes, probeErr := model.GetLastChannelProbeTimes(ids)
-	if probeErr != nil {
-		common.SysLog("failed to load channel probe times: " + probeErr.Error())
+	end := start + pageSize
+	if end < start || end > len(channels) {
+		end = len(channels)
 	}
-	rates, _, rateErr := model.GetPreviousDayChannelProbeStats(ids, time.Now())
-	if rateErr != nil {
-		common.SysLog("failed to load channel probe rates: " + rateErr.Error())
-	}
-	usage, usageErr := model.GetChannelTokenUsageAt(ids, time.Now())
-	if usageErr != nil {
-		common.SysLog("failed to load channel usage: " + usageErr.Error())
-	}
-	for _, channel := range channels {
-		if channel == nil {
-			continue
-		}
-		channel.LastTestTime = channel.TestTime
-		if probeTimes[channel.Id] > channel.TestTime {
-			channel.LastTestTime = probeTimes[channel.Id]
-			channel.LastTestIsAuto = true
-		}
-		channel.PreviousDayProbeSuccessRate = rates[channel.Id]
-		channel.CurrentConcurrency = service.CurrentChannelConcurrency(channel.Id)
-		channel.DailyTokens = usage[channel.Id].DailyTokens
-		channel.MonthlyTokens = usage[channel.Id].MonthlyTokens
-		channel.DailyCostUSD = channel.CalculateTokenCostUSD(channel.DailyTokens, operation_setting.GetBillingUSDToCNYRate())
-		channel.MonthlyCostUSD = channel.CalculateTokenCostUSD(channel.MonthlyTokens, operation_setting.GetBillingUSDToCNYRate())
-	}
+	return channels[start:end]
 }
 
 func GetAllChannels(c *gin.Context) {
@@ -154,6 +193,17 @@ func GetAllChannels(c *gin.Context) {
 	if typeStr != "" {
 		if t, err := strconv.Atoi(typeStr); err == nil {
 			typeFilter = t
+		}
+	}
+	prioritySort := sortOptions.SortBy == "priority" && groupFilter != ""
+	var priorityReference []*model.Channel
+	if groupFilter != "" {
+		var err error
+		priorityReference, err = loadChannelPriorityReference(groupFilter, "")
+		if err != nil {
+			common.SysError("failed to load channel priority reference: " + err.Error())
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+			return
 		}
 	}
 
@@ -185,6 +235,9 @@ func GetAllChannels(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取标签渠道失败，请稍后重试"})
 				return
 			}
+			if prioritySort {
+				service.SortChannelsByPriority(tagChannels, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
+			}
 			channelData = append(channelData, tagChannels...)
 		}
 	} else {
@@ -194,11 +247,11 @@ func GetAllChannels(c *gin.Context) {
 			return
 		}
 
-		err := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter)).
-			Limit(pageInfo.GetPageSize()).
-			Offset(pageInfo.GetStartIdx()).
-			Omit("key").
-			Find(&channelData).Error
+		query := sortOptions.Apply(buildChannelListQuery(groupFilter, statusFilter, typeFilter)).Omit("key")
+		if !prioritySort {
+			query = query.Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx())
+		}
+		err := query.Find(&channelData).Error
 		if err != nil {
 			common.SysError("failed to get channels: " + err.Error())
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
@@ -206,10 +259,14 @@ func GetAllChannels(c *gin.Context) {
 		}
 	}
 
-	for _, datum := range channelData {
-		clearChannelInfo(datum)
+	if prioritySort && !enableTagMode {
+		service.SortChannelsByPriority(channelData, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
+		channelData = channelPageSlice(channelData, pageInfo.GetPage(), pageInfo.GetPageSize())
 	}
-	enrichChannelListMetrics(channelData)
+	enrichChannelRuntimeMetrics(channelData)
+	if !prioritySort && groupFilter != "" {
+		service.CalculateChannelPriorityScores(channelData, priorityReference, groupFilter)
+	}
 
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
@@ -310,12 +367,24 @@ func FixChannelsAbilities(c *gin.Context) {
 func SearchChannels(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
+	groupFilter := model.NormalizeChannelGroupFilter(group)
 	modelKeyword := c.Query("model")
 	statusParam := c.Query("status")
 	statusFilter := parseStatusFilter(statusParam)
 	idSort, _ := strconv.ParseBool(c.Query("id_sort"))
 	sortOptions := model.NewChannelSortOptions(c.Query("sort_by"), c.Query("sort_order"), idSort)
+	prioritySort := sortOptions.SortBy == "priority" && groupFilter != ""
 	enableTagMode, _ := strconv.ParseBool(c.Query("tag_mode"))
+	var priorityReference []*model.Channel
+	if groupFilter != "" {
+		var err error
+		priorityReference, err = loadChannelPriorityReference(groupFilter, modelKeyword)
+		if err != nil {
+			common.SysLog("failed to load channel priority reference: " + err.Error())
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道列表失败，请稍后重试"})
+			return
+		}
+	}
 	channelData := make([]*model.Channel, 0)
 	if enableTagMode {
 		tags, err := model.SearchTags(keyword, group, modelKeyword, idSort)
@@ -338,6 +407,9 @@ func SearchChannels(c *gin.Context) {
 						"message": err.Error(),
 					})
 					return
+				}
+				if prioritySort {
+					service.SortChannelsByPriority(tagChannels, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
 				}
 				channelData = append(channelData, tagChannels...)
 			}
@@ -402,19 +474,14 @@ func SearchChannels(c *gin.Context) {
 	}
 
 	total := len(channelData)
-	startIdx := (page - 1) * pageSize
-	if startIdx > total {
-		startIdx = total
-	}
-	endIdx := startIdx + pageSize
-	if endIdx > total {
-		endIdx = total
-	}
 
-	pagedData := channelData[startIdx:endIdx]
-
-	for _, datum := range pagedData {
-		clearChannelInfo(datum)
+	if prioritySort && !enableTagMode {
+		service.SortChannelsByPriority(channelData, priorityReference, groupFilter, sortOptions.SortOrder != "asc")
+	}
+	pagedData := channelPageSlice(channelData, page, pageSize)
+	enrichChannelRuntimeMetrics(pagedData)
+	if !prioritySort && groupFilter != "" {
+		service.CalculateChannelPriorityScores(pagedData, priorityReference, groupFilter)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -441,7 +508,7 @@ func GetChannel(c *gin.Context) {
 		return
 	}
 	if channel != nil {
-		clearChannelInfo(channel)
+		enrichChannelRuntimeMetrics([]*model.Channel{channel})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -507,6 +574,49 @@ func validateTwoFactorAuth(twoFA *model.TwoFA, code string) bool {
 
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
+	if channel == nil {
+		return fmt.Errorf("channel cannot be empty")
+	}
+	channel.NormalizeGroups()
+	if channel.Group == "" {
+		return fmt.Errorf("pricing group is required")
+	}
+	hasModel := false
+	for _, rawModel := range strings.Split(channel.Models, ",") {
+		if strings.TrimSpace(rawModel) != "" {
+			hasModel = true
+			break
+		}
+	}
+	if !hasModel {
+		return fmt.Errorf("at least one model is required")
+	}
+	testModel := strings.TrimSpace(channel.GetTestModel())
+	if testModel == "" {
+		return fmt.Errorf("test model is required")
+	}
+	channel.TestModel = common.GetPointer(testModel)
+	if channel.ProbePeriodMinutes < 0 || channel.ProbePeriodMinutes > model.MaxChannelProbePeriodMinutes {
+		return fmt.Errorf("probe period must be between 0 and %d minutes", model.MaxChannelProbePeriodMinutes)
+	}
+	if channel.ProbePeriodMinutes == 0 {
+		channel.ProbePeriodMinutes = model.DefaultChannelProbePeriodMinutes
+	}
+	if channel.UpstreamMaxRetries != nil && (*channel.UpstreamMaxRetries < 0 || *channel.UpstreamMaxRetries > model.MaxChannelUpstreamRetries) {
+		return fmt.Errorf("upstream max retries must be between 0 and %d", model.MaxChannelUpstreamRetries)
+	}
+	if channel.MaxConcurrency != nil && (*channel.MaxConcurrency < 1 || *channel.MaxConcurrency > model.MaxChannelMaxConcurrency) {
+		return fmt.Errorf("max concurrency must be between 1 and %d", model.MaxChannelMaxConcurrency)
+	}
+	if channel.PriceMultiplier < 0 || math.IsNaN(channel.PriceMultiplier) || math.IsInf(channel.PriceMultiplier, 0) || channel.PriceMultiplier > model.MaxChannelPriceMultiplier {
+		return fmt.Errorf("price multiplier must be between 0 and %d", model.MaxChannelPriceMultiplier)
+	}
+	if channel.PriceMultiplierMode != "" && channel.GetPriceMultiplierMode() != strings.ToLower(strings.TrimSpace(channel.PriceMultiplierMode)) {
+		return fmt.Errorf("unsupported price multiplier mode")
+	}
+	if channel.ForcePriorityScope != "" && channel.GetForcePriorityScope() != strings.ToLower(strings.TrimSpace(channel.ForcePriorityScope)) {
+		return fmt.Errorf("unsupported force priority scope")
+	}
 	// 校验 channel settings
 	if err := channel.ValidateSettings(); err != nil {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())
@@ -514,7 +624,7 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
-		if channel == nil || channel.Key == "" {
+		if channel.Key == "" {
 			return fmt.Errorf("channel cannot be empty")
 		}
 
@@ -786,7 +896,6 @@ func DeleteDisabledChannel(c *gin.Context) {
 type ChannelTag struct {
 	Tag            string  `json:"tag"`
 	NewTag         *string `json:"new_tag"`
-	Priority       *int64  `json:"priority"`
 	Weight         *uint   `json:"weight"`
 	ModelMapping   *string `json:"model_mapping"`
 	Models         *string `json:"models"`
@@ -891,7 +1000,7 @@ func EditTagChannels(c *gin.Context) {
 		}
 		channelTag.HeaderOverride = common.GetPointer[string](trimmed)
 	}
-	err = model.EditChannelByTag(channelTag.Tag, channelTag.NewTag, channelTag.ModelMapping, channelTag.Models, channelTag.Groups, channelTag.Priority, channelTag.Weight, channelTag.ParamOverride, channelTag.HeaderOverride)
+	err = model.EditChannelByTag(channelTag.Tag, channelTag.NewTag, channelTag.ModelMapping, channelTag.Models, channelTag.Groups, channelTag.Weight, channelTag.ParamOverride, channelTag.HeaderOverride)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -976,17 +1085,36 @@ func UpdateChannel(c *gin.Context) {
 	}
 	clearChannelReadOnlyFields(&channel, requestData)
 
-	// 使用统一的校验函数
-	if err := validateChannel(&channel.Channel, false); err != nil {
+	// Preserve existing ChannelInfo to ensure multi-key channels keep correct state even if the client does not send ChannelInfo in the request.
+	originChannel, err := model.GetChannelById(channel.Id, true)
+	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
-	// Preserve existing ChannelInfo to ensure multi-key channels keep correct state even if the client does not send ChannelInfo in the request.
-	originChannel, err := model.GetChannelById(channel.Id, true)
-	if err != nil {
+	if originChannel == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "channel not found",
+		})
+		return
+	}
+	// UpdateChannel accepts a partial channel patch. Use persisted required
+	// fields when the client did not send them; explicit empty values are still
+	// rejected by validateChannel.
+	if _, hasGroup := requestData["group"]; !hasGroup {
+		channel.Group = originChannel.Group
+	}
+	if _, hasModels := requestData["models"]; !hasModels {
+		channel.Models = originChannel.Models
+	}
+	if _, hasTestModel := requestData["test_model"]; !hasTestModel {
+		channel.TestModel = originChannel.TestModel
+	}
+
+	if err := validateChannel(&channel.Channel, false); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -1088,10 +1216,17 @@ func UpdateChannel(c *gin.Context) {
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
 		}
 	}
-	err = channel.Update()
-	if err != nil {
-		common.ApiError(c, err)
-		return
+	updateColumns := channelUpdateColumns(requestData)
+	if len(updateColumns) > 0 {
+		err = channel.Update(updateColumns...)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else {
+		// Do not write a zero-valued patch when the request only contains
+		// read-only or client-side operation fields.
+		channel = PatchChannel{Channel: *originChannel}
 	}
 	model.InitChannelCache()
 	service.ResetProxyClientCache()
@@ -1119,6 +1254,7 @@ func UpdateChannel(c *gin.Context) {
 	})
 	channel.Key = ""
 	clearChannelInfo(&channel.Channel)
+	enrichCurrentChannelConcurrency([]*model.Channel{&channel.Channel})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -1140,7 +1276,6 @@ func UpdateChannelStatus(c *gin.Context) {
 	}
 	changed := model.UpdateChannelStatus(id, "", req.Status, "manual operation")
 	if changed {
-		model.InitChannelCache()
 		service.ResetProxyClientCache()
 	}
 	recordManageAudit(c, "channel.status_update", map[string]interface{}{
@@ -1168,7 +1303,6 @@ func BatchUpdateChannelStatus(c *gin.Context) {
 		}
 	}
 	if changedCount > 0 {
-		model.InitChannelCache()
 		service.ResetProxyClientCache()
 	}
 	recordManageAudit(c, "channel.status_update_batch", map[string]interface{}{
@@ -1414,6 +1548,10 @@ func CopyChannel(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取渠道信息失败，请稍后重试"})
 		return
 	}
+	if origin == nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "渠道不存在"})
+		return
+	}
 
 	// clone channel
 	clone := *origin // shallow copy is sufficient as we will overwrite primitives
@@ -1425,6 +1563,10 @@ func CopyChannel(c *gin.Context) {
 	if resetBalance {
 		clone.Balance = 0
 		clone.UsedQuota = 0
+	}
+	if err := validateChannel(&clone, true); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
 	}
 
 	// insert
@@ -1663,8 +1805,11 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		channel.ChannelInfo.MultiKeyStatusList[keyIndex] = 2 // disabled
+		channel.ChannelInfo.MultiKeyDisabledTime[keyIndex] = common.GetTimestamp()
+		channel.ChannelInfo.MultiKeyDisabledReason[keyIndex] = "Manually disabled"
+		channel.ReconcileMultiKeyAvailability(false)
 
-		err = channel.Update()
+		err = channel.Update("channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1705,8 +1850,9 @@ func ManageMultiKeys(c *gin.Context) {
 		if channel.ChannelInfo.MultiKeyDisabledReason != nil {
 			delete(channel.ChannelInfo.MultiKeyDisabledReason, keyIndex)
 		}
+		channel.ReconcileMultiKeyAvailability(true)
 
-		err = channel.Update()
+		err = channel.Update("channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1729,8 +1875,9 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
 		channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
 		channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+		channel.ReconcileMultiKeyAvailability(true)
 
-		err = channel.Update()
+		err = channel.Update("channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1756,6 +1903,7 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		var disabledCount int
+		disabledAt := common.GetTimestamp()
 		for i := 0; i < channel.ChannelInfo.MultiKeySize; i++ {
 			status := 1 // default enabled
 			if s, exists := channel.ChannelInfo.MultiKeyStatusList[i]; exists {
@@ -1765,6 +1913,8 @@ func ManageMultiKeys(c *gin.Context) {
 			// 只禁用当前启用的密钥
 			if status == 1 {
 				channel.ChannelInfo.MultiKeyStatusList[i] = 2 // disabled
+				channel.ChannelInfo.MultiKeyDisabledTime[i] = disabledAt
+				channel.ChannelInfo.MultiKeyDisabledReason[i] = "Manually disabled"
 				disabledCount++
 			}
 		}
@@ -1776,8 +1926,9 @@ func ManageMultiKeys(c *gin.Context) {
 			})
 			return
 		}
+		channel.ReconcileMultiKeyAvailability(false)
 
-		err = channel.Update()
+		err = channel.Update("channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1856,8 +2007,9 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		channel.ReconcileMultiKeyAvailability(false)
 
-		err = channel.Update()
+		err = channel.Update("key", "channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1917,6 +2069,13 @@ func ManageMultiKeys(c *gin.Context) {
 			})
 			return
 		}
+		if len(remainingKeys) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "不能删除所有密钥",
+			})
+			return
+		}
 
 		// Update channel with remaining keys
 		channel.Key = strings.Join(remainingKeys, "\n")
@@ -1924,8 +2083,9 @@ func ManageMultiKeys(c *gin.Context) {
 		channel.ChannelInfo.MultiKeyStatusList = newStatusList
 		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
 		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		channel.ReconcileMultiKeyAvailability(false)
 
-		err = channel.Update()
+		err = channel.Update("key", "channel_info", "status", "other_info")
 		if err != nil {
 			common.ApiError(c, err)
 			return

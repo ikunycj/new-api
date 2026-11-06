@@ -10,15 +10,16 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
+	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,25 +44,13 @@ func withOrderedRoutingBillingSettings(t *testing.T) {
 func newOrderedRoutingBillingInfo(userID int) *relaycommon.RelayInfo {
 	return &relaycommon.RelayInfo{
 		UserId:          userID,
+		BillingUserId:   userID,
 		UserGroup:       "account",
 		OriginModelName: "ordered-routing-price",
 		IsPlayground:    true,
 		ForcePreConsume: true,
 		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 	}
-}
-
-func TestCancellationPhase(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	before, _ := gin.CreateTestContext(httptest.NewRecorder())
-	assert.Equal(t, "before_upstream", cancellationPhase(before, false))
-	assert.Equal(t, "upstream", cancellationPhase(before, true))
-
-	response, _ := gin.CreateTestContext(httptest.NewRecorder())
-	_, err := response.Writer.Write([]byte("partial response"))
-	require.NoError(t, err)
-	assert.Equal(t, "response", cancellationPhase(response, true))
 }
 
 func TestRelayRetryCommittedStopsAfterStreamingOutput(t *testing.T) {
@@ -87,17 +76,22 @@ func TestRelayRetryCommittedStopsOnClientCancellation(t *testing.T) {
 	assert.True(t, relayRetryCommitted(ctx, &relaycommon.RelayInfo{}))
 }
 
-func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
+func TestShouldRetryUpstreamSourcesUseConfiguredStatusCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
+	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
+	operation_setting.AutomaticRetryStatusCodeRanges = []operation_setting.StatusCodeRange{{Start: http.StatusBadGateway, End: http.StatusBadGateway}}
 
 	tests := []struct {
 		name       string
 		source     types.ErrorSource
 		statusCode int
+		want       bool
 	}{
-		{name: "openai bad request", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadRequest},
-		{name: "openai unauthorized", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized},
-		{name: "ikun server error", source: types.ErrorSourceIkun, statusCode: http.StatusBadGateway},
+		{name: "configured OpenAI error", source: types.ErrorSourceOpenAI, statusCode: http.StatusBadGateway, want: true},
+		{name: "configured channel error", source: types.ErrorSourceChannel, statusCode: http.StatusBadGateway, want: true},
+		{name: "unconfigured OpenAI error", source: types.ErrorSourceOpenAI, statusCode: http.StatusUnauthorized, want: false},
+		{name: "unconfigured channel error", source: types.ErrorSourceChannel, statusCode: http.StatusInternalServerError, want: false},
 	}
 
 	for _, tt := range tests {
@@ -108,55 +102,25 @@ func TestShouldRetryUpstreamSourcesAcrossHTTP4xxAnd5xx(t *testing.T) {
 				Code:    "upstream_code",
 				Source:  tt.source,
 			}, tt.statusCode)
-			require.True(t, shouldRetry(ctx, err, 1))
+			assert.Equal(t, tt.want, shouldRetry(ctx, err, 1))
+			assert.Equal(t, tt.want, isFailoverEligible(ctx, err))
 		})
 	}
 }
 
-func TestShouldRetryHonorsConfiguredNonRetryableMapping(t *testing.T) {
+func TestShouldRetryTaskRelayUsesConfiguredStatusCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	err := types.WithOpenAIError(types.OpenAIError{
-		Message: "vendor rejected request",
-		Code:    "vendor_policy_error",
-		Source:  types.ErrorSourceChannel,
-	}, http.StatusBadGateway)
-	err.SetClassification(207001, "policy", "request", "none", false)
+	originalRanges := operation_setting.AutomaticRetryStatusCodeRanges
+	t.Cleanup(func() { operation_setting.AutomaticRetryStatusCodeRanges = originalRanges })
+	operation_setting.AutomaticRetryStatusCodeRanges = []operation_setting.StatusCodeRange{{Start: http.StatusTooManyRequests, End: http.StatusTooManyRequests}}
 
-	assert.False(t, shouldRetry(ctx, err, 1))
-	assert.False(t, isFailoverEligible(ctx, err))
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	assert.True(t, shouldRetryTaskRelay(ctx, 1, &taskdto.TaskError{StatusCode: http.StatusTooManyRequests}, 1))
+	assert.False(t, shouldRetryTaskRelay(ctx, 1, &taskdto.TaskError{StatusCode: http.StatusBadGateway}, 1))
+	assert.False(t, shouldRetryTaskRelay(ctx, 1, &taskdto.TaskError{StatusCode: http.StatusTooManyRequests, LocalError: true}, 1))
 }
 
-func TestShouldRetryHonorsChannelErrorAction(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-
-	for _, action := range []string{"none", "retry_later", "abort", "manual"} {
-		err := types.WithOpenAIError(types.OpenAIError{
-			Message: "upstream failure",
-			Code:    "server_error",
-			Source:  types.ErrorSourceChannel,
-		}, http.StatusBadGateway)
-		err.SetClassification(205002, "upstream", "channel", action, true)
-		assert.False(t, shouldRetry(ctx, err, 1), action)
-		if action == "none" || action == "abort" || action == "manual" {
-			assert.False(t, isFailoverEligible(ctx, err), action)
-		}
-	}
-
-	for _, action := range []string{"retry_channel", "switch_channel"} {
-		err := types.WithOpenAIError(types.OpenAIError{
-			Message: "upstream failure",
-			Code:    "server_error",
-			Source:  types.ErrorSourceChannel,
-		}, http.StatusBadGateway)
-		err.SetClassification(205002, "upstream", "channel", action, true)
-		assert.True(t, shouldRetry(ctx, err, 1), action)
-		assert.False(t, shouldRetry(ctx, err, 0), action)
-	}
-}
-
-func TestShouldRetryDoesNotFailoverAllTokenClientErrors(t *testing.T) {
+func TestShouldRetryDoesNotFailoverLocalClientErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	err := types.NewErrorWithStatusCode(errors.New("invalid request"), types.ErrorCodeInvalidRequest, http.StatusBadRequest)
@@ -172,7 +136,7 @@ func TestShouldRetryRespectsSpecificChannelSelection(t *testing.T) {
 	err := types.WithOpenAIError(types.OpenAIError{
 		Message: "upstream failure",
 		Code:    "server_error",
-		Source:  types.ErrorSourceIkun,
+		Source:  types.ErrorSourceChannel,
 	}, http.StatusBadGateway)
 
 	assert.False(t, shouldRetry(ctx, err, 1))

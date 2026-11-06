@@ -18,8 +18,10 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
+	kitdto "github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -357,7 +359,7 @@ func sunoFetchRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.Ta
 			return
 		}
 		for _, task := range taskModels {
-			tasks = append(tasks, TaskModel2Dto(task))
+			tasks = append(tasks, TaskModel2Dto(task, false))
 		}
 	} else {
 		tasks = make([]any, 0)
@@ -385,7 +387,7 @@ func sunoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dt
 
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	return
 }
@@ -428,7 +430,25 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 				taskResp = service.TaskErrorWrapper(err, "convert_to_openai_video_failed", http.StatusInternalServerError)
 				return
 			}
-			respBody = openAIVideoData
+			var video kitdto.OpenAIVideo
+			if err := common.Unmarshal(openAIVideoData, &video); err != nil {
+				return nil, service.TaskErrorWrapper(err, "invalid_video_response", http.StatusBadGateway)
+			}
+			video.ID = originTask.TaskID
+			video.TaskID = originTask.TaskID
+			video.Model = originTask.Properties.OriginModelName
+			video.RemixedFromVideoID = ""
+			video.Metadata = nil
+			if originTask.Status == model.TaskStatusSuccess {
+				video.SetMetadata("url", taskcommon.BuildProxyURL(originTask.TaskID))
+			}
+			if video.Error != nil || originTask.Status == model.TaskStatusFailure {
+				video.Error = &kitdto.OpenAIVideoError{Code: "task_failed", Message: "Task failed, please contact support with the task ID"}
+			}
+			respBody, err = common.Marshal(video)
+			if err != nil {
+				return nil, service.TaskErrorWrapper(err, "marshal_video_response", http.StatusInternalServerError)
+			}
 			return
 		}
 		taskResp = service.TaskErrorWrapperLocal(fmt.Errorf("not_implemented:%s", originTask.Platform), "not_implemented", http.StatusNotImplemented)
@@ -438,7 +458,7 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// 通用 TaskDto 格式
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	if err != nil {
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
@@ -521,7 +541,7 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"metadata": nil,
 		"status":   mapTaskStatusToSimple(task.Status),
 		"task_id":  task.TaskID,
-		"url":      task.GetResultURL(),
+		"url":      TaskModel2Dto(task, false).ResultURL,
 	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
@@ -569,8 +589,8 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 	}
 }
 
-func TaskModel2Dto(task *model.Task) *dto.TaskDto {
-	return &dto.TaskDto{
+func TaskModel2Dto(task *model.Task, includeInternal bool) *dto.TaskDto {
+	result := &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
 		UpdatedAt:  task.UpdatedAt,
@@ -592,4 +612,43 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Username:   task.Username,
 		Data:       task.Data,
 	}
+	if includeInternal {
+		return result
+	}
+	result.ChannelId = 0
+	result.Properties = model.Properties{Input: task.Properties.Input, OriginModelName: task.Properties.OriginModelName}
+	result.Data = nil
+	result.FailReason = ""
+	result.ResultURL = ""
+	if task.Status == model.TaskStatusFailure {
+		result.FailReason = "Task failed, please contact support with the task ID"
+	} else if task.Status == model.TaskStatusSuccess {
+		result.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+	}
+	if task.Platform == constant.TaskPlatformSuno && task.Status == model.TaskStatusSuccess {
+		// Only the documented output shapes are public; provider payloads may
+		// contain operational metadata and the provider's own error messages.
+		var songs []dto.SunoSong
+		if err := common.Unmarshal(task.Data, &songs); err == nil {
+			for i := range songs {
+				if songs[i].AudioURL != "" {
+					songs[i].AudioURL = fmt.Sprintf("%s/api/task/%s/media?kind=audio&index=%d", system_setting.ServerAddress, task.TaskID, i)
+				}
+				if songs[i].VideoURL != "" {
+					songs[i].VideoURL = fmt.Sprintf("%s/api/task/%s/media?kind=video&index=%d", system_setting.ServerAddress, task.TaskID, i)
+				}
+				if songs[i].ImageURL != "" {
+					songs[i].ImageURL = fmt.Sprintf("%s/api/task/%s/media?kind=image&index=%d", system_setting.ServerAddress, task.TaskID, i)
+				}
+				if songs[i].ImageLargeURL != "" {
+					songs[i].ImageLargeURL = fmt.Sprintf("%s/api/task/%s/media?kind=image_large&index=%d", system_setting.ServerAddress, task.TaskID, i)
+				}
+				songs[i].Metadata.ErrorType = nil
+				songs[i].Metadata.ErrorMessage = nil
+			}
+			result.Data, _ = common.Marshal(songs)
+		}
+		result.ResultURL = ""
+	}
+	return result
 }

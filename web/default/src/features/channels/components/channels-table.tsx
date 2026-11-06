@@ -24,13 +24,16 @@ import type {
   SortingState,
   Row,
 } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
-  DISABLED_ROW_DESKTOP,
-  DISABLED_ROW_MOBILE,
   DataTablePage,
   useDebouncedColumnFilter,
   useDataTable,
@@ -46,7 +49,7 @@ import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import { getChannels, searchChannels, getGroups } from '../api'
+import { getChannels, searchChannels, getPricingGroups } from '../api'
 import {
   DEFAULT_PAGE_SIZE,
   CHANNEL_STATUS,
@@ -70,6 +73,18 @@ const CHANNELS_COLUMN_VISIBILITY_STORAGE_KEY = 'channels:column-visibility'
 const CHANNELS_COLUMN_SIZING_STORAGE_KEY = 'channels:column-sizing'
 const CHANNELS_VIEW_MODE_STORAGE_KEY = 'channels:view-mode'
 const CHANNELS_STATUS_FILTER_STORAGE_KEY = 'channel-status-filter'
+const CHANNEL_ENABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-enabled)] hover:[--data-table-card-bg:var(--table-channel-enabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-enabled)] [background-color:var(--table-channel-enabled)] hover:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:![background-color:var(--table-channel-enabled)] [&>td]:![background-color:var(--table-channel-enabled)] hover:[&>td]:![background-color:var(--table-channel-enabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-enabled)]'
+const CHANNEL_ENABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-enabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-enabled)] [background-color:var(--table-channel-enabled)]'
+const CHANNEL_DISABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-disabled)] hover:[--data-table-card-bg:var(--table-channel-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)] hover:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-disabled)] [&>td]:![background-color:var(--table-channel-disabled)] hover:[&>td]:![background-color:var(--table-channel-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-disabled)]'
+const CHANNEL_DISABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-disabled)] [background-color:var(--table-channel-disabled)]'
+const CHANNEL_AUTO_DISABLED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-auto-disabled)] hover:[--data-table-card-bg:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)] hover:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-auto-disabled)] [&>td]:![background-color:var(--table-channel-auto-disabled)] hover:[&>td]:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-auto-disabled)]'
+const CHANNEL_AUTO_DISABLED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-auto-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)]'
 
 const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'id',
@@ -77,6 +92,7 @@ const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'balance',
   'response_time',
   'test_time',
+  'priority',
 ])
 
 function isDisabledChannelRow(channel: Channel) {
@@ -175,6 +191,17 @@ export function ChannelsTable() {
 
   // Determine whether to use search or regular list API
   const shouldSearch = Boolean(globalFilter?.trim() || modelFilter.trim())
+  const selectedGroup = groupFilter.find((value) => value !== 'all') ?? ''
+  const prioritySort = sorting[0]?.id === 'priority' ? sorting[0] : undefined
+  const prioritySortDescending = prioritySort?.desc ?? true
+  let prioritySortLabel = t('Priority')
+  if (!selectedGroup) {
+    prioritySortLabel = t('Select a group')
+  } else if (prioritySort) {
+    prioritySortLabel = prioritySortDescending
+      ? t('Priority: High to Low')
+      : t('Priority: Low to High')
+  }
 
   const sortParams = useMemo(() => {
     const activeSort = sorting[0]
@@ -203,14 +230,21 @@ export function ChannelsTable() {
 
   // Fetch groups for filter
   const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const groupOptions = useMemo(
     () =>
       (groupsData?.data || []).map((g) => ({
-        label: g,
+        label: groupsData?.display_names?.[g] || g,
         value: g,
       })),
     [groupsData]
@@ -286,6 +320,13 @@ export function ChannelsTable() {
       }
     },
     placeholderData: (previousData) => previousData,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Apply tag aggregation if tag mode is enabled
@@ -303,7 +344,10 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupLabels: groupsData?.display_names,
+  })
 
   // React Table instance
   const { table } = useDataTable({
@@ -420,13 +464,15 @@ export function ChannelsTable() {
       renderCard={(row, { isSelected }) => (
         <ChannelCard row={row} isSelected={isSelected} />
       )}
-      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+      cardGridClassName='grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-3'
       applyHeaderSize
+      getColumnClassName={(_, part) => (part === 'cell' ? 'py-1.5' : undefined)}
       toolbarProps={{
         searchPlaceholder: t('Filter by name, ID, or key...'),
         searchDebounceMs: 500,
         onReset: () => {
           resetModelFilterInput()
+          setSorting([])
         },
         additionalSearch: (
           <Input
@@ -458,6 +504,43 @@ export function ChannelsTable() {
             singleSelect: true,
           },
         ],
+        filterActions: (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant={prioritySort ? 'secondary' : 'outline'}
+                  size='sm'
+                  disabled={!selectedGroup}
+                  onClick={() => {
+                    if (!selectedGroup) return
+                    setSorting((previous) => {
+                      const activeSort = previous[0]
+                      if (activeSort?.id === 'priority') {
+                        return [{ id: 'priority', desc: !activeSort.desc }]
+                      }
+                      return [{ id: 'priority', desc: true }]
+                    })
+                    if (pagination.pageIndex > 0) {
+                      onPaginationChange({ ...pagination, pageIndex: 0 })
+                    }
+                  }}
+                  aria-label={prioritySortLabel}
+                  aria-pressed={Boolean(prioritySort)}
+                  className='gap-1.5'
+                />
+              }
+            >
+              {prioritySortDescending ? (
+                <ArrowDownWideNarrow data-icon='inline-start' aria-hidden />
+              ) : (
+                <ArrowUpNarrowWide data-icon='inline-start' aria-hidden />
+              )}
+              {prioritySortLabel}
+            </TooltipTrigger>
+            <TooltipContent>{prioritySortLabel}</TooltipContent>
+          </Tooltip>
+        ),
         preActions: (
           <Tooltip>
             <TooltipTrigger
@@ -480,13 +563,22 @@ export function ChannelsTable() {
         ),
       }}
       getRowClassName={(row, { isMobile }) => {
-        if (!isDisabledChannelRow(row.original)) {
+        if (isTagAggregateRow(row.original)) {
           return undefined
         }
-        if (isMobile) {
-          return DISABLED_ROW_MOBILE
+        if (row.original.status === CHANNEL_STATUS.AUTO_DISABLED) {
+          return isMobile
+            ? CHANNEL_AUTO_DISABLED_ROW_MOBILE
+            : CHANNEL_AUTO_DISABLED_ROW_DESKTOP
         }
-        return DISABLED_ROW_DESKTOP
+        if (isDisabledChannelRow(row.original)) {
+          return isMobile
+            ? CHANNEL_DISABLED_ROW_MOBILE
+            : CHANNEL_DISABLED_ROW_DESKTOP
+        }
+        return isMobile
+          ? CHANNEL_ENABLED_ROW_MOBILE
+          : CHANNEL_ENABLED_ROW_DESKTOP
       }}
       bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />

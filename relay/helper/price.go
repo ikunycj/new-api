@@ -10,10 +10,10 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,17 +55,7 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		relayInfo.UsingGroup = autoGroup.(string)
 	}
 
-	// check user group special ratio
-	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
-	if ok {
-		// user group special ratio
-		groupRatioInfo.GroupSpecialRatio = userGroupRatio
-		groupRatioInfo.GroupRatio = userGroupRatio
-		groupRatioInfo.HasSpecialRatio = true
-	} else {
-		// normal group ratio
-		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
-	}
+	groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 
 	return groupRatioInfo
 }
@@ -102,7 +92,6 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 	var audioRatio float64
 	var audioCompletionRatio float64
 	var freeModel bool
-	var estimatedProviderBaseCostUSD float64
 	if !usePrice {
 		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
 		if meta.MaxTokens != 0 {
@@ -135,7 +124,6 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 			return types.PriceData{}, err
 		}
 		preConsumedQuota = quota
-		estimatedProviderBaseCostUSD = float64(preConsumedTokens) * modelRatio / common.QuotaPerUnit
 	} else {
 		if meta.ImagePriceRatio != 0 {
 			modelPrice = modelPrice * meta.ImagePriceRatio
@@ -162,22 +150,21 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 	}
 
 	priceData := types.PriceData{
-		FreeModel:                    freeModel,
-		ModelPrice:                   modelPrice,
-		ModelRatio:                   modelRatio,
-		CompletionRatio:              completionRatio,
-		GroupRatioInfo:               groupRatioInfo,
-		UsePrice:                     usePrice,
-		CacheRatio:                   cacheRatio,
-		ImageRatio:                   imageRatio,
-		AudioRatio:                   audioRatio,
-		AudioCompletionRatio:         audioCompletionRatio,
-		CacheCreationRatio:           cacheCreationRatio,
-		CacheCreation5mRatio:         cacheCreationRatio5m,
-		CacheCreation1hRatio:         cacheCreationRatio1h,
-		QuotaToPreConsume:            preConsumedQuota,
-		BillingUSDToCNYRate:          billingUSDToCNYRate,
-		EstimatedProviderBaseCostUSD: estimatedProviderBaseCostUSD,
+		FreeModel:            freeModel,
+		ModelPrice:           modelPrice,
+		ModelRatio:           modelRatio,
+		CompletionRatio:      completionRatio,
+		GroupRatioInfo:       groupRatioInfo,
+		UsePrice:             usePrice,
+		CacheRatio:           cacheRatio,
+		ImageRatio:           imageRatio,
+		AudioRatio:           audioRatio,
+		AudioCompletionRatio: audioCompletionRatio,
+		CacheCreationRatio:   cacheCreationRatio,
+		CacheCreation5mRatio: cacheCreationRatio5m,
+		CacheCreation1hRatio: cacheCreationRatio1h,
+		QuotaToPreConsume:    preConsumedQuota,
+		BillingUSDToCNYRate:  billingUSDToCNYRate,
 	}
 	if usePrice {
 		for name, ratio := range meta.BillingRatios {
@@ -189,7 +176,6 @@ func modelPriceHelperWithBillingRate(c *gin.Context, info *relaycommon.RelayInfo
 			return types.PriceData{}, err
 		}
 		priceData.QuotaToPreConsume = quota
-		priceData.EstimatedProviderBaseCostUSD = priceData.ApplyOtherRatiosToFloat(modelPrice)
 	}
 
 	if common.DebugEnabled {
@@ -269,12 +255,6 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 		Quota:               quota,
 		GroupRatioInfo:      groupRatioInfo,
 		BillingUSDToCNYRate: billingUSDToCNYRate,
-		EstimatedProviderBaseCostUSD: func() float64 {
-			if usePrice {
-				return modelPrice
-			}
-			return modelRatio / 2
-		}(),
 	}
 	return priceData, nil
 }
@@ -308,6 +288,15 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	if err != nil {
 		return types.PriceData{}, err
 	}
+	if billingexpr.UsedVars(exprStr)["image_count"] {
+		requestInput, err = ResolveImageBillingRequestInput(info, requestInput)
+		if err != nil {
+			return types.PriceData{}, err
+		}
+	}
+	if info.RelayFormat == types.RelayFormatOpenAIRealtime && billingexpr.UsesFixedPricing(exprStr) {
+		return types.PriceData{}, fmt.Errorf("fixed pricing is not supported for Realtime requests")
+	}
 
 	rawCost, trace, err := billingexpr.RunExprWithRequest(exprStr, billingexpr.TokenParams{
 		P:   float64(promptTokens),
@@ -335,6 +324,9 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 
 	exprHash := billingexpr.ExprHashString(exprStr)
 	snapshot := &billingexpr.BillingSnapshot{
+		EstimatedImageCount:       trace.ImageCount,
+		EstimatedBillingUnit:      trace.BillingUnit,
+		EstimatedFixedPrice:       trace.FixedPrice,
 		BillingMode:               billing_setting.BillingModeTieredExpr,
 		ModelName:                 info.OriginModelName,
 		ExprString:                exprStr,
@@ -353,11 +345,10 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	info.BillingRequestInput = &requestInput
 
 	priceData := types.PriceData{
-		FreeModel:                    freeModel,
-		GroupRatioInfo:               groupRatioInfo,
-		QuotaToPreConsume:            preConsumedQuota,
-		BillingUSDToCNYRate:          billingUSDToCNYRate,
-		EstimatedProviderBaseCostUSD: rawCost / 1_000_000,
+		FreeModel:           freeModel,
+		GroupRatioInfo:      groupRatioInfo,
+		QuotaToPreConsume:   preConsumedQuota,
+		BillingUSDToCNYRate: billingUSDToCNYRate,
 	}
 
 	logger.LogDebug(c, "model_price_helper_tiered result: model=%s preConsume=%d quotaBeforeGroup=%.2f groupRatio=%.2f tier=%s", info.OriginModelName, preConsumedQuota, quotaBeforeGroup, groupRatioInfo.GroupRatio, trace.MatchedTier)

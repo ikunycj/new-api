@@ -35,7 +35,7 @@ import {
   getTagModels,
   editTagChannels,
   getAllModels,
-  getGroups,
+  getPricingGroups,
 } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import type { TagOperationParams } from '../../types'
@@ -65,8 +65,15 @@ export function TagBatchEditDialog({
 
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Transform groups to multi-select options
@@ -75,7 +82,7 @@ export function TagBatchEditDialog({
     const allGroups = new Set([...groupsData.data, ...groups])
     return [...allGroups].map((group) => ({
       value: group,
-      label: group,
+      label: groupsData.display_names?.[group] || group,
     }))
   }, [groupsData, groups])
 
@@ -276,7 +283,7 @@ export function TagBatchEditDialog({
 
           {/* Groups */}
           <div className='space-y-2'>
-            <Label htmlFor='groups'>{t('Groups')}</Label>
+            <Label htmlFor='groups'>{t('Pricing groups')}</Label>
             {isLoadingGroups ? (
               <Skeleton className='h-10 w-full' />
             ) : (
@@ -288,7 +295,7 @@ export function TagBatchEditDialog({
               />
             )}
             <p className='text-muted-foreground text-xs'>
-              {t('User groups that can access channels with this tag')}
+              {t('Pricing groups that can access channels with this tag')}
             </p>
           </div>
         </div>

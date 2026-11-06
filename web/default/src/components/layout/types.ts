@@ -34,8 +34,6 @@ type BaseNavItem = {
    * `useSidebarView`). Route-level guards still enforce access independently.
    */
   requiredRole?: number
-  requiresLoadTestAccess?: boolean
-  requiresToBAccess?: boolean
 }
 
 /**

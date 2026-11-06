@@ -9,13 +9,13 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,7 +44,15 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 	adaptor.Init(info)
 
+	imageCount := uint(1)
+	if request.N != nil {
+		imageCount = *request.N
+	}
+	if imageCount < 1 || imageCount > dto.MaxImageN {
+		return types.NewErrorWithStatusCode(fmt.Errorf("image_count must be between 1 and %d", dto.MaxImageN), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
 	var requestBody io.Reader
+	var jsonData []byte
 
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
@@ -52,6 +60,12 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		requestBody = common.ReaderOnly(storage)
+		if strings.Contains(c.Request.Header.Get("Content-Type"), "application/json") {
+			jsonData, err = storage.Bytes()
+			if err != nil {
+				return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+		}
 	} else {
 		convertedRequest, err := adaptor.ConvertImageRequest(c, info, *request)
 		if err != nil {
@@ -63,7 +77,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		case *bytes.Buffer:
 			requestBody = convertedRequest.(io.Reader)
 		default:
-			jsonData, err := common.Marshal(convertedRequest)
+			jsonData, err = common.Marshal(convertedRequest)
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
@@ -82,10 +96,28 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
 			defer closer.Close()
-			jsonData = nil
 			info.UpstreamRequestBodySize = size
 			requestBody = body
 		}
+	}
+
+	if jsonData != nil {
+		var outbound struct {
+			N *uint `json:"n"`
+		}
+		if err := common.Unmarshal(jsonData, &outbound); err != nil {
+			return types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+		if outbound.N != nil {
+			imageCount = *outbound.N
+		}
+		if imageCount < 1 || imageCount > dto.MaxImageN {
+			return types.NewErrorWithStatusCode(fmt.Errorf("image_count must be between 1 and %d", dto.MaxImageN), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+		}
+	}
+	jsonData = nil
+	if billingErr := service.PrepareImageBillingForRequest(c, info, int(imageCount)); billingErr != nil {
+		return billingErr
 	}
 
 	statusCodeMappingStr := c.GetString("status_code_mapping")
@@ -118,9 +150,9 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return newAPIError
 	}
 
-	imageN := uint(1)
-	if request.N != nil {
-		imageN = *request.N
+	imageN := info.ImageRequestCount
+	if info.BillingImageCount != nil {
+		imageN = *info.BillingImageCount
 	}
 
 	if usage.(*dto.Usage).TotalTokens == 0 {

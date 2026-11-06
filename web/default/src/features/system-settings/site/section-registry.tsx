@@ -41,6 +41,7 @@ const SITE_SECTIONS = [
           Footer: settings.Footer,
           About: settings.About,
           HomePageContent: settings.HomePageContent,
+          CustomerService: settings.CustomerService,
           ServerAddress: settings.ServerAddress,
           legal: {
             user_agreement: settings['legal.user_agreement'],
@@ -54,7 +55,11 @@ const SITE_SECTIONS = [
     id: 'notice',
     titleKey: 'System Notice',
     build: (settings: SiteSettings) => (
-      <NoticeSection defaultValue={settings.Notice ?? ''} />
+      <NoticeSection
+        defaultValue={settings.Notice ?? ''}
+        announcements={settings['console_setting.announcements']}
+        announcementsEnabled={settings['console_setting.announcements_enabled']}
+      />
     ),
   },
   {

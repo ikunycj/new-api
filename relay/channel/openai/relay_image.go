@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -23,10 +23,10 @@ import (
 )
 
 func updateOpenAIImageCount(info *relaycommon.RelayInfo, count int64) {
-	if info == nil || !info.PriceData.UsePrice || count <= 0 || count > int64(dto.MaxImageN) {
+	if info == nil || count <= 0 || count > int64(dto.MaxImageN) {
 		return
 	}
-	info.PriceData.AddOtherRatio("n", float64(count))
+	info.SetBillingImageCount(int(count))
 }
 
 // OpenaiImageHandler handles non-streaming OpenAI image responses
@@ -78,12 +78,7 @@ func normalizeOpenAIUsage(usage *dto.Usage) {
 		usage.CompletionTokens = usage.OutputTokens
 	}
 	if usage.InputTokensDetails != nil {
-		usage.PromptTokensDetails.CachedTokens = usage.InputTokensDetails.CachedTokens
-		usage.PromptTokensDetails.CachedCreationTokens = usage.InputTokensDetails.CachedCreationTokens
-		usage.PromptTokensDetails.CacheWriteTokens = usage.InputTokensDetails.CacheWriteTokens
-		usage.PromptTokensDetails.ImageTokens = usage.InputTokensDetails.ImageTokens
-		usage.PromptTokensDetails.TextTokens = usage.InputTokensDetails.TextTokens
-		usage.PromptTokensDetails.AudioTokens = usage.InputTokensDetails.AudioTokens
+		usage.PromptTokensDetails = usage.InputTokensDetails.Clone()
 	}
 	if usage.TotalTokens == 0 {
 		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
@@ -127,8 +122,8 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		}
 		if err := common.Unmarshal(raw, &chunk); err == nil {
 			normalizeOpenAIUsage(&chunk.Usage)
-			if service.ValidUsage(&chunk.Usage) {
-				usage = &chunk.Usage
+			if dto.HasOpenAIUsageTokens(&chunk.Usage) {
+				usage = dto.MergeUsageNonZero(usage, &chunk.Usage)
 			}
 			if chunk.Type == "image_generation.completed" || chunk.Type == "image_edit.completed" {
 				completedImages++
@@ -157,7 +152,9 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		upstreamFinished := info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone ||
 			info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF
 		requestedN := 1.0
-		if n, ok := info.PriceData.OtherRatios()["n"]; ok {
+		if info.ImageRequestCount > 0 {
+			requestedN = float64(info.ImageRequestCount)
+		} else if n, ok := info.PriceData.OtherRatios()["n"]; ok {
 			requestedN = n
 		}
 		if upstreamFinished || float64(completedImages) > requestedN {

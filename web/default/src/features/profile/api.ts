@@ -50,45 +50,6 @@ export async function updateUserProfile(
   return res.data
 }
 
-// ============================================================================
-// Team / Sub-account APIs
-// ============================================================================
-
-export type ChildAccount = {
-  id: number
-  username: string
-  display_name: string
-  email: string
-  used_quota: number
-  status: number
-}
-
-export async function getChildAccounts(): Promise<ApiResponse<ChildAccount[]>> {
-  const res = await api.get('/api/user/self/children')
-  return res.data
-}
-
-export async function addChildAccount(data: {
-  user_id?: number
-  email?: string
-}): Promise<ApiResponse> {
-  const res = await api.post('/api/user/self/children', data)
-  return res.data
-}
-
-export type ParentAccount = {
-  id: number
-  username: string
-  display_name: string
-  email: string
-}
-
-export async function getSelfParent(): Promise<ApiResponse<ParentAccount | null>> {
-  const res = await api.get('/api/user/self/parent')
-  return res.data
-}
-
-
 /**
  * Update user settings
  */
@@ -120,15 +81,7 @@ export async function deleteUserAccount(
 }
 
 /**
- * Read current access token without regenerating it
- */
-export async function getAccessToken(): Promise<ApiResponse<string>> {
-  const res = await api.get('/api/user/access-token')
-  return res.data
-}
-
-/**
- * Generate/regenerate system access token (invalidates the previous one)
+ * Generate/regenerate system access token
  */
 export async function generateAccessToken(): Promise<ApiResponse<string>> {
   const res = await api.get('/api/user/token')
@@ -230,5 +183,39 @@ export async function performCheckin(
     ? `/api/user/checkin?turnstile=${encodeURIComponent(turnstileToken)}`
     : '/api/user/checkin'
   const res = await api.post(url)
+  return res.data
+}
+
+export type ChildAccount = {
+  id: number
+  username: string
+  display_name: string
+  email: string
+  used_quota: number
+  status: number
+}
+
+export async function getChildAccounts(): Promise<ApiResponse<ChildAccount[]>> {
+  const res = await api.get('/api/user/self/children')
+  return res.data
+}
+
+export async function addChildAccount(data: {
+  user_id?: number
+  email?: string
+}): Promise<ApiResponse> {
+  const res = await api.post('/api/user/self/children', data)
+  return res.data
+}
+
+export type ParentAccount = {
+  id: number
+  username: string
+  display_name: string
+  email: string
+}
+
+export async function getSelfParent(): Promise<ApiResponse<ParentAccount | null>> {
+  const res = await api.get('/api/user/self/parent')
   return res.data
 }

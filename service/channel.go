@@ -1,15 +1,15 @@
 package service
 
 import (
+	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/types"
 )
 
 func formatNotifyType(channelId int, status int) string {
@@ -43,6 +43,42 @@ func EnableChannel(channelId int, usingKey string, channelName string) {
 	}
 }
 
+// CompleteChannelProbe notifies only after the lease-guarded result and channel
+// status have committed together.
+func CompleteChannelProbe(ctx context.Context, channelID int, result model.ChannelProbeHistory, leaseUntil int64, usingKey string) (int, bool, error) {
+	channel, changed, err := model.CompleteChannelProbe(ctx, channelID, result, leaseUntil, usingKey)
+	if err != nil {
+		return 0, false, err
+	}
+	if changed {
+		notifyChannelProbeStatus(channel, result.ErrorMessage)
+	}
+	return channel.Status, changed, nil
+}
+
+// RecoverChannelAfterTest 仅在安全恢复事务提交后通知，不使用请求开始时的渠道快照。
+func RecoverChannelAfterTest(ctx context.Context, channelID int, usingKey string) error {
+	channel, changed, err := model.RecoverChannelAfterTest(ctx, channelID, usingKey)
+	if err != nil {
+		return err
+	}
+	if changed {
+		notifyChannelProbeStatus(channel, "")
+	}
+	return nil
+}
+
+func notifyChannelProbeStatus(channel *model.Channel, reason string) {
+	subject := fmt.Sprintf("通道「%s」（#%d）已被启用", channel.Name, channel.Id)
+	content := subject
+	if channel.Status == common.ChannelStatusAutoDisabled {
+		subject = fmt.Sprintf("通道「%s」（#%d）已被禁用", channel.Name, channel.Id)
+		content = subject + "，原因：" + reason
+	}
+	// 通知投递不占用探测槽位；只有实际状态变化才会通知。
+	go NotifyRootUser(formatNotifyType(channel.Id, channel.Status), subject, content)
+}
+
 func ShouldDisableChannel(err *types.NewAPIError) bool {
 	if !common.AutomaticDisableChannelEnabled {
 		return false
@@ -63,72 +99,4 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	lowerMessage := strings.ToLower(err.Error())
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
 	return search
-}
-
-// ShouldDisableChannelForChannel evaluates only rules configured on the
-// affected channel; global automatic-disable settings are intentionally not
-// consulted.
-func ShouldDisableChannelForChannel(err *types.NewAPIError, channel *model.Channel) bool {
-	if err == nil || channel == nil || !channel.GetAutoBan() {
-		return false
-	}
-	if types.IsChannelError(err) {
-		return true
-	}
-	if types.IsSkipRetryError(err) {
-		return false
-	}
-	settings := channel.GetSetting()
-	if statusCodeMatches(err.StatusCode, settings.AutoDisableStatusCodes) {
-		return true
-	}
-	message := strings.ToLower(err.Error())
-	for _, keyword := range strings.FieldsFunc(strings.ToLower(settings.AutoDisableKeywords), func(r rune) bool {
-		return r == '\n' || r == '\r' || r == ',' || r == ';'
-	}) {
-		if keyword = strings.TrimSpace(keyword); keyword != "" && strings.Contains(message, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-func statusCodeMatches(status int, rules string) bool {
-	for _, raw := range strings.FieldsFunc(rules, func(r rune) bool { return r == '\n' || r == '\r' || r == ',' || r == ';' }) {
-		parts := strings.SplitN(strings.TrimSpace(raw), "-", 2)
-		if len(parts) == 0 || parts[0] == "" {
-			continue
-		}
-		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-		if err != nil {
-			continue
-		}
-		end := start
-		if len(parts) == 2 {
-			end, err = strconv.Atoi(strings.TrimSpace(parts[1]))
-			if err != nil {
-				continue
-			}
-		}
-		if start > end {
-			start, end = end, start
-		}
-		if status >= start && status <= end {
-			return true
-		}
-	}
-	return false
-}
-
-func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {
-	if !common.AutomaticEnableChannelEnabled {
-		return false
-	}
-	if newAPIError != nil {
-		return false
-	}
-	if status != common.ChannelStatusAutoDisabled {
-		return false
-	}
-	return true
 }

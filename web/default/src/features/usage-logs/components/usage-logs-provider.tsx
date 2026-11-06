@@ -17,12 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
+import { getRouteApi } from '@tanstack/react-router'
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
 import { useIsAdmin } from '@/hooks/use-admin'
 import { useAuthStore } from '@/stores/auth-store'
 
 import type { ChannelAffinityInfo } from '../types'
+
+const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 export type LogsViewScope = 'all' | 'self' | 'team'
 
@@ -52,7 +55,7 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
     useState<ChannelAffinityInfo | null>(null)
   const [affinityDialogOpen, setAffinityDialogOpen] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
-  const [viewScope, setViewScope] = useState<LogsViewScope>('all')
+  const [viewScope, setViewScope] = useState<LogsViewScope>('self')
 
   return (
     <UsageLogsContext.Provider
@@ -85,19 +88,15 @@ export function useUsageLogsContext() {
 }
 
 /**
- * Resolves the effective admin scope for usage logs: whether the current
- * user is allowed to view all users' logs (`canManageScope`), and whether
- * their current view preference (`viewScope`) has that scope active
- * (`isAdminView`). Data fetching and admin-only UI should key off
- * `isAdminView` rather than raw role, so an admin who switches to "only
- * mine" is treated exactly like a regular user for that view.
+ * Resolves the effective admin scope for usage logs. Only the dedicated
+ * call-log section exposes all users' logs; the other sections are scoped to
+ * the current user even for administrators.
  */
 export function useLogsViewScope() {
   const canManageScope = useIsAdmin()
   const user = useAuthStore((s) => s.auth.user)
   const { viewScope, setViewScope } = useUsageLogsContext()
-
-  // A parent account (has children, not a child itself) can switch to team view
+  const section = route.useParams().section
   const canManageTeamScope =
     !canManageScope &&
     Boolean(user?.has_children) &&
@@ -108,7 +107,7 @@ export function useLogsViewScope() {
     canManageTeamScope,
     viewScope,
     setViewScope,
-    isAdminView: canManageScope && viewScope === 'all',
+    isAdminView: canManageScope && section === 'call' && viewScope !== 'self',
     isTeamView: canManageTeamScope && viewScope === 'team',
   }
 }

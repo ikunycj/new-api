@@ -23,27 +23,26 @@ import {
   Gauge,
   Zap,
   Flame,
-  TrendingUp,
   Activity,
-  DatabaseZap,
+  KeyRound,
   type LucideIcon,
-} from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-import type { IconBadgeTone } from '@/components/ui/icon-badge'
-import { safeDivide } from '@/features/dashboard/lib'
+import type { IconBadgeTone } from '@/components/ui/icon-badge';
+import { safeDivide } from '@/features/dashboard/lib';
 
 interface StatCardConfig {
-  key: string
-  title: string
-  description: string
-  icon: LucideIcon
-  iconTone: IconBadgeTone
-  getValue: (stat: Record<string, number>, days?: number) => number
+  key: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  iconTone: IconBadgeTone;
+  getValue: (stat: Record<string, number>, days?: number) => number;
 }
 
 export function useModelStatCardsConfig(): StatCardConfig[] {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   return [
     {
@@ -88,55 +87,49 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
       getValue: (stat, timeRangeMinutes = 1) =>
         safeDivide(stat?.tpm ?? 0, timeRangeMinutes),
     },
-    {
-      key: 'cacheHitRate',
-      title: t('Cache Hit Rate'),
-      description: t('Cached input tokens ratio'),
-      icon: DatabaseZap,
-      iconTone: 'chart-2',
-      // Returned as a 0-1 ratio; the card renders it as a percentage. A zero
-      // denominator means the window holds no cache-reporting requests, and
-      // the card shows a placeholder instead of a misleading 0%.
-      getValue: (stat) =>
-        safeDivide(stat?.cacheReadTokens ?? 0, stat?.inputTokensTotal ?? 0, 4),
-    },
-  ]
+  ];
 }
 
 export function useSummaryCardsConfig(totals: {
-  todayUsageDisplay: string
-  usedDisplay: string
-  requestCountDisplay: string
-  currencyLabel: string
-  currencyEnabled: boolean
+  usageDisplay: string;
+  usageDescription: string;
+  tokenDisplay: string;
+  tokenDescription: string;
+  requestDisplay: string;
+  requestDescription: string;
+  apiKeysDisplay: string;
+  apiKeysDescription: string;
 }) {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   return [
     {
       key: 'todayUsage',
-      title: t('Last 24h usage'),
-      value: totals.todayUsageDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Consumed in the last 24 hours')} (${totals.currencyLabel})`
-        : t('Consumed in the last 24 hours'),
+      title: t("Today's balance usage"),
+      value: totals.usageDisplay,
+      description: totals.usageDescription,
       icon: Flame,
     },
     {
-      key: 'usage',
-      title: t('Historical Usage'),
-      value: totals.usedDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Total consumed')} (${totals.currencyLabel})`
-        : t('Total consumed quota'),
-      icon: TrendingUp,
+      key: 'tokens',
+      title: t("Today's usage"),
+      value: totals.tokenDisplay,
+      description: totals.tokenDescription,
+      icon: Layers,
     },
     {
       key: 'requests',
       title: t('Request Count'),
-      value: totals.requestCountDisplay,
-      description: t('Total requests made'),
+      value: totals.requestDisplay,
+      description: totals.requestDescription,
       icon: Activity,
     },
-  ]
+    {
+      key: 'apiKeys',
+      title: t('API Keys'),
+      value: totals.apiKeysDisplay,
+      description: totals.apiKeysDescription,
+      icon: KeyRound,
+    },
+  ];
 }

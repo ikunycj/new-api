@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Alert02Icon,
   ChartUpIcon,
+  Clock01Icon,
   Coins01Icon,
-  DashboardSpeed01Icon,
   Key01Icon,
   Layers01Icon,
   MoneyReceive01Icon,
@@ -29,23 +29,38 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import { lazy, Suspense, useState, type ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { DashboardChartControls } from '@/features/dashboard/components/dashboard-chart-controls'
+import { buildDefaultDashboardFilters } from '@/features/dashboard/lib'
+import type { DashboardFilters } from '@/features/dashboard/types'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
+import { dateToUnixTimestamp } from '@/lib/time'
 
 import type { AdminAnalyticsSection } from './admin-analytics'
-import { getAdminConsoleStats, getAdminConsoleSystemLoad } from './api'
+import {
+  getAdminConsoleRealtimeStats,
+  getAdminConsoleStats,
+  getAdminConsoleSystemLoad,
+} from './api'
 import {
   AdminConsoleStatCard,
   type AdminConsoleStatTone,
 } from './components/admin-console-stat-card'
-import type { AdminConsoleStats, AdminConsoleSystemLoad } from './types'
+import type { AdminConsoleDataState } from './types'
 
 const LazyAdminAnalytics = lazy(() =>
   import('./admin-analytics').then((module) => ({
@@ -69,36 +84,10 @@ function formatTokenAmount(value: number): string {
   return `${(value / divisor).toFixed(2)}${suffix}`
 }
 
-function normalizePercentage(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(100, Math.max(0, value))
-}
-
-function formatPercentage(value: number): string {
-  return `${new Intl.NumberFormat('zh-CN', {
-    maximumFractionDigits: 1,
-  }).format(normalizePercentage(value))}%`
-}
-
-function SystemLoadMetric(props: { label: string; value: number }) {
-  const percentage = normalizePercentage(props.value)
-
-  return (
-    <Progress
-      value={percentage}
-      className='gap-1'
-      aria-label={`${props.label}使用率 ${formatPercentage(percentage)}`}
-    >
-      <div className='flex w-full min-w-0 items-baseline justify-between gap-1'>
-        <span className='text-muted-foreground truncate font-sans text-[10px] font-medium'>
-          {props.label}
-        </span>
-        <span className='font-mono text-xs font-semibold tabular-nums'>
-          {formatPercentage(percentage)}
-        </span>
-      </div>
-    </Progress>
-  )
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0 秒'
+  if (seconds < 1) return `${Math.round(seconds * 1000)} 毫秒`
+  return `${seconds.toFixed(seconds >= 10 ? 0 : 2)} 秒`
 }
 
 interface ConsoleStatItem {
@@ -107,25 +96,11 @@ interface ConsoleStatItem {
   detail: ReactNode
   icon: Parameters<typeof AdminConsoleStatCard>[0]['icon']
   tone: AdminConsoleStatTone
+  loading?: boolean
 }
 
-function ConsoleCardGrid(props: {
-  stats?: AdminConsoleStats
-  systemLoad?: AdminConsoleSystemLoad
-  systemLoadLoading: boolean
-  systemLoadError: boolean
-  loading: boolean
-}) {
-  const stats = props.stats
-  const systemLoad = props.systemLoad ?? stats?.system_load
-  let systemLoadDetail = props.systemLoadLoading
-    ? '正在读取实时负载…'
-    : '实时采样 · 每 5 秒更新'
-  if (props.systemLoadError) {
-    systemLoadDetail = props.systemLoad
-      ? '实时负载刷新失败，当前为最近一次数据'
-      : '实时负载加载失败'
-  }
+function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
+  const stats = props.data.stats
   const items: ConsoleStatItem[] = [
     {
       title: 'API 密钥',
@@ -133,7 +108,7 @@ function ConsoleCardGrid(props: {
       detail: (
         <>
           <span className='text-success'>
-            今日使用 {formatCompactNumber(stats?.api_keys.active ?? 0)}
+            已用 {formatCompactNumber(stats?.api_keys.active ?? 0)}
           </span>
           {' / '}启用 {formatCompactNumber(stats?.api_keys.enabled ?? 0)}
         </>
@@ -159,69 +134,57 @@ function ConsoleCardGrid(props: {
       tone: 'chart-2',
     },
     {
-      title: '系统负载',
-      value: (
-        <div className='grid grid-cols-3 gap-2 font-sans'>
-          <SystemLoadMetric
-            label='CPU'
-            value={systemLoad?.cpu_usage_percent ?? 0}
-          />
-          <SystemLoadMetric
-            label='内存'
-            value={systemLoad?.memory_usage_percent ?? 0}
-          />
-          <SystemLoadMetric
-            label='存储'
-            value={systemLoad?.storage_usage_percent ?? 0}
-          />
-        </div>
-      ),
-      detail: systemLoadDetail,
-      icon: DashboardSpeed01Icon,
-      tone: 'chart-5',
+      title: '平均响应',
+      value: props.data.statsError
+        ? '--'
+        : formatDuration(stats?.performance.average_response_seconds ?? 0),
+      detail: props.data.statsError
+        ? '统计数据加载失败'
+        : `P50 ${formatDuration(stats?.performance.today_response_p50_seconds ?? 0)} / P90 ${formatDuration(stats?.performance.today_response_p90_seconds ?? 0)} / P99 ${formatDuration(stats?.performance.today_response_p99_seconds ?? 0)}`,
+      icon: Clock01Icon,
+      tone: 'chart-4',
+      loading: props.data.statsLoading,
     },
     {
-      title: '今日新增用户',
+      title: '新增用户',
       value: `+${formatCompactNumber(stats?.users.today ?? 0)}`,
-      detail: (
-        <div
-          className='truncate'
-          title={`用户总数 ${formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今日 ${formatCompactNumber(stats?.users.active_today ?? 0)} / 近 7 天 ${formatCompactNumber(stats?.users.active_week ?? 0)} / 近 30 天 ${formatCompactNumber(stats?.users.active_month ?? 0)}`}
-        >
-          用户总数 {formatCompactNumber(stats?.users.total ?? 0)} · 活跃 今{' '}
-          {formatCompactNumber(stats?.users.active_today ?? 0)} / 7天{' '}
-          {formatCompactNumber(stats?.users.active_week ?? 0)} / 30天{' '}
-          {formatCompactNumber(stats?.users.active_month ?? 0)}
-        </div>
-      ),
+      detail: `活跃${formatCompactNumber(stats?.users.active_today ?? 0)}/总共${formatCompactNumber(stats?.users.total ?? 0)}`,
       icon: UserAdd01Icon,
       tone: 'chart-4',
     },
     {
-      title: '今日请求',
+      title: '请求',
       value: formatCompactNumber(stats?.requests.today ?? 0),
-      detail: `本月 ${formatCompactNumber(stats?.requests.month ?? 0)} / 累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
+      detail: `累计 ${formatCompactNumber(stats?.requests.total ?? 0)}`,
       icon: ChartUpIcon,
       tone: 'chart-3',
     },
     {
-      title: '今日收入',
+      title: '钱包收入',
       value: formatLocalCurrencyAmount(stats?.revenue.today ?? 0),
-      detail: `本月 ${formatLocalCurrencyAmount(stats?.revenue.month ?? 0, { compact: true })} / 累计 ${formatLocalCurrencyAmount(stats?.revenue.total ?? 0, { compact: true })}`,
+      detail: `累计 ${formatLocalCurrencyAmount(stats?.revenue.total ?? 0, { compact: true })}`,
       icon: MoneyReceive01Icon,
       tone: 'chart-3',
     },
     {
-      title: '扣费额度',
+      title: '用户扣费',
       value: formatQuota(stats?.quota.today ?? 0),
-      detail: `本月 ${formatQuota(stats?.quota.month ?? 0)} / 累计 ${formatQuota(stats?.quota.total ?? 0)}`,
+      detail: `累计 ${formatQuota(stats?.quota.total ?? 0)}`,
       icon: Coins01Icon,
       tone: 'chart-2',
     },
     {
       title: 'Token 数',
       value: formatTokenAmount(stats?.tokens.today ?? 0),
-      detail: `本月 ${formatTokenAmount(stats?.tokens.month ?? 0)} / 累计 ${formatTokenAmount(stats?.tokens.total ?? 0)}`,
+      detail: (
+        <>
+          累计 {formatTokenAmount(stats?.tokens.total ?? 0)}
+          <strong className='text-foreground/85 font-semibold'>
+            {' / 缓存命中 '}
+            {(stats?.tokens.cache_hit_rate ?? 0).toFixed(1)}%
+          </strong>
+        </>
+      ),
       icon: Layers01Icon,
       tone: 'chart-4',
     },
@@ -237,7 +200,7 @@ function ConsoleCardGrid(props: {
           detail={item.detail}
           icon={item.icon}
           tone={item.tone}
-          loading={props.loading}
+          loading={item.loading ?? props.data.statsLoading}
         />
       ))}
     </div>
@@ -245,72 +208,152 @@ function ConsoleCardGrid(props: {
 }
 
 export function AdminConsole() {
-  const [activeView, setActiveView] = useState<
-    'overview' | AdminAnalyticsSection
-  >('overview')
+  const { t } = useTranslation()
+  const [activeView, setActiveView] =
+    useState<AdminAnalyticsSection>('overview')
+  const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
+    buildDefaultDashboardFilters()
+  )
+  const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
+  const adminConsoleTimeRange = useMemo(() => {
+    if (!modelFilters.start_timestamp || !modelFilters.end_timestamp) {
+      return undefined
+    }
+    return {
+      start_timestamp: dateToUnixTimestamp(modelFilters.start_timestamp),
+      end_timestamp: dateToUnixTimestamp(modelFilters.end_timestamp),
+    }
+  }, [modelFilters.end_timestamp, modelFilters.start_timestamp])
   const statsQuery = useQuery({
-    queryKey: ['admin-console-stats'],
-    queryFn: getAdminConsoleStats,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    queryKey: [
+      'admin-console-stats',
+      adminConsoleTimeRange?.start_timestamp,
+      adminConsoleTimeRange?.end_timestamp,
+    ],
+    queryFn: () => getAdminConsoleStats(adminConsoleTimeRange),
+    enabled: activeView === 'overview',
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
     placeholderData: (previous) => previous,
   })
   const systemLoadQuery = useQuery({
     queryKey: ['admin-console-system-load'],
     queryFn: getAdminConsoleSystemLoad,
     enabled: activeView === 'overview',
-    staleTime: 5_000,
-    refetchInterval: 5_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
     placeholderData: (previous) => previous,
   })
+  const realtimeStatsQuery = useQuery({
+    queryKey: ['admin-console-realtime'],
+    queryFn: () => getAdminConsoleRealtimeStats(),
+    enabled: activeView === 'overview',
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
+    placeholderData: (previous) => previous,
+  })
+  const consoleData: AdminConsoleDataState = {
+    stats: statsQuery.data,
+    realtimeStats: realtimeStatsQuery.data,
+    systemLoad: systemLoadQuery.data,
+    statsLoading: statsQuery.isLoading && !statsQuery.data,
+    realtimeStatsLoading:
+      realtimeStatsQuery.isLoading && !realtimeStatsQuery.data,
+    systemLoadLoading: systemLoadQuery.isLoading && !systemLoadQuery.data,
+    statsError: statsQuery.isError,
+    realtimeStatsError: realtimeStatsQuery.isError,
+    systemLoadError: systemLoadQuery.isError,
+  }
 
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>管理控制台</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-4'>
-          <Tabs
-            value={activeView}
-            onValueChange={(value) => setActiveView(value as typeof activeView)}
-          >
-            <TabsList>
-              <TabsTrigger value='overview'>总览</TabsTrigger>
-              <TabsTrigger value='flow'>流量</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>
+            <Tabs
+              value={activeView}
+              onValueChange={(value) =>
+                setActiveView(value as AdminAnalyticsSection)
+              }
+            >
+              <TabsList>
+                <TabsTrigger value='overview'>总览</TabsTrigger>
+                <TabsTrigger value='flow'>流量</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <div className='flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2'>
+              {activeView === 'flow' && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        onClick={() =>
+                          setFlowSensitiveVisible((visible) => !visible)
+                        }
+                        aria-label={
+                          flowSensitiveVisible
+                            ? t('Hide sensitive data')
+                            : t('Show sensitive data')
+                        }
+                        className='text-muted-foreground hover:text-foreground size-8'
+                      />
+                    }
+                  >
+                    {flowSensitiveVisible ? <Eye /> : <EyeOff />}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {flowSensitiveVisible
+                      ? t('Hide sensitive data')
+                      : t('Show sensitive data')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <DashboardChartControls
+                filters={modelFilters}
+                onChange={setModelFilters}
+              />
+            </div>
+          </div>
 
           {activeView === 'overview' ? (
             <div className='flex flex-col gap-4'>
-              <ConsoleCardGrid
-                stats={statsQuery.data}
-                systemLoad={systemLoadQuery.data}
-                systemLoadLoading={
-                  systemLoadQuery.isLoading && !systemLoadQuery.data
-                }
-                systemLoadError={systemLoadQuery.isError}
-                loading={statsQuery.isLoading && !statsQuery.data}
-              />
-              <Suspense
-                fallback={
-                  <div className='space-y-3'>
-                    <Skeleton className='h-9 w-72' />
-                    <Skeleton className='h-96 w-full' />
-                  </div>
-                }
-              >
-                <LazyAdminAnalytics section='overview' />
+              <ConsoleCardGrid data={consoleData} />
+              <Suspense fallback={<Skeleton className='h-96 w-full' />}>
+                <LazyAdminAnalytics
+                  section='overview'
+                  filters={modelFilters}
+                  flowSensitiveVisible={flowSensitiveVisible}
+                  adminData={consoleData}
+                />
               </Suspense>
             </div>
           ) : (
-            <Suspense
-              fallback={
-                <div className='space-y-3'>
-                  <Skeleton className='h-9 w-72' />
-                  <Skeleton className='h-96 w-full' />
-                </div>
-              }
-            >
-              <LazyAdminAnalytics section={activeView} />
+            <Suspense fallback={<Skeleton className='h-96 w-full' />}>
+              <LazyAdminAnalytics
+                section={activeView}
+                filters={modelFilters}
+                flowSensitiveVisible={flowSensitiveVisible}
+                adminData={consoleData}
+              />
             </Suspense>
           )}
 

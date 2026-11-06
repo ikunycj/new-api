@@ -23,8 +23,9 @@ import { api } from '@/lib/api'
 
 import type {
   ChannelMonitor,
-  ChannelMonitorPayload,
+  ChannelMonitorCreatePayload,
   ChannelMonitorRunResponse,
+  ChannelMonitorSettingsPayload,
   GroupStatusMonitor,
   GroupStatusTestResponse,
   PricingGroupMetrics,
@@ -45,7 +46,8 @@ function requireData<T>(response: ApiResponse<T>): T {
 
 export async function getChannelMonitors(): Promise<ChannelMonitor[]> {
   const response = await api.get<ApiResponse<{ items: ChannelMonitor[] }>>(
-    '/api/monitor/channel/'
+    '/api/monitor/channel/',
+    { skipErrorHandler: true }
   )
   return requireData(response.data).items
 }
@@ -59,7 +61,7 @@ export async function getPricingGroupMetrics(): Promise<PricingGroupMetrics[]> {
 }
 
 export async function createChannelMonitor(
-  payload: ChannelMonitorPayload
+  payload: ChannelMonitorCreatePayload
 ): Promise<ChannelMonitor> {
   const response = await api.post<ApiResponse<ChannelMonitor>>(
     '/api/monitor/channel/',
@@ -70,22 +72,13 @@ export async function createChannelMonitor(
 
 export async function updateChannelMonitor(
   id: number,
-  payload: ChannelMonitorPayload
+  payload: ChannelMonitorSettingsPayload
 ): Promise<ChannelMonitor> {
   const response = await api.put<ApiResponse<ChannelMonitor>>(
     `/api/monitor/channel/${id}`,
     payload
   )
   return requireData(response.data)
-}
-
-export async function deleteChannelMonitor(id: number): Promise<void> {
-  const response = await api.delete<ApiResponse<null>>(
-    `/api/monitor/channel/${id}`
-  )
-  if (!response.data.success) {
-    throw new Error(response.data.message || 'Request failed')
-  }
 }
 
 export async function runChannelMonitor(

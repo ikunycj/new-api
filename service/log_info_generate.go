@@ -7,11 +7,11 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -315,7 +315,22 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	}
 	other["billing_mode"] = "tiered_expr"
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
+	other["billing_unit"] = snap.EstimatedBillingUnit
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
+		other["billing_unit"] = result.BillingUnit
+		if result.FixedPrice != nil {
+			other["fixed_price"] = *result.FixedPrice
+		}
+		if result.ImageCount != nil {
+			other["image_count"] = *result.ImageCount
+		}
+	} else {
+		if snap.EstimatedFixedPrice != nil {
+			other["fixed_price"] = *snap.EstimatedFixedPrice
+		}
+		if snap.EstimatedImageCount != nil {
+			other["image_count"] = *snap.EstimatedImageCount
+		}
 	}
 }

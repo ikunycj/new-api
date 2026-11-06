@@ -15,6 +15,9 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -35,12 +38,14 @@ type tokenPageResponse struct {
 }
 
 type tokenResponseItem struct {
-	ID              int      `json:"id"`
-	Name            string   `json:"name"`
-	Key             string   `json:"key"`
-	Status          int      `json:"status"`
-	Group           string   `json:"group"`
-	GroupCandidates []string `json:"group_candidates"`
+	ID                  int      `json:"id"`
+	Name                string   `json:"name"`
+	Key                 string   `json:"key"`
+	Status              int      `json:"status"`
+	Group               string   `json:"group"`
+	GroupCandidates     []string `json:"group_candidates"`
+	CurrentConcurrency  int      `json:"current_concurrency"`
+	ConcurrencyDegraded bool     `json:"concurrency_degraded"`
 }
 
 type tokenKeyResponse struct {
@@ -451,6 +456,28 @@ func TestSearchTokensMasksKeyInResponse(t *testing.T) {
 	}
 }
 
+func TestGetAllTokensIncludesCurrentConcurrencyPerApiKey(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	token := seedToken(t, db, 1, "active-token", "active1234token5678")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/?p=1&size=10", nil, 1)
+	common.SetContextKey(ctx, constant.ContextKeyTokenId, token.Id)
+	finish := service.BeginPricingGroupActivity(ctx, "default", 1, "concurrency-test")
+	t.Cleanup(finish)
+
+	GetAllTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, 1, page.Items[0].CurrentConcurrency)
+	assert.False(t, page.Items[0].ConcurrencyDegraded)
+
+	finish()
+}
+
 func TestGetTokenMasksKeyInResponse(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	token := seedToken(t, db, 1, "detail-token", "qrst1234uvwx5678")
@@ -600,6 +627,88 @@ func TestAddTokenNormalizesSingleCandidateToFixedGroup(t *testing.T) {
 	assert.Equal(t, "vip", token.Group)
 	assert.Empty(t, token.GroupCandidates)
 	assert.False(t, token.CrossGroupRetry)
+}
+
+func TestAddTokenUsesCurrentUserGroupForPermission(t *testing.T) {
+	db := openTokenControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Token{}, &model.User{}))
+	require.NoError(t, db.Create(&model.User{
+		Id:       1,
+		Username: "current-group-user",
+		Password: "password123",
+		Status:   common.UserStatusEnabled,
+		Role:     common.RoleCommonUser,
+		Group:    "VIP",
+	}).Error)
+
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousPricingGroups := setting.UserGroupPricingGroups2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, setting.UpdateUserGroupPricingGroupsByJSONString(previousPricingGroups))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"ChatGPT高质量":1}`))
+	require.NoError(t, setting.UpdateUserGroupPricingGroupsByJSONString(`{"VIP":["ChatGPT高质量"],"default":["default"]}`))
+
+	body := map[string]any{
+		"name":             "current-group-token",
+		"expired_time":     -1,
+		"remain_quota":     100,
+		"unlimited_quota":  true,
+		"group":            "ChatGPT高质量",
+		"group_candidates": []string{"ChatGPT高质量"},
+	}
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", body, 1)
+	// Simulate a browser session created before the account group was changed.
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var token model.Token
+	require.NoError(t, db.First(&token, "name = ?", "current-group-token").Error)
+	assert.Equal(t, "ChatGPT高质量", token.Group)
+
+	// A stale session must not retain access after the persisted account group
+	// is changed back to a group without this pricing permission.
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", 1).Update("group", "default").Error)
+	deniedBody := map[string]any{
+		"name":             "revoked-group-token",
+		"expired_time":     -1,
+		"remain_quota":     100,
+		"unlimited_quota":  true,
+		"group":            "ChatGPT高质量",
+		"group_candidates": []string{"ChatGPT高质量"},
+	}
+	deniedContext, deniedRecorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", deniedBody, 1)
+	common.SetContextKey(deniedContext, constant.ContextKeyUserGroup, "VIP")
+	AddToken(deniedContext)
+	deniedResponse := decodeAPIResponse(t, deniedRecorder)
+	assert.False(t, deniedResponse.Success)
+	assert.Contains(t, deniedResponse.Message, "无权访问")
+}
+
+func TestAddTokenRequiresAtLeastOneGroup(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	body := map[string]any{
+		"name":                 "missing-group-token",
+		"expired_time":         -1,
+		"remain_quota":         100,
+		"unlimited_quota":      true,
+		"model_limits_enabled": false,
+		"model_limits":         "",
+		"group":                "",
+		"group_candidates":     []string{},
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", body, 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	assert.Contains(t, response.Message, "请选择至少一个模型计费分组")
+	var token model.Token
+	assert.Error(t, db.Where("name = ?", "missing-group-token").First(&token).Error)
 }
 
 func TestTokenResponsesExposeCandidatesWithoutLeakingStorage(t *testing.T) {

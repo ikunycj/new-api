@@ -27,19 +27,13 @@ export interface QuotaDataItem {
   user_id?: number
   username?: string
   model_name?: string
+  use_group?: string
+  channel_id?: number
+  channel_name?: string
   created_at: number
   token_used?: number
   count?: number
   quota?: number
-  use_group?: string
-  channel_id?: number
-  channel_name?: string
-  // Cache billing counters. Both are 0 for rows written before the columns
-  // existed, and input_tokens_total only accumulates for requests whose
-  // upstream reported cache metadata — so a zero denominator means
-  // "no cache data", not "0% hit rate".
-  cache_read_tokens?: number
-  input_tokens_total?: number
 }
 
 export interface FlowQuotaDataItem {
@@ -58,194 +52,6 @@ export interface FlowQuotaDataItem {
 }
 
 export type FlowMetric = 'quota' | 'tokens' | 'requests'
-
-// One key's aggregated spend over the ranking's time range. Quota uses the
-// platform billing unit, formatted with the same formatter as the stat
-// cards; token_name may be empty for keys whose row was hard-deleted.
-export interface TokenUsageItem {
-  token_id: number
-  token_name?: string
-  user_id: number
-  username?: string
-  count: number
-  quota: number
-  // raw_quota is the sticker price before the key's group discount/markup —
-  // what the same requests would have cost at group ratio 1.0. 0 means
-  // "unknown" for rows predating this column or billed through a path that
-  // never recorded a group ratio, not "no discount applied".
-  raw_quota: number
-  // charge_usd_micros is the sum of each request's own real USD settlement
-  // (millionths of a dollar), already computed by the billing path — not
-  // derived from quota, which is in an internal unit that bakes in a CNY
-  // rate that can drift over the range. Divide by 1_000_000 for dollars.
-  // 0 means unknown for rows predating this column.
-  charge_usd_micros: number
-  // charge_cny_micros is charge_usd_micros converted at the admin-configured
-  // billing exchange rate (系统设置 -> 货币与展示 -> 计费汇率) — the same
-  // rate the relay path itself uses, not a hardcoded constant. Divide by
-  // 1_000_000 for yuan.
-  charge_cny_micros: number
-  // raw_charge_usd_micros / raw_charge_cny_micros are the sticker-price
-  // USD/CNY before the key's group discount — the money counterpart to
-  // raw_quota, scaled from charge_usd_micros by the same raw_quota/quota
-  // ratio. 0 when quota is 0 (nothing to scale from).
-  raw_charge_usd_micros: number
-  raw_charge_cny_micros: number
-  token_used: number
-  cache_read_tokens: number
-  input_tokens_total: number
-  last_used: number
-}
-
-// ----------------------------------------------------------------------------
-// Realtime throughput
-//
-// These come from in-process counters, not from quota_data. The backend keeps
-// one ring buffer per active user and only ever reports the traffic this node
-// served itself, so NodeName identifies the instance behind the numbers.
-// ----------------------------------------------------------------------------
-
-export interface RealtimeWindow {
-  window_seconds: number
-  requests: number
-  tokens: number
-  rpm: number
-  tpm: number
-  cache_read_tokens: number
-  input_tokens_total: number
-  // 0-1 ratio, or null when no request in the window reported cache metadata.
-  // null and 0 mean different things: null is "not measured", 0 is a real
-  // observed miss, and the UI must not render the former as the latter.
-  cache_hit_rate: number | null
-}
-
-export interface RealtimeBucket {
-  timestamp: number
-  requests: number
-  tokens: number
-  // Raw terms rather than a ratio, so several buckets can be re-aggregated
-  // before dividing without needing to weight per-bucket rates.
-  cache_read_tokens: number
-  input_tokens_total: number
-}
-
-export interface RealtimeSnapshot {
-  user_id: number
-  now: number
-  node_name: string
-  windows: RealtimeWindow[]
-  series: RealtimeBucket[]
-  // Echo of the filter this snapshot was built under. A client polling with a
-  // filter compares these against its current selection so a response that
-  // arrives after the user switched keys can be discarded rather than rendered
-  // under the wrong label.
-  token_id?: number
-  model?: string
-}
-
-// One selectable key or model, with its request count so the picker can order
-// by activity rather than alphabetically.
-export interface RealtimeDimensionOption {
-  token_id?: number
-  token_name?: string
-  model?: string
-  requests: number
-}
-
-export interface RealtimeDimensions {
-  tokens: RealtimeDimensionOption[]
-  models: RealtimeDimensionOption[]
-  // The breakdown hit its ring cap, so some combinations are missing from
-  // these lists even though their traffic is still counted in the totals.
-  truncated: boolean
-}
-
-// One key's realtime throughput, the same window metrics as RealtimeSnapshot
-// but scoped to a single key. Backs the "current consumption" ranking.
-export interface RealtimeKeyBreakdown {
-  token_id: number
-  token_name?: string
-  windows: RealtimeWindow[]
-}
-
-export interface RealtimeKeyBreakdowns {
-  user_id: number
-  now: number
-  node_name: string
-  truncated: boolean
-  keys: RealtimeKeyBreakdown[]
-}
-
-// ----------------------------------------------------------------------------
-// Historical usage
-//
-// The long-range counterpart to the realtime snapshot. It reads the hourly
-// quota_data rollup, so it can answer for any range but cannot resolve finer
-// than an hour — which is also why spend lives here and not in the rings.
-// ----------------------------------------------------------------------------
-
-export interface UsageStatsBucket {
-  timestamp: number
-  requests: number
-  tokens: number
-  quota: number
-  cache_read_tokens: number
-  input_tokens_total: number
-  // Averages across the bucket, not peaks: an hourly bucket smooths bursts
-  // away entirely, so the realtime panel is what to read for live load.
-  rpm: number
-  tpm: number
-}
-
-export interface UsageStatsTotals {
-  requests: number
-  tokens: number
-  quota: number
-  cache_read_tokens: number
-  input_tokens_total: number
-  rpm: number
-  tpm: number
-  // null means no request in the range reported cache metadata, which is not
-  // the same as a 0% rate; see RealtimeWindow.
-  cache_hit_rate: number | null
-}
-
-export interface UsageStatsOption {
-  token_id?: number
-  token_name?: string
-  model?: string
-  requests: number
-  quota: number
-}
-
-export interface UsageStatsResult {
-  start_time: number
-  end_time: number
-  bucket_seconds: number
-  token_id?: number
-  model?: string
-  totals: UsageStatsTotals
-  series: UsageStatsBucket[]
-  tokens: UsageStatsOption[]
-  models: UsageStatsOption[]
-}
-
-export interface RealtimeUserSummary {
-  user_id: number
-  username: string
-  requests: number
-  tokens: number
-  rpm: number
-  tpm: number
-  last_seen: number
-}
-
-export interface RealtimeUsersResponse {
-  window_seconds: number
-  node_name: string
-  now: number
-  users: RealtimeUserSummary[]
-}
 
 export type FlowOverflowMode = 'aggregate' | 'hide'
 
@@ -386,28 +192,17 @@ export interface DashboardFilters {
   end_timestamp?: Date
   time_granularity?: TimeGranularity
   username?: string
-  token_name?: string
-  model_name?: string
+  metric?: DashboardMetric
+  range_preset?: DashboardRangePreset
 }
 
-export type ConsumptionDistributionChartType = 'bar' | 'area'
-
-export type ModelAnalyticsChartTab = 'trend' | 'proportion' | 'top'
-
-export interface DashboardChartPreferences {
-  consumptionDistributionChart: ConsumptionDistributionChartType
-  modelAnalyticsChart: ModelAnalyticsChartTab
-  defaultTimeRangeDays: number
-  defaultTimeGranularity: TimeGranularity
-}
-
-// User analytics selections are held by the dashboard parent so they survive
-// switching between dashboard sub-sections, matching the model/flow filters.
-export interface UserChartsFilters {
-  timeGranularity: TimeGranularity
-  selectedRange: number
-  topUserLimit: number
-}
+export type DashboardMetric = 'tokens' | 'quota'
+export type DashboardRangePreset =
+  | 'today'
+  | 'yesterday'
+  | 'week'
+  | 'month'
+  | 'custom'
 
 // ============================================================================
 // API Info Types

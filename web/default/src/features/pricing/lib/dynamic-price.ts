@@ -20,9 +20,11 @@ import { TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit } from '../types'
 import {
   BILLING_PRICING_VARS,
+  FIXED_PRICE_VAR,
   parseTiersFromExpr,
   splitBillingExprAndRequestRules,
   tryParseRequestRuleExpr,
+  type BillingUnit,
   type BillingVar,
   type ParsedTier,
 } from './billing-expr'
@@ -45,10 +47,13 @@ export type DynamicPriceEntry = {
   value: number
   formatted: string
   variable: BillingVar
+  billingUnit: BillingUnit
+  imageCount?: boolean
 }
 
 export type DynamicPricingSummary = {
   tiers: ParsedTier[]
+  tierEntries: Array<{ tier: ParsedTier; entries: DynamicPriceEntry[] }>
   tier: ParsedTier | null
   tierCount: number
   hasRequestRules: boolean
@@ -59,7 +64,11 @@ export type DynamicPricingSummary = {
   secondaryEntries: DynamicPriceEntry[]
 }
 
-const PRIMARY_DYNAMIC_FIELDS = new Set(['inputPrice', 'outputPrice'])
+const PRIMARY_DYNAMIC_FIELDS = new Set([
+  'inputPrice',
+  'outputPrice',
+  'fixedPrice',
+])
 
 export function isDynamicPricingModel(model: PricingModel): boolean {
   return model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
@@ -73,13 +82,14 @@ export function getDynamicDisplayGroupRatio(
 }
 
 export function formatDynamicUnitPrice(
-  valuePerMillionTokens: number,
-  options: DynamicPriceOptions
+  value: number,
+  options: DynamicPriceOptions,
+  billingUnit: BillingUnit = 'token'
 ): string {
   const groupRatio = options.groupRatioMultiplier ?? 1
-  const priceUSD =
-    (valuePerMillionTokens * groupRatio) /
-    TOKEN_UNIT_DIVISORS[options.tokenUnit]
+  const divisor =
+    billingUnit === 'request' ? 1 : TOKEN_UNIT_DIVISORS[options.tokenUnit]
+  const priceUSD = (value * groupRatio) / divisor
   const billingUSDToCNYRate =
     options.usdExchangeRate != null &&
     options.usdExchangeRate > 0 &&
@@ -114,28 +124,35 @@ export function getDynamicPriceEntries(
 ): DynamicPriceEntry[] {
   if (!tier) return []
 
-  return BILLING_PRICING_VARS.flatMap((variable) => {
-    if (!variable.field) return []
-    const value = Number(tier[variable.field])
-    if (!Number.isFinite(value) || value <= 0) return []
+  const variables =
+    tier.billingUnit === 'request' ? [FIXED_PRICE_VAR] : BILLING_PRICING_VARS
+  return variables
+    .flatMap((variable) => {
+      if (!variable.field || tier[variable.field] == null) return []
+      const value = Number(tier[variable.field])
+      if (!Number.isFinite(value) || value < 0) return []
+      if (value === 0 && tier.billingUnit !== 'request') return []
 
-    return [
-      {
-        key: variable.key,
-        field: variable.field,
-        label: variable.label,
-        shortLabel: variable.shortLabel,
-        value,
-        formatted: formatDynamicUnitPrice(value, options),
-        variable,
-      },
-    ]
-  }).sort((a, b) => {
-    const aPrimary = PRIMARY_DYNAMIC_FIELDS.has(a.field)
-    const bPrimary = PRIMARY_DYNAMIC_FIELDS.has(b.field)
-    if (aPrimary !== bPrimary) return aPrimary ? -1 : 1
-    return 0
-  })
+      return [
+        {
+          key: variable.key,
+          field: variable.field,
+          label: variable.label,
+          shortLabel: variable.shortLabel,
+          value,
+          formatted: formatDynamicUnitPrice(value, options, tier.billingUnit),
+          variable,
+          billingUnit: tier.billingUnit,
+          imageCount: tier.imageCount,
+        },
+      ]
+    })
+    .sort((a, b) => {
+      const aPrimary = PRIMARY_DYNAMIC_FIELDS.has(a.field)
+      const bPrimary = PRIMARY_DYNAMIC_FIELDS.has(b.field)
+      if (aPrimary !== bPrimary) return aPrimary ? -1 : 1
+      return 0
+    })
 }
 
 export function getDynamicPricingSummary(
@@ -146,11 +163,16 @@ export function getDynamicPricingSummary(
 
   const tiers = getDynamicPricingTiers(model)
   const tier = tiers[0] || null
-  const entries = getDynamicPriceEntries(tier, options)
+  const tierEntries = tiers.map((pricingTier) => ({
+    tier: pricingTier,
+    entries: getDynamicPriceEntries(pricingTier, options),
+  }))
+  const entries = tierEntries[0]?.entries ?? []
   const rawExpression = model.billing_expr || ''
 
   return {
     tiers,
+    tierEntries,
     tier,
     tierCount: tiers.length,
     hasRequestRules: hasDynamicRequestRules(model),

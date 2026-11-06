@@ -21,21 +21,25 @@ type HybridCacheConfig[V any] struct {
 	Namespace Namespace
 
 	// Redis is used when RedisEnabled returns true (or RedisEnabled is nil) and Redis is not nil.
-	Redis        *redis.Client
-	RedisCodec   ValueCodec[V]
-	RedisEnabled func() bool
+	Redis             *redis.Client
+	RedisCodec        ValueCodec[V]
+	RedisEnabled      func() bool
+	ServeStaleOnError bool
 
 	// Memory builds a hot cache used when Redis is disabled. Keys stored in memory are fully namespaced.
 	Memory func() *hot.HotCache[string, V]
 }
 
-// HybridCache is a small helper that uses Redis when enabled, otherwise falls back to in-memory hot cache.
+// HybridCache uses Redis as the shared store and keeps a bounded local copy so
+// a transient Redis outage can serve the last snapshot without hammering the
+// backing database. When Redis is disabled, the local copy is authoritative.
 type HybridCache[V any] struct {
 	ns Namespace
 
-	redis        *redis.Client
-	redisCodec   ValueCodec[V]
-	redisEnabled func() bool
+	redis             *redis.Client
+	redisCodec        ValueCodec[V]
+	redisEnabled      func() bool
+	serveStaleOnError bool
 
 	memOnce sync.Once
 	memInit func() *hot.HotCache[string, V]
@@ -44,11 +48,12 @@ type HybridCache[V any] struct {
 
 func NewHybridCache[V any](cfg HybridCacheConfig[V]) *HybridCache[V] {
 	return &HybridCache[V]{
-		ns:           cfg.Namespace,
-		redis:        cfg.Redis,
-		redisCodec:   cfg.RedisCodec,
-		redisEnabled: cfg.RedisEnabled,
-		memInit:      cfg.Memory,
+		ns:                cfg.Namespace,
+		redis:             cfg.Redis,
+		redisCodec:        cfg.RedisCodec,
+		redisEnabled:      cfg.RedisEnabled,
+		serveStaleOnError: cfg.ServeStaleOnError,
+		memInit:           cfg.Memory,
 	}
 }
 
@@ -101,6 +106,15 @@ func (c *HybridCache[V]) Get(key string) (value V, found bool, err error) {
 			var zero V
 			return zero, false, nil
 		}
+		// Redis is an acceleration layer for these read-mostly snapshots. Use
+		// the local copy on connection/time-out errors; callers can then decide
+		// whether a synchronous refresh is necessary only when no snapshot is
+		// available at all.
+		if c.serveStaleOnError {
+			if value, memoryFound, memoryErr := c.memCache().Get(full); memoryErr == nil && memoryFound {
+				return value, true, nil
+			}
+		}
 		var zero V
 		return zero, false, e
 	}
@@ -121,7 +135,9 @@ func (c *HybridCache[V]) SetWithTTL(key string, v V, ttl time.Duration) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), defaultRedisOpTimeout)
 		defer cancel()
-		return c.redis.Set(ctx, full, raw, ttl).Err()
+		err = c.redis.Set(ctx, full, raw, ttl).Err()
+		c.memCache().SetWithTTL(full, v, ttl)
+		return err
 	}
 
 	c.memCache().SetWithTTL(full, v, ttl)
@@ -245,8 +261,10 @@ func (c *HybridCache[V]) DeleteMany(keys []string) (map[string]bool, error) {
 	if len(fullKeys) == 0 {
 		return res, nil
 	}
-
 	if c.redisOn() {
+		// Keep local snapshots coherent with invalidations even when Redis is
+		// temporarily unavailable.
+		c.memCache().DeleteMany(fullKeys)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultRedisDelTimeout)
 		defer cancel()
 

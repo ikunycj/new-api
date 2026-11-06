@@ -40,10 +40,10 @@ func GetPricingGroupUsageAt(now time.Time) (map[string]PricingGroupUsage, error)
 
 	var rows []usageRow
 	selectClause := logGroupCol + ` AS pricing_group,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN prompt_tokens + completion_tokens ELSE 0 END), 0) AS tokens_today,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN quota ELSE 0 END), 0) AS quota_today,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN prompt_tokens + completion_tokens ELSE 0 END), 0) AS tokens_yesterday,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN quota ELSE 0 END), 0) AS quota_yesterday,
+		COALESCE(SUM(prompt_tokens + completion_tokens) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_today,
+		COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_today,
+		COALESCE(SUM(prompt_tokens + completion_tokens) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_yesterday,
+		COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_yesterday,
 		COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens_total,
 		COALESCE(SUM(quota), 0) AS quota_total`
 	if err := LOG_DB.Table("logs").

@@ -19,8 +19,8 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/samber/lo"
@@ -372,6 +372,10 @@ func FetchUpstreamRatios(c *gin.Context) {
 					}
 				}
 				if isType1 {
+					if err := validateUpstreamBilling(type1Data); err != nil {
+						ch <- upstreamResult{Name: uniqueName, Err: "模型定价表达式无效：" + err.Error()}
+						return
+					}
 					ch <- upstreamResult{Name: uniqueName, Data: type1Data}
 					return
 				}
@@ -488,6 +492,10 @@ func FetchUpstreamRatios(c *gin.Context) {
 				converted[billing_setting.BillingExprField] = valueMap(billingExprMap)
 			}
 
+			if err := validateUpstreamBilling(converted); err != nil {
+				ch <- upstreamResult{Name: uniqueName, Err: "模型定价表达式无效：" + err.Error()}
+				return
+			}
 			ch <- upstreamResult{Name: uniqueName, Data: converted}
 		}(chn)
 	}
@@ -522,6 +530,17 @@ func FetchUpstreamRatios(c *gin.Context) {
 		}
 	}
 
+	if len(successfulChannels) == 0 {
+		errors := make([]string, 0, len(testResults))
+		for _, result := range testResults {
+			errors = append(errors, result.Name+": "+result.Error)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "上游价格获取失败：" + strings.Join(errors, "; "),
+		})
+		return
+	}
 	differences := buildDifferences(localData, successfulChannels)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -531,6 +550,101 @@ func FetchUpstreamRatios(c *gin.Context) {
 			"test_results": testResults,
 		},
 	})
+}
+
+func validateUpstreamBilling(data map[string]any) error {
+	configuration := billing_setting.BillingSetting{}
+	for field, target := range map[string]*map[string]string{
+		billing_setting.BillingModeField: &configuration.BillingMode,
+		billing_setting.BillingExprField: &configuration.BillingExpr,
+	} {
+		value, exists := data[field]
+		if !exists {
+			continue
+		}
+		encoded, err := common.Marshal(value)
+		if err != nil {
+			return err
+		}
+		if err := common.Unmarshal(encoded, target); err != nil {
+			return err
+		}
+		if *target == nil {
+			return fmt.Errorf("%s must be an object", field)
+		}
+	}
+	return billing_setting.ValidateBillingConfiguration(configuration)
+}
+
+func ApplyUpstreamPrices(c *gin.Context) {
+	var request struct {
+		Updates map[string]string `json:"updates"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil || len(request.Updates) == 0 {
+		common.ApiErrorMsg(c, "无效的价格同步参数")
+		return
+	}
+	configuration := billing_setting.BillingSetting{
+		BillingMode: billing_setting.GetBillingModeCopy(),
+		BillingExpr: billing_setting.GetBillingExprCopy(),
+	}
+	allowed := map[string]bool{
+		"ModelRatio": true, "CompletionRatio": true, "CacheRatio": true, "CreateCacheRatio": true,
+		"ImageRatio": true, "AudioRatio": true, "AudioCompletionRatio": true, "ModelPrice": true,
+	}
+	keys := make([]string, 0, len(request.Updates))
+	for key, value := range request.Updates {
+		keys = append(keys, key)
+		switch key {
+		case "billing_setting.billing_mode":
+			configuration.BillingMode = nil
+			if err := common.UnmarshalJsonStr(value, &configuration.BillingMode); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+		case "billing_setting.billing_expr":
+			configuration.BillingExpr = nil
+			if err := common.UnmarshalJsonStr(value, &configuration.BillingExpr); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+		default:
+			if !allowed[key] {
+				common.ApiErrorMsg(c, "不支持同步设置："+key)
+				return
+			}
+			var prices map[string]float64
+			if err := common.UnmarshalJsonStr(value, &prices); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			if prices == nil {
+				common.ApiErrorMsg(c, "价格设置必须是 JSON 对象")
+				return
+			}
+			for modelName, price := range prices {
+				if price < 0 || math.IsNaN(price) || math.IsInf(price, 0) {
+					common.ApiErrorMsg(c, "无效的模型价格："+modelName)
+					return
+				}
+			}
+		}
+	}
+	if configuration.BillingMode == nil || configuration.BillingExpr == nil {
+		common.ApiErrorMsg(c, "计费配置必须是 JSON 对象")
+		return
+	}
+	if err := billing_setting.ValidateBillingConfiguration(configuration); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.UpdateOptionsBulk(request.Updates); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	sort.Strings(keys)
+	recordManageAudit(c, "option.update", map[string]any{"keys": keys})
+	common.ApiSuccess(c, nil)
 }
 
 func buildDifferences(localData map[string]any, successfulChannels []struct {

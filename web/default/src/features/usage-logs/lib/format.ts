@@ -18,11 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { StatusBadgeProps } from '@/components/status-badge'
 import {
-  BILLING_PRICING_VARS,
   normalizeTierLabel,
   parseTiersFromExpr,
   type ParsedTier,
 } from '@/features/pricing/lib/billing-expr'
+import {
+  getDynamicPriceEntries,
+  type DynamicPriceEntry,
+} from '@/features/pricing/lib/dynamic-price'
 
 import type { UsageLog } from '../data/schema'
 import type { LogOtherData } from '../types'
@@ -230,7 +233,7 @@ export function resolveMatchedTier(
 export interface TieredBillingSummary {
   tiers: ParsedTier[]
   tier: ParsedTier
-  priceEntries: Array<{ field: string; shortLabel: string; price: number }>
+  priceEntries: Array<DynamicPriceEntry & { price: number }>
 }
 
 /**
@@ -246,7 +249,8 @@ export function hasAnyCacheTokens(
     (other.cache_tokens || 0) > 0 ||
     (other.cache_creation_tokens || 0) > 0 ||
     (other.cache_creation_tokens_5m || 0) > 0 ||
-    (other.cache_creation_tokens_1h || 0) > 0
+    (other.cache_creation_tokens_1h || 0) > 0 ||
+    (other.cache_creation_tokens_12h || 0) > 0
   )
 }
 
@@ -261,22 +265,21 @@ export function getTieredBillingSummary(
   if (!tier) return null
 
   const cacheTokensPresent = hasAnyCacheTokens(other)
-
-  const priceEntries: TieredBillingSummary['priceEntries'] = []
-  for (const v of BILLING_PRICING_VARS) {
-    if (!v.field) continue
-    if (v.group === 'cache' && !cacheTokensPresent) continue
-    const raw = tier[v.field as keyof ParsedTier]
-    const price = Number(raw)
-    if (Number.isFinite(price) && price > 0) {
-      priceEntries.push({
-        field: v.field,
-        shortLabel: v.shortLabel,
-        price,
-      })
-    }
+  const loggedTier: ParsedTier = { ...tier }
+  if (
+    other.billing_unit === 'request' &&
+    other.fixed_price != null &&
+    Number.isFinite(other.fixed_price) &&
+    other.fixed_price >= 0
+  ) {
+    loggedTier.billingUnit = 'request'
+    loggedTier.fixedPrice = other.fixed_price
+    loggedTier.imageCount = other.image_count != null
   }
-  return { tiers, tier, priceEntries }
+  const priceEntries = getDynamicPriceEntries(loggedTier, { tokenUnit: 'M' })
+    .filter((entry) => entry.variable.group !== 'cache' || cacheTokensPresent)
+    .map((entry) => ({ ...entry, price: entry.value }))
+  return { tiers, tier: loggedTier, priceEntries }
 }
 
 /**
@@ -357,8 +360,6 @@ const AUDIT_TEMPLATES: Record<string, string> = {
     'Applied upstream model changes to channel (ID: {{id}})',
   'channel.upstream_apply_all':
     'Applied upstream model changes to {{count}} channels',
-  'channel_routing.group_type.update':
-    'Updated billing group {{billing_group}} customer type to {{group_type}}',
   // Redemption codes
   'redemption.create':
     'Created {{count}} redemption codes named {{name}} ({{quota}} each)',

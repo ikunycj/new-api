@@ -75,6 +75,14 @@ function getChannelTestResponseTime(
   return undefined
 }
 
+function getChannelTestTTFT(response: ChannelTestResponse): number | undefined {
+  const ttftMs = response.data?.ttft_ms
+  if (typeof ttftMs === 'number' && Number.isFinite(ttftMs) && ttftMs > 0) {
+    return ttftMs
+  }
+  return undefined
+}
+
 function formatChannelTestDuration(responseTime?: number): string | undefined {
   if (responseTime === undefined) return undefined
 
@@ -200,11 +208,15 @@ export async function handleDeleteChannel(
 }
 
 /**
- * Update a specific channel field (e.g., priority, weight)
+ * Update a specific channel field.
  */
 export async function handleUpdateChannelField(
   id: number,
-  fieldName: string,
+  fieldName:
+    | 'weight'
+    | 'price_multiplier'
+    | 'upstream_max_retries'
+    | 'max_concurrency',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void
@@ -213,8 +225,14 @@ export async function handleUpdateChannelField(
     const response = await updateChannel(id, { [fieldName]: value })
     if (response.success) {
       // Show success toast with field name
-      const fieldLabel =
-        fieldName.charAt(0).toUpperCase() + fieldName.slice(1).toLowerCase()
+      let fieldLabel = i18next.t('Weight')
+      if (fieldName === 'price_multiplier') {
+        fieldLabel = i18next.t('Channel price multiplier')
+      } else if (fieldName === 'upstream_max_retries') {
+        fieldLabel = i18next.t('Retry Times')
+      } else if (fieldName === 'max_concurrency') {
+        fieldLabel = '并发'
+      }
       toast.success(
         i18next.t('{{field}} updated to {{value}}', {
           field: fieldLabel,
@@ -236,7 +254,7 @@ export async function handleUpdateChannelField(
  */
 export async function handleUpdateTagField(
   tag: string,
-  fieldName: 'priority' | 'weight',
+  fieldName: 'weight',
   value: number,
   queryClient?: QueryClient,
   onSuccess?: () => void
@@ -281,7 +299,8 @@ export async function handleTestChannel(
     success: boolean,
     responseTime?: number,
     error?: string,
-    errorCode?: string
+    errorCode?: string,
+    ttftMs?: number
   ) => void
 ): Promise<void> {
   const payload =
@@ -298,6 +317,7 @@ export async function handleTestChannel(
   try {
     const response = await testChannel(id, payload)
     const responseTime = getChannelTestResponseTime(response)
+    const ttftMs = getChannelTestTTFT(response)
     const duration = formatChannelTestDuration(responseTime)
     const target = getChannelTestLabel(options)
     if (response.success) {
@@ -313,7 +333,7 @@ export async function handleTestChannel(
             : undefined
         )
       }
-      onTestComplete?.(true, responseTime)
+      onTestComplete?.(true, responseTime, undefined, undefined, ttftMs)
     } else {
       const errorMsg = response.message || i18next.t(ERROR_MESSAGES.TEST_FAILED)
       if (!options?.silent) {
@@ -323,7 +343,13 @@ export async function handleTestChannel(
             : errorMsg,
         })
       }
-      onTestComplete?.(false, responseTime, errorMsg, response.error_code)
+      onTestComplete?.(
+        false,
+        responseTime,
+        errorMsg,
+        response.error_code,
+        ttftMs
+      )
     }
   } catch (_error: unknown) {
     const err = _error as { response?: { data?: { message?: string } } }

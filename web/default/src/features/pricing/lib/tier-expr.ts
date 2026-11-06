@@ -37,6 +37,7 @@ export type VisualTier = {
   cache_read_unit_cost?: number
   cache_create_unit_cost?: number
   cache_create_1h_unit_cost?: number
+  cache_create_12h_unit_cost?: number
   image_unit_cost?: number
   image_output_unit_cost?: number
   audio_input_unit_cost?: number
@@ -53,7 +54,8 @@ export function getTierCacheMode(
 ): CacheMode {
   if (tier?.cache_mode === CACHE_MODE_TIMED) return CACHE_MODE_TIMED
   if (tier?.cache_mode === CACHE_MODE_GENERIC) return CACHE_MODE_GENERIC
-  return Number(tier?.cache_create_1h_unit_cost) > 0
+  return Number(tier?.cache_create_1h_unit_cost) > 0 ||
+    Number(tier?.cache_create_12h_unit_cost) > 0
     ? CACHE_MODE_TIMED
     : CACHE_MODE_GENERIC
 }
@@ -71,6 +73,7 @@ export function normalizeVisualTier(
     cache_read_unit_cost: Number(tier.cache_read_unit_cost) || 0,
     cache_create_unit_cost: Number(tier.cache_create_unit_cost) || 0,
     cache_create_1h_unit_cost: Number(tier.cache_create_1h_unit_cost) || 0,
+    cache_create_12h_unit_cost: Number(tier.cache_create_12h_unit_cost) || 0,
     image_unit_cost: Number(tier.image_unit_cost) || 0,
     image_output_unit_cost: Number(tier.image_output_unit_cost) || 0,
     audio_input_unit_cost: Number(tier.audio_input_unit_cost) || 0,
@@ -188,9 +191,16 @@ export function tryParseVisualConfig(
         const val = simple[4 + i]
         if (val != null) tier[cv.field] = Number(val)
       })
-      return normalizeVisualConfig({
+      const config = normalizeVisualConfig({
         tiers: [normalizeVisualTier(tier as Partial<VisualTier>)],
       })
+      if (
+        generateExprFromVisualConfig(config).replaceAll(/\s+/g, '') !==
+        body.replaceAll(/\s+/g, '')
+      ) {
+        return null
+      }
+      return config
     }
 
     const condGroup =
@@ -251,6 +261,7 @@ const ESTIMATOR_VARS = [
   { var: 'cr', stateKey: 'cacheReadTokens' },
   { var: 'cc', stateKey: 'cacheCreateTokens' },
   { var: 'cc1h', stateKey: 'cacheCreate1hTokens' },
+  { var: 'cc12h', stateKey: 'cacheCreate12hTokens' },
   { var: 'img', stateKey: 'imageTokens' },
   { var: 'img_o', stateKey: 'imageOutputTokens' },
   { var: 'ai', stateKey: 'audioInputTokens' },
@@ -272,11 +283,18 @@ export function evalExprLocally(
   exprStr: string,
   promptTokens: number,
   completionTokens: number,
-  extraTokenValues: ExtraTokenValues
+  extraTokenValues: ExtraTokenValues,
+  imageCount = 1
 ): EvalResult {
   try {
     if (!exprStr || !exprStr.trim()) {
       return { cost: 0, matchedTier: '', error: null }
+    }
+    if (
+      exprUsesImageCount(exprStr) &&
+      (!Number.isInteger(imageCount) || imageCount < 1 || imageCount > 128)
+    ) {
+      return { cost: 0, matchedTier: '', error: 'image_count: 1..128' }
     }
     let matchedTier = ''
     const tierFn = (name: string, value: number) => {
@@ -286,12 +304,24 @@ export function evalExprLocally(
     const cacheReadTokens = extraTokenValues.cacheReadTokens || 0
     const cacheCreateTokens = extraTokenValues.cacheCreateTokens || 0
     const cacheCreate1hTokens = extraTokenValues.cacheCreate1hTokens || 0
+    const cacheCreate12hTokens = extraTokenValues.cacheCreate12hTokens || 0
     const len =
-      promptTokens + cacheReadTokens + cacheCreateTokens + cacheCreate1hTokens
+      promptTokens +
+      cacheReadTokens +
+      cacheCreateTokens +
+      cacheCreate1hTokens +
+      cacheCreate12hTokens
     const env: Record<string, unknown> = {
       p: promptTokens,
       c: completionTokens,
       len,
+      image_count: imageCount,
+      fixed: (amount: number) => {
+        if (amount < 0 || !Number.isFinite(amount * 1_000_000)) {
+          throw new RangeError('fixed: >= 0, finite')
+        }
+        return amount * 1_000_000
+      },
       tier: tierFn,
       max: Math.max,
       min: Math.min,
@@ -304,9 +334,12 @@ export function evalExprLocally(
     }
     const fn = new Function(
       ...Object.keys(env),
-      `"use strict"; return (${exprStr});`
+      `"use strict"; return (${exprStr.replace(/^v1:/, '')});`
     )
-    const cost = Number(fn(...Object.values(env))) || 0
+    const cost = Number(fn(...Object.values(env)))
+    if (!Number.isFinite(cost) || cost < 0) {
+      return { cost: 0, matchedTier: '', error: 'cost: >= 0, finite' }
+    }
     return { cost, matchedTier, error: null }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
@@ -318,6 +351,12 @@ export function exprUsesExtraVars(exprStr: string): boolean {
   if (!exprStr) return false
   const varNames = ESTIMATOR_VARS.map((f) => f.var).join('|')
   return new RegExp(`\\b(${varNames})\\b`).test(exprStr)
+}
+
+export function exprUsesImageCount(exprStr: string): boolean {
+  return /\bimage_count\b/.test(
+    exprStr.replaceAll(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '')
+  )
 }
 
 export const ESTIMATOR_EXTRA_FIELDS = ESTIMATOR_VARS

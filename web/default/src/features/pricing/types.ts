@@ -72,12 +72,10 @@ export type PricingModel = {
 
 export type PricingDisplayModel = PricingModel & {
   display_group: string
+  display_group_label: string
   display_group_ratio: number
-  display_groups: Array<{ group: string; ratio: number }>
-  tob_display_groups: Array<{ group: string; ratio: number }>
+  display_groups: Array<{ group: string; label: string; ratio: number }>
 }
-
-export type BillingGroupType = 'toB' | 'toC'
 
 /** Input/output modalities supported by a model. */
 export type Modality = 'text' | 'image' | 'audio' | 'video' | 'file'
@@ -103,10 +101,8 @@ export type PricingData = {
   data: PricingModel[]
   vendors: PricingVendor[]
   group_ratio: Record<string, number>
-  billing_group_types?: Record<string, BillingGroupType>
-  usable_group: Record<string, { desc: string; ratio: number }>
+  usable_group: Record<string, string>
   supported_endpoint: Record<string, string>
-  auto_groups: string[]
 }
 
 export type TokenUnit = 'M' | 'K'

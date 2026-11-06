@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CustomerServiceInfo } from '@/components/layout/components/customer-service-info'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -139,6 +140,8 @@ export function PaymentConfirmDialog({
               </div>
             </div>
           </div>
+
+          <CustomerServiceInfo compact />
         </div>
 
         <AlertDialogFooter className='grid grid-cols-2 gap-2 sm:flex'>

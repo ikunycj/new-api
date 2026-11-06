@@ -40,8 +40,13 @@ import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Label } from '@/components/ui/label'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
+import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '@/features/pricing/lib/billing-expr'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { formatTokens, formatUseTime } from '@/lib/format'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { UsageLog } from '../../data/schema'
@@ -57,11 +62,6 @@ import {
   getResponseTimeColor,
   renderAuditContent,
 } from '../../lib/format'
-import {
-  formatUsageLogQuotaUSD,
-  formatUsageLogUSD,
-  formatUsageLogUSDMicros,
-} from '../../lib/money'
 import {
   getLogTypeConfig,
   isPerCallBilling,
@@ -155,24 +155,6 @@ function formatRatio(ratio: number | undefined): string {
   return ratio.toFixed(4)
 }
 
-function getProfitGuardDecisionLabel(
-  decision: string | undefined,
-  t: (key: string) => string
-): string {
-  switch (decision) {
-    case 'allow':
-      return t('Allowed')
-    case 'block':
-      return t('Blocked')
-    case 'warn':
-      return t('Monitor')
-    case 'off':
-      return t('Off')
-    default:
-      return t('Unavailable')
-  }
-}
-
 function getUsageBillingPathLabel(
   t: TFunction,
   adminInfo: LogOtherData['admin_info']
@@ -232,7 +214,13 @@ function BillingBreakdown(props: {
   const tieredSummary = getTieredBillingSummary(other)
 
   const rows: Array<{ label: string; value: string }> = []
-  const fmtPrice = (usd: number) => formatUsageLogUSD(usd)
+  const priceOpts = {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+    billingUSDToCNYRate: other.billing_usd_to_cny_rate,
+  }
+  const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
   const baseInputUSD = other.model_ratio != null ? other.model_ratio * 2.0 : 0
 
   if (isTieredExpr) {
@@ -248,10 +236,17 @@ function BillingBreakdown(props: {
         })
       }
       for (const entry of tieredSummary.priceEntries) {
+        const unit =
+          entry.billingUnit === 'request'
+            ? formatBillingPriceUnit(entry.billingUnit, entry.imageCount, t)
+            : 'M'
         rows.push({
-          label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}/M`,
+          label: formatBillingVarLabel(entry.variable, t),
+          value: `${fmtPrice(entry.price)}/${unit}`,
         })
+      }
+      if (other.image_count != null) {
+        rows.push({ label: 'image_count', value: String(other.image_count) })
       }
     } else {
       rows.push({
@@ -339,6 +334,15 @@ function BillingBreakdown(props: {
         value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
       })
     }
+    if (
+      other.cache_creation_ratio_12h != null &&
+      other.cache_creation_ratio_12h !== 0
+    ) {
+      rows.push({
+        label: `${t('Cache Write')} (cc12h)`,
+        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
+      })
+    }
   }
 
   if (!isTieredExpr) {
@@ -404,82 +408,8 @@ function BillingBreakdown(props: {
 
   rows.push({
     label: t('Total Cost'),
-    value: formatUsageLogQuotaUSD(log.quota, {
-      billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-      quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-    }),
+    value: formatLogQuota(log.quota),
   })
-
-  // Cost reconciliation is recorded in the same `other` snapshot as the
-  // billing details. Keep this admin-only so provider economics never leak to
-  // regular users, while still showing the exact inputs used for this log.
-  if (isAdmin && other.cost_reconciliation) {
-    const reconciliation = other.cost_reconciliation
-    const userRevenue = reconciliation.user_charge_usd_micros
-    const estimatedCost = reconciliation.estimated_cost_usd_micros
-    const profitDifference =
-      userRevenue != null && estimatedCost != null
-        ? userRevenue - estimatedCost
-        : undefined
-
-    rows.push({
-      label: t('User revenue'),
-      value: formatUsageLogUSDMicros(userRevenue),
-    })
-    rows.push({
-      label: t('Estimated cost'),
-      value: formatUsageLogUSDMicros(estimatedCost),
-    })
-    rows.push({
-      label: t('Profit difference'),
-      value: formatUsageLogUSDMicros(profitDifference),
-    })
-
-    if (reconciliation.successful_cost_usd_micros != null) {
-      rows.push({
-        label: t('Successful cost'),
-        value: formatUsageLogUSDMicros(
-          reconciliation.successful_cost_usd_micros
-        ),
-      })
-    }
-    if (reconciliation.retry_cost_usd_micros != null) {
-      rows.push({
-        label: t('Retry cost'),
-        value: formatUsageLogUSDMicros(reconciliation.retry_cost_usd_micros),
-      })
-    }
-    const failedPartialCost =
-      reconciliation.failed_partial_cost_usd_micros ??
-      reconciliation.failed_partial_usage_cost_usd_micros
-    if (failedPartialCost != null) {
-      rows.push({
-        label: t('Failed partial cost'),
-        value: formatUsageLogUSDMicros(failedPartialCost),
-      })
-    }
-
-    const guard = reconciliation.profit_guard
-    if (guard) {
-      const decisionLabel = getProfitGuardDecisionLabel(guard.decision, t)
-      rows.push({
-        label: t('Profit protection decision'),
-        value: `${decisionLabel}${guard.mode ? ` (${guard.mode})` : ''}`,
-      })
-      if (guard.projected_profit_margin != null) {
-        rows.push({
-          label: t('Projected profit margin'),
-          value: `${guard.projected_profit_margin.toFixed(2)}%`,
-        })
-      }
-      if (guard.projected_channel_cost_usd != null) {
-        rows.push({
-          label: t('Projected channel cost'),
-          value: formatUsageLogUSD(guard.projected_channel_cost_usd),
-        })
-      }
-    }
-  }
 
   if (rows.length === 0) return null
 
@@ -502,7 +432,9 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
   const cacheWrite = other.cache_creation_tokens || 0
   const cacheWrite5m = other.cache_creation_tokens_5m || 0
   const cacheWrite1h = other.cache_creation_tokens_1h || 0
-  const hasTokens = promptTokens > 0 || completionTokens > 0
+  const cacheWrite12h = other.cache_creation_tokens_12h || 0
+  const hasTokens =
+    promptTokens > 0 || completionTokens > 0 || hasAnyCacheTokens(other)
 
   if (!hasTokens) return null
 
@@ -521,7 +453,12 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
     })
   }
 
-  if (cacheWrite > 0 && cacheWrite5m === 0 && cacheWrite1h === 0) {
+  if (
+    cacheWrite > 0 &&
+    cacheWrite5m === 0 &&
+    cacheWrite1h === 0 &&
+    cacheWrite12h === 0
+  ) {
     rows.push({
       label: t('Cache Write'),
       value: cacheWrite.toLocaleString(),
@@ -539,6 +476,13 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
     rows.push({
       label: t('Cache Write (1h)'),
       value: cacheWrite1h.toLocaleString(),
+    })
+  }
+
+  if (cacheWrite12h > 0) {
+    rows.push({
+      label: `${t('Cache Write')} (cc12h)`,
+      value: cacheWrite12h.toLocaleString(),
     })
   }
 
@@ -561,6 +505,7 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
+  groupLabels: Record<string, string>
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -774,7 +719,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
           {(props.log.group || other?.group) && (
             <DetailRow
               label={t('Group')}
-              value={props.log.group || other?.group || ''}
+              value={
+                props.groupLabels[props.log.group || other?.group || ''] ||
+                props.log.group ||
+                other?.group ||
+                ''
+              }
               mono
             />
           )}
@@ -937,13 +887,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
             <DetailRow
               label={t('Fee Amount')}
-              value={formatUsageLogQuotaUSD(
-                other.fee_quota ?? props.log.quota,
-                {
-                  billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                  quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                }
-              )}
+              value={formatLogQuota(other.fee_quota ?? props.log.quota)}
               mono
             />
           </DetailSection>
@@ -1173,7 +1117,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
           <DetailSection label={t('Dynamic Pricing')}>
             <DynamicPricingBreakdown
               compact
-              displayCurrency='USD'
               billingExpr={decodeBillingExprB64(other.expr_b64)}
               billingUSDToCNYRate={other.billing_usd_to_cny_rate}
               matchedTierLabel={other.matched_tier}
@@ -1266,10 +1209,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             {other.subscription_pre_consumed != null && (
               <DetailRow
                 label={t('Pre-consumed')}
-                value={formatUsageLogQuotaUSD(other.subscription_pre_consumed, {
-                  billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                  quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                })}
+                value={formatLogQuota(other.subscription_pre_consumed)}
                 mono
               />
             )}
@@ -1277,37 +1217,21 @@ export function DetailsDialog(props: DetailsDialogProps) {
               other.subscription_post_delta !== 0 && (
                 <DetailRow
                   label={t('Post Delta')}
-                  value={formatUsageLogQuotaUSD(other.subscription_post_delta, {
-                    billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                    quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                  })}
+                  value={formatLogQuota(other.subscription_post_delta)}
                   mono
                 />
               )}
             {other.subscription_consumed != null && (
               <DetailRow
                 label={t('Final Consumed')}
-                value={formatUsageLogQuotaUSD(other.subscription_consumed, {
-                  billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                  quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                })}
+                value={formatLogQuota(other.subscription_consumed)}
                 mono
               />
             )}
             {other.subscription_remain != null && (
               <DetailRow
                 label={t('Remaining')}
-                value={`${formatUsageLogQuotaUSD(other.subscription_remain, {
-                  billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                  quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                })}${
-                  other.subscription_total != null
-                    ? ` / ${formatUsageLogQuotaUSD(other.subscription_total, {
-                        billingUSDToCNYRate: other.billing_usd_to_cny_rate,
-                        quotaPerUnit: other.cost_reconciliation?.quota_per_unit,
-                      })}`
-                    : ''
-                }`}
+                value={`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}
                 mono
               />
             )}

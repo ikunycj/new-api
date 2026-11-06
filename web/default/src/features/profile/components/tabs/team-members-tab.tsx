@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { UserPlus, Users, UserCheck } from 'lucide-react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -102,7 +102,7 @@ export function TeamMembersTab({ profile, onUpdate: _onUpdate }: TeamMembersTabP
     try {
       const payload = input.includes('@')
         ? { email: input }
-        : { user_id: parseInt(input, 10) }
+        : { user_id: Number.parseInt(input, 10) }
       const res = await addChildAccount(payload)
       if (res.success) {
         toast.success(t('Member added successfully'))
@@ -122,39 +122,92 @@ export function TeamMembersTab({ profile, onUpdate: _onUpdate }: TeamMembersTabP
 
   // Child view: show parent account info (read-only, no unbind)
   if (isChild) {
+    let parentContent: ReactNode
+    if (parentLoading) {
+      parentContent = <div className='bg-muted h-14 animate-pulse rounded-lg' />
+    } else if (parent) {
+      parentContent = (
+        <div className='flex items-center gap-2 rounded-lg border p-2.5 sm:p-3'>
+          <div className='bg-muted shrink-0 rounded-md p-1.5'>
+            <UserCheck className='h-3.5 w-3.5' />
+          </div>
+          <div className='min-w-0'>
+            <p className='truncate text-sm font-medium'>
+              {parent.display_name || parent.username}
+            </p>
+            <p className='text-muted-foreground truncate text-xs'>
+              {parent.email || parent.username}
+            </p>
+          </div>
+        </div>
+      )
+    } else {
+      parentContent = (
+        <div className='text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm'>
+          <UserCheck className='h-8 w-8 opacity-40' />
+          <span>{t('Parent account info unavailable')}</span>
+        </div>
+      )
+    }
+
     return (
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>
           {t('Your account is managed by a parent account.')}
         </p>
         <Separator />
-        {parentLoading ? (
-          <div className='bg-muted h-14 animate-pulse rounded-lg' />
-        ) : parent ? (
-          <div className='flex items-center gap-2 rounded-lg border p-2.5 sm:p-3'>
-            <div className='bg-muted shrink-0 rounded-md p-1.5'>
-              <UserCheck className='h-3.5 w-3.5' />
-            </div>
-            <div className='min-w-0'>
-              <p className='truncate text-sm font-medium'>
-                {parent.display_name || parent.username}
-              </p>
-              <p className='text-muted-foreground truncate text-xs'>
-                {parent.email || parent.username}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className='text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm'>
-            <UserCheck className='h-8 w-8 opacity-40' />
-            <span>{t('Parent account info unavailable')}</span>
-          </div>
-        )}
+        {parentContent}
       </div>
     )
   }
 
   // Parent view: add and list children
+  let membersContent: ReactNode
+  if (childrenLoading) {
+    membersContent = (
+      <div className='space-y-2'>
+        {[1, 2].map((i) => (
+          <div key={i} className='bg-muted h-14 animate-pulse rounded-lg' />
+        ))}
+      </div>
+    )
+  } else if (children.length === 0) {
+    membersContent = (
+      <div className='text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm'>
+        <Users className='h-8 w-8 opacity-40' />
+        <span>{t('No team members yet')}</span>
+        <span className='text-xs opacity-70'>
+          {t(
+            'Add members by email or user ID. Their API costs will be charged to your account.'
+          )}
+        </span>
+      </div>
+    )
+  } else {
+    membersContent = (
+      <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+        {children.map((child) => (
+          <div
+            key={child.id}
+            className='flex items-center gap-2 rounded-lg border p-2.5 sm:p-3'
+          >
+            <div className='bg-muted shrink-0 rounded-md p-1.5'>
+              <UserCheck className='h-3.5 w-3.5' />
+            </div>
+            <div className='min-w-0'>
+              <p className='truncate text-sm font-medium'>
+                {child.display_name || child.username}
+              </p>
+              <p className='text-muted-foreground truncate text-xs'>
+                {child.email || child.username}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className='space-y-4'>
       {/* Add member */}
@@ -180,44 +233,7 @@ export function TeamMembersTab({ profile, onUpdate: _onUpdate }: TeamMembersTabP
       <Separator />
 
       {/* Members list */}
-      {childrenLoading ? (
-        <div className='space-y-2'>
-          {[1, 2].map((i) => (
-            <div key={i} className='bg-muted h-14 animate-pulse rounded-lg' />
-          ))}
-        </div>
-      ) : children.length === 0 ? (
-        <div className='text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm'>
-          <Users className='h-8 w-8 opacity-40' />
-          <span>{t('No team members yet')}</span>
-          <span className='text-xs opacity-70'>
-            {t(
-              'Add members by email or user ID. Their API costs will be charged to your account.'
-            )}
-          </span>
-        </div>
-      ) : (
-        <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
-          {children.map((child) => (
-            <div
-              key={child.id}
-              className='flex items-center gap-2 rounded-lg border p-2.5 sm:p-3'
-            >
-              <div className='bg-muted shrink-0 rounded-md p-1.5'>
-                <UserCheck className='h-3.5 w-3.5' />
-              </div>
-              <div className='min-w-0'>
-                <p className='truncate text-sm font-medium'>
-                  {child.display_name || child.username}
-                </p>
-                <p className='text-muted-foreground truncate text-xs'>
-                  {child.email || child.username}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {membersContent}
     </div>
   )
 }

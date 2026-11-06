@@ -133,7 +133,6 @@ export const channelFormSchema = z
     name: z.string().min(1, ERROR_MESSAGES.REQUIRED_NAME),
     type: z.number().min(0, ERROR_MESSAGES.REQUIRED_TYPE),
     base_url: z.string().optional(),
-    tob_display_url: z.string().optional(),
     key: z.string(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
@@ -146,20 +145,18 @@ export const channelFormSchema = z
         'Model mapping must be a JSON object with string values'
       ),
     weight: z.number().optional(),
-    test_model: z.string().optional(),
+    test_model: z.string().trim().min(1, ERROR_MESSAGES.REQUIRED_TEST_MODEL),
     auto_ban: z.number().optional(),
-    auto_disable_keywords: z.string().optional(),
-    auto_disable_status_codes: z.string().optional(),
-    auto_disable_response_time_ms: z.number().int().min(0).max(3600000),
     auto_probe_enabled: z.boolean(),
-    probe_interval_seconds: z.number().int().min(0).max(604800),
-    auto_disabled_probe_interval_seconds: z.number().int().min(0).max(604800),
-    probe_failure_auto_ban: z.boolean(),
-    probe_success_auto_enable: z.boolean(),
+    probe_period_minutes: z.number().int().min(1).max(10080),
+    probe_random_delay_enabled: z.boolean(),
+    probe_stream_enabled: z.boolean(),
     upstream_max_retries: z.number().int().min(0).max(100).nullable(),
     max_concurrency: z.number().int().min(1).max(10000).nullable(),
     price_multiplier: z.number().finite().min(0).max(1000),
     price_multiplier_mode: z.enum(['usd', 'cny']),
+    force_priority: z.boolean(),
+    force_priority_scope: z.enum(['group', 'cross_group']),
     status: z.number(),
     status_code_mapping: z
       .string()
@@ -203,7 +200,6 @@ export const channelFormSchema = z
     pass_through_body_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
-    mock_load_test: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
     is_enterprise_account: z.boolean().optional(), // OpenRouter specific
     vertex_key_type: z.enum(['json', 'api_key']).optional(), // Vertex AI specific
@@ -315,27 +311,24 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   name: '',
   type: 1,
   base_url: '',
-  tob_display_url: '',
   key: '',
   openai_organization: '',
   models: '',
-  group: ['default'],
+  group: [],
   model_mapping: '',
   weight: 0,
   test_model: '',
-  auto_ban: 1,
-  auto_disable_keywords: '',
-  auto_disable_status_codes: '',
-  auto_disable_response_time_ms: 0,
+  auto_ban: 0,
   auto_probe_enabled: false,
-  probe_interval_seconds: 120,
-  auto_disabled_probe_interval_seconds: 10,
-  probe_failure_auto_ban: true,
-  probe_success_auto_enable: true,
-  upstream_max_retries: 1,
+  probe_period_minutes: 5,
+  probe_random_delay_enabled: false,
+  probe_stream_enabled: false,
+  upstream_max_retries: 0,
   max_concurrency: 1000,
   price_multiplier: 1,
   price_multiplier_mode: 'usd',
+  force_priority: false,
+  force_priority_scope: 'group',
   status: CHANNEL_STATUS.ENABLED,
   status_code_mapping: '',
   tag: '',
@@ -356,7 +349,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   pass_through_body_enabled: false,
   system_prompt: '',
   system_prompt_override: false,
-  mock_load_test: false,
   // Type-specific settings
   is_enterprise_account: false,
   vertex_key_type: 'json',
@@ -395,10 +387,6 @@ export function transformChannelToFormDefaults(
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
-    mock_load_test: false,
-    auto_disable_keywords: '',
-    auto_disable_status_codes: '',
-    auto_disable_response_time_ms: 0,
   }
 
   if (channel.setting) {
@@ -411,11 +399,6 @@ export function transformChannelToFormDefaults(
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
-        mock_load_test: parsed.mock_load_test === true,
-        auto_disable_keywords: parsed.auto_disable_keywords || '',
-        auto_disable_status_codes: parsed.auto_disable_status_codes || '',
-        auto_disable_response_time_ms:
-          Number(parsed.auto_disable_response_time_ms) || 0,
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -425,7 +408,6 @@ export function transformChannelToFormDefaults(
 
   // Parse type-specific settings from settings field
   let vertexKeyType: 'json' | 'api_key' = 'json'
-  let tobDisplayUrl = ''
   let azureResponsesVersion = ''
   let isEnterpriseAccount = false
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
@@ -445,7 +427,6 @@ export function transformChannelToFormDefaults(
   if (channel.settings) {
     try {
       const parsed = JSON.parse(channel.settings)
-      tobDisplayUrl = parsed.tob_display_url || ''
       vertexKeyType = parsed.vertex_key_type || 'json'
       azureResponsesVersion = parsed.azure_responses_version || ''
       isEnterpriseAccount = parsed.openrouter_enterprise === true
@@ -480,32 +461,36 @@ export function transformChannelToFormDefaults(
     name: channel.name || '',
     type: channel.type,
     base_url: channel.base_url || '',
-    tob_display_url: tobDisplayUrl,
     key: '', // Never populate key from backend for security
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
-    group: parseGroups(channel.group || 'default'),
+    group: parseGroups(channel.group || ''),
     model_mapping: channel.model_mapping || '',
     weight: channel.weight || 0,
     test_model: channel.test_model || '',
-    auto_ban: channel.auto_ban ?? 1,
+    auto_ban: channel.auto_ban ?? 0,
     auto_probe_enabled: channel.auto_probe_enabled ?? false,
-    probe_interval_seconds:
-      channel.probe_interval_seconds ??
-      CHANNEL_FORM_DEFAULT_VALUES.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      channel.auto_disabled_probe_interval_seconds ??
-      CHANNEL_FORM_DEFAULT_VALUES.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban: channel.probe_failure_auto_ban ?? true,
-    probe_success_auto_enable: channel.probe_success_auto_enable ?? true,
-    upstream_max_retries: channel.upstream_max_retries ?? 1,
+    probe_period_minutes:
+      channel.probe_period_minutes == null || channel.probe_period_minutes <= 0
+        ? CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes
+        : channel.probe_period_minutes,
+    probe_random_delay_enabled: channel.probe_random_delay_enabled ?? false,
+    probe_stream_enabled: channel.probe_stream_enabled ?? false,
+    upstream_max_retries:
+      channel.upstream_max_retries === undefined
+        ? CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries
+        : channel.upstream_max_retries,
     max_concurrency:
-      channel.max_concurrency && channel.max_concurrency > 0
-        ? channel.max_concurrency
-        : CHANNEL_FORM_DEFAULT_VALUES.max_concurrency,
-    price_multiplier: channel.price_multiplier ?? 1,
+      channel.max_concurrency == null || channel.max_concurrency <= 0
+        ? CHANNEL_FORM_DEFAULT_VALUES.max_concurrency
+        : channel.max_concurrency,
+    price_multiplier:
+      channel.price_multiplier ?? CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
     price_multiplier_mode:
       channel.price_multiplier_mode === 'cny' ? 'cny' : 'usd',
+    force_priority: channel.force_priority ?? false,
+    force_priority_scope:
+      channel.force_priority_scope === 'cross_group' ? 'cross_group' : 'group',
     status: channel.status,
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
@@ -552,10 +537,6 @@ function buildSettingJSON(formData: ChannelFormValues): string {
     pass_through_body_enabled: formData.pass_through_body_enabled || false,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
-    mock_load_test: formData.mock_load_test === true,
-    auto_disable_keywords: formData.auto_disable_keywords || '',
-    auto_disable_status_codes: formData.auto_disable_status_codes || '',
-    auto_disable_response_time_ms: formData.auto_disable_response_time_ms || 0,
   }
   return JSON.stringify(settingObj)
 }
@@ -574,12 +555,6 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
       // eslint-disable-next-line no-console
       console.error('Failed to parse existing settings:', error)
     }
-  }
-
-  if (formData.tob_display_url?.trim()) {
-    settingsObj.tob_display_url = normalizeBaseUrl(formData.tob_display_url)
-  } else {
-    delete settingsObj.tob_display_url
   }
 
   // Add vertex_key_type for Vertex AI channels (type 41)
@@ -719,18 +694,18 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     weight: formData.weight || null,
-    test_model: formData.test_model || null,
-    auto_ban: formData.auto_ban ?? 1,
+    test_model: formData.test_model.trim(),
+    auto_ban: formData.auto_ban ?? 0,
     auto_probe_enabled: formData.auto_probe_enabled,
-    probe_interval_seconds: formData.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      formData.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban: formData.probe_failure_auto_ban,
-    probe_success_auto_enable: formData.probe_success_auto_enable,
+    probe_period_minutes: formData.probe_period_minutes,
+    probe_random_delay_enabled: formData.probe_random_delay_enabled,
+    probe_stream_enabled: formData.probe_stream_enabled,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status: formData.status,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
@@ -748,6 +723,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
       ;(channel as Record<string, unknown>)[key] = null
     }
   })
+  channel.group = formatGroups(formData.group)
 
   return {
     mode,
@@ -776,18 +752,18 @@ export function transformFormDataToUpdatePayload(
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     weight: formData.weight ?? 0,
-    test_model: formData.test_model || null,
-    auto_ban: formData.auto_ban ?? 1,
+    test_model: formData.test_model.trim(),
+    auto_ban: formData.auto_ban ?? 0,
     auto_probe_enabled: formData.auto_probe_enabled,
-    probe_interval_seconds: formData.probe_interval_seconds,
-    auto_disabled_probe_interval_seconds:
-      formData.auto_disabled_probe_interval_seconds,
-    probe_failure_auto_ban: formData.probe_failure_auto_ban,
-    probe_success_auto_enable: formData.probe_success_auto_enable,
+    probe_period_minutes: formData.probe_period_minutes,
+    probe_random_delay_enabled: formData.probe_random_delay_enabled,
+    probe_stream_enabled: formData.probe_stream_enabled,
     upstream_max_retries: formData.upstream_max_retries,
     max_concurrency: formData.max_concurrency,
     price_multiplier: formData.price_multiplier,
     price_multiplier_mode: formData.price_multiplier_mode,
+    force_priority: formData.force_priority,
+    force_priority_scope: formData.force_priority_scope,
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
@@ -810,10 +786,12 @@ export function transformFormDataToUpdatePayload(
     }
   })
 
+  payload.group = formatGroups(formData.group)
+
   // Send explicit empty strings for nullable fields so GORM updates can clear them.
   payload.base_url = normalizeBaseUrl(formData.base_url) || ''
   payload.openai_organization = formData.openai_organization || ''
-  payload.test_model = formData.test_model || ''
+  payload.test_model = formData.test_model.trim()
   payload.tag = formData.tag || ''
   payload.remark = formData.remark || ''
   payload.model_mapping = formData.model_mapping || ''
@@ -865,10 +843,14 @@ export function parseModels(models: string): string[] {
  */
 export function parseGroups(groups: string): string[] {
   if (!groups) return []
-  return groups
-    .split(',')
-    .map((g) => g.trim())
-    .filter((g) => g.length > 0)
+  return [
+    ...new Set(
+      groups
+        .split(',')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0)
+    ),
+  ]
 }
 
 /**
@@ -882,5 +864,5 @@ export function formatModels(models: string[]): string {
  * Format groups array to string
  */
 export function formatGroups(groups: string[]): string {
-  return groups.join(',')
+  return parseGroups(groups.join(',')).join(',')
 }

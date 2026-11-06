@@ -41,6 +41,13 @@ export const DOCS_ROUTES = [
     file: 'docs/quick-start.html',
   },
   {
+    id: 'client-models',
+    group: 'overview',
+    label: 'Configure multi-provider models in your client',
+    path: '/docs/client-models',
+    file: 'docs/client-models.html',
+  },
+  {
     id: 'model-pricing',
     group: 'overview',
     label: '模型定价',

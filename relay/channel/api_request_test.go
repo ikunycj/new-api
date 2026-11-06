@@ -8,7 +8,6 @@ import (
 	common2 "github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,45 +79,6 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	headers, err := processHeaderOverride(info, ctx)
 	require.NoError(t, err)
 	require.Equal(t, "trace-123", headers["x-upstream-trace"])
-}
-
-func TestProcessHeaderOverride_MockHeadersNeverReachUpstream(t *testing.T) {
-	t.Parallel()
-
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	ctx.Request.Header.Set("X-Alltoken-Mock-Failure-Rate", "0.5")
-	override := map[string]any{
-		"X-Alltoken-Mock-Failure-Rate": "{client_header:X-Alltoken-Mock-Failure-Rate}",
-	}
-
-	realChannel := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{HeadersOverride: override}}
-	headers, err := processHeaderOverride(realChannel, ctx)
-	require.NoError(t, err)
-	require.Empty(t, headers)
-
-	// Mock requests are terminated before channel handling; even a legacy
-	// mock-marked channel must never receive mock control headers.
-	assert.Empty(t, headers)
-}
-
-func TestProcessHeaderOverride_WildcardCannotLeakMockHeadersToRealChannel(t *testing.T) {
-	t.Parallel()
-
-	gin.SetMode(gin.TestMode)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	ctx.Request.Header.Set("X-Alltoken-Mock-Failure-Rate", "1")
-	ctx.Request.Header.Set("X-Trace-Id", "trace-123")
-	info := &relaycommon.RelayInfo{
-		ChannelMeta: &relaycommon.ChannelMeta{HeadersOverride: map[string]any{"*": ""}},
-	}
-
-	headers, err := processHeaderOverride(info, ctx)
-	require.NoError(t, err)
-	require.Equal(t, "trace-123", headers["x-trace-id"])
-	require.NotContains(t, headers, "x-alltoken-mock-failure-rate")
 }
 
 func TestProcessHeaderOverride_RuntimeOverrideIsFinalHeaderMap(t *testing.T) {
@@ -267,46 +227,6 @@ func TestCaptureUpstreamRequestID(t *testing.T) {
 			}
 			captureUpstreamRequestID(ctx, header)
 			require.Equal(t, tt.want, ctx.GetString(common2.UpstreamRequestIdKey))
-		})
-	}
-}
-
-func TestApplyObservabilityHeaders(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	tests := []struct {
-		name       string
-		baseURL    string
-		requestID  string
-		retryIndex int
-		wantID     string
-		wantRetry  string
-	}{
-		{name: "ikun", baseURL: "https://ikun.love", requestID: "server-request-123", retryIndex: 2, wantID: "server-request-123", wantRetry: "2"},
-		{name: "other provider", baseURL: "https://example.com", requestID: "server-request-123"},
-		{name: "missing request id", baseURL: "https://ikun.love"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-			ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
-			ctx.Set(common2.RequestIdKey, tt.requestID)
-			header := http.Header{"X-Client-Request-Id": []string{"untrusted-override"}}
-			info := &relaycommon.RelayInfo{
-				RetryIndex: tt.retryIndex,
-				ChannelMeta: &relaycommon.ChannelMeta{
-					ChannelBaseUrl: tt.baseURL,
-				},
-			}
-
-			applyObservabilityHeaders(header, ctx, info)
-
-			if tt.wantID == "" {
-				require.Equal(t, "untrusted-override", header.Get("X-Client-Request-ID"))
-				require.Empty(t, header.Get("X-AllToken-Attempt"))
-				return
-			}
-			require.Equal(t, tt.wantID, header.Get("X-Client-Request-ID"))
-			require.Equal(t, tt.wantRetry, header.Get("X-AllToken-Attempt"))
 		})
 	}
 }

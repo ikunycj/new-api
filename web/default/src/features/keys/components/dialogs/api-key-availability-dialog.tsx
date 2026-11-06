@@ -19,9 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   AlertCircleIcon,
   ArrowDown01Icon,
+  Copy01Icon,
   DashboardSpeed01Icon,
   InformationCircleIcon,
   ReloadIcon,
+  Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
@@ -69,8 +71,10 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 
 import {
+  buildApiKeyTestCurlCommand,
   getApiKeys,
   isApiKeyTestEndpoint,
   selectApiKeyTestModel,
@@ -345,6 +349,10 @@ function ApiKeyAvailabilityDialogContent(props: ApiKeyAvailabilityDialogProps) {
   const [testResult, setTestResult] = useState<ApiKeyModelTestResult | null>(
     null
   )
+  const { copiedText, copyToClipboard } = useCopyToClipboard({
+    successMessage: t('Code copied'),
+    errorMessage: t('Could not copy code'),
+  })
 
   const apiKeysQuery = useQuery({
     queryKey: ['api-key-availability-keys', refreshTrigger],
@@ -489,6 +497,23 @@ function ApiKeyAvailabilityDialogContent(props: ApiKeyAvailabilityDialogProps) {
     selectedEndpoint && availableEndpoints.includes(selectedEndpoint)
       ? selectedEndpoint
       : availableEndpoints[0]
+  const curlCommand = useMemo(() => {
+    if (
+      !props.apiBaseUrl ||
+      !selectedTokenKey ||
+      !selectedModel ||
+      !activeEndpoint
+    ) {
+      return null
+    }
+
+    return buildApiKeyTestCurlCommand(
+      props.apiBaseUrl,
+      selectedTokenKey,
+      selectedModel.id,
+      activeEndpoint
+    )
+  }, [activeEndpoint, props.apiBaseUrl, selectedModel, selectedTokenKey])
   const endpointItems = useMemo(
     () =>
       availableEndpoints.map((endpointType) => ({
@@ -573,6 +598,11 @@ function ApiKeyAvailabilityDialogContent(props: ApiKeyAvailabilityDialogProps) {
 
     setTestResult(result)
     setIsTesting(false)
+  }
+
+  const handleCopyCurl = () => {
+    if (!curlCommand) return
+    void copyToClipboard(curlCommand)
   }
 
   let testButtonLabel = t('Start test')
@@ -842,6 +872,21 @@ function ApiKeyAvailabilityDialogContent(props: ApiKeyAvailabilityDialogProps) {
       <Button variant='outline' onClick={() => handleOpenChange(false)}>
         {t('Cancel')}
       </Button>
+      {curlCommand ? (
+        <Button
+          variant='outline'
+          onClick={handleCopyCurl}
+          disabled={isResolvingKey}
+          aria-label={t('Copy ready-to-run curl')}
+        >
+          <HugeiconsIcon
+            icon={copiedText === curlCommand ? Tick02Icon : Copy01Icon}
+            data-icon='inline-start'
+            aria-hidden='true'
+          />
+          {t('Copy ready-to-run curl')}
+        </Button>
+      ) : null}
       <Button
         onClick={() => void handleTest()}
         disabled={

@@ -33,14 +33,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -55,7 +47,6 @@ import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
 import { useUpdateOption } from '../hooks/use-update-option'
-import { safeNumberFieldProps } from '../utils/numeric-field'
 
 const numericString = z.string().refine((value) => {
   const trimmed = value.trim()
@@ -63,123 +54,13 @@ const numericString = z.string().refine((value) => {
   return !Number.isNaN(Number(trimmed)) && Number(trimmed) >= 0
 }, 'Enter a non-negative number or leave empty')
 
-const channelTestModes = ['scheduled_all', 'passive_recovery'] as const
-type ChannelTestMode = (typeof channelTestModes)[number]
-
-// The two health modes differ in one way that matters operationally: `observe`
-// records scores and exposes them for inspection but never lets them touch
-// channel selection, which makes it the safe way to validate the signal on
-// production traffic. `active` additionally allows the weighted router to
-// consume them.
-const channelHealthModes = ['observe', 'active'] as const
-type ChannelHealthMode = (typeof channelHealthModes)[number]
-
-function normalizeChannelHealthMode(value?: string): ChannelHealthMode {
-  return value === 'active' ? 'active' : 'observe'
-}
-
-// `passthrough` is the legacy behaviour: whatever the upstream returned is
-// forwarded to the caller verbatim. `normalized` projects it onto a stable,
-// client-facing shape so operational detail (balance, account pool, upstream
-// host names) stops leaking outward. Defaults to `passthrough`, matching
-// common/public_error_config.go, so an unwritten option changes nothing.
-const publicErrorModes = ['passthrough', 'normalized'] as const
-type PublicErrorMode = (typeof publicErrorModes)[number]
-
-function normalizePublicErrorMode(value?: string): PublicErrorMode {
-  return value === 'normalized' ? 'normalized' : 'passthrough'
-}
-
-const circuitPolicySchema = z.object({
-  failure_threshold: z.number().int().min(1).max(10000),
-  window_seconds: z.number().int().min(1).max(86400),
-  cooldown_seconds: z.number().int().min(1).max(86400),
-  half_open_requests: z.number().int().min(1).max(100),
-})
-
-const channelCircuitConfigSchema = z.object({
-  default: circuitPolicySchema,
-  modes: z.object({
-    cost_first: circuitPolicySchema,
-    stability_first: circuitPolicySchema,
-  }),
-  presets: z
-    .array(
-      z.object({
-        key: z.string().trim().min(1),
-        label: z.string().trim().min(1),
-        failure_threshold: z.number().int().min(1).max(10000),
-        window_seconds: z.number().int().min(1).max(86400),
-        cooldown_seconds: z.number().int().min(1).max(86400),
-        half_open_requests: z.number().int().min(1).max(100),
-      })
-    )
-    .min(1)
-    .max(20),
-})
-
 const routingReliabilitySchema = z
   .object({
-    RetryTimes: z.coerce.number().min(0).max(10),
-    ChannelCircuitEnabled: z.boolean(),
-    ChannelCircuitConfig: z.string().superRefine((value, ctx) => {
-      try {
-        if (!channelCircuitConfigSchema.safeParse(JSON.parse(value)).success) {
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Invalid JSON format or values out of allowed range',
-          })
-        }
-      } catch {
-        ctx.addIssue({ code: 'custom', message: 'Invalid JSON format' })
-      }
-    }),
     ChannelDisableThreshold: numericString,
-    // These bounds are deliberately identical to the server-side validation in
-    // model/option.go, so an out-of-range value is rejected here instead of
-    // costing a round-trip that ends in a 400.
-    ChannelHealthEnabled: z.boolean(),
-    ChannelHealthMode: z.enum(channelHealthModes),
-    ChannelHealthHalfLifeSeconds: z.coerce.number().int().min(5).max(86400),
-    ChannelHealthMinSamples: z.coerce.number().int().min(0).max(1000),
-    ChannelHealthLatencyHalfLifeSeconds: z.coerce
-      .number()
-      .int()
-      .min(5)
-      .max(86400),
-    ChannelHealthStateTTLSeconds: z.coerce.number().int().min(60).max(604800),
-    ChannelHealthProbeEnabled: z.boolean(),
-    ChannelHealthProbeIntervalSeconds: z.coerce
-      .number()
-      .int()
-      .min(10)
-      .max(86400),
-    ChannelHealthProbeIdleGraceSeconds: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .max(86400),
-    ChannelHealthHistoryEnabled: z.boolean(),
-    ChannelHealthHistoryBucketSeconds: z.coerce
-      .number()
-      .int()
-      .min(10)
-      .max(3600),
-    ChannelHealthHistoryRetentionDays: z.coerce.number().int().min(1).max(365),
-    PublicErrorMode: z.enum(publicErrorModes),
     AutomaticDisableChannelEnabled: z.boolean(),
-    AutomaticEnableChannelEnabled: z.boolean(),
     AutomaticDisableKeywords: z.string(),
     AutomaticDisableStatusCodes: z.string(),
     AutomaticRetryStatusCodes: z.string(),
-    monitor_setting: z.object({
-      auto_test_channel_enabled: z.boolean(),
-      auto_test_channel_minutes: z.coerce
-        .number()
-        .int()
-        .min(1, 'Interval must be at least 1 minute'),
-      channel_test_mode: z.enum(channelTestModes),
-    }),
   })
   .superRefine((values, ctx) => {
     const disableParsed = parseHttpStatusCodeRules(
@@ -214,31 +95,11 @@ type RoutingReliabilityFormInput = z.input<typeof routingReliabilitySchema>
 
 type RoutingReliabilitySectionProps = {
   defaultValues: {
-    RetryTimes: number
-    ChannelCircuitEnabled: boolean
-    ChannelCircuitConfig: string
-    ChannelHealthEnabled: boolean
-    ChannelHealthMode: ChannelHealthMode
-    ChannelHealthHalfLifeSeconds: number
-    ChannelHealthMinSamples: number
-    ChannelHealthLatencyHalfLifeSeconds: number
-    ChannelHealthStateTTLSeconds: number
-    ChannelHealthProbeEnabled: boolean
-    ChannelHealthProbeIntervalSeconds: number
-    ChannelHealthProbeIdleGraceSeconds: number
-    ChannelHealthHistoryEnabled: boolean
-    ChannelHealthHistoryBucketSeconds: number
-    ChannelHealthHistoryRetentionDays: number
-    PublicErrorMode: PublicErrorMode
     ChannelDisableThreshold: string
     AutomaticDisableChannelEnabled: boolean
-    AutomaticEnableChannelEnabled: boolean
     AutomaticDisableKeywords: string
     AutomaticDisableStatusCodes: string
     AutomaticRetryStatusCodes: string
-    'monitor_setting.auto_test_channel_enabled': boolean
-    'monitor_setting.auto_test_channel_minutes': number
-    'monitor_setting.channel_test_mode': ChannelTestMode
   }
 }
 
@@ -246,111 +107,31 @@ function normalizeLineEndings(value: string) {
   return value.replaceAll('\r\n', '\n')
 }
 
-function normalizeJsonDocument(value: string) {
-  const raw = value.trim()
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
-}
-
 type NormalizedRoutingReliabilityValues = {
-  RetryTimes: number
-  ChannelCircuitEnabled: boolean
-  ChannelCircuitConfig: string
-  ChannelHealthEnabled: boolean
-  ChannelHealthMode: ChannelHealthMode
-  ChannelHealthHalfLifeSeconds: number
-  ChannelHealthMinSamples: number
-  ChannelHealthLatencyHalfLifeSeconds: number
-  ChannelHealthStateTTLSeconds: number
-  ChannelHealthProbeEnabled: boolean
-  ChannelHealthProbeIntervalSeconds: number
-  ChannelHealthProbeIdleGraceSeconds: number
-  ChannelHealthHistoryEnabled: boolean
-  ChannelHealthHistoryBucketSeconds: number
-  ChannelHealthHistoryRetentionDays: number
-  PublicErrorMode: PublicErrorMode
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
-  AutomaticEnableChannelEnabled: boolean
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
-  'monitor_setting.auto_test_channel_enabled': boolean
-  'monitor_setting.auto_test_channel_minutes': number
-  'monitor_setting.channel_test_mode': ChannelTestMode
-}
-
-function normalizeChannelTestMode(value?: string): ChannelTestMode {
-  return value === 'passive_recovery' ? 'passive_recovery' : 'scheduled_all'
 }
 
 const buildFormDefaults = (
   defaults: RoutingReliabilitySectionProps['defaultValues']
 ): RoutingReliabilityFormInput => ({
-  RetryTimes: defaults.RetryTimes ?? 0,
-  ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
-  ChannelCircuitConfig: defaults.ChannelCircuitConfig ?? '{}',
-  ChannelHealthEnabled: defaults.ChannelHealthEnabled,
-  ChannelHealthMode: normalizeChannelHealthMode(defaults.ChannelHealthMode),
-  ChannelHealthHalfLifeSeconds: defaults.ChannelHealthHalfLifeSeconds,
-  ChannelHealthMinSamples: defaults.ChannelHealthMinSamples,
-  ChannelHealthLatencyHalfLifeSeconds:
-    defaults.ChannelHealthLatencyHalfLifeSeconds,
-  ChannelHealthStateTTLSeconds: defaults.ChannelHealthStateTTLSeconds,
-  ChannelHealthProbeEnabled: defaults.ChannelHealthProbeEnabled,
-  ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
-  ChannelHealthProbeIdleGraceSeconds:
-    defaults.ChannelHealthProbeIdleGraceSeconds,
-  ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
-  ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
-  ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
-  PublicErrorMode: normalizePublicErrorMode(defaults.PublicErrorMode),
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
   AutomaticDisableKeywords: normalizeLineEndings(
     defaults.AutomaticDisableKeywords ?? ''
   ),
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
-  monitor_setting: {
-    auto_test_channel_enabled:
-      defaults['monitor_setting.auto_test_channel_enabled'],
-    auto_test_channel_minutes:
-      defaults['monitor_setting.auto_test_channel_minutes'],
-    channel_test_mode: normalizeChannelTestMode(
-      defaults['monitor_setting.channel_test_mode']
-    ),
-  },
 })
 
 const normalizeDefaults = (
   defaults: RoutingReliabilitySectionProps['defaultValues']
 ): NormalizedRoutingReliabilityValues => ({
-  RetryTimes: defaults.RetryTimes ?? 0,
-  ChannelCircuitEnabled: defaults.ChannelCircuitEnabled,
-  ChannelCircuitConfig: normalizeJsonDocument(defaults.ChannelCircuitConfig),
-  ChannelHealthEnabled: defaults.ChannelHealthEnabled,
-  ChannelHealthMode: normalizeChannelHealthMode(defaults.ChannelHealthMode),
-  ChannelHealthHalfLifeSeconds: defaults.ChannelHealthHalfLifeSeconds,
-  ChannelHealthMinSamples: defaults.ChannelHealthMinSamples,
-  ChannelHealthLatencyHalfLifeSeconds:
-    defaults.ChannelHealthLatencyHalfLifeSeconds,
-  ChannelHealthStateTTLSeconds: defaults.ChannelHealthStateTTLSeconds,
-  ChannelHealthProbeEnabled: defaults.ChannelHealthProbeEnabled,
-  ChannelHealthProbeIntervalSeconds: defaults.ChannelHealthProbeIntervalSeconds,
-  ChannelHealthProbeIdleGraceSeconds:
-    defaults.ChannelHealthProbeIdleGraceSeconds,
-  ChannelHealthHistoryEnabled: defaults.ChannelHealthHistoryEnabled,
-  ChannelHealthHistoryBucketSeconds: defaults.ChannelHealthHistoryBucketSeconds,
-  ChannelHealthHistoryRetentionDays: defaults.ChannelHealthHistoryRetentionDays,
-  PublicErrorMode: normalizePublicErrorMode(defaults.PublicErrorMode),
   ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
   AutomaticDisableKeywords: normalizeLineEndings(
     defaults.AutomaticDisableKeywords ?? ''
   ),
@@ -360,38 +141,13 @@ const normalizeDefaults = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     defaults.AutomaticRetryStatusCodes ?? ''
   ).normalized,
-  'monitor_setting.auto_test_channel_enabled':
-    defaults['monitor_setting.auto_test_channel_enabled'],
-  'monitor_setting.auto_test_channel_minutes':
-    defaults['monitor_setting.auto_test_channel_minutes'],
-  'monitor_setting.channel_test_mode': normalizeChannelTestMode(
-    defaults['monitor_setting.channel_test_mode']
-  ),
 })
 
 const normalizeFormValues = (
   values: RoutingReliabilityFormValues
 ): NormalizedRoutingReliabilityValues => ({
-  RetryTimes: values.RetryTimes,
-  ChannelCircuitEnabled: values.ChannelCircuitEnabled,
-  ChannelCircuitConfig: normalizeJsonDocument(values.ChannelCircuitConfig),
-  ChannelHealthEnabled: values.ChannelHealthEnabled,
-  ChannelHealthMode: values.ChannelHealthMode,
-  ChannelHealthHalfLifeSeconds: values.ChannelHealthHalfLifeSeconds,
-  ChannelHealthMinSamples: values.ChannelHealthMinSamples,
-  ChannelHealthLatencyHalfLifeSeconds:
-    values.ChannelHealthLatencyHalfLifeSeconds,
-  ChannelHealthStateTTLSeconds: values.ChannelHealthStateTTLSeconds,
-  ChannelHealthProbeEnabled: values.ChannelHealthProbeEnabled,
-  ChannelHealthProbeIntervalSeconds: values.ChannelHealthProbeIntervalSeconds,
-  ChannelHealthProbeIdleGraceSeconds: values.ChannelHealthProbeIdleGraceSeconds,
-  ChannelHealthHistoryEnabled: values.ChannelHealthHistoryEnabled,
-  ChannelHealthHistoryBucketSeconds: values.ChannelHealthHistoryBucketSeconds,
-  ChannelHealthHistoryRetentionDays: values.ChannelHealthHistoryRetentionDays,
-  PublicErrorMode: values.PublicErrorMode,
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
   AutomaticDisableKeywords: normalizeLineEndings(
     values.AutomaticDisableKeywords
   ),
@@ -401,11 +157,6 @@ const normalizeFormValues = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     values.AutomaticRetryStatusCodes
   ).normalized,
-  'monitor_setting.auto_test_channel_enabled':
-    values.monitor_setting.auto_test_channel_enabled,
-  'monitor_setting.auto_test_channel_minutes':
-    values.monitor_setting.auto_test_channel_minutes,
-  'monitor_setting.channel_test_mode': values.monitor_setting.channel_test_mode,
 })
 
 export function RoutingReliabilitySection({
@@ -435,16 +186,6 @@ export function RoutingReliabilitySection({
 
   const autoDisableStatusCodes = form.watch('AutomaticDisableStatusCodes')
   const autoRetryStatusCodes = form.watch('AutomaticRetryStatusCodes')
-  const channelTestMode = form.watch('monitor_setting.channel_test_mode')
-  // The tuning knobs are meaningless while scoring is off, and probing is a
-  // strict sub-switch of scoring on the backend too (IsChannelHealthProbeEnabled
-  // requires both flags), so the UI mirrors that dependency rather than offering
-  // controls that silently do nothing.
-  const healthEnabled = form.watch('ChannelHealthEnabled')
-  const healthMode = form.watch('ChannelHealthMode')
-  const publicErrorMode = form.watch('PublicErrorMode')
-  const probeEnabled = form.watch('ChannelHealthProbeEnabled')
-  const historyEnabled = form.watch('ChannelHealthHistoryEnabled')
   const autoDisableParsed = useMemo(
     () => parseHttpStatusCodeRules(autoDisableStatusCodes),
     [autoDisableStatusCodes]
@@ -486,485 +227,10 @@ export function RoutingReliabilitySection({
           />
 
           <div className='flex min-w-0 flex-col gap-4'>
-            <div className='bg-muted/20 rounded-lg border p-4'>
-              <FormField
-                control={form.control}
-                name='ChannelCircuitEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Circuit protection')}</FormLabel>
-                      <FormDescription>
-                        {field.value ? t('Enabled') : t('Disabled')}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name='ChannelCircuitConfig'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Circuit configuration (JSON)')}</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={18}
-                      className='font-mono text-xs'
-                      spellCheck={false}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Central defaults for balanced, cost-first, stability-first, and quick presets.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <Separator />
-
-          <div className='flex min-w-0 flex-col gap-4'>
-            <div className='flex flex-col gap-1'>
-              <h4 className='text-sm font-medium'>
-                {t('Real-time channel health scoring')}
-              </h4>
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'Scores every channel from live traffic using a time-decayed availability and latency average. Scores are bucketed per model family, so Claude channels are only compared with Claude channels and GPT with GPT.'
-                )}
-              </p>
-            </div>
-
-            <div className='grid min-w-0 gap-6 lg:grid-cols-2'>
-              <FormField
-                control={form.control}
-                name='ChannelHealthEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Health scoring')}</FormLabel>
-                      <FormDescription>
-                        {field.value
-                          ? t('Collecting samples')
-                          : t(
-                              'Off: no samples are collected and routing is unchanged'
-                            )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthMode'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Scoring mode')}</FormLabel>
-                    <Select
-                      items={[
-                        { value: 'observe', label: t('Observe only') },
-                        {
-                          value: 'active',
-                          label: t('Active (affects routing)'),
-                        },
-                      ]}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={!healthEnabled}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <SelectItem value='observe'>
-                            {t('Observe only')}
-                          </SelectItem>
-                          <SelectItem value='active'>
-                            {t('Active (affects routing)')}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {healthMode === 'active'
-                        ? t(
-                            'Live scores replace the previous-day success rate in the availability input. Only groups using the weighted routing strategy are affected; priority groups still take their first candidate.'
-                          )
-                        : t(
-                            'Scores are recorded and visible but never influence channel selection. Safe to enable on production traffic.'
-                          )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className='grid min-w-0 gap-6 lg:grid-cols-2'>
-              <FormField
-                control={form.control}
-                name='PublicErrorMode'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Client-facing error message')}</FormLabel>
-                    <Select
-                      items={[
-                        {
-                          value: 'passthrough',
-                          label: t('Passthrough (legacy)'),
-                        },
-                        {
-                          value: 'normalized',
-                          label: t('Normalized (recommended)'),
-                        },
-                      ]}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <SelectItem value='passthrough'>
-                            {t('Passthrough (legacy)')}
-                          </SelectItem>
-                          <SelectItem value='normalized'>
-                            {t('Normalized (recommended)')}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {publicErrorMode === 'normalized'
-                        ? t(
-                            'Upstream operational detail — insufficient balance, exhausted account pool, channel status codes — is replaced by a stable error carrying a request id. Internal callers authenticated with a signed load-test token still receive the full classification in the X-Alltoken-* headers.'
-                          )
-                        : t(
-                            'Upstream error bodies are forwarded to callers unchanged. Enable this to stop leaking balance, account pool and channel detail downstream.'
-                          )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className='grid min-w-0 gap-6 lg:grid-cols-2 xl:grid-cols-4'>
-              <FormField
-                control={form.control}
-                name='ChannelHealthHalfLifeSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {t('Availability half-life (seconds)')}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={5}
-                        max={86400}
-                        step={1}
-                        disabled={!healthEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'How fast old samples lose weight. Shorter reacts quicker but is noisier.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthMinSamples'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Minimum samples')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={0}
-                        max={1000}
-                        step={1}
-                        disabled={!healthEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Below this effective sample count the score is blended toward neutral, so a barely-used channel is neither blindly trusted nor unfairly condemned.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthLatencyHalfLifeSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Latency half-life (seconds)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={5}
-                        max={86400}
-                        step={1}
-                        disabled={!healthEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        "Decay of the channel's own latency baseline, which the newest response is scored against."
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthStateTTLSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('State TTL (seconds)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={60}
-                        max={604800}
-                        step={1}
-                        disabled={!healthEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Idle entries are evicted after this long so removed channels do not linger in memory.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className='grid min-w-0 gap-6 lg:grid-cols-3'>
-              <FormField
-                control={form.control}
-                name='ChannelHealthProbeEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Synthetic probing')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          "Probes idle channels with their family's cheapest model so they still have a fresh score. Costs upstream quota."
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={!healthEnabled}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthProbeIntervalSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Probe interval (seconds)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={10}
-                        max={86400}
-                        step={1}
-                        disabled={!healthEnabled || !probeEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('How often the probe loop wakes up.')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthProbeIdleGraceSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Probe idle grace (seconds)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={0}
-                        max={86400}
-                        step={1}
-                        disabled={!healthEnabled || !probeEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Channels that real traffic touched within this window are skipped, since real evidence beats a synthetic call.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className='grid min-w-0 gap-6 lg:grid-cols-3'>
-              <FormField
-                control={form.control}
-                name='ChannelHealthHistoryEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Persist score history')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Writes the score trend to the database so the dashboard chart survives a reload or a restart. Costs disk, not upstream quota.'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={!healthEnabled}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthHistoryBucketSeconds'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('History bucket (seconds)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={10}
-                        max={3600}
-                        step={1}
-                        disabled={!healthEnabled || !historyEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Resolution of the stored trend. Scores inside one bucket are averaged.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='ChannelHealthHistoryRetentionDays'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('History retention (days)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={1}
-                        max={365}
-                        step={1}
-                        disabled={!healthEnabled || !historyEnabled}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Buckets older than this are deleted hourly.')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className='flex min-w-0 flex-col gap-4'>
             <div className='flex flex-col gap-1'>
               <h4 className='text-sm font-medium'>{t('Request retry')}</h4>
             </div>
-            <div className='grid min-w-0 gap-6 xl:grid-cols-[minmax(12rem,24rem)_minmax(0,1fr)]'>
-              <FormField
-                control={form.control}
-                name='RetryTimes'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Retry Times')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min='0'
-                        max='10'
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Number of times to retry failed requests (0-10)')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+            <div className='max-w-2xl'>
               <FormField
                 control={form.control}
                 name='AutomaticRetryStatusCodes'
@@ -992,135 +258,6 @@ export function RoutingReliabilitySection({
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className='flex min-w-0 flex-col gap-4'>
-            <div className='flex flex-col gap-1'>
-              <h4 className='text-sm font-medium'>
-                {t('Channel health checks')}
-              </h4>
-            </div>
-            <div className='grid min-w-0 gap-6 lg:grid-cols-3'>
-              <FormField
-                control={form.control}
-                name='monitor_setting.auto_test_channel_enabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Scheduled channel tests')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Automatically probe all channels in the background'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='monitor_setting.channel_test_mode'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Channel test mode')}</FormLabel>
-                    <Select
-                      items={[
-                        {
-                          value: 'scheduled_all',
-                          label: t('Scheduled full test'),
-                        },
-                        {
-                          value: 'passive_recovery',
-                          label: t('Passive recovery only'),
-                        },
-                      ]}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <SelectItem value='scheduled_all'>
-                            {t('Scheduled full test')}
-                          </SelectItem>
-                          <SelectItem value='passive_recovery'>
-                            {t('Passive recovery only')}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {t(
-                        'Scheduled full test probes non-manually-disabled channels; passive recovery only checks auto-disabled channels after real request failures.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='monitor_setting.auto_test_channel_minutes'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Test interval (minutes)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        min={1}
-                        step={1}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {channelTestMode === 'passive_recovery'
-                        ? t(
-                            'How frequently the system checks auto-disabled channels for recovery'
-                          )
-                        : t('How frequently the system tests all channels')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='AutomaticEnableChannelEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Re-enable on success')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Bring channels back online after successful checks'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
                 )}
               />
             </div>

@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/relayconvert"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,7 +56,7 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	if usage == nil || usage.TotalTokens == 0 {
 		text := service.ExtractOutputTextFromResponses(&responsesResp)
-		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = mergeEstimatedOpenAIUsage(usage, service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens()))
 		chatResp.Usage = *usage
 	}
 
@@ -164,7 +164,7 @@ func OaiResponsesToChatBufferedStreamHandler(c *gin.Context, info *relaycommon.R
 	usage := chatResult.Usage
 	if usage == nil || usage.TotalTokens == 0 {
 		text := service.ExtractOutputTextFromResponses(finalResponse)
-		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = mergeEstimatedOpenAIUsage(usage, service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens()))
 		chatResp.Usage = *usage
 	}
 
@@ -313,7 +313,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 	usage := state.Usage()
 	if usage == nil || usage.TotalTokens == 0 {
-		usage = service.ResponseText2Usage(c, state.UsageText(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = mergeEstimatedOpenAIUsage(usage, service.ResponseText2Usage(c, state.UsageText(), info.UpstreamModelName, info.GetEstimatePromptTokens()))
 		state.SetUsage(usage)
 	}
 

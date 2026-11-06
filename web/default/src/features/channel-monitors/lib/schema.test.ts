@@ -22,9 +22,6 @@ import { describe, test } from 'node:test'
 import { channelMonitorFormSchema } from './schema'
 
 const validMonitor = {
-  name: 'Status monitor',
-  api_url: 'https://example.com/v1',
-  api_key: 'sk-test',
   test_model: 'gpt-test',
   interval_seconds: 60,
   timeout_seconds: 15,

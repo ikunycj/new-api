@@ -22,7 +22,7 @@ import {
   getBillingSectionContent,
   getBillingSectionMeta,
 } from './section-registry.tsx'
-import { defaultBillingSettings } from './billing-defaults'
+import { defaultBillingSettings } from './settings-defaults'
 
 export function BillingSettings() {
   return (

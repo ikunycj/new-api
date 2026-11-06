@@ -16,15 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Shield, User, Users } from 'lucide-react'
+import { Shield, User as UserIcon, Users } from 'lucide-react'
 
-import type { User as UserRecord } from './types'
+import type { User } from './types'
 
 // ============================================================================
 // User Utilities
 // ============================================================================
 
-export const isUserDeleted = (user: UserRecord): boolean => {
+export const isUserDeleted = (user: User): boolean => {
   return user.DeletedAt != null
 }
 
@@ -76,7 +76,7 @@ export const USER_ROLES = {
   [USER_ROLE.USER]: {
     labelKey: 'User',
     value: USER_ROLE.USER,
-    icon: User,
+    icon: UserIcon,
   },
   [USER_ROLE.ADMIN]: {
     labelKey: 'Admin',
@@ -91,7 +91,7 @@ export const USER_ROLES = {
 } as const
 
 export const getUserRoleOptions = (t: (key: string) => string) => [
-  { label: t('User'), value: String(USER_ROLE.USER), icon: User },
+  { label: t('User'), value: String(USER_ROLE.USER), icon: UserIcon },
   { label: t('Admin'), value: String(USER_ROLE.ADMIN), icon: Users },
   { label: t('Root'), value: String(USER_ROLE.ROOT), icon: Shield },
 ]
@@ -101,21 +101,6 @@ export const getUserRoleOptions = (t: (key: string) => string) => [
 // ============================================================================
 
 export const DEFAULT_GROUP = 'default' as const
-
-// Account groups are separate from pricing/routing groups. Pricing packages
-// must never be offered in the user editor.
-export const ACCOUNT_GROUPS = ['default', 'vip'] as const
-
-export function normalizeAccountGroup(
-  group?: string
-): (typeof ACCOUNT_GROUPS)[number] {
-  const normalized = group?.trim().toLowerCase()
-  return normalized === 'vip' ||
-    normalized === 'tob' ||
-    normalized === 'enterprise'
-    ? 'vip'
-    : 'default'
-}
 
 // ============================================================================
 // Third-party Binding Fields

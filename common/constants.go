@@ -5,7 +5,6 @@ import (
 	//"os"
 	//"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -78,14 +77,6 @@ var EmailLoginAuthServerList = []string{
 var DebugEnabled bool
 var MemoryCacheEnabled bool
 
-// MonitoringEnabled controls optional metrics and monitoring integrations.
-// Channel probes and routing logic intentionally do not depend on this flag.
-var MonitoringEnabled = true
-
-// ObservabilityEventLogEnabled controls structured monitoring events written
-// to the application log. Regular application and Nginx logs are unaffected.
-var ObservabilityEventLogEnabled = true
-
 var LogConsumeEnabled = true
 
 var TLSInsecureSkipVerify bool
@@ -100,6 +91,18 @@ var SMTPForceAuthLogin = false
 var SMTPAccount = ""
 var SMTPFrom = ""
 var SMTPToken = ""
+
+const (
+	DefaultSMTPVerificationSubject  = "{{system_name}}邮箱验证邮件"
+	DefaultSMTPVerificationContent  = "<p>您好，你正在进行{{system_name}}邮箱验证。</p><p>您的验证码为: <strong>{{code}}</strong></p><p>验证码 {{valid_minutes}} 分钟内有效，如果不是本人操作，请忽略。</p>"
+	DefaultSMTPPasswordResetSubject = "{{system_name}}密码重置"
+	DefaultSMTPPasswordResetContent = "<p>您好，你正在进行{{system_name}}密码重置。</p><p>点击 <a href='{{reset_link}}'>此处</a> 进行密码重置。</p><p>如果链接无法点击，请尝试点击下面的链接或将其复制到浏览器中打开：<br> {{reset_link}} </p><p>重置链接 {{valid_minutes}} 分钟内有效，如果不是本人操作，请忽略。</p>"
+)
+
+var SMTPVerificationSubject = DefaultSMTPVerificationSubject
+var SMTPVerificationContent = DefaultSMTPVerificationContent
+var SMTPPasswordResetSubject = DefaultSMTPPasswordResetSubject
+var SMTPPasswordResetContent = DefaultSMTPPasswordResetContent
 
 var GitHubClientId = ""
 var GitHubClientSecret = ""
@@ -118,41 +121,10 @@ var TelegramBotToken = ""
 var TelegramBotName = ""
 
 var QuotaForNewUser = 0
-var QuotaForInviter = 0
-var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
-var AutomaticEnableChannelEnabled = false
-
-const ChannelCircuitEnabledOptionKey = "ChannelCircuitEnabled"
-
-// ChannelCircuitEnabled is persisted in options and defaults to disabled.
-var channelCircuitEnabled atomic.Bool
-var channelCircuitConfigVersion atomic.Uint64
-
-func SetChannelCircuitEnabled(enabled bool) {
-	if channelCircuitEnabled.Swap(enabled) == enabled {
-		return
-	}
-	channelCircuitConfigVersion.Add(1)
-}
-
-func NotifyChannelCircuitConfigChanged() {
-	channelCircuitConfigVersion.Add(1)
-}
-
-func IsChannelCircuitEnabled() bool {
-	return channelCircuitEnabled.Load()
-}
-
-func ChannelCircuitConfigVersion() uint64 {
-	return channelCircuitConfigVersion.Load()
-}
-
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
-
-var RetryTimes = 0
 
 //var RootUserEmail = ""
 
@@ -183,9 +155,7 @@ var BatchUpdateInterval int
 
 var RelayTimeout int // unit is second
 
-var RelayIdleConnTimeout int     // unit is second
-var StreamClientWriteTimeout int // unit is second
-var ShutdownTimeoutSeconds int   // unit is second
+var RelayIdleConnTimeout int // unit is second
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
@@ -197,7 +167,6 @@ var CohereSafetySetting string
 const (
 	RequestIdKey         = "X-Oneapi-Request-Id"
 	UpstreamRequestIdKey = "X-Upstream-Request-Id"
-	ClientTraceIdKey     = "client_trace_id"
 )
 
 const (

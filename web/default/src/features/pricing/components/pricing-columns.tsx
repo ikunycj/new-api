@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -29,6 +30,11 @@ import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
+import {
+  formatBillingPriceUnit,
+  formatTierLabel,
+  formatTierTimeCondition,
+} from '../lib/billing-expr'
 import {
   getDynamicPricingSummary,
   getOfficialDynamicPricingSummary,
@@ -45,6 +51,12 @@ import {
 import type { PricingDisplayModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { PriceValueComparison } from './price-value-comparison'
+
+const PRIMARY_DYNAMIC_PRICE_FIELDS = new Set([
+  'inputPrice',
+  'outputPrice',
+  'fixedPrice',
+])
 
 // ----------------------------------------------------------------------------
 // Pricing Table Columns
@@ -141,8 +153,47 @@ export function usePricingColumns(
             )
           }
 
-          const primaryEntries = dynamicSummary.primaryEntries.slice(0, 2)
-          if (primaryEntries.length === 0) {
+          const officialDynamicSummary = getOfficialDynamicPricingSummary(
+            model,
+            tokenUnit,
+            usdExchangeRate,
+            showRechargePrice
+          )
+          const tierLines = dynamicSummary.tierEntries
+            .map(({ tier, entries }, tierIndex) => {
+              const primaryEntries = entries
+                .filter((entry) =>
+                  PRIMARY_DYNAMIC_PRICE_FIELDS.has(entry.field)
+                )
+                .slice(0, 2)
+              const officialEntries =
+                officialDynamicSummary?.tierEntries[tierIndex]?.entries.filter(
+                  (entry) => PRIMARY_DYNAMIC_PRICE_FIELDS.has(entry.field)
+                ) ?? []
+              return {
+                tier,
+                primaryEntries,
+                condition:
+                  formatTierTimeCondition(tier, t) ??
+                  tier.conditionExpression ??
+                  tier.conditions
+                    .map(
+                      (condition) =>
+                        `${condition.var} ${condition.op} ${condition.value}`
+                    )
+                    .join(' && '),
+                current: primaryEntries
+                  .map((entry) => stripTrailingZeros(entry.formatted))
+                  .join(' / '),
+                official: officialEntries
+                  .slice(0, 2)
+                  .map((entry) => stripTrailingZeros(entry.formatted))
+                  .join(' / '),
+              }
+            })
+            .filter((line) => line.primaryEntries.length > 0)
+
+          if (tierLines.length === 0) {
             return (
               <span className='text-muted-foreground text-xs'>
                 {t('Dynamic Pricing')}
@@ -150,28 +201,48 @@ export function usePricingColumns(
             )
           }
 
-          const currentValue = primaryEntries
-            .map((entry) => stripTrailingZeros(entry.formatted))
-            .join(' / ')
-          const officialDynamicSummary = getOfficialDynamicPricingSummary(
-            model,
-            tokenUnit,
-            usdExchangeRate,
-            showRechargePrice
-          )
-          const officialEntries = new Map(
-            (officialDynamicSummary?.primaryEntries ?? []).map((entry) => [
-              entry.key,
-              stripTrailingZeros(entry.formatted),
-            ])
-          )
-          const officialValues = primaryEntries
-            .map((entry) => officialEntries.get(entry.key))
-            .filter((value): value is string => Boolean(value))
-          const officialValue =
-            officialValues.length === primaryEntries.length
-              ? officialValues.join(' / ')
-              : undefined
+          let currentValue: ReactNode
+          if (tierLines.length > 1) {
+            currentValue = (
+              <div className='space-y-1'>
+                {tierLines.map((line) => (
+                  <div key={line.tier.label}>
+                    <span className='text-muted-foreground text-[10px]'>
+                      {formatTierLabel(line.tier.label, t)}:{' '}
+                    </span>
+                    {line.current}
+                    {line.condition ? (
+                      <code className='text-muted-foreground/60 block text-[9px] leading-tight break-all'>
+                        {line.condition}
+                      </code>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )
+          } else {
+            currentValue = tierLines[0].current
+          }
+          let officialValue: ReactNode | undefined
+          if (tierLines.every((line) => line.official)) {
+            if (tierLines.length > 1) {
+              officialValue = (
+                <div className='space-y-1'>
+                  {tierLines.map((line) => (
+                    <div key={line.tier.label}>
+                      <span className='text-muted-foreground text-[10px]'>
+                        {formatTierLabel(line.tier.label, t)}:{' '}
+                      </span>
+                      {line.official}
+                    </div>
+                  ))}
+                </div>
+              )
+            } else {
+              officialValue = tierLines[0].official
+            }
+          }
+          const firstEntry = tierLines[0].primaryEntries[0]
 
           return (
             <PriceValueComparison
@@ -179,7 +250,13 @@ export function usePricingColumns(
               official={officialValue}
               unit={
                 <>
-                  / {tokenUnitLabel} tokens
+                  /{' '}
+                  {formatBillingPriceUnit(
+                    firstEntry.billingUnit,
+                    firstEntry.imageCount,
+                    t,
+                    tokenUnit
+                  )}
                   {dynamicSummary.tierCount > 1 &&
                     ` · ${t('{{count}} tiers', {
                       count: dynamicSummary.tierCount,
@@ -294,31 +371,93 @@ export function usePricingColumns(
             )
           }
 
-          const cacheEntry = dynamicSummary.entries.find(
-            (entry) => entry.field === 'cacheReadPrice'
-          )
-          if (!cacheEntry) {
+          const cacheLines = dynamicSummary.tierEntries
+            .map(({ tier, entries }, tierIndex) => ({
+              tier,
+              tierIndex,
+              condition:
+                formatTierTimeCondition(tier, t) ??
+                tier.conditionExpression ??
+                tier.conditions
+                  .map(
+                    (condition) =>
+                      `${condition.var} ${condition.op} ${condition.value}`
+                  )
+                  .join(' && '),
+              entry: entries.find((entry) => entry.field === 'cacheReadPrice'),
+            }))
+            .filter(
+              (
+                line
+              ): line is typeof line & {
+                entry: NonNullable<typeof line.entry>
+              } => line.entry != null
+            )
+          if (cacheLines.length === 0) {
             return <span className='text-muted-foreground/30 text-xs'>—</span>
           }
 
-          const cachedPrice = stripTrailingZeros(cacheEntry.formatted)
           const officialDynamicSummary = getOfficialDynamicPricingSummary(
             model,
             tokenUnit,
             usdExchangeRate,
             showRechargePrice
           )
-          const officialCacheEntry = officialDynamicSummary?.entries.find(
-            (entry) => entry.field === 'cacheReadPrice'
-          )
-          const officialCachedPrice = officialCacheEntry
-            ? stripTrailingZeros(officialCacheEntry.formatted)
-            : undefined
+          const resolvedCacheLines = cacheLines.map((line) => ({
+            ...line,
+            official: stripTrailingZeros(
+              officialDynamicSummary?.tierEntries[line.tierIndex]?.entries.find(
+                (entry) => entry.field === 'cacheReadPrice'
+              )?.formatted ?? ''
+            ),
+            current: stripTrailingZeros(line.entry.formatted),
+          }))
+          let currentCachePrice: ReactNode
+          if (resolvedCacheLines.length > 1) {
+            currentCachePrice = (
+              <div className='space-y-1'>
+                {resolvedCacheLines.map((line) => (
+                  <div key={line.tier.label}>
+                    <span className='text-muted-foreground text-[10px]'>
+                      {formatTierLabel(line.tier.label, t)}:{' '}
+                    </span>
+                    {line.current}
+                    {line.condition ? (
+                      <code className='text-muted-foreground/60 block text-[9px] break-all'>
+                        {line.condition}
+                      </code>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )
+          } else {
+            currentCachePrice = resolvedCacheLines[0].current
+          }
+          let officialCachePrice: ReactNode | undefined
+          if (resolvedCacheLines.every((line) => line.official)) {
+            if (resolvedCacheLines.length > 1) {
+              officialCachePrice = (
+                <div className='space-y-1'>
+                  {resolvedCacheLines.map((line) => (
+                    <div key={line.tier.label}>
+                      <span className='text-muted-foreground text-[10px]'>
+                        {formatTierLabel(line.tier.label, t)}:{' '}
+                      </span>
+                      {line.official}
+                    </div>
+                  ))}
+                </div>
+              )
+            } else {
+              officialCachePrice = resolvedCacheLines[0].official
+            }
+          }
 
           return (
             <PriceValueComparison
-              current={cachedPrice}
-              official={officialCachedPrice}
+              current={currentCachePrice}
+              official={officialCachePrice}
               unit={`/ ${tokenUnitLabel}`}
             />
           )
@@ -443,20 +582,16 @@ export function usePricingColumns(
     {
       accessorKey: 'display_group',
       header: t('Groups'),
-      cell: ({ row }) => {
-        if (!row.original.display_group) {
-          return <span className='text-muted-foreground/30 text-xs'>—</span>
-        }
-        return (
-          <BadgeCell>
-            <GroupBadge
-              group={row.original.display_group}
-              ratio={row.original.display_group_ratio}
-              size='sm'
-            />
-          </BadgeCell>
-        )
-      },
+      cell: ({ row }) => (
+        <BadgeCell>
+          <GroupBadge
+            group={row.original.display_group}
+            label={row.original.display_group_label}
+            ratio={row.original.display_group_ratio}
+            size='sm'
+          />
+        </BadgeCell>
+      ),
       size: 130,
       enableSorting: false,
     },

@@ -23,17 +23,14 @@ import { toast } from 'sonner'
 import { updateSystemOption } from '../api'
 import type { UpdateOptionRequest } from '../types'
 
-type UpdateOptionMutationRequest = UpdateOptionRequest & {
-  /** Allow callers that save several options to refresh the query once. */
-  refreshSystemOptions?: boolean
-  showSuccessToast?: boolean
-}
-
 // Configuration keys that require status refresh
 const STATUS_RELATED_KEYS = new Set([
   'HeaderNavModules',
   'SidebarModulesAdmin',
   'Notice',
+  'console_setting.announcements',
+  'console_setting.announcements_enabled',
+  'CustomerService',
   'LogConsumeEnabled',
   'QuotaPerUnit',
   'USDExchangeRate',
@@ -50,15 +47,14 @@ export function useUpdateOption() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({
-      refreshSystemOptions: _refreshSystemOptions,
-      showSuccessToast: _showSuccessToast,
-      ...request
-    }: UpdateOptionMutationRequest) => updateSystemOption(request),
+    mutationFn: (request: UpdateOptionRequest) => updateSystemOption(request),
     onSuccess: (data, variables) => {
       if (data.success) {
-        if (variables.refreshSystemOptions !== false) {
-          queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        // Always refresh system-options
+        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+
+        if (variables.key === 'Notice') {
+          queryClient.invalidateQueries({ queryKey: ['notice'] })
         }
 
         // If updating frontend-display-related config, also refresh status
@@ -71,9 +67,7 @@ export function useUpdateOption() {
           }
         }
 
-        if (variables.showSuccessToast !== false) {
-          toast.success(i18next.t('Setting updated successfully'))
-        }
+        toast.success(i18next.t('Setting updated successfully'))
       } else {
         toast.error(data.message || i18next.t('Failed to update setting'))
       }

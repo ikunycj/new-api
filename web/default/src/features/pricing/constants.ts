@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import { PREFERRED_MODEL_ORDER } from '../../lib/model-preferences'
-
 import type { TokenUnit } from './types'
 
 // ----------------------------------------------------------------------------
@@ -54,31 +53,11 @@ export function getSortLabels(t: TFunction): Record<SortOption, string> {
   }
 }
 
-/** Filter values */
-export const FILTER_ALL = 'all'
-
-/** Model type options */
-export const MODEL_TYPES = {
-  ALL: 'all',
-  TEXT: 'text',
-  AUDIO: 'audio',
-  IMAGE: 'image',
-  VIDEO: 'video',
-} as const
-
-export type ModelTypeOption = (typeof MODEL_TYPES)[keyof typeof MODEL_TYPES]
-
-export function getModelTypeLabels(
-  t: TFunction
-): Record<ModelTypeOption, string> {
-  return {
-    [MODEL_TYPES.ALL]: t('All Model Types'),
-    [MODEL_TYPES.TEXT]: t('Text'),
-    [MODEL_TYPES.AUDIO]: t('Audio'),
-    [MODEL_TYPES.IMAGE]: t('Image'),
-    [MODEL_TYPES.VIDEO]: t('Video'),
-  }
-}
+/**
+ * Empty filter values represent "all" so a configured pricing group named
+ * "all" remains a real catalog entry instead of colliding with UI state.
+ */
+export const FILTER_ALL = ''
 
 /** Quota type options */
 export const QUOTA_TYPES = {
@@ -188,5 +167,8 @@ export const VIEW_MODES = {
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
 
-/** Default page size for pricing table */
-export const DEFAULT_PRICING_PAGE_SIZE = 20
+/** Number of model cards revealed in each infinite-scroll batch. */
+export const PRICING_CARD_BATCH_SIZE = 18
+
+/** Default page size for the pricing table view. */
+export const DEFAULT_PRICING_PAGE_SIZE = 18

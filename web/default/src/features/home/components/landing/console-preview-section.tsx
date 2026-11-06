@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity01Icon, Chart01Icon } from '@hugeicons/core-free-icons'
+import {
+  Activity01Icon,
+  Alert02Icon,
+  CheckmarkCircle02Icon,
+  Key01Icon,
+  RefreshIcon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 
@@ -30,41 +36,89 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
-import type { HomeCatalogModel } from '../../lib/catalog'
 import { SectionHeading } from './section-heading'
 
-interface ConsolePreviewSectionProps {
-  models: HomeCatalogModel[]
-}
-
-const USAGE_BARS = [32, 46, 38, 57, 68, 52, 74, 62, 84, 71, 92, 79].map(
-  (height, position) => ({ id: `usage-${position + 1}`, height })
-)
 const LOG_SAMPLES = [
-  { time: '10:42:18', tokens: '1,824', cost: '$0.012', duration: '412 ms' },
-  { time: '10:41:52', tokens: '2,306', cost: '$0.021', duration: '638 ms' },
-  { time: '10:40:09', tokens: '968', cost: '$0.004', duration: '295 ms' },
-  { time: '10:38:44', tokens: '1,476', cost: '$0.015', duration: '526 ms' },
+  {
+    time: '10:42:18',
+    model: 'gpt-6-astra',
+    group: 'ChatGPT Pro',
+    tokens: '1,824',
+    cost: '$0.012',
+    duration: '412 ms',
+  },
+  {
+    time: '10:41:52',
+    model: 'claude-sonnet-5',
+    group: 'Claude Economy',
+    tokens: '2,306',
+    cost: '$0.021',
+    duration: '638 ms',
+  },
+  {
+    time: '10:40:09',
+    model: 'deepseek-flash',
+    group: 'DeepSeek Standard',
+    tokens: '968',
+    cost: '$0.004',
+    duration: '295 ms',
+  },
+  {
+    time: '10:38:44',
+    model: 'gpt-image-2.5-sunburst',
+    group: 'ChatGPT Plus',
+    tokens: '1,476',
+    cost: '$0.015',
+    duration: '526 ms',
+  },
 ]
 
-export function ConsolePreviewSection(props: ConsolePreviewSectionProps) {
+const GROUP_STATUS_SAMPLES = [
+  {
+    name: 'ChatGPT Plus',
+    availability: '99.98%',
+    latency: '412 ms',
+    status: 'operational',
+  },
+  {
+    name: 'ChatGPT Pro',
+    availability: '99.99%',
+    latency: '318 ms',
+    status: 'operational',
+  },
+  {
+    name: 'Claude Economy',
+    availability: '92.40%',
+    latency: '--',
+    status: 'failed',
+  },
+  {
+    name: 'Claude Priority',
+    availability: '99.95%',
+    latency: '465 ms',
+    status: 'operational',
+  },
+] as const
+
+export function ConsolePreviewSection() {
   const { t } = useTranslation()
   const metrics = [
     { label: t("Today's usage"), value: '$24.68', hint: t('Usage') },
     { label: t('Requests'), value: '18,420', hint: t('Last 24 hours') },
     { label: t('Average TPM'), value: '3,280', hint: t('Tokens per minute') },
-    { label: t('Current Balance'), value: '$824.10', hint: t('Credit') },
+    { label: t('Available groups'), value: '3 / 4', hint: t('Operational') },
   ]
 
   return (
     <section className='px-4 py-20 sm:px-6 sm:py-24 lg:py-28'>
       <div className='mx-auto w-full max-w-6xl'>
         <SectionHeading
-          eyebrow={t('Usage and observability')}
-          title={t('Every request leaves a clear record.')}
+          eyebrow={t('Console and monitoring')}
+          title={t('Clear call records, visible group status')}
           description={t(
-            'Review usage, cost, and response timing by model, token, and time.'
+            'Review model, group, token, cost, and latency for every call, then check group availability from the same console.'
           )}
         />
 
@@ -93,48 +147,8 @@ export function ConsolePreviewSection(props: ConsolePreviewSectionProps) {
             ))}
           </div>
 
-          <div className='grid lg:grid-cols-[0.86fr_1.14fr]'>
-            <section className='border-border p-4 sm:p-5 lg:border-e'>
-              <header className='flex items-start justify-between gap-4'>
-                <div className='flex items-center gap-2'>
-                  <HugeiconsIcon
-                    icon={Chart01Icon}
-                    className='text-muted-foreground size-4'
-                  />
-                  <div>
-                    <h3 className='text-sm font-semibold'>
-                      {t('Usage trend')}
-                    </h3>
-                    <p className='text-muted-foreground mt-0.5 text-xs'>
-                      {t('By hour')}
-                    </p>
-                  </div>
-                </div>
-                <Badge variant='secondary'>
-                  <span className='bg-success size-1.5 rounded-full' />
-                  {t('Healthy')}
-                </Badge>
-              </header>
-
-              <div className='bg-muted/70 mt-5 flex h-48 items-end gap-2 border-b px-3 pt-4'>
-                {USAGE_BARS.map((bar) => (
-                  <span
-                    key={bar.id}
-                    className='bg-primary block w-full rounded-t-sm opacity-70'
-                    style={{ height: `${bar.height}%` }}
-                  />
-                ))}
-              </div>
-              <div className='text-muted-foreground mt-2 flex justify-between font-mono text-[10px]'>
-                <span>00:00</span>
-                <span>06:00</span>
-                <span>12:00</span>
-                <span>18:00</span>
-                <span>{t('Now')}</span>
-              </div>
-            </section>
-
-            <section className='border-border border-t p-4 sm:p-5 lg:border-t-0'>
+          <div className='grid lg:grid-cols-[1.18fr_0.82fr]'>
+            <section className='border-border min-w-0 p-4 sm:p-5 lg:border-e'>
               <header className='flex items-start justify-between gap-4'>
                 <div className='flex items-center gap-2'>
                   <HugeiconsIcon
@@ -146,7 +160,7 @@ export function ConsolePreviewSection(props: ConsolePreviewSectionProps) {
                       {t('Recent calls')}
                     </h3>
                     <p className='text-muted-foreground mt-0.5 text-xs'>
-                      {t('Token redacted')}
+                      {t('Model, group, tokens, cost and latency')}
                     </p>
                   </div>
                 </div>
@@ -159,29 +173,34 @@ export function ConsolePreviewSection(props: ConsolePreviewSectionProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('Time / model')}</TableHead>
-                    <TableHead>{t('Tokens')}</TableHead>
+                    <TableHead>{t('Group')}</TableHead>
                     <TableHead className='hidden sm:table-cell'>
-                      {t('Cost')}
+                      {t('Tokens / cost')}
                     </TableHead>
                     <TableHead>{t('Duration')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {LOG_SAMPLES.map((sample, index) => (
+                  {LOG_SAMPLES.map((sample) => (
                     <TableRow key={sample.time}>
                       <TableCell>
                         <span className='block font-mono text-xs font-semibold'>
                           {sample.time}
                         </span>
-                        <span className='text-muted-foreground block max-w-36 truncate font-mono text-[11px]'>
-                          {props.models[index]?.model_name || 'YOUR_MODEL'}
+                        <span className='text-muted-foreground block max-w-44 truncate font-mono text-[11px]'>
+                          {sample.model}
                         </span>
                       </TableCell>
-                      <TableCell className='font-mono text-xs'>
-                        {sample.tokens}
+                      <TableCell>
+                        <Badge variant='outline' className='max-w-32 truncate'>
+                          {sample.group}
+                        </Badge>
                       </TableCell>
                       <TableCell className='hidden font-mono text-xs sm:table-cell'>
-                        {sample.cost}
+                        <span className='block'>{sample.tokens}</span>
+                        <span className='text-muted-foreground mt-0.5 block'>
+                          {sample.cost}
+                        </span>
                       </TableCell>
                       <TableCell className='font-mono text-xs'>
                         {sample.duration}
@@ -190,6 +209,97 @@ export function ConsolePreviewSection(props: ConsolePreviewSectionProps) {
                   ))}
                 </TableBody>
               </Table>
+            </section>
+
+            <section className='border-border border-t p-4 sm:p-5 lg:border-t-0'>
+              <header className='flex items-start justify-between gap-4'>
+                <div className='flex items-center gap-2'>
+                  <HugeiconsIcon
+                    icon={RefreshIcon}
+                    className='text-muted-foreground size-4'
+                  />
+                  <div>
+                    <h3 className='text-sm font-semibold'>
+                      {t('Group status query')}
+                    </h3>
+                    <p className='text-muted-foreground mt-0.5 text-xs leading-5'>
+                      {t(
+                        'Check available groups, latency, and recent test results for an API key.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  variant='secondary'
+                  className='bg-success/10 text-success'
+                >
+                  3 / 4 {t('Operational')}
+                </Badge>
+              </header>
+
+              <div className='border-border bg-background mt-4 flex items-center gap-2 rounded-lg border p-2'>
+                <HugeiconsIcon
+                  icon={Key01Icon}
+                  className='text-muted-foreground ml-1 size-4 shrink-0'
+                  aria-hidden='true'
+                />
+                <code className='text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs'>
+                  sk-all-models-••••••
+                </code>
+                <span className='bg-primary text-primary-foreground shrink-0 rounded-md px-3 py-1.5 text-xs font-medium'>
+                  {t('Check status')}
+                </span>
+              </div>
+
+              <div className='mt-3 space-y-2'>
+                {GROUP_STATUS_SAMPLES.map((group) => {
+                  const operational = group.status === 'operational'
+                  return (
+                    <div
+                      key={group.name}
+                      className='border-border bg-card flex items-center gap-3 rounded-lg border px-3 py-3'
+                    >
+                      <span
+                        className={cn(
+                          'flex size-8 shrink-0 items-center justify-center rounded-md',
+                          operational
+                            ? 'bg-success/10 text-success'
+                            : 'bg-destructive/10 text-destructive'
+                        )}
+                      >
+                        <HugeiconsIcon
+                          icon={
+                            operational ? CheckmarkCircle02Icon : Alert02Icon
+                          }
+                          className='size-4'
+                          aria-hidden='true'
+                        />
+                      </span>
+                      <span className='min-w-0 flex-1'>
+                        <span className='block truncate text-sm font-medium'>
+                          {group.name}
+                        </span>
+                        <span className='text-muted-foreground mt-1 flex flex-wrap gap-x-3 text-[11px]'>
+                          <span>
+                            {t('Availability')} {group.availability}
+                          </span>
+                          <span>
+                            {t('Request latency')} {group.latency}
+                          </span>
+                        </span>
+                      </span>
+                      <Badge
+                        variant={operational ? 'secondary' : 'destructive'}
+                        className={cn(
+                          operational && 'bg-success/10 text-success'
+                        )}
+                      >
+                        {operational ? t('Operational') : t('Failed')}
+                      </Badge>
+                    </div>
+                  )
+                })}
+              </div>
             </section>
           </div>
         </Card>

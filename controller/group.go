@@ -7,27 +7,31 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
 
+const defaultUserGroup = model.DefaultUserGroup
+
 func managedUserGroups() []string {
-	// Account groups are deliberately independent from pricing and routing
-	// groups. Keep this contract stable so a pricing package can never appear
-	// in the user editor or be accepted by the account API.
-	return []string{"default", "vip"}
+	groups, err := model.ListUserGroupNames()
+	if err != nil || len(groups) == 0 {
+		return []string{defaultUserGroup}
+	}
+	return groups
 }
 
-func normalizeManagedUserGroup(group string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(group)) {
-	case "vip", "tob", "enterprise":
-		return "vip", true
-	case "default":
-		return "default", true
-	default:
-		return "", false
+func isManagedUserGroup(group string) bool {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return false
 	}
+	known, err := model.IsUserGroupName(group)
+	if err != nil {
+		return group == defaultUserGroup
+	}
+	return known
 }
 
 func GetGroups(c *gin.Context) {
@@ -41,10 +45,19 @@ func GetGroups(c *gin.Context) {
 func GetPricingGroups(c *gin.Context) {
 	groups, err := model.GetPricingGroupNames()
 	if err != nil {
-		common.ApiError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	common.ApiSuccess(c, groups)
+	displayNames := make(map[string]string, len(groups))
+	for _, group := range groups {
+		displayNames[group] = ratio_setting.GetPricingGroupDisplayNameOrName(group)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       "",
+		"data":          groups,
+		"display_names": displayNames,
+	})
 }
 
 func GetManagedUserGroups(c *gin.Context) {
@@ -59,6 +72,7 @@ func GetManagedUserGroups(c *gin.Context) {
 type userGroupRequest struct {
 	Name string `json:"name"`
 }
+
 type updateUserGroupRequest struct {
 	Name             *string   `json:"name"`
 	TopupRatio       *float64  `json:"topup_ratio"`
@@ -68,7 +82,7 @@ type updateUserGroupRequest struct {
 
 func CreateManagedUserGroup(c *gin.Context) {
 	var req userGroupRequest
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiErrorMsg(c, "用户分组名称不能为空")
 		return
 	}
@@ -91,20 +105,22 @@ func UpdateManagedUserGroup(c *gin.Context) {
 		common.ApiErrorMsg(c, "无效的用户分组配置")
 		return
 	}
-	name, err := model.UpdateUserGroupConfiguration(c.Param("name"), model.UserGroupUpdate{
-		Name: req.Name, TopupRatio: req.TopupRatio,
-		PricingGroups: req.PricingGroups, PricingGroupsAll: req.PricingGroupsAll,
+	updatedName, err := model.UpdateUserGroupConfiguration(c.Param("name"), model.UserGroupUpdate{
+		Name:             req.Name,
+		TopupRatio:       req.TopupRatio,
+		PricingGroups:    req.PricingGroups,
+		PricingGroupsAll: req.PricingGroupsAll,
 	})
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	summary, err := model.GetUserGroupSummary(name)
+	group, err := model.GetUserGroupSummary(updatedName)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, summary)
+	common.ApiSuccess(c, group)
 }
 
 func DeleteManagedUserGroup(c *gin.Context) {
@@ -119,34 +135,19 @@ func GetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]interface{})
 	userGroup := ""
 	userId := c.GetInt("id")
-	userGroup, _ = model.GetUserGroup(userId, false)
-	isToBUser := false
-	if user, err := model.GetUserById(userId, false); err == nil {
-		isToBUser = user.IsToB()
-	}
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	pricingGroups, err := model.GetPricingGroupNames()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	for _, groupName := range pricingGroups {
-		if isToBUser && !model.IsBillingGroupToB(groupName) {
-			continue
-		}
-		// UserUsableGroups contains the groups that the user can use
-		if desc, ok := userUsableGroups[groupName]; ok {
+	// Group permissions can be changed outside the application (for example
+	// during an operational SSH repair). Read the persisted value here so the
+	// API-key selector does not keep serving a stale Redis group.
+	userGroup, _ = model.GetUserGroup(userId, true)
+	pricingGroups := service.GetUserGroupPricingGroups(userGroup)
+	for order, groupName := range ratio_setting.GetPricingGroupOrder() {
+		if _, ok := pricingGroups[groupName]; ok {
+			remark := ratio_setting.GetPricingGroupRemark(groupName)
 			usableGroups[groupName] = map[string]interface{}{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
-				"desc":  desc,
-			}
-		}
-	}
-	if !isToBUser {
-		if _, ok := userUsableGroups["auto"]; ok {
-			usableGroups["auto"] = map[string]interface{}{
-				"ratio": "自动",
-				"desc":  setting.GetUsableGroupDescription("auto"),
+				"ratio":  ratio_setting.GetGroupRatio(groupName),
+				"desc":   ratio_setting.GetPricingGroupDisplayNameOrName(groupName),
+				"remark": remark,
+				"order":  order,
 			}
 		}
 	}

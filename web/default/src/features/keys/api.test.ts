@@ -22,6 +22,7 @@ import { afterEach, describe, test } from 'node:test'
 import { api } from '@/lib/api'
 
 import {
+  buildApiKeyTestCurlCommand,
   fetchApiKeyModels,
   getApiKeys,
   selectApiKeyTestModel,
@@ -93,6 +94,62 @@ describe('API key management', () => {
     assert.deepEqual(apiKey.group_candidates, [])
     assert.equal(apiKey.group, 'default')
     assert.equal(apiKey.cross_group_retry, false)
+    assert.equal(apiKey.daily_tokens, 0)
+    assert.equal(apiKey.total_tokens, 0)
+    assert.equal(apiKey.daily_quota, 0)
+    assert.equal(apiKey.total_quota, 0)
+    assert.equal(apiKey.current_concurrency, 0)
+    assert.equal(apiKey.concurrency_degraded, false)
+  })
+
+  test('preserves API key usage metrics from list responses', async () => {
+    api.get = (async () => ({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: 2,
+              name: 'Metered key',
+              key: 'sk-metered',
+              status: 1,
+              remain_quota: 100,
+              used_quota: 200,
+              daily_tokens: 34_670_000,
+              total_tokens: 2_110_000_000,
+              daily_quota: 3_000_000,
+              total_quota: 76_000_000,
+              current_concurrency: 2,
+              concurrency_degraded: false,
+              unlimited_quota: false,
+              expired_time: -1,
+              created_time: 1,
+              accessed_time: 1,
+              group: 'default',
+              group_candidates: ['default'],
+              cross_group_retry: false,
+              model_limits_enabled: false,
+              model_limits: '',
+              allow_ips: '',
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 10,
+        },
+      },
+    })) as typeof api.get
+
+    const result = await getApiKeys()
+    const apiKey = result.data?.items[0]
+
+    assert.ok(apiKey)
+    assert.equal(apiKey.daily_tokens, 34_670_000)
+    assert.equal(apiKey.total_tokens, 2_110_000_000)
+    assert.equal(apiKey.daily_quota, 3_000_000)
+    assert.equal(apiKey.total_quota, 76_000_000)
+    assert.equal(apiKey.current_concurrency, 2)
+    assert.equal(apiKey.concurrency_degraded, false)
   })
 })
 
@@ -256,6 +313,7 @@ describe('API key availability test', () => {
         verifyBody: (body) => {
           assert.equal(body.model, 'gpt-4o-mini')
           assert.equal(body.max_tokens, 16)
+          assert.equal(body.stream, false)
           assert.ok(Array.isArray(body.messages))
         },
       },
@@ -267,6 +325,7 @@ describe('API key availability test', () => {
         verifyBody: (body) => {
           assert.equal(body.model, 'gpt-5.1')
           assert.equal(body.max_output_tokens, 16)
+          assert.equal(body.stream, false)
           assert.ok(Array.isArray(body.input))
         },
       },
@@ -389,6 +448,86 @@ describe('API key availability test', () => {
       >
       testCase.verifyBody(body)
     }
+  })
+
+  test('builds a shell-safe streaming curl command for streamable endpoints', () => {
+    const openAiCommand = buildApiKeyTestCurlCommand(
+      'https://api.example.com/v1/',
+      'sk-test-key',
+      'gpt-4o-mini',
+      'openai'
+    )
+
+    assert.ok(openAiCommand)
+    assert.match(openAiCommand, /^curl -N \\\n/)
+    assert.match(
+      openAiCommand,
+      /https:\/\/api\.example\.com\/v1\/chat\/completions/
+    )
+    assert.match(openAiCommand, /"stream":true/)
+    assert.match(openAiCommand, /Authorization: Bearer sk-test-key/)
+
+    const responseCommand = buildApiKeyTestCurlCommand(
+      'https://api.example.com/v1',
+      "sk-o'neil",
+      'gpt-5.1',
+      'openai-response'
+    )
+    assert.ok(responseCommand)
+    assert.match(responseCommand, /https:\/\/api\.example\.com\/v1\/responses/)
+    assert.match(responseCommand, /"stream":true/)
+    assert.match(responseCommand, /sk-o'\\''neil/)
+
+    const anthropicCommand = buildApiKeyTestCurlCommand(
+      'https://api.example.com/v1',
+      'sk-anthropic',
+      'claude-sonnet-4-5',
+      'anthropic'
+    )
+    assert.ok(anthropicCommand)
+    assert.match(anthropicCommand, /x-api-key: sk-anthropic/)
+    assert.doesNotMatch(anthropicCommand, /Authorization:/)
+    assert.match(anthropicCommand, /anthropic-version: 2023-06-01/)
+    assert.match(anthropicCommand, /"stream":true/)
+
+    const geminiCommand = buildApiKeyTestCurlCommand(
+      'https://api.example.com/v1',
+      'sk-gemini',
+      'gemini-2.5-flash',
+      'gemini'
+    )
+    assert.ok(geminiCommand)
+    assert.match(
+      geminiCommand,
+      /v1beta\/models\/gemini-2\.5-flash:streamGenerateContent\?alt=sse/
+    )
+    assert.match(geminiCommand, /x-goog-api-key: sk-gemini/)
+    assert.doesNotMatch(geminiCommand, /"stream":true/)
+  })
+
+  test('does not offer streaming curl commands for non-streaming endpoints', () => {
+    assert.equal(
+      buildApiKeyTestCurlCommand(
+        'https://api.example.com/v1',
+        'sk-test-key',
+        'text-embedding-3-small',
+        'embeddings'
+      ),
+      null
+    )
+    assert.equal(
+      buildApiKeyTestCurlCommand('', 'sk-test-key', 'gpt-4o-mini', 'openai'),
+      null
+    )
+    assert.equal(
+      buildApiKeyTestCurlCommand(
+        'https://api.example.com/v1',
+        '   ',
+        'gpt-4o-mini',
+        'openai'
+      ),
+      null
+    )
   })
 
   test('returns response metadata and a compact text preview', async () => {

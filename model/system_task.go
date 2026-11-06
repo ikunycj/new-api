@@ -16,14 +16,14 @@ const (
 	SystemTaskStatusSucceeded SystemTaskStatus = "succeeded"
 	SystemTaskStatusFailed    SystemTaskStatus = "failed"
 
-	SystemTaskTypeLogCleanup         = "log_cleanup"
-	SystemTaskTypeChannelTest        = "channel_test"
-	SystemTaskTypeModelUpdate        = "model_update"
-	SystemTaskTypeMidjourneyPoll     = "midjourney_poll"
-	SystemTaskTypeAsyncTaskPoll      = "async_task_poll"
-	SystemTaskTypeAffiliateSettle    = "affiliate_settlement"
-	SystemTaskTypeCostReconciliation = "cost_reconciliation"
-	SystemTaskTypeGroupBench         = "group_bench"
+	SystemTaskTypeLogCleanup      = "log_cleanup"
+	SystemTaskTypeChannelTest     = "channel_test"
+	SystemTaskTypeChannelProbe    = "channel_probe"
+	SystemTaskTypeModelUpdate     = "model_update"
+	SystemTaskTypeMidjourneyPoll  = "midjourney_poll"
+	SystemTaskTypeAsyncTaskPoll   = "async_task_poll"
+	SystemTaskTypeAffiliateSettle = "affiliate_settlement"
+	SystemTaskTypeLogRollup       = "log_rollup"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")
@@ -186,7 +186,8 @@ func ListSystemTasks(limit int) ([]*SystemTask, error) {
 		limit = 100
 	}
 	var tasks []*SystemTask
-	err := DB.Order("id desc").Limit(limit).Find(&tasks).Error
+	// Continuous jobs must remain visible even after newer tasks finish.
+	err := DB.Order("CASE WHEN status IN ('pending', 'running') THEN 0 ELSE 1 END").Order("id desc").Limit(limit).Find(&tasks).Error
 	return tasks, err
 }
 

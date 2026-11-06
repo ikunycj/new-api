@@ -143,7 +143,7 @@ func VideoProxy(c *gin.Context) {
 	}
 	if validateErr != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Video URL blocked for task %s: %v", taskID, validateErr))
-		videoProxyError(c, http.StatusForbidden, "server_error", fmt.Sprintf("request blocked: %v", validateErr))
+		videoProxyError(c, http.StatusForbidden, "server_error", "request blocked")
 		return
 	}
 
@@ -170,8 +170,10 @@ func VideoProxy(c *gin.Context) {
 	}
 
 	for key, values := range resp.Header {
-		for _, value := range values {
-			c.Writer.Header().Add(key, value)
+		if service.ShouldCopyUpstreamHeader(c, key, values) {
+			for _, value := range values {
+				c.Writer.Header().Add(key, value)
+			}
 		}
 	}
 

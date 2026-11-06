@@ -10,7 +10,7 @@ import (
 
 // Version the hash namespace so newly added Token fields cannot be read as
 // zero values from hashes written by an older binary.
-const tokenCacheKeyPrefix = "token:v2:"
+const tokenCacheKeyPrefix = "token:v3:"
 
 func cacheSetToken(token Token) error {
 	key := common.GenerateHMAC(token.Key)

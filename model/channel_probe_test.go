@@ -1,0 +1,263 @@
+package model
+
+import (
+	"testing"
+	"time"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+)
+
+type legacyChannelProbeMigrationChannel struct {
+	ID                               int `gorm:"column:id;primaryKey"`
+	ProbeIntervalSeconds             int `gorm:"column:probe_interval_seconds"`
+	AutoDisabledProbeIntervalSeconds int `gorm:"column:auto_disabled_probe_interval_seconds"`
+}
+
+func (legacyChannelProbeMigrationChannel) TableName() string { return "channels" }
+
+type legacyChannelProbeMigrationState struct {
+	ChannelID   int   `gorm:"column:channel_id;primaryKey"`
+	NextProbeAt int64 `gorm:"column:next_probe_at"`
+	LeaseUntil  int64 `gorm:"column:lease_until"`
+}
+
+func (legacyChannelProbeMigrationState) TableName() string { return "channel_probe_states" }
+
+func setupChannelProbeTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, testDB.AutoMigrate(&ChannelProbeState{}, &ChannelProbeHistory{}))
+
+	previousDB := DB
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	DB = testDB
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	initCol()
+	t.Cleanup(func() {
+		DB = previousDB
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		initCol()
+	})
+	return testDB
+}
+
+func TestMigrateChannelProbePeriodConvertsSecondsAndDropsObsoleteColumns(t *testing.T) {
+	testDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, testDB.AutoMigrate(&legacyChannelProbeMigrationChannel{}, &legacyChannelProbeMigrationState{}))
+	require.NoError(t, testDB.Create(&[]legacyChannelProbeMigrationChannel{
+		{ID: 1, ProbeIntervalSeconds: 0, AutoDisabledProbeIntervalSeconds: 10},
+		{ID: 2, ProbeIntervalSeconds: 60, AutoDisabledProbeIntervalSeconds: 10},
+		{ID: 3, ProbeIntervalSeconds: 61, AutoDisabledProbeIntervalSeconds: 30},
+	}).Error)
+	require.NoError(t, testDB.Create(&legacyChannelProbeMigrationState{ChannelID: 1, NextProbeAt: 123, LeaseUntil: 456}).Error)
+
+	previousDB := DB
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	DB = testDB
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	initCol()
+	t.Cleanup(func() {
+		DB = previousDB
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		initCol()
+	})
+
+	require.NoError(t, migrateChannelProbePeriod())
+	require.NoError(t, migrateChannelProbePeriod())
+	assert.False(t, DB.Migrator().HasColumn(&Channel{}, "probe_interval_seconds"))
+	assert.False(t, DB.Migrator().HasColumn(&Channel{}, "auto_disabled_probe_interval_seconds"))
+	assert.True(t, DB.Migrator().HasColumn(&Channel{}, "probe_period_minutes"))
+	assert.False(t, DB.Migrator().HasColumn(&ChannelProbeState{}, "next_probe_at"))
+
+	var periods []struct {
+		ID                 int
+		ProbePeriodMinutes int
+	}
+	require.NoError(t, DB.Table("channels").Order("id").Find(&periods).Error)
+	assert.Equal(t, []int{5, 1, 2}, []int{periods[0].ProbePeriodMinutes, periods[1].ProbePeriodMinutes, periods[2].ProbePeriodMinutes})
+}
+
+func TestClaimChannelProbeAllowsOnlyOneActiveLease(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+
+	claimed, err := ClaimChannelProbe(1001, 100, 300)
+	require.NoError(t, err)
+	assert.True(t, claimed)
+
+	claimed, err = ClaimChannelProbe(1001, 100, 300)
+	require.NoError(t, err)
+	assert.False(t, claimed)
+
+	var state ChannelProbeState
+	require.NoError(t, db.First(&state, "channel_id = ?", 1001).Error)
+	assert.Equal(t, int64(400), state.LeaseUntil)
+
+	claimed, err = ClaimChannelProbe(1001, 400, 300)
+	require.NoError(t, err)
+	assert.True(t, claimed)
+	assert.Equal(t, int64(700), readProbeLease(t, db, 1001))
+}
+
+func TestReleaseChannelProbeDoesNotClearAReplacementLease(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+
+	claimed, err := ClaimChannelProbe(1002, 100, 300)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	claimed, err = ClaimChannelProbe(1002, 401, 300)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	require.NoError(t, ReleaseChannelProbe(1002, 400))
+	assert.Equal(t, int64(701), readProbeLease(t, db, 1002))
+
+	require.NoError(t, ReleaseChannelProbe(1002, 701))
+	assert.Zero(t, readProbeLease(t, db, 1002))
+}
+
+func TestSaveChannelProbeResultWithLeaseRejectsStaleOwner(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+
+	claimed, err := ClaimChannelProbe(1003, 100, 300)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	claimed, err = ClaimChannelProbe(1003, 401, 300)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	err = SaveChannelProbeResultWithLease(1003, ChannelProbeHistory{
+		ChannelID: 1003,
+		Success:   false,
+		CheckedAt: 450,
+	}, 400)
+	require.Error(t, err)
+	assert.Equal(t, int64(701), readProbeLease(t, db, 1003))
+
+	var historyCount int64
+	require.NoError(t, db.Model(&ChannelProbeHistory{}).Where("channel_id = ?", 1003).Count(&historyCount).Error)
+	assert.Zero(t, historyCount, "a stale write must roll back its history row")
+
+	require.NoError(t, SaveChannelProbeResultWithLease(1003, ChannelProbeHistory{
+		ChannelID: 1003,
+		Success:   true,
+		LatencyMs: 42,
+		CheckedAt: 500,
+	}, 701))
+	assert.Zero(t, readProbeLease(t, db, 1003))
+
+	var stored ChannelProbeHistory
+	require.NoError(t, db.Where("channel_id = ?", 1003).First(&stored).Error)
+	assert.True(t, stored.Success)
+	assert.Equal(t, int64(42), stored.LatencyMs)
+	var state ChannelProbeState
+	require.NoError(t, db.First(&state, "channel_id = ?", 1003).Error)
+	assert.Equal(t, int64(500), state.LastProbeAt)
+}
+
+func TestSaveChannelProbeResultUsesAuthoritativeChannelIDAndCleansGlobalHistory(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+	require.NoError(t, db.Create(&ChannelProbeState{ChannelID: 1006}).Error)
+	require.NoError(t, db.Create(&ChannelProbeHistory{ChannelID: 2000, CheckedAt: 1}).Error)
+
+	require.NoError(t, SaveChannelProbeResult(1006, ChannelProbeHistory{
+		ChannelID: 9999,
+		Success:   true,
+		CheckedAt: int64(channelProbeHistoryRetention/time.Second) + 10,
+	}))
+
+	var stored []ChannelProbeHistory
+	require.NoError(t, db.Order("id ASC").Find(&stored).Error)
+	require.Len(t, stored, 1)
+	assert.Equal(t, 1006, stored[0].ChannelID)
+}
+
+func TestGetLastChannelProbeTimesReturnsLatestStateByChannel(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+	require.NoError(t, db.Create(&[]ChannelProbeState{
+		{ChannelID: 1010, LastProbeAt: 200},
+		{ChannelID: 1011, LastProbeAt: 0},
+	}).Error)
+
+	times, err := GetLastChannelProbeTimes([]int{1010, 1011, 1012})
+	require.NoError(t, err)
+	assert.Equal(t, map[int]int64{1010: 200}, times)
+}
+
+func TestChannelProbeSettingsKeepPeriodAndRetryDefaultsSeparate(t *testing.T) {
+	retries := 0
+	channel := &Channel{
+		ProbePeriodMinutes: 3,
+		UpstreamMaxRetries: &retries,
+	}
+	assert.Equal(t, 3, channel.GetProbePeriodMinutes())
+	assert.Zero(t, channel.GetUpstreamMaxRetries())
+
+	channel.ProbePeriodMinutes = 0
+	channel.UpstreamMaxRetries = nil
+	assert.Equal(t, 5, channel.GetProbePeriodMinutes())
+	assert.Zero(t, channel.GetUpstreamMaxRetries())
+	assert.Equal(t, 1000, channel.GetMaxConcurrency())
+	maxConcurrency := 7
+	channel.MaxConcurrency = &maxConcurrency
+	assert.Equal(t, maxConcurrency, channel.GetMaxConcurrency())
+	maxConcurrency = 0
+	assert.Equal(t, 1000, channel.GetMaxConcurrency())
+
+	falseValue := false
+	trueValue := true
+	assert.False(t, channel.ShouldAutoProbe())
+	channel.AutoProbeEnabled = &trueValue
+	assert.True(t, channel.ShouldAutoProbe())
+	channel.AutoProbeEnabled = &falseValue
+	assert.False(t, channel.ShouldAutoProbe())
+}
+
+func TestHasEnabledKeyTreatsMissingMultiKeyStatusAsEnabled(t *testing.T) {
+	channel := &Channel{
+		Key: "first\nsecond",
+		ChannelInfo: ChannelInfo{
+			IsMultiKey:         true,
+			MultiKeyStatusList: map[int]int{1: common.ChannelStatusAutoDisabled},
+		},
+	}
+
+	assert.True(t, channel.HasEnabledKey())
+
+	channel.ChannelInfo.MultiKeyStatusList[0] = common.ChannelStatusAutoDisabled
+	assert.False(t, channel.HasEnabledKey())
+}
+
+func TestPreviousNaturalDaySuccessRateUsesPreviousLocalDayAndDefaultsTo100(t *testing.T) {
+	db := setupChannelProbeTestDB(t)
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.Local)
+	start, end := PreviousNaturalDayBounds(now)
+
+	require.NoError(t, db.Create(&[]ChannelProbeHistory{
+		{ChannelID: 1004, Success: true, CheckedAt: start + 1},
+		{ChannelID: 1004, Success: false, CheckedAt: end - 1},
+		{ChannelID: 1004, Success: true, CheckedAt: end},
+	}).Error)
+
+	rate, err := GetPreviousDayChannelProbeSuccessRate(1004, now)
+	require.NoError(t, err)
+	assert.Equal(t, float64(50), rate)
+
+	rate, err = GetPreviousDayChannelProbeSuccessRate(1005, now)
+	require.NoError(t, err)
+	assert.Equal(t, float64(100), rate)
+}
+
+func readProbeLease(t *testing.T, db *gorm.DB, channelID int) int64 {
+	t.Helper()
+	var state ChannelProbeState
+	require.NoError(t, db.First(&state, "channel_id = ?", channelID).Error)
+	return state.LeaseUntil
+}

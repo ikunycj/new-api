@@ -16,9 +16,6 @@ import (
 
 const maxUserGroupNameLength = 64
 
-// DefaultUserGroup is the stable account-group name used by legacy users.
-const DefaultUserGroup = "default"
-
 // UserGroup is the administrator-managed account-group catalog. It is
 // intentionally separate from pricing and routing groups.
 type UserGroup struct {

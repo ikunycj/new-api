@@ -6,7 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -39,12 +39,6 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 		return apiErr
 	}
 	relayInfo.Billing = session
-	// Make the selected plan available to error-log recording, which only receives
-	// the request context after an upstream attempt fails.
-	if relayInfo.SubscriptionPlanId > 0 {
-		c.Set("subscription_plan_id", relayInfo.SubscriptionPlanId)
-		c.Set("subscription_plan_title", relayInfo.SubscriptionPlanTitle)
-	}
 	return nil
 }
 

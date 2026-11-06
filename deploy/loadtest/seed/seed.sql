@@ -63,7 +63,7 @@ DELETE FROM channels WHERE name LIKE 'Load Test Channel %';
 INSERT INTO channels (
   type, "key", status, name, weight, created_time, response_time,
   base_url, balance, balance_updated_time, models, "group", used_quota,
-  other, other_info, channel_info, settings, setting, header_override, priority
+  other, other_info, channel_info, settings, setting, header_override
 )
 SELECT
   1,
@@ -83,17 +83,15 @@ SELECT
   '',
   '{}',
   '',
-  '{"error_source":"channel","mock_load_test":true}',
-  '{"X-Alltoken-Mock-Channels":"{client_header:X-Alltoken-Mock-Channels}","X-Alltoken-Mock-Failure-Rate":"{client_header:X-Alltoken-Mock-Failure-Rate}","X-Alltoken-Mock-Failure-Status":"{client_header:X-Alltoken-Mock-Failure-Status}","X-Alltoken-Mock-Latency-Ms":"{client_header:X-Alltoken-Mock-Latency-Ms}"}',
-  seed.priority
+  '{"error_source":"channel"}',
+  ''
 FROM (VALUES
-  ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080', 600),
-  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080', 500),
-  ('sk-local-mock-c', 'Load Test Channel C', 'http://mock-upstream-c:8080', 400)
-) AS seed(api_key, name, base_url, priority);
+  ('sk-local-mock-a', 'Load Test Channel A', 'http://mock-upstream:8080'),
+  ('sk-local-mock-b', 'Load Test Channel B', 'http://mock-upstream-b:8080')
+) AS seed(api_key, name, base_url);
 
-INSERT INTO abilities ("group", model, channel_id, enabled, priority, weight)
-SELECT 'default', models.model, channels.id, true, channels.priority, 100
+INSERT INTO abilities ("group", model, channel_id, enabled, weight)
+SELECT 'default', models.model, channels.id, true, 100
 FROM channels
 JOIN (VALUES
   ('gpt-3.5-turbo'),
@@ -107,70 +105,35 @@ JOIN (VALUES
 WHERE name LIKE 'Load Test Channel %'
 ON CONFLICT ("group", model, channel_id) DO UPDATE SET
   enabled = EXCLUDED.enabled,
-  priority = EXCLUDED.priority,
   weight = EXCLUDED.weight;
 
 INSERT INTO billing_group_routes (
-  billing_group, name, mode, enabled, max_total_attempts, total_timeout_ms,
-  circuit_failure_threshold, circuit_window_seconds, circuit_cooldown_seconds,
-  circuit_half_open_requests, created_time, updated_time
+  billing_group, name, enabled,
+  created_time, updated_time
 )
 VALUES (
-  'default', 'Default load-test route', 'balanced', true, 4, 10000,
-  3, 30, 30, 1, extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
+  'default', 'Default load-test route', true,
+  extract(epoch FROM now())::bigint, extract(epoch FROM now())::bigint
 )
 ON CONFLICT (billing_group) DO UPDATE SET
   name = EXCLUDED.name,
-  mode = EXCLUDED.mode,
   enabled = EXCLUDED.enabled,
-  max_total_attempts = EXCLUDED.max_total_attempts,
-  total_timeout_ms = EXCLUDED.total_timeout_ms,
   updated_time = EXCLUDED.updated_time;
 
 DELETE FROM billing_group_channels
 WHERE billing_group_route_id = (SELECT id FROM billing_group_routes WHERE billing_group = 'default');
 
 INSERT INTO billing_group_channels (
-  billing_group_route_id, channel_id, priority, weight, max_attempts, enabled, cost_factor
+  billing_group_route_id, channel_id, priority, weight, enabled
 )
 SELECT
   (SELECT id FROM billing_group_routes WHERE billing_group = 'default'),
   id,
-  CASE name
-    WHEN 'Load Test Channel A' THEN 100
-    WHEN 'Load Test Channel B' THEN 90
-    ELSE 80
-  END,
+  CASE name WHEN 'Load Test Channel A' THEN 100 ELSE 90 END,
   100,
-  1,
-  true,
-  CASE name
-    WHEN 'Load Test Channel A' THEN 0.2
-    WHEN 'Load Test Channel B' THEN 1.0
-    ELSE 1.2
-  END
+  true
 FROM channels
-WHERE name IN ('Load Test Channel A', 'Load Test Channel B', 'Load Test Channel C');
-
-INSERT INTO channel_error_mappings (
-  channel_id, channel_type, raw_code, status_code, alltoken_code,
-  category, failure_scope, action, retryable, enabled
-)
-VALUES
-  (0, 0, 'channel_exhausted', 503, 205001, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_capacity_exceeded', 429, 205003, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 429, 205002, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 500, 205002, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 502, 205002, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 503, 205002, 'upstream', 'channel', 'switch_channel', true, true),
-  (0, 0, 'mock_error', 504, 205002, 'upstream', 'channel', 'switch_channel', true, true)
-ON CONFLICT (channel_id, channel_type, raw_code, status_code) DO UPDATE SET
-  alltoken_code = EXCLUDED.alltoken_code,
-  category = EXCLUDED.category,
-  failure_scope = EXCLUDED.failure_scope,
-  action = EXCLUDED.action,
-  retryable = EXCLUDED.retryable,
-  enabled = EXCLUDED.enabled;
+WHERE name IN ('Load Test Channel A', 'Load Test Channel B');
 
 COMMIT;
 

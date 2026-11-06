@@ -239,7 +239,9 @@ export function categorizeModelsWithRedirect(
   ])
 
   const redirectOnlySet = new Set(
-    [...normalizedRedirectModels].filter((m) => !normalizedCurrentModels.has(m))
+    [...normalizedRedirectModels].filter(
+      (m) => !normalizedCurrentModels.has(m)
+    )
   )
 
   return {

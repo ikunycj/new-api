@@ -35,8 +35,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '@/features/pricing/lib/billing-expr'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import { formatTimestampToDate } from '@/lib/format'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
@@ -49,7 +54,7 @@ import {
   isViolationFeeLog,
   renderAuditContent,
 } from '../../lib/format'
-import { formatUsageLogQuotaUSD, formatUsageLogUSD } from '../../lib/money'
+import { usePricingGroupLabels } from '../../lib/pricing-group-labels'
 import {
   isDisplayableLogType,
   isTimingLogType,
@@ -145,13 +150,7 @@ function buildTypeDetailSegments(
       })
     }
     segments.push({
-      text: `${t('Fee')}: ${formatUsageLogQuotaUSD(
-        other?.fee_quota ?? log.quota,
-        {
-          billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
-          quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
-        }
-      )}`,
+      text: `${t('Fee')}: ${formatLogQuota(other?.fee_quota ?? log.quota)}`,
       muted: true,
     })
     return segments
@@ -161,8 +160,16 @@ function buildTypeDetailSegments(
 
   const segments: DetailSegment[] = []
 
-  const formatPrice = (price: number) => `${formatUsageLogUSD(price)}/M`
-  const formatPriceCompact = (price: number) => formatUsageLogUSD(price)
+  const priceOpts = {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+    billingUSDToCNYRate: other.billing_usd_to_cny_rate,
+  }
+  const formatPrice = (price: number) =>
+    `${formatBillingCurrencyFromUSD(price, priceOpts)}/M`
+  const formatPriceCompact = (price: number) =>
+    formatBillingCurrencyFromUSD(price, priceOpts)
   const formatPriceList = (prices: string[], showUnit: boolean) => {
     const text = prices.join(' / ')
     return showUnit ? `${text}/M` : text
@@ -183,12 +190,18 @@ function buildTypeDetailSegments(
 
       const cacheEntries = tieredSummary.priceEntries
         .filter((entry) =>
-          ['cacheReadPrice', 'cacheCreatePrice', 'cacheCreate1hPrice'].includes(
-            entry.field
-          )
+          [
+            'cacheReadPrice',
+            'cacheCreatePrice',
+            'cacheCreate1hPrice',
+            'cacheCreate12hPrice',
+          ].includes(entry.field)
         )
         .map((entry) => {
-          return formatPriceCompact(entry.price)
+          const price = formatPriceCompact(entry.price)
+          return entry.key === 'cc12h'
+            ? `${formatBillingVarLabel(entry.variable, t)} ${price}`
+            : price
         })
       if (cacheEntries.length > 0) {
         segments.push({
@@ -206,9 +219,16 @@ function buildTypeDetailSegments(
               'cacheReadPrice',
               'cacheCreatePrice',
               'cacheCreate1hPrice',
+              'cacheCreate12hPrice',
             ].includes(entry.field)
         )
-        .map((entry) => `${t(entry.shortLabel)} ${formatPrice(entry.price)}`)
+        .map((entry) => {
+          const price =
+            entry.billingUnit === 'request'
+              ? `${formatPriceCompact(entry.price)}/${formatBillingPriceUnit(entry.billingUnit, entry.imageCount, t)}`
+              : formatPrice(entry.price)
+          return `${formatBillingVarLabel(entry.variable, t)} ${price}`
+        })
       if (otherEntries.length > 0) {
         segments.push({
           text: otherEntries.join(' · '),
@@ -226,7 +246,7 @@ function buildTypeDetailSegments(
     const isPerCall = isPerCallBilling(modelPrice)
     if (isPerCall && modelPrice != null) {
       segments.push({
-        text: `${t('Per-call')} · ${formatUsageLogUSD(modelPrice)}`,
+        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
@@ -251,6 +271,10 @@ function buildTypeDetailSegments(
           other.cache_creation_ratio_1h != null &&
           other.cache_creation_ratio_1h !== 0
             ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
+            : null,
+          other.cache_creation_ratio_12h != null &&
+          other.cache_creation_ratio_12h !== 0
+            ? `${t('Cache Write')} (cc12h) ${formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_12h)}`
             : null,
         ].filter(Boolean) as string[]
 
@@ -308,6 +332,7 @@ export function useCommonLogsColumns(
   isTeamView = false
 ): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
+  const groupLabels = usePricingGroupLabels(isAdmin)
   const columns: ColumnDef<UsageLog>[] = [
     {
       accessorKey: 'created_at',
@@ -506,58 +531,148 @@ export function useCommonLogsColumns(
 
   if (isAdmin || isTeamView) {
     columns.push({
-        id: 'user',
-        header: t('User'),
-        accessorFn: (row) => row.username,
-        cell: function UserCell({ row }) {
-          const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
-            useUsageLogsContext()
-          const log = row.original
+      id: 'user',
+      header: t('User'),
+      accessorFn: (row) => row.username,
+      cell: function UserCell({ row }) {
+        const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
+          useUsageLogsContext()
+        const log = row.original
 
-          if (!log.username) return null
+        if (!log.username) return null
 
-          return (
-            <button
-              type='button'
-              className='flex items-center gap-1.5 text-left'
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedUserId(log.user_id)
-                setUserInfoDialogOpen(true)
-              }}
-            >
-              <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
-                <AvatarFallback
-                  className={cn(
-                    'text-[11px] font-semibold',
-                    !sensitiveVisible && 'bg-muted text-muted-foreground'
-                  )}
-                  style={
-                    sensitiveVisible
-                      ? getUserAvatarStyle(log.username)
-                      : undefined
+        return (
+          <button
+            type='button'
+            className='flex items-center gap-1.5 text-left'
+            onClick={(e) => {
+              e.stopPropagation()
+              setSelectedUserId(log.user_id)
+              setUserInfoDialogOpen(true)
+            }}
+          >
+            <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
+              <AvatarFallback
+                className={cn(
+                  'text-[11px] font-semibold',
+                  !sensitiveVisible && 'bg-muted text-muted-foreground'
+                )}
+                style={
+                  sensitiveVisible ? getUserAvatarStyle(log.username) : undefined
+                }
+              >
+                {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
+              </AvatarFallback>
+            </Avatar>
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
                   }
                 >
-                  {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
-                </AvatarFallback>
-              </Avatar>
-              <TooltipProvider delay={300}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
-                    }
-                  >
-                    {sensitiveVisible ? log.username : '••••'}
-                  </TooltipTrigger>
-                  {sensitiveVisible && log.username.length > 12 && (
-                    <TooltipContent side='top'>{log.username}</TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
-            </button>
+                  {sensitiveVisible ? log.username : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && log.username.length > 12 && (
+                  <TooltipContent side='top'>{log.username}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          </button>
+        )
+      },
+    })
+  }
+
+  if (isAdmin) {
+    columns.push(
+      {
+        accessorKey: 'ip',
+        header: t('IP Address'),
+        cell: function IpCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const ip = row.original.ip
+
+          if (!ip) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[140px] truncate font-mono text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? ip : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && ip.length > 18 && (
+                  <TooltipContent className='font-mono'>{ip}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           )
         },
+        size: 140,
+      },
+      {
+        accessorKey: 'remark',
+        header: t('Remark'),
+        cell: function RemarkCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const remark = row.original.remark
+          if (!remark) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[140px] truncate text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? remark : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && remark.length > 16 && (
+                  <TooltipContent className='max-w-xs break-words'>
+                    {remark}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 150,
+      },
+      {
+        accessorKey: 'email',
+        header: t('Email'),
+        cell: function EmailCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const email = row.original.email
+          if (!email) {
+            return <span className='text-muted-foreground/40'>-</span>
+          }
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='block max-w-[180px] truncate text-xs' />
+                  }
+                >
+                  {sensitiveVisible ? email : '••••'}
+                </TooltipTrigger>
+                {sensitiveVisible && email.length > 20 && (
+                  <TooltipContent>{email}</TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 190,
       }
     )
   }
@@ -605,7 +720,9 @@ export function useCommonLogsColumns(
               {group ? (
                 <GroupBadge
                   group={group}
-                  label={sensitiveVisible ? undefined : '••••'}
+                  label={
+                    sensitiveVisible ? groupLabels[group] || group : '••••'
+                  }
                   type='text'
                   size='sm'
                   className='inline align-baseline text-xs leading-none [&>span]:leading-none'
@@ -667,7 +784,12 @@ export function useCommonLogsColumns(
           />
         )
       },
-      meta: { label: t('Stream') },
+      meta: {
+        label: t('Stream'),
+        sortAscendingLabel: t('Non-stream'),
+        sortDescendingLabel: t('Stream'),
+        sortDescendingFirst: true,
+      },
     },
     {
       accessorKey: 'prompt_tokens',
@@ -744,11 +866,7 @@ export function useCommonLogsColumns(
                 />
                 <TooltipContent>
                   <span>
-                    {t('Deducted by subscription')}:{' '}
-                    {formatUsageLogQuotaUSD(quota, {
-                      billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
-                      quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
-                    })}
+                    {t('Deducted by subscription')}: {formatLogQuota(quota)}
                   </span>
                 </TooltipContent>
               </Tooltip>
@@ -756,10 +874,7 @@ export function useCommonLogsColumns(
           )
         }
 
-        const quotaStr = formatUsageLogQuotaUSD(quota, {
-          billingUSDToCNYRate: other?.billing_usd_to_cny_rate,
-          quotaPerUnit: other?.cost_reconciliation?.quota_per_unit,
-        })
+        const quotaStr = formatLogQuota(quota)
         const quotaDisplay = splitQuotaDisplay(quotaStr)
 
         return (
@@ -851,6 +966,7 @@ export function useCommonLogsColumns(
             <DetailsDialog
               log={log}
               isAdmin={isAdmin}
+              groupLabels={groupLabels}
               open={dialogOpen}
               onOpenChange={setDialogOpen}
             />

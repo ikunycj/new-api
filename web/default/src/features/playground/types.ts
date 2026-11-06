@@ -23,6 +23,14 @@ export type MessageStatus = 'loading' | 'streaming' | 'complete' | 'error'
 
 export type PlaygroundMessageLayoutMode = 'alternating' | 'left'
 
+export interface PlaygroundConversation {
+  id: string
+  title: string
+  updatedAt: number
+  messages: Message[]
+  summary: string
+}
+
 export interface MessageVersion {
   id: string
   content: string
@@ -150,6 +158,8 @@ export interface PlaygroundConfig {
   frequency_penalty: number
   presence_penalty: number
   seed: number | null
+  conversationContext: boolean
+  contextWindowTokens: number
   stream: boolean
   imageSize: string
   imageQuality: string

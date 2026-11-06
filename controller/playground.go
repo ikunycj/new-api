@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,9 +26,7 @@ func playgroundRelay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	defer func() {
 		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
+			writeRelayError(c, relayFormat, nil, newAPIError, c.GetString(common.RequestIdKey))
 		}
 	}()
 
@@ -58,7 +57,9 @@ func playgroundRelay(c *gin.Context, relayFormat types.RelayFormat) {
 		Name:   fmt.Sprintf("playground-%s", relayInfo.UsingGroup),
 		Group:  relayInfo.UsingGroup,
 	}
-	_ = middleware.SetupContextForToken(c, tempToken)
+	if err := middleware.SetupContextForToken(c, tempToken); err != nil {
+		return
+	}
 
 	Relay(c, relayFormat)
 }

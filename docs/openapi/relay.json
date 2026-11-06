@@ -4506,9 +4506,6 @@
           "groups": {
             "type": "string"
           },
-          "priority": {
-            "type": "integer"
-          },
           "weight": {
             "type": "integer"
           },

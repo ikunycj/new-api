@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -9,8 +10,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -265,6 +271,72 @@ func withSMTPSettings(t *testing.T) {
 		SMTPToken = originalSMTPToken
 		SystemName = originalSystemName
 	})
+}
+
+func TestBuildEmailMessageUsesMultipartAlternative(t *testing.T) {
+	withSMTPSettings(t)
+
+	SMTPFrom = "Sender <sender@example.com>"
+	SystemName = "测试系统"
+	content := `<p>您的验证码为: <strong>123456</strong></p><p>点击 <a href="https://example.com/reset">此处</a> 重置密码。</p>`
+
+	message, recipients, err := buildEmailMessage(
+		"Alice <alice@example.com>;bob@example.com",
+		"验证码",
+		content,
+	)
+	require.NoError(t, err)
+	require.Equal(t, []string{"alice@example.com", "bob@example.com"}, recipients)
+
+	parsedMessage, err := mail.ReadMessage(bytes.NewReader(message))
+	require.NoError(t, err)
+	require.Equal(t, "1.0", parsedMessage.Header.Get("MIME-Version"))
+
+	from, err := mail.ParseAddress(parsedMessage.Header.Get("From"))
+	require.NoError(t, err)
+	require.Equal(t, "测试系统", from.Name)
+	require.Equal(t, "sender@example.com", from.Address)
+
+	subject, err := new(mime.WordDecoder).DecodeHeader(parsedMessage.Header.Get("Subject"))
+	require.NoError(t, err)
+	require.Equal(t, "验证码", subject)
+
+	mediaType, params, err := mime.ParseMediaType(parsedMessage.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.Equal(t, "multipart/alternative", mediaType)
+
+	parts := multipart.NewReader(parsedMessage.Body, params["boundary"])
+	plainPart, err := parts.NextRawPart()
+	require.NoError(t, err)
+	plainMediaType, _, err := mime.ParseMediaType(plainPart.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.Equal(t, "text/plain", plainMediaType)
+	require.Equal(t, "quoted-printable", plainPart.Header.Get("Content-Transfer-Encoding"))
+	plainBody, err := io.ReadAll(quotedprintable.NewReader(plainPart))
+	require.NoError(t, err)
+	require.Contains(t, string(plainBody), "123456")
+	require.Contains(t, string(plainBody), "https://example.com/reset")
+
+	htmlPart, err := parts.NextRawPart()
+	require.NoError(t, err)
+	htmlMediaType, _, err := mime.ParseMediaType(htmlPart.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.Equal(t, "text/html", htmlMediaType)
+	require.Equal(t, "quoted-printable", htmlPart.Header.Get("Content-Transfer-Encoding"))
+	htmlBody, err := io.ReadAll(quotedprintable.NewReader(htmlPart))
+	require.NoError(t, err)
+	require.Equal(t, content, string(htmlBody))
+
+	_, err = parts.NextRawPart()
+	require.ErrorIs(t, err, io.EOF)
+}
+
+func TestBuildEmailMessageRejectsInvalidRecipient(t *testing.T) {
+	withSMTPSettings(t)
+	SMTPFrom = "sender@example.com"
+
+	_, _, err := buildEmailMessage("receiver@example.com;invalid recipient", "Verification", "<p>123456</p>")
+	require.EqualError(t, err, "invalid SMTP recipient")
 }
 
 func TestSendEmailUsesExplicitStartTLSWithInsecureCertificate(t *testing.T) {

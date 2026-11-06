@@ -16,64 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { PlanRecord } from '@/features/subscriptions/types'
-import { api } from '@/lib/api'
+import { api } from '@/lib/api';
 
 import type {
   FlowQuotaDataItem,
   QuotaDataItem,
-  RealtimeDimensions,
-  RealtimeKeyBreakdowns,
-  RealtimeSnapshot,
-  RealtimeUsersResponse,
-  TokenUsageItem,
   UptimeGroupResult,
-  UsageStatsResult,
-} from './types'
-
-export interface PackageComparisonStat {
-  plan_id: number
-  plan_title: string
-  plan_price: number
-  currency: string
-  plan_quota: number
-  requests: number
-  success_requests: number
-  error_requests: number
-  success_rate: number
-  prompt_tokens: number
-  completion_tokens: number
-  total_tokens: number
-  quota: number
-  average_latency_ms: number
-  channel_hit_rate: number
-}
-
-export async function getAdminPlans(): Promise<{
-  success: boolean
-  data?: PlanRecord[]
-}> {
-  const res = await api.get<{ success: boolean; data?: PlanRecord[] }>(
-    '/api/subscription/admin/plans'
-  )
-  return res.data
-}
-
-export async function getPackageComparison(params: {
-  plan_ids: number[]
-  start_timestamp: number
-  end_timestamp: number
-  model_name?: string
-  group?: string
-}) {
-  const res = await api.get<{
-    success: boolean
-    data?: { plans: PackageComparisonStat[] }
-  }>('/api/admin/analytics/package-comparison', {
-    params: { ...params, plan_ids: params.plan_ids.join(',') },
-  })
-  return res.data
-}
+} from './types';
 
 // ============================================================================
 // Dashboard APIs
@@ -87,187 +36,49 @@ export async function getPackageComparison(params: {
 // Admin users get all users' data by default.
 export async function getUserQuotaDates(
   params: {
-    start_timestamp: number
-    end_timestamp: number
-    default_time?: string
-    username?: string
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
+    username?: string;
   },
-  isAdmin = false
+  isAdmin = false,
 ) {
-  const endpoint = isAdmin ? '/api/data' : '/api/data/self'
+  const endpoint = isAdmin ? '/api/data' : '/api/data/self';
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     endpoint,
-    { params }
-  )
-  return res.data
+    { params, skipErrorHandler: true },
+  );
+  return res.data;
 }
 
-// Get quota data for the calling user's team (parent + all children).
-// Only available to parent accounts; children and admins are rejected by the backend.
-export async function getTeamQuotaDates(params: {
-  start_timestamp: number
-  end_timestamp: number
-  default_time?: string
-}) {
+export async function getTeamQuotaDates(
+  params: {
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
+  },
+) {
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     '/api/data/team',
-    { params }
-  )
-  return res.data
+    { params, skipErrorHandler: true },
+  );
+  return res.data;
 }
 
-// Get aggregate used_quota and request_count for the calling user's team.
-// Only callable by a parent account (parent_id = 0 with children).
-export async function getTeamSummaryStats() {
+export async function getUserQuotaSummary() {
   const res = await api.get<{
-    success: boolean
-    data?: { used_quota: number; request_count: number }
-  }>('/api/data/team/summary')
-  return res.data
+    success: boolean;
+    data?: { total_requests: number; total_tokens: number };
+  }>('/api/data/self/summary', { skipErrorHandler: true });
+  return res.data;
 }
 
-// Distinct key names / models that have consumption rows in the window. Used
-// by the consumption chart's inline quick filters.
-export async function getQuotaDataDimensions(
-  params?: { start_timestamp?: number; end_timestamp?: number },
-  isAdmin = false
-): Promise<{
-  success: boolean
-  data?: { keys: string[]; models: string[] }
-}> {
-  const endpoint = isAdmin
-    ? '/api/data/dimensions'
-    : '/api/data/self/dimensions'
+export async function getUserInFlight() {
   const res = await api.get<{
-    success: boolean
-    data?: { keys: string[]; models: string[] }
-    message?: string
-  }>(endpoint, { params })
-  return res.data
-}
-
-// ----------------------------------------------------------------------------
-// Realtime Throughput
-// ----------------------------------------------------------------------------
-
-// Get the calling user's own realtime throughput. The backend derives the user
-// from the session, so there is deliberately no user id parameter here.
-//
-// tokenId / model narrow the result to one key and/or model. They can only
-// narrow: the filter is applied inside the caller's own counters server-side,
-// so passing another account's key returns nothing rather than its traffic.
-export async function getSelfRealtimeMetrics(filter?: {
-  tokenId?: number
-  model?: string
-}) {
-  const params: Record<string, string | number> = {}
-  if (filter?.tokenId) params.token_id = filter.tokenId
-  if (filter?.model) params.model = filter.model
-
-  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
-    '/api/data/realtime/self',
-    { params }
-  )
-  return res.data
-}
-
-// List the keys and models the calling user currently has live traffic for.
-// Only active combinations are returned, since selecting an idle key could
-// only ever produce an empty chart.
-export async function getSelfRealtimeDimensions(windowSeconds = 3600) {
-  const res = await api.get<{ success: boolean; data: RealtimeDimensions }>(
-    '/api/data/realtime/self/dimensions',
-    { params: { window_seconds: windowSeconds } }
-  )
-  return res.data
-}
-
-// Split the calling user's realtime snapshot by key — the "which key is
-// burning quota right now" ranking. Only keys with traffic inside the
-// retention window appear.
-export async function getSelfRealtimeKeyBreakdown() {
-  const res = await api.get<{ success: boolean; data: RealtimeKeyBreakdowns }>(
-    '/api/data/realtime/self/keys'
-  )
-  return res.data
-}
-
-// Get the parent account's team aggregate realtime throughput
-// (parent + currently-bound children). Only callable by a parent account.
-export async function getTeamRealtimeMetrics() {
-  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
-    '/api/data/realtime/team'
-  )
-  return res.data
-}
-
-// Get the parent account's team per-key realtime breakdown.
-// Keys from the parent and all currently-bound children are merged.
-export async function getTeamRealtimeKeyBreakdown() {
-  const res = await api.get<{ success: boolean; data: RealtimeKeyBreakdowns }>(
-    '/api/data/realtime/team/keys'
-  )
-  return res.data
-}
-
-// Get the parent account's per-key historical spend for the team.
-// Children's rows are included only during binding periods.
-export async function getTeamTokenUsage(params: {
-  start_timestamp: number
-  end_timestamp: number
-  token_name?: string
-  model_name?: string
-  limit?: number
-}) {
-  const res = await api.get<{
-    success: boolean
-    data?: TokenUsageItem[]
-    message?: string
-  }>('/api/data/team/token-usage', { params })
-  return res.data
-}
-
-// Get the calling user's historical usage, including spend, over an arbitrary
-// range. This reads the hourly rollup rather than the in-memory rings, so it
-// can answer for a month but cannot resolve finer than an hour.
-export async function getSelfUsageStats(params: {
-  startTimestamp?: number
-  endTimestamp?: number
-  bucketSeconds?: number
-  tokenId?: number
-  model?: string
-}) {
-  const query: Record<string, string | number> = {}
-  if (params.startTimestamp) query.start_timestamp = params.startTimestamp
-  if (params.endTimestamp) query.end_timestamp = params.endTimestamp
-  if (params.bucketSeconds) query.bucket_seconds = params.bucketSeconds
-  if (params.tokenId) query.token_id = params.tokenId
-  if (params.model) query.model = params.model
-
-  const res = await api.get<{ success: boolean; data: UsageStatsResult }>(
-    '/api/data/usage/self',
-    { params: query }
-  )
-  return res.data
-}
-
-// Get per-user realtime throughput. Admin only — the route is AdminAuth gated
-// on the server, so a non-admin role would get 403 rather than other users'
-// numbers.
-export async function getRealtimeMetricsUsers(windowSeconds = 60) {
-  const res = await api.get<{ success: boolean; data: RealtimeUsersResponse }>(
-    '/api/data/realtime/users',
-    { params: { window_seconds: windowSeconds } }
-  )
-  return res.data
-}
-
-// Get one specific user's realtime throughput. Admin only.
-export async function getRealtimeMetricsByUser(userId: number) {
-  const res = await api.get<{ success: boolean; data: RealtimeSnapshot }>(
-    `/api/data/realtime/users/${userId}`
-  )
-  return res.data
+    success: boolean;
+    data?: { in_flight: number; degraded: boolean };
+  }>('/api/user/self/in-flight', { skipErrorHandler: true });
+  return res.data;
 }
 
 // ----------------------------------------------------------------------------
@@ -275,78 +86,61 @@ export async function getRealtimeMetricsByUser(userId: number) {
 // ----------------------------------------------------------------------------
 
 export async function getUserQuotaDataByUsers(params: {
-  start_timestamp: number
-  end_timestamp: number
+  start_timestamp: number;
+  end_timestamp: number;
 }) {
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     '/api/data/users',
-    { params }
-  )
-  return res.data
-}
-
-// Get flow distribution data for the parent account's team (parent + bound children).
-// Returns admin-style rows with user/group/model/channel breakdown.
-export async function getTeamFlowQuotaDates(params: {
-  start_timestamp: number
-  end_timestamp: number
-  default_time?: string
-}) {
-  const res = await api.get<{
-    success: boolean
-    data?: FlowQuotaDataItem[]
-    message?: string
-  }>('/api/data/team/flow', { params })
-  return res.data
+    { params },
+  );
+  return res.data;
 }
 
 export async function getFlowQuotaDates(
   params: {
-    start_timestamp: number
-    end_timestamp: number
-    default_time?: string
-    username?: string
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
+    username?: string;
   },
-  isAdmin = false
+  isAdmin = false,
 ) {
-  const endpoint = isAdmin ? '/api/data/flow' : '/api/data/flow/self'
+  const endpoint = isAdmin ? '/api/data/flow' : '/api/data/flow/self';
   const res = await api.get<{
-    success: boolean
-    data?: FlowQuotaDataItem[]
-    message?: string
-  }>(endpoint, { params })
-  return res.data
+    success: boolean;
+    data?: FlowQuotaDataItem[];
+    message?: string;
+  }>(endpoint, { params });
+  return res.data;
 }
 
-// Per-key spend ranking over a time range. The admin endpoint aggregates
-// across all users (username filter optional); the self variant is scoped to
-// the session account and capped at one month server-side.
-export async function getTokenUsage(
+export async function getTeamFlowQuotaDates(
   params: {
-    start_timestamp: number
-    end_timestamp: number
-    username?: string
-    token_name?: string
-    model_name?: string
-    limit?: number
+    start_timestamp: number;
+    end_timestamp: number;
+    default_time?: string;
   },
-  isAdmin = false
 ) {
-  const endpoint = isAdmin
-    ? '/api/data/token-usage'
-    : '/api/data/self/token-usage'
   const res = await api.get<{
-    success: boolean
-    data?: TokenUsageItem[]
-    message?: string
-  }>(endpoint, { params })
-  return res.data
+    success: boolean;
+    data?: FlowQuotaDataItem[];
+    message?: string;
+  }>('/api/data/team/flow', { params });
+  return res.data;
 }
 
 // Get uptime monitoring status for all services
 export async function getUptimeStatus() {
   const res = await api.get<{ success: boolean; data: UptimeGroupResult[] }>(
-    '/api/uptime/status'
-  )
-  return res.data
+    '/api/uptime/status',
+  );
+  return res.data;
+}
+
+export async function getTeamSummaryStats() {
+  const res = await api.get<{
+    success: boolean;
+    data?: { used_quota: number; request_count: number };
+  }>('/api/data/team/summary', { skipErrorHandler: true });
+  return res.data;
 }

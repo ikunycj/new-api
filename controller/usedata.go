@@ -32,9 +32,7 @@ func GetAllQuotaDates(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	username := c.Query("username")
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username, tokenName, modelName)
+	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -50,9 +48,7 @@ func GetAllQuotaDates(c *gin.Context) {
 func GetQuotaDatesByUser(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	dates, err := model.GetQuotaDataGroupByUser(startTimestamp, endTimestamp, tokenName, modelName)
+	dates, err := model.GetQuotaDataGroupByUser(startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -62,59 +58,6 @@ func GetQuotaDatesByUser(c *gin.Context) {
 		"message": "",
 		"data":    dates,
 	})
-}
-
-// GetAdminQuotaDataDimensions serves the dashboard quick-filter dropdowns: the
-// key names and models that have consumption. Reads the pre-aggregated
-// quota_data_dimensions table maintained by the quota flush loop, so response
-// time is independent of quota_data size. Time-range parameters are accepted
-// but ignored for compatibility with older frontends.
-func GetAdminQuotaDataDimensions(c *gin.Context) {
-	dims, err := model.GetQuotaDataDimensionsFast(0)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    dims,
-	})
-}
-
-func GetSelfQuotaDataDimensions(c *gin.Context) {
-	userId := c.GetInt("id")
-	dims, err := model.GetQuotaDataDimensionsFast(userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    dims,
-	})
-}
-
-func GetTeamQuotaDates(c *gin.Context) {
-	userIds, ok := getTeamUserIds(c)
-	if !ok {
-		return
-	}
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	if endTimestamp-startTimestamp > 2592000 {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "时间跨度不能超过 1 个月"})
-		return
-	}
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	dates, err := model.GetQuotaDataByUserIds(userIds, startTimestamp, endTimestamp, tokenName, modelName)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": dates})
 }
 
 func GetUserQuotaDates(c *gin.Context) {
@@ -129,9 +72,7 @@ func GetUserQuotaDates(c *gin.Context) {
 		})
 		return
 	}
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	dates, err := model.GetQuotaDataByUserId(userId, startTimestamp, endTimestamp, tokenName, modelName)
+	dates, err := model.GetQuotaDataByUserId(userId, startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -142,6 +83,15 @@ func GetUserQuotaDates(c *gin.Context) {
 		"data":    dates,
 	})
 	return
+}
+
+func GetUserQuotaSummary(c *gin.Context) {
+	summary, err := model.GetUserQuotaSummary(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, summary)
 }
 
 func GetAllFlowQuotaDates(c *gin.Context) {
@@ -189,115 +139,54 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 	return
 }
 
-// tokenUsageMaxSpanSeconds bounds how far back the per-key spend listing can
-// reach. The ranking is meant for dashboards (month-to-date, last N days); an
-// unbounded range would let one request scan the whole quota_data table.
-const tokenUsageMaxSpanSeconds = int64(366 * 86400)
-
-// parseTokenUsageRange validates the ranking's time window.
-func parseTokenUsageRange(c *gin.Context) (int64, int64, bool) {
+func GetTeamQuotaDates(c *gin.Context) {
+	userIds, ok := getTeamUserIds(c)
+	if !ok {
+		return
+	}
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	if startTimestamp <= 0 || endTimestamp <= 0 || endTimestamp < startTimestamp {
-		common.ApiErrorMsg(c, "invalid time range")
-		return 0, 0, false
-	}
-	if endTimestamp-startTimestamp > tokenUsageMaxSpanSeconds {
-		common.ApiErrorMsg(c, "time span too large")
-		return 0, 0, false
-	}
-	return startTimestamp, endTimestamp, true
-}
-
-// parseTokenUsageLimit reads the optional row cap, clamped to sane values.
-func parseTokenUsageLimit(c *gin.Context) int {
-	limit, _ := strconv.Atoi(c.Query("limit"))
-	if limit <= 0 || limit > 500 {
-		return 100
-	}
-	return limit
-}
-
-// GetAdminTokenUsage serves the dashboard's per-key spend ranking across all
-// users. username/token_name/model_name narrow it like every other /api/data
-// query; rows are ordered by spend and capped.
-func GetAdminTokenUsage(c *gin.Context) {
-	startTimestamp, endTimestamp, ok := parseTokenUsageRange(c)
-	if !ok {
-		return
-	}
-	rows, err := model.GetTokenUsageRanking(startTimestamp, endTimestamp, 0,
-		c.Query("username"), c.Query("token_name"), c.Query("model_name"),
-		parseTokenUsageLimit(c))
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    rows,
-	})
-}
-
-// GetSelfTokenUsage is the per-key spend ranking for the session account.
-// Like the other self data routes the user id comes from the session, never
-// from a parameter.
-func GetSelfTokenUsage(c *gin.Context) {
-	startTimestamp, endTimestamp, ok := parseTokenUsageRange(c)
-	if !ok {
-		return
-	}
-	if endTimestamp-startTimestamp > 2592000 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "时间跨度不能超过 1 个月",
-		})
-		return
-	}
-	rows, err := model.GetTokenUsageRanking(startTimestamp, endTimestamp, c.GetInt("id"),
-		"", c.Query("token_name"), c.Query("model_name"),
-		parseTokenUsageLimit(c))
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    rows,
-	})
-}
-
-// GetTeamTokenUsage is the per-key spend ranking for a parent account's team.
-// A child's rows are included only when their created_at falls inside an active
-// binding window, matching the same binding-period semantics as GetTeamSummaryStats.
-func GetTeamTokenUsage(c *gin.Context) {
-	_, ok := getTeamUserIds(c)
-	if !ok {
-		return
-	}
-	parentId := c.GetInt("id")
-	startTimestamp, endTimestamp, ok := parseTokenUsageRange(c)
-	if !ok {
-		return
-	}
 	if endTimestamp-startTimestamp > 2592000 {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "时间跨度不能超过 1 个月"})
 		return
 	}
-	rows, err := model.GetTeamTokenUsageRanking(parentId, startTimestamp, endTimestamp,
-		c.Query("token_name"), c.Query("model_name"), parseTokenUsageLimit(c))
+	tokenName := c.Query("token_name")
+	modelName := c.Query("model_name")
+	dates, err := model.GetQuotaDataByUserIds(userIds, startTimestamp, endTimestamp, tokenName, modelName)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": rows})
+	for _, date := range dates {
+		if date == nil {
+			continue
+		}
+		date.ChannelID = 0
+		date.ChannelName = ""
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": dates})
 }
 
-// GetTeamFlowQuotaDates serves the distribution (Sankey) view for a parent's team.
-// Returns admin-style rows (user_id, username, use_group, model_name, channel_id)
-// filtered to the team members that were active in the requested time window.
+func GetTeamSummaryStats(c *gin.Context) {
+	userIds, ok := getTeamUserIds(c)
+	if !ok {
+		return
+	}
+	usedQuota, requestCount, err := model.GetTeamUsageSummary(userIds)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"used_quota":    usedQuota,
+			"request_count": requestCount,
+		},
+	})
+}
+
 func GetTeamFlowQuotaDates(c *gin.Context) {
 	userIds, ok := getTeamUserIds(c)
 	if !ok {
@@ -317,27 +206,4 @@ func GetTeamFlowQuotaDates(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": dates})
-}
-
-// GetTeamSummaryStats returns the aggregate used_quota and request_count for
-// the caller's team (parent account + all children). Only callable by a parent
-// account (parent_id = 0, has children).
-func GetTeamSummaryStats(c *gin.Context) {
-	userIds, ok := getTeamUserIds(c)
-	if !ok {
-		return
-	}
-	usedQuota, requestCount, err := model.GetTeamUsageSummary(userIds)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data": gin.H{
-			"used_quota":    usedQuota,
-			"request_count": requestCount,
-		},
-	})
 }

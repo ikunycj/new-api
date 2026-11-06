@@ -4,8 +4,3 @@
 !README.md
 !loadtest/
 !loadtest/**
-!observability/
-!observability/**
-!rainyun-migration/
-!rainyun-migration/**
-observability/**/data/

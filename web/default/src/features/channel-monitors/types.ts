@@ -30,64 +30,28 @@ export type ChannelMonitorResult = {
 
 export type ChannelMonitor = {
   id: number
-  name: string
-  api_url: string
+  pricing_group: string
   test_model: string
   interval_seconds: number
   timeout_seconds: number
   enabled: boolean
   visible: boolean
-  has_api_key: boolean
   status: ChannelMonitorStatus
   latest_latency_ms: number | null
   latest_status_code: number | null
   latest_error?: string
   last_checked_at: number | null
   next_check_at: number | null
+  raw_availability_24h: number | null
   raw_availability_7d: number | null
   raw_availability_30d: number | null
+  availability_24h: number | null
   availability_7d: number | null
   availability_30d: number | null
   availability_boost_percent: number
   recent_results: ChannelMonitorResult[]
   created_at: number
   updated_at: number
-}
-
-export type GroupStatusMonitor = Pick<
-  ChannelMonitor,
-  | 'id'
-  | 'name'
-  | 'api_url'
-  | 'test_model'
-  | 'interval_seconds'
-  | 'status'
-  | 'latest_latency_ms'
-  | 'last_checked_at'
-  | 'next_check_at'
-  | 'availability_7d'
-  | 'availability_30d'
-  | 'recent_results'
-> & {
-  can_test: boolean
-  user_test_available_at: number | null
-}
-
-export type ChannelMonitorPayload = {
-  name: string
-  api_url: string
-  api_key: string
-  test_model: string
-  interval_seconds: number
-  timeout_seconds: number
-  enabled: boolean
-  visible: boolean
-  availability_boost_percent: number
-}
-
-export type ChannelMonitorRunResponse = {
-  result: ChannelMonitorResult
-  monitor: ChannelMonitor
 }
 
 export type PricingGroupUsagePeriod = {
@@ -111,6 +75,43 @@ export type PricingGroupMetrics = {
     connections: number
   }
   updated_at: number
+}
+
+export type GroupStatusMonitor = Pick<
+  ChannelMonitor,
+  | 'id'
+  | 'pricing_group'
+  | 'test_model'
+  | 'interval_seconds'
+  | 'status'
+  | 'latest_latency_ms'
+  | 'last_checked_at'
+  | 'next_check_at'
+  | 'availability_24h'
+  | 'availability_7d'
+  | 'availability_30d'
+  | 'recent_results'
+> & {
+  can_test: boolean
+  user_test_available_at: number | null
+}
+
+export type ChannelMonitorSettingsPayload = {
+  test_model: string
+  interval_seconds: number
+  timeout_seconds: number
+  enabled: boolean
+  visible: boolean
+  availability_boost_percent: number
+}
+
+export type ChannelMonitorCreatePayload = ChannelMonitorSettingsPayload & {
+  pricing_group: string
+}
+
+export type ChannelMonitorRunResponse = {
+  result: ChannelMonitorResult
+  monitor: ChannelMonitor
 }
 
 export type GroupStatusTestResult = {
