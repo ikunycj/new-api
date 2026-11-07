@@ -15,17 +15,9 @@ services:
     image: new-api:local
     container_name: new-api
     restart: always
-    env_file:
-      - ./config/timeouts.env
     command: --log-dir /app/logs
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "5"
     ports:
       - "${APP_PORT:-3000}:3000"
-      - "127.0.0.1:${METRICS_HOST_PORT:-8006}:${METRICS_PORT:-8006}"
     volumes:
       - ./data:/data
       - ./logs:/app/logs
@@ -43,24 +35,9 @@ services:
       SESSION_COOKIE_TRUSTED_URL: ${SESSION_COOKIE_TRUSTED_URL:-}
       TZ: ${TZ:-Asia/Shanghai}
       ERROR_LOG_ENABLED: ${ERROR_LOG_ENABLED:-true}
-      ACCESS_LOG_SUCCESS_SAMPLE_RATE: ${ACCESS_LOG_SUCCESS_SAMPLE_RATE:-1}
       BATCH_UPDATE_ENABLED: ${BATCH_UPDATE_ENABLED:-true}
       NODE_NAME: ${NODE_NAME:-new-api-node-1}
       NODE_TYPE: ${NODE_TYPE:-master}
-      # Set MONITORING_ENABLED=false to stop application metrics and the
-      # Prometheus/Alertmanager/Grafana integration. Nginx logs and channel
-      # probes are independent and remain enabled.
-      MONITORING_ENABLED: ${MONITORING_ENABLED:-true}
-      OBSERVABILITY_EVENT_LOG_ENABLED: ${OBSERVABILITY_EVENT_LOG_ENABLED:-true}
-      ENABLE_METRICS: ${ENABLE_METRICS:-true}
-      METRICS_PORT: ${METRICS_PORT:-8006}
-      METRICS_BIND_ADDRESS: ${METRICS_BIND_ADDRESS:-0.0.0.0}
-      FAILOVER_PROMETHEUS_URL: ${FAILOVER_PROMETHEUS_URL:-}
-      FAILOVER_ALERTMANAGER_URL: ${FAILOVER_ALERTMANAGER_URL:-}
-      FAILOVER_GRAFANA_PUBLIC_URL: ${FAILOVER_GRAFANA_PUBLIC_URL:-}
-      FAILOVER_MONITORING_USERNAME: ${FAILOVER_MONITORING_USERNAME:-}
-      FAILOVER_MONITORING_PASSWORD: ${FAILOVER_MONITORING_PASSWORD:-}
-      FAILOVER_MONITORING_BEARER_TOKEN: ${FAILOVER_MONITORING_BEARER_TOKEN:-}
     networks:
       - new-api-network
       - 1panel-network

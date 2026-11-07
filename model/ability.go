@@ -8,7 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -20,7 +20,6 @@ type Ability struct {
 	Model     string  `json:"model" gorm:"type:varchar(255);primaryKey;autoIncrement:false"`
 	ChannelId int     `json:"channel_id" gorm:"primaryKey;autoIncrement:false;index"`
 	Enabled   bool    `json:"enabled"`
-	Priority  *int64  `json:"priority" gorm:"bigint;default:0;index"`
 	Weight    uint    `json:"weight" gorm:"default:0;index"`
 	Tag       *string `json:"tag" gorm:"index"`
 }
@@ -60,51 +59,6 @@ func GetAllEnableAbilities() []Ability {
 	return abilities
 }
 
-func getPriority(group string, model string, retry int) (int, error) {
-
-	var priorities []int
-	err := DB.Model(&Ability{}).
-		Select("DISTINCT(priority)").
-		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).
-		Order("priority DESC").              // 按优先级降序排序
-		Pluck("priority", &priorities).Error // Pluck用于将查询的结果直接扫描到一个切片中
-
-	if err != nil {
-		// 处理错误
-		return 0, err
-	}
-
-	if len(priorities) == 0 {
-		// 如果没有查询到优先级，则返回错误
-		return 0, errors.New("数据库一致性被破坏")
-	}
-
-	// 确定要使用的优先级
-	var priorityToUse int
-	if retry >= len(priorities) {
-		// 如果重试次数大于优先级数，则使用最小的优先级
-		priorityToUse = priorities[len(priorities)-1]
-	} else {
-		priorityToUse = priorities[retry]
-	}
-	return priorityToUse, nil
-}
-
-func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
-	maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = (?)", group, model, true, maxPrioritySubQuery)
-	if retry != 0 {
-		priority, err := getPriority(group, model, retry)
-		if err != nil {
-			return nil, err
-		} else {
-			channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, model, true, priority)
-		}
-	}
-
-	return channelQuery, nil
-}
-
 func GetChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
 	return GetChannelExcluding(group, model, retry, requestPath, nil)
 }
@@ -112,21 +66,17 @@ func GetChannel(group string, model string, retry int, requestPath string) (*Cha
 // GetChannelExcluding is the database-backed counterpart to
 // GetRandomSatisfiedChannelExcluding. The exclusion set is request-local and
 // is never persisted or used to alter channel health.
-func GetChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
-	excludedChannels := excluded
+func GetChannelExcluding(group string, model string, _ int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
 	var abilities []Ability
-	// Priority is a legacy persistence field only. Runtime selection considers
-	// every enabled ability and uses Weight for distribution in all DB modes.
 	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	err := channelQuery.Order("weight DESC").Find(&abilities).Error
-	if err != nil {
+	if err := channelQuery.Order("weight DESC").Find(&abilities).Error; err != nil {
 		return nil, err
 	}
 	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
-	if len(excludedChannels) > 0 {
+	if len(excluded) > 0 {
 		filtered := make([]Ability, 0, len(abilities))
 		for _, ability := range abilities {
-			if _, ok := excludedChannels[ability.ChannelId]; ok {
+			if _, ok := excluded[ability.ChannelId]; ok {
 				continue
 			}
 			filtered = append(filtered, ability)
@@ -153,8 +103,10 @@ func GetChannelExcluding(group string, model string, retry int, requestPath stri
 	} else {
 		return nil, nil
 	}
-	err = DB.First(&channel, "id = ?", channel.Id).Error
-	return &channel, err
+	if err := DB.First(&channel, "id = ?", channel.Id).Error; err != nil {
+		return nil, err
+	}
+	return &channel, nil
 }
 
 // filterAbilitiesByRequestPathAndModel restricts candidates by request path and
@@ -206,10 +158,14 @@ func filterAbilitiesByRequestPathAndModel(abilities []Ability, requestPath strin
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 	models_ := strings.Split(channel.Models, ",")
-	groups_ := strings.Split(channel.Group, ",")
+	groups_ := channel.GetGroups()
 	abilitySet := make(map[string]struct{})
 	abilities := make([]Ability, 0, len(models_))
-	for _, model := range models_ {
+	for _, rawModel := range models_ {
+		model := strings.TrimSpace(rawModel)
+		if model == "" {
+			continue
+		}
 		for _, group := range groups_ {
 			key := group + "|" + model
 			if _, exists := abilitySet[key]; exists {
@@ -221,7 +177,6 @@ func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 				Model:     model,
 				ChannelId: channel.Id,
 				Enabled:   channel.Status == common.ChannelStatusEnabled,
-				Priority:  channel.Priority,
 				Weight:    uint(channel.GetWeight()),
 				Tag:       channel.Tag,
 			}
@@ -278,10 +233,14 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 
 	// Then add new abilities
 	models_ := strings.Split(channel.Models, ",")
-	groups_ := strings.Split(channel.Group, ",")
+	groups_ := channel.GetGroups()
 	abilitySet := make(map[string]struct{})
 	abilities := make([]Ability, 0, len(models_))
-	for _, model := range models_ {
+	for _, rawModel := range models_ {
+		model := strings.TrimSpace(rawModel)
+		if model == "" {
+			continue
+		}
 		for _, group := range groups_ {
 			key := group + "|" + model
 			if _, exists := abilitySet[key]; exists {
@@ -293,7 +252,6 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 				Model:     model,
 				ChannelId: channel.Id,
 				Enabled:   channel.Status == common.ChannelStatusEnabled,
-				Priority:  channel.Priority,
 				Weight:    uint(channel.GetWeight()),
 				Tag:       channel.Tag,
 			}
@@ -329,13 +287,10 @@ func UpdateAbilityStatusByTag(tag string, status bool) error {
 	return DB.Model(&Ability{}).Where("tag = ?", tag).Select("enabled").Update("enabled", status).Error
 }
 
-func UpdateAbilityByTag(tag string, newTag *string, priority *int64, weight *uint) error {
+func UpdateAbilityByTag(tag string, newTag *string, weight *uint) error {
 	ability := Ability{}
 	if newTag != nil {
 		ability.Tag = newTag
-	}
-	if priority != nil {
-		ability.Priority = priority
 	}
 	if weight != nil {
 		ability.Weight = *weight

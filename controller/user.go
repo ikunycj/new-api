@@ -11,13 +11,12 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/QuantumNous/new-api/constant"
@@ -142,7 +141,7 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
-	model.UpdateUserLastLoginAt(user.Id)
+	model.UpdateUserLastLoginAtWithIP(user.Id, c.ClientIP())
 	onboardingStatus := user.OnboardingStatus()
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
@@ -166,7 +165,6 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"role":                user.Role,
 			"status":              user.Status,
 			"group":               user.Group,
-			"loadtest_enabled":    user.Role >= common.RoleAdminUser || user.IsToB(),
 			"onboarding_required": onboardingStatus.Required,
 			"onboarding_version":  onboardingStatus.Version,
 		},
@@ -248,6 +246,7 @@ func Register(c *gin.Context) {
 		DisplayName:       user.Username,
 		InviterId:         inviterId,
 		Role:              common.RoleCommonUser, // 明确设置角色为普通用户
+		CreatedIP:         c.ClientIP(),
 		OnboardingVersion: model.NewUserOnboardingVersion(),
 	}
 	if common.EmailVerificationEnabled {
@@ -288,9 +287,6 @@ func Register(c *gin.Context) {
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
 		}
-		if setting.DefaultUseAutoGroup {
-			token.Group = "auto"
-		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
 			return
@@ -304,6 +300,29 @@ func Register(c *gin.Context) {
 	return
 }
 
+type userListResponse struct {
+	*model.User
+	CurrentConcurrency  int  `json:"current_concurrency"`
+	ConcurrencyDegraded bool `json:"concurrency_degraded"`
+}
+
+func buildUserListResponses(users []*model.User) []*userListResponse {
+	userIDs := make([]int, 0, len(users))
+	for _, user := range users {
+		userIDs = append(userIDs, user.Id)
+	}
+	counts, degraded := service.GetUsersInFlightRequests(userIDs)
+	responses := make([]*userListResponse, 0, len(users))
+	for _, user := range users {
+		responses = append(responses, &userListResponse{
+			User:                user,
+			CurrentConcurrency:  counts[user.Id],
+			ConcurrencyDegraded: degraded,
+		})
+	}
+	return responses
+}
+
 func GetAllUsers(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	users, total, err := model.GetAllUsers(pageInfo)
@@ -311,9 +330,15 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.FillUsersLastUsedAt(users); err != nil {
+		common.SysLog("failed to fill users last_used_at: " + err.Error())
+	}
+	if err := model.FillUsersRecentIPs(users); err != nil {
+		common.SysLog("failed to fill users recent IPs: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(buildUserListResponses(users))
 
 	common.ApiSuccess(c, pageInfo)
 	return
@@ -340,9 +365,15 @@ func SearchUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.FillUsersLastUsedAt(users); err != nil {
+		common.SysLog("failed to fill users last_used_at: " + err.Error())
+	}
+	if err := model.FillUsersRecentIPs(users); err != nil {
+		common.SysLog("failed to fill users recent IPs: " + err.Error())
+	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(buildUserListResponses(users))
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -411,22 +442,6 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
-func GetAccessToken(c *gin.Context) {
-	id := c.GetInt("id")
-	user, err := model.GetUserById(id, true)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	// Read-only: return the current access token without rotating it.
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    user.GetAccessToken(),
-	})
-	return
-}
-
 func GetAffCode(c *gin.Context) {
 	id := c.GetInt("id")
 	if err := model.EnsureAffiliateProfile(id); err != nil {
@@ -446,7 +461,6 @@ func GetAffCode(c *gin.Context) {
 	return
 }
 
-// childView is the subset of User fields exposed to the parent account owner.
 type childView struct {
 	Id          int    `json:"id"`
 	Username    string `json:"username"`
@@ -456,50 +470,45 @@ type childView struct {
 	Status      int    `json:"status"`
 }
 
-// GetSelfChildren returns all sub-accounts attached to the caller's account.
 func GetSelfChildren(c *gin.Context) {
-	id := c.GetInt("id")
-	children, err := model.GetUserChildren(id)
+	children, err := model.GetUserChildren(c.GetInt("id"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	views := make([]childView, 0, len(children))
-	for _, u := range children {
+	for _, child := range children {
 		views = append(views, childView{
-			Id:          u.Id,
-			Username:    u.Username,
-			DisplayName: u.DisplayName,
-			Email:       u.Email,
-			UsedQuota:   u.UsedQuota,
-			Status:      u.Status,
+			Id:          child.Id,
+			Username:    child.Username,
+			DisplayName: child.DisplayName,
+			Email:       child.Email,
+			UsedQuota:   child.UsedQuota,
+			Status:      child.Status,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": views})
+	common.ApiSuccess(c, views)
 }
 
-// AddSelfChild attaches a user as a sub-account of the caller.
-// Body: {"user_id": <int>} or {"email": "<string>"}
 func AddSelfChild(c *gin.Context) {
-	myId := c.GetInt("id")
-
+	parentId := c.GetInt("id")
 	var body struct {
 		UserId int    `json:"user_id"`
 		Email  string `json:"email"`
 	}
-	if err := json.NewDecoder(c.Request.Body).Decode(&body); err != nil {
+	if err := common.DecodeJson(c.Request.Body, &body); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
 
-	// Resolve target user
-	var target *model.User
+	var child *model.User
 	var err error
-	if body.UserId != 0 {
-		target, err = model.GetUserById(body.UserId, false)
-	} else if body.Email != "" {
-		target, err = model.GetUniqueUserByEmail(model.NormalizeEmail(body.Email))
-	} else {
+	switch {
+	case body.UserId > 0:
+		child, err = model.GetUserById(body.UserId, false)
+	case strings.TrimSpace(body.Email) != "":
+		child, err = model.GetUniqueUserByEmail(model.NormalizeEmail(body.Email))
+	default:
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
@@ -507,17 +516,11 @@ func AddSelfChild(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-
-	// Validation
-	if target.Id == myId {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams) // can't be own child
+	if child.Id == parentId || child.ParentId != 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	if target.ParentId != 0 {
-		common.ApiErrorMsg(c, "该用户已隶属于其他父账号")
-		return
-	}
-	hasChildren, err := model.HasChildren(target.Id)
+	hasChildren, err := model.HasChildren(child.Id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -526,28 +529,24 @@ func AddSelfChild(c *gin.Context) {
 		common.ApiErrorMsg(c, "该用户已有子账号，不能作为子账号使用")
 		return
 	}
-
-	if err := model.SetUserParentId(target.Id, myId); err != nil {
+	if err := model.SetUserParentId(child.Id, parentId); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if err := model.InvalidateUserCache(target.Id); err != nil {
-		common.SysLog(fmt.Sprintf("failed to invalidate cache for user %d: %s", target.Id, err.Error()))
+	if err := model.InvalidateUserCache(child.Id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", child.Id, err.Error()))
 	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+	common.ApiSuccess(c, nil)
 }
 
-// GetSelfParent returns the parent account info for a child account.
 func GetSelfParent(c *gin.Context) {
-	id := c.GetInt("id")
-	user, err := model.GetUserById(id, false)
+	user, err := model.GetUserById(c.GetInt("id"), false)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if user.ParentId == 0 {
-		c.JSON(http.StatusOK, gin.H{"success": true, "data": nil})
+		common.ApiSuccess(c, nil)
 		return
 	}
 	parent, err := model.GetUserById(user.ParentId, false)
@@ -555,12 +554,12 @@ func GetSelfParent(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+	common.ApiSuccess(c, gin.H{
 		"id":           parent.Id,
 		"username":     parent.Username,
 		"display_name": parent.DisplayName,
 		"email":        parent.Email,
-	}})
+	})
 }
 
 func GetSelf(c *gin.Context) {
@@ -586,6 +585,14 @@ func GetSelf(c *gin.Context) {
 	// 获取用户设置并提取sidebar_modules
 	userSetting := user.GetSetting()
 	onboardingStatus := user.OnboardingStatus()
+	hasChildren := false
+	if user.ParentId == 0 {
+		hasChildren, err = model.HasChildren(id)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
@@ -599,10 +606,9 @@ func GetSelf(c *gin.Context) {
 		"discord_id":          user.DiscordId,
 		"oidc_id":             user.OidcId,
 		"wechat_id":           user.WeChatId,
-		"telegram_id":         user.TelegramId,
 		"feishu_id":           user.FeishuId,
+		"telegram_id":         user.TelegramId,
 		"group":               user.Group,
-		"loadtest_enabled":    user.Role >= common.RoleAdminUser || user.IsToB(),
 		"quota":               user.Quota,
 		"used_quota":          user.UsedQuota,
 		"request_count":       user.RequestCount,
@@ -619,7 +625,7 @@ func GetSelf(c *gin.Context) {
 		"onboarding_required": onboardingStatus.Required,
 		"onboarding_version":  onboardingStatus.Version,
 		"parent_id":           user.ParentId,
-		"has_children":        user.ParentId == 0 && func() bool { ok, _ := model.HasChildren(id); return ok }(),
+		"has_children":        hasChildren,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -628,6 +634,19 @@ func GetSelf(c *gin.Context) {
 		"data":    responseData,
 	})
 	return
+}
+
+// GetUserInFlight returns the authenticated user's active relay requests.
+// The user ID is always taken from the auth context; callers cannot query
+// another user's activity by supplying an ID.
+func GetUserInFlight(c *gin.Context) {
+	count, degraded := service.GetUserInFlightRequests(
+		common.GetContextKeyInt(c, constant.ContextKeyUserId),
+	)
+	common.ApiSuccess(c, gin.H{
+		"in_flight": count,
+		"degraded":  degraded,
+	})
 }
 
 func CompleteOnboarding(c *gin.Context) {
@@ -734,12 +753,14 @@ func GetUserModels(c *gin.Context) {
 	if err != nil {
 		id = c.GetInt("id")
 	}
-	user, err := model.GetUserCache(id)
+	// Model access follows the current account group. Bypass the user cache so
+	// an operational group change is visible before the cache expires.
+	userGroup, err := model.GetUserGroup(id, true)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserGroupPricingGroups(userGroup)
 	group := c.Query("group")
 	if group != "" {
 		if _, ok := groups[group]; !ok {
@@ -803,17 +824,18 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	updatedUser.Role = originUser.Role
 	updatedUser.Group = strings.TrimSpace(updatedUser.Group)
 	if updatedUser.Group == "" {
-		updatedUser.Group = originUser.Group
+		updatedUser.Group = strings.TrimSpace(originUser.Group)
+		if updatedUser.Group == "" {
+			updatedUser.Group = defaultUserGroup
+		}
 	}
-	canonicalGroup, validGroup := normalizeManagedUserGroup(updatedUser.Group)
-	if !validGroup {
+	if !isManagedUserGroup(updatedUser.Group) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	updatedUser.Group = canonicalGroup
-	updatedUser.Role = originUser.Role
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
@@ -855,50 +877,40 @@ func UpdateUser(c *gin.Context) {
 	return
 }
 
-// AdminSetUserParent sets or clears the parent account for a user.
-// Body: {"parent_id": <int>}  — send 0 to detach.
 func AdminSetUserParent(c *gin.Context) {
 	targetId, err := strconv.Atoi(c.Param("id"))
-	if err != nil || targetId == 0 {
+	if err != nil || targetId <= 0 {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-
 	var body struct {
 		ParentId int `json:"parent_id"`
 	}
-	if err := json.NewDecoder(c.Request.Body).Decode(&body); err != nil {
+	if err := common.DecodeJson(c.Request.Body, &body); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-
 	if body.ParentId == targetId {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-
-	// Verify parent exists when non-zero
 	if body.ParentId != 0 {
 		if _, err := model.GetUserById(body.ParentId, false); err != nil {
 			common.ApiError(c, err)
 			return
 		}
 	}
-
 	if err := model.SetUserParentId(targetId, body.ParentId); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-
 	if err := model.InvalidateUserCache(targetId); err != nil {
-		common.SysLog(fmt.Sprintf("failed to invalidate cache for user %d: %s", targetId, err.Error()))
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", targetId, err.Error()))
 	}
-
 	recordManageAuditFor(c, targetId, "user.set_parent", map[string]interface{}{
 		"parent_id": body.ParentId,
 	})
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+	common.ApiSuccess(c, nil)
 }
 
 func AdminClearUserBinding(c *gin.Context) {
@@ -1149,14 +1161,12 @@ func CreateUser(c *gin.Context) {
 	}
 	user.Group = strings.TrimSpace(user.Group)
 	if user.Group == "" {
-		user.Group = "default"
+		user.Group = defaultUserGroup
 	}
-	canonicalGroup, validGroup := normalizeManagedUserGroup(user.Group)
-	if !validGroup {
+	if !isManagedUserGroup(user.Group) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	user.Group = canonicalGroup
 	myRole := c.GetInt("role")
 	if user.Role >= myRole {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
@@ -1169,6 +1179,7 @@ func CreateUser(c *gin.Context) {
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
 		Group:       user.Group,
+		CreatedIP:   c.ClientIP(),
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
@@ -1526,7 +1537,6 @@ type UpdateUserSettingRequest struct {
 	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
-	RecordIpLog                      bool    `json:"record_ip_log"`
 }
 
 func UpdateUserSetting(c *gin.Context) {
@@ -1628,7 +1638,6 @@ func UpdateUserSetting(c *gin.Context) {
 		QuotaWarningThreshold:            req.QuotaWarningThreshold,
 		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
-		RecordIpLog:                      req.RecordIpLog,
 	}
 
 	// 如果是webhook类型,添加webhook相关设置

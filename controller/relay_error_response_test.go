@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,150 +8,89 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
-
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 )
 
-func newTestContext(t *testing.T, written int) (*gin.Context, *httptest.ResponseRecorder) {
-	t.Helper()
+func newPublicProjectionTestError() *types.NewAPIError {
+	apiErr := types.WithOpenAIError(types.OpenAIError{
+		Message: "provider detail: https://provider.example/request/secret",
+		Type:    "provider_error",
+		Code:    "provider_internal",
+		Source:  types.ErrorSourceChannel,
+	}, http.StatusBadGateway)
+	apiErr.SetChannelLocation(17, "private-provider")
+	return apiErr
+}
+
+func TestWriteRelayErrorProjectsJSONAndClaudeResponses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	if written > 0 {
-		// Simulate a stream that already emitted bytes: gin only reports a
-		// positive writer size once something was written.
-		_, _ = ctx.Writer.Write([]byte(strings.Repeat("x", written)))
-	}
-	return ctx, recorder
-}
 
-func withNormalizedMode(t *testing.T) {
-	t.Helper()
-	previous := common.PublicErrorMode()
-	common.SetPublicErrorMode(common.PublicErrorModeNormalized)
-	t.Cleanup(func() { common.SetPublicErrorMode(previous) })
-}
-
-func withPassthroughMode(t *testing.T) {
-	t.Helper()
-	previous := common.PublicErrorMode()
-	common.SetPublicErrorMode(common.PublicErrorModePassthrough)
-	t.Cleanup(func() { common.SetPublicErrorMode(previous) })
-}
-
-// TestWriteRelayErrorBeforeStreamStart verifies the ordinary path: nothing has
-// been written yet, so the error is a normal JSON response.
-func TestWriteRelayErrorBeforeStreamStart(t *testing.T) {
-	withNormalizedMode(t)
-	ctx, recorder := newTestContext(t, 0)
-
-	apiErr := types.NewOpenAIError(errors.New("Insufficient account balance"), types.ErrorCodeBadResponseStatusCode, http.StatusTooManyRequests)
-	apiErr.SetChannelLocation(38, "Claude Pro")
-
-	writeRelayError(ctx, types.RelayFormatOpenAI, nil, apiErr, "req_test")
-
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want 503", recorder.Code)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("body is not JSON: %v (%q)", err, recorder.Body.String())
-	}
-	errObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("missing error object: %s", recorder.Body.String())
-	}
-	message, _ := errObj["message"].(string)
-	if strings.Contains(strings.ToLower(message), "insufficient") {
-		t.Errorf("upstream wording leaked: %q", message)
-	}
-	if strings.Contains(message, "CH38") || strings.Contains(message, "Claude Pro") {
-		t.Errorf("channel identity leaked: %q", message)
-	}
-}
-
-// TestWriteRelayErrorAfterStreamStartIsInBand is the regression test for the
-// transport bug: an error raised after the first chunk must be delivered as an
-// SSE frame, not appended as a bare JSON object.
-func TestWriteRelayErrorAfterStreamStartIsInBand(t *testing.T) {
-	withNormalizedMode(t)
-
-	for _, tc := range []struct {
-		name       string
-		format     types.RelayFormat
-		wantPrefix string
-		wantAbsent string
+	tests := []struct {
+		name   string
+		format types.RelayFormat
+		check  func(t *testing.T, body string)
 	}{
 		{
-			name:       "openai stream",
-			format:     types.RelayFormatOpenAI,
-			wantPrefix: "xdata: ",
-			wantAbsent: "x{",
+			name:   "openai",
+			format: types.RelayFormatOpenAI,
+			check: func(t *testing.T, body string) {
+				require.Contains(t, body, "Service temporarily unavailable")
+				require.Contains(t, body, "request id: req-local")
+			},
 		},
 		{
-			name:       "claude stream",
-			format:     types.RelayFormatClaude,
-			wantPrefix: "xevent: error\n",
-			wantAbsent: "x{",
+			name:   "claude",
+			format: types.RelayFormatClaude,
+			check: func(t *testing.T, body string) {
+				require.Contains(t, body, `"type":"server_error"`)
+				require.Contains(t, body, "request id: req-local")
+			},
 		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, recorder := newTestContext(t, 1)
-			apiErr := types.NewOpenAIError(errors.New("Insufficient account balance"), types.ErrorCodeBadResponseStatusCode, http.StatusTooManyRequests)
-			apiErr.SetChannelLocation(38, "Claude Pro")
+	}
 
-			writeRelayError(ctx, tc.format, nil, apiErr, "req_test")
-			got := recorder.Body.String()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Set(common.RequestIdKey, "req-local")
 
-			if !strings.HasPrefix(got, tc.wantPrefix) {
-				t.Errorf("stream error was not framed: %q", got)
-			}
-			// The raw status must not be re-written onto a committed response.
-			if recorder.Code != http.StatusOK {
-				t.Errorf("status rewritten after stream start: %d", recorder.Code)
-			}
-			if strings.Contains(strings.ToLower(got), "insufficient") {
-				t.Errorf("upstream wording leaked into stream: %q", got)
-			}
-			if strings.Contains(got, "CH38") {
-				t.Errorf("channel identity leaked into stream: %q", got)
-			}
+			writeRelayError(ctx, tt.format, nil, newPublicProjectionTestError(), "req-local")
+
+			body := recorder.Body.String()
+			require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+			require.NotContains(t, body, "provider detail")
+			require.NotContains(t, body, "provider_internal")
+			require.NotContains(t, body, "private-provider")
+			tt.check(t, body)
 		})
 	}
 }
 
-// TestInternalErrorHeadersFollowAuthentication pins that the internal
-// classification headers survive only for authenticated internal callers.
-func TestInternalErrorHeadersFollowAuthentication(t *testing.T) {
-	withNormalizedMode(t)
+func TestWriteRelayErrorProjectsSSEAfterResponseStarted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(common.RequestIdKey, "req-local")
+	_, err := ctx.Writer.Write([]byte("data: partial\n\n"))
+	require.NoError(t, err)
 
-	ctx, _ := newTestContext(t, 0)
-	if internalErrorDetailAllowed(ctx) {
-		t.Error("a normal caller must not receive internal error headers")
-	}
+	writeRelayError(ctx, types.RelayFormatOpenAI, nil, newPublicProjectionTestError(), "req-local")
 
-	ctx.Set(contextKeyInternalErrorDetail, true)
-	if !internalErrorDetailAllowed(ctx) {
-		t.Error("an authenticated internal caller must keep internal error headers")
-	}
-
-	// A client-supplied header cannot claim the flag: only the verified
-	// load-test path sets it.
-	ctx2, _ := newTestContext(t, 0)
-	ctx2.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	ctx2.Request.Header.Set("X-Alltoken-Mock-Load-Test", "true")
-	if internalErrorDetailAllowed(ctx2) {
-		t.Error("a forged marker must not unlock internal error headers")
-	}
+	body := recorder.Body.String()
+	require.True(t, strings.Contains(body, "data: "))
+	require.NotContains(t, body, "provider detail")
+	require.NotContains(t, body, "private-provider")
+	require.Contains(t, body, "request id: req-local")
 }
 
-// TestInternalErrorHeadersUnchangedInPassthrough pins the rollback behaviour.
-func TestInternalErrorHeadersUnchangedInPassthrough(t *testing.T) {
-	withPassthroughMode(t)
-
-	ctx, _ := newTestContext(t, 0)
-	if !internalErrorDetailAllowed(ctx) {
-		t.Error("passthrough mode must not change header emission")
-	}
+func TestPublicProjectionDoesNotUseUnderlyingErrorText(t *testing.T) {
+	apiErr := types.NewErrorWithStatusCode(
+		errors.New("internal provider response"),
+		types.ErrorCodeBadResponse,
+		http.StatusBadGateway,
+	)
+	public := apiErr.ToPublicOpenAIError()
+	require.NotContains(t, public.Message, "internal provider response")
 }

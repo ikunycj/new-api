@@ -39,6 +39,16 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type PricingGroupConfigurationRequest = {
+  group_ratio: string
+  pricing_group_enabled: string
+  pricing_group_display_name: string
+  pricing_group_order: string
+  pricing_group_retry_policy: string
+  pricing_group_routing_strategy: string
+  pricing_group_remark: string
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string
@@ -108,11 +118,14 @@ export type SystemTaskListResponse = {
 
 export type SiteSettings = {
   Notice: string
+  'console_setting.announcements': string
+  'console_setting.announcements_enabled': boolean
   SystemName: string
   Logo: string
   Footer: string
   About: string
   HomePageContent: string
+  CustomerService: string
   ServerAddress: string
   'legal.user_agreement': string
   'legal.privacy_policy': string
@@ -171,11 +184,9 @@ export type AuthSettings = {
 
 export type ContentSettings = {
   'console_setting.api_info': string
-  'console_setting.announcements': string
   'console_setting.faq': string
   'console_setting.uptime_kuma_groups': string
   'console_setting.api_info_enabled': boolean
-  'console_setting.announcements_enabled': boolean
   'console_setting.faq_enabled': boolean
   'console_setting.uptime_kuma_enabled': boolean
   DataExportEnabled: boolean
@@ -222,38 +233,15 @@ export type ModelSettings = {
   'billing_setting.billing_mode': string
   'billing_setting.billing_expr': string
   'tool_price_setting.prices': string
-  TopupGroupRatio: string
   GroupRatio: string
-  UserUsableGroups: string
-  GroupGroupRatio: string
-  AutoGroups: string
-  DefaultUseAutoGroup: boolean
-  'group_ratio_setting.group_special_usable_group': string
-  RetryTimes: number
-  ChannelCircuitEnabled: boolean
-  ChannelCircuitConfig: string
-  ChannelHealthEnabled: boolean
-  ChannelHealthMode: 'observe' | 'active'
-  PublicErrorMode: 'passthrough' | 'normalized'
-  ChannelHealthHalfLifeSeconds: number
-  ChannelHealthMinSamples: number
-  ChannelHealthLatencyHalfLifeSeconds: number
-  ChannelHealthStateTTLSeconds: number
-  ChannelHealthProbeEnabled: boolean
-  ChannelHealthProbeIntervalSeconds: number
-  ChannelHealthProbeIdleGraceSeconds: number
-  ChannelHealthHistoryEnabled: boolean
-  ChannelHealthHistoryBucketSeconds: number
-  ChannelHealthHistoryRetentionDays: number
+  PricingGroupOrder: string
+  PricingGroupRetryPolicy: string
+  PricingGroupRoutingStrategy: string
   ChannelDisableThreshold: string
   AutomaticDisableChannelEnabled: boolean
-  AutomaticEnableChannelEnabled: boolean
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
-  'monitor_setting.auto_test_channel_enabled': boolean
-  'monitor_setting.auto_test_channel_minutes': number
-  'monitor_setting.channel_test_mode': 'scheduled_all' | 'passive_recovery'
   'channel_affinity_setting.enabled': boolean
   'channel_affinity_setting.switch_on_success': boolean
   'channel_affinity_setting.keep_on_channel_disabled': boolean
@@ -290,13 +278,13 @@ export type BillingSettings = {
   'billing_setting.billing_mode': string
   'billing_setting.billing_expr': string
   'tool_price_setting.prices': string
-  TopupGroupRatio: string
   GroupRatio: string
-  UserUsableGroups: string
-  GroupGroupRatio: string
-  AutoGroups: string
-  DefaultUseAutoGroup: boolean
-  'group_ratio_setting.group_special_usable_group': string
+  PricingGroupEnabled: string
+  PricingGroupDisplayName: string
+  PricingGroupRemark: string
+  PricingGroupOrder: string
+  PricingGroupRetryPolicy: string
+  PricingGroupRoutingStrategy: string
   PayAddress: string
   EpayId: string
   EpayKey: string
@@ -385,18 +373,6 @@ export type AffiliateSettings = {
   show_invitee_topups: boolean
 }
 
-export type AffiliateCampaign = {
-  id?: number
-  code?: string
-  name: string
-  enabled: boolean
-  starts_at: number
-  ends_at: number
-  inviter_cashback_rate_bps: number
-  invitee_bonus_rate_bps: number
-  hold_seconds: number
-}
-
 export type AffiliateUserOverride = {
   id?: number
   user_id?: number
@@ -433,12 +409,6 @@ export type AffiliateSettingsResponse = {
   success: boolean
   message: string
   data?: AffiliateSettings
-}
-
-export type AffiliateCampaignResponse = {
-  success: boolean
-  message: string
-  data?: AffiliateCampaign
 }
 
 export type AffiliateUserOverridesResponse = {
@@ -501,11 +471,6 @@ export type AffiliateAdjustmentResponse = {
 }
 
 export type OperationsSettings = {
-  RelayTimeout: number
-  StreamingTimeout: number
-  RelayIdleConnTimeout: number
-  StreamClientWriteTimeout: number
-  ShutdownTimeoutSeconds: number
   DefaultCollapseSidebar: boolean
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean
@@ -515,6 +480,10 @@ export type OperationsSettings = {
   SMTPAccount: string
   SMTPFrom: string
   SMTPToken: string
+  SMTPVerificationSubject: string
+  SMTPVerificationContent: string
+  SMTPPasswordResetSubject: string
+  SMTPPasswordResetContent: string
   SMTPSSLEnabled: boolean
   SMTPStartTLSEnabled: boolean
   SMTPInsecureSkipVerify: boolean
@@ -529,18 +498,12 @@ export type OperationsSettings = {
   'performance_setting.disk_cache_path': string
   'performance_setting.monitor_enabled': boolean
   'performance_setting.monitor_cpu_threshold': number
-  'performance_setting.monitor_iowait_threshold': number
   'performance_setting.monitor_memory_threshold': number
   'performance_setting.monitor_disk_threshold': number
   'perf_metrics_setting.enabled': boolean
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
-  'loadtest_setting.max_duration_seconds': number
-  'loadtest_setting.max_rps': number
-  'loadtest_setting.max_concurrency': number
-  'loadtest_setting.max_output_tokens': number
-  'loadtest_setting.request_timeout_seconds': number
 }
 
 export type SecuritySettings = {
@@ -549,15 +512,6 @@ export type SecuritySettings = {
   ModelRequestRateLimitSuccessCount: number
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
-  GlobalApiRateLimitEnabled: boolean
-  GlobalApiRateLimitNum: number
-  GlobalApiRateLimitDuration: number
-  GlobalWebRateLimitEnabled: boolean
-  GlobalWebRateLimitNum: number
-  GlobalWebRateLimitDuration: number
-  CriticalRateLimitEnabled: boolean
-  CriticalRateLimitNum: number
-  CriticalRateLimitDuration: number
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
   SensitiveWords: string

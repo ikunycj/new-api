@@ -45,10 +45,10 @@ const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
 const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
   common: {
-    titleKey: 'Common Logs',
+    titleKey: 'Usage Logs',
   },
   call: {
-    titleKey: 'Call Logs',
+    titleKey: '调用日志',
   },
   drawing: {
     titleKey: 'Drawing Logs',
@@ -62,15 +62,10 @@ function UsageLogsContent() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
-  const requestedSection: UsageLogsSectionId =
+  const activeCategory: UsageLogsSectionId =
     params.section && isUsageLogsSectionId(params.section)
       ? params.section
       : USAGE_LOGS_DEFAULT_SECTION
-  // `call` is the legacy public URL for the common/call log table. Normalize
-  // it before rendering so the table, filters, and reconciliation cards all
-  // share the common-log implementation.
-  const activeCategory =
-    requestedSection === 'call' ? 'common' : requestedSection
   const {
     selectedUserId,
     userInfoDialogOpen,
@@ -81,6 +76,7 @@ function UsageLogsContent() {
   } = useUsageLogsContext()
   const { canManageScope, canManageTeamScope, viewScope, setViewScope } =
     useLogsViewScope()
+  const logCategory = activeCategory === 'call' ? 'common' : activeCategory
   const tabNavGroups = useMemo<NavGroup[]>(
     () => [
       {
@@ -126,18 +122,16 @@ function UsageLogsContent() {
     [setViewScope]
   )
 
-  // Keep the legacy `/usage-logs/call` entry visibly distinct while reusing
-  // the common log data/query implementation underneath.
-  const pageMeta = SECTION_META[requestedSection]
+  const pageMeta = SECTION_META[activeCategory]
+  const pageTitle =
+    activeCategory === 'call' ? pageMeta.titleKey : t(pageMeta.titleKey)
   const showTaskSwitcher =
-    activeCategory !== 'common' && visibleSections.length > 1
-
+    (activeCategory === 'drawing' || activeCategory === 'task') &&
+    visibleSections.length > 1
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
-          {t(pageMeta.titleKey)}
-        </SectionPageLayout.Title>
+        <SectionPageLayout.Title>{pageTitle}</SectionPageLayout.Title>
         {canManageScope && (
           <SectionPageLayout.Actions>
             <Tabs value={viewScope} onValueChange={handleViewScopeChange}>
@@ -148,16 +142,17 @@ function UsageLogsContent() {
             </Tabs>
           </SectionPageLayout.Actions>
         )}
-        {canManageTeamScope && (
-          <SectionPageLayout.Actions>
-            <Tabs value={viewScope} onValueChange={handleViewScopeChange}>
-              <TabsList>
-                <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
-                <TabsTrigger value='team'>{t('Team Logs')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </SectionPageLayout.Actions>
-        )}
+        {canManageTeamScope &&
+          (activeCategory === 'common' || activeCategory === 'task') && (
+            <SectionPageLayout.Actions>
+              <Tabs value={viewScope} onValueChange={handleViewScopeChange}>
+                <TabsList>
+                  <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
+                  <TabsTrigger value='team'>{t('Team Logs')}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </SectionPageLayout.Actions>
+          )}
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>
             {showTaskSwitcher && (
@@ -172,7 +167,7 @@ function UsageLogsContent() {
               </Tabs>
             )}
             <div className='min-h-0 flex-1'>
-              <UsageLogsTable logCategory={activeCategory} />
+              <UsageLogsTable logCategory={logCategory} />
             </div>
           </div>
         </SectionPageLayout.Content>

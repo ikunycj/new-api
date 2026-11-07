@@ -48,6 +48,7 @@ export interface CommonFilters {
  */
 export interface CommonLogFilters extends CommonFilters {
   keyword?: string
+  group?: string
 }
 
 /**
@@ -161,6 +162,7 @@ export interface LogOtherData {
   cache_creation_tokens?: number
   cache_creation_tokens_5m?: number
   cache_creation_tokens_1h?: number
+  cache_creation_tokens_12h?: number
   claude?: boolean
   model_ratio?: number
   completion_ratio?: number
@@ -172,6 +174,7 @@ export interface LogOtherData {
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number
   cache_creation_ratio_1h?: number
+  cache_creation_ratio_12h?: number
   is_model_mapped?: boolean
   upstream_model_name?: string
   audio_ratio?: number
@@ -181,6 +184,9 @@ export interface LogOtherData {
   // billing_mode === 'tiered_expr'. expr_b64 is the base64-encoded billing
   // expression and matched_tier is the label of the tier that fired.
   billing_mode?: string
+  billing_unit?: 'token' | 'request'
+  fixed_price?: number
+  image_count?: number
   expr_b64?: string
   matched_tier?: string
   reasoning_effort?: string
@@ -229,34 +235,6 @@ export interface LogOtherData {
   subscription_consumed?: number
   subscription_remain?: number
   subscription_total?: number
-  cost_reconciliation?: {
-    version?: number
-    status?: 'estimated' | 'unavailable' | string
-    billing_usd_to_cny_rate?: number
-    quota_per_unit?: number
-    user_charge_usd_micros?: number
-    provider_base_cost_usd_micros?: number
-    estimated_cost_usd_micros?: number
-    successful_cost_usd_micros?: number
-    retry_cost_usd_micros?: number
-    failed_partial_usage_cost_usd_micros?: number
-    // Newer snapshots use the shorter key; keep the legacy name above for
-    // logs written before the rollup migration.
-    failed_partial_cost_usd_micros?: number
-    channel_cost_factor_source?: string
-    cost_basis?: string
-    retry_cost_basis?: string
-    failed_partial_usage_basis?: string
-    profit_guard?: {
-      mode?: string
-      decision?: string
-      channel_id?: number
-      minimum_profit_margin?: number
-      projected_profit_margin?: number
-      estimated_revenue_usd?: number
-      projected_channel_cost_usd?: number
-    }
-  }
 }
 
 /**
@@ -274,24 +252,15 @@ export interface LogStatistics {
   cache_hit_rate: number
 }
 
-export interface CostReconciliationTotals {
-  request_count: number
-  user_charge_usd_micros: number
-  estimated_cost_usd_micros: number
-  successful_cost_usd_micros: number
-  retry_cost_usd_micros: number
-  failed_partial_cost_usd_micros: number
-  diff_usd_micros: number
-  estimated_count: number
-  unavailable_count: number
+export interface LogFilterOptions {
+  groups: string[]
+  channels: Array<{ id: number; name: string }>
 }
 
-export interface CostReconciliationResponse {
+export interface GetLogFilterOptionsResponse {
   success: boolean
   message?: string
-  data?: {
-    totals: CostReconciliationTotals
-  }
+  data?: LogFilterOptions
 }
 
 // ============================================================================

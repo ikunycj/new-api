@@ -1,7 +1,6 @@
 package common
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,19 +22,12 @@ type DiskSpaceInfo struct {
 
 // SystemStatus 系统状态信息
 type SystemStatus struct {
-	CPUUsage       float64
-	CPUWaitPercent float64
-	MemoryUsage    float64
-	DiskUsage      float64
+	CPUUsage    float64
+	MemoryUsage float64
+	DiskUsage   float64
 }
 
 var latestSystemStatus atomic.Value
-
-var cpuSampleState struct {
-	sync.Mutex
-	initialized bool
-	previous    cpu.TimesStat
-}
 
 func init() {
 	latestSystemStatus.Store(SystemStatus{})
@@ -60,10 +52,12 @@ func StartSystemMonitor() {
 func updateSystemStatus() {
 	var status SystemStatus
 
-	// CPU usage excludes iowait so disk stalls do not look like CPU saturation.
-	if usage, wait, err := sampleCPU(); err == nil {
-		status.CPUUsage = usage
-		status.CPUWaitPercent = wait
+	// CPU
+	// 注意：cpu.Percent(0, false) 返回自上次调用以来的 CPU 使用率
+	// 如果是第一次调用，可能会返回错误或不准确的值，但在循环中会逐渐正常
+	percents, err := cpu.Percent(0, false)
+	if err == nil && len(percents) > 0 {
+		status.CPUUsage = percents[0]
 	}
 
 	// Memory
@@ -81,56 +75,13 @@ func updateSystemStatus() {
 	latestSystemStatus.Store(status)
 }
 
-func sampleCPU() (busyPercent, waitPercent float64, err error) {
-	times, err := cpu.Times(false)
-	if err != nil || len(times) == 0 {
-		return 0, 0, err
-	}
-
-	cpuSampleState.Lock()
-	defer cpuSampleState.Unlock()
-	if !cpuSampleState.initialized {
-		cpuSampleState.previous = times[0]
-		cpuSampleState.initialized = true
-		return 0, 0, nil
-	}
-
-	previous := cpuSampleState.previous
-	cpuSampleState.previous = times[0]
-	return cpuUsageFromDelta(times[0], previous)
-}
-
-func cpuUsageFromDelta(current, previous cpu.TimesStat) (busyPercent, waitPercent float64, err error) {
-	delta := func(current, old float64) float64 {
-		if current <= old {
-			return 0
-		}
-		return current - old
-	}
-	user := delta(current.User, previous.User)
-	system := delta(current.System, previous.System)
-	nice := delta(current.Nice, previous.Nice)
-	irq := delta(current.Irq, previous.Irq)
-	softIRQ := delta(current.Softirq, previous.Softirq)
-	steal := delta(current.Steal, previous.Steal)
-	iowait := delta(current.Iowait, previous.Iowait)
-	idle := delta(current.Idle, previous.Idle)
-	total := user + system + nice + irq + softIRQ + steal + iowait + idle
-	if total <= 0 {
-		return 0, 0, nil
-	}
-	return (user + system + nice + irq + softIRQ + steal) / total * 100,
-		iowait / total * 100,
-		nil
-}
-
 // GetSystemStatus 获取当前系统状态
 func GetSystemStatus() SystemStatus {
 	return latestSystemStatus.Load().(SystemStatus)
 }
 
-// RefreshSystemStatus forces one synchronous sample for admin dashboards.
-// The background monitor continues to own periodic refreshes.
+// RefreshSystemStatus updates the cached CPU, memory, and disk readings for
+// callers that need a current snapshot while the overload monitor is disabled.
 func RefreshSystemStatus() SystemStatus {
 	updateSystemStatus()
 	return GetSystemStatus()

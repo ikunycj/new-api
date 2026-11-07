@@ -27,7 +27,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
 import {
@@ -38,7 +37,7 @@ import {
   getQuotaTypeLabels,
 } from '../constants'
 import { parseTags } from '../lib/filters'
-import type { PricingModel, PricingVendor } from '../types'
+import type { PricingModel } from '../types'
 
 type FilterOption = {
   value: string
@@ -58,14 +57,10 @@ type FilterSectionProps = {
 export interface PricingSidebarProps {
   quotaTypeFilter: string
   endpointTypeFilter: string
-  vendorFilter: string
   tagFilter: string
   onQuotaTypeChange: (value: string) => void
   onEndpointTypeChange: (value: string) => void
-  onVendorChange: (value: string) => void
   onTagChange: (value: string) => void
-  vendors: PricingVendor[]
-  groups?: string[]
   tags: string[]
   models: PricingModel[]
   hasActiveFilters: boolean
@@ -150,25 +145,6 @@ export function PricingSidebar(props: PricingSidebarProps) {
   const quotaTypeLabels = getQuotaTypeLabels(t)
   const endpointTypeLabels = getEndpointTypeLabels(t)
 
-  const vendorOptions: FilterOption[] = [
-    {
-      value: FILTER_ALL,
-      label: t('All Vendors'),
-      count: props.models.length,
-    },
-    ...props.vendors
-      .map((vendor) => ({
-        value: vendor.name,
-        label: vendor.name,
-        count: countBy(
-          props.models,
-          (model) => model.vendor_name === vendor.name
-        ),
-        icon: vendor.icon ? getLobeIcon(vendor.icon, 14) : undefined,
-      }))
-      .filter((vendor) => vendor.count > 0),
-  ]
-
   const quotaOptions: FilterOption[] = [
     {
       value: QUOTA_TYPES.ALL,
@@ -248,12 +224,6 @@ export function PricingSidebar(props: PricingSidebarProps) {
       )}
 
       <div className='space-y-1'>
-        <FilterSection
-          title={t('All Vendors')}
-          value={props.vendorFilter}
-          options={vendorOptions}
-          onChange={props.onVendorChange}
-        />
         <FilterSection
           title={t('Model Tags')}
           value={props.tagFilter}

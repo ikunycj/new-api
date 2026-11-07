@@ -20,11 +20,10 @@ import { flexRender, type Row } from '@tanstack/react-table'
 import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupBadge } from '@/components/group-badge'
 import { cn } from '@/lib/utils'
 
 import { CHANNEL_STATUS } from '../constants'
-import { isTagAggregateRow, parseGroupsList } from '../lib'
+import { isTagAggregateRow } from '../lib'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
@@ -64,8 +63,9 @@ function ChannelMetric({
  * Bespoke channel card for the card view. Reuses every column's existing cell
  * renderer via `flexRender`, so the table's information and interactions are
  * preserved: row selection, provider/multi-key/IO.NET type badge, id,
- * name/remark + warning icons, status (with tooltips), groups, inline
- * weight spinner, balance refresh, response/test times, tag
+ * name/remark + warning icons, status (with tooltips), groups, inline weight
+ * and price multiplier spinners, channel cost/usage, response/test
+ * times, previous-day probe rate, tag
  * expand-collapse, and the per-row (or per-tag) actions menu.
  */
 function ChannelCardComponent({
@@ -89,18 +89,18 @@ function ChannelCardComponent({
   }
 
   const fieldLabels: Record<string, string> = {
-    daily_cost_usd: t('Daily Cost / Monthly Cost'),
-    daily_tokens: t('Daily Usage / Monthly Usage'),
+    daily_cost_cny: '日成本 / 总成本（¥）',
+    daily_tokens: `${t('Daily Usage')} / ${t('Total Usage')}`,
     response_time: t('Response'),
     test_time: t('Last Tested'),
     price_multiplier: t('Channel price multiplier'),
+    priority_score: '优先级得分',
     test_model: t('Test Model'),
     upstream_max_retries: t('Retry Times'),
     max_concurrency: '并发',
     previous_day_probe_success_rate: t('Previous-day probe success rate'),
+    last_test_ttft_ms: t('TTFT'),
   }
-
-  const groups = parseGroupsList(row.original.group ?? '')
 
   const selectCell = renderCell('select')
   const typeCell = renderCell('type')
@@ -108,10 +108,11 @@ function ChannelCardComponent({
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
   const weightCell = renderCell('weight')
-  const costCell = renderCell('daily_cost_usd')
+  const costCell = renderCell('daily_cost_cny')
   const tokenUsageCell = renderCell('daily_tokens')
   const responseCell = renderCell('response_time')
   const priceMultiplierCell = renderCell('price_multiplier')
+  const priorityScoreCell = renderCell('priority_score')
   const testModelCell = renderCell('test_model')
   const upstreamMaxRetriesCell = renderCell('upstream_max_retries')
   const concurrencyCell = renderCell('max_concurrency')
@@ -119,8 +120,8 @@ function ChannelCardComponent({
   const previousDayProbeSuccessRateCell = renderCell(
     'previous_day_probe_success_rate'
   )
-
-  const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
+  const lastTestTTFTCell = renderCell('last_test_ttft_ms')
+  const groupCell = renderCell('group')
 
   // In card view the enable/disable state is already conveyed by the inline
   // power toggle, so the plain "Enabled"/"Disabled" badge is redundant. Keep
@@ -134,7 +135,7 @@ function ChannelCardComponent({
     <ChannelRowActionsLayoutContext.Provider value='card'>
       <div
         data-state={isSelected ? 'selected' : undefined}
-        className='flex flex-col gap-3'
+        className='flex flex-col gap-2'
       >
         {/* Row 1: selection + type, with status badge + actions menu */}
         <div className='flex items-center justify-between gap-2'>
@@ -150,11 +151,11 @@ function ChannelCardComponent({
           </div>
         </div>
 
-        {/* Name and compact label/value metrics retain all channel metrics in card view. */}
+        {/* Name and compact label/value metrics share the same reading order. */}
         <div className='flex min-w-0 flex-col gap-2 overflow-hidden'>
           <div className='min-w-0 text-sm leading-tight'>
             {!isTagRow && (
-              <div className={labelClass}>
+              <div className='text-muted-foreground text-[11px] font-medium select-none'>
                 #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
               </div>
             )}
@@ -165,10 +166,13 @@ function ChannelCardComponent({
             <ChannelMetric label={fieldLabels.previous_day_probe_success_rate}>
               {previousDayProbeSuccessRateCell}
             </ChannelMetric>
+            <ChannelMetric label={fieldLabels.last_test_ttft_ms}>
+              {lastTestTTFTCell}
+            </ChannelMetric>
             <ChannelMetric label={fieldLabels.test_time}>
               {testCell}
             </ChannelMetric>
-            <ChannelMetric label={fieldLabels.daily_cost_usd}>
+            <ChannelMetric label={fieldLabels.daily_cost_cny}>
               {costCell}
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.daily_tokens}>
@@ -184,6 +188,9 @@ function ChannelCardComponent({
             <ChannelMetric label={fieldLabels.price_multiplier}>
               {priceMultiplierCell}
             </ChannelMetric>
+            <ChannelMetric label={fieldLabels.priority_score}>
+              {priorityScoreCell}
+            </ChannelMetric>
             <ChannelMetric label={fieldLabels.upstream_max_retries}>
               {upstreamMaxRetriesCell}
             </ChannelMetric>
@@ -193,23 +200,8 @@ function ChannelCardComponent({
           </div>
         </div>
 
-        {/* Last row: groups span the full width, showing every group (no label) */}
-        <div className='-mt-0.5 min-w-0'>
-          {groups.length > 0 ? (
-            <div className='-ml-1.5 flex flex-wrap gap-1'>
-              {groups.map((g) => (
-                <GroupBadge
-                  key={g}
-                  group={g}
-                  label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  size='sm'
-                />
-              ))}
-            </div>
-          ) : (
-            <span className='text-muted-foreground text-sm'>-</span>
-          )}
-        </div>
+        {/* Last row: groups span the full width and reuse the table renderer. */}
+        <div className='-mt-0.5 min-w-0'>{groupCell}</div>
       </div>
     </ChannelRowActionsLayoutContext.Provider>
   )

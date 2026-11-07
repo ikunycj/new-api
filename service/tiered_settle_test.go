@@ -5,10 +5,13 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -738,6 +741,80 @@ func TestBuildTieredTokenParams_Len_TierCondition(t *testing.T) {
 	if math.Abs(cost-wantCost) > 1e-6 {
 		t.Fatalf("cost = %f, want %f", cost, wantCost)
 	}
+}
+
+func TestBuildTieredTokenParamsOpenAICacheLifetimes(t *testing.T) {
+	var usage dto.Usage
+	require.NoError(t, common.UnmarshalJsonStr(`{"prompt_tokens":1000,"completion_tokens":100,"prompt_tokens_details":{"cached_tokens":100,"cache_write_tokens":400,"cache_creation_input_tokens":300,"cache_write_tokens_details":{"ttl_30m_tokens":200,"ttl_12h_tokens":200}}}`, &usage))
+	for _, test := range []struct {
+		name       string
+		expression string
+		prompt     float64
+		short      float64
+		long       float64
+		cost       float64
+	}{
+		{"separate lifetime price", `tier("base", p * 2 + c * 12 + cr * 0.2 + cc * 2.5 + cc12h * 5)`, 500, 200, 200, 3720},
+		{"short write price fallback", `tier("base", p * 2 + c * 12 + cr * 0.2 + cc * 2.5)`, 500, 600, 0, 3720},
+		{"prompt price fallback", `tier("base", p * 2 + c * 12 + cr * 0.2)`, 1100, 0, 0, 3420},
+		{"only long writes separately priced", `tier("base", p * 2 + c * 12 + cr * 0.2 + cc12h * 5)`, 700, 0, 200, 3620},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			params := BuildTieredTokenParams(&usage, false, billingexpr.UsedVars(test.expression))
+			assert.Equal(t, test.prompt, params.P)
+			assert.Equal(t, test.short, params.CC)
+			assert.Equal(t, test.long, params.CC12h)
+			assert.Equal(t, float64(1000), params.Len)
+			cost, _, err := billingexpr.RunExpr(test.expression, params)
+			require.NoError(t, err)
+			assert.Equal(t, test.cost, cost)
+		})
+	}
+}
+
+func TestResponsesBillingSnapshotPreservesCacheLifetimePrices(t *testing.T) {
+	var native dto.Usage
+	require.NoError(t, common.UnmarshalJsonStr(`{"input_tokens":1000,"output_tokens":100,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":400,"cache_creation_input_tokens":300,"cache_write_tokens_details":{"ttl_30m_tokens":200,"ttl_12h_tokens":200}}}`, &native))
+	converted := relayconvert.UsageFromResponsesUsage(&native)
+	require.NotNil(t, converted.BillingUsage)
+	effective := effectiveBillingUsage(converted)
+	const expression = `tier("base", p * 2 + c * 12 + cr * 0.2 + cc * 2.5 + cc12h * 5)`
+	params := BuildTieredTokenParams(effective, false, billingexpr.UsedVars(expression))
+	assert.Equal(t, float64(500), params.P)
+	assert.Equal(t, float64(100), params.CR)
+	assert.Equal(t, float64(200), params.CC)
+	assert.Equal(t, float64(200), params.CC12h)
+	cost, _, err := billingexpr.RunExpr(expression, params)
+	require.NoError(t, err)
+	assert.Equal(t, float64(3720), cost)
+	effective.PromptTokensDetails.CacheWriteTokensDetails.TTL12hTokens = 0
+	assert.Equal(t, 200, converted.BillingUsage.OpenAIUsage.InputTokensDetails.CacheWriteTokensDetails.TTL12hTokens)
+}
+
+func TestTieredFixedSettlementUsesActualImageCount(t *testing.T) {
+	const expression = `tier("image", fixed(0.0035)) * image_count`
+	info := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode: "tiered_expr", ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+			GroupRatio: 0.5, QuotaPerUnit: 500000, BillingUSDToCNYRate: 8,
+			EstimatedImageCount: common.GetPointer(3), EstimatedQuotaAfterGroup: 21000,
+			EstimatedBillingUnit: billingexpr.BillingUnitRequest, EstimatedFixedPrice: common.GetPointer(0.0035),
+		},
+		BillingImageCount: common.GetPointer(2),
+	}
+	ok, quota, result := TryTieredSettle(info, billingexpr.TokenParams{})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	assert.Equal(t, 14000, quota)
+	assert.True(t, isFixedPriceSettlement(info, result))
+	assert.Equal(t, 2, *result.ImageCount)
+	assert.Equal(t, 3, *info.TieredBillingSnapshot.EstimatedImageCount)
+	other := map[string]interface{}{}
+	InjectTieredBillingInfo(other, info, result)
+	assert.Equal(t, billingexpr.BillingUnitRequest, other["billing_unit"])
+	assert.Equal(t, 0.0035, other["fixed_price"])
+	assert.Equal(t, 2, other["image_count"])
+	assert.False(t, isFixedPriceSettlement(info, &billingexpr.TieredResult{BillingUnit: billingexpr.BillingUnitToken}))
 }
 
 const complexTieredExpr = `p <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6 + img * 3 + img_o * 30 + ai * 10 + ao * 40) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12 + img * 6 + img_o * 60 + ai * 20 + ao * 80)`

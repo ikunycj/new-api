@@ -5,9 +5,10 @@ import (
 	"net/http"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,16 +31,6 @@ func OaiResponsesCompactionHandler(c *gin.Context, resp *http.Response) (*dto.Us
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
-	usage := dto.Usage{}
-	if compactResp.Usage != nil {
-		usage.PromptTokens = compactResp.Usage.InputTokens
-		usage.CompletionTokens = compactResp.Usage.OutputTokens
-		usage.TotalTokens = compactResp.Usage.TotalTokens
-		if compactResp.Usage.InputTokensDetails != nil {
-			usage.PromptTokensDetails.CachedTokens = compactResp.Usage.InputTokensDetails.CachedTokens
-			usage.PromptTokensDetails.CacheWriteTokens = compactResp.Usage.InputTokensDetails.CacheWriteTokens
-		}
-	}
-
-	return &usage, nil
+	usage := relayconvert.UsageFromResponsesUsage(compactResp.Usage)
+	return usage, nil
 }

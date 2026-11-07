@@ -13,90 +13,154 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
 */
+import { nanoid } from 'nanoid'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
 import {
   saveConfig,
   saveParameterEnabled,
-  saveMessages,
   applyMessageStateUpdate,
   getInitialParameterEnabled,
   getInitialPlaygroundConfig,
-  loadMessages,
+  loadMessagesWithImages,
   type MessageStateUpdater,
 } from '../lib'
+import {
+  loadPlaygroundConversations,
+  removePlaygroundConversation,
+  savePlaygroundConversation,
+} from '../lib/storage/conversation-storage'
 import type {
   Message,
+  PlaygroundConversation,
   PlaygroundConfig,
   ParameterEnabled,
   ModelOption,
   GroupOption,
 } from '../types'
 
-const MESSAGE_SAVE_DEBOUNCE_MS = 500
+function createConversation(messages: Message[] = []): PlaygroundConversation {
+  return {
+    id: nanoid(),
+    title: '',
+    updatedAt: Date.now(),
+    messages,
+    summary: '',
+  }
+}
 
-/**
- * Main state management hook for playground
- */
+function getConversationTitle(messages: Message[]): string {
+  const firstUserMessage = messages.find((message) => message.from === 'user')
+  const title = firstUserMessage?.versions[0]?.content.trim() ?? ''
+  if (!title) return ''
+  return title.length > 40 ? `${title.slice(0, 40)}…` : title
+}
+
+function sortConversations(conversations: PlaygroundConversation[]) {
+  return [...conversations].sort(
+    (left, right) => right.updatedAt - left.updatedAt
+  )
+}
+
 export function usePlaygroundState(
   initialModel?: string,
   initialGroup?: string
 ) {
-  // Load initial state from localStorage
   const [config, setConfig] = useState<PlaygroundConfig>(() => ({
     ...getInitialPlaygroundConfig(),
     ...(initialModel ? { model: initialModel } : {}),
     ...(initialGroup ? { group: initialGroup } : {}),
   }))
-
   const [parameterEnabled, setParameterEnabled] = useState<ParameterEnabled>(
     getInitialParameterEnabled
   )
-
   const [messages, setMessages] = useState<Message[]>([])
+  const [conversationSummary, setConversationSummary] = useState('')
+  const [conversations, setConversations] = useState<PlaygroundConversation[]>(
+    []
+  )
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(true)
-  const messagesSaveTimerRef = useRef<number | null>(null)
-  const latestMessagesRef = useRef<Message[]>(messages)
-  const hasLoadedMessagesRef = useRef(false)
-
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
 
-  const persistMessages = useCallback((messagesToSave: Message[]) => {
-    latestMessagesRef.current = messagesToSave
+  const messagesRef = useRef(messages)
+  const summaryRef = useRef(conversationSummary)
+  const conversationsRef = useRef(conversations)
+  const activeConversationIdRef = useRef(activeConversationId)
+  const pendingPersistRef = useRef<PlaygroundConversation | null>(null)
+  const persistTimerRef = useRef<number | null>(null)
 
-    if (!hasLoadedMessagesRef.current) {
-      return
-    }
-
-    if (messagesSaveTimerRef.current !== null) {
-      window.clearTimeout(messagesSaveTimerRef.current)
-    }
-
-    messagesSaveTimerRef.current = window.setTimeout(() => {
-      messagesSaveTimerRef.current = null
-      saveMessages(latestMessagesRef.current)
-    }, MESSAGE_SAVE_DEBOUNCE_MS)
-  }, [])
+  const persistConversation = useCallback(
+    (conversationId: string, nextMessages: Message[], nextSummary: string) => {
+      const existing = conversationsRef.current.find(
+        (conversation) => conversation.id === conversationId
+      )
+      const title = existing?.title || getConversationTitle(nextMessages)
+      const nextConversation: PlaygroundConversation = {
+        id: conversationId,
+        title,
+        updatedAt: Date.now(),
+        messages: nextMessages,
+        summary: nextSummary,
+      }
+      const nextConversations = sortConversations([
+        nextConversation,
+        ...conversationsRef.current.filter(
+          (conversation) => conversation.id !== conversationId
+        ),
+      ])
+      conversationsRef.current = nextConversations
+      setConversations(nextConversations)
+      pendingPersistRef.current = nextConversation
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current)
+      }
+      persistTimerRef.current = window.setTimeout(() => {
+        persistTimerRef.current = null
+        const pending = pendingPersistRef.current
+        pendingPersistRef.current = null
+        if (pending) void savePlaygroundConversation(pending)
+      }, 300)
+    },
+    []
+  )
 
   useEffect(() => {
     let cancelled = false
-
-    window.setTimeout(() => {
-      const loadedMessages = loadMessages() ?? []
-      if (cancelled) {
-        return
+    void (async () => {
+      let loaded = await loadPlaygroundConversations()
+      if (loaded.length === 0) {
+        const legacyMessages = (await loadMessagesWithImages()) ?? []
+        const migrated = createConversation(legacyMessages)
+        loaded = [migrated]
+        void savePlaygroundConversation(migrated)
       }
 
-      latestMessagesRef.current = loadedMessages
-      hasLoadedMessagesRef.current = true
-      setMessages(loadedMessages)
+      if (cancelled) return
+      const sorted = sortConversations(loaded)
+      const active = sorted[0]
+      conversationsRef.current = sorted
+      setConversations(sorted)
+      if (active) {
+        activeConversationIdRef.current = active.id
+        messagesRef.current = active.messages
+        summaryRef.current = active.summary
+        setActiveConversationId(active.id)
+        setMessages(active.messages)
+        setConversationSummary(active.summary)
+      }
       setIsLoadingMessages(false)
-    }, 0)
+    })().catch((error: unknown) => {
+      if (cancelled) return
+      // eslint-disable-next-line no-console
+      console.error('Failed to initialize playground conversations:', error)
+      setIsLoadingMessages(false)
+    })
 
     return () => {
       cancelled = true
@@ -105,19 +169,119 @@ export function usePlaygroundState(
 
   useEffect(
     () => () => {
-      if (messagesSaveTimerRef.current !== null) {
-        window.clearTimeout(messagesSaveTimerRef.current)
-        saveMessages(latestMessagesRef.current)
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current)
+      }
+      if (pendingPersistRef.current) {
+        void savePlaygroundConversation(pendingPersistRef.current)
       }
     },
     []
   )
 
-  // Update config with automatic save
+  const updateMessages = useCallback(
+    (updater: MessageStateUpdater) => {
+      setMessages((previousMessages) => {
+        const nextMessages = applyMessageStateUpdate(previousMessages, updater)
+        messagesRef.current = nextMessages
+        const conversationId = activeConversationIdRef.current
+        if (conversationId) {
+          persistConversation(conversationId, nextMessages, summaryRef.current)
+        }
+        return nextMessages
+      })
+    },
+    [persistConversation]
+  )
+
+  const updateConversationSummary = useCallback(
+    (summary: string) => {
+      summaryRef.current = summary
+      setConversationSummary(summary)
+      const conversationId = activeConversationIdRef.current
+      if (conversationId) {
+        persistConversation(conversationId, messagesRef.current, summary)
+      }
+    },
+    [persistConversation]
+  )
+
+  const createNewConversation = useCallback(() => {
+    const next = createConversation()
+    const nextConversations = sortConversations([
+      next,
+      ...conversationsRef.current,
+    ])
+    conversationsRef.current = nextConversations
+    activeConversationIdRef.current = next.id
+    messagesRef.current = []
+    summaryRef.current = ''
+    setConversations(nextConversations)
+    setActiveConversationId(next.id)
+    setMessages([])
+    setConversationSummary('')
+    void savePlaygroundConversation(next)
+  }, [])
+
+  const selectConversation = useCallback((conversationId: string) => {
+    const selected = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId
+    )
+    if (!selected) return
+
+    activeConversationIdRef.current = selected.id
+    messagesRef.current = selected.messages
+    summaryRef.current = selected.summary
+    setActiveConversationId(selected.id)
+    setMessages(selected.messages)
+    setConversationSummary(selected.summary)
+  }, [])
+
+  const deleteConversation = useCallback((conversationId: string) => {
+    if (pendingPersistRef.current?.id === conversationId) {
+      pendingPersistRef.current = null
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
+    }
+    const remaining = conversationsRef.current.filter(
+      (conversation) => conversation.id !== conversationId
+    )
+    void removePlaygroundConversation(conversationId)
+
+    if (remaining.length === 0) {
+      const next = createConversation()
+      conversationsRef.current = [next]
+      activeConversationIdRef.current = next.id
+      messagesRef.current = []
+      summaryRef.current = ''
+      setConversations([next])
+      setActiveConversationId(next.id)
+      setMessages([])
+      setConversationSummary('')
+      void savePlaygroundConversation(next)
+      return
+    }
+
+    const nextConversations = sortConversations(remaining)
+    conversationsRef.current = nextConversations
+    setConversations(nextConversations)
+    if (activeConversationIdRef.current === conversationId) {
+      const next = nextConversations[0]
+      activeConversationIdRef.current = next.id
+      messagesRef.current = next.messages
+      summaryRef.current = next.summary
+      setActiveConversationId(next.id)
+      setMessages(next.messages)
+      setConversationSummary(next.summary)
+    }
+  }, [])
+
   const updateConfig = useCallback(
     <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) => {
-      setConfig((prev) => {
-        const updated = { ...prev, [key]: value }
+      setConfig((previous) => {
+        const updated = { ...previous, [key]: value }
         saveConfig(updated)
         return updated
       })
@@ -125,11 +289,10 @@ export function usePlaygroundState(
     []
   )
 
-  // Update parameter enabled with automatic save
   const updateParameterEnabled = useCallback(
     (key: keyof ParameterEnabled, value: boolean) => {
-      setParameterEnabled((prev) => {
-        const updated = { ...prev, [key]: value }
+      setParameterEnabled((previous) => {
+        const updated = { ...previous, [key]: value }
         saveParameterEnabled(updated)
         return updated
       })
@@ -137,24 +300,12 @@ export function usePlaygroundState(
     []
   )
 
-  // Update messages with automatic save
-  const updateMessages = useCallback(
-    (updater: MessageStateUpdater) => {
-      setMessages((prev) => {
-        const newMessages = applyMessageStateUpdate(prev, updater)
-        persistMessages(newMessages)
-        return newMessages
-      })
-    },
-    [persistMessages]
-  )
-
-  // Clear all messages
   const clearMessages = useCallback(() => {
+    summaryRef.current = ''
+    setConversationSummary('')
     updateMessages([])
   }, [updateMessages])
 
-  // Reset config to defaults
   const resetConfig = useCallback(() => {
     setConfig(DEFAULT_CONFIG)
     setParameterEnabled(DEFAULT_PARAMETER_ENABLED)
@@ -163,23 +314,25 @@ export function usePlaygroundState(
   }, [])
 
   return {
-    // State
     config,
     parameterEnabled,
     messages,
+    conversationSummary,
+    conversations,
+    activeConversationId,
     isLoadingMessages,
     models,
     groups,
-
-    // Setters
     setModels,
     setGroups,
-
-    // Actions
     updateConfig,
     updateParameterEnabled,
     updateMessages,
+    updateConversationSummary,
     clearMessages,
     resetConfig,
+    createNewConversation,
+    selectConversation,
+    deleteConversation,
   }
 }

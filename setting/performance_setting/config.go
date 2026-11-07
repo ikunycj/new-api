@@ -20,8 +20,6 @@ type PerformanceSetting struct {
 	MonitorEnabled bool `json:"monitor_enabled"`
 	// MonitorCPUThreshold CPU 使用率阈值（%）
 	MonitorCPUThreshold int `json:"monitor_cpu_threshold"`
-	// MonitorIOWaitThreshold 磁盘 I/O 等待阈值（%）
-	MonitorIOWaitThreshold int `json:"monitor_iowait_threshold"`
 	// MonitorMemoryThreshold 内存使用率阈值（%）
 	MonitorMemoryThreshold int `json:"monitor_memory_threshold"`
 	// MonitorDiskThreshold 磁盘使用率阈值（%）
@@ -37,7 +35,6 @@ var performanceSetting = PerformanceSetting{
 
 	MonitorEnabled:         true,
 	MonitorCPUThreshold:    90,
-	MonitorIOWaitThreshold: 95,
 	MonitorMemoryThreshold: 90,
 	MonitorDiskThreshold:   95,
 }
@@ -61,7 +58,6 @@ func syncToCommon() {
 	common.SetPerformanceMonitorConfig(common.PerformanceMonitorConfig{
 		Enabled:         performanceSetting.MonitorEnabled,
 		CPUThreshold:    performanceSetting.MonitorCPUThreshold,
-		IOWaitThreshold: performanceSetting.MonitorIOWaitThreshold,
 		MemoryThreshold: performanceSetting.MonitorMemoryThreshold,
 		DiskThreshold:   performanceSetting.MonitorDiskThreshold,
 	})

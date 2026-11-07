@@ -24,7 +24,6 @@ import type {
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
-  ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -97,15 +96,6 @@ export async function searchChannels(
   return res.data
 }
 
-export async function getPricingGroups(): Promise<{
-  success: boolean
-  data?: string[]
-  message?: string
-}> {
-  const res = await api.get('/api/group/pricing-groups')
-  return res.data
-}
-
 /**
  * Get single channel by ID
  */
@@ -117,11 +107,6 @@ export async function getChannel(id: number): Promise<GetChannelResponse> {
 /**
  * Get channel operations summary for administrators
  */
-export async function getChannelOps(): Promise<ChannelOpsResponse> {
-  const res = await api.get('/api/channel/ops', channelActionConfig())
-  return res.data
-}
-
 /**
  * Create new channel(s)
  * Supports single, batch, and multi-key modes
@@ -221,11 +206,17 @@ export async function batchSetChannelTag(
  */
 export async function testChannel(
   id: number,
-  params?: { model?: string; endpoint_type?: string; stream?: boolean }
+  params?: {
+    model?: string
+    endpoint_type?: string
+    stream?: boolean
+    iq_test?: boolean
+  },
+  signal?: AbortSignal
 ): Promise<ChannelTestResponse> {
   const res = await api.get(
     `/api/channel/test/${id}`,
-    channelActionConfig({ params })
+    channelActionConfig({ params, signal })
   )
   return res.data
 }
@@ -333,7 +324,7 @@ export async function deleteDisabledChannels(): Promise<{
 }
 
 /**
- * Get channel key (requires 2FA verification)
+ * Get channel key after secure verification.
  */
 export async function getChannelKey(
   id: number,
@@ -662,9 +653,17 @@ export async function getOllamaVersion(
 // ============================================================================
 
 /**
- * Get all pricing/routing groups used by channel filters and tag operations.
+ * Get pricing groups available for channel access.
  */
-export const getGroups = getPricingGroups
+export async function getPricingGroups(): Promise<{
+  success: boolean
+  message?: string
+  data?: string[]
+  display_names?: Record<string, string>
+}> {
+  const res = await api.get('/api/group/pricing-groups')
+  return res.data
+}
 
 // ============================================================================
 // Prefill Groups (Model Groups)

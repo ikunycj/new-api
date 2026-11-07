@@ -1592,16 +1592,61 @@ func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endA
 	return items, total, nil
 }
 
+const affiliateUserOverrideConfiguredCondition = `(
+	affiliate_user_overrides.inviter_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.invitee_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.reward_rate_bps IS NOT NULL OR
+	affiliate_user_overrides.fixed_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.maximum_reward_quota IS NOT NULL OR
+	affiliate_user_overrides.minimum_top_up_cents IS NOT NULL OR
+	affiliate_user_overrides.hold_seconds IS NOT NULL
+)`
+
+func hasAffiliateUserOverrideValues(override *AffiliateUserOverride) bool {
+	if override == nil {
+		return false
+	}
+	return override.InviterRewardQuota != nil ||
+		override.InviteeRewardQuota != nil ||
+		override.RewardRateBps != nil ||
+		override.FixedRewardQuota != nil ||
+		override.MaximumRewardQuota != nil ||
+		override.MinimumTopUpCents != nil ||
+		override.HoldSeconds != nil
+}
+
+// User-specific strategies may only override fields in the global
+// configuration section. Preferences and rule fields remain global-only.
+func hasAffiliateUserOverrideDisallowedValues(override *AffiliateUserOverride) bool {
+	if override == nil {
+		return false
+	}
+	return override.Enabled != nil ||
+		override.RegistrationRewardTrigger != nil ||
+		override.CashbackFrequency != nil ||
+		override.RewardMode != nil ||
+		override.UnlimitedReward != nil ||
+		override.MinimumTransferQuota != nil ||
+		override.ShowInviteeTopUps != nil
+}
+
 func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUserOverride) (*AffiliateUserOverrideView, error) {
 	changeReason := strings.TrimSpace(override.ChangeReason)
-	if userID <= 0 || adminUserID <= 0 || changeReason == "" || len(changeReason) > 500 {
+	if userID <= 0 || adminUserID <= 0 || len(changeReason) > 500 ||
+		hasAffiliateUserOverrideDisallowedValues(&override) ||
+		!hasAffiliateUserOverrideValues(&override) {
+		return nil, ErrAffiliateRuleInvalid
+	}
+	global := globalAffiliateRule()
+	if (global.RewardMode == operation_setting.AffiliateRewardModePercentage && override.FixedRewardQuota != nil) ||
+		(global.RewardMode == operation_setting.AffiliateRewardModeFixed && override.RewardRateBps != nil) {
 		return nil, ErrAffiliateRuleInvalid
 	}
 	override.UserID = userID
 	override.ID = 0
 	override.UpdatedBy = adminUserID
 	override.ChangeReason = changeReason
-	rule := applyAffiliateOverride(globalAffiliateRule(), &override)
+	rule := applyAffiliateOverride(global, &override)
 	if err := validateAffiliateRule(rule); err != nil {
 		return nil, err
 	}
@@ -1621,7 +1666,65 @@ func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUs
 }
 
 func DeleteAffiliateUserOverride(userID int) error {
+	if userID <= 0 {
+		return ErrAffiliateRuleInvalid
+	}
 	return DB.Where("user_id = ?", userID).Delete(&AffiliateUserOverride{}).Error
+}
+
+func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*AffiliateUserOverrideView, int64, error) {
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+
+	query := DB.Table("users").
+		Joins("LEFT JOIN affiliate_user_overrides ON affiliate_user_overrides.user_id = users.id").
+		Where("users.deleted_at IS NULL")
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		query = query.Where(affiliateUserOverrideConfiguredCondition)
+	} else {
+		pattern, err := sanitizeLikePattern(strings.ToLower(keyword))
+		if err != nil {
+			return nil, 0, err
+		}
+		pattern = "%" + pattern + "%"
+		condition := "LOWER(users.username) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!' OR LOWER(users.display_name) LIKE ? ESCAPE '!' OR LOWER(users.remark) LIKE ? ESCAPE '!'"
+		args := []interface{}{pattern, pattern, pattern, pattern}
+		if userID, err := strconv.Atoi(keyword); err == nil && userID > 0 {
+			condition = "users.id = ? OR " + condition
+			args = append([]interface{}{userID}, args...)
+		}
+		query = query.Where("("+condition+")", args...)
+	}
+	if keyword == "" {
+		query = query.Order("affiliate_user_overrides.updated_at DESC, users.id ASC")
+	} else {
+		query = query.Order("CASE WHEN " + affiliateUserOverrideConfiguredCondition + " THEN 0 ELSE 1 END, users.username ASC, users.id ASC")
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var userIDs []int
+	if err := query.Select("users.id").Offset(startIdx).Limit(limit).Pluck("users.id", &userIDs).Error; err != nil {
+		return nil, 0, err
+	}
+
+	items := make([]*AffiliateUserOverrideView, 0, len(userIDs))
+	for _, userID := range userIDs {
+		item, err := GetAffiliateUserOverrideView(userID)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, nil
 }
 
 func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error) {
@@ -1634,7 +1737,9 @@ func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error
 	var overridePtr *AffiliateUserOverride
 	updatedByUsername := ""
 	if err := DB.Where("user_id = ?", userID).First(&override).Error; err == nil {
-		overridePtr = &override
+		if hasAffiliateUserOverrideValues(&override) {
+			overridePtr = &override
+		}
 		if override.UpdatedBy > 0 {
 			var updatedBy User
 			if err := DB.Unscoped().Select("username").Where("id = ?", override.UpdatedBy).First(&updatedBy).Error; err == nil {

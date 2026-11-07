@@ -24,7 +24,6 @@ export {
   type ApiKeyFormValues,
   API_KEY_FORM_DEFAULT_VALUES,
   MAX_GROUP_CANDIDATES,
-  SYSTEM_ROUTING_VALUE,
   getApiKeyFormDefaultValues,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,

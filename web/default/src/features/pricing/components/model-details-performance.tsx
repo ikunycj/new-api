@@ -161,7 +161,10 @@ function average(
   )
 }
 
-export function ModelDetailsPerformance(props: { model: PricingModel }) {
+export function ModelDetailsPerformance(props: {
+  model: PricingModel
+  groupLabels: Record<string, string>
+}) {
   const { t } = useTranslation()
   const metricsQuery = useQuery({
     queryKey: ['perf-metrics', props.model.model_name],
@@ -266,7 +269,13 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
               header: t('Group'),
               className: tableStyles.compactHeaderCell,
               cellClassName: tableStyles.compactCell,
-              cell: (perf) => <GroupBadge group={perf.group} size='sm' />,
+              cell: (perf) => (
+                <GroupBadge
+                  group={perf.group}
+                  label={props.groupLabels[perf.group] || perf.group}
+                  size='sm'
+                />
+              ),
             },
             {
               id: 'tps',

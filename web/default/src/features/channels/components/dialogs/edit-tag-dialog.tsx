@@ -44,7 +44,7 @@ import {
   editTagChannels,
   getTagModels,
   getAllModels,
-  getGroups,
+  getPricingGroups,
 } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import type { TagOperationParams } from '../../types'
@@ -73,6 +73,13 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     queryKey: ['tag-models', currentTag],
     queryFn: () => (currentTag ? getTagModels(currentTag) : null),
     enabled: open && !!currentTag,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Fetch all available models
@@ -80,13 +87,27 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
     queryKey: ['all-models'],
     queryFn: getAllModels,
     enabled: open,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   // Fetch groups
   const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
+    queryKey: ['pricing-groups'],
+    queryFn: getPricingGroups,
     enabled: open,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const availableModels =
@@ -417,7 +438,7 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
           {/* Groups */}
           <div className='space-y-2'>
             <Label>
-              {t('Groups')}
+              {t('Pricing groups')}
               <span className='text-muted-foreground ml-2 text-xs'>
                 {t("(Override all channels' groups)")}
               </span>
@@ -427,6 +448,7 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
                 <GroupBadge
                   key={group}
                   group={group}
+                  label={groupsData?.display_names?.[group] || group}
                   className={`cursor-pointer rounded-sm transition-opacity hover:opacity-70 ${
                     selectedGroups.includes(group) ? 'bg-muted/70 px-1' : ''
                   }`}

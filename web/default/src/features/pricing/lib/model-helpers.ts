@@ -17,31 +17,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { EXCLUDED_GROUPS, FILTER_ALL, QUOTA_TYPE_VALUES } from '../constants'
-import type {
-  BillingGroupType,
-  PricingDisplayModel,
-  PricingModel,
-} from '../types'
+import type { PricingDisplayModel, PricingModel } from '../types'
 
 // ----------------------------------------------------------------------------
 // Model Helper Utilities
 // ----------------------------------------------------------------------------
 
 /**
- * Get available groups for a model
+ * Get pricing groups configured for the model-square catalog.
+ *
+ * The catalog contains configured groups, while each model's enabled groups
+ * determine which of those groups can actually serve that model.
  */
-export function getAvailableGroups(
-  model: PricingModel,
-  usableGroup: Record<string, { desc: string; ratio: number }>
+export function getCatalogGroups(
+  catalogGroups: Record<string, string>
 ): string[] {
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const supportsAllGroups = modelEnableGroups.includes(FILTER_ALL)
-
-  return Object.keys(usableGroup)
-    .filter((group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group))
-    .filter((group) => supportsAllGroups || modelEnableGroups.includes(group))
+  return Object.keys(catalogGroups).filter(
+    (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
+  )
 }
 
 /**
@@ -66,48 +59,32 @@ export function expandModelsByGroup(
   models: PricingModel[],
   availableGroups: string[],
   groupRatio: Record<string, number>,
-  billingGroupTypes: Record<string, BillingGroupType> = {}
+  groupLabels: Record<string, string> = {}
 ): PricingDisplayModel[] {
   const selectableGroups = availableGroups.filter(
     (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
   )
   return models.flatMap((model) => {
-    const enabledGroups = Array.isArray(model.enable_groups)
-      ? model.enable_groups
-      : []
-    const supportsAllGroups = enabledGroups.includes(FILTER_ALL)
-
-    const displayGroups: Array<{ group: string; ratio: number }> = []
-    const toBDisplayGroups: Array<{ group: string; ratio: number }> = []
-    for (const group of selectableGroups) {
-      if (!supportsAllGroups && !enabledGroups.includes(group)) continue
-      const entry = {
+    const enabledGroups = new Set(model.enable_groups || [])
+    const groups = selectableGroups
+      .filter((group) => enabledGroups.has(group))
+      .map((group) => ({
         group,
+        label: groupLabels[group] || group,
         ratio: getConfiguredGroupRatio(groupRatio, group),
-      }
-      if (billingGroupTypes[group] === 'toB') {
-        toBDisplayGroups.push(entry)
-      } else {
-        displayGroups.push(entry)
-      }
-    }
-    const byPriceThenName = (
-      a: { group: string; ratio: number },
-      b: { group: string; ratio: number }
-    ) => a.ratio - b.ratio || a.group.localeCompare(b.group)
-    displayGroups.sort(byPriceThenName)
-    toBDisplayGroups.sort(byPriceThenName)
+      }))
+      .sort((a, b) => a.ratio - b.ratio || a.group.localeCompare(b.group))
 
-    if (displayGroups.length === 0 && toBDisplayGroups.length === 0) return []
-    const lowest = displayGroups[0] ?? { group: '', ratio: 1 }
+    if (groups.length === 0) return []
+    const lowest = groups[0]
     return [
       {
         ...model,
         key: model.key || model.model_name,
         display_group: lowest.group,
+        display_group_label: lowest.label,
         display_group_ratio: lowest.ratio,
-        display_groups: displayGroups,
-        tob_display_groups: toBDisplayGroups,
+        display_groups: groups,
       },
     ]
   })
@@ -124,29 +101,22 @@ export function getDisplayGroupRatio(
   model: PricingModel,
   selectedGroup?: string
 ): number {
-  if (selectedGroup === '') return 1
-
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const supportsAllGroups = modelEnableGroups.includes(FILTER_ALL)
   const groupRatio = model.group_ratio || {}
+  const enabledGroups = new Set(model.enable_groups || [])
 
   if (
     selectedGroup &&
     selectedGroup !== FILTER_ALL &&
-    (supportsAllGroups || modelEnableGroups.includes(selectedGroup))
+    enabledGroups.has(selectedGroup) &&
+    typeof groupRatio[selectedGroup] === 'number' &&
+    Number.isFinite(groupRatio[selectedGroup])
   ) {
-    return getConfiguredGroupRatio(groupRatio, selectedGroup)
-  }
-
-  if (modelEnableGroups.length === 0) {
-    return 1
+    return groupRatio[selectedGroup]
   }
 
   let minRatio = Number.POSITIVE_INFINITY
 
-  for (const group of modelEnableGroups) {
+  for (const group of enabledGroups) {
     const ratio = groupRatio[group]
     if (
       typeof ratio === 'number' &&

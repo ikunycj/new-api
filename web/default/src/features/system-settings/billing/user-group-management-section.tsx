@@ -59,7 +59,7 @@ import { UserGroupTableRow } from './user-group-table-row'
 import {
   createUserGroup,
   deleteUserGroup,
-  getPricingGroupNames,
+  getPricingGroupCatalog,
   getUserGroupSummaries,
   updateUserGroup,
   type UpdateUserGroupRequest,
@@ -105,13 +105,13 @@ export function UserGroupManagementSection() {
 
   const pricingGroupsQuery = useQuery({
     queryKey: ['pricing-groups'],
-    queryFn: getPricingGroupNames,
+    queryFn: getPricingGroupCatalog,
   })
 
   const pricingGroupOptions = useMemo<Option[]>(
     () =>
-      (pricingGroupsQuery.data ?? []).map((group) => ({
-        label: group,
+      (pricingGroupsQuery.data?.names ?? []).map((group) => ({
+        label: pricingGroupsQuery.data?.displayNames[group] || group,
         value: group,
       })),
     [pricingGroupsQuery.data]

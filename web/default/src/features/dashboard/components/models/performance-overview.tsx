@@ -88,8 +88,14 @@ export function PerformanceOverview() {
   const metricsQuery = useQuery({
     queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
     queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
-    staleTime: 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
     retry: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const models = useMemo(

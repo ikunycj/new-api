@@ -3,24 +3,18 @@ package controller
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestManagedUserGroupsExposeOnlyAccountGroups(t *testing.T) {
-	groups := managedUserGroups()
+func TestManagedUserGroupsOnlyContainsDefault(t *testing.T) {
+	previous := ratio_setting.GroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previous))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"enterprise-pricing":0.5}`))
 
-	assert.Equal(t, []string{"default", "vip"}, groups)
-	assert.NotContains(t, groups, "toB")
-	assert.NotContains(t, groups, "成本套餐")
-}
-
-func TestNormalizeManagedUserGroup(t *testing.T) {
-	for _, legacy := range []string{"toB", " enterprise "} {
-		group, ok := normalizeManagedUserGroup(legacy)
-		assert.True(t, ok)
-		assert.Equal(t, "vip", group)
-	}
-	group, ok := normalizeManagedUserGroup("成本套餐")
-	assert.False(t, ok)
-	assert.Empty(t, group)
+	assert.Equal(t, []string{"default"}, managedUserGroups())
+	assert.False(t, isManagedUserGroup("enterprise-pricing"))
 }

@@ -98,7 +98,12 @@ const queryClient = new QueryClient({
           const redirect = `${router.history.location.href}`
           router.navigate({ to: '/sign-in', search: { redirect } })
         }
-        if (error.response?.status === 500) {
+        // Optional/background queries may explicitly suppress the global
+        // error handler. They must not take the entire application to /500.
+        if (
+          error.response?.status === 500 &&
+          !error.config?.skipErrorHandler
+        ) {
           showErrorToast(i18next.t('Internal Server Error!'))
           router.navigate({ to: '/500' })
         }

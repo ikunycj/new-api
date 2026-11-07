@@ -17,10 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { RefreshCw, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
@@ -43,113 +42,77 @@ export function AccessTokenDialog({
   onOpenChange,
 }: AccessTokenDialogProps) {
   const { t } = useTranslation()
-  const { token, generating, loading, fetchToken, generate } = useAccessToken()
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const { token, generating, generate } = useAccessToken()
 
-  // Load the current token when dialog opens (first open must NOT rotate it)
+  // Auto-generate token when dialog opens if no token exists
   useEffect(() => {
-    if (open) {
-      fetchToken()
+    if (open && !token) {
+      generate()
     }
-  }, [open, fetchToken])
-
-  // Confirm dialog copy differs when there is no token to invalidate yet
-  const hasToken = Boolean(token)
-  let actionLabel = hasToken ? t('Regenerate') : t('Generate')
-  if (generating) {
-    actionLabel = t('Generating...')
-  }
+  }, [open, token, generate])
 
   return (
-    <>
-      <Dialog
-        open={open}
-        onOpenChange={onOpenChange}
-        title={t('Access Token')}
-        description={t(
-          "Your system access token for API authentication. Keep it secure and don't share it with others."
-        )}
-        contentClassName='sm:max-w-md'
-        contentHeight='auto'
-        bodyClassName='space-y-4'
-        footer={
-          <>
-            <Button
-              type='button'
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('Access Token')}
+      description={t(
+        "Your system access token for API authentication. Keep it secure and don't share it with others."
+      )}
+      contentClassName='sm:max-w-md'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+      footer={
+        <>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+          >
+            {t('Close')}
+          </Button>
+          <Button
+            type='button'
+            onClick={generate}
+            disabled={generating}
+            className='gap-2'
+          >
+            {generating ? (
+              <Loader2 className='h-4 w-4 animate-spin' />
+            ) : (
+              <RefreshCw className='h-4 w-4' />
+            )}
+            {generating ? t('Generating...') : t('Regenerate')}
+          </Button>
+        </>
+      }
+    >
+      <div className='my-6 space-y-4'>
+        <div className='space-y-2'>
+          <Label htmlFor='token'>{t('Token')}</Label>
+          <div className='flex gap-2'>
+            <Input
+              id='token'
+              type='text'
+              value={token}
+              readOnly
+              className='font-mono text-xs'
+              placeholder={t('Click "Generate" to create a token')}
+            />
+            <CopyButton
+              value={token}
               variant='outline'
-              onClick={() => onOpenChange(false)}
-            >
-              {t('Close')}
-            </Button>
-            <Button
-              type='button'
-              onClick={() => setConfirmOpen(true)}
-              disabled={generating || loading}
-              className='gap-2'
-            >
-              {generating ? (
-                <Loader2 className='h-4 w-4 animate-spin' />
-              ) : (
-                <RefreshCw className='h-4 w-4' />
-              )}
-              {actionLabel}
-            </Button>
-          </>
-        }
-      >
-        <div className='my-6 space-y-4'>
-          <div className='space-y-2'>
-            <Label htmlFor='token'>{t('Token')}</Label>
-            <div className='flex gap-2'>
-              <Input
-                id='token'
-                type='text'
-                value={token}
-                readOnly
-                disabled={loading && !token}
-                className='font-mono text-xs'
-                placeholder={
-                  loading
-                    ? t('Loading...')
-                    : t('Click "Generate" to create a token')
-                }
-              />
-              <CopyButton
-                value={token}
-                variant='outline'
-                className='size-9'
-                iconClassName='size-4'
-                tooltip={t('Copy token')}
-                aria-label={t('Copy token')}
-              />
-            </div>
-            <p className='text-muted-foreground text-xs'>
-              {t('Use this token for API authentication')}
-            </p>
+              className='size-9'
+              iconClassName='size-4'
+              tooltip={t('Copy token')}
+              aria-label={t('Copy token')}
+            />
           </div>
+          <p className='text-muted-foreground text-xs'>
+            {t('Use this token for API authentication')}
+          </p>
         </div>
-      </Dialog>
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={hasToken ? t('Regenerate Access Token') : t('Generate Access Token')}
-        desc={
-          hasToken
-            ? t(
-                'Regenerating will immediately invalidate the current token, and API requests using it will stop working. This action cannot be undone.'
-              )
-            : t("You don't have an access token yet. Generate one now?")
-        }
-        confirmText={actionLabel}
-        destructive={hasToken}
-        isLoading={generating}
-        handleConfirm={async () => {
-          const success = await generate()
-          if (success) {
-            setConfirmOpen(false)
-          }
-        }}
-      />
-    </>
+      </div>
+    </Dialog>
   )
 }

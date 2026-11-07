@@ -20,16 +20,13 @@ import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import type { EventParamsDefinition, IVChart } from '@visactor/vchart'
 import {
-  Activity,
   ChevronRight,
   CircleAlert,
   EyeOff,
   GitBranch,
-  Hash,
   Info,
   Loader2,
   Route,
-  WalletCards,
 } from 'lucide-react'
 import {
   Fragment,
@@ -60,7 +57,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getFlowQuotaDates, getTeamFlowQuotaDates } from '@/features/dashboard/api'
+import {
+  getFlowQuotaDates,
+  getTeamFlowQuotaDates,
+} from '@/features/dashboard/api'
 import {
   buildDashboardFlowData,
   buildFlowSankeySpec,
@@ -98,14 +98,9 @@ interface FlowChartsProps {
   filters?: DashboardFilters
   // When false, sensitive node labels are masked in the rendered Sankey.
   sensitiveVisible?: boolean
+  includeAdminData?: boolean
   isTeamView?: boolean
 }
-
-const FLOW_METRIC_OPTIONS = [
-  { value: 'quota', labelKey: 'By quota', icon: WalletCards },
-  { value: 'tokens', labelKey: 'By tokens', icon: Hash },
-  { value: 'requests', labelKey: 'By requests', icon: Activity },
-] as const
 
 const FLOW_METRIC_LABEL_KEYS: Record<FlowMetric, string> = {
   quota: 'Quota',
@@ -261,14 +256,14 @@ export function FlowCharts(props: FlowChartsProps) {
   const isRoot = Boolean(user?.role && user.role >= ROLE.SUPER_ADMIN)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
   const isTeamView = props.isTeamView ?? false
-  // In team view a parent account sees user+group+model+channel stages (same as admin).
+  const includeAdminData = props.includeAdminData ?? isAdmin
   let flowRole: FlowRole = 'user'
-  if (isRoot) {
+  if (includeAdminData && isRoot) {
     flowRole = 'root'
-  } else if (isAdmin || isTeamView) {
+  } else if ((includeAdminData && isAdmin) || isTeamView) {
     flowRole = 'admin'
   }
-  const [metric, setMetric] = useState<FlowMetric>('quota')
+  const metric: FlowMetric = props.filters?.metric ?? 'tokens'
   const [topNodeLimit, setTopNodeLimit] = useState(DEFAULT_FLOW_TOP_NODE_LIMIT)
   const [overflowMode, setOverflowMode] =
     useState<FlowOverflowMode>('aggregate')
@@ -338,14 +333,28 @@ export function FlowCharts(props: FlowChartsProps) {
     isError,
     isLoading,
   } = useQuery({
-    queryKey: ['dashboard', 'flow', flowQueryParams, flowRole, isTeamView],
+    queryKey: [
+      'dashboard',
+      'flow',
+      flowQueryParams,
+      flowRole,
+      includeAdminData,
+      user?.id,
+      isTeamView,
+    ],
     queryFn: () =>
       isTeamView
         ? getTeamFlowQuotaDates(flowQueryParams)
-        : getFlowQuotaDates(flowQueryParams, isAdmin),
+        : getFlowQuotaDates(flowQueryParams, includeAdminData),
     select: (res) =>
       requireSuccessfulFlowRows(res, t('Please try again later.')),
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const maskSensitive = props.sensitiveVisible === false
@@ -541,53 +550,6 @@ export function FlowCharts(props: FlowChartsProps) {
       <div className='flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between'>
         <div className='flex min-w-0 flex-wrap items-end gap-2'>
           <div className='flex min-w-0 flex-col gap-1.5'>
-            <div className='flex items-center gap-1.5'>
-              <span className='text-muted-foreground text-xs font-medium'>
-                {t('Flow width metric')}
-              </span>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type='button'
-                        className='text-muted-foreground/60 hover:text-foreground flex size-5 shrink-0 items-center justify-center rounded-md'
-                        aria-label={t('Flow width metric')}
-                      />
-                    }
-                  >
-                    <Info className='size-3.5' />
-                  </TooltipTrigger>
-                  <TooltipContent className='max-w-[14rem]'>
-                    {t('Choose how flow widths are calculated.')}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <Tabs
-              value={metric}
-              onValueChange={(value) => setMetric(value as FlowMetric)}
-              className='shrink-0'
-            >
-              <TabsList aria-label={t('Flow width metric')}>
-                {FLOW_METRIC_OPTIONS.map((option) => {
-                  const Icon = option.icon
-                  return (
-                    <TabsTrigger
-                      key={option.value}
-                      value={option.value}
-                      className='gap-1.5 px-2.5 text-xs'
-                    >
-                      <Icon data-icon='inline-start' aria-hidden='true' />
-                      {t(option.labelKey)}
-                    </TabsTrigger>
-                  )
-                })}
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className='flex min-w-0 flex-col gap-1.5'>
             <span className='text-muted-foreground text-xs font-medium'>
               {t('Display limit')}
             </span>
@@ -649,7 +611,7 @@ export function FlowCharts(props: FlowChartsProps) {
         </div>
 
         <div className='flex min-w-0 items-center gap-2 xl:justify-end'>
-          {(isAdmin || isTeamView) && (
+          {includeAdminData && (
             <div className='flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[min(24rem,34vw)]'>
               <MultiSelect
                 options={userFilterOptions}

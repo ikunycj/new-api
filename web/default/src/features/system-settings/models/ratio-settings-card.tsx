@@ -27,7 +27,7 @@ import * as z from 'zod'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-import { resetModelRatios } from '../api'
+import { resetModelRatios, updatePricingGroupConfiguration } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -121,16 +121,41 @@ const createModelSchema = (t: Translate) =>
 const createGroupSchema = (t: Translate) =>
   z.object({
     GroupRatio: createJsonStringField(t),
-    UserUsableGroups: createJsonStringField(t),
-    GroupGroupRatio: createJsonStringField(t),
-    AutoGroups: createJsonStringField(t, {
-      predicate: (parsed) =>
-        Array.isArray(parsed) &&
-        parsed.every((item) => typeof item === 'string'),
-      predicateMessage: 'Expected a JSON array of group identifiers',
+    PricingGroupEnabled: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every((enabled) => typeof enabled === 'boolean'),
     }),
-    DefaultUseAutoGroup: z.boolean(),
-    GroupSpecialUsableGroup: createJsonStringField(t),
+    PricingGroupDisplayName: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every(
+          (displayName) => typeof displayName === 'string'
+        ),
+    }),
+    PricingGroupRemark: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every((remark) => typeof remark === 'string'),
+    }),
+    PricingGroupOrder: createJsonStringField(t, {
+      predicate: (value) =>
+        Array.isArray(value) && value.every((item) => typeof item === 'string'),
+    }),
+    PricingGroupRetryPolicy: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' && value !== null && !Array.isArray(value),
+    }),
+    PricingGroupRoutingStrategy: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' && value !== null && !Array.isArray(value),
+    }),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -177,8 +202,26 @@ export function RatioSettingsCard({
       toast.error(error.message || t('Failed to reset model ratios'))
     },
   })
+  const pricingGroupMutation = useMutation({
+    mutationFn: updatePricingGroupConfiguration,
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('定价分组设置已保存')
+        queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      } else {
+        toast.error(data.message || '定价分组设置保存失败')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '定价分组设置保存失败')
+    },
+  })
+  const {
+    mutateAsync: savePricingGroupConfiguration,
+    isPending: isSavingPricingGroups,
+  } = pricingGroupMutation
 
-  const modelNormalizedDefaults = useRef({
+  const initialModelValues = {
     ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
     ModelRatio: normalizeJsonString(modelDefaults.ModelRatio),
     CacheRatio: normalizeJsonString(modelDefaults.CacheRatio),
@@ -192,21 +235,27 @@ export function RatioSettingsCard({
     ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
     BillingMode: normalizeJsonString(modelDefaults.BillingMode),
     BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
-  })
-  const [savedModelValues, setSavedModelValues] = useState(
-    modelNormalizedDefaults.current
-  )
+  }
+  const modelNormalizedDefaults = useRef(initialModelValues)
+  const [savedModelValues, setSavedModelValues] = useState(initialModelValues)
 
-  const groupNormalizedDefaults = useRef({
+  const initialGroupValues = {
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-    UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
-    GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
-    AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
-    DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
-    GroupSpecialUsableGroup: normalizeJsonString(
-      groupDefaults.GroupSpecialUsableGroup
+    PricingGroupEnabled: normalizeJsonString(groupDefaults.PricingGroupEnabled),
+    PricingGroupDisplayName: normalizeJsonString(
+      groupDefaults.PricingGroupDisplayName
     ),
-  })
+    PricingGroupRemark: normalizeJsonString(groupDefaults.PricingGroupRemark),
+    PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
+    PricingGroupRetryPolicy: normalizeJsonString(
+      groupDefaults.PricingGroupRetryPolicy
+    ),
+    PricingGroupRoutingStrategy: normalizeJsonString(
+      groupDefaults.PricingGroupRoutingStrategy
+    ),
+  }
+  const groupNormalizedDefaults = useRef(initialGroupValues)
+  const [savedGroupValues, setSavedGroupValues] = useState(initialGroupValues)
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
 
@@ -234,13 +283,22 @@ export function RatioSettingsCard({
     resolver: zodResolver(groupSchema),
     mode: 'onChange',
     defaultValues: {
-      ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
-      GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
-      AutoGroups: formatJsonForTextarea(groupDefaults.AutoGroups),
-      GroupSpecialUsableGroup: formatJsonForTextarea(
-        groupDefaults.GroupSpecialUsableGroup
+      PricingGroupEnabled: formatJsonForTextarea(
+        groupDefaults.PricingGroupEnabled
+      ),
+      PricingGroupDisplayName: formatJsonForTextarea(
+        groupDefaults.PricingGroupDisplayName
+      ),
+      PricingGroupRemark: formatJsonForTextarea(
+        groupDefaults.PricingGroupRemark
+      ),
+      PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
+      PricingGroupRoutingStrategy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRoutingStrategy
       ),
     },
   })
@@ -283,23 +341,40 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-      UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
-      GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
-      AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
-      DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
-      GroupSpecialUsableGroup: normalizeJsonString(
-        groupDefaults.GroupSpecialUsableGroup
+      PricingGroupEnabled: normalizeJsonString(
+        groupDefaults.PricingGroupEnabled
+      ),
+      PricingGroupDisplayName: normalizeJsonString(
+        groupDefaults.PricingGroupDisplayName
+      ),
+      PricingGroupRemark: normalizeJsonString(groupDefaults.PricingGroupRemark),
+      PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: normalizeJsonString(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
+      PricingGroupRoutingStrategy: normalizeJsonString(
+        groupDefaults.PricingGroupRoutingStrategy
       ),
     }
+    setSavedGroupValues(groupNormalizedDefaults.current)
 
     groupForm.reset({
-      ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
-      GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
-      AutoGroups: formatJsonForTextarea(groupDefaults.AutoGroups),
-      GroupSpecialUsableGroup: formatJsonForTextarea(
-        groupDefaults.GroupSpecialUsableGroup
+      PricingGroupEnabled: formatJsonForTextarea(
+        groupDefaults.PricingGroupEnabled
+      ),
+      PricingGroupDisplayName: formatJsonForTextarea(
+        groupDefaults.PricingGroupDisplayName
+      ),
+      PricingGroupRemark: formatJsonForTextarea(
+        groupDefaults.PricingGroupRemark
+      ),
+      PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
+      PricingGroupRetryPolicy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRetryPolicy
+      ),
+      PricingGroupRoutingStrategy: formatJsonForTextarea(
+        groupDefaults.PricingGroupRoutingStrategy
       ),
     })
   }, [groupDefaults, groupForm])
@@ -351,19 +426,18 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
-        UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
-        GroupGroupRatio: normalizeJsonString(values.GroupGroupRatio),
-        AutoGroups: normalizeJsonString(values.AutoGroups),
-        DefaultUseAutoGroup: values.DefaultUseAutoGroup,
-        GroupSpecialUsableGroup: normalizeJsonString(
-          values.GroupSpecialUsableGroup
+        PricingGroupEnabled: normalizeJsonString(values.PricingGroupEnabled),
+        PricingGroupDisplayName: normalizeJsonString(
+          values.PricingGroupDisplayName
         ),
-      }
-
-      // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
-      const apiKeyMap: Record<string, string> = {
-        GroupSpecialUsableGroup:
-          'group_ratio_setting.group_special_usable_group',
+        PricingGroupRemark: normalizeJsonString(values.PricingGroupRemark),
+        PricingGroupOrder: normalizeJsonString(values.PricingGroupOrder),
+        PricingGroupRetryPolicy: normalizeJsonString(
+          values.PricingGroupRetryPolicy
+        ),
+        PricingGroupRoutingStrategy: normalizeJsonString(
+          values.PricingGroupRoutingStrategy
+        ),
       }
 
       const updates = (
@@ -372,12 +446,32 @@ export function RatioSettingsCard({
         (key) => normalized[key] !== groupNormalizedDefaults.current[key]
       )
 
-      for (const key of updates) {
-        const apiKey = apiKeyMap[key] || key
-        await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
-      }
+      if (updates.length === 0) return
+
+      const result = await savePricingGroupConfiguration({
+        group_ratio: normalized.GroupRatio,
+        pricing_group_enabled: normalized.PricingGroupEnabled,
+        pricing_group_display_name: normalized.PricingGroupDisplayName,
+        pricing_group_remark: normalized.PricingGroupRemark,
+        pricing_group_order: normalized.PricingGroupOrder,
+        pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
+        pricing_group_routing_strategy: normalized.PricingGroupRoutingStrategy,
+      })
+      if (!result.success) return
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing-group-metrics'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
+      ])
+
+      groupNormalizedDefaults.current = normalized
+      setSavedGroupValues(normalized)
     },
-    [updateOption]
+    [queryClient, savePricingGroupConfiguration]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -424,8 +518,9 @@ export function RatioSettingsCard({
       return (
         <GroupRatioForm
           form={groupForm}
+          savedGroupRatio={savedGroupValues.GroupRatio}
           onSave={saveGroupRatios}
-          isSaving={updateOption.isPending}
+          isSaving={isSavingPricingGroups}
         />
       )
     }

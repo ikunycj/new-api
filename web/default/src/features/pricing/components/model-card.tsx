@@ -35,6 +35,12 @@ import { cn } from '@/lib/utils'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import {
+  formatTierLabel,
+  formatTierTimeCondition,
+  formatBillingPriceUnit,
+  formatBillingVarLabel,
+} from '../lib/billing-expr'
+import {
   getDynamicPricingSummary,
   getOfficialDynamicPricingSummary,
 } from '../lib/dynamic-price'
@@ -62,6 +68,11 @@ export interface ModelCardProps {
 const TOKEN_COUNT_FORMAT = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
 })
+const PRIMARY_DYNAMIC_PRICE_FIELDS = new Set([
+  'inputPrice',
+  'outputPrice',
+  'fixedPrice',
+])
 
 function formatTokenCount(tokens: number): string {
   if (tokens >= 1_000_000) {
@@ -84,14 +95,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
-  const groups = props.model.enable_groups || []
   const displayGroups = props.model.display_groups || []
-  const toBDisplayGroups = props.model.tob_display_groups || []
-  const canExpandGroups = toBDisplayGroups.length > 0
+  const groupPreviewLimit = 3
+  const canExpandGroups = displayGroups.length > groupPreviewLimit
   const visibleGroups = isGroupsExpanded
-    ? [...displayGroups, ...toBDisplayGroups]
-    : displayGroups
-  const hiddenGroupCount = toBDisplayGroups.length
+    ? displayGroups
+    : displayGroups.slice(0, groupPreviewLimit)
+  const hiddenGroupCount = Math.max(displayGroups.length - groupPreviewLimit, 0)
   const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
@@ -133,29 +143,52 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     label: string
     value: string
     officialValue?: string
+    unit?: string
+    conditionExpression?: string
   }[] = []
   let specialPricingExpression = ''
   if (dynamicSummary) {
     if (dynamicSummary.isSpecialExpression) {
       specialPricingExpression = dynamicSummary.rawExpression
-    } else if (dynamicSummary.primaryEntries.length > 0) {
-      const officialEntries = new Map(
-        (officialDynamicSummary?.primaryEntries ?? []).map((entry) => [
-          entry.key,
-          entry.formatted,
-        ])
-      )
-      priceRows.push(
-        ...dynamicSummary.primaryEntries.map((entry) => {
-          const officialValue = officialEntries.get(entry.key)
-          return {
-            key: entry.key,
-            label: t(entry.shortLabel),
+    } else {
+      dynamicSummary.tierEntries.forEach(({ tier, entries }, tierIndex) => {
+        const primaryEntries = entries.filter((entry) =>
+          PRIMARY_DYNAMIC_PRICE_FIELDS.has(entry.field)
+        )
+        const officialEntries = new Map(
+          (officialDynamicSummary?.tierEntries[tierIndex]?.entries ?? [])
+            .filter((entry) => PRIMARY_DYNAMIC_PRICE_FIELDS.has(entry.field))
+            .map((entry) => [entry.key, entry.formatted])
+        )
+        primaryEntries.forEach((entry, entryIndex) => {
+          priceRows.push({
+            key: `${tier.label}:${entry.key}`,
+            label:
+              dynamicSummary.tierCount > 1
+                ? `${formatTierLabel(tier.label, t)} · ${formatBillingVarLabel(entry.variable, t)}`
+                : formatBillingVarLabel(entry.variable, t),
             value: entry.formatted,
-            officialValue,
-          }
+            officialValue: officialEntries.get(entry.key),
+            unit: formatBillingPriceUnit(
+              entry.billingUnit,
+              entry.imageCount,
+              t,
+              tokenUnit
+            ),
+            conditionExpression:
+              entryIndex === 0
+                ? (formatTierTimeCondition(tier, t) ??
+                  tier.conditionExpression ??
+                  tier.conditions
+                    .map(
+                      (condition) =>
+                        `${condition.var} ${condition.op} ${condition.value}`
+                    )
+                    .join(' && '))
+                : undefined,
+          })
         })
-      )
+      })
     }
   } else if (isTokenBased) {
     const inputValue = formatPrice(
@@ -250,6 +283,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     })
   }
 
+  const hasOnlyRequestTiers =
+    dynamicSummary != null &&
+    dynamicSummary.tierCount > 0 &&
+    dynamicSummary.tiers.every((tier) => tier.billingUnit === 'request')
   const metadata: { key: string; label: string; value: string }[] = []
   if (props.model.context_length && props.model.context_length > 0) {
     metadata.push({
@@ -276,7 +313,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     metadata.push({
       key: 'groups',
       label: t('Groups'),
-      value: groups.length.toString(),
+      value: displayGroups.length.toString(),
     })
   }
   if (metadata.length < 3) {
@@ -290,7 +327,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     metadata.push({
       key: 'pricing-type',
       label: t('Pricing Type'),
-      value: isTokenBased ? t('Token-based') : t('Per Request'),
+      value:
+        hasOnlyRequestTiers || !isTokenBased
+          ? t('Per Request')
+          : t('Token-based'),
     })
   }
 
@@ -314,7 +354,14 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         key={row.key}
         className='grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 text-sm'
       >
-        <span className='text-muted-foreground pt-0.5'>{row.label}</span>
+        <span className='text-muted-foreground min-w-0 pt-0.5'>
+          <span className='block'>{row.label}</span>
+          {row.conditionExpression ? (
+            <code className='text-muted-foreground/65 mt-0.5 line-clamp-2 block text-[10px] leading-snug break-words'>
+              {row.conditionExpression}
+            </code>
+          ) : null}
+        </span>
         <PriceValueComparison
           current={row.value}
           official={row.officialValue}
@@ -322,7 +369,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           currentClassName='font-semibold'
         />
         <span className='text-muted-foreground self-start pt-0.5 text-xs'>
-          / {priceUnit}
+          / {row.unit ?? priceUnit}
         </span>
       </div>
     ))
@@ -412,7 +459,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           <div
             className={cn(
               'flex min-w-0 flex-col gap-1.5',
-              visibleGroups.length > 4 && 'max-h-40 overflow-y-auto pr-1'
+              isGroupsExpanded && 'max-h-40 overflow-y-auto pr-1'
             )}
           >
             {visibleGroups.map((group) => {
@@ -427,11 +474,35 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 : null
               let price = ''
               if (isDynamicPricing) {
-                price =
-                  groupDynamicSummary?.primaryEntries
-                    .slice(0, 2)
-                    .map((entry) => entry.formatted)
-                    .join(' / ') || t('Dynamic Pricing')
+                if (groupDynamicSummary?.isSpecialExpression) {
+                  price = t('Special billing expression')
+                } else if (
+                  groupDynamicSummary &&
+                  groupDynamicSummary.tierCount > 1
+                ) {
+                  price =
+                    groupDynamicSummary.tierEntries
+                      .map(({ tier, entries }) => {
+                        const tierPrice = entries
+                          .filter((entry) =>
+                            PRIMARY_DYNAMIC_PRICE_FIELDS.has(entry.field)
+                          )
+                          .slice(0, 2)
+                          .map((entry) => entry.formatted)
+                          .join(' / ')
+                        return tierPrice
+                          ? `${formatTierLabel(tier.label, t)}: ${tierPrice}`
+                          : ''
+                      })
+                      .filter(Boolean)
+                      .join(' · ') || t('Dynamic Pricing')
+                } else {
+                  price =
+                    groupDynamicSummary?.primaryEntries
+                      .slice(0, 2)
+                      .map((entry) => entry.formatted)
+                      .join(' / ') || t('Dynamic Pricing')
+                }
               } else if (isTokenBased) {
                 price = `${formatPrice(props.model, 'input', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)} / ${formatPrice(props.model, 'output', tokenUnit, showRechargePrice, priceRate, usdExchangeRate, group.group)}`
               } else {
@@ -450,6 +521,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 >
                   <GroupBadge
                     group={group.group}
+                    label={group.label}
                     ratio={group.ratio}
                     size='sm'
                   />

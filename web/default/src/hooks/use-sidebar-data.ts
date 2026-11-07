@@ -21,10 +21,7 @@ import {
   Box,
   CreditCard,
   FileText,
-  Gauge,
-  GitBranch,
   FlaskConical,
-  HeartPulse,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -32,6 +29,7 @@ import {
   Radio,
   ServerCog,
   Settings,
+  Tags,
   Ticket,
   User,
   Users,
@@ -84,11 +82,6 @@ export function useSidebarData(): SidebarData {
             icon: LayoutDashboard,
           },
           {
-            title: t('Group Status'),
-            url: '/group-status',
-            icon: HeartPulse,
-          },
-          {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
@@ -97,12 +90,6 @@ export function useSidebarData(): SidebarData {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,
-          },
-          {
-            title: t('Load Test Demo'),
-            url: '/loadtest-demo',
-            icon: Gauge,
-            requiresLoadTestAccess: true,
           },
           {
             title: t('Task Logs'),
@@ -127,12 +114,6 @@ export function useSidebarData(): SidebarData {
             url: '/profile',
             icon: User,
           },
-          {
-            title: t('My Channels'),
-            url: '/my-channels',
-            icon: Radio,
-            requiresToBAccess: true,
-          },
         ],
       },
       {
@@ -140,7 +121,7 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
-            title: t('Admin Console'),
+            title: '管理控制台',
             url: '/admin-console',
             icon: LayoutDashboard,
             requiredRole: ROLE.ADMIN,
@@ -151,30 +132,26 @@ export function useSidebarData(): SidebarData {
             icon: Radio,
           },
           {
-            title: '分组管理',
+            title: t('Group Management'),
             url: '/group-management',
-            icon: Users,
+            icon: Tags,
             requiredRole: ROLE.SUPER_ADMIN,
-          },
-          {
-            title: t('Channel Monitors'),
-            url: '/channel-monitors',
-            icon: HeartPulse,
-          },
-          {
-            title: t('Monitoring & Alerts'),
-            url: '/failover',
-            icon: GitBranch,
-          },
-          {
-            title: t('Models'),
-            url: '/models/metadata',
-            icon: Box,
           },
           {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: '调用日志',
+            url: '/usage-logs/call',
+            icon: FileText,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
+            title: t('Models'),
+            url: '/models/metadata',
+            icon: Box,
           },
           {
             title: t('Redemption Codes'),

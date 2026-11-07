@@ -8,7 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,7 +32,7 @@ func GetAllTask(c *gin.Context) {
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllTasks(queryParams)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tasksToDto(items, true))
+	pageInfo.SetItems(tasksToDto(items, true, true))
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -55,7 +55,7 @@ func GetTeamTask(c *gin.Context) {
 	items := model.TaskGetAllTeamTask(userIds, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllTeamTask(userIds, queryParams)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tasksToDto(items, true))
+	pageInfo.SetItems(tasksToDto(items, true, false))
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -79,11 +79,11 @@ func GetUserTask(c *gin.Context) {
 	items := model.TaskGetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllUserTask(userId, queryParams)
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tasksToDto(items, false))
+	pageInfo.SetItems(tasksToDto(items, false, false))
 	common.ApiSuccess(c, pageInfo)
 }
 
-func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
+func tasksToDto(tasks []*model.Task, fillUser bool, includeInternal bool) []*dto.TaskDto {
 	var userIdMap map[int]*model.UserBase
 	if fillUser {
 		userIdMap = make(map[int]*model.UserBase)
@@ -105,7 +105,7 @@ func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
 				task.Username = user.Username
 			}
 		}
-		result[i] = relay.TaskModel2Dto(task)
+		result[i] = relay.TaskModel2Dto(task, includeInternal)
 	}
 	return result
 }

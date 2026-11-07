@@ -47,7 +47,6 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     detail: true,
     token: true,
     log: true,
-    loadtest: true,
     midjourney: true,
     task: true,
   },
@@ -58,7 +57,6 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   },
   admin: {
     enabled: true,
-    dashboard: true,
     channel: true,
     models: true,
     redemption: true,
@@ -101,9 +99,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
-  '/dashboard/users': { section: 'console', module: 'detail' },
   '/keys': { section: 'console', module: 'token' },
-  '/loadtest-demo': { section: 'console', module: 'loadtest' },
   '/usage-logs': { section: 'console', module: 'log' },
   '/usage-logs/common': { section: 'console', module: 'log' },
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
@@ -111,10 +107,6 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/wallet': { section: 'personal', module: 'topup' },
   '/profile': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
-  '/group-pricing': { section: 'admin', module: 'setting' },
-  '/group-management': { section: 'admin', module: 'setting' },
-  '/admin-console': { section: 'admin', module: 'dashboard' },
-  '/failover': { section: 'admin', module: 'channel' },
   '/models': { section: 'admin', module: 'models' },
   '/models/metadata': { section: 'admin', module: 'models' },
   '/models/deployments': { section: 'admin', module: 'models' },
@@ -308,11 +300,7 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(
-            group.items,
-            adminConfig,
-            userConfig
-          ),
+          items: filterNavItems(group.items, adminConfig, userConfig),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
     [navGroups, adminConfig, userConfig]

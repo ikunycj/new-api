@@ -241,7 +241,7 @@ export function DocsShell(props: DocsShellProps) {
       : undefined
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
       <div data-doc-page-source='true'>
         <div className='pointer-events-none sticky top-16 z-30 mt-16 px-3 pt-2 md:hidden'>
           <div className='pointer-events-auto'>

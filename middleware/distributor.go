@@ -12,13 +12,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
+	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -33,19 +34,22 @@ func isPlaygroundRequest(path string) bool {
 	return strings.HasPrefix(path, "/pg/")
 }
 
+func affinityRouteEntryAllows(entries []model.BillingGroupChannel, channel *model.Channel) bool {
+	if channel == nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.ChannelId != channel.Id || !entry.Enabled {
+			continue
+		}
+		return entry.Weight > 0 || channel.IsForcePriority()
+	}
+	return false
+}
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// Managed load-test mock requests are executed entirely inside
-		// controller.Relay. Bypass channel discovery here, otherwise the
-		// distributor can reject the request (or select a real channel) before
-		// the controller gets a chance to enter the internal mock executor.
-		// Authentication and mock-signature validation still happen in Relay.
-		if service.IsMockLoadTestRequest(c) {
-			common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-			c.Next()
-			return
-		}
-
+		defer service.CancelPendingRoutingSelection(c)
 		var channel *model.Channel
 		channelId, ok := common.GetContextKey(c, constant.ContextKeyTokenSpecificChannelId)
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
@@ -98,6 +102,7 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+				userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 				if isPlaygroundRequest(c.Request.URL.Path) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
@@ -106,7 +111,7 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if playgroundRequest.Group != "" {
-						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
+						if !service.UserGroupCanUsePricingGroup(userGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
@@ -143,12 +148,24 @@ func Distribute() func(c *gin.Context) {
 					affinityUsable := false
 					preferred, preferredErr := model.CacheGetChannel(preferredChannelID)
 					if preferredErr == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
-						(!service.IsMockLoadTestRequest(c) || preferred.GetSetting().MockLoadTest) &&
 						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) &&
 						model.IsChannelEnabledForGroupModel(selectGroup, modelRequest.Model, preferred.Id) {
-						channel = preferred
-						affinityUsable = true
-						service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
+						// Affinity is a stability hint, not a hard routing rule. It
+						// must not bypass a selected force layer, an exhausted
+						// channel, or a zero-weight route entry.
+						if (!channel.IsForcePriority() || preferred.Id == channel.Id) &&
+							preferred.HasEnabledKey() &&
+							service.CurrentChannelConcurrency(preferred.Id) < preferred.GetMaxConcurrency() {
+							_, entries, configured := model.ResolveBillingGroupRoute(selectGroup)
+							if !configured || affinityRouteEntryAllows(entries, preferred) {
+								if preferred.Id != channel.Id {
+									service.CancelPendingRoutingSelection(c)
+								}
+								channel = preferred
+								affinityUsable = true
+								service.MarkChannelAffinityUsed(c, selectGroup, preferred.Id)
+							}
+						}
 					}
 					if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
 						service.ClearCurrentChannelAffinityCache(c)
@@ -158,6 +175,13 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		finishGroupActivity := service.BeginPricingGroupActivity(
+			c,
+			common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+			common.GetContextKeyInt(c, constant.ContextKeyUserId),
+			c.GetString(common.RequestIdKey),
+		)
+		defer finishGroupActivity()
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -257,7 +281,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			relayMode == relayconstant.RelayModeMidjourneyTaskImageSeed {
 			shouldSelectChannel = false
 		} else {
-			midjourneyRequest := dto.MidjourneyRequest{}
+			midjourneyRequest := taskdto.MidjourneyRequest{}
 			err = common.UnmarshalBodyReusable(c, &midjourneyRequest)
 			if err != nil {
 				return nil, false, errors.New(i18n.T(c, i18n.MsgDistributorInvalidMidjourney, map[string]any{"Error": err.Error()}))

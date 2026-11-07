@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -31,6 +32,41 @@ func CreateLogCleanupSystemTask(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    task.ToResponse(),
+	})
+}
+
+func DeleteLogUsageRollups(c *gin.Context) {
+	dateText := c.Query("before_date")
+	date, err := time.ParseInLocation("2006-01-02", dateText, time.Local)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "before_date must use YYYY-MM-DD",
+		})
+		return
+	}
+	now := time.Now().In(time.Local)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	if cutoff := date.Unix(); cutoff > todayStart {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "before_date cannot be later than today",
+		})
+		return
+	}
+	cutoff := date.Unix()
+	deleted, err := model.DeleteChannelUsageRollupsBefore(c.Request.Context(), cutoff)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"deleted_count": deleted,
+			"before_date":   dateText,
+		},
 	})
 }
 

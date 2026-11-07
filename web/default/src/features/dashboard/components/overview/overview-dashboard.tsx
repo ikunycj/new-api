@@ -469,7 +469,6 @@ export function OverviewDashboard() {
   const [ccSwitchKey, setCCSwitchKey] = useState('')
   const [isResolvingCCSwitchKey, setIsResolvingCCSwitchKey] = useState(false)
   const requestChoiceOpenRef = useRef(false)
-  const selfRefreshInFlightRef = useRef(false)
   const onboardingMutationGenerationRef = useRef(0)
 
   useEffect(() => {
@@ -483,12 +482,11 @@ export function OverviewDashboard() {
     let disposed = false
 
     const refreshSelf = async () => {
-      if (disposed || selfRefreshInFlightRef.current) return
+      if (disposed) return
 
       const currentUser = useAuthStore.getState().auth.user
       if (!currentUser || currentUser.id !== user.id) return
 
-      selfRefreshInFlightRef.current = true
       const refreshGeneration = onboardingMutationGenerationRef.current
       try {
         const result = await getSelf()
@@ -517,23 +515,13 @@ export function OverviewDashboard() {
         setUser(refreshedUser)
       } catch {
         // Keep the cached snapshot when the refresh is unavailable.
-      } finally {
-        selfRefreshInFlightRef.current = false
       }
     }
 
     void refreshSelf()
-    const handleWindowFocus = () => void refreshSelf()
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void refreshSelf()
-    }
-    window.addEventListener('focus', handleWindowFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       disposed = true
-      window.removeEventListener('focus', handleWindowFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [setUser, user?.id])
 
@@ -549,8 +537,13 @@ export function OverviewDashboard() {
       return result.success ? (result.data?.items ?? []) : []
     },
     enabled: Boolean(user?.id),
-    staleTime: 0,
+    staleTime: Infinity,
+    gcTime: 0,
     refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
   })
 
   const anyKey = useMemo(
@@ -622,7 +615,10 @@ export function OverviewDashboard() {
     [isAdmin, quickActions]
   )
 
+  const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const stepStates = useMemo<StartStepState[]>(() => {
+    if (!setupStatusReady) return startSteps.map(() => 'pending')
+
     const currentStepIndex = startSteps.findIndex(
       (step, index) => !step.completed && !skippedSteps.includes(index)
     )
@@ -632,18 +628,16 @@ export function OverviewDashboard() {
       if (index === currentStepIndex) return 'current'
       return 'pending'
     })
-  }, [skippedSteps, startSteps])
+  }, [setupStatusReady, skippedSteps, startSteps])
   const completedStepCount = stepStates.filter(
     (state) => state === 'completed'
   ).length
   const setupComplete = completedStepCount === stepStates.length
-  const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const onboardingRequired = user?.onboarding_required === true
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
-  const showLeftContentPanels =
-    isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
-  const showContentPanels = showLeftContentPanels || showUptimePanel
+  const showLeftContentPanels = true
+  const showContentPanels = true
 
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
@@ -939,11 +933,9 @@ export function OverviewDashboard() {
                   'lg:grid-cols-2'
               )}
             >
-              {isAdmin && (
-                <CardStaggerItem className='lg:col-span-2'>
-                  <PerformanceHealthPanel />
-                </CardStaggerItem>
-              )}
+              <CardStaggerItem className='lg:col-span-2'>
+                <PerformanceHealthPanel />
+              </CardStaggerItem>
               {showApiInfoPanel && (
                 <CardStaggerItem>
                   <ApiInfoPanel />

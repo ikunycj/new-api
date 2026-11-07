@@ -2,7 +2,9 @@ package billing_setting
 
 import (
 	"fmt"
+	"math"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/samber/lo"
@@ -70,6 +72,45 @@ func GetPricingSyncData(base map[string]any) map[string]any {
 // Smoke test (called externally for validation before save)
 // ---------------------------------------------------------------------------
 
+func ValidateBillingExpressionsJSON(value string) error {
+	var expressions map[string]string
+	if err := common.UnmarshalJsonStr(value, &expressions); err != nil {
+		return err
+	}
+	if expressions == nil {
+		return fmt.Errorf("billing expressions must be a JSON object")
+	}
+	for model, expression := range expressions {
+		if expression == "" {
+			continue
+		}
+		if err := SmokeTestExpr(expression); err != nil {
+			return fmt.Errorf("model %s: %w", model, err)
+		}
+	}
+	return nil
+}
+
+func ValidateBillingConfiguration(configuration BillingSetting) error {
+	for model, mode := range configuration.BillingMode {
+		if mode != BillingModeRatio && mode != BillingModeTieredExpr {
+			return fmt.Errorf("model %s: unsupported billing mode %s", model, mode)
+		}
+		if mode == BillingModeTieredExpr && configuration.BillingExpr[model] == "" {
+			return fmt.Errorf("model %s: tiered_expr requires a billing expression", model)
+		}
+	}
+	for model, expression := range configuration.BillingExpr {
+		if expression == "" {
+			continue
+		}
+		if err := SmokeTestExpr(expression); err != nil {
+			return fmt.Errorf("model %s: %w", model, err)
+		}
+	}
+	return nil
+}
+
 func SmokeTestExpr(exprStr string) error {
 	return smokeTestExpr(exprStr)
 }
@@ -80,6 +121,7 @@ func smokeTestExpr(exprStr string) error {
 		{P: 1000, C: 1000, Len: 1000},
 		{P: 100000, C: 100000, Len: 100000},
 		{P: 1000000, C: 1000000, Len: 1000000},
+		{Len: 1000, CR: 1000, CC: 1000, CC1h: 1000, CC12h: 1000, Img: 1000, ImgO: 1000, AI: 1000, AO: 1000},
 	}
 	requests := []billingexpr.RequestInput{
 		{},
@@ -97,8 +139,8 @@ func smokeTestExpr(exprStr string) error {
 			if err != nil {
 				return fmt.Errorf("vector {p=%g, c=%g}: run failed: %w", v.P, v.C, err)
 			}
-			if result < 0 {
-				return fmt.Errorf("vector {p=%g, c=%g}: result %f < 0", v.P, v.C, result)
+			if result < 0 || math.IsNaN(result) || math.IsInf(result, 0) {
+				return fmt.Errorf("vector {p=%g, c=%g}: invalid cost %g", v.P, v.C, result)
 			}
 		}
 	}

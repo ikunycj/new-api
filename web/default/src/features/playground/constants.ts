@@ -54,6 +54,8 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
   frequency_penalty: 0,
   presence_penalty: 0,
   seed: null,
+  conversationContext: true,
+  contextWindowTokens: 0,
   stream: true,
   imageSize: '1024x1024',
   imageQuality: 'auto',
@@ -73,6 +75,7 @@ export const DEFAULT_PARAMETER_ENABLED: ParameterEnabled = {
 export const STORAGE_KEYS = {
   CONFIG: 'playground_config',
   MESSAGES: 'playground_messages',
+  MESSAGES_CLEARED: 'playground_messages_cleared',
   PARAMETER_ENABLED: 'playground_parameter_enabled',
 } as const
 

@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import DeepSeek from '@lobehub/icons/es/DeepSeek'
+
 interface HomeProviderIconProps {
   icon?: string
   provider?: string
@@ -32,6 +34,9 @@ export function HomeProviderIcon(props: HomeProviderIconProps) {
     width: size,
   } as const
 
+  if (key.includes('deepseek')) {
+    return <DeepSeek.Color width={size} height={size} aria-hidden='true' />
+  }
   if (key.includes('dalle') || key.includes('image')) {
     return (
       <svg {...svgProps}>

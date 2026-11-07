@@ -20,11 +20,9 @@ export {
   cleanFilters,
   buildQueryParams,
   getSavedGranularity,
-  saveGranularity,
   getDefaultDays,
-  getSavedChartPreferences,
-  saveChartPreferences,
   buildDefaultDashboardFilters,
+  getDashboardPresetRange,
 } from './filters'
 export {
   getLatencyColorClass,

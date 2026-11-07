@@ -298,6 +298,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	}
 	user.Role = common.RoleCommonUser
 	user.Status = common.UserStatusEnabled
+	user.CreatedIP = c.ClientIP()
 	user.OnboardingVersion = model.NewUserOnboardingVersion()
 
 	// Handle affiliate code

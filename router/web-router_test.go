@@ -70,6 +70,7 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 	common.OptionMap = map[string]string{
 		"HeaderNavModules": `{"docs":{"enabled":true}}`,
 		"HomePageContent":  "",
+		"CustomerService":  "Contact us <support@example.com>\nLine 2",
 	}
 	common.OptionMapRWMutex.Unlock()
 	t.Cleanup(func() {
@@ -126,6 +127,7 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		assert.Contains(t, body, `Test &lt;/script&gt;&lt;b&gt; Gateway`)
 		assert.Contains(t, body, `"home_page_content_loaded":true`)
 		assert.Contains(t, body, `"locale":"zhCN"`)
+		assert.Contains(t, body, `"customer_service":"Contact us \u003csupport@example.com\u003e\nLine 2"`)
 		assert.Contains(t, body, `Test \u003c/script\u003e\u003cb\u003e Gateway`)
 		assert.NotContains(t, body, `window.__NEW_API_PUBLIC_BOOTSTRAP__={"home_page_content":"","home_page_content_loaded":true,"locale":"zhCN","setup":true,"status":{"HeaderNavModules":"{\"docs\":{\"enabled\":true}}","logo":"https://cdn.example/logo.png?x=1\u0026y=2","server_address":"https://api.example.com","system_name":"Test </script>`)
 		assert.Equal(t, "no-cache, must-revalidate", recorder.Header().Get("Cache-Control"))

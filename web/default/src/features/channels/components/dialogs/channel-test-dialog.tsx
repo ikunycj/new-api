@@ -26,10 +26,13 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Brain,
+  Eye,
   Gauge,
   Info,
   Loader2,
   Settings,
+  Square,
   Trash2,
 } from 'lucide-react'
 import {
@@ -87,7 +90,7 @@ import {
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import { updateChannel } from '../../api'
+import { testChannel, updateChannel } from '../../api'
 import {
   channelsQueryKeys,
   formatResponseTime,
@@ -99,6 +102,10 @@ import type {
   SearchChannelsResponse,
 } from '../../types'
 import { useChannels } from '../channels-provider'
+import {
+  ChannelIQTestPreview,
+  type ChannelIQTestResult,
+} from './channel-iq-test-preview'
 
 type ChannelTestDialogProps = {
   open: boolean
@@ -118,9 +125,21 @@ type TestStatus = 'idle' | 'testing' | 'success' | 'error'
 type TestResult = {
   status: TestStatus
   responseTime?: number
+  ttftMs?: number
   completedAt?: number
   error?: string
   errorCode?: string
+}
+
+type IQTestStatus = Omit<ChannelIQTestResult, 'model' | 'response'>
+
+type IQSourceCacheEntry = {
+  source: string
+}
+
+type IQTestRequest = {
+  controller: AbortController
+  batchId?: number
 }
 
 type BatchProgress = {
@@ -133,6 +152,9 @@ type BatchProgress = {
 type ChannelTestCachePatch = {
   responseTime: number
   testTime: number
+  lastTestTime: number
+  lastTestIsAuto: boolean
+  lastTestTTFTMs?: number
 }
 
 type LatestChannelTestCachePatch = {
@@ -144,16 +166,23 @@ type ChannelListCache = GetChannelsResponse | SearchChannelsResponse
 
 function createChannelTestCachePatch(
   responseTime?: number,
-  completedAt = Date.now()
+  completedAt = Date.now(),
+  ttftMs?: number
 ): ChannelTestCachePatch | undefined {
   if (typeof responseTime !== 'number' || !Number.isFinite(responseTime)) {
     return undefined
   }
 
-  return {
+  const patch: ChannelTestCachePatch = {
     responseTime,
     testTime: Math.floor(completedAt / 1000),
+    lastTestTime: Math.floor(completedAt / 1000),
+    lastTestIsAuto: false,
   }
+  if (typeof ttftMs === 'number' && Number.isFinite(ttftMs) && ttftMs > 0) {
+    patch.lastTestTTFTMs = ttftMs
+  }
+  return patch
 }
 
 function getLatestChannelTestCachePatch(
@@ -164,7 +193,8 @@ function getLatestChannelTestCachePatch(
       const completedAt = result.completedAt ?? 0
       const patch = createChannelTestCachePatch(
         result.responseTime,
-        completedAt
+        completedAt,
+        result.ttftMs
       )
       if (!patch) return latestPatch
       if (!latestPatch || completedAt >= latestPatch.completedAt) {
@@ -185,6 +215,10 @@ const endpointTypeOptions: Array<{ value: string; label: string }> = [
   {
     value: 'openai-response-compact',
     label: 'OpenAI Response Compaction (/v1/responses/compact)',
+  },
+  {
+    value: 'openai-alpha-search',
+    label: 'OpenAI Alpha Search (/v1/alpha/search)',
   },
   { value: 'anthropic', label: 'Anthropic (/v1/messages)' },
   {
@@ -213,6 +247,7 @@ const STREAM_INCOMPATIBLE_ENDPOINTS = new Set([
 const MODEL_PRICE_ERROR_CODE = 'model_price_error'
 const FAILURE_SUMMARY_MAX_LENGTH = 96
 const BATCH_TEST_CONCURRENCY = 5
+const IQ_BATCH_CONCURRENCY = 5
 const BATCH_TEST_DELAY_MS = 100
 
 type FailureStatusDisplay = {
@@ -329,6 +364,11 @@ function ChannelTestDialogContent({
   const queryClient = useQueryClient()
   const currentChannelId = currentRow.id
   const batchStopRequestedRef = useRef(false)
+  const iqBatchStopRequestedRef = useRef(false)
+  const iqTestSessionRef = useRef(0)
+  const iqBatchIdRef = useRef(0)
+  const activeIQBatchIdRef = useRef<number | null>(null)
+  const iqAbortControllersRef = useRef<Map<string, IQTestRequest>>(new Map())
   const batchProgressToastIdRef = useRef<ReturnType<
     typeof toast.loading
   > | null>(null)
@@ -336,6 +376,17 @@ function ChannelTestDialogContent({
   const [isStreamTest, setIsStreamTest] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
+  const [iqTestResults, setIQTestResults] = useState<
+    Record<string, IQTestStatus>
+  >({})
+  // Keep each model's latest result until the dialog session is reset.
+  const iqSourceCacheRef = useRef<Map<string, IQSourceCacheEntry>>(new Map())
+  const [iqTestingModels, setIQTestingModels] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [isIQBatchTesting, setIsIQBatchTesting] = useState(false)
+  const [previewIQModel, setPreviewIQModel] = useState<string | null>(null)
+  const [previewIQSource, setPreviewIQSource] = useState<string>()
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [testingModels, setTestingModels] = useState<Set<string>>(
     () => new Set()
@@ -399,10 +450,23 @@ function ChannelTestDialogContent({
 
   const resetState = useCallback(() => {
     batchStopRequestedRef.current = true
+    iqBatchStopRequestedRef.current = true
+    iqTestSessionRef.current += 1
+    activeIQBatchIdRef.current = null
+    for (const request of iqAbortControllersRef.current.values()) {
+      request.controller.abort()
+    }
+    iqAbortControllersRef.current.clear()
     setEndpointType('auto')
     setIsStreamTest(false)
     setSearchTerm('')
     setTestResults({})
+    setIQTestResults({})
+    iqSourceCacheRef.current.clear()
+    setIQTestingModels(() => new Set())
+    setIsIQBatchTesting(false)
+    setPreviewIQModel(null)
+    setPreviewIQSource(undefined)
     setRowSelection({})
     setTestingModels(() => new Set())
     setIsBatchTesting(false)
@@ -417,6 +481,7 @@ function ChannelTestDialogContent({
 
   const streamDisabled = STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
   const effectiveStreamTest = !streamDisabled && isStreamTest
+  const isConnectionTesting = testingModels.size > 0 || isBatchTesting
 
   const handleEndpointTypeChange = useCallback((value: string | null) => {
     if (value === null) return
@@ -513,6 +578,11 @@ function ChannelTestDialogContent({
               ...channel,
               response_time: patch.responseTime,
               test_time: patch.testTime,
+              last_test_time: patch.lastTestTime,
+              last_test_is_auto: patch.lastTestIsAuto,
+              ...(patch.lastTestTTFTMs !== undefined
+                ? { last_test_ttft_ms: patch.lastTestTTFTMs }
+                : {}),
             }
           })
 
@@ -564,11 +634,12 @@ function ChannelTestDialogContent({
             stream: effectiveStreamTest || undefined,
             silent,
           },
-          (success, responseTime, error, errorCode) => {
+          (success, responseTime, error, errorCode, ttftMs) => {
             const completedAt = Date.now()
             finalResult = {
               status: success ? 'success' : 'error',
               responseTime,
+              ttftMs,
               completedAt,
               error,
               errorCode,
@@ -589,7 +660,8 @@ function ChannelTestDialogContent({
           refreshChannelLists(
             createChannelTestCachePatch(
               finalResult?.responseTime,
-              finalResult?.completedAt
+              finalResult?.completedAt,
+              finalResult?.ttftMs
             )
           )
         }
@@ -606,6 +678,232 @@ function ChannelTestDialogContent({
       updateTestResult,
     ]
   )
+
+  const testIQModel = useCallback(
+    async (model: string, batchId?: number): Promise<IQTestStatus> => {
+      const normalizedModel = model.trim()
+      const existingRequest = iqAbortControllersRef.current.get(normalizedModel)
+      if (existingRequest) {
+        return { status: 'testing' }
+      }
+
+      const session = iqTestSessionRef.current
+      const abortController = new AbortController()
+      iqAbortControllersRef.current.set(normalizedModel, {
+        controller: abortController,
+        batchId,
+      })
+      setPreviewIQModel(null)
+      setPreviewIQSource(undefined)
+      setIQTestingModels((previous) => new Set(previous).add(normalizedModel))
+      setIQTestResults((previous) => ({
+        ...previous,
+        [normalizedModel]: { status: 'testing' },
+      }))
+
+      let result: IQTestStatus
+      try {
+        const response = await testChannel(
+          currentRow.id,
+          {
+            model: normalizedModel,
+            endpoint_type: endpointType === 'auto' ? undefined : endpointType,
+            iq_test: true,
+          },
+          abortController.signal
+        )
+        const completedAt = Date.now()
+        if (!response.success || !response.data?.response) {
+          if (session === iqTestSessionRef.current) {
+            iqSourceCacheRef.current.delete(normalizedModel)
+          }
+          result = {
+            status: 'error',
+            completedAt,
+            responseTime: response.data?.response_time,
+            error: response.message || response.data?.error || t('Test failed'),
+          }
+        } else {
+          const sourceBytes = new TextEncoder().encode(
+            response.data.response
+          ).byteLength
+          if (session === iqTestSessionRef.current) {
+            iqSourceCacheRef.current.set(normalizedModel, {
+              source: response.data.response,
+            })
+          }
+          result = {
+            status: 'success',
+            responseBytes: response.data.response_bytes ?? sourceBytes,
+            finishReason: response.data.finish_reason,
+            responseTime: response.data.response_time,
+            completedAt,
+          }
+        }
+      } catch (error: unknown) {
+        if (session === iqTestSessionRef.current) {
+          iqSourceCacheRef.current.delete(normalizedModel)
+        }
+        let errorMessage = t('Test failed')
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          errorMessage = t('Cancelled')
+        } else if (error instanceof Error) {
+          errorMessage = error.message
+        }
+        result = {
+          status: 'error',
+          completedAt: Date.now(),
+          error: errorMessage,
+        }
+      } finally {
+        const request = iqAbortControllersRef.current.get(normalizedModel)
+        if (request?.controller === abortController) {
+          iqAbortControllersRef.current.delete(normalizedModel)
+        }
+      }
+
+      if (session === iqTestSessionRef.current) {
+        setIQTestResults((previous) => ({
+          ...previous,
+          [normalizedModel]: result,
+        }))
+        setIQTestingModels((previous) => {
+          const next = new Set(previous)
+          next.delete(normalizedModel)
+          return next
+        })
+        refreshChannelLists(
+          createChannelTestCachePatch(result.responseTime, result.completedAt)
+        )
+      }
+      return result
+    },
+    [currentRow.id, endpointType, refreshChannelLists, t]
+  )
+
+  const openIQPreview = useCallback((model: string) => {
+    const entry = iqSourceCacheRef.current.get(model)
+    if (!entry) return
+
+    setPreviewIQModel(model)
+    setPreviewIQSource(entry.source)
+  }, [])
+
+  const handleBatchIQTest = useCallback(
+    async (modelsToTest: string[]) => {
+      const uniqueModels = [
+        ...new Set(modelsToTest.map((model) => model.trim()).filter(Boolean)),
+      ]
+      const availableModels = uniqueModels.filter(
+        (model) => !iqAbortControllersRef.current.has(model)
+      )
+      if (!availableModels.length || isIQBatchTesting) return
+
+      const session = iqTestSessionRef.current
+      const batchId = ++iqBatchIdRef.current
+      activeIQBatchIdRef.current = batchId
+      iqBatchStopRequestedRef.current = false
+      setIsIQBatchTesting(true)
+      const progressId = toast.loading(t('IQ test running'), {
+        description: t('{{completed}}/{{total}} completed', {
+          completed: 0,
+          total: availableModels.length,
+        }),
+      })
+      let completed = 0
+      let succeeded = 0
+      let failed = 0
+
+      try {
+        const recordResult = (result: IQTestStatus) => {
+          if (session !== iqTestSessionRef.current) return
+          completed += 1
+          if (result.status === 'success') succeeded += 1
+          else failed += 1
+
+          toast.loading(t('IQ test running'), {
+            id: progressId,
+            description: t('{{completed}}/{{total}} completed', {
+              completed,
+              total: availableModels.length,
+            }),
+          })
+        }
+
+        for (
+          let startIndex = 0;
+          startIndex < availableModels.length;
+          startIndex += IQ_BATCH_CONCURRENCY
+        ) {
+          if (iqBatchStopRequestedRef.current) break
+
+          const batch = availableModels.slice(
+            startIndex,
+            startIndex + IQ_BATCH_CONCURRENCY
+          )
+          await Promise.allSettled(
+            batch.map(async (model) => {
+              const result = await testIQModel(model, batchId)
+              recordResult(result)
+            })
+          )
+        }
+
+        const stopped =
+          session === iqTestSessionRef.current &&
+          iqBatchStopRequestedRef.current
+        if (stopped) {
+          toast.info(
+            t(
+              'IQ test stopped: {{completed}}/{{total}} completed, {{success}} succeeded, {{failed}} failed',
+              {
+                completed,
+                total: availableModels.length,
+                success: succeeded,
+                failed,
+              }
+            ),
+            { id: progressId }
+          )
+        } else if (failed > 0) {
+          toast.error(
+            t('IQ test completed: {{success}} succeeded, {{failed}} failed', {
+              success: succeeded,
+              failed,
+            }),
+            { id: progressId }
+          )
+        } else {
+          toast.success(
+            t('IQ test completed: {{count}} succeeded', { count: succeeded }),
+            { id: progressId }
+          )
+        }
+      } finally {
+        if (
+          activeIQBatchIdRef.current === batchId &&
+          session === iqTestSessionRef.current
+        ) {
+          activeIQBatchIdRef.current = null
+          iqBatchStopRequestedRef.current = false
+          setIsIQBatchTesting(false)
+        }
+      }
+    },
+    [isIQBatchTesting, t, testIQModel]
+  )
+
+  const handleStopBatchIQTest = useCallback(() => {
+    const activeBatchId = activeIQBatchIdRef.current
+    if (isIQBatchTesting && activeBatchId !== null) {
+      iqBatchStopRequestedRef.current = true
+      for (const request of iqAbortControllersRef.current.values()) {
+        if (request.batchId === activeBatchId) {
+          request.controller.abort()
+        }
+      }
+    }
+  }, [isIQBatchTesting])
 
   const handleStopBatchTest = useCallback(() => {
     if (!isBatchTesting || isBatchStopRequested) return
@@ -830,7 +1128,6 @@ function ChannelTestDialogContent({
     [handleClose]
   )
 
-  const isAnyTesting = testingModels.size > 0 || isBatchTesting
   const isFilteringModels = searchTerm.trim().length > 0
   const testAllButtonLabel = isFilteringModels
     ? t('Test {{count}} matching models', { count: filteredModels.length })
@@ -905,11 +1202,21 @@ function ChannelTestDialogContent({
           const model = row.original.model
           const result = testResults[model]
           return (
-            <TestResultCell
-              result={result}
-              model={model}
-              onOpenDetails={setFailureDetails}
-            />
+            <div className='flex min-w-0 flex-col gap-1'>
+              <TestResultCell
+                result={result}
+                model={model}
+                onOpenDetails={setFailureDetails}
+              />
+              <IQTestResultCell
+                result={iqTestResults[model]}
+                model={model}
+                isTesting={iqTestingModels.has(model)}
+                hasSource={iqSourceCacheRef.current.has(model)}
+                onOpenPreview={openIQPreview}
+                onRun={() => void testIQModel(model)}
+              />
+            </div>
           )
         },
         enableSorting: false,
@@ -930,7 +1237,7 @@ function ChannelTestDialogContent({
                     variant='ghost'
                     size='icon-sm'
                     onClick={() => testSingleModel(model)}
-                    disabled={isTestingModel || isBatchTesting}
+                    disabled={isTestingModel || isConnectionTesting}
                     aria-label={t('Test Connection')}
                   />
                 }
@@ -950,11 +1257,15 @@ function ChannelTestDialogContent({
     ],
     [
       defaultTestModel,
-      isBatchTesting,
+      isConnectionTesting,
+      iqTestResults,
+      iqTestingModels,
       t,
       testResults,
+      testIQModel,
       testingModels,
       testSingleModel,
+      openIQPreview,
     ]
   )
 
@@ -1075,7 +1386,9 @@ function ChannelTestDialogContent({
                       <Button
                         size='sm'
                         onClick={() => handleBatchTest(filteredModels)}
-                        disabled={isAnyTesting || filteredModels.length === 0}
+                        disabled={
+                          isConnectionTesting || filteredModels.length === 0
+                        }
                       >
                         {testAllButtonLabel}
                       </Button>
@@ -1157,10 +1470,36 @@ function ChannelTestDialogContent({
               <DataTablePagination table={table} />
             </div>
 
-            <TestModelsBulkActions table={table} />
+            <TestModelsBulkActions
+              table={table}
+              onBatchIQTest={handleBatchIQTest}
+              onStopIQTest={handleStopBatchIQTest}
+              isIQBatchTesting={isIQBatchTesting}
+              iqTestingModels={iqTestingModels}
+            />
           </div>
         </div>
       </Dialog>
+      <ChannelIQTestPreview
+        key={previewIQModel ?? 'closed'}
+        open={previewIQModel !== null}
+        channelName={currentRow.name}
+        model={previewIQModel ?? ''}
+        result={
+          previewIQModel
+            ? {
+                ...(iqTestResults[previewIQModel] ?? { status: 'error' }),
+              }
+            : null
+        }
+        source={previewIQSource}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setPreviewIQModel(null)
+            setPreviewIQSource(undefined)
+          }
+        }}
+      />
       <ConfirmDialog
         open={isDeleteFailedDialogOpen}
         onOpenChange={setIsDeleteFailedDialogOpen}
@@ -1213,6 +1552,72 @@ function TestStatusCell({ result }: { result?: TestResult }) {
   }
 
   return <StatusBadge label={t('Failed')} variant='danger' copyable={false} />
+}
+
+function IQTestResultCell({
+  result,
+  model,
+  isTesting,
+  hasSource,
+  onOpenPreview,
+  onRun,
+}: {
+  result?: IQTestStatus
+  model: string
+  isTesting: boolean
+  hasSource: boolean
+  onOpenPreview: (model: string) => void
+  onRun: () => void
+}) {
+  const { t } = useTranslation()
+  const isRunning = isTesting || result?.status === 'testing'
+
+  return (
+    <div className='flex min-w-0 items-start gap-1.5 text-xs'>
+      <Brain className='mt-0.5 size-3.5 shrink-0' aria-hidden='true' />
+      {isRunning && (
+        <StatusBadge variant='info' size='sm' copyable={false}>
+          <Loader2 className='size-3.5 shrink-0 animate-spin' />
+          <span>{t('Testing...')}</span>
+        </StatusBadge>
+      )}
+      {!isRunning && result?.status === 'error' && (
+        <span
+          className='text-destructive line-clamp-2 min-w-0 flex-1 break-words'
+          title={result.error || t('Test failed')}
+        >
+          {result.error || t('Test failed')}
+        </span>
+      )}
+      {!isRunning && result?.status === 'success' && hasSource && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 gap-1 px-1.5'
+          onClick={() => onOpenPreview(model)}
+        >
+          <Eye className='size-3.5' />
+          {t('View result')}
+        </Button>
+      )}
+      {!isRunning && result?.status === 'success' && !hasSource && (
+        <span className='text-muted-foreground'>
+          {t('Result not retained; run again')}
+        </span>
+      )}
+      {!isRunning && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 gap-1 px-1.5'
+          onClick={onRun}
+          disabled={isTesting}
+        >
+          {t('Run IQ test')}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 function TestResultCell({
@@ -1390,19 +1795,63 @@ function FailureDetailsSheet({
   )
 }
 
-function TestModelsBulkActions({ table }: { table: TanStackTable<ModelRow> }) {
+function TestModelsBulkActions({
+  table,
+  onBatchIQTest,
+  onStopIQTest,
+  isIQBatchTesting,
+  iqTestingModels,
+}: {
+  table: TanStackTable<ModelRow>
+  onBatchIQTest: (models: string[]) => void
+  onStopIQTest: () => void
+  isIQBatchTesting: boolean
+  iqTestingModels: Set<string>
+}) {
   const { t } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
   const selectedRows = table.getFilteredSelectedRowModel().rows
   const selectedModels = selectedRows.map((row) => row.original.model)
+  const availableSelectedModels = selectedModels.filter(
+    (model) => !iqTestingModels.has(model)
+  )
 
   const handleCopySelected = useCallback(() => {
     if (selectedModels.length === 0) return
     void copyToClipboard(selectedModels.join(','))
   }, [copyToClipboard, selectedModels])
 
+  const handleBatchIQTestSelected = useCallback(() => {
+    onBatchIQTest(selectedModels)
+  }, [onBatchIQTest, selectedModels])
+
   return (
     <BulkActionsToolbar table={table} entityName='model'>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size='sm'
+              onClick={
+                isIQBatchTesting ? onStopIQTest : handleBatchIQTestSelected
+              }
+              disabled={
+                !isIQBatchTesting && availableSelectedModels.length === 0
+              }
+            />
+          }
+        >
+          {isIQBatchTesting ? (
+            <Square data-icon='inline-start' />
+          ) : (
+            <Brain data-icon='inline-start' />
+          )}
+          {isIQBatchTesting ? t('Stop testing') : t('Batch IQ test')}
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{t('Batch IQ test')}</p>
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger
           render={

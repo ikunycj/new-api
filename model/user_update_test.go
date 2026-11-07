@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/glebarez/sqlite"
 
 	"github.com/stretchr/testify/assert"
@@ -41,6 +41,10 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 		Quota:        1000,
 		UsedQuota:    20,
 		RequestCount: 3,
+		CreatedIP:    "198.51.100.1",
+		LastLoginAt:  100,
+		LastLoginIP:  "198.51.100.2",
+		LastUsedIP:   "198.51.100.3",
 	}
 	require.NoError(t, DB.Create(&user).Error)
 
@@ -51,9 +55,14 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 		"quota":         gorm.Expr("quota - ?", 400),
 		"used_quota":    gorm.Expr("used_quota + ?", 400),
 		"request_count": gorm.Expr("request_count + ?", 1),
+		"last_used_at":  1234567890,
 	}).Error)
 
 	staleUser.DisplayName = "after"
+	staleUser.CreatedIP = "203.0.113.10"
+	staleUser.LastLoginAt = 200
+	staleUser.LastLoginIP = "203.0.113.11"
+	staleUser.LastUsedIP = "203.0.113.12"
 	require.NoError(t, staleUser.Update(false))
 
 	var got User
@@ -62,6 +71,84 @@ func TestUserUpdateDoesNotOverwriteAccountingFields(t *testing.T) {
 	assert.Equal(t, 600, got.Quota)
 	assert.Equal(t, 420, got.UsedQuota)
 	assert.Equal(t, 4, got.RequestCount)
+	assert.Equal(t, int64(1234567890), got.LastUsedAt)
+	assert.Equal(t, "198.51.100.1", got.CreatedIP)
+	assert.Equal(t, int64(100), got.LastLoginAt)
+	assert.Equal(t, "198.51.100.2", got.LastLoginIP)
+	assert.Equal(t, "198.51.100.3", got.LastUsedIP)
+}
+
+func TestUpdateUserUsedQuotaAndRequestCountRecordsLastUsedAt(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Id:       3,
+		Username: "api-user",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, DB.Create(&user).Error)
+
+	beforeUpdate := common.GetTimestamp()
+	UpdateUserUsedQuotaAndRequestCount(user.Id, 100)
+	afterUpdate := common.GetTimestamp()
+
+	var got User
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	assert.Equal(t, 100, got.UsedQuota)
+	assert.Equal(t, 1, got.RequestCount)
+	assert.GreaterOrEqual(t, got.LastUsedAt, beforeUpdate)
+	assert.LessOrEqual(t, got.LastUsedAt, afterUpdate)
+}
+
+func TestUpdateUserLastLoginAtWithIPRecordsTimestampAndIP(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Id:       4,
+		Username: "login-user",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, DB.Create(&user).Error)
+
+	beforeUpdate := common.GetTimestamp()
+	UpdateUserLastLoginAtWithIP(user.Id, "198.51.100.42")
+	afterUpdate := common.GetTimestamp()
+
+	var got User
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	assert.GreaterOrEqual(t, got.LastLoginAt, beforeUpdate)
+	assert.LessOrEqual(t, got.LastLoginAt, afterUpdate)
+	assert.Equal(t, "198.51.100.42", got.LastLoginIP)
+}
+
+func TestFillUsersLastUsedAtUsesLatestConsumeLogAsFallback(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	previousLogDB := LOG_DB
+	LOG_DB = DB
+	t.Cleanup(func() {
+		LOG_DB = previousLogDB
+	})
+	require.NoError(t, DB.Exec("DELETE FROM logs").Error)
+	require.NoError(t, DB.Create(&[]Log{
+		{UserId: 10, Type: LogTypeConsume, CreatedAt: 100},
+		{UserId: 10, Type: LogTypeConsume, CreatedAt: 300},
+		{UserId: 10, Type: LogTypeError, CreatedAt: 400},
+		{UserId: 11, Type: LogTypeConsume, CreatedAt: 500},
+	}).Error)
+
+	users := []*User{
+		{Id: 10},
+		{Id: 11, LastUsedAt: 450},
+		{Id: 12},
+	}
+	require.NoError(t, FillUsersLastUsedAt(users))
+
+	assert.Equal(t, int64(300), users[0].LastUsedAt)
+	assert.Equal(t, int64(450), users[1].LastUsedAt)
+	assert.Zero(t, users[2].LastUsedAt)
 }
 
 func TestUpdateUserSettingOnlyUpdatesSetting(t *testing.T) {
@@ -187,6 +274,27 @@ func TestMigrateUsernameToNonUniqueSQLite(t *testing.T) {
 	require.NoError(t, migrateUsernameToNonUnique())
 	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
 	require.NoError(t, DB.Exec("INSERT INTO users (username) VALUES (?)", "same-name").Error)
+}
+
+func TestRemoveLegacyUserClassificationColumnSQLite(t *testing.T) {
+	legacyDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	previousDB := DB
+	previousDatabaseType := common.MainDatabaseType()
+	DB = legacyDB
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	t.Cleanup(func() {
+		DB = previousDB
+		common.SetMainDatabaseType(previousDatabaseType)
+	})
+
+	require.NoError(t, DB.Exec("CREATE TABLE `users` (`id` integer primary key, `email` varchar(255), `user_type` varchar(8))").Error)
+	require.NoError(t, DB.Exec("CREATE INDEX `idx_users_user_type` ON `users` (`user_type`)").Error)
+	require.True(t, DB.Migrator().HasColumn(&legacyUserClassificationColumn{}, "user_type"))
+	require.NoError(t, removeLegacyUserClassificationColumn())
+	assert.False(t, DB.Migrator().HasColumn(&legacyUserClassificationColumn{}, "user_type"))
+	assert.False(t, DB.Migrator().HasIndex(&legacyUserClassificationColumn{}, "idx_users_user_type"))
 }
 
 func TestInsertRejectsDuplicateEmailWithoutUniqueIndex(t *testing.T) {

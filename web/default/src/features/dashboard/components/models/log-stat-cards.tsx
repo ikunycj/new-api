@@ -16,12 +16,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import {
+  Activity01Icon,
+  ChartUpIcon,
+  DashboardSpeed01Icon,
+  Layers01Icon,
+} from '@hugeicons/core-free-icons'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
+import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getTeamQuotaDates, getUserQuotaDates } from '@/features/dashboard/api'
+import {
+  AdminConsoleStatCard,
+  type AdminConsoleStatTone,
+} from '@/features/admin-console/components/admin-console-stat-card'
+import type { AdminConsoleDataState } from '@/features/admin-console/types'
+import {
+  getTeamQuotaDates,
+  getUserQuotaDates,
+} from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
   buildQueryParams,
@@ -36,12 +51,32 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
-interface LogStatCardsProps {
+interface LogStatCardsBaseProps {
   filters?: DashboardFilters
-  isTeamView?: boolean
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
+  isTeamView?: boolean
+}
+
+interface UserLogStatCardsProps extends LogStatCardsBaseProps {
+  includeAdminData: false
+  adminData?: never
+}
+
+interface AdminLogStatCardsProps extends LogStatCardsBaseProps {
+  includeAdminData: true
+  adminData: AdminConsoleDataState
+}
+
+type LogStatCardsProps = UserLogStatCardsProps | AdminLogStatCardsProps
+
+interface AdminLogStatItem {
+  title: string
+  value: ReactNode
+  detail: ReactNode
+  icon: typeof Activity01Icon
+  tone: AdminConsoleStatTone
+  loading: boolean
 }
 
 const MAX_INLINE_STAT_CHARS = 9
@@ -59,29 +94,45 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
   }
 }
 
-// Cache hit rate arrives as a 0-1 ratio; render it with at most one decimal so
-// the card stays legible at the existing font size.
-function formatPercent(value: number, locale: Intl.LocalesArgument): string {
-  const percent = value * 100
-  const formatted = new Intl.NumberFormat(locale, {
-    maximumFractionDigits: 1,
-  }).format(percent)
+function normalizePercentage(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
 
-  return `${formatted}%`
+function formatPercentage(value: number): string {
+  return `${new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: 1,
+  }).format(normalizePercentage(value))}%`
+}
+
+function SystemLoadMetric(props: { label: string; value: number }) {
+  const percentage = normalizePercentage(props.value)
+
+  return (
+    <Progress
+      value={percentage}
+      className='gap-1'
+      aria-label={`${props.label}使用率 ${formatPercentage(percentage)}`}
+    >
+      <div className='flex w-full min-w-0 items-baseline justify-between gap-1'>
+        <span className='text-muted-foreground truncate font-sans text-[10px] font-medium'>
+          {props.label}
+        </span>
+        <span className='font-mono text-xs font-semibold tabular-nums'>
+          {formatPercentage(percentage)}
+        </span>
+      </div>
+    </Progress>
+  )
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
-  const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = !!(user?.role && user.role >= 10)
-  const { isTeamView = false } = props
   const [stats, setStats] = useState<{
     totalQuota: number
     totalCount: number
     totalTokens: number
-    totalCacheRead: number
-    totalInputTokens: number
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -106,11 +157,14 @@ export function LogStatCards(props: LogStatCardsProps) {
     const timeDiff = (timeRange.end_timestamp - timeRange.start_timestamp) / 60
     setTimeRangeMinutes(timeDiff)
 
-    const queryParams = buildQueryParams(timeRange, filters)
-    const fetchPromise = isTeamView
-      ? getTeamQuotaDates(queryParams)
-      : getUserQuotaDates(queryParams, isAdmin)
-    void fetchPromise
+    const request = props.isTeamView
+      ? getTeamQuotaDates(buildQueryParams(timeRange, filters))
+      : getUserQuotaDates(
+          buildQueryParams(timeRange, filters),
+          props.includeAdminData
+        )
+
+    void request
       .then((res) => {
         if (abortController.signal.aborted) return
         const data = res?.data || []
@@ -132,47 +186,25 @@ export function LogStatCards(props: LogStatCardsProps) {
     return () => {
       abortController.abort()
     }
-  }, [filters, isAdmin, isTeamView, onDataUpdate])
+  }, [filters, onDataUpdate, props.includeAdminData, props.isTeamView])
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,
     quota: stats?.totalQuota ?? 0,
     tpm: stats?.totalTokens ?? 0,
-    cacheReadTokens: stats?.totalCacheRead ?? 0,
-    inputTokensTotal: stats?.totalInputTokens ?? 0,
   }
 
-  // Cache hit rate has no meaningful value until at least one request in the
-  // window reported cache metadata, so surface a placeholder rather than 0%.
-  const cacheDataAvailable = (stats?.totalInputTokens ?? 0) > 0
-
-  const items = statCardsConfig.map((config) => {
-    const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-
-    if (config.key === 'cacheHitRate' && !cacheDataAvailable) {
-      return {
-        title: config.title,
-        value: '--',
-        fullValue: '--',
-        desc: config.description,
-        icon: config.icon,
-        iconTone: config.iconTone,
-      }
-    }
-
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const modelConfigs = props.includeAdminData ? [] : statCardsConfig
+  const modelItems = modelConfigs.map((config) => {
     const rawValue = config.getValue(adaptedStats, timeRangeMinutes)
-    let formatted: { displayValue: string; fullValue: string }
-    if (config.key === 'quota') {
-      formatted = {
-        displayValue: formatQuota(rawValue),
-        fullValue: formatQuota(rawValue),
-      }
-    } else if (config.key === 'cacheHitRate') {
-      const percent = formatPercent(rawValue, locale)
-      formatted = { displayValue: percent, fullValue: percent }
-    } else {
-      formatted = formatStatNumber(rawValue, locale)
-    }
+    const formatted =
+      config.key === 'quota'
+        ? {
+            displayValue: formatQuota(rawValue),
+            fullValue: formatQuota(rawValue),
+          }
+        : formatStatNumber(rawValue, locale)
 
     return {
       title: config.title,
@@ -181,23 +213,124 @@ export function LogStatCards(props: LogStatCardsProps) {
       desc: config.description,
       icon: config.icon,
       iconTone: config.iconTone,
+      loading,
+      error,
     }
   })
 
+  if (props.includeAdminData) {
+    const adminData = props.adminData
+    const adminStats = adminData.stats
+    const realtimeStats = adminData.realtimeStats
+    const systemLoad = adminData.systemLoad
+    const rpm = formatStatNumber(realtimeStats?.rpm ?? 0, locale)
+    const tpm = formatStatNumber(realtimeStats?.tpm ?? 0, locale)
+    const concurrency = formatStatNumber(
+      realtimeStats?.current_concurrency ?? 0,
+      locale
+    )
+    const adminLoading = adminData.statsLoading
+    const adminError = adminData.statsError
+    const realtimeLoading = adminData.realtimeStatsLoading
+    const realtimeError = adminData.realtimeStatsError
+    const cardLoading = adminLoading || realtimeLoading
+    let systemLoadDetail = '实时采样 · 每 5 秒更新'
+    if (adminData.systemLoadLoading) {
+      systemLoadDetail = '正在读取实时负载…'
+    } else if (adminData.systemLoadError) {
+      systemLoadDetail = adminData.systemLoad
+        ? '实时负载刷新失败，当前为最近一次数据'
+        : '实时负载加载失败'
+    }
+    const adminItems: AdminLogStatItem[] = [
+      {
+        title: '实时并发',
+        value: realtimeError ? '--' : concurrency.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatCompactNumber(adminStats?.performance.concurrency_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.concurrency_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.concurrency_p99 ?? 0, locale)}`,
+        icon: Activity01Icon,
+        tone: 'chart-2',
+        loading: cardLoading,
+      },
+      {
+        title: '实时负载',
+        value: (
+          <div className='grid grid-cols-3 gap-2 font-sans'>
+            <SystemLoadMetric
+              label='CPU'
+              value={systemLoad?.cpu_usage_percent ?? 0}
+            />
+            <SystemLoadMetric
+              label='内存'
+              value={systemLoad?.memory_usage_percent ?? 0}
+            />
+            <SystemLoadMetric
+              label='存储'
+              value={systemLoad?.storage_usage_percent ?? 0}
+            />
+          </div>
+        ),
+        detail: systemLoadDetail,
+        icon: DashboardSpeed01Icon,
+        tone: 'chart-5',
+        loading: Boolean(adminData.systemLoadLoading && !systemLoad),
+      },
+      {
+        title: '实时 RPM',
+        value: realtimeError ? '--' : rpm.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatCompactNumber(adminStats?.performance.today_rpm_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.today_rpm_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.today_rpm_p99 ?? 0, locale)}`,
+        icon: ChartUpIcon,
+        tone: 'chart-2',
+        loading: cardLoading,
+      },
+      {
+        title: '实时 TPM',
+        value: realtimeError ? '--' : tpm.displayValue,
+        detail: adminError
+          ? '统计数据加载失败'
+          : `P50 ${formatCompactNumber(adminStats?.performance.today_tpm_p50 ?? 0, locale)} / P90 ${formatCompactNumber(adminStats?.performance.today_tpm_p90 ?? 0, locale)} / P99 ${formatCompactNumber(adminStats?.performance.today_tpm_p99 ?? 0, locale)}`,
+        icon: Layers01Icon,
+        tone: 'chart-5',
+        loading: cardLoading,
+      },
+    ]
+
+    return (
+      <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+        {adminItems.map((item) => (
+          <AdminConsoleStatCard
+            key={item.title}
+            title={item.title}
+            value={item.value}
+            detail={item.detail}
+            icon={item.icon}
+            tone={item.tone}
+            loading={item.loading}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  const items = modelItems
+
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-6'>
+      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
         {items.map((it, idx) => {
           const Icon = it.icon
           let valueContent
-          if (loading) {
+          if (it.loading) {
             valueContent = (
               <div className='mt-1 flex flex-col gap-1 sm:mt-2 sm:gap-1.5'>
                 <Skeleton className='h-5 w-16 sm:h-7 sm:w-20' />
                 <Skeleton className='hidden h-3.5 w-28 md:block' />
               </div>
             )
-          } else if (error) {
+          } else if (it.error) {
             valueContent = (
               <>
                 <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>

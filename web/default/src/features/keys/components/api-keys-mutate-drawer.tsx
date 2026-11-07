@@ -79,7 +79,6 @@ import {
   getApiKeyFormSchema,
   type ApiKeyFormValues,
   getApiKeyFormDefaultValues,
-  SYSTEM_ROUTING_VALUE,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
@@ -117,15 +116,19 @@ export function ApiKeysMutateDrawer({
   })
 
   const groupsRaw = groupsData?.data
-  const backendHasAuto = Object.hasOwn(groupsRaw ?? {}, 'auto')
   const groups = useMemo<ApiKeyRoutingGroupOption[]>(
     () =>
       Object.entries(groupsRaw ?? {})
         .filter(([key]) => key !== 'auto')
+        .sort(
+          ([, left], [, right]) =>
+            (left.order ?? Number.MAX_SAFE_INTEGER) -
+            (right.order ?? Number.MAX_SAFE_INTEGER)
+        )
         .map(([key, info]) => ({
           value: key,
-          label: key,
-          desc: info.desc || key,
+          label: info.desc || key,
+          desc: info.remark || info.desc || key,
           ratio: info.ratio,
         })),
     [groupsRaw]
@@ -212,7 +215,13 @@ export function ApiKeysMutateDrawer({
     }
   }
 
-  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = () => {
+  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = (errors) => {
+    const groupErrorMessage = errors.group_candidates?.message
+    if (groupErrorMessage) {
+      toast.error(t(String(groupErrorMessage)))
+      return
+    }
+
     toast.error(t('Please fix the highlighted fields before saving'))
   }
 
@@ -239,13 +248,9 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroups = form.watch('group_candidates')
   const selectedModelLimits = form.watch('model_limits')
-  const concreteSelectedGroups = useMemo(
-    () => selectedGroups.filter((group) => group !== SYSTEM_ROUTING_VALUE),
-    [selectedGroups]
-  )
   const modelQueryGroups = useMemo(
-    () => (concreteSelectedGroups.length > 0 ? concreteSelectedGroups : ['']),
-    [concreteSelectedGroups]
+    () => (selectedGroups.length > 0 ? selectedGroups : ['']),
+    [selectedGroups]
   )
   const modelQueries = useQueries({
     queries: modelQueryGroups.map((group) => ({
@@ -272,9 +277,13 @@ export function ApiKeysMutateDrawer({
     return [...union]
   }, [modelQueries, selectedModelLimits])
   const isLoadingModels = modelQueries.some((query) => query.isLoading)
-  const usesMultipleGroups = selectedGroups.length > 1
-  const usesSystemRouting = selectedGroups[0] === SYSTEM_ROUTING_VALUE
   const unlimitedQuota = form.watch('unlimited_quota')
+
+  const handleGroupSelectionChange = (value: string[]) => {
+    form.setValue('cross_group_retry', value.length > 1, {
+      shouldDirty: true,
+    })
+  }
 
   return (
     <Sheet
@@ -420,11 +429,6 @@ export function ApiKeysMutateDrawer({
             <SideDrawerSection>
               <SideDrawerSectionHeader
                 title={t('Model groups and routing')}
-                description={
-                  isUpdate
-                    ? t('Choose groups and set their request order')
-                    : t('Select one or more groups')
-                }
                 icon={<Route className='size-4' />}
                 iconTone='info'
               />
@@ -436,25 +440,13 @@ export function ApiKeysMutateDrawer({
                     <FormLabel>{t('Available groups')}</FormLabel>
                     <FormControl>
                       <ApiKeyRoutingGroupsField
-                        allowSystemRouting={backendHasAuto || usesSystemRouting}
                         options={groups}
                         value={field.value}
                         modelsByGroup={modelsByGroup}
                         isLoadingModels={isLoadingModels}
                         onValueChange={(value) => {
-                          const wasUsingMultipleGroups = field.value.length > 1
                           field.onChange(value)
-                          if (
-                            value.length <= 1 &&
-                            value[0] !== SYSTEM_ROUTING_VALUE
-                          ) {
-                            form.setValue('cross_group_retry', false)
-                          } else if (
-                            value.length > 1 &&
-                            !wasUsingMultipleGroups
-                          ) {
-                            form.setValue('cross_group_retry', true)
-                          }
+                          handleGroupSelectionChange(value)
                         }}
                       />
                     </FormControl>
@@ -462,33 +454,11 @@ export function ApiKeysMutateDrawer({
                   </FormItem>
                 )}
               />
-
-              {(usesMultipleGroups || usesSystemRouting) && (
-                <FormField
-                  control={form.control}
-                  name='cross_group_retry'
-                  render={({ field }) => (
-                    <FormItem className={sideDrawerSwitchItemClassName()}>
-                      <div className='flex flex-col gap-0.5'>
-                        <FormLabel className='text-sm'>
-                          {t('Try the next group after a failure')}
-                        </FormLabel>
-                        <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
-                          {t(
-                            'After retryable failures exhaust the current group, continue with the next group in order.'
-                          )}
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={!!field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormDescription>
+                {t(
+                  'The first group is used first; retryable failures follow the order below.'
+                )}
+              </FormDescription>
             </SideDrawerSection>
 
             <SideDrawerSection>

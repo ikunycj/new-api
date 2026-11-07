@@ -1,12 +1,94 @@
 package controller
 
-import "github.com/QuantumNous/new-api/model"
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/model"
+)
+
+// channelPersistedUpdateFields is the allowlist passed to GORM for partial
+// channel updates. Request-only fields and retired routing fields never reach
+// the database update statement.
+var channelPersistedUpdateFields = []struct {
+	jsonName string
+	column   string
+}{
+	{jsonName: "type", column: "type"},
+	{jsonName: "key", column: "key"},
+	{jsonName: "openai_organization", column: "openai_organization"},
+	{jsonName: "test_model", column: "test_model"},
+	{jsonName: "name", column: "name"},
+	{jsonName: "base_url", column: "base_url"},
+	{jsonName: "other", column: "other"},
+	{jsonName: "models", column: "models"},
+	{jsonName: "group", column: "group"},
+	{jsonName: "model_mapping", column: "model_mapping"},
+	{jsonName: "status_code_mapping", column: "status_code_mapping"},
+	{jsonName: "auto_ban", column: "auto_ban"},
+	{jsonName: "auto_probe_enabled", column: "auto_probe_enabled"},
+	{jsonName: "probe_period_minutes", column: "probe_period_minutes"},
+	{jsonName: "probe_random_delay_enabled", column: "probe_random_delay_enabled"},
+	{jsonName: "probe_stream_enabled", column: "probe_stream_enabled"},
+	{jsonName: "upstream_max_retries", column: "upstream_max_retries"},
+	{jsonName: "max_concurrency", column: "max_concurrency"},
+	{jsonName: "price_multiplier", column: "price_multiplier"},
+	{jsonName: "price_multiplier_mode", column: "price_multiplier_mode"},
+	{jsonName: "force_priority", column: "force_priority"},
+	{jsonName: "force_priority_scope", column: "force_priority_scope"},
+	{jsonName: "other_info", column: "other_info"},
+	{jsonName: "tag", column: "tag"},
+	{jsonName: "setting", column: "setting"},
+	{jsonName: "param_override", column: "param_override"},
+	{jsonName: "header_override", column: "header_override"},
+	{jsonName: "remark", column: "remark"},
+	{jsonName: "weight", column: "weight"},
+	{jsonName: "channel_info", column: "channel_info"},
+	{jsonName: "settings", column: "settings"},
+	{jsonName: "multi_key_mode", column: "channel_info"},
+}
+
+func channelUpdateColumns(requestData map[string]any) []string {
+	columns := make([]string, 0, len(requestData)+1)
+	seen := make(map[string]struct{}, len(requestData))
+	keyProvided := false
+	if value, ok := requestData["key"]; ok {
+		key, isString := value.(string)
+		keyProvided = isString && strings.TrimSpace(key) != ""
+	}
+	for _, field := range channelPersistedUpdateFields {
+		if _, ok := requestData[field.jsonName]; !ok {
+			continue
+		}
+		// The edit form deliberately sends no stored credential back to the
+		// browser. Treat an empty key as "unchanged" so a partial update cannot
+		// clear the credential or bypass ChannelSensitiveWrite.
+		if field.jsonName == "key" && !keyProvided {
+			continue
+		}
+		if _, ok := seen[field.column]; ok {
+			continue
+		}
+		seen[field.column] = struct{}{}
+		columns = append(columns, field.column)
+	}
+	if keyProvided {
+		if _, exists := seen["channel_info"]; !exists {
+			columns = append(columns, "channel_info")
+		}
+	}
+	if _, ok := requestData["key_mode"]; ok {
+		if _, exists := seen["channel_info"]; !exists {
+			columns = append(columns, "channel_info")
+		}
+	}
+	return columns
+}
 
 func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, requestData map[string]any) bool {
 	if _, ok := requestData["type"]; ok && channel.Type != origin.Type {
 		return true
 	}
-	if _, ok := requestData["key"]; ok && channel.Key != "" && channel.Key != origin.Key {
+	if _, ok := requestData["key"]; ok && strings.TrimSpace(channel.Key) != "" && channel.Key != origin.Key {
 		return true
 	}
 	if _, ok := requestData["base_url"]; ok && !equalStringPtr(channel.BaseURL, origin.BaseURL) {
@@ -84,19 +166,21 @@ var channelOperationalFields = map[string]struct{}{
 var channelReadOnlyFields = map[string]struct{}{
 	"created_time":                    {},
 	"test_time":                       {},
+	"last_test_time":                  {},
+	"last_test_is_auto":               {},
+	"last_test_ttft_ms":               {},
 	"response_time":                   {},
 	"balance":                         {},
 	"balance_updated_time":            {},
 	"used_quota":                      {},
-	"last_test_time":                  {},
-	"last_test_is_auto":               {},
-	"current_concurrency":             {},
 	"daily_tokens":                    {},
-	"monthly_tokens":                  {},
-	"daily_cost_usd":                  {},
-	"monthly_cost_usd":                {},
+	"total_tokens":                    {},
+	"daily_cost_cny":                  {},
+	"total_cost_cny":                  {},
 	"previous_day_probe_success_rate": {},
-	"previous_day_probe_sample_count": {},
+	"previous_day_average_ttft_ms":    {},
+	"priority_score":                  {},
+	"current_concurrency":             {},
 }
 
 func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]any) {
@@ -105,6 +189,15 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	}
 	if _, ok := requestData["test_time"]; ok {
 		channel.TestTime = 0
+	}
+	if _, ok := requestData["last_test_time"]; ok {
+		channel.LastTestTime = 0
+	}
+	if _, ok := requestData["last_test_is_auto"]; ok {
+		channel.LastTestIsAuto = false
+	}
+	if _, ok := requestData["last_test_ttft_ms"]; ok {
+		channel.LastTestTTFTMs = 0
 	}
 	if _, ok := requestData["response_time"]; ok {
 		channel.ResponseTime = 0
@@ -118,6 +211,27 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 	if _, ok := requestData["used_quota"]; ok {
 		channel.UsedQuota = 0
 	}
+	if _, ok := requestData["daily_tokens"]; ok {
+		channel.DailyTokens = 0
+	}
+	if _, ok := requestData["total_tokens"]; ok {
+		channel.TotalTokens = 0
+	}
+	if _, ok := requestData["daily_cost_cny"]; ok {
+		channel.DailyCostCNY = nil
+	}
+	if _, ok := requestData["total_cost_cny"]; ok {
+		channel.TotalCostCNY = nil
+	}
+	if _, ok := requestData["priority_score"]; ok {
+		channel.PriorityScore = nil
+	}
+	if _, ok := requestData["current_concurrency"]; ok {
+		channel.CurrentConcurrency = 0
+	}
+	if _, ok := requestData["previous_day_average_ttft_ms"]; ok {
+		channel.PreviousDayAverageTTFTMs = 0
+	}
 }
 
 // channelNonSensitiveFields lists routing / server-managed channel
@@ -127,30 +241,28 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 // to the fail-closed branch and is treated as sensitive. The
 // TestChannelFieldsAreClassified guard test enforces this.
 var channelNonSensitiveFields = map[string]struct{}{
-	"id":                                   {},
-	"test_model":                           {},
-	"name":                                 {},
-	"weight":                               {},
-	"models":                               {},
-	"group":                                {},
-	"model_mapping":                        {},
-	"status_code_mapping":                  {},
-	"priority":                             {},
-	"auto_ban":                             {},
-	"other_info":                           {},
-	"tag":                                  {},
-	"remark":                               {},
-	"channel_info":                         {},
-	"multi_key_mode":                       {},
-	"auto_probe_enabled":                   {},
-	"probe_interval_seconds":               {},
-	"auto_disabled_probe_interval_seconds": {},
-	"probe_failure_auto_ban":               {},
-	"probe_success_auto_enable":            {},
-	"upstream_max_retries":                 {},
-	"max_concurrency":                      {},
-	"price_multiplier":                     {},
-	"price_multiplier_mode":                {},
-	"force_priority":                       {},
-	"force_priority_scope":                 {},
+	"id":                         {},
+	"test_model":                 {},
+	"auto_probe_enabled":         {},
+	"probe_period_minutes":       {},
+	"probe_random_delay_enabled": {},
+	"probe_stream_enabled":       {},
+	"upstream_max_retries":       {},
+	"max_concurrency":            {},
+	"price_multiplier":           {},
+	"price_multiplier_mode":      {},
+	"force_priority":             {},
+	"force_priority_scope":       {},
+	"name":                       {},
+	"weight":                     {},
+	"models":                     {},
+	"group":                      {},
+	"model_mapping":              {},
+	"status_code_mapping":        {},
+	"auto_ban":                   {},
+	"other_info":                 {},
+	"tag":                        {},
+	"remark":                     {},
+	"channel_info":               {},
+	"multi_key_mode":             {},
 }

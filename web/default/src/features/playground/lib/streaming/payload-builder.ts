@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type {
+  ChatCompletionMessage,
   ChatCompletionRequest,
   Message,
   PlaygroundConfig,
@@ -31,11 +32,28 @@ export function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
   parameterEnabled: ParameterEnabled
+): ChatCompletionRequest
+export function buildChatCompletionPayload(
+  messages: ChatCompletionMessage[],
+  config: PlaygroundConfig,
+  parameterEnabled: ParameterEnabled
+): ChatCompletionRequest
+export function buildChatCompletionPayload(
+  messages: Message[] | ChatCompletionMessage[],
+  config: PlaygroundConfig,
+  parameterEnabled: ParameterEnabled
 ): ChatCompletionRequest {
-  // Filter and format valid messages
+  // Prepared context messages are already API-shaped; raw playground messages
+  // still need validation and conversion here.
   const processedMessages = messages
-    .filter(isValidMessage)
-    .map(formatMessageForAPI)
+    .filter((message) => {
+      if ('key' in message) return isValidMessage(message)
+      return true
+    })
+    .map((message) => {
+      if ('key' in message) return formatMessageForAPI(message)
+      return message
+    })
 
   const payload: ChatCompletionRequest = {
     model: config.model,

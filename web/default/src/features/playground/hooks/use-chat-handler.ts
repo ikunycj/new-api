@@ -32,11 +32,12 @@ import {
   parseRequestErrorDetails,
   applyChatCompletionResponse,
   completeAssistantMessage,
-  getMessageContent,
   hasChatCompletionChoice,
   isImageGenerationModel,
   isAssistantMessageFinal,
   isAssistantMessagePending,
+  prepareConversationContext,
+  ConversationContextError,
 } from '../lib'
 import type { Message, PlaygroundConfig, ParameterEnabled } from '../types'
 import { useStreamRequest } from './use-stream-request'
@@ -45,6 +46,8 @@ interface UseChatHandlerOptions {
   config: PlaygroundConfig
   parameterEnabled: ParameterEnabled
   onMessageUpdate: (updater: (prev: Message[]) => Message[]) => void
+  conversationSummary: string
+  onConversationSummaryUpdate: (summary: string) => void
 }
 
 const KNOWN_ERROR_MESSAGES = new Set<string>(Object.values(ERROR_MESSAGES))
@@ -73,6 +76,8 @@ export function useChatHandler({
   config,
   parameterEnabled,
   onMessageUpdate,
+  conversationSummary,
+  onConversationSummaryUpdate,
 }: UseChatHandlerOptions) {
   const { t } = useTranslation()
   const { sendStreamRequest, stopStream, isStreaming } = useStreamRequest()
@@ -192,6 +197,7 @@ export function useChatHandler({
     (requestId: number) => {
       flushStreamUpdates()
       setIsRequesting(false)
+      abortControllerRef.current = null
       markRequestCompletedOnce(requestId)
       onMessageUpdate((prev) =>
         updateLastAssistantMessage(prev, (message) =>
@@ -209,6 +215,7 @@ export function useChatHandler({
     (error: string, errorCode?: string) => {
       flushStreamUpdates()
       setIsRequesting(false)
+      abortControllerRef.current = null
       const displayError = getDisplayError(error)
       toast.error(displayError)
       const errorTitle = t(ERROR_MESSAGES.API_REQUEST_ERROR)
@@ -224,50 +231,150 @@ export function useChatHandler({
     [flushStreamUpdates, getDisplayError, onMessageUpdate, t]
   )
 
+  const prepareContext = useCallback(
+    async (messages: Message[], signal: AbortSignal) => {
+      if (!config.conversationContext) {
+        const preparedMessages = messages
+          .filter(
+            (message) =>
+              message.from !== 'assistant' || message.versions[0]?.content
+          )
+          .map((message) => ({
+            role: message.from,
+            content: message.versions[0]?.content ?? '',
+          }))
+        const latestUserMessage = [...preparedMessages]
+          .reverse()
+          .find((message) => message.role === 'user')
+        return {
+          messages: preparedMessages,
+          imagePrompt: latestUserMessage?.content ?? '',
+          summary: conversationSummary,
+        }
+      }
+
+      const prepared = await prepareConversationContext(messages, {
+        model: config.model,
+        existingSummary: conversationSummary,
+        config,
+        parameterEnabled,
+        compressSummary: async (source, maxTokens) => {
+          const response = await sendChatCompletion(
+            {
+              model: config.model,
+              group: config.group,
+              messages: [
+                {
+                  role: 'system',
+                  content:
+                    'Summarize the conversation for future context. Preserve user goals, decisions, constraints, important facts, visual details, and unresolved questions. Return only the concise summary.',
+                },
+                { role: 'user', content: source },
+              ],
+              stream: false,
+              temperature: 0,
+              max_tokens: maxTokens,
+            },
+            signal
+          )
+          const summary = response.choices?.[0]?.message?.content?.trim()
+          if (!summary) throw new Error('summary-failed')
+          return summary
+        },
+      })
+      if (prepared.summary !== conversationSummary) {
+        onConversationSummaryUpdate(prepared.summary)
+      }
+      return prepared
+    },
+    [config, conversationSummary, onConversationSummaryUpdate, parameterEnabled]
+  )
+
+  const getContextErrorMessage = useCallback(
+    (error: unknown) => {
+      if (error instanceof ConversationContextError) {
+        if (error.message === 'summary-failed') {
+          return t('Failed to compress conversation history')
+        }
+        if (error.message === 'context-limit-unknown') {
+          return t(
+            'The selected model does not publish a context limit. Set one to enable safe history compression.'
+          )
+        }
+        return t('The current prompt exceeds the model context limit.')
+      }
+      return parseRequestErrorDetails(error).errorMessage
+    },
+    [t]
+  )
+
   // Send streaming chat request
   const sendStreamingChat = useCallback(
-    (messages: Message[]) => {
+    async (messages: Message[]) => {
       const requestId = requestIdRef.current + 1
+      const abortController = new AbortController()
       requestIdRef.current = requestId
+      abortControllerRef.current = abortController
       setIsRequesting(true)
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled
-      )
-      sendStreamRequest(
-        payload,
-        handleStreamUpdate,
-        () => handleStreamComplete(requestId),
-        handleStreamError
-      )
+
+      try {
+        const prepared = await prepareContext(messages, abortController.signal)
+        if (abortController.signal.aborted) {
+          abortControllerRef.current = null
+          setIsRequesting(false)
+          return
+        }
+        const payload = buildChatCompletionPayload(
+          prepared.messages,
+          config,
+          parameterEnabled
+        )
+        sendStreamRequest(
+          payload,
+          handleStreamUpdate,
+          () => handleStreamComplete(requestId),
+          handleStreamError
+        )
+      } catch (error: unknown) {
+        if (abortController.signal.aborted) {
+          abortControllerRef.current = null
+          setIsRequesting(false)
+          return
+        }
+        abortControllerRef.current = null
+        setIsRequesting(false)
+        handleStreamError(getContextErrorMessage(error))
+      }
     },
     [
       config,
-      parameterEnabled,
-      sendStreamRequest,
-      handleStreamUpdate,
+      getContextErrorMessage,
       handleStreamComplete,
       handleStreamError,
+      handleStreamUpdate,
+      parameterEnabled,
+      prepareContext,
+      sendStreamRequest,
     ]
   )
 
   // Send non-streaming chat request
   const sendNonStreamingChat = useCallback(
     async (messages: Message[]) => {
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled
-      )
       const requestId = requestIdRef.current + 1
       const abortController = new AbortController()
 
       requestIdRef.current = requestId
       abortControllerRef.current = abortController
-
       try {
         setIsRequesting(true)
+        const prepared = await prepareContext(messages, abortController.signal)
+        if (abortController.signal.aborted) return
+        const payload = buildChatCompletionPayload(
+          prepared.messages,
+          config,
+          parameterEnabled
+        )
         const response = await sendChatCompletion(
           payload,
           abortController.signal
@@ -285,16 +392,19 @@ export function useChatHandler({
               message,
               response
             )
-
             return updatedMessage ?? message
           })
         )
         markRequestCompletedOnce(requestId)
       } catch (error: unknown) {
         if (abortController.signal.aborted) return
-
-        const { errorCode, errorMessage } = parseRequestErrorDetails(error)
-        handleStreamError(errorMessage, errorCode)
+        const details = parseRequestErrorDetails(error)
+        handleStreamError(
+          error instanceof ConversationContextError
+            ? getContextErrorMessage(error)
+            : details.errorMessage,
+          details.errorCode
+        )
       } finally {
         if (requestIdRef.current === requestId) {
           abortControllerRef.current = null
@@ -304,33 +414,30 @@ export function useChatHandler({
     },
     [
       config,
-      parameterEnabled,
-      onMessageUpdate,
+      getContextErrorMessage,
       handleStreamError,
       markRequestCompletedOnce,
+      onMessageUpdate,
+      parameterEnabled,
+      prepareContext,
     ]
   )
 
   const sendImageGeneration = useCallback(
     async (messages: Message[]) => {
-      const promptMessage = [...messages]
-        .reverse()
-        .find((message) => message.from === 'user')
-      const prompt = promptMessage
-        ? getMessageContent(promptMessage).trim()
-        : ''
-
-      if (!prompt) {
-        handleStreamError(ERROR_MESSAGES.API_REQUEST_ERROR)
-        return
-      }
-
       const requestId = requestIdRef.current + 1
       const abortController = new AbortController()
       requestIdRef.current = requestId
+      abortControllerRef.current = abortController
 
       try {
         setIsRequesting(true)
+        const prepared = await prepareContext(messages, abortController.signal)
+        const prompt = prepared.imagePrompt.trim()
+        if (!prompt) {
+          handleStreamError(ERROR_MESSAGES.API_REQUEST_ERROR)
+          return
+        }
         const response = await generateImage(
           {
             model: config.model,
@@ -351,7 +458,9 @@ export function useChatHandler({
             url:
               image.url ||
               (image.b64_json ? `data:image/png;base64,${image.b64_json}` : ''),
-            revisedPrompt: image.revised_prompt,
+            ...(typeof image.revised_prompt === 'string'
+              ? { revisedPrompt: image.revised_prompt }
+              : {}),
           }))
           .filter((image) => image.url)
 
@@ -369,7 +478,12 @@ export function useChatHandler({
         if (abortController.signal.aborted) return
 
         const { errorCode, errorMessage } = parseRequestErrorDetails(error)
-        handleStreamError(errorMessage, errorCode)
+        handleStreamError(
+          error instanceof ConversationContextError
+            ? getContextErrorMessage(error)
+            : errorMessage,
+          errorCode
+        )
       } finally {
         if (requestIdRef.current === requestId) {
           abortControllerRef.current = null
@@ -377,7 +491,15 @@ export function useChatHandler({
         }
       }
     },
-    [config, handleStreamError, markRequestCompletedOnce, onMessageUpdate, t]
+    [
+      config,
+      getContextErrorMessage,
+      handleStreamError,
+      markRequestCompletedOnce,
+      onMessageUpdate,
+      prepareContext,
+      t,
+    ]
   )
 
   // Send chat request (stream or non-stream based on config)

@@ -213,7 +213,11 @@ func runMidjourneyTaskUpdateOnce(ctx context.Context, report func(processed, tot
 			if err != nil {
 				logger.LogError(ctx, "UpdateMidjourneyTask task error: "+err.Error())
 			} else if won && shouldReturnQuota {
-				err = model.IncreaseUserQuota(task.UserId, task.Quota, false)
+				billingUserId := task.BillingUserId
+				if billingUserId == 0 {
+					billingUserId = task.UserId
+				}
+				err = model.IncreaseUserQuota(billingUserId, task.Quota, false)
 				if err != nil {
 					logger.LogError(ctx, "fail to increase user quota: "+err.Error())
 				}
@@ -332,10 +336,33 @@ func GetUserMidjourney(c *gin.Context) {
 	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.CountAllUserTask(userId, queryParams)
 
-	if setting.MjForwardUrlEnabled {
-		for i, midjourney := range items {
-			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
-			items[i] = midjourney
+	for _, task := range items {
+		if task.ImageUrl != "" {
+			task.ImageUrl = system_setting.ServerAddress + "/mj/image/" + task.MjId
+		}
+		if task.VideoUrl != "" {
+			task.VideoUrl = system_setting.ServerAddress + "/mj/video/" + task.MjId
+		}
+		if task.VideoUrls != "" {
+			var videoURLs []dto.ImgUrls
+			if err := common.Unmarshal([]byte(task.VideoUrls), &videoURLs); err == nil {
+				for i := range videoURLs {
+					if videoURLs[i].Url != "" {
+						videoURLs[i].Url = fmt.Sprintf("%s/mj/video/%s?index=%d", system_setting.ServerAddress, task.MjId, i)
+					}
+				}
+				if data, err := common.Marshal(videoURLs); err == nil {
+					task.VideoUrls = string(data)
+				}
+			} else {
+				task.VideoUrls = ""
+			}
+		}
+		task.ChannelId = 0
+		task.Properties = ""
+		task.Description = ""
+		if task.FailReason != "" {
+			task.FailReason = "Task failed, please contact support with the task ID"
 		}
 	}
 	pageInfo.SetTotal(int(total))

@@ -19,7 +19,14 @@ func GetPerfMetricsSummary(c *gin.Context) {
 		}
 	}
 
-	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
+	groupEnabled := ratio_setting.GetPricingGroupEnabledCopy()
+	activeGroups := make([]string, 0, len(groupEnabled)+1)
+	for group, enabled := range groupEnabled {
+		if enabled {
+			activeGroups = append(activeGroups, group)
+		}
+	}
+	activeGroups = append(activeGroups, "auto")
 	result, err := perfmetrics.QuerySummaryAll(hours, activeGroups)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -74,9 +81,8 @@ func GetPerfMetrics(c *gin.Context) {
 }
 
 func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {
-	activeRatios := ratio_setting.GetGroupRatioCopy()
+	groupEnabled := ratio_setting.GetPricingGroupEnabledCopy()
 	return lo.Filter(groups, func(g perfmetrics.GroupResult, _ int) bool {
-		_, ok := activeRatios[g.Group]
-		return ok || g.Group == "auto"
+		return groupEnabled[g.Group] || g.Group == "auto"
 	})
 }

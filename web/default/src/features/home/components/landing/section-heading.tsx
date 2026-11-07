@@ -16,12 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ReactNode } from 'react'
+
 import { cn } from '@/lib/utils'
 
 interface SectionHeadingProps {
   eyebrow: string
   title: string
   description?: string
+  action?: ReactNode
   centered?: boolean
 }
 
@@ -57,9 +60,12 @@ export function SectionHeading(props: SectionHeadingProps) {
         <p className='text-primary mb-3 text-xs font-semibold uppercase'>
           {props.eyebrow}
         </p>
-        <h2 className='text-foreground max-w-3xl text-3xl leading-tight font-semibold sm:text-4xl'>
-          {props.title}
-        </h2>
+        <div className='flex items-end justify-between gap-4'>
+          <h2 className='text-foreground max-w-3xl text-3xl leading-tight font-semibold sm:text-4xl'>
+            {props.title}
+          </h2>
+          {props.action}
+        </div>
       </div>
       {props.description && (
         <p className='text-muted-foreground text-sm leading-7 sm:text-base'>

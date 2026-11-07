@@ -16,45 +16,28 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
 import {
-  AlertTriangle,
-  ChevronDown,
-  GripVertical,
-  Info,
-  Plus,
-  Trash2,
-} from 'lucide-react'
-import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react'
+  Add01Icon,
+  Delete02Icon,
+  InformationCircleIcon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useCallback, useEffect, memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
-import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
-import { Dialog } from '@/components/dialog'
 import {
   sideDrawerContentClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import {
   Select,
   SelectContent,
@@ -63,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -70,70 +54,132 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getPricingGroupMetrics } from '@/features/channel-monitors/api'
-import type { PricingGroupMetrics } from '@/features/channel-monitors/types'
+import {
+  getChannelMonitors,
+  getPricingGroupMetrics,
+  runChannelMonitor,
+  updateChannelMonitor,
+} from '@/features/channel-monitors/api'
+import {
+  ChannelMonitorFormCard,
+  ChannelMonitorSheet,
+} from '@/features/channel-monitors/components/monitor-sheet'
+import { PricingGroupMonitorControl } from '@/features/channel-monitors/components/pricing-group-monitor-control'
+import type {
+  ChannelMonitor,
+  ChannelMonitorSettingsPayload,
+  PricingGroupMetrics,
+} from '@/features/channel-monitors/types'
 import { formatQuota } from '@/lib/format'
 
-import { safeJsonParse } from '../utils/json-parser'
+import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
-  userUsableGroups: string
-  additionalGroupNames?: readonly string[]
-  groupGroupRatio: string
-  autoGroups: string
-  groupSpecialUsableGroup: string
+  pricingGroupEnabled: string
+  pricingGroupDisplayName: string
+  pricingGroupRemark: string
+  pricingGroupOrder: string
+  pricingGroupRetryPolicy: string
+  pricingGroupRoutingStrategy: string
+  savedGroupRatio: string
   onChange: (field: string, value: string) => void
-  groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
-  onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
-  onGroupRename?: (previousName: string, nextName: string) => void
+  onValidationChange: (isValid: boolean) => void
 }
 
 type GroupPricingRow = {
   _id: string
+  // Existing group keys are the persisted identity used by channels, tokens,
+  // abilities, and historical logs. New rows keep this empty until saved.
+  identityName: string
   name: string
+  displayName: string
+  remark: string
+  enabled: boolean
   ratio: string
-  selectable: boolean
-  description: string
-  groupType: 'toB' | 'toC'
+  retryMode: PricingGroupRetryMode
+  retryTimes: string
+  strategyId: string
 }
 
-const EMPTY_PRICING_GROUP_METRICS: PricingGroupMetrics[] = []
+type PricingGroupRetryMode = 'fixed' | 'follow_channels'
 
-function formatMetricTokens(tokens: number): string {
-  const absolute = Math.abs(tokens)
-  let divisor = 1
-  let suffix = ''
-  if (absolute >= 1_000_000) {
-    divisor = 1_000_000
-    suffix = 'M'
-  } else if (absolute >= 1_000) {
-    divisor = 1_000
-    suffix = 'K'
-  }
-  const value = tokens / divisor
-  return `${Number(value.toFixed(Math.abs(value) >= 100 ? 0 : 2))}${suffix}`
+type PricingGroupRetryPolicy = {
+  mode: PricingGroupRetryMode
+  retry_times: number
 }
 
-type RegistryEntry = {
+type PricingGroupRoutingStrategy = {
   name: string
-  ratio: number
+  price_weight: number
+  availability_weight: number
+  load_weight: number
+  ttft_weight: number
+  recent_test_ttft_weight: number
+}
+
+type PricingGroupRoutingConfiguration = {
+  strategies: Record<string, PricingGroupRoutingStrategy>
+  group_bindings: Record<string, string>
+}
+
+type StrategyDraft = {
+  _id: string
+  id: string
+  name: string
+  priceWeight: string
+  availabilityWeight: string
+  loadWeight: string
+  ttftWeight: string
+  recentTestTTFTWeight: string
+}
+
+type GroupPricingEditorState = {
+  rows: GroupPricingRow[]
+  strategies: StrategyDraft[]
 }
 
 const sectionCardClassName =
   'relative shadow-sm ring-0 before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:border before:border-border/90'
 const sectionHeaderClassName = 'border-b bg-muted/20'
+const EMPTY_CHANNEL_MONITORS: ChannelMonitor[] = []
+const EMPTY_PRICING_GROUP_METRICS: PricingGroupMetrics[] = []
+const DEFAULT_GROUP_RETRY_TIMES = 3
+const MAX_GROUP_RETRY_TIMES = 100
+const RETRY_MODE_ITEMS = [
+  { value: 'fixed', label: '固定次数' },
+  { value: 'follow_channels', label: '跟随渠道' },
+] as const
+const DEFAULT_ROUTING_STRATEGY_DEFINITIONS: Array<{
+  id: string
+  name: string
+  weights: [number, number, number, number, number]
+}> = [
+  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0, 0] },
+  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0, 0] },
+  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0, 0] },
+]
+const STRATEGY_WEIGHT_EPSILON = 0.0001
 
 let groupPricingIdCounter = 0
 function createGroupPricingId() {
   groupPricingIdCounter += 1
   return `gpr_${groupPricingIdCounter}`
+}
+
+let strategyDraftIdCounter = 0
+function createStrategyDraftId() {
+  strategyDraftIdCounter += 1
+  return `strategy_draft_${strategyDraftIdCounter}`
 }
 
 function normalizeRatio(value: unknown): number {
@@ -148,408 +194,680 @@ function parseRatioMap(value: string): Record<string, number> {
   })
 }
 
-function parseUsableMap(value: string): Record<string, string> {
-  return safeJsonParse<Record<string, string>>(value, {
+function parsePricingGroupEnabled(
+  value: string,
+  groupNames: string[]
+): Record<string, boolean> {
+  const parsed = safeJsonParse<Record<string, unknown>>(value, {
     fallback: {},
     silent: true,
   })
+  return Object.fromEntries(
+    groupNames.map((name) => [
+      name,
+      typeof parsed[name] === 'boolean' ? parsed[name] : true,
+    ])
+  )
 }
 
-function parseNestedRatioMap(
-  value: string
-): Record<string, Record<string, number>> {
-  return safeJsonParse<Record<string, Record<string, number>>>(value, {
+function parsePricingGroupRemark(
+  value: string,
+  groupNames?: readonly string[]
+): Record<string, string> {
+  const parsed = safeJsonParse<Record<string, unknown>>(value, {
     fallback: {},
     silent: true,
   })
+  const allowedNames = groupNames ? new Set(groupNames) : null
+  const result: Record<string, string> = {}
+  for (const [groupName, remark] of Object.entries(parsed)) {
+    if (allowedNames && !allowedNames.has(groupName)) continue
+    if (typeof remark === 'string') {
+      result[groupName] = remark
+    }
+  }
+  return result
+}
+
+function parsePricingGroupDisplayName(
+  value: string,
+  groupNames?: readonly string[]
+): Record<string, string> {
+  const parsed = safeJsonParse<Record<string, unknown>>(value, {
+    fallback: {},
+    silent: true,
+  })
+  const allowedNames = groupNames ? new Set(groupNames) : null
+  const result: Record<string, string> = {}
+  for (const [groupName, displayName] of Object.entries(parsed)) {
+    if (allowedNames && !allowedNames.has(groupName)) continue
+    if (typeof displayName === 'string' && displayName.trim() !== '') {
+      result[groupName] = displayName
+    }
+  }
+  return result
+}
+
+function parsePricingGroupOrder(value: string): string[] {
+  return safeJsonParse<string[]>(value, {
+    fallback: [],
+    silent: true,
+  }).filter((name) => typeof name === 'string' && name.trim() !== '')
+}
+
+function parsePricingGroupRetryPolicy(
+  value: string
+): Record<string, PricingGroupRetryPolicy> {
+  const parsed = safeJsonParse<
+    Record<string, Partial<PricingGroupRetryPolicy>>
+  >(value, {
+    fallback: {},
+    silent: true,
+  })
+  const result: Record<string, PricingGroupRetryPolicy> = {}
+  for (const [group, policy] of Object.entries(parsed)) {
+    const mode: PricingGroupRetryMode =
+      policy.mode === 'fixed' ? 'fixed' : 'follow_channels'
+    const retryTimes = Number(policy.retry_times)
+    result[group] = {
+      mode,
+      retry_times:
+        mode === 'fixed' && Number.isInteger(retryTimes)
+          ? Math.min(MAX_GROUP_RETRY_TIMES, Math.max(0, retryTimes))
+          : 0,
+    }
+  }
+  return result
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {}
+  }
+  return value as Record<string, unknown>
+}
+
+function parsePricingGroupRoutingConfiguration(
+  value: string,
+  groupNames: string[] = []
+): PricingGroupRoutingConfiguration {
+  const trimmedValue = value.trim()
+  const useDefaults =
+    trimmedValue === '' || trimmedValue === '{}' || trimmedValue === 'null'
+  const parsed = tryJsonParse<unknown>(value)
+  const raw = useDefaults
+    ? {
+        strategies: Object.fromEntries(
+          DEFAULT_ROUTING_STRATEGY_DEFINITIONS.map((definition) => [
+            definition.id,
+            {
+              name: definition.name,
+              price_weight: definition.weights[0],
+              availability_weight: definition.weights[1],
+              load_weight: definition.weights[2],
+              ttft_weight: definition.weights[3],
+              recent_test_ttft_weight: definition.weights[4],
+            },
+          ])
+        ),
+        group_bindings: Object.fromEntries(
+          groupNames.map((groupName) => [groupName, 'balanced'])
+        ),
+      }
+    : asRecord(parsed.success ? parsed.data : {})
+  const rawStrategies = asRecord(raw.strategies)
+
+  const strategies: Record<string, PricingGroupRoutingStrategy> = {}
+  for (const [strategyId, rawDefinition] of Object.entries(rawStrategies)) {
+    const definition = asRecord(rawDefinition)
+    const name = typeof definition.name === 'string' ? definition.name : ''
+    const readWeight = (key: string) => {
+      const weight = definition[key]
+      return typeof weight === 'number' ? weight : Number.NaN
+    }
+    strategies[strategyId] = {
+      name,
+      price_weight: readWeight('price_weight'),
+      availability_weight: readWeight('availability_weight'),
+      load_weight: readWeight('load_weight'),
+      // Older saved configurations predate TTFT routing and omit this field.
+      ttft_weight: readWeight('ttft_weight') || 0,
+      // Older saved configurations predate recent-test TTFT routing.
+      recent_test_ttft_weight: readWeight('recent_test_ttft_weight') || 0,
+    }
+  }
+
+  const rawBindings = asRecord(raw.group_bindings)
+  const groupBindings: Record<string, string> = {}
+  for (const groupName of groupNames) {
+    const configured = rawBindings[groupName]
+    groupBindings[groupName] = typeof configured === 'string' ? configured : ''
+  }
+
+  return { strategies, group_bindings: groupBindings }
+}
+
+function strategyDraftsFromConfiguration(
+  configuration: PricingGroupRoutingConfiguration
+): StrategyDraft[] {
+  return Object.entries(configuration.strategies).map(([id, strategy]) => ({
+    _id: createStrategyDraftId(),
+    id,
+    name: strategy.name,
+    priceWeight: String(strategy.price_weight),
+    availabilityWeight: String(strategy.availability_weight),
+    loadWeight: String(strategy.load_weight),
+    ttftWeight: String(strategy.ttft_weight),
+    recentTestTTFTWeight: String(strategy.recent_test_ttft_weight),
+  }))
+}
+
+function normalizeRetryTimes(value: string): number {
+  if (value.trim() === '') return DEFAULT_GROUP_RETRY_TIMES
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return DEFAULT_GROUP_RETRY_TIMES
+  return Math.min(MAX_GROUP_RETRY_TIMES, Math.max(0, Math.trunc(parsed)))
+}
+
+function isValidFixedRetryTimes(value: string): boolean {
+  if (value.trim() === '') return false
+  const retryTimes = Number(value)
+  return (
+    Number.isInteger(retryTimes) &&
+    retryTimes >= 0 &&
+    retryTimes <= MAX_GROUP_RETRY_TIMES
+  )
+}
+
+function isValidGroupRatio(value: string): boolean {
+  if (value.trim() === '') return false
+  const ratio = Number(value)
+  return Number.isFinite(ratio) && ratio >= 0
+}
+
+function isValidStrategyWeight(value: string): boolean {
+  if (value.trim() === '') return false
+  const weight = Number(value)
+  return Number.isFinite(weight) && weight >= 0
+}
+
+function isValidStrategyDraft(strategy: StrategyDraft): boolean {
+  if (
+    strategy.id.trim() === '' ||
+    strategy.id.trim() !== strategy.id ||
+    strategy.name.trim() === '' ||
+    !isValidStrategyWeight(strategy.priceWeight) ||
+    !isValidStrategyWeight(strategy.availabilityWeight) ||
+    !isValidStrategyWeight(strategy.loadWeight) ||
+    !isValidStrategyWeight(strategy.ttftWeight) ||
+    !isValidStrategyWeight(strategy.recentTestTTFTWeight)
+  ) {
+    return false
+  }
+  const total =
+    Number(strategy.priceWeight) +
+    Number(strategy.availabilityWeight) +
+    Number(strategy.loadWeight) +
+    Number(strategy.ttftWeight) +
+    Number(strategy.recentTestTTFTWeight)
+  return Math.abs(total - 100) <= STRATEGY_WEIGHT_EPSILON
+}
+
+function isValidGroupPricingRow(
+  row: GroupPricingRow,
+  strategyIds: ReadonlySet<string>
+): boolean {
+  if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
+  if (!strategyIds.has(row.strategyId)) return false
+  if (
+    row.retryMode !== 'follow_channels' &&
+    !isValidFixedRetryTimes(row.retryTimes)
+  ) {
+    return false
+  }
+  return true
+}
+
+function groupPricingRowsAreValid(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+): boolean {
+  const names = new Set<string>()
+  const strategyIds = new Set<string>()
+  const strategyNames = new Set<string>()
+  for (const strategy of strategies) {
+    if (!isValidStrategyDraft(strategy)) return false
+    if (strategyIds.has(strategy.id)) return false
+    if (strategyNames.has(strategy.name.trim())) return false
+    strategyIds.add(strategy.id)
+    strategyNames.add(strategy.name.trim())
+  }
+  if (strategies.length === 0) return false
+  for (const row of rows) {
+    if (!isValidGroupPricingRow(row, strategyIds)) return false
+    const name = row.name.trim()
+    if (names.has(name)) return false
+    names.add(name)
+  }
+  return true
+}
+
+function getOrderedGroupNames(
+  groupRatio: string,
+  pricingGroupOrder: string
+): string[] {
+  const ratioMap = parseRatioMap(groupRatio)
+  const configuredNames = Object.keys(ratioMap)
+  const configuredOrder = parsePricingGroupOrder(pricingGroupOrder)
+  return [
+    ...configuredOrder.filter((name) => name in ratioMap),
+    ...configuredNames.filter((name) => !configuredOrder.includes(name)),
+  ]
 }
 
 function buildGroupPricingRows(
   groupRatio: string,
-  userUsableGroups: string,
-  additionalGroupNames: readonly string[] = []
+  pricingGroupEnabled: string,
+  pricingGroupDisplayName: string,
+  pricingGroupRemark: string,
+  pricingGroupOrder: string,
+  pricingGroupRetryPolicy: string,
+  configuration: PricingGroupRoutingConfiguration
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
-  const usableMap = parseUsableMap(userUsableGroups)
-  const names = new Set([
-    ...Object.keys(ratioMap),
-    ...Object.keys(usableMap),
-    ...additionalGroupNames,
-  ])
+  const orderedNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+  const enabledByName = parsePricingGroupEnabled(
+    pricingGroupEnabled,
+    orderedNames
+  )
+  const remarksByName = parsePricingGroupRemark(
+    pricingGroupRemark,
+    orderedNames
+  )
+  const displayNamesByName = parsePricingGroupDisplayName(
+    pricingGroupDisplayName,
+    orderedNames
+  )
+  const retryPolicies = parsePricingGroupRetryPolicy(pricingGroupRetryPolicy)
 
-  return [...names].map((name) => ({
-    _id: createGroupPricingId(),
-    name,
-    ratio: String(normalizeRatio(ratioMap[name])),
-    selectable: Object.hasOwn(usableMap, name),
-    description: String(usableMap[name] ?? ''),
-    groupType: 'toC',
-  }))
+  return orderedNames.map((name) => {
+    const retryPolicy = retryPolicies[name] ?? {
+      mode: 'follow_channels',
+      retry_times: 0,
+    }
+    return {
+      _id: createGroupPricingId(),
+      identityName: name,
+      name,
+      displayName: displayNamesByName[name] ?? '',
+      remark: remarksByName[name] ?? '',
+      enabled: enabledByName[name],
+      ratio: String(normalizeRatio(ratioMap[name])),
+      retryMode: retryPolicy.mode,
+      retryTimes: String(retryPolicy.retry_times),
+      strategyId: configuration.group_bindings[name] ?? '',
+    }
+  })
 }
 
-function serializeGroupPricingRows(rows: GroupPricingRow[]) {
+function serializeGroupPricingState(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+) {
   const groupRatio: Record<string, number> = {}
-  const userUsableGroups: Record<string, string> = {}
+  const pricingGroupEnabled: Record<string, boolean> = {}
+  const pricingGroupDisplayName: Record<string, string> = {}
+  const pricingGroupRemark: Record<string, string> = {}
+  const pricingGroupOrder: string[] = []
+  const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
+  const pricingGroupRoutingStrategies: Record<
+    string,
+    PricingGroupRoutingStrategy
+  > = {}
+  const groupBindings: Record<string, string> = {}
+
+  for (const strategy of strategies) {
+    pricingGroupRoutingStrategies[strategy.id] = {
+      name: strategy.name,
+      price_weight: Number(strategy.priceWeight),
+      availability_weight: Number(strategy.availabilityWeight),
+      load_weight: Number(strategy.loadWeight),
+      ttft_weight: Number(strategy.ttftWeight),
+      recent_test_ttft_weight: Number(strategy.recentTestTTFTWeight),
+    }
+  }
 
   for (const row of rows) {
-    const name = row.name.trim()
+    const name = (row.identityName.trim() || row.name).trim()
     if (!name) continue
+    if (!(name in groupRatio)) pricingGroupOrder.push(name)
     groupRatio[name] = normalizeRatio(row.ratio)
-    if (row.selectable) {
-      userUsableGroups[name] = row.description
+    pricingGroupEnabled[name] = row.enabled
+    const displayName = row.displayName.trim()
+    if (displayName) pricingGroupDisplayName[name] = displayName
+    const remark = row.remark.trim()
+    if (remark) pricingGroupRemark[name] = remark
+    pricingGroupRetryPolicy[name] = {
+      mode: row.retryMode,
+      retry_times:
+        row.retryMode === 'fixed' ? normalizeRetryTimes(row.retryTimes) : 0,
     }
+    groupBindings[name] = row.strategyId
   }
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
-    UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
+    PricingGroupEnabled: JSON.stringify(pricingGroupEnabled, null, 2),
+    PricingGroupDisplayName: JSON.stringify(pricingGroupDisplayName, null, 2),
+    PricingGroupRemark: JSON.stringify(pricingGroupRemark, null, 2),
+    PricingGroupOrder: JSON.stringify(pricingGroupOrder),
+    PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
+    PricingGroupRoutingStrategy: JSON.stringify(
+      {
+        strategies: pricingGroupRoutingStrategies,
+        group_bindings: groupBindings,
+      },
+      null,
+      2
+    ),
   }
 }
 
-function groupPricingSignature(rows: GroupPricingRow[]): string {
-  const serialized = serializeGroupPricingRows(rows)
+function groupPricingSignature(
+  rows: GroupPricingRow[],
+  strategies: StrategyDraft[]
+): string {
+  const serialized = serializeGroupPricingState(rows, strategies)
+  const routing = parsePricingGroupRoutingConfiguration(
+    serialized.PricingGroupRoutingStrategy,
+    rows.map((row) => row.name.trim()).filter(Boolean)
+  )
   return JSON.stringify({
-    groupRatio: parseRatioMap(serialized.GroupRatio),
-    userUsableGroups: parseUsableMap(serialized.UserUsableGroups),
+    ratios: parseRatioMap(serialized.GroupRatio),
+    enabled: parsePricingGroupEnabled(
+      serialized.PricingGroupEnabled,
+      rows.map((row) => row.name.trim()).filter(Boolean)
+    ),
+    displayNames: parsePricingGroupDisplayName(
+      serialized.PricingGroupDisplayName,
+      rows.map((row) => row.name.trim()).filter(Boolean)
+    ),
+    remarks: parsePricingGroupRemark(
+      serialized.PricingGroupRemark,
+      rows.map((row) => row.name.trim()).filter(Boolean)
+    ),
+    order: parsePricingGroupOrder(serialized.PricingGroupOrder),
+    retryPolicies: parsePricingGroupRetryPolicy(
+      serialized.PricingGroupRetryPolicy
+    ),
+    routing,
   })
 }
 
 function sourceGroupPricingSignature(
   groupRatio: string,
-  userUsableGroups: string
+  pricingGroupEnabled: string,
+  pricingGroupDisplayName: string,
+  pricingGroupRemark: string,
+  pricingGroupOrder: string,
+  pricingGroupRetryPolicy: string,
+  pricingGroupRoutingStrategy: string
 ): string {
+  const names = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+  const configuredPolicies = parsePricingGroupRetryPolicy(
+    pricingGroupRetryPolicy
+  )
+  const routing = parsePricingGroupRoutingConfiguration(
+    pricingGroupRoutingStrategy,
+    names
+  )
+  const retryPolicies: Record<string, PricingGroupRetryPolicy> = {}
+  for (const name of names) {
+    retryPolicies[name] = configuredPolicies[name] ?? {
+      mode: 'follow_channels',
+      retry_times: 0,
+    }
+  }
   return JSON.stringify({
-    groupRatio: parseRatioMap(groupRatio),
-    userUsableGroups: parseUsableMap(userUsableGroups),
+    ratios: parseRatioMap(groupRatio),
+    enabled: parsePricingGroupEnabled(pricingGroupEnabled, names),
+    displayNames: parsePricingGroupDisplayName(pricingGroupDisplayName, names),
+    remarks: parsePricingGroupRemark(pricingGroupRemark, names),
+    order: names,
+    retryPolicies,
+    routing,
   })
 }
 
-function UnknownGroupBadge() {
-  const { t } = useTranslation()
-  return (
-    <StatusBadge variant='danger' copyable={false}>
-      <AlertTriangle className='mr-1 h-3 w-3' />
-      {t('Not in pricing table')}
-    </StatusBadge>
-  )
-}
-
-type GroupNameSelectProps = {
-  options: string[]
-  value: string | null
-  placeholder: string
-  onValueChange: (value: string) => void
-  className?: string
-}
-
-function GroupNameSelect(props: GroupNameSelectProps) {
-  const options = useMemo(() => {
-    if (props.value && !props.options.includes(props.value)) {
-      return [props.value, ...props.options]
-    }
-    return props.options
-  }, [props.options, props.value])
-
-  return (
-    <Select
-      value={props.value === '' ? null : props.value}
-      onValueChange={(v) => {
-        if (typeof v === 'string' && v !== '') props.onValueChange(v)
-      }}
-    >
-      <SelectTrigger className={props.className ?? 'w-48'}>
-        <SelectValue placeholder={props.placeholder} />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          {options.map((name) => (
-            <SelectItem key={name} value={name}>
-              {name}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  )
+function findPricingGroupMonitor(
+  row: GroupPricingRow,
+  monitorByName: ReadonlyMap<string, ChannelMonitor>
+): ChannelMonitor | null {
+  return monitorByName.get(row.name.trim()) ?? null
 }
 
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
-  userUsableGroups,
-  additionalGroupNames = [],
-  groupGroupRatio,
-  autoGroups,
-  groupSpecialUsableGroup,
+  pricingGroupEnabled,
+  pricingGroupDisplayName,
+  pricingGroupRemark,
+  pricingGroupOrder,
+  pricingGroupRetryPolicy,
+  pricingGroupRoutingStrategy,
+  savedGroupRatio,
   onChange,
-  groupTypeByName,
-  onGroupTypeChange,
-  onGroupRename,
+  onValidationChange,
 }: GroupRatioVisualEditorProps) {
-  const { t } = useTranslation()
-  const [detailGroup, setDetailGroup] = useState<string | null>(null)
-  const metricsQuery = useQuery({
-    queryKey: ['pricing-group-metrics'],
-    queryFn: getPricingGroupMetrics,
-    // These metrics are informational and should not cause the editable table
-    // to redraw every few seconds while the user is changing values.
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  })
-  const metricsByName = useMemo(
-    () =>
-      new Map(
-        (metricsQuery.data ?? EMPTY_PRICING_GROUP_METRICS).map((metric) => [
-          metric.pricing_group,
-          metric,
-        ])
-      ),
-    [metricsQuery.data]
-  )
-
-  const registry = useMemo<RegistryEntry[]>(() => {
-    const ratioMap = parseRatioMap(groupRatio)
-    const usableMap = parseUsableMap(userUsableGroups)
-    const names = new Set([
-      ...Object.keys(ratioMap),
-      ...Object.keys(usableMap),
-      ...additionalGroupNames,
-    ])
-    return [...names].map((name) => ({
-      name,
-      ratio: normalizeRatio(ratioMap[name]),
-    }))
-  }, [additionalGroupNames, groupRatio, userUsableGroups])
-
-  const registryNames = useMemo(
-    () => registry.map((entry) => entry.name),
-    [registry]
-  )
-
-  // Auto groups
-  const autoGroupsList = useMemo(() => {
-    return safeJsonParse<string[]>(autoGroups, {
-      fallback: [],
-      context: 'auto groups',
-    })
-  }, [autoGroups])
-
-  const handleAutoGroupAdd = useCallback(
-    (name: string) => {
-      if (autoGroupsList.includes(name)) return
-      onChange('AutoGroups', JSON.stringify([...autoGroupsList, name], null, 2))
-    },
-    [autoGroupsList, onChange]
-  )
-
-  const handleAutoGroupDelete = useCallback(
-    (index: number) => {
-      const list = autoGroupsList.filter((_, i) => i !== index)
-      onChange('AutoGroups', JSON.stringify(list, null, 2))
-    },
-    [autoGroupsList, onChange]
-  )
-
-  const handleAutoGroupMove = useCallback(
-    (index: number, direction: 'up' | 'down') => {
-      const list = [...autoGroupsList]
-      const newIndex = direction === 'up' ? index - 1 : index + 1
-      if (newIndex < 0 || newIndex >= list.length) return
-      ;[list[index], list[newIndex]] = [list[newIndex], list[index]]
-      onChange('AutoGroups', JSON.stringify(list, null, 2))
-    },
-    [autoGroupsList, onChange]
-  )
-
-  const autoGroupCandidates = useMemo(
-    () => registryNames.filter((name) => !autoGroupsList.includes(name)),
-    [registryNames, autoGroupsList]
-  )
-
   return (
-    <div className='space-y-4'>
-      <GroupPricingTable
-        groupRatio={groupRatio}
-        userUsableGroups={userUsableGroups}
-        additionalGroupNames={additionalGroupNames}
-        metricsByName={metricsByName}
-        metricsLoading={metricsQuery.isLoading}
-        onChange={onChange}
-        onShowDetail={setDetailGroup}
-        groupTypeByName={groupTypeByName}
-        onGroupTypeChange={onGroupTypeChange}
-        onGroupRename={onGroupRename}
-      />
-      {metricsQuery.isError ? (
-        <p className='text-destructive text-sm'>
-          {t('Pricing group metrics failed to load')}:{' '}
-          {metricsQuery.error.message}
-        </p>
-      ) : null}
-
-      <GroupOverrideRules
-        registry={registry}
-        groupGroupRatio={groupGroupRatio}
-        onChange={onChange}
-      />
-
-      {/* Auto Groups */}
-      <Card className={sectionCardClassName}>
-        <CardHeader className={sectionHeaderClassName}>
-          <CardTitle>{t('Auto assignment order')}</CardTitle>
-          <CardDescription>
-            {t(
-              'Priority order for tokens in the auto group. The system tries groups from top to bottom.'
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-4'>
-            <GroupNameSelect
-              options={autoGroupCandidates}
-              value={null}
-              placeholder={t('Add group')}
-              onValueChange={handleAutoGroupAdd}
-            />
-            {autoGroupsList.length > 0 && (
-              <div className='space-y-2'>
-                {autoGroupsList.map((group, index) => (
-                  <div
-                    key={group}
-                    className='flex items-center gap-2 rounded-md border p-3'
-                  >
-                    <GripVertical className='text-muted-foreground h-4 w-4' />
-                    <span className='font-medium'>{group}</span>
-                    {!registryNames.includes(group) && <UnknownGroupBadge />}
-                    <div className='ml-auto flex gap-1'>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        disabled={index === 0}
-                        onClick={() => handleAutoGroupMove(index, 'up')}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        disabled={index === autoGroupsList.length - 1}
-                        onClick={() => handleAutoGroupMove(index, 'down')}
-                      >
-                        ↓
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => handleAutoGroupDelete(index)}
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <GroupDetailSheet
-        groupName={detailGroup}
-        onOpenChange={(open) => {
-          if (!open) setDetailGroup(null)
-        }}
-        registry={registry}
-        userUsableGroups={userUsableGroups}
-        groupGroupRatio={groupGroupRatio}
-        autoGroups={autoGroupsList}
-        groupSpecialUsableGroup={groupSpecialUsableGroup}
-      />
-    </div>
+    <GroupPricingTable
+      groupRatio={groupRatio}
+      pricingGroupEnabled={pricingGroupEnabled}
+      pricingGroupDisplayName={pricingGroupDisplayName}
+      pricingGroupRemark={pricingGroupRemark}
+      pricingGroupOrder={pricingGroupOrder}
+      pricingGroupRetryPolicy={pricingGroupRetryPolicy}
+      pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
+      savedGroupRatio={savedGroupRatio}
+      onChange={onChange}
+      onValidationChange={onValidationChange}
+    />
   )
 })
 
 type GroupPricingTableProps = {
   groupRatio: string
-  userUsableGroups: string
-  additionalGroupNames: readonly string[]
-  metricsByName: ReadonlyMap<string, PricingGroupMetrics>
-  metricsLoading: boolean
+  pricingGroupEnabled: string
+  pricingGroupDisplayName: string
+  pricingGroupRemark: string
+  pricingGroupOrder: string
+  pricingGroupRetryPolicy: string
+  pricingGroupRoutingStrategy: string
+  savedGroupRatio: string
   onChange: (field: string, value: string) => void
-  onShowDetail: (name: string) => void
-  groupTypeByName?: ReadonlyMap<string, 'toB' | 'toC'>
-  onGroupTypeChange?: (name: string, type: 'toB' | 'toC') => void
-  onGroupRename?: (previousName: string, nextName: string) => void
+  onValidationChange: (isValid: boolean) => void
 }
 
 function GroupPricingTable({
   groupRatio,
-  userUsableGroups,
-  additionalGroupNames,
-  metricsByName,
-  metricsLoading,
+  pricingGroupEnabled,
+  pricingGroupDisplayName,
+  pricingGroupRemark,
+  pricingGroupOrder,
+  pricingGroupRetryPolicy,
+  pricingGroupRoutingStrategy,
+  savedGroupRatio,
   onChange,
-  onShowDetail,
-  groupTypeByName,
-  onGroupTypeChange,
-  onGroupRename,
+  onValidationChange,
 }: GroupPricingTableProps) {
-  const nameBeforeEdit = useRef(new Map<string, string>())
   const { t } = useTranslation()
-  const routingGroupNames = useMemo(
-    () =>
-      new Set(additionalGroupNames.map((name) => name.trim()).filter(Boolean)),
-    [additionalGroupNames]
-  )
-  const [pendingTypeChange, setPendingTypeChange] = useState<{
-    id: string
-    name: string
-    previousType: 'toB' | 'toC'
-    nextType: 'toB' | 'toC'
-  } | null>(null)
-  const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(
-      groupRatio,
-      userUsableGroups,
-      additionalGroupNames
-    ).map((row) => ({
-      ...row,
-      groupType: groupTypeByName?.get(row.name) ?? row.groupType,
-    }))
-  )
-
-  useEffect(() => {
-    const incomingSignature = sourceGroupPricingSignature(
-      groupRatio,
-      userUsableGroups
-    )
-    setRows((currentRows) => {
-      if (groupPricingSignature(currentRows) === incomingSignature) {
-        let typeChanged = false
-        const syncedRows = currentRows.map((row) => {
-          const nextType = groupTypeByName?.get(row.name) ?? row.groupType
-          if (row.groupType === nextType) return row
-          typeChanged = true
-          return { ...row, groupType: nextType }
-        })
-        return typeChanged ? syncedRows : currentRows
+  const queryClient = useQueryClient()
+  const [editorState, setEditorState] = useState<GroupPricingEditorState>(
+    () => {
+      const groupNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+      const routingConfiguration = parsePricingGroupRoutingConfiguration(
+        pricingGroupRoutingStrategy,
+        groupNames
+      )
+      return {
+        rows: buildGroupPricingRows(
+          groupRatio,
+          pricingGroupEnabled,
+          pricingGroupDisplayName,
+          pricingGroupRemark,
+          pricingGroupOrder,
+          pricingGroupRetryPolicy,
+          routingConfiguration
+        ),
+        strategies: strategyDraftsFromConfiguration(routingConfiguration),
       }
-      return buildGroupPricingRows(
+    }
+  )
+  const [monitorEditor, setMonitorEditor] = useState<{
+    monitor: ChannelMonitor | null
+    pricingGroupName: string
+    pricingGroupLabel: string
+  } | null>(null)
+  const [detailRowId, setDetailRowId] = useState<string | null>(null)
+  const [deleteRowId, setDeleteRowId] = useState<string | null>(null)
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>(
+    {}
+  )
+  const incomingSignature = sourceGroupPricingSignature(
+    groupRatio,
+    pricingGroupEnabled,
+    pricingGroupDisplayName,
+    pricingGroupRemark,
+    pricingGroupOrder,
+    pricingGroupRetryPolicy,
+    pricingGroupRoutingStrategy
+  )
+  const parsedEditorState = useMemo(() => {
+    const groupNames = getOrderedGroupNames(groupRatio, pricingGroupOrder)
+    const routingConfiguration = parsePricingGroupRoutingConfiguration(
+      pricingGroupRoutingStrategy,
+      groupNames
+    )
+    return {
+      rows: buildGroupPricingRows(
         groupRatio,
-        userUsableGroups,
-        additionalGroupNames
-      ).map((row) => ({
-        ...row,
-        groupType: groupTypeByName?.get(row.name) ?? row.groupType,
-      }))
-    })
-  }, [additionalGroupNames, groupRatio, userUsableGroups, groupTypeByName])
+        pricingGroupEnabled,
+        pricingGroupDisplayName,
+        pricingGroupRemark,
+        pricingGroupOrder,
+        pricingGroupRetryPolicy,
+        routingConfiguration
+      ),
+      strategies: strategyDraftsFromConfiguration(routingConfiguration),
+    }
+  }, [
+    groupRatio,
+    pricingGroupEnabled,
+    pricingGroupDisplayName,
+    pricingGroupRemark,
+    pricingGroupOrder,
+    pricingGroupRetryPolicy,
+    pricingGroupRoutingStrategy,
+  ])
+  const currentEditorState =
+    groupPricingSignature(editorState.rows, editorState.strategies) ===
+    incomingSignature
+      ? editorState
+      : parsedEditorState
+  const currentRows = currentEditorState.rows
+  const currentStrategies = currentEditorState.strategies
+  const currentEditorIsValid = useMemo(
+    () => groupPricingRowsAreValid(currentRows, currentStrategies),
+    [currentRows, currentStrategies]
+  )
+  useEffect(() => {
+    onValidationChange(currentEditorIsValid)
+  }, [currentEditorIsValid, onValidationChange])
+  const persistedGroupNames = useMemo(
+    () => new Set(Object.keys(parseRatioMap(savedGroupRatio))),
+    [savedGroupRatio]
+  )
+  const monitorsQuery = useQuery({
+    queryKey: ['channel-monitors'],
+    queryFn: getChannelMonitors,
+    refetchInterval: 10_000,
+  })
+  const metricsQuery = useQuery({
+    queryKey: ['pricing-group-metrics'],
+    queryFn: getPricingGroupMetrics,
+    refetchInterval: 3_000,
+    refetchIntervalInBackground: false,
+  })
+  const monitors = monitorsQuery.data ?? EMPTY_CHANNEL_MONITORS
+  const metrics = metricsQuery.data ?? EMPTY_PRICING_GROUP_METRICS
+  const monitorByName = useMemo(
+    () => new Map(monitors.map((monitor) => [monitor.pricing_group, monitor])),
+    [monitors]
+  )
+  const metricsByName = useMemo(
+    () => new Map(metrics.map((metric) => [metric.pricing_group, metric])),
+    [metrics]
+  )
+  const detailRow = currentRows.find((row) => row._id === detailRowId) ?? null
+  const detailMonitor = detailRow
+    ? findPricingGroupMonitor(detailRow, monitorByName)
+    : null
+  const deleteRow = currentRows.find((row) => row._id === deleteRowId) ?? null
 
-  const emitRows = useCallback(
-    (nextRows: GroupPricingRow[]) => {
-      setRows(nextRows)
-      const serialized = serializeGroupPricingRows(nextRows)
+  const updateMonitorMutation = useMutation({
+    mutationFn: ({
+      monitor,
+      enabled,
+    }: {
+      monitor: ChannelMonitor
+      enabled: boolean
+    }) => {
+      const payload: ChannelMonitorSettingsPayload = {
+        test_model: monitor.test_model,
+        interval_seconds: monitor.interval_seconds,
+        timeout_seconds: monitor.timeout_seconds,
+        enabled,
+        visible: monitor.visible,
+        availability_boost_percent: monitor.availability_boost_percent,
+      }
+      return updateChannelMonitor(monitor.id, payload)
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+      ])
+    },
+    onError: (error) => toast.error(error.message || '更新监控失败'),
+  })
+
+  const runMonitorMutation = useMutation({
+    mutationFn: runChannelMonitor,
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
+        queryClient.invalidateQueries({ queryKey: ['group-status'] }),
+      ])
+      if (result.result.success) toast.success('可用性测试成功')
+      else toast.error('可用性测试失败')
+    },
+    onError: (error) => toast.error(error.message || '可用性测试失败'),
+  })
+
+  const emitState = useCallback(
+    (nextRows: GroupPricingRow[], nextStrategies: StrategyDraft[]) => {
+      setEditorState({ rows: nextRows, strategies: nextStrategies })
+      setPositionDrafts({})
+      const serialized = serializeGroupPricingState(nextRows, nextStrategies)
       onChange('GroupRatio', serialized.GroupRatio)
-      onChange('UserUsableGroups', serialized.UserUsableGroups)
+      onChange('PricingGroupEnabled', serialized.PricingGroupEnabled)
+      onChange('PricingGroupDisplayName', serialized.PricingGroupDisplayName)
+      onChange('PricingGroupRemark', serialized.PricingGroupRemark)
+      onChange('PricingGroupOrder', serialized.PricingGroupOrder)
+      onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
+      onChange(
+        'PricingGroupRoutingStrategy',
+        serialized.PricingGroupRoutingStrategy
+      )
     },
     [onChange]
   )
@@ -557,72 +875,188 @@ function GroupPricingTable({
   const updateRow = useCallback(
     (
       id: string,
-      field: Exclude<keyof GroupPricingRow, '_id'>,
-      value: string | number | boolean
+      field:
+        | 'name'
+        | 'displayName'
+        | 'remark'
+        | 'enabled'
+        | 'ratio'
+        | 'retryMode'
+        | 'retryTimes'
+        | 'strategyId',
+      value: string | boolean
     ) => {
-      emitRows(
-        rows.map((row) => (row._id === id ? { ...row, [field]: value } : row))
-      )
+      const nextRows = currentRows.map((row) => {
+        if (row._id !== id) return row
+        if (field === 'name' && row.identityName.trim() !== '') return row
+        return { ...row, [field]: value }
+      })
+      if (nextRows.every((row, index) => row === currentRows[index])) return
+      emitState(nextRows, currentStrategies)
     },
-    [emitRows, rows]
+    [currentRows, currentStrategies, emitState]
   )
 
   const addRow = useCallback(() => {
-    const existingNames = new Set(rows.map((row) => row.name))
+    const existingNames = new Set(currentRows.map((row) => row.name))
     let index = 1
     let name = `group_${index}`
     while (existingNames.has(name)) {
       index += 1
       name = `group_${index}`
     }
-    emitRows([
-      ...rows,
+    emitState(
+      [
+        ...currentRows,
+        {
+          _id: createGroupPricingId(),
+          identityName: '',
+          name,
+          displayName: '',
+          remark: '',
+          enabled: true,
+          ratio: '1',
+          retryMode: 'follow_channels',
+          retryTimes: '0',
+          strategyId: currentStrategies[0]?.id ?? '',
+        },
+      ],
+      currentStrategies
+    )
+  }, [currentRows, currentStrategies, emitState])
+
+  const updateStrategy = useCallback(
+    (
+      draftId: string,
+      field:
+        | 'name'
+        | 'priceWeight'
+        | 'availabilityWeight'
+        | 'loadWeight'
+        | 'ttftWeight'
+        | 'recentTestTTFTWeight',
+      value: string
+    ) => {
+      const nextStrategies = currentStrategies.map((strategy) =>
+        strategy._id === draftId ? { ...strategy, [field]: value } : strategy
+      )
+      emitState(currentRows, nextStrategies)
+    },
+    [currentRows, currentStrategies, emitState]
+  )
+
+  const addStrategy = useCallback(() => {
+    const existingIds = new Set(
+      currentStrategies.map((strategy) => strategy.id)
+    )
+    const existingNames = new Set(
+      currentStrategies.map((strategy) => strategy.name.trim())
+    )
+    let index = 1
+    let id = `strategy_${index}`
+    while (existingIds.has(id)) {
+      index += 1
+      id = `strategy_${index}`
+    }
+    let name = '新策略'
+    let nameIndex = 2
+    while (existingNames.has(name)) {
+      name = `新策略 ${nameIndex}`
+      nameIndex += 1
+    }
+    emitState(currentRows, [
+      ...currentStrategies,
       {
-        _id: createGroupPricingId(),
+        _id: createStrategyDraftId(),
+        id,
         name,
-        ratio: '1',
-        selectable: true,
-        description: '',
-        groupType: 'toC',
+        priceWeight: '40',
+        availabilityWeight: '40',
+        loadWeight: '20',
+        ttftWeight: '0',
+        recentTestTTFTWeight: '0',
       },
     ])
-  }, [emitRows, rows])
+  }, [currentRows, currentStrategies, emitState])
+
+  const removeStrategy = useCallback(
+    (draftId: string) => {
+      const strategy = currentStrategies.find((item) => item._id === draftId)
+      if (!strategy) return
+      if (currentRows.some((row) => row.strategyId === strategy.id)) {
+        toast.error('该策略仍被定价分组使用，请先修改分组策略')
+        return
+      }
+      if (currentStrategies.length <= 1) {
+        toast.error('至少需要保留一个策略')
+        return
+      }
+      emitState(
+        currentRows,
+        currentStrategies.filter((item) => item._id !== draftId)
+      )
+    },
+    [currentRows, currentStrategies, emitState]
+  )
 
   const removeRow = useCallback(
     (id: string) => {
-      emitRows(rows.filter((row) => row._id !== id))
-    },
-    [emitRows, rows]
-  )
-
-  const requestTypeChange = useCallback(
-    (row: GroupPricingRow, nextType: 'toB' | 'toC') => {
-      if (row.groupType === nextType) return
-      setPendingTypeChange({
-        id: row._id,
-        name: row.name.trim(),
-        previousType: row.groupType,
-        nextType,
-      })
-    },
-    []
-  )
-
-  const confirmTypeChange = useCallback(() => {
-    if (!pendingTypeChange) return
-    const { id, name, nextType } = pendingTypeChange
-    setRows((currentRows) =>
-      currentRows.map((row) =>
-        row._id === id ? { ...row, groupType: nextType } : row
+      emitState(
+        currentRows.filter((row) => row._id !== id),
+        currentStrategies
       )
-    )
-    onGroupTypeChange?.(name, nextType)
-    setPendingTypeChange(null)
-  }, [onGroupTypeChange, pendingTypeChange])
+    },
+    [currentRows, currentStrategies, emitState]
+  )
+
+  const moveRowToPosition = useCallback(
+    (id: string, position: number) => {
+      const sourceIndex = currentRows.findIndex((row) => row._id === id)
+      const targetIndex = position - 1
+      if (
+        sourceIndex < 0 ||
+        targetIndex < 0 ||
+        targetIndex >= currentRows.length ||
+        sourceIndex === targetIndex
+      ) {
+        return
+      }
+      const nextRows = [...currentRows]
+      const [moved] = nextRows.splice(sourceIndex, 1)
+      nextRows.splice(targetIndex, 0, moved)
+      emitState(nextRows, currentStrategies)
+    },
+    [currentRows, currentStrategies, emitState]
+  )
+
+  const commitRowPosition = useCallback(
+    (rowId: string, fallbackPosition: number) => {
+      const draft = positionDrafts[rowId]
+      setPositionDrafts((current) => {
+        if (!(rowId in current)) return current
+        const next = { ...current }
+        delete next[rowId]
+        return next
+      })
+      if (draft === undefined || draft.trim() === '') return
+      const position = Number(draft)
+      if (
+        !Number.isInteger(position) ||
+        position < 1 ||
+        position > currentRows.length
+      ) {
+        return
+      }
+      if (position !== fallbackPosition) {
+        moveRowToPosition(rowId, position)
+      }
+    },
+    [currentRows.length, moveRowToPosition, positionDrafts]
+  )
 
   const duplicateNames = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const row of rows) {
+    for (const row of currentRows) {
       const name = row.name.trim()
       if (!name) continue
       counts.set(name, (counts.get(name) ?? 0) + 1)
@@ -630,996 +1064,883 @@ function GroupPricingTable({
     return [...counts.entries()]
       .filter(([, count]) => count > 1)
       .map(([name]) => name)
-  }, [rows])
-
-  return (
-    <Card className={sectionCardClassName}>
-      <CardHeader className={sectionHeaderClassName}>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-          <div>
-            <CardTitle>{t('Pricing groups')}</CardTitle>
-            <CardDescription>
-              {t(
-                'Edit billing ratios and user-selectable groups in one table.'
-              )}
-            </CardDescription>
-          </div>
-          <Button onClick={addRow} size='sm' className='sm:self-start'>
-            <Plus className='mr-2 h-4 w-4' />
-            {t('Add group')}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className='space-y-3'>
-          <StaticDataTable
-            data={rows}
-            getRowKey={(row) => row._id}
-            emptyClassName='text-muted-foreground h-20 text-sm'
-            emptyContent={t('No groups yet. Add a group to get started.')}
-            columns={[
-              {
-                id: 'group',
-                header: t('Group name'),
-                className: 'min-w-40',
-                cell: (row) => (
-                  <Input
-                    value={row.name}
-                    onFocus={() => {
-                      nameBeforeEdit.current.set(row._id, row.name)
-                    }}
-                    onBlur={() => {
-                      const previousName =
-                        nameBeforeEdit.current.get(row._id) ?? row.name
-                      nameBeforeEdit.current.delete(row._id)
-                      const nextName = row.name.trim()
-                      if (previousName.trim() !== nextName) {
-                        onGroupRename?.(previousName.trim(), nextName)
-                      }
-                    }}
-                    onChange={(event) =>
-                      updateRow(row._id, 'name', event.target.value)
-                    }
-                    aria-invalid={duplicateNames.includes(row.name.trim())}
-                  />
-                ),
-              },
-              {
-                id: 'ratio',
-                header: t('Ratio'),
-                className: 'w-28',
-                cell: (row) => (
-                  <Input
-                    type='number'
-                    min={0}
-                    step={0.1}
-                    value={row.ratio}
-                    onChange={(event) =>
-                      updateRow(row._id, 'ratio', event.target.value)
-                    }
-                  />
-                ),
-              },
-              {
-                id: 'selectable',
-                header: t('User selectable'),
-                className: 'w-28 text-center',
-                cell: (row) => (
-                  <div className='flex justify-center'>
-                    <Checkbox
-                      checked={row.selectable}
-                      onCheckedChange={(checked) =>
-                        updateRow(row._id, 'selectable', checked === true)
-                      }
-                      aria-label={t('User selectable')}
-                    />
-                  </div>
-                ),
-              },
-              {
-                id: 'group-type',
-                header: t('Customer type'),
-                className: 'w-28',
-                cell: (row) => (
-                  <NativeSelect
-                    value={row.groupType}
-                    onChange={(event) => {
-                      const type = event.target.value as 'toB' | 'toC'
-                      requestTypeChange(row, type)
-                    }}
-                  >
-                    <NativeSelectOption value='toB'>
-                      {t('ToB')}
-                    </NativeSelectOption>
-                    <NativeSelectOption value='toC'>
-                      {t('ToC')}
-                    </NativeSelectOption>
-                  </NativeSelect>
-                ),
-              },
-              {
-                id: 'description',
-                header: t('Description'),
-                className: 'min-w-56',
-                cell: (row) =>
-                  row.selectable ? (
-                    <Input
-                      value={row.description}
-                      placeholder={t('Group description')}
-                      onChange={(event) =>
-                        updateRow(row._id, 'description', event.target.value)
-                      }
-                    />
-                  ) : (
-                    <span className='text-muted-foreground px-3 text-sm'>
-                      -
-                    </span>
-                  ),
-              },
-              {
-                id: 'usage',
-                header: t('Usage'),
-                className: 'min-w-40',
-                cell: (row) => {
-                  const metrics = metricsByName.get(row.name.trim())
-                  if (metricsLoading) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>
-                        {t('Loading...')}
-                      </span>
-                    )
-                  }
-                  if (!metrics) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>-</span>
-                    )
-                  }
-                  return (
-                    <div className='text-xs leading-5'>
-                      <div>
-                        {t('Today')}:{' '}
-                        {formatMetricTokens(metrics.usage.today.tokens)}/
-                        {formatQuota(metrics.usage.today.quota)}
-                      </div>
-                      <div>
-                        {t('Yesterday')}:{' '}
-                        {formatMetricTokens(metrics.usage.yesterday.tokens)}/
-                        {formatQuota(metrics.usage.yesterday.quota)}
-                      </div>
-                      <div>
-                        {t('Total')}:{' '}
-                        {formatMetricTokens(metrics.usage.total.tokens)}/
-                        {formatQuota(metrics.usage.total.quota)}
-                      </div>
-                    </div>
-                  )
-                },
-              },
-              {
-                id: 'channels',
-                header: t('Channels'),
-                className: 'min-w-28',
-                cell: (row) => {
-                  const metrics = metricsByName.get(row.name.trim())
-                  if (metricsLoading) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>
-                        {t('Loading...')}
-                      </span>
-                    )
-                  }
-                  if (!metrics) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>-</span>
-                    )
-                  }
-                  return (
-                    <div className='text-xs leading-5'>
-                      <div>
-                        {t('Available')}: {metrics.channels.available}
-                      </div>
-                      <div>
-                        {t('Total')}: {metrics.channels.total}
-                      </div>
-                    </div>
-                  )
-                },
-              },
-              {
-                id: 'activity',
-                header: t('Activity'),
-                className: 'min-w-28',
-                cell: (row) => {
-                  const metrics = metricsByName.get(row.name.trim())
-                  if (metricsLoading) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>
-                        {t('Loading...')}
-                      </span>
-                    )
-                  }
-                  if (!metrics) {
-                    return (
-                      <span className='text-muted-foreground text-xs'>-</span>
-                    )
-                  }
-                  return (
-                    <div className='text-xs leading-5'>
-                      <div>
-                        {t('Active users')}: {metrics.activity.users}
-                      </div>
-                      <div>
-                        {t('Active connections')}:{' '}
-                        {metrics.activity.connections}
-                      </div>
-                    </div>
-                  )
-                },
-              },
-              {
-                id: 'actions',
-                header: t('Actions'),
-                className: 'text-right',
-                cellClassName: 'text-right',
-                cell: (row) => (
-                  <div className='flex justify-end gap-1'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => onShowDetail(row.name.trim())}
-                      disabled={!row.name.trim()}
-                      aria-label={t('Details')}
-                    >
-                      <Info className='h-4 w-4' />
-                    </Button>
-                    {routingGroupNames.has(row.name.trim()) ? (
-                      <TooltipProvider delay={100}>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={<span className='inline-flex' />}
-                          >
-                            <span className='inline-flex' title={t('Delete')}>
-                              <Button
-                                variant='ghost'
-                                size='sm'
-                                disabled
-                                aria-label={t('Delete')}
-                              >
-                                <Trash2 className='h-4 w-4' />
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className='max-w-xs'>
-                            {t(
-                              'Delete the routing configuration for this group first, then save before deleting the pricing group.'
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => removeRow(row._id)}
-                        aria-label={t('Delete')}
-                      >
-                        <Trash2 className='h-4 w-4' />
-                      </Button>
-                    )}
-                  </div>
-                ),
-              },
-            ]}
-          />
-
-          {duplicateNames.length > 0 && (
-            <p className='text-destructive text-sm'>
-              {t('Duplicate group names: {{names}}', {
-                names: duplicateNames.join(', '),
-              })}
-            </p>
-          )}
-        </div>
-      </CardContent>
-      <ConfirmDialog
-        open={pendingTypeChange !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingTypeChange(null)
-        }}
-        title={t('Confirm customer type change')}
-        desc={t(
-          'Changing {{name}} to {{type}} updates its routing scope and may change which channels can serve requests.',
-          {
-            name: pendingTypeChange?.name ?? '',
-            type: pendingTypeChange?.nextType === 'toB' ? t('ToB') : t('ToC'),
-          }
-        )}
-        confirmText={t('Update')}
-        handleConfirm={confirmTypeChange}
-      />
-    </Card>
+  }, [currentRows])
+  const hasEmptyName = currentRows.some((row) => row.name.trim() === '')
+  const hasInvalidRatio = currentRows.some(
+    (row) => !isValidGroupRatio(row.ratio)
   )
-}
-
-type GroupOverride = {
-  targetGroup: string
-  ratio: number
-}
-
-type GroupOverrideRulesProps = {
-  registry: RegistryEntry[]
-  groupGroupRatio: string
-  onChange: (field: string, value: string) => void
-}
-
-function GroupOverrideRules({
-  registry,
-  groupGroupRatio,
-  onChange,
-}: GroupOverrideRulesProps) {
-  const { t } = useTranslation()
-  const [userGroupDialogOpen, setUserGroupDialogOpen] = useState(false)
-  const [userGroupInput, setUserGroupInput] = useState<string | null>(null)
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false)
-  const [overrideUserGroup, setOverrideUserGroup] = useState<string | null>(
-    null
+  const hasInvalidRetryTimes = currentRows.some(
+    (row) =>
+      row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
   )
-  const [overrideEditData, setOverrideEditData] =
-    useState<GroupOverride | null>(null)
-
-  const registryNames = useMemo(
-    () => registry.map((entry) => entry.name),
-    [registry]
+  const hasInvalidStrategyDefinition = currentStrategies.some(
+    (strategy) => !isValidStrategyDraft(strategy)
   )
-
-  const baseRatioByName = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const entry of registry) map.set(entry.name, entry.ratio)
-    return map
-  }, [registry])
-
-  const groupGroupRatioList = useMemo(() => {
-    const map = parseNestedRatioMap(groupGroupRatio)
-    return Object.entries(map).map(([userGroup, overrides]) => ({
-      userGroup,
-      overrides: Object.entries(overrides).map(([targetGroup, ratio]) => ({
-        targetGroup,
-        ratio,
+  const duplicateStrategyNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const strategy of currentStrategies) {
+      const name = strategy.name.trim()
+      if (!name) continue
+      counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return new Set(
+      [...counts.entries()]
+        .filter(([, count]) => count > 1)
+        .map(([name]) => name)
+    )
+  }, [currentStrategies])
+  const strategyIds = useMemo(
+    () => new Set(currentStrategies.map((strategy) => strategy.id)),
+    [currentStrategies]
+  )
+  const hasInvalidStrategyBinding = currentRows.some(
+    (row) => !strategyIds.has(row.strategyId)
+  )
+  const strategySelectItems = useMemo(
+    () =>
+      currentStrategies.map((strategy) => ({
+        value: strategy.id,
+        label: strategy.name.trim() || '未命名策略',
       })),
-    }))
-  }, [groupGroupRatio])
-
-  const emitMap = useCallback(
-    (map: Record<string, Record<string, number>>) => {
-      onChange('GroupGroupRatio', JSON.stringify(map, null, 2))
-    },
-    [onChange]
-  )
-
-  const handleUserGroupSave = useCallback(() => {
-    if (!userGroupInput) return
-    const map = parseNestedRatioMap(groupGroupRatio)
-    if (!map[userGroupInput]) {
-      map[userGroupInput] = {}
-    }
-    emitMap(map)
-    setUserGroupDialogOpen(false)
-    setUserGroupInput(null)
-  }, [userGroupInput, groupGroupRatio, emitMap])
-
-  const handleUserGroupDelete = useCallback(
-    (userGroup: string) => {
-      const map = parseNestedRatioMap(groupGroupRatio)
-      delete map[userGroup]
-      emitMap(map)
-    },
-    [groupGroupRatio, emitMap]
-  )
-
-  const handleOverrideAdd = useCallback((userGroup: string) => {
-    setOverrideUserGroup(userGroup)
-    setOverrideEditData(null)
-    setOverrideDialogOpen(true)
-  }, [])
-
-  const handleOverrideEdit = useCallback(
-    (userGroup: string, override: GroupOverride) => {
-      setOverrideUserGroup(userGroup)
-      setOverrideEditData(override)
-      setOverrideDialogOpen(true)
-    },
-    []
-  )
-
-  const handleOverrideSave = useCallback(
-    (targetGroup: string, ratio: number, oldTargetGroup?: string) => {
-      if (!overrideUserGroup) return
-      const map = parseNestedRatioMap(groupGroupRatio)
-      if (!map[overrideUserGroup]) {
-        map[overrideUserGroup] = {}
-      }
-      if (oldTargetGroup && oldTargetGroup !== targetGroup) {
-        delete map[overrideUserGroup][oldTargetGroup]
-      }
-      map[overrideUserGroup][targetGroup] = ratio
-      emitMap(map)
-      setOverrideDialogOpen(false)
-    },
-    [overrideUserGroup, groupGroupRatio, emitMap]
-  )
-
-  const handleOverrideDelete = useCallback(
-    (userGroup: string, targetGroup: string) => {
-      const map = parseNestedRatioMap(groupGroupRatio)
-      if (map[userGroup]) {
-        delete map[userGroup][targetGroup]
-        if (Object.keys(map[userGroup]).length === 0) {
-          delete map[userGroup]
-        }
-      }
-      emitMap(map)
-    },
-    [groupGroupRatio, emitMap]
+    [currentStrategies]
   )
 
   return (
-    <Card className={sectionCardClassName}>
-      <CardHeader className={sectionHeaderClassName}>
-        <CardTitle>{t('Special ratio rules')}</CardTitle>
-        <CardDescription>
-          {t(
-            'Each rule reads as a sentence: users of one group pay a special ratio when billed as another group. Without a rule, the billing group base ratio applies.'
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className='space-y-4'>
-          <Button
-            onClick={() => {
-              setUserGroupInput(null)
-              setUserGroupDialogOpen(true)
-            }}
-            size='sm'
-          >
-            <Plus className='mr-2 h-4 w-4' />
-            {t('Add user group')}
-          </Button>
-          {groupGroupRatioList.length > 0 && (
-            <div className='space-y-3'>
-              {groupGroupRatioList.map((userGroupData) => (
-                <Collapsible key={userGroupData.userGroup}>
-                  <div className='rounded-lg border'>
-                    <div className='flex items-center justify-between p-4'>
-                      <div className='flex items-center gap-2'>
-                        <CollapsibleTrigger
-                          render={<Button variant='ghost' size='sm' />}
-                        >
-                          <ChevronDown className='h-4 w-4' />
-                        </CollapsibleTrigger>
-                        <span className='font-semibold'>
-                          {userGroupData.userGroup}
-                        </span>
-                        {!registryNames.includes(userGroupData.userGroup) && (
-                          <AlertTriangle
-                            className='text-destructive h-4 w-4'
-                            aria-label={t('Not in pricing table')}
-                          />
-                        )}
-                        <span className='text-muted-foreground text-sm'>
-                          {t('{{count}} override', {
-                            count: userGroupData.overrides.length,
-                          })}
-                        </span>
-                      </div>
-                      <div className='flex gap-2'>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          onClick={() =>
-                            handleOverrideAdd(userGroupData.userGroup)
-                          }
-                        >
-                          <Plus className='h-4 w-4' />
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          onClick={() =>
-                            handleUserGroupDelete(userGroupData.userGroup)
-                          }
-                        >
-                          <Trash2 className='h-4 w-4' />
-                        </Button>
-                      </div>
-                    </div>
-                    <CollapsibleContent>
-                      {userGroupData.overrides.length > 0 && (
-                        <div className='border-t'>
-                          <StaticDataTable
-                            className='rounded-none border-0'
-                            data={userGroupData.overrides}
-                            getRowKey={(override) => override.targetGroup}
-                            columns={[
-                              {
-                                id: 'target-group',
-                                header: t('Billing group'),
-                                cellClassName: 'font-medium',
-                                cell: (override) => (
-                                  <span className='inline-flex items-center gap-1.5'>
-                                    {override.targetGroup}
-                                    {!registryNames.includes(
-                                      override.targetGroup
-                                    ) && (
-                                      <AlertTriangle
-                                        className='text-destructive h-3.5 w-3.5'
-                                        aria-label={t('Not in pricing table')}
-                                      />
-                                    )}
-                                  </span>
-                                ),
-                              },
-                              {
-                                id: 'ratio',
-                                header: t('Ratio'),
-                                cell: (override) => {
-                                  const baseRatio = baseRatioByName.get(
-                                    override.targetGroup
-                                  )
-                                  return (
-                                    <span className='inline-flex items-center gap-1.5'>
-                                      {override.ratio}
-                                      {baseRatio !== undefined &&
-                                        baseRatio !== override.ratio && (
-                                          <span className='text-muted-foreground text-xs'>
-                                            {t('(instead of {{ratio}})', {
-                                              ratio: baseRatio,
-                                            })}
-                                          </span>
-                                        )}
-                                    </span>
-                                  )
-                                },
-                              },
-                              {
-                                id: 'actions',
-                                header: t('Actions'),
-                                className: 'text-right',
-                                cellClassName: 'text-right',
-                                cell: (override) => (
-                                  <StaticRowActions
-                                    editLabel={t('Edit')}
-                                    deleteLabel={t('Delete')}
-                                    menuLabel={t('Open menu')}
-                                    onEdit={() =>
-                                      handleOverrideEdit(
-                                        userGroupData.userGroup,
-                                        override
-                                      )
-                                    }
-                                    onDelete={() =>
-                                      handleOverrideDelete(
-                                        userGroupData.userGroup,
-                                        override.targetGroup
-                                      )
-                                    }
-                                  />
-                                ),
-                              },
-                            ]}
-                          />
-                        </div>
-                      )}
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardContent>
-
-      {/* Add user group dialog */}
-      <Dialog
-        open={userGroupDialogOpen}
-        onOpenChange={setUserGroupDialogOpen}
-        title={t('Add user group')}
-        description={t(
-          'Create a new user group to configure ratio overrides for.'
-        )}
-        contentHeight='auto'
-        bodyClassName='space-y-4'
-        footer={
-          <>
-            <Button
-              variant='outline'
-              onClick={() => setUserGroupDialogOpen(false)}
-            >
-              {t('Cancel')}
+    <>
+      <Card className={sectionCardClassName}>
+        <CardHeader className={sectionHeaderClassName}>
+          <div className='flex flex-wrap items-center justify-end gap-3'>
+            <Button onClick={addRow} size='sm'>
+              <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
+              {t('Add group')}
             </Button>
-            <Button onClick={handleUserGroupSave} disabled={!userGroupInput}>
-              {t('Add')}
-            </Button>
-          </>
-        }
-      >
-        <div className='space-y-4 py-4'>
-          <div className='space-y-2'>
-            <Label>{t('User group name')}</Label>
-            <GroupNameSelect
-              className='w-full'
-              options={registryNames}
-              value={userGroupInput}
-              placeholder={t('Select a group')}
-              onValueChange={setUserGroupInput}
-            />
           </div>
-        </div>
-      </Dialog>
+        </CardHeader>
+        <CardContent>
+          <div className='space-y-3'>
+            <StaticDataTable
+              className='w-full'
+              tableClassName='w-max min-w-[106rem] table-fixed'
+              data={currentRows}
+              getRowKey={(row) => row._id}
+              emptyClassName='text-muted-foreground h-20 text-sm'
+              emptyContent={t('No groups yet. Add a group to get started.')}
+              columns={[
+                {
+                  id: 'order',
+                  header: '顺序',
+                  className: 'w-20',
+                  cellClassName: 'w-20',
+                  cell: (row, index) => {
+                    const orderLabel = `调整 ${row.name || '未命名分组'} 顺序`
+                    return (
+                      <Input
+                        type='number'
+                        min={1}
+                        max={currentRows.length}
+                        step={1}
+                        inputMode='numeric'
+                        value={positionDrafts[row._id] ?? String(index + 1)}
+                        disabled={currentRows.length <= 1}
+                        aria-label={orderLabel}
+                        title={orderLabel}
+                        className='w-16 px-1 text-center font-semibold tabular-nums'
+                        onChange={(event) => {
+                          setPositionDrafts((current) => ({
+                            ...current,
+                            [row._id]: event.target.value,
+                          }))
+                        }}
+                        onBlur={() => commitRowPosition(row._id, index + 1)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
+                          }
+                        }}
+                      />
+                    )
+                  },
+                },
+                {
+                  id: 'group',
+                  header: t('Group name'),
+                  className: 'w-36',
+                  cellClassName: 'w-36',
+                  cell: (row) => {
+                    return (
+                      <Input
+                        value={row.name}
+                        disabled={row.identityName.trim() !== ''}
+                        title={
+                          row.identityName.trim() !== ''
+                            ? t('Group name cannot be changed when editing.')
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          updateRow(row._id, 'name', event.target.value)
+                        }
+                        aria-invalid={
+                          !row.name.trim() ||
+                          duplicateNames.includes(row.name.trim())
+                        }
+                      />
+                    )
+                  },
+                },
+                {
+                  id: 'displayName',
+                  header: t('Display name'),
+                  className: 'w-44',
+                  cellClassName: 'w-44',
+                  cell: (row) => (
+                    <Input
+                      value={row.displayName}
+                      placeholder={row.name}
+                      maxLength={255}
+                      aria-label={`${row.name || '未命名分组'}显示名称`}
+                      onChange={(event) =>
+                        updateRow(row._id, 'displayName', event.target.value)
+                      }
+                    />
+                  ),
+                },
+                {
+                  id: 'remark',
+                  header: '备注',
+                  className: 'w-52',
+                  cellClassName: 'w-52',
+                  cell: (row) => (
+                    <Input
+                      value={row.remark}
+                      maxLength={255}
+                      placeholder='可选'
+                      aria-label={`${row.name || '未命名分组'}备注`}
+                      onChange={(event) =>
+                        updateRow(row._id, 'remark', event.target.value)
+                      }
+                    />
+                  ),
+                },
+                {
+                  id: 'ratio',
+                  header: t('Ratio'),
+                  className: 'w-20',
+                  cellClassName: 'w-20',
+                  cell: (row) => (
+                    <Input
+                      type='number'
+                      min={0}
+                      step={0.1}
+                      value={row.ratio}
+                      aria-invalid={!isValidGroupRatio(row.ratio)}
+                      onChange={(event) =>
+                        updateRow(row._id, 'ratio', event.target.value)
+                      }
+                    />
+                  ),
+                },
+                {
+                  id: 'usage',
+                  header: '用量',
+                  className: 'w-36',
+                  cellClassName: 'w-36',
+                  cell: (row) => (
+                    <GroupUsageCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
+                    />
+                  ),
+                },
+                {
+                  id: 'channels',
+                  header: '渠道数',
+                  className: 'w-32',
+                  cellClassName: 'w-32',
+                  cell: (row) => (
+                    <GroupChannelCountCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
+                    />
+                  ),
+                },
+                {
+                  id: 'activity',
+                  header: (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className='inline-flex cursor-help items-center gap-1' />
+                          }
+                        >
+                          活跃
+                          <HugeiconsIcon
+                            icon={InformationCircleIcon}
+                            aria-hidden='true'
+                            className='size-3.5'
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent className='max-w-xs whitespace-normal'>
+                          活跃用户：当前正在处理请求的去重用户数；活跃连接：当前正在处理的请求数。请求完成或超时后会移除。
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ),
+                  className: 'w-24',
+                  cellClassName: 'w-24',
+                  cell: (row) => (
+                    <GroupActivityCell
+                      metrics={metricsByName.get(row.name.trim())}
+                      isLoading={metricsQuery.isLoading}
+                    />
+                  ),
+                },
+                {
+                  id: 'retries',
+                  header: '重试次数',
+                  className: 'w-50',
+                  cellClassName: 'w-50',
+                  cell: (row) => (
+                    <RetryPolicyControl
+                      mode={row.retryMode}
+                      retryTimes={row.retryTimes}
+                      isInvalid={
+                        row.retryMode === 'fixed' &&
+                        !isValidFixedRetryTimes(row.retryTimes)
+                      }
+                      onModeChange={(value) =>
+                        updateRow(row._id, 'retryMode', value)
+                      }
+                      onRetryTimesChange={(value) =>
+                        updateRow(row._id, 'retryTimes', value)
+                      }
+                    />
+                  ),
+                },
+                {
+                  id: 'monitor',
+                  header: '分组监控',
+                  className: 'w-50',
+                  cellClassName: 'w-50',
+                  cell: (row) => {
+                    const groupName = row.name.trim()
+                    const monitor = findPricingGroupMonitor(row, monitorByName)
+                    return (
+                      <PricingGroupMonitorControl
+                        groupName={groupName || '未命名分组'}
+                        monitor={monitor}
+                        isPersisted={
+                          groupName !== '' &&
+                          persistedGroupNames.has(groupName) &&
+                          !duplicateNames.includes(groupName)
+                        }
+                        isLoading={monitorsQuery.isLoading}
+                        hasError={monitorsQuery.isError}
+                        isUpdating={
+                          updateMonitorMutation.isPending &&
+                          updateMonitorMutation.variables?.monitor.id ===
+                            monitor?.id
+                        }
+                        onConfigure={() => {
+                          if (!groupName) return
+                          setMonitorEditor({
+                            monitor,
+                            pricingGroupName: groupName,
+                            pricingGroupLabel:
+                              row.displayName.trim() || groupName,
+                          })
+                        }}
+                        onRetry={() => void monitorsQuery.refetch()}
+                        onToggleEnabled={(enabled) => {
+                          if (monitor) {
+                            updateMonitorMutation.mutate({ monitor, enabled })
+                          }
+                        }}
+                      />
+                    )
+                  },
+                },
+                {
+                  id: 'strategy',
+                  header: '策略',
+                  className: 'w-18',
+                  cellClassName: 'w-18',
+                  cell: (row) => (
+                    <Select
+                      items={strategySelectItems}
+                      value={row.strategyId}
+                      onValueChange={(value) => {
+                        if (value) updateRow(row._id, 'strategyId', value)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder='选择策略' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {currentStrategies.map((strategy) => (
+                            <SelectItem key={strategy.id} value={strategy.id}>
+                              {strategy.name.trim() || '未命名策略'}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ),
+                },
+                {
+                  id: 'actions',
+                  header: t('Actions'),
+                  className: 'w-30 text-right',
+                  cellClassName: 'w-30 text-right',
+                  cell: (row) => {
+                    const monitor = findPricingGroupMonitor(row, monitorByName)
+                    const isRunning =
+                      runMonitorMutation.isPending &&
+                      runMonitorMutation.variables === monitor?.id
+                    return (
+                      <div className='flex justify-end gap-1'>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          disabled={!monitor || isRunning}
+                          onClick={() => {
+                            if (monitor) runMonitorMutation.mutate(monitor.id)
+                          }}
+                          aria-label='测试'
+                        >
+                          {isRunning && <Spinner data-icon='inline-start' />}
+                          测试
+                        </Button>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => setDetailRowId(row._id)}
+                          disabled={!row.name.trim()}
+                          aria-label='编辑'
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => setDeleteRowId(row._id)}
+                          aria-label={t('Delete')}
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} />
+                        </Button>
+                      </div>
+                    )
+                  },
+                },
+              ]}
+            />
 
-      <GroupOverrideDialog
-        open={overrideDialogOpen}
-        onOpenChange={setOverrideDialogOpen}
-        onSave={handleOverrideSave}
-        editData={overrideEditData}
-        userGroup={overrideUserGroup}
-        groupOptions={registryNames}
-        baseRatioByName={baseRatioByName}
+            <div className='rounded-md border border-dashed'>
+              <div className='bg-muted/10 flex items-center justify-between border-b px-4 py-3'>
+                <div>
+                  <div className='text-sm font-semibold'>策略设置</div>
+                  <div className='text-muted-foreground text-xs'>
+                    策略独立于定价分组维护，五项权重总和必须为 100。
+                  </div>
+                </div>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  onClick={addStrategy}
+                >
+                  <HugeiconsIcon icon={Add01Icon} data-icon='inline-start' />
+                  添加策略
+                </Button>
+              </div>
+              <div className='space-y-3 p-4'>
+                {currentStrategies.map((strategy) => (
+                  <div
+                    key={strategy._id}
+                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(5,7rem)_2.5rem] md:items-end'
+                  >
+                    <div className='space-y-1'>
+                      <Label className='text-xs'>名称</Label>
+                      <Input
+                        value={strategy.name}
+                        aria-invalid={
+                          strategy.name.trim() === '' ||
+                          duplicateStrategyNames.has(strategy.name.trim())
+                        }
+                        onChange={(event) =>
+                          updateStrategy(
+                            strategy._id,
+                            'name',
+                            event.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    {(
+                      [
+                        ['价格', 'priceWeight'],
+                        ['可用性', 'availabilityWeight'],
+                        ['负载', 'loadWeight'],
+                        ['昨日平均TTFT', 'ttftWeight'],
+                        ['最近测试TTFT', 'recentTestTTFTWeight'],
+                      ] as const
+                    ).map(([label, field]) => (
+                      <div key={field} className='space-y-1'>
+                        <Label className='text-xs'>{label}权重</Label>
+                        <Input
+                          type='number'
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={strategy[field]}
+                          aria-label={`${strategy.name} ${label}权重`}
+                          onChange={(event) =>
+                            updateStrategy(
+                              strategy._id,
+                              field,
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      aria-label='删除策略'
+                      title='删除策略'
+                      onClick={() => removeStrategy(strategy._id)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} />
+                    </Button>
+                    <div className='text-muted-foreground text-xs md:col-span-7'>
+                      当前比例：{strategy.priceWeight}% /{' '}
+                      {strategy.availabilityWeight}% / {strategy.loadWeight}% /{' '}
+                      {strategy.ttftWeight}% / {strategy.recentTestTTFTWeight}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {monitorsQuery.isError && (
+              <p className='text-destructive text-sm'>
+                分组监控加载失败：{monitorsQuery.error.message}
+              </p>
+            )}
+
+            {metricsQuery.isError && (
+              <p className='text-destructive text-sm'>
+                分组指标加载失败：{metricsQuery.error.message}
+              </p>
+            )}
+
+            {duplicateNames.length > 0 && (
+              <p className='text-destructive text-sm'>
+                {t('Duplicate group names: {{names}}', {
+                  names: duplicateNames.join(', '),
+                })}
+              </p>
+            )}
+            {hasEmptyName && (
+              <p className='text-destructive text-sm'>分组名称不能为空</p>
+            )}
+            {hasInvalidRatio && (
+              <p className='text-destructive text-sm'>
+                倍率必须是大于等于 0 的数值
+              </p>
+            )}
+            {hasInvalidRetryTimes && (
+              <p className='text-destructive text-sm'>
+                固定重试次数必须是 0 到 100 之间的整数
+              </p>
+            )}
+            {(hasInvalidStrategyDefinition ||
+              duplicateStrategyNames.size > 0) && (
+              <p className='text-destructive text-sm'>
+                策略名称不能为空或重复；各项权重必须大于等于 0，且总和为 100
+              </p>
+            )}
+            {hasInvalidStrategyBinding && (
+              <p className='text-destructive text-sm'>
+                每个定价分组都必须选择一个有效策略
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ChannelMonitorSheet
+        open={monitorEditor !== null}
+        monitor={monitorEditor?.monitor ?? null}
+        pricingGroupName={monitorEditor?.pricingGroupName ?? ''}
+        pricingGroupLabel={monitorEditor?.pricingGroupLabel}
+        onOpenChange={(open) => {
+          if (!open) setMonitorEditor(null)
+        }}
       />
-    </Card>
+
+      <GroupDetailSheet
+        row={detailRow}
+        monitor={detailMonitor}
+        onOpenChange={(open) => {
+          if (!open) setDetailRowId(null)
+        }}
+        onChange={(field, value) => {
+          if (!detailRow) return
+          updateRow(detailRow._id, field, value)
+        }}
+        isPersisted={
+          detailRow !== null &&
+          persistedGroupNames.has(detailRow.name.trim()) &&
+          !duplicateNames.includes(detailRow.name.trim())
+        }
+        nameInvalid={
+          detailRow !== null &&
+          (!detailRow.name.trim() ||
+            duplicateNames.includes(detailRow.name.trim()))
+        }
+      />
+
+      <ConfirmDialog
+        open={deleteRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteRowId(null)
+        }}
+        title='确认删除分组？'
+        desc={
+          deleteRow
+            ? `删除“${deleteRow.name || '未命名分组'}”后，保存设置将同时移除该分组的监控配置和历史记录。`
+            : ''
+        }
+        destructive
+        confirmText='删除'
+        handleConfirm={() => {
+          if (!deleteRow) return
+          removeRow(deleteRow._id)
+          setDeleteRowId(null)
+        }}
+      />
+    </>
   )
 }
 
-type GroupOverrideDialogProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSave: (targetGroup: string, ratio: number, oldTargetGroup?: string) => void
-  editData: GroupOverride | null
-  userGroup: string | null
-  groupOptions: string[]
-  baseRatioByName: Map<string, number>
+function formatMetricTokens(tokens: number): string {
+  if (!Number.isFinite(tokens)) return '-'
+  const absolute = Math.abs(tokens)
+  let divisor = 1
+  let suffix = ''
+  if (absolute >= 1_000_000_000) {
+    divisor = 1_000_000_000
+    suffix = 'B'
+  } else if (absolute >= 1_000_000) {
+    divisor = 1_000_000
+    suffix = 'M'
+  } else if (absolute >= 1_000) {
+    divisor = 1_000
+    suffix = 'K'
+  }
+  const value = tokens / divisor
+  let digits = 2
+  if (Math.abs(value) >= 100) {
+    digits = 0
+  } else if (Math.abs(value) >= 10) {
+    digits = 1
+  }
+  return `${Number(value.toFixed(digits))}${suffix}`
 }
 
-function GroupOverrideDialog({
-  open,
-  onOpenChange,
-  onSave,
-  editData,
-  userGroup,
-  groupOptions,
-  baseRatioByName,
-}: GroupOverrideDialogProps) {
-  const { t } = useTranslation()
-  const [targetGroup, setTargetGroup] = useState<string | null>(null)
-  const [ratio, setRatio] = useState('')
+type GroupMetricCellProps = {
+  metrics?: PricingGroupMetrics
+  isLoading: boolean
+}
 
-  useEffect(() => {
-    if (!open) {
-      setTargetGroup(null)
-      setRatio('')
-      return
-    }
-
-    setTargetGroup(editData?.targetGroup ?? null)
-    setRatio(editData ? String(editData.ratio) : '')
-  }, [editData, open])
-
-  const baseRatio = targetGroup ? baseRatioByName.get(targetGroup) : undefined
-
-  const handleSave = () => {
-    if (!targetGroup || !ratio.trim()) return
-    const parsedRatio = Number.parseFloat(ratio)
-    if (Number.isNaN(parsedRatio)) return
-
-    onSave(targetGroup, parsedRatio, editData?.targetGroup)
-    setTargetGroup(null)
-    setRatio('')
+function GroupUsageCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
   }
-
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={editData ? t('Edit ratio override') : t('Add ratio override')}
-      description={
-        userGroup
-          ? t(
-              'Configure a custom ratio for "{{userGroup}}" users when using a specific token group.',
-              { userGroup }
-            )
-          : t(
-              'Configure a custom ratio for when users use a specific token group.'
-            )
-      }
-      contentHeight='auto'
-      bodyClassName='space-y-4'
-      footer={
-        <>
-          <Button variant='outline' onClick={() => onOpenChange(false)}>
-            {t('Cancel')}
-          </Button>
-          <Button onClick={handleSave}>
-            {editData ? t('Update') : t('Add')}
-          </Button>
-        </>
-      }
-    >
-      <div className='space-y-4 py-4'>
-        <div className='space-y-2'>
-          <Label>{t('Billing group')}</Label>
-          <GroupNameSelect
-            className='w-full'
-            options={groupOptions}
-            value={targetGroup}
-            placeholder={t('Select a group')}
-            onValueChange={setTargetGroup}
-          />
-          <p className='text-muted-foreground text-xs'>
-            {t('The token group that will have a custom ratio')}
-          </p>
-        </div>
-        <div className='space-y-2'>
-          <Label>{t('Ratio')}</Label>
-          <Input
-            value={ratio}
-            onChange={(e) => {
-              const val = e.target.value
-              if (val === '' || !Number.isNaN(Number.parseFloat(val))) {
-                setRatio(val)
-              }
-            }}
-            placeholder={baseRatio === undefined ? '0.9' : String(baseRatio)}
-          />
-          <p className='text-muted-foreground text-xs'>
-            {baseRatio !== undefined
-              ? t('(instead of {{ratio}})', { ratio: baseRatio })
-              : t(
-                  'Multiplier applied when {{userGroup}} uses {{targetGroup}}',
-                  {
-                    userGroup: userGroup || t('this user group'),
-                    targetGroup: targetGroup || t('this token group'),
-                  }
-                )}
-          </p>
-        </div>
+    <div className='space-y-0.5 text-xs leading-5'>
+      <div>
+        <span className='text-muted-foreground'>今日：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.today.tokens)}/
+          {formatQuota(props.metrics.usage.today.quota)}
+        </span>
       </div>
-    </Dialog>
+      <div>
+        <span className='text-muted-foreground'>昨日：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.yesterday.tokens)}/
+          {formatQuota(props.metrics.usage.yesterday.quota)}
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>累计：</span>
+        <span className='font-medium'>
+          {formatMetricTokens(props.metrics.usage.total.tokens)}/
+          {formatQuota(props.metrics.usage.total.quota)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function GroupChannelCountCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div className='space-y-0.5 text-xs leading-5'>
+      <div>
+        <span className='text-muted-foreground'>可用：</span>
+        <span className='font-semibold'>
+          {props.metrics.channels.available}个渠道
+        </span>
+      </div>
+      <div>
+        <span className='text-muted-foreground'>总量：</span>
+        <span className='font-medium'>
+          {props.metrics.channels.total}个渠道
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function GroupActivityCell(props: GroupMetricCellProps) {
+  if (props.isLoading) {
+    return <span className='text-muted-foreground text-xs'>加载中...</span>
+  }
+  if (!props.metrics) {
+    return <span className='text-muted-foreground text-xs'>-</span>
+  }
+  return (
+    <div
+      className='text-xs leading-5 font-medium'
+      title='连接数按当前正在处理的请求统计'
+    >
+      <div>{`活跃用户${props.metrics.activity.users}`}</div>
+      <div>{`活跃连接${props.metrics.activity.connections}`}</div>
+    </div>
   )
 }
 
 type GroupDetailSheetProps = {
-  groupName: string | null
+  row: GroupPricingRow | null
+  monitor: ChannelMonitor | null
   onOpenChange: (open: boolean) => void
-  registry: RegistryEntry[]
-  userUsableGroups: string
-  groupGroupRatio: string
-  autoGroups: string[]
-  groupSpecialUsableGroup: string
-}
-
-type VisibilityRule = {
-  userGroup: string
-  visible: boolean
-  description: string
-}
-
-function parseSpecialGroupKey(rawKey: string): {
-  visible: boolean
-  groupName: string
-} {
-  if (rawKey.startsWith('-:')) {
-    return { visible: false, groupName: rawKey.slice(2) }
-  }
-  if (rawKey.startsWith('+:')) {
-    return { visible: true, groupName: rawKey.slice(2) }
-  }
-  return { visible: true, groupName: rawKey }
+  onChange: (
+    field:
+      | 'name'
+      | 'displayName'
+      | 'remark'
+      | 'enabled'
+      | 'ratio'
+      | 'retryMode'
+      | 'retryTimes',
+    value: string | boolean
+  ) => void
+  isPersisted: boolean
+  nameInvalid: boolean
 }
 
 function GroupDetailSheet(props: GroupDetailSheetProps) {
   const { t } = useTranslation()
-  const name = props.groupName
-
-  const detail = useMemo(() => {
-    if (!name) return null
-
-    const entry = props.registry.find((item) => item.name === name)
-    const usableMap = parseUsableMap(props.userUsableGroups)
-    const overrideMap = parseNestedRatioMap(props.groupGroupRatio)
-    const specialMap = safeJsonParse<Record<string, Record<string, string>>>(
-      props.groupSpecialUsableGroup,
-      { fallback: {}, silent: true }
-    )
-
-    // Overrides that apply when other user groups bill as this group
-    const incomingOverrides: { userGroup: string; ratio: number }[] = []
-    for (const [userGroup, overrides] of Object.entries(overrideMap)) {
-      if (Object.hasOwn(overrides, name)) {
-        incomingOverrides.push({ userGroup, ratio: overrides[name] })
-      }
-    }
-
-    // Overrides that apply when users of this group bill as other groups
-    const outgoingOverrides = Object.entries(overrideMap[name] ?? {}).map(
-      ([targetGroup, ratio]) => ({ targetGroup, ratio })
-    )
-
-    // Visibility rules targeting this group
-    const visibilityRules: VisibilityRule[] = []
-    for (const [userGroup, inner] of Object.entries(specialMap)) {
-      if (typeof inner !== 'object' || inner === null) continue
-      for (const [rawKey, desc] of Object.entries(inner)) {
-        const parsed = parseSpecialGroupKey(rawKey)
-        if (parsed.groupName !== name) continue
-        visibilityRules.push({
-          userGroup,
-          visible: parsed.visible,
-          description: typeof desc === 'string' ? desc : '',
-        })
-      }
-    }
-
-    const autoIndex = props.autoGroups.indexOf(name)
-
-    return {
-      ratio: entry?.ratio,
-      selectable: Object.hasOwn(usableMap, name),
-      description: String(usableMap[name] ?? ''),
-      incomingOverrides,
-      outgoingOverrides,
-      visibilityRules,
-      autoIndex,
-    }
-  }, [
-    name,
-    props.registry,
-    props.userUsableGroups,
-    props.groupGroupRatio,
-    props.autoGroups,
-    props.groupSpecialUsableGroup,
-  ])
+  const name = props.row?.name ?? ''
+  const displayName = props.row?.displayName.trim() || name.trim()
 
   return (
-    <Sheet open={name !== null} onOpenChange={props.onOpenChange}>
+    <Sheet open={props.row !== null} onOpenChange={props.onOpenChange}>
       <SheetContent
         side='right'
         className={sideDrawerContentClassName('sm:max-w-lg')}
       >
         <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>
-            {t('Group details')}
-            {name ? `: ${name}` : ''}
-          </SheetTitle>
+          <SheetTitle>编辑{displayName ? `：${displayName}` : ''}</SheetTitle>
           <SheetDescription>
-            {t('Everything configured for this group, in one place.')}
+            修改分组状态、备注、倍率、重试策略和监控功能。
           </SheetDescription>
         </SheetHeader>
 
-        {detail && (
+        {props.row && (
           <div className={sideDrawerFormClassName('gap-5')}>
-            <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>{t('Overview')}</h3>
-              <dl className='space-y-1.5 text-sm'>
-                <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>{t('Ratio')}</dt>
-                  <dd className='font-medium'>{detail.ratio ?? '-'}</dd>
-                </div>
-                <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>
-                    {t('User selectable')}
-                  </dt>
-                  <dd className='font-medium'>
-                    {detail.selectable ? t('Yes') : t('No')}
-                  </dd>
-                </div>
-                {detail.selectable && detail.description && (
-                  <div className='flex justify-between gap-4'>
-                    <dt className='text-muted-foreground'>
-                      {t('Description')}
-                    </dt>
-                    <dd className='text-right font-medium'>
-                      {detail.description}
-                    </dd>
-                  </div>
-                )}
-                <div className='flex justify-between'>
-                  <dt className='text-muted-foreground'>
-                    {t('Auto assignment order')}
-                  </dt>
-                  <dd className='font-medium'>
-                    {detail.autoIndex >= 0
-                      ? t('Position {{position}}', {
-                          position: detail.autoIndex + 1,
-                        })
-                      : t('Not included')}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>
-                {t('Ratio overrides when billed as this group')}
-              </h3>
-              {detail.incomingOverrides.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>{t('None')}</p>
-              ) : (
-                <ul className='space-y-1 text-sm'>
-                  {detail.incomingOverrides.map((item) => (
-                    <li
-                      key={item.userGroup}
-                      className='flex justify-between rounded-md border px-3 py-1.5'
-                    >
-                      <span>
-                        {t('Users in {{group}}', { group: item.userGroup })}
-                      </span>
-                      <span className='font-medium'>{item.ratio}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>
-                {t('Ratio overrides for users of this group')}
-              </h3>
-              {detail.outgoingOverrides.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>{t('None')}</p>
-              ) : (
-                <ul className='space-y-1 text-sm'>
-                  {detail.outgoingOverrides.map((item) => (
-                    <li
-                      key={item.targetGroup}
-                      className='flex justify-between rounded-md border px-3 py-1.5'
-                    >
-                      <span>
-                        {t('When billed as {{group}}', {
-                          group: item.targetGroup,
-                        })}
-                      </span>
-                      <span className='font-medium'>{item.ratio}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>
-                {t('Special visibility rules')}
-              </h3>
-              {detail.visibilityRules.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>{t('None')}</p>
-              ) : (
-                <ul className='space-y-1 text-sm'>
-                  {detail.visibilityRules.map((rule) => (
-                    <li
-                      key={`${rule.userGroup}-${rule.visible}`}
-                      className='flex items-center justify-between rounded-md border px-3 py-1.5'
-                    >
-                      <span>
-                        {rule.visible
-                          ? t('Extra visible to {{group}}', {
-                              group: rule.userGroup,
-                            })
-                          : t('Hidden from {{group}}', {
-                              group: rule.userGroup,
-                            })}
-                      </span>
-                      <StatusBadge
-                        variant={rule.visible ? 'info' : 'danger'}
-                        copyable={false}
-                      >
-                        {rule.visible ? t('Visible') : t('Hidden')}
-                      </StatusBadge>
-                    </li>
-                  ))}
-                </ul>
+            <div className='flex items-center justify-between gap-4 rounded-md border px-3 py-3'>
+              <div className='min-w-0 space-y-0.5'>
+                <Label htmlFor='group-detail-enabled'>启用分组</Label>
+                <p className='text-muted-foreground text-xs'>
+                  关闭后，该分组不会提供给用户，也不会参与 API
+                  请求调度；现有配置和监控数据会保留。
+                </p>
+              </div>
+              <Switch
+                id='group-detail-enabled'
+                checked={props.row.enabled}
+                onCheckedChange={(checked) =>
+                  props.onChange('enabled', checked)
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-name'>{t('Group name')}</Label>
+              <Input
+                id='group-detail-name'
+                value={props.row.name}
+                disabled={props.row.identityName.trim() !== ''}
+                title={
+                  props.row.identityName.trim() !== ''
+                    ? t('Group name cannot be changed when editing.')
+                    : undefined
+                }
+                aria-invalid={props.nameInvalid}
+                onChange={(event) => props.onChange('name', event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-display-name'>
+                {t('Display name')}
+              </Label>
+              <Input
+                id='group-detail-display-name'
+                value={props.row.displayName}
+                placeholder={name.trim()}
+                maxLength={255}
+                onChange={(event) =>
+                  props.onChange('displayName', event.target.value)
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-remark'>备注</Label>
+              <Textarea
+                id='group-detail-remark'
+                rows={3}
+                maxLength={255}
+                value={props.row.remark}
+                placeholder='在创建 API Key 时展示给用户'
+                onChange={(event) =>
+                  props.onChange('remark', event.target.value)
+                }
+              />
+              <p className='text-muted-foreground text-xs'>
+                备注会显示在用户创建 API Key 时的分组选项中。
+              </p>
+            </div>
+            <div className='space-y-2'>
+              <Label>重试次数</Label>
+              <RetryPolicyControl
+                mode={props.row.retryMode}
+                retryTimes={props.row.retryTimes}
+                isInvalid={
+                  props.row.retryMode === 'fixed' &&
+                  !isValidFixedRetryTimes(props.row.retryTimes)
+                }
+                onModeChange={(value) => props.onChange('retryMode', value)}
+                onRetryTimesChange={(value) =>
+                  props.onChange('retryTimes', value)
+                }
+              />
+              <p className='text-muted-foreground text-xs'>
+                固定模式表示首次请求失败后允许再次尝试的次数；跟随渠道模式按当前可用渠道数与各渠道可重试次数之和计算。API
+                Key 不再单独覆盖分组重试预算。
+              </p>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='group-detail-ratio'>{t('Ratio')}</Label>
+              <Input
+                id='group-detail-ratio'
+                type='number'
+                min={0}
+                step={0.1}
+                value={props.row.ratio}
+                aria-invalid={!isValidGroupRatio(props.row.ratio)}
+                onChange={(event) =>
+                  props.onChange('ratio', event.target.value)
+                }
+              />
+            </div>
+            <Separator />
+            <section className='flex flex-col gap-3'>
+              <ChannelMonitorFormCard
+                monitor={props.monitor}
+                pricingGroupName={props.row.name.trim()}
+                pricingGroupLabel={
+                  props.row.displayName.trim() || props.row.name.trim()
+                }
+                disabled={!props.isPersisted}
+              />
+              {!props.isPersisted && (
+                <p className='text-muted-foreground text-xs'>
+                  请先保存分组后配置监控。
+                </p>
               )}
             </section>
           </div>
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+type RetryPolicyControlProps = {
+  mode: PricingGroupRetryMode
+  retryTimes: string
+  isInvalid: boolean
+  onModeChange: (value: PricingGroupRetryMode) => void
+  onRetryTimesChange: (value: string) => void
+}
+
+function RetryPolicyControl(props: RetryPolicyControlProps) {
+  return (
+    <div className='flex min-w-0 items-center gap-2'>
+      <Select
+        items={RETRY_MODE_ITEMS}
+        value={props.mode}
+        onValueChange={(value) => {
+          if (value === 'fixed' || value === 'follow_channels') {
+            props.onModeChange(value)
+          }
+        }}
+      >
+        <SelectTrigger className='w-40'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            <SelectItem value='fixed'>固定次数</SelectItem>
+            <SelectItem value='follow_channels'>跟随渠道</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {props.mode === 'fixed' && (
+        <Input
+          type='number'
+          min={0}
+          max={MAX_GROUP_RETRY_TIMES}
+          step={1}
+          value={props.retryTimes}
+          aria-invalid={props.isInvalid}
+          onChange={(event) => props.onRetryTimesChange(event.target.value)}
+          onBlur={() =>
+            props.onRetryTimesChange(
+              String(normalizeRetryTimes(props.retryTimes))
+            )
+          }
+          aria-label='固定重试次数'
+          className='w-20 tabular-nums'
+        />
+      )}
+    </div>
   )
 }

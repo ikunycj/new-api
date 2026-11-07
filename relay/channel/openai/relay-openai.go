@@ -8,14 +8,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/relayconvert"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -137,6 +137,13 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
+			var snapshot struct {
+				Usage *dto.Usage `json:"usage"`
+			}
+			if common.UnmarshalJsonStr(data, &snapshot) == nil && dto.HasOpenAIUsageTokens(snapshot.Usage) {
+				usage = dto.MergeUsageNonZero(usage, snapshot.Usage)
+				containStreamUsage = containStreamUsage || service.ValidUsage(snapshot.Usage)
+			}
 			if err := processTokenData(info.RelayMode, data, &responseTextBuilder, &toolCount); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
@@ -150,9 +157,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			Usage *dto.Usage `json:"usage"`
 		}
 		err := common.Unmarshal([]byte(secondLastStreamData), &streamResp)
-		if err == nil && streamResp.Usage != nil && service.ValidUsage(streamResp.Usage) {
-			usage = streamResp.Usage
-			containStreamUsage = true
+		if err == nil && dto.HasOpenAIUsageTokens(streamResp.Usage) {
+			usage = dto.MergeUsageNonZero(usage, streamResp.Usage)
+			containStreamUsage = containStreamUsage || service.ValidUsage(streamResp.Usage)
 
 			if common.DebugEnabled {
 				logger.LogDebug(c, "Audio model usage extracted from second last SSE: PromptTokens=%d, CompletionTokens=%d, TotalTokens=%d, InputTokens=%d, OutputTokens=%d",
@@ -176,8 +183,10 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	if !containStreamUsage {
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
-		usage.CompletionTokens += toolCount * 7
+		estimate := service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		estimate.CompletionTokens += toolCount * 7
+		estimate.TotalTokens = estimate.PromptTokens + estimate.CompletionTokens
+		usage = mergeEstimatedOpenAIUsage(usage, estimate)
 	}
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
@@ -242,11 +251,9 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 				completionTokens += ctkm
 			}
 		}
-		simpleResponse.Usage = dto.Usage{
-			PromptTokens:     info.GetEstimatePromptTokens(),
-			CompletionTokens: completionTokens,
-			TotalTokens:      info.GetEstimatePromptTokens() + completionTokens,
-		}
+		simpleResponse.Usage.PromptTokens = info.GetEstimatePromptTokens()
+		simpleResponse.Usage.CompletionTokens = completionTokens
+		simpleResponse.Usage.TotalTokens = info.GetEstimatePromptTokens() + completionTokens
 		usageModified = true
 	}
 

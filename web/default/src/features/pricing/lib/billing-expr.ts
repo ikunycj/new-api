@@ -99,6 +99,15 @@ export const BILLING_VARS: BillingVar[] = [
     group: 'cache',
   },
   {
+    key: 'cc12h',
+    field: 'cacheCreate12hPrice',
+    tierField: 'cache_create_12h_unit_cost',
+    label: 'Cache create price',
+    shortLabel: 'Cache Write',
+    side: 'input',
+    group: 'cache',
+  },
+  {
     key: 'img',
     field: 'imagePrice',
     tierField: 'image_unit_cost',
@@ -136,6 +145,37 @@ export const BILLING_VARS: BillingVar[] = [
   },
 ]
 
+export type BillingUnit = 'token' | 'request'
+
+// A pricing function, not a token variable or a visual-editor condition.
+export const FIXED_PRICE_VAR: BillingVar = {
+  key: 'fixed',
+  field: 'fixedPrice',
+  tierField: null,
+  label: 'Fixed price (USD)',
+  shortLabel: 'Fixed price',
+  side: 'input',
+}
+
+export function formatBillingVarLabel(
+  variable: BillingVar,
+  t: (key: string) => string,
+  short = true
+): string {
+  const label = t(short ? variable.shortLabel : variable.label)
+  return variable.key === 'cc12h' ? `${label} (cc12h)` : label
+}
+
+export function formatBillingPriceUnit(
+  unit: BillingUnit,
+  imageCount: boolean | undefined,
+  t: (key: string) => string,
+  tokenUnit: 'K' | 'M' = 'M'
+): string {
+  if (unit === 'request') return imageCount ? t('Image') : t('request')
+  return `1${tokenUnit} ${t('tokens')}`
+}
+
 /** Vars that have real price fields (excludes condition-only vars like `len`) */
 export const BILLING_PRICING_VARS: BillingVar[] = BILLING_VARS.filter(
   (v) => !v.isConditionOnly
@@ -160,7 +200,7 @@ export const BILLING_CACHE_VAR_MAP = BILLING_EXTRA_VARS.map((v) => ({
 }))
 
 const BILLING_VAR_REGEX = new RegExp(
-  `\\b(${BILLING_PRICING_VARS.map((v) => v.key).join('|')})\\s*\\*\\s*([\\d.eE+-]+)`,
+  `\\b(${BILLING_PRICING_VARS.map((v) => v.key).join('|')})\\s*\\*\\s*(-?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)`,
   'g'
 )
 
@@ -233,10 +273,26 @@ export type TierCondition = {
   value: number
 }
 
-export type ParsedTier = {
+export type TierTimeSchedule = {
+  timezone: string
+  weekdayStart: number
+  weekdayEnd: number
+  windows: Array<{ start: number; end: number }>
+  inverted: boolean
+}
+
+type ParsedTierPrice = {
+  billingUnit: BillingUnit
+  fixedPrice?: number
+  [field: string]: unknown
+}
+
+export type ParsedTier = ParsedTierPrice & {
   label: string
   conditions: TierCondition[]
-  [field: string]: unknown
+  conditionExpression?: string
+  timeSchedule?: TierTimeSchedule
+  imageCount?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -250,54 +306,377 @@ function stripExprVersion(exprStr: string): { version: number; body: string } {
   return { version: 1, body: exprStr }
 }
 
-function parseTierBody(bodyStr: string): Record<string, number> {
+function parseTierBody(bodyStr: string): ParsedTierPrice | null {
+  const fixed = bodyStr.trim().match(/^fixed\(\s*([^()]+)\s*\)$/)
+  if (fixed) {
+    const literal = fixed[1].trim()
+    const amount = Number(literal)
+    if (
+      !NUMERIC_LITERAL_REGEX.test(literal) ||
+      amount < 0 ||
+      !Number.isFinite(amount * 1_000_000)
+    ) {
+      return null
+    }
+    return { billingUnit: 'request', fixedPrice: amount }
+  }
+
   const coeffs: Record<string, number> = {}
   const re = new RegExp(BILLING_VAR_REGEX.source, 'g')
-  let m
-  while ((m = re.exec(bodyStr)) !== null) {
-    if (!(m[1] in coeffs)) coeffs[m[1]] = Number(m[2])
+  for (const match of bodyStr.matchAll(re)) {
+    const price = Number(match[2])
+    if (match[1] in coeffs || !Number.isFinite(price) || price < 0) return null
+    coeffs[match[1]] = price
   }
-  const tier: Record<string, number> = {}
+  const skeleton = bodyStr.replaceAll(re, 'T')
+  if (!/^T(?:\s*\+\s*T)*$/.test(skeleton.trim())) return null
+  const tier: ParsedTierPrice = {
+    billingUnit: 'token',
+  }
   for (const [varName, field] of Object.entries(BILLING_VAR_KEY_TO_FIELD)) {
-    tier[field] = coeffs[varName] || 0
+    tier[field] = coeffs[varName] ?? 0
   }
   return tier
+}
+
+function splitTopLevelConditional(
+  expression: string
+): { condition: string; whenTrue: string; whenFalse: string } | null {
+  let depth = 0
+  let quote = ''
+  let escaped = false
+  let question = -1
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (character === '?' && depth === 0) {
+      question = index
+      break
+    }
+  }
+
+  if (question < 0) return null
+
+  depth = 0
+  quote = ''
+  escaped = false
+  let nestedQuestions = 0
+  for (let index = question + 1; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+    if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (depth === 0 && character === '?') nestedQuestions += 1
+    else if (depth === 0 && character === ':') {
+      if (nestedQuestions === 0) {
+        const condition = expression.slice(0, question).trim()
+        const whenTrue = expression.slice(question + 1, index).trim()
+        const whenFalse = expression.slice(index + 1).trim()
+        if (!condition || !whenTrue || !whenFalse) return null
+        return { condition, whenTrue, whenFalse }
+      }
+      nestedQuestions -= 1
+    }
+  }
+
+  return null
+}
+
+function splitTopLevelOr(expression: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let depth = 0
+  let quote = ''
+  let escaped = false
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") quote = character
+    else if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    else if (depth === 0 && expression.slice(index, index + 4) === ' || ') {
+      parts.push(expression.slice(start, index).trim())
+      start = index + 4
+      index += 3
+    }
+  }
+
+  parts.push(expression.slice(start).trim())
+  return parts.filter(Boolean)
+}
+
+function combineTierConditions(parent: string[], next: string): string[] {
+  return [...parent, `(${next})`]
+}
+
+function parseTierTimeSchedule(expression: string): TierTimeSchedule | null {
+  let body = unwrapOuterParens(expression)
+  let inverted = false
+  if (body.startsWith('!(') && hasFullOuterParens(body.slice(1))) {
+    inverted = true
+    body = unwrapOuterParens(body.slice(1))
+  }
+
+  const parts = splitTopLevelAnd(body)
+  if (parts.length !== 3) return null
+
+  const weekdayStartMatch = unwrapOuterParens(parts[0]).match(
+    /^weekday\("([^"\\]+)"\)\s*>=\s*([\d.eE+-]+)$/
+  )
+  const weekdayEndMatch = unwrapOuterParens(parts[1]).match(
+    /^weekday\("([^"\\]+)"\)\s*<=\s*([\d.eE+-]+)$/
+  )
+  if (
+    !weekdayStartMatch ||
+    !weekdayEndMatch ||
+    weekdayStartMatch[1] !== weekdayEndMatch[1]
+  ) {
+    return null
+  }
+
+  const weekdayStart = Number(weekdayStartMatch[2])
+  const weekdayEnd = Number(weekdayEndMatch[2])
+  if (
+    !Number.isInteger(weekdayStart) ||
+    !Number.isInteger(weekdayEnd) ||
+    weekdayStart < 0 ||
+    weekdayEnd > 6 ||
+    weekdayStart > weekdayEnd
+  ) {
+    return null
+  }
+
+  const windowParts = splitTopLevelOr(unwrapOuterParens(parts[2]))
+  if (windowParts.length === 0) return null
+
+  const windows: TierTimeSchedule['windows'] = []
+  for (const windowPart of windowParts) {
+    const bounds = splitTopLevelAnd(unwrapOuterParens(windowPart))
+    if (bounds.length !== 2) return null
+
+    const startMatch = unwrapOuterParens(bounds[0]).match(
+      /^hour\("([^"\\]+)"\)\s*>=\s*([\d.eE+-]+)$/
+    )
+    const endMatch = unwrapOuterParens(bounds[1]).match(
+      /^hour\("([^"\\]+)"\)\s*<\s*([\d.eE+-]+)$/
+    )
+    if (
+      !startMatch ||
+      !endMatch ||
+      startMatch[1] !== weekdayStartMatch[1] ||
+      endMatch[1] !== weekdayStartMatch[1]
+    ) {
+      return null
+    }
+
+    const start = Number(startMatch[2])
+    const end = Number(endMatch[2])
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end > 24 ||
+      start >= end
+    ) {
+      return null
+    }
+    windows.push({ start, end })
+  }
+
+  return {
+    timezone: weekdayStartMatch[1],
+    weekdayStart,
+    weekdayEnd,
+    windows,
+    inverted,
+  }
+}
+
+export function formatTierTimeCondition(
+  tier: ParsedTier,
+  t: (key: string) => string
+): string | null {
+  const schedule = tier.timeSchedule
+  if (!schedule) return null
+
+  if (schedule.inverted) {
+    return `${t('All other times')} (${schedule.timezone})`
+  }
+  if (schedule.weekdayStart !== 1 || schedule.weekdayEnd !== 5) return null
+
+  const windows = schedule.windows
+    .map(
+      ({ start, end }) =>
+        `${String(start).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00`
+    )
+    .join(', ')
+  return `${t('Monday to Friday')}, ${windows} (${schedule.timezone})`
+}
+
+export function formatTierLabel(
+  label: string,
+  t: (key: string) => string
+): string {
+  if (label === 'peak') return t('Peak period')
+  if (label === 'off_peak') return t('Off-peak period')
+  return label
+}
+
+function parseSimpleTierConditions(expression: string): TierCondition[] | null {
+  const parts = splitTopLevelAnd(expression)
+  const conditions: TierCondition[] = []
+  for (const part of parts) {
+    const match = unwrapOuterParens(part).match(
+      /^(p|c|len)\s*(<=|<|>=|>)\s*([\d.eE+]+)$/
+    )
+    if (!match || !Number.isFinite(Number(match[3]))) return null
+    conditions.push({
+      var: match[1] as TierCondition['var'],
+      op: match[2] as TierCondition['op'],
+      value: Number(match[3]),
+    })
+  }
+  return conditions.length > 0 ? conditions : null
+}
+
+function parseTierLeaf(
+  expression: string,
+  globalImageCount: boolean
+): ParsedTier | null {
+  let body = unwrapOuterParens(expression)
+  let imageCount = globalImageCount
+  const factors = splitTopLevelMultiply(body)
+  if (factors.includes('image_count')) {
+    if (factors.at(-1) !== 'image_count') return null
+    factors.pop()
+    body = factors.join(' * ')
+    imageCount = true
+  }
+
+  const match = body.match(/^tier\("((?:[^"\\]|\\.)*)",\s*([\s\S]+)\)$/)
+  if (!match) return null
+
+  let label: string
+  try {
+    label = JSON.parse(`"${match[1]}"`) as string
+  } catch {
+    return null
+  }
+  const prices = parseTierBody(match[2].trim())
+  if (!prices) return null
+  return { ...prices, label, conditions: [], imageCount }
+}
+
+function parseConditionalTierExpression(
+  expression: string,
+  globalImageCount: boolean,
+  parentConditions: string[] = []
+): ParsedTier[] | null {
+  const body = unwrapOuterParens(expression)
+  const conditional = splitTopLevelConditional(body)
+  if (conditional) {
+    const whenTrue = parseConditionalTierExpression(
+      conditional.whenTrue,
+      globalImageCount,
+      combineTierConditions(parentConditions, conditional.condition)
+    )
+    const whenFalse = parseConditionalTierExpression(
+      conditional.whenFalse,
+      globalImageCount,
+      combineTierConditions(parentConditions, `!(${conditional.condition})`)
+    )
+    return whenTrue && whenFalse ? [...whenTrue, ...whenFalse] : null
+  }
+
+  const tier = parseTierLeaf(body, globalImageCount)
+  if (!tier) return null
+  if (parentConditions.length > 0) {
+    const conditionExpression = parentConditions.join(' && ')
+    const conditions = parseSimpleTierConditions(conditionExpression)
+    if (conditions) tier.conditions = conditions
+    else tier.conditionExpression = conditionExpression
+    tier.timeSchedule = parseTierTimeSchedule(conditionExpression) ?? undefined
+  }
+  return [tier]
 }
 
 export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
   if (!exprStr) return []
   try {
-    const { body } = stripExprVersion(exprStr)
+    const split = splitBillingExprAndRequestRules(exprStr)
+    const versioned = stripExprVersion(split.billingExpr)
+    if (versioned.version !== 1) return []
+    let body = unwrapOuterParens(versioned.body)
+    let globalImageCount = false
+    const imageFactor = body.match(/^([\s\S]+)\s*\*\s*image_count$/)
+    if (imageFactor && hasFullOuterParens(imageFactor[1].trim())) {
+      body = unwrapOuterParens(imageFactor[1])
+      globalImageCount = true
+    }
     const condGroup =
-      `((?:(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)` +
-      `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`
+      `((?:(?:p|c|len)\\s*(?:<=|<|>=|>)\\s*[\\d.eE+]+)` +
+      `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<=|<|>=|>)\\s*[\\d.eE+]+)*)`
     const tierRe = new RegExp(
-      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*([^)]+)\\)`,
+      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*(fixed\\(\\s*[^()]+\\s*\\)|[^()]+)\\)(\\s*\\*\\s*image_count)?`,
       'g'
     )
     const tiers: ParsedTier[] = []
-    let m
-    while ((m = tierRe.exec(body)) !== null) {
-      const condStr = m[1] || ''
+    for (const match of body.matchAll(tierRe)) {
+      const prices = parseTierBody(match[3])
+      if (!prices) return []
       const conditions: TierCondition[] = []
-      if (condStr) {
-        for (const cp of condStr.split(/\s*&&\s*/)) {
-          const cm = cp.trim().match(/^(p|c|len)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/)
-          if (cm) {
-            conditions.push({
-              var: cm[1] as TierCondition['var'],
-              op: cm[2] as TierCondition['op'],
-              value: Number(cm[3]),
-            })
-          }
-        }
+      for (const cp of (match[1] || '').split(/\s*&&\s*/).filter(Boolean)) {
+        const cm = cp.trim().match(/^(p|c|len)\s*(<=|<|>=|>)\s*([\d.eE+]+)$/)
+        if (!cm || !Number.isFinite(Number(cm[3]))) return []
+        conditions.push({
+          var: cm[1] as TierCondition['var'],
+          op: cm[2] as TierCondition['op'],
+          value: Number(cm[3]),
+        })
       }
-      const tier = parseTierBody(m[3]) as ParsedTier
-      tier.label = m[2]
-      tier.conditions = conditions
-      tiers.push(tier)
+      tiers.push({
+        ...prices,
+        billingUnit: prices.billingUnit,
+        label: match[2],
+        conditions,
+        imageCount: globalImageCount || Boolean(match[4]),
+      })
     }
-    return tiers
+    // Only a chain of supported conditional leaves is structured pricing.
+    // Unknown arithmetic/functions must keep the raw-expression fallback.
+    const skeleton = body.replaceAll(tierRe, (_full, cond) =>
+      cond ? '?T' : 'T'
+    )
+    const supportedShape = /^(?:\?T\s*:\s*)*(?:T|p\s*\*\s*0\s*\+\s*c\s*\*\s*0)$/
+    if (tiers.length > 0 && supportedShape.test(skeleton.trim())) return tiers
+    return parseConditionalTierExpression(body, globalImageCount) ?? []
   } catch {
     return []
   }
@@ -480,6 +859,9 @@ function tryParseRuleGroupFactor(part: string): RequestRuleGroup | null {
 
   const conditionStr = m[1]
   const multiplier = m[2]
+  if (!Number.isFinite(Number(multiplier)) || Number(multiplier) < 0) {
+    return null
+  }
 
   const andParts = splitTopLevelAnd(conditionStr)
   const conditions: RequestCondition[] = []
@@ -553,12 +935,13 @@ export function splitBillingExprAndRequestRules(expr: string): {
     }
   })
 
-  if (ruleParts.length === 0 || baseParts.length !== 1) {
+  const pricingParts = baseParts.filter((part) => part !== 'image_count')
+  if (ruleParts.length === 0 || pricingParts.length !== 1) {
     return { billingExpr: trimmed, requestRuleExpr: '' }
   }
 
   return {
-    billingExpr: unwrapOuterParens(baseParts[0]),
+    billingExpr: unwrapOuterParens(baseParts.join(' * ')),
     requestRuleExpr: ruleParts.join(' * '),
   }
 }

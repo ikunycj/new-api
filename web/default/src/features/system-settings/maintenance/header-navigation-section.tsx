@@ -170,8 +170,8 @@ export function HeaderNavigationSection({
     },
     {
       key: 'about',
-      title: t('About'),
-      description: t('Static page describing the platform.'),
+      title: t('Contact us'),
+      description: t('Contact page content configured in System Information.'),
     },
   ]
 

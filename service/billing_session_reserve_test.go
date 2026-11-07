@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,6 +23,7 @@ func TestBillingSessionReserveRechecksWalletBeforeHigherCandidate(t *testing.T) 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	info := &relaycommon.RelayInfo{
 		UserId:          userID,
+		BillingUserId:   userID,
 		IsPlayground:    true,
 		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 		ForcePreConsume: true,
@@ -48,6 +49,7 @@ func TestBillingSessionReserveRejectsInsufficientWalletForHigherCandidate(t *tes
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	info := &relaycommon.RelayInfo{
 		UserId:          userID,
+		BillingUserId:   userID,
 		IsPlayground:    true,
 		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},
 		ForcePreConsume: true,
@@ -78,6 +80,7 @@ func TestBillingSessionReserveRechecksTrustedWalletForHigherCandidate(t *testing
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	info := &relaycommon.RelayInfo{
 		UserId:          userID,
+		BillingUserId:   userID,
 		TokenUnlimited:  true,
 		IsPlayground:    true,
 		UserSetting:     dto.UserSetting{BillingPreference: "wallet_only"},

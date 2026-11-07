@@ -20,10 +20,8 @@ import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
-import { Route as AuthenticatedRoutingReliabilityRouteImport } from './routes/_authenticated/routing-reliability'
 import { Route as AuthenticatedGroupManagementRouteImport } from './routes/_authenticated/group-management'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
-import { Route as AuthenticatedChannelAffinityRouteImport } from './routes/_authenticated/channel-affinity'
 import { Route as AuthenticatedAdminConsoleRouteImport } from './routes/_authenticated/admin-console'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
@@ -44,6 +42,7 @@ import { Route as DocsQuickStartIndexRouteImport } from './routes/docs/quick-sta
 import { Route as DocsModelPricingIndexRouteImport } from './routes/docs/model-pricing/index'
 import { Route as DocsIntegrationsIndexRouteImport } from './routes/docs/integrations/index'
 import { Route as DocsErrorSelfCheckIndexRouteImport } from './routes/docs/error-self-check/index'
+import { Route as DocsClientModelsIndexRouteImport } from './routes/docs/client-models/index'
 import { Route as DocsAiModelIndexRouteImport } from './routes/docs/ai-model/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
@@ -54,18 +53,11 @@ import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
-import { Route as AuthenticatedMyChannelsIndexRouteImport } from './routes/_authenticated/my-channels/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
-import { Route as AuthenticatedLoadtestDemoIndexRouteImport } from './routes/_authenticated/loadtest-demo/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
-import { Route as AuthenticatedGroupStatusIndexRouteImport } from './routes/_authenticated/group-status/index'
-import { Route as AuthenticatedGroupPricingIndexRouteImport } from './routes/_authenticated/group-pricing/index'
-import { Route as AuthenticatedFailoverIndexRouteImport } from './routes/_authenticated/failover/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
-import { Route as AuthenticatedChannelMonitorsIndexRouteImport } from './routes/_authenticated/channel-monitors/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
-import { Route as AuthenticatedOperationsLoadtestRouteImport } from './routes/_authenticated/operations/loadtest'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
@@ -150,12 +142,6 @@ const OauthProviderRoute = OauthProviderRouteImport.update({
   path: '/oauth/$provider',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoutingReliabilityRoute =
-  AuthenticatedRoutingReliabilityRouteImport.update({
-    id: '/routing-reliability',
-    path: '/routing-reliability',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedGroupManagementRoute =
   AuthenticatedGroupManagementRouteImport.update({
     id: '/group-management',
@@ -167,12 +153,6 @@ const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
   path: '/chat2link',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedChannelAffinityRoute =
-  AuthenticatedChannelAffinityRouteImport.update({
-    id: '/channel-affinity',
-    path: '/channel-affinity',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedAdminConsoleRoute =
   AuthenticatedAdminConsoleRouteImport.update({
     id: '/admin-console',
@@ -276,6 +256,11 @@ const DocsErrorSelfCheckIndexRoute = DocsErrorSelfCheckIndexRouteImport.update({
   path: '/docs/error-self-check/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsClientModelsIndexRoute = DocsClientModelsIndexRouteImport.update({
+  id: '/docs/client-models/',
+  path: '/docs/client-models/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsAiModelIndexRoute = DocsAiModelIndexRouteImport.update({
   id: '/docs/ai-model/',
   path: '/docs/ai-model/',
@@ -334,22 +319,10 @@ const AuthenticatedPlaygroundIndexRoute =
     path: '/playground/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedMyChannelsIndexRoute =
-  AuthenticatedMyChannelsIndexRouteImport.update({
-    id: '/my-channels/',
-    path: '/my-channels/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedModelsIndexRoute =
   AuthenticatedModelsIndexRouteImport.update({
     id: '/models/',
     path: '/models/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedLoadtestDemoIndexRoute =
-  AuthenticatedLoadtestDemoIndexRouteImport.update({
-    id: '/loadtest-demo/',
-    path: '/loadtest-demo/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
@@ -357,24 +330,6 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedGroupStatusIndexRoute =
-  AuthenticatedGroupStatusIndexRouteImport.update({
-    id: '/group-status/',
-    path: '/group-status/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedGroupPricingIndexRoute =
-  AuthenticatedGroupPricingIndexRouteImport.update({
-    id: '/group-pricing/',
-    path: '/group-pricing/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedFailoverIndexRoute =
-  AuthenticatedFailoverIndexRouteImport.update({
-    id: '/failover/',
-    path: '/failover/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -387,22 +342,10 @@ const AuthenticatedChannelsIndexRoute =
     path: '/channels/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedChannelMonitorsIndexRoute =
-  AuthenticatedChannelMonitorsIndexRouteImport.update({
-    id: '/channel-monitors/',
-    path: '/channel-monitors/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedUsageLogsSectionRoute =
   AuthenticatedUsageLogsSectionRouteImport.update({
     id: '/usage-logs/$section',
     path: '/usage-logs/$section',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedOperationsLoadtestRoute =
-  AuthenticatedOperationsLoadtestRouteImport.update({
-    id: '/operations/loadtest',
-    path: '/operations/loadtest',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedModelsSectionRoute =
@@ -593,10 +536,8 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/admin-console': typeof AuthenticatedAdminConsoleRoute
-  '/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
-  '/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
@@ -608,18 +549,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
-  '/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
-  '/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
-  '/failover/': typeof AuthenticatedFailoverIndexRoute
-  '/group-pricing/': typeof AuthenticatedGroupPricingIndexRoute
-  '/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
-  '/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
-  '/my-channels/': typeof AuthenticatedMyChannelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -630,6 +564,7 @@ export interface FileRoutesByFullPath {
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/client-models/': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
@@ -679,10 +614,8 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/admin-console': typeof AuthenticatedAdminConsoleRoute
-  '/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/group-management': typeof AuthenticatedGroupManagementRoute
-  '/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
   '/docs': typeof DocsIndexRoute
@@ -694,18 +627,11 @@ export interface FileRoutesByTo {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
-  '/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
-  '/channel-monitors': typeof AuthenticatedChannelMonitorsIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
-  '/failover': typeof AuthenticatedFailoverIndexRoute
-  '/group-pricing': typeof AuthenticatedGroupPricingIndexRoute
-  '/group-status': typeof AuthenticatedGroupStatusIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
-  '/loadtest-demo': typeof AuthenticatedLoadtestDemoIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
-  '/my-channels': typeof AuthenticatedMyChannelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -716,6 +642,7 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersIndexRoute
   '/wallet': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model': typeof DocsAiModelIndexRoute
+  '/docs/client-models': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing': typeof DocsModelPricingIndexRoute
@@ -769,10 +696,8 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/admin-console': typeof AuthenticatedAdminConsoleRoute
-  '/_authenticated/channel-affinity': typeof AuthenticatedChannelAffinityRoute
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/_authenticated/group-management': typeof AuthenticatedGroupManagementRoute
-  '/_authenticated/routing-reliability': typeof AuthenticatedRoutingReliabilityRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
@@ -784,18 +709,11 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
-  '/_authenticated/operations/loadtest': typeof AuthenticatedOperationsLoadtestRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
-  '/_authenticated/channel-monitors/': typeof AuthenticatedChannelMonitorsIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
-  '/_authenticated/failover/': typeof AuthenticatedFailoverIndexRoute
-  '/_authenticated/group-pricing/': typeof AuthenticatedGroupPricingIndexRoute
-  '/_authenticated/group-status/': typeof AuthenticatedGroupStatusIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
-  '/_authenticated/loadtest-demo/': typeof AuthenticatedLoadtestDemoIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
-  '/_authenticated/my-channels/': typeof AuthenticatedMyChannelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
@@ -806,6 +724,7 @@ export interface FileRoutesById {
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/wallet/': typeof AuthenticatedWalletIndexRoute
   '/docs/ai-model/': typeof DocsAiModelIndexRoute
+  '/docs/client-models/': typeof DocsClientModelsIndexRoute
   '/docs/error-self-check/': typeof DocsErrorSelfCheckIndexRoute
   '/docs/integrations/': typeof DocsIntegrationsIndexRoute
   '/docs/model-pricing/': typeof DocsModelPricingIndexRoute
@@ -858,10 +777,8 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/admin-console'
-    | '/channel-affinity'
     | '/chat2link'
     | '/group-management'
-    | '/routing-reliability'
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
@@ -873,18 +790,11 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
-    | '/operations/loadtest'
     | '/usage-logs/$section'
-    | '/channel-monitors/'
     | '/channels/'
     | '/dashboard/'
-    | '/failover/'
-    | '/group-pricing/'
-    | '/group-status/'
     | '/keys/'
-    | '/loadtest-demo/'
     | '/models/'
-    | '/my-channels/'
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
@@ -895,6 +805,7 @@ export interface FileRouteTypes {
     | '/users/'
     | '/wallet/'
     | '/docs/ai-model/'
+    | '/docs/client-models/'
     | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
@@ -944,10 +855,8 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/admin-console'
-    | '/channel-affinity'
     | '/chat2link'
     | '/group-management'
-    | '/routing-reliability'
     | '/oauth/$provider'
     | '/about'
     | '/docs'
@@ -959,18 +868,11 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
-    | '/operations/loadtest'
     | '/usage-logs/$section'
-    | '/channel-monitors'
     | '/channels'
     | '/dashboard'
-    | '/failover'
-    | '/group-pricing'
-    | '/group-status'
     | '/keys'
-    | '/loadtest-demo'
     | '/models'
-    | '/my-channels'
     | '/playground'
     | '/profile'
     | '/redemption-codes'
@@ -981,6 +883,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/wallet'
     | '/docs/ai-model'
+    | '/docs/client-models'
     | '/docs/error-self-check'
     | '/docs/integrations'
     | '/docs/model-pricing'
@@ -1033,10 +936,8 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/admin-console'
-    | '/_authenticated/channel-affinity'
     | '/_authenticated/chat2link'
     | '/_authenticated/group-management'
-    | '/_authenticated/routing-reliability'
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
@@ -1048,18 +949,11 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
-    | '/_authenticated/operations/loadtest'
     | '/_authenticated/usage-logs/$section'
-    | '/_authenticated/channel-monitors/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
-    | '/_authenticated/failover/'
-    | '/_authenticated/group-pricing/'
-    | '/_authenticated/group-status/'
     | '/_authenticated/keys/'
-    | '/_authenticated/loadtest-demo/'
     | '/_authenticated/models/'
-    | '/_authenticated/my-channels/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
@@ -1070,6 +964,7 @@ export interface FileRouteTypes {
     | '/_authenticated/users/'
     | '/_authenticated/wallet/'
     | '/docs/ai-model/'
+    | '/docs/client-models/'
     | '/docs/error-self-check/'
     | '/docs/integrations/'
     | '/docs/model-pricing/'
@@ -1121,6 +1016,7 @@ export interface RootRouteChildren {
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   DocsAiModelIndexRoute: typeof DocsAiModelIndexRoute
+  DocsClientModelsIndexRoute: typeof DocsClientModelsIndexRoute
   DocsErrorSelfCheckIndexRoute: typeof DocsErrorSelfCheckIndexRoute
   DocsIntegrationsIndexRoute: typeof DocsIntegrationsIndexRoute
   DocsModelPricingIndexRoute: typeof DocsModelPricingIndexRoute
@@ -1219,13 +1115,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthProviderRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/routing-reliability': {
-      id: '/_authenticated/routing-reliability'
-      path: '/routing-reliability'
-      fullPath: '/routing-reliability'
-      preLoaderRoute: typeof AuthenticatedRoutingReliabilityRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/group-management': {
       id: '/_authenticated/group-management'
       path: '/group-management'
@@ -1238,13 +1127,6 @@ declare module '@tanstack/react-router' {
       path: '/chat2link'
       fullPath: '/chat2link'
       preLoaderRoute: typeof AuthenticatedChat2linkRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/channel-affinity': {
-      id: '/_authenticated/channel-affinity'
-      path: '/channel-affinity'
-      fullPath: '/channel-affinity'
-      preLoaderRoute: typeof AuthenticatedChannelAffinityRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin-console': {
@@ -1387,6 +1269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsErrorSelfCheckIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/client-models/': {
+      id: '/docs/client-models/'
+      path: '/docs/client-models'
+      fullPath: '/docs/client-models/'
+      preLoaderRoute: typeof DocsClientModelsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs/ai-model/': {
       id: '/docs/ai-model/'
       path: '/docs/ai-model'
@@ -1457,13 +1346,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlaygroundIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/my-channels/': {
-      id: '/_authenticated/my-channels/'
-      path: '/my-channels'
-      fullPath: '/my-channels/'
-      preLoaderRoute: typeof AuthenticatedMyChannelsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/models/': {
       id: '/_authenticated/models/'
       path: '/models'
@@ -1471,39 +1353,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedModelsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/loadtest-demo/': {
-      id: '/_authenticated/loadtest-demo/'
-      path: '/loadtest-demo'
-      fullPath: '/loadtest-demo/'
-      preLoaderRoute: typeof AuthenticatedLoadtestDemoIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/keys/': {
       id: '/_authenticated/keys/'
       path: '/keys'
       fullPath: '/keys/'
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/group-status/': {
-      id: '/_authenticated/group-status/'
-      path: '/group-status'
-      fullPath: '/group-status/'
-      preLoaderRoute: typeof AuthenticatedGroupStatusIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/group-pricing/': {
-      id: '/_authenticated/group-pricing/'
-      path: '/group-pricing'
-      fullPath: '/group-pricing/'
-      preLoaderRoute: typeof AuthenticatedGroupPricingIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/failover/': {
-      id: '/_authenticated/failover/'
-      path: '/failover'
-      fullPath: '/failover/'
-      preLoaderRoute: typeof AuthenticatedFailoverIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard/': {
@@ -1520,25 +1374,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChannelsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/channel-monitors/': {
-      id: '/_authenticated/channel-monitors/'
-      path: '/channel-monitors'
-      fullPath: '/channel-monitors/'
-      preLoaderRoute: typeof AuthenticatedChannelMonitorsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/usage-logs/$section': {
       id: '/_authenticated/usage-logs/$section'
       path: '/usage-logs/$section'
       fullPath: '/usage-logs/$section'
       preLoaderRoute: typeof AuthenticatedUsageLogsSectionRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/operations/loadtest': {
-      id: '/_authenticated/operations/loadtest'
-      path: '/operations/loadtest'
-      fullPath: '/operations/loadtest'
-      preLoaderRoute: typeof AuthenticatedOperationsLoadtestRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/models/$section': {
@@ -1840,26 +1680,17 @@ const AuthenticatedSystemSettingsRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedSystemSettingsRouteRoute: typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   AuthenticatedAdminConsoleRoute: typeof AuthenticatedAdminConsoleRoute
-  AuthenticatedChannelAffinityRoute: typeof AuthenticatedChannelAffinityRoute
   AuthenticatedChat2linkRoute: typeof AuthenticatedChat2linkRoute
   AuthenticatedGroupManagementRoute: typeof AuthenticatedGroupManagementRoute
-  AuthenticatedRoutingReliabilityRoute: typeof AuthenticatedRoutingReliabilityRoute
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
   AuthenticatedDashboardSectionRoute: typeof AuthenticatedDashboardSectionRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
-  AuthenticatedOperationsLoadtestRoute: typeof AuthenticatedOperationsLoadtestRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
-  AuthenticatedChannelMonitorsIndexRoute: typeof AuthenticatedChannelMonitorsIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
-  AuthenticatedFailoverIndexRoute: typeof AuthenticatedFailoverIndexRoute
-  AuthenticatedGroupPricingIndexRoute: typeof AuthenticatedGroupPricingIndexRoute
-  AuthenticatedGroupStatusIndexRoute: typeof AuthenticatedGroupStatusIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
-  AuthenticatedLoadtestDemoIndexRoute: typeof AuthenticatedLoadtestDemoIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
-  AuthenticatedMyChannelsIndexRoute: typeof AuthenticatedMyChannelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
@@ -1874,27 +1705,17 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSystemSettingsRouteRoute:
     AuthenticatedSystemSettingsRouteRouteWithChildren,
   AuthenticatedAdminConsoleRoute: AuthenticatedAdminConsoleRoute,
-  AuthenticatedChannelAffinityRoute: AuthenticatedChannelAffinityRoute,
   AuthenticatedChat2linkRoute: AuthenticatedChat2linkRoute,
   AuthenticatedGroupManagementRoute: AuthenticatedGroupManagementRoute,
-  AuthenticatedRoutingReliabilityRoute: AuthenticatedRoutingReliabilityRoute,
   AuthenticatedChatChatIdRoute: AuthenticatedChatChatIdRoute,
   AuthenticatedDashboardSectionRoute: AuthenticatedDashboardSectionRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
-  AuthenticatedOperationsLoadtestRoute: AuthenticatedOperationsLoadtestRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
-  AuthenticatedChannelMonitorsIndexRoute:
-    AuthenticatedChannelMonitorsIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
-  AuthenticatedFailoverIndexRoute: AuthenticatedFailoverIndexRoute,
-  AuthenticatedGroupPricingIndexRoute: AuthenticatedGroupPricingIndexRoute,
-  AuthenticatedGroupStatusIndexRoute: AuthenticatedGroupStatusIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
-  AuthenticatedLoadtestDemoIndexRoute: AuthenticatedLoadtestDemoIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
-  AuthenticatedMyChannelsIndexRoute: AuthenticatedMyChannelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
@@ -1927,6 +1748,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   DocsAiModelIndexRoute: DocsAiModelIndexRoute,
+  DocsClientModelsIndexRoute: DocsClientModelsIndexRoute,
   DocsErrorSelfCheckIndexRoute: DocsErrorSelfCheckIndexRoute,
   DocsIntegrationsIndexRoute: DocsIntegrationsIndexRoute,
   DocsModelPricingIndexRoute: DocsModelPricingIndexRoute,

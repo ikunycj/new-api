@@ -8,13 +8,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
@@ -26,17 +25,43 @@ var channelsIDM map[int]*Channel                     // all channels include dis
 var channel2advancedCustomConfig map[int]*dto.AdvancedCustomConfig
 var channelSyncLock sync.RWMutex
 
+// Channel-test TTFT is published independently from the persisted channel
+// snapshot. Serializing full refreshes keeps an older, slower refresh from
+// replacing a newer snapshot, while the per-channel version protects a
+// just-completed test from being overwritten by a log query that started
+// before that test finished.
+var channelCacheRefreshLock sync.Mutex
+var channelTestTTFTVersions = make(map[int]uint64)
+
 func InitChannelCache() {
+	channelCacheRefreshLock.Lock()
+	defer channelCacheRefreshLock.Unlock()
+
 	InitChannelRoutingCache()
 	if !common.MemoryCacheEnabled {
 		InvalidatePricingCache()
 		return
 	}
+
+	channelSyncLock.RLock()
+	refreshTTFTVersions := make(map[int]uint64, len(channelTestTTFTVersions))
+	for channelID, version := range channelTestTTFTVersions {
+		refreshTTFTVersions[channelID] = version
+	}
+	channelSyncLock.RUnlock()
+
 	newChannelId2channel := make(map[int]*Channel)
 	newChannel2advancedCustomConfig := make(map[int]*dto.AdvancedCustomConfig)
 	var channels []*Channel
-	DB.Find(&channels)
+	if err := DB.Find(&channels).Error; err != nil {
+		common.SysLog("failed to load channels while syncing cache: " + err.Error())
+	}
+	channelIDs := make([]int, 0, len(channels))
 	for _, channel := range channels {
+		if channel == nil || channel.Id <= 0 {
+			continue
+		}
+		channelIDs = append(channelIDs, channel.Id)
 		newChannelId2channel[channel.Id] = channel
 		if channel.Type == constant.ChannelTypeAdvancedCustom {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
@@ -44,51 +69,43 @@ func InitChannelCache() {
 			}
 		}
 	}
-	channelIDs := make([]int, 0, len(channels))
-	for _, channel := range channels {
-		channelIDs = append(channelIDs, channel.Id)
-	}
-	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, time.Now()); err != nil {
-		common.SysLog(fmt.Sprintf("failed to load channel probe rates: %v", err))
-	} else {
-		for _, channel := range channels {
-			channel.PreviousDayProbeSuccessRate = rates[channel.Id]
-			channel.PreviousDayProbeSampleCount = samples[channel.Id]
-		}
-	}
+	enrichPreviousDayChannelRuntimeMetrics(channels, time.Now())
 	var abilities []*Ability
-	DB.Find(&abilities)
-	groups := make(map[string]bool)
-	for _, ability := range abilities {
-		groups[ability.Group] = true
+	if err := DB.Find(&abilities).Error; err != nil {
+		common.SysLog("failed to load channel abilities while syncing cache: " + err.Error())
 	}
 	newGroup2model2channels := make(map[string]map[string][]int)
-	for group := range groups {
-		newGroup2model2channels[group] = make(map[string][]int)
-	}
-	for _, channel := range channels {
-		if channel.Status != common.ChannelStatusEnabled {
-			continue // skip disabled channels
+	seen := make(map[string]map[string]map[int]struct{})
+	for _, ability := range abilities {
+		if ability == nil || !ability.Enabled || ability.ChannelId <= 0 {
+			continue
 		}
-		groups := strings.Split(channel.Group, ",")
-		for _, group := range groups {
-			models := strings.Split(channel.Models, ",")
-			for _, model := range models {
-				if _, ok := newGroup2model2channels[group][model]; !ok {
-					newGroup2model2channels[group][model] = make([]int, 0)
-				}
-				newGroup2model2channels[group][model] = append(newGroup2model2channels[group][model], channel.Id)
-			}
+		channel, ok := newChannelId2channel[ability.ChannelId]
+		if !ok || channel == nil || channel.Status != common.ChannelStatusEnabled {
+			continue
 		}
+		group := strings.TrimSpace(ability.Group)
+		modelName := strings.TrimSpace(ability.Model)
+		if group == "" || modelName == "" {
+			continue
+		}
+		if _, ok := newGroup2model2channels[group]; !ok {
+			newGroup2model2channels[group] = make(map[string][]int)
+			seen[group] = make(map[string]map[int]struct{})
+		}
+		if _, ok := newGroup2model2channels[group][modelName]; !ok {
+			newGroup2model2channels[group][modelName] = make([]int, 0)
+			seen[group][modelName] = make(map[int]struct{})
+		}
+		if _, exists := seen[group][modelName][ability.ChannelId]; exists {
+			continue
+		}
+		seen[group][modelName][ability.ChannelId] = struct{}{}
+		newGroup2model2channels[group][modelName] = append(newGroup2model2channels[group][modelName], ability.ChannelId)
 	}
-
-	// sort by priority
-	for group, model2channels := range newGroup2model2channels {
-		for model, channels := range model2channels {
-			sort.Slice(channels, func(i, j int) bool {
-				return newChannelId2channel[channels[i]].GetPriority() > newChannelId2channel[channels[j]].GetPriority()
-			})
-			newGroup2model2channels[group][model] = channels
+	for _, model2channels := range newGroup2model2channels {
+		for _, channelIDs := range model2channels {
+			sort.Ints(channelIDs)
 		}
 	}
 
@@ -96,6 +113,21 @@ func InitChannelCache() {
 	group2model2channels = newGroup2model2channels
 	//channelsIDM = newChannelId2channel
 	for i, channel := range newChannelId2channel {
+		// LastTestTTFTMs is a runtime-only value. If the log query did not
+		// return a usable sample (for example, consume logging is disabled or
+		// a test completed concurrently with this refresh), retain the latest
+		// value already published in the process instead of briefly resetting
+		// the scheduler's metric to zero.
+		if oldChannel, ok := channelsIDM[i]; ok && oldChannel != nil {
+			// If a test completed after this refresh began, the in-memory value
+			// is newer than the query snapshot and must win even when the query
+			// returned a positive (but stale) sample.
+			if channelTestTTFTVersions[i] != refreshTTFTVersions[i] {
+				channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
+			} else if channel.LastTestTTFTMs <= 0 && oldChannel.LastTestTTFTMs > 0 {
+				channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
+			}
+		}
 		if channel.ChannelInfo.IsMultiKey {
 			channel.Keys = channel.GetKeys()
 			if channel.ChannelInfo.MultiKeyMode == constant.MultiKeyModePolling {
@@ -110,6 +142,11 @@ func InitChannelCache() {
 	}
 	channelsIDM = newChannelId2channel
 	channel2advancedCustomConfig = newChannel2advancedCustomConfig
+	for channelID := range channelTestTTFTVersions {
+		if _, ok := newChannelId2channel[channelID]; !ok {
+			delete(channelTestTTFTVersions, channelID)
+		}
+	}
 	channelSyncLock.Unlock()
 	// Lock ordering: InvalidatePricingCache acquires updatePricingLock, and
 	// GetPricing (holding updatePricingLock) nests channelSyncLock.RLock via
@@ -131,394 +168,206 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	return GetRandomSatisfiedChannelExcluding(group, model, retry, requestPath, nil)
 }
 
-// GetRandomSatisfiedChannelExcluding selects a channel by its weight while
-// excluding channels already attempted for this request. Priority is retained
-// in the database for backwards compatibility but is not part of runtime
-// scheduling.
-func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
-	excludedChannels := excluded
-	// if memory cache is disabled, get channel directly from database
+// GetEligibleChannels returns the complete enabled candidate set for a
+// pricing-group/model/path combination. The order is stable by channel ID;
+// dynamic routing policies apply their ranking after this capability lookup.
+func GetEligibleChannels(group string, modelName string, requestPath string, excluded map[int]struct{}) ([]*Channel, error) {
 	if !common.MemoryCacheEnabled {
-		return GetChannelExcluding(group, model, retry, requestPath, excludedChannels)
+		return getEligibleChannelsFromDB(group, modelName, requestPath, excluded)
 	}
 
 	channelSyncLock.RLock()
 	defer channelSyncLock.RUnlock()
-
-	// First, try to find channels with the exact model name.
-	channels := filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
-
-	// If no channels found, try to find channels with the normalized model name.
-	if len(channels) == 0 {
-		normalizedModel := ratio_setting.FormatMatchingModelName(model)
-		channels = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
+	channelIDs := filterChannelsByRequestPathAndModel(group2model2channels[group][modelName], requestPath, modelName)
+	if len(channelIDs) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		channelIDs = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, modelName)
 	}
-	if len(excludedChannels) > 0 {
-		filtered := make([]int, 0, len(channels))
-		for _, channelID := range channels {
-			if _, ok := excludedChannels[channelID]; ok {
-				continue
-			}
-			filtered = append(filtered, channelID)
+	channels := make([]*Channel, 0, len(channelIDs))
+	seen := make(map[int]struct{}, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if _, exists := seen[channelID]; exists {
+			continue
 		}
-		channels = filtered
+		seen[channelID] = struct{}{}
+		if _, skip := excluded[channelID]; skip {
+			continue
+		}
+		channel, ok := channelsIDM[channelID]
+		if !ok || channel == nil || channel.Status != common.ChannelStatusEnabled {
+			continue
+		}
+		channels = append(channels, channel)
+	}
+	sort.SliceStable(channels, func(i, j int) bool { return channels[i].Id < channels[j].Id })
+	return channels, nil
+}
+
+func getEligibleChannelsFromDB(group string, modelName string, requestPath string, excluded map[int]struct{}) ([]*Channel, error) {
+	var abilities []Ability
+	groupColumn := commonGroupCol
+	if groupColumn == "" {
+		groupColumn = "`group`"
+	}
+	query := DB.Where(groupColumn+" = ? AND model = ? AND enabled = ?", group, modelName, true)
+	if err := query.Find(&abilities).Error; err != nil {
+		return nil, err
+	}
+	if len(abilities) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		if normalizedModel != modelName {
+			if err := DB.Where(groupColumn+" = ? AND model = ? AND enabled = ?", group, normalizedModel, true).Find(&abilities).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, modelName)
+	ids := make([]int, 0, len(abilities))
+	seen := make(map[int]struct{}, len(abilities))
+	for _, ability := range abilities {
+		if _, exists := seen[ability.ChannelId]; exists {
+			continue
+		}
+		seen[ability.ChannelId] = struct{}{}
+		ids = append(ids, ability.ChannelId)
+	}
+	if len(ids) == 0 {
+		return []*Channel{}, nil
+	}
+	var loaded []*Channel
+	if err := DB.Where("id IN ? AND status = ?", ids, common.ChannelStatusEnabled).Find(&loaded).Error; err != nil {
+		return nil, err
+	}
+	byID := make(map[int]*Channel, len(loaded))
+	for _, channel := range loaded {
+		byID[channel.Id] = channel
+	}
+	result := make([]*Channel, 0, len(ids))
+	for _, id := range ids {
+		if _, skip := excluded[id]; skip {
+			continue
+		}
+		if channel := byID[id]; channel != nil {
+			result = append(result, channel)
+		}
+	}
+	enrichPreviousDayChannelRuntimeMetrics(result, time.Now())
+	sort.SliceStable(result, func(i, j int) bool { return result[i].Id < result[j].Id })
+	return result, nil
+}
+
+// enrichPreviousDayChannelRuntimeMetrics loads the non-persisted metrics used
+// by dynamic routing. Keeping this enrichment beside cache loading ensures the
+// selector sees the same probe and TTFT data as the channel management API.
+func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) {
+	if len(channels) == 0 {
+		return
+	}
+	channelIDs := make([]int, 0, len(channels))
+	for _, channel := range channels {
+		if channel != nil && channel.Id > 0 {
+			channelIDs = append(channelIDs, channel.Id)
+		}
+	}
+	if len(channelIDs) == 0 {
+		return
+	}
+	// Routing cache refreshes also run in SQLite-backed tests and on the hot
+	// request path. Keep this enrichment limited to probe and TTFT tables;
+	// historical usage is PostgreSQL-specific and belongs to the admin API.
+	if rates, samples, err := GetPreviousDayChannelProbeStats(channelIDs, now); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.PreviousDayProbeSuccessRate = rates[channel.Id]
+				channel.PreviousDayProbeSampleCount = samples[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load channel probe rates while syncing cache: " + err.Error())
+	}
+	if averages, err := GetPreviousDayChannelAverageTTFTs(channelIDs, now); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.PreviousDayAverageTTFTMs = averages[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load channel TTFT metrics while syncing cache: " + err.Error())
+	}
+	if ttfts, err := GetLatestChannelTestTTFTs(channelIDs); err == nil {
+		for _, channel := range channels {
+			if channel != nil {
+				channel.LastTestTTFTMs = ttfts[channel.Id]
+			}
+		}
+	} else {
+		common.SysLog("failed to load latest channel test TTFTs while syncing cache: " + err.Error())
+	}
+}
+
+// UpdateCachedChannelTestTTFT publishes a newly completed channel-test TTFT
+// to the in-memory channel cache. Test TTFT is a runtime metric rather than a
+// persisted channel field, so replacing the cached model would risk losing
+// concurrent runtime state; update only this metric instead.
+func UpdateCachedChannelTestTTFT(channelID int, ttftMs float64) {
+	if channelID <= 0 || ttftMs <= 0 || math.IsNaN(ttftMs) || math.IsInf(ttftMs, 0) {
+		return
+	}
+	if !common.MemoryCacheEnabled {
+		return
 	}
 
+	channelSyncLock.Lock()
+	defer channelSyncLock.Unlock()
+	cached, ok := channelsIDM[channelID]
+	if !ok || cached == nil {
+		return
+	}
+	updated := *cached
+	updated.LastTestTTFTMs = ttftMs
+	channelsIDM[channelID] = &updated
+	if channelTestTTFTVersions == nil {
+		channelTestTTFTVersions = make(map[int]uint64)
+	}
+	channelTestTTFTVersions[channelID]++
+}
+
+// GetRandomSatisfiedChannelExcluding selects a weighted channel while
+// excluding channels already attempted for this request.
+func GetRandomSatisfiedChannelExcluding(group string, model string, retry int, requestPath string, excluded map[int]struct{}) (*Channel, error) {
+	channels, err := GetEligibleChannels(group, model, requestPath, excluded)
+	if err != nil {
+		return nil, err
+	}
 	if len(channels) == 0 {
 		return nil, nil
 	}
-
 	if len(channels) == 1 {
-		if channel, ok := channelsIDM[channels[0]]; ok {
-			return channel, nil
-		}
-		return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channels[0])
+		return channels[0], nil
 	}
 
+	// Dynamic routing consumes the full candidate set; this helper only applies
+	// weighted selection.
+	targetChannels := channels
 	var sumWeight int
-	targetChannels := make([]*Channel, 0, len(channels))
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
-			sumWeight += channel.GetWeight()
-			targetChannels = append(targetChannels, channel)
-		} else {
-			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
-		}
+	for _, channel := range targetChannels {
+		sumWeight += channel.GetWeight() + 10
+	}
+	if sumWeight <= 0 {
+		return nil, errors.New("channel weight is invalid")
 	}
 
-	if len(targetChannels) == 0 {
-		return nil, fmt.Errorf("no channel found, group: %s, model: %s", group, model)
-	}
-
-	// smoothing factor and adjustment
-	smoothingFactor := 1
-	smoothingAdjustment := 0
-
-	if sumWeight == 0 {
-		// when all channels have weight 0, set sumWeight to the number of channels and set smoothing adjustment to 100
-		// each channel's effective weight = 100
-		sumWeight = len(targetChannels) * 100
-		smoothingAdjustment = 100
-	} else if sumWeight/len(targetChannels) < 10 {
-		// when the average weight is less than 10, set smoothing factor to 100
-		smoothingFactor = 100
-	}
-
-	// Calculate the total weight of all channels up to endIdx
-	totalWeight := sumWeight * smoothingFactor
-
-	// Generate a random value in the range [0, totalWeight)
-	randomWeight := rand.Intn(totalWeight)
+	randomWeight := rand.Intn(sumWeight)
 
 	// Find a channel based on its weight
 	for _, channel := range targetChannels {
-		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
+		randomWeight -= channel.GetWeight() + 10
 		if randomWeight < 0 {
 			return channel, nil
 		}
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
-}
-
-// GetConfiguredRouteChannel preserves the legacy priority strategy.
-func GetConfiguredRouteChannel(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}) (*Channel, error) {
-	return GetConfiguredRouteChannelWithStrategy(group, model, requestPath, entries, excluded, RoutingStrategyPriority)
-}
-
-// GetConfiguredRouteChannelWithStrategy selects an eligible channel according
-// to the route strategy. Priority keeps deterministic ordering; weighted uses
-// the legacy per-channel weight as a base for dynamic route scoring.
-func GetConfiguredRouteChannelWithStrategy(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}, strategy string) (*Channel, error) {
-	return GetConfiguredRouteChannelWithStrategyConfig(group, model, requestPath, entries, excluded, RoutingStrategyConfig{Type: strategy})
-}
-
-// GetConfiguredRouteChannelWithStrategyConfig selects an eligible channel using
-// the complete persisted strategy configuration. The string-only wrapper above
-// remains for callers that only provide the strategy type.
-func GetConfiguredRouteChannelWithStrategyConfig(group string, model string, requestPath string, entries []BillingGroupChannel, excluded map[int]struct{}, strategyConfig RoutingStrategyConfig) (*Channel, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	strategyConfig = normalizeRoutingStrategyConfig(strategyConfig)
-	orderedEntries := append([]BillingGroupChannel(nil), entries...)
-	SortRouteChannels(orderedEntries)
-	if !common.MemoryCacheEnabled {
-		channelIDs := make([]int, 0, len(orderedEntries))
-		for _, entry := range orderedEntries {
-			if !entry.Enabled {
-				continue
-			}
-			if _, skip := excluded[entry.ChannelId]; skip {
-				continue
-			}
-			channelIDs = append(channelIDs, entry.ChannelId)
-		}
-		if len(channelIDs) == 0 {
-			return nil, nil
-		}
-		var abilities []Ability
-		query := DB.Where(map[string]any{"group": group, "model": model, "enabled": true}).Where("channel_id IN ?", channelIDs)
-		if err := query.Find(&abilities).Error; err != nil {
-			return nil, err
-		}
-		if len(abilities) == 0 {
-			normalizedModel := ratio_setting.FormatMatchingModelName(model)
-			if normalizedModel != model {
-				query = DB.Where(map[string]any{"group": group, "model": normalizedModel, "enabled": true}).Where("channel_id IN ?", channelIDs)
-				if err := query.Find(&abilities).Error; err != nil {
-					return nil, err
-				}
-			}
-		}
-		abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
-		if len(abilities) == 0 {
-			return nil, nil
-		}
-		eligibleIDs := make([]int, 0, len(abilities))
-		for _, ability := range abilities {
-			eligibleIDs = append(eligibleIDs, ability.ChannelId)
-		}
-		var channels []Channel
-		if err := DB.Where("id IN ? AND status = ?", eligibleIDs, common.ChannelStatusEnabled).Find(&channels).Error; err != nil {
-			return nil, err
-		}
-		channelByID := make(map[int]*Channel, len(channels))
-		for i := range channels {
-			channelByID[channels[i].Id] = &channels[i]
-		}
-		candidates := make([]weightedRouteCandidate, 0, len(orderedEntries))
-		for _, entry := range orderedEntries {
-			if channel := channelByID[entry.ChannelId]; channel != nil {
-				candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
-			}
-		}
-		return chooseRouteCandidate(candidates, strategyConfig, requestPath, model), nil
-	}
-
-	channelSyncLock.RLock()
-	defer channelSyncLock.RUnlock()
-	eligibleIDs := filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
-	if len(eligibleIDs) == 0 {
-		normalizedModel := ratio_setting.FormatMatchingModelName(model)
-		eligibleIDs = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
-	}
-	eligible := make(map[int]struct{}, len(eligibleIDs))
-	for _, channelID := range eligibleIDs {
-		eligible[channelID] = struct{}{}
-	}
-
-	candidates := make([]weightedRouteCandidate, 0, len(orderedEntries))
-	for _, entry := range orderedEntries {
-		if !entry.Enabled {
-			continue
-		}
-		if _, skip := excluded[entry.ChannelId]; skip {
-			continue
-		}
-		if _, ok := eligible[entry.ChannelId]; !ok {
-			continue
-		}
-		channel := channelsIDM[entry.ChannelId]
-		if channel == nil || channel.Status != common.ChannelStatusEnabled {
-			continue
-		}
-		candidates = append(candidates, weightedRouteCandidate{channel: channel, weight: entry.Weight, costFactor: entry.CostFactor})
-	}
-	return chooseRouteCandidate(candidates, strategyConfig, requestPath, model), nil
-}
-
-type weightedRouteCandidate struct {
-	channel    *Channel
-	weight     int
-	costFactor float64
-}
-
-// channelHealthScoreGetter returns the live health score for one
-// channel/route/model triple plus whether a snapshot exists. It is injected
-// rather than linked directly because the implementation lives in the service
-// package, which imports model; a direct model->service import would be a
-// dependency cycle. The same injection pattern is used for the channel health
-// probe executor.
-//
-// The model name is part of the lookup because health is bucketed per model
-// family: comparing a claude channel's score against a gpt channel's score
-// would average two incomparable latency and failure profiles.
-type channelHealthScoreGetter func(channelID int, route string, modelName string) (float64, bool)
-
-var (
-	channelHealthScoreGetterPtr atomic.Pointer[channelHealthScoreGetter]
-)
-
-// SetChannelHealthScoreGetter registers the live health score lookup. Without
-// it, routing falls back to the legacy PreviousDayProbeSuccessRate input even
-// when the subsystem is active. A nil getter clears the injection.
-func SetChannelHealthScoreGetter(getter channelHealthScoreGetter) {
-	if getter == nil {
-		channelHealthScoreGetterPtr.Store(nil)
-		return
-	}
-	channelHealthScoreGetterPtr.Store(&getter)
-}
-
-func loadChannelHealthScoreGetter() channelHealthScoreGetter {
-	if pointer := channelHealthScoreGetterPtr.Load(); pointer != nil {
-		return *pointer
-	}
-	return nil
-}
-
-func chooseRouteCandidate(candidates []weightedRouteCandidate, strategyConfig RoutingStrategyConfig, route string, modelName string) *Channel {
-	if len(candidates) == 0 {
-		return nil
-	}
-	if strategyConfig.Type != RoutingStrategyWeighted {
-		return candidates[0].channel
-	}
-
-	// When the real-time health subsystem is active and has a score for this
-	// channel/route pair, prefer it over the legacy PreviousDayProbeSuccessRate.
-	// The legacy value is pulled from the previous calendar day and therefore
-	// cannot react to a channel failing right now; the live score can. Observe
-	// mode leaves the legacy input untouched so routing behaviour is identical.
-	healthActive := common.IsChannelHealthActive()
-	healthScoreGetter := loadChannelHealthScoreGetter()
-
-	weights := make([]float64, len(candidates))
-	maxResponseTime := 0
-	minCostFactor := math.MaxFloat64
-	for _, candidate := range candidates {
-		if candidate.channel.ResponseTime > maxResponseTime {
-			maxResponseTime = candidate.channel.ResponseTime
-		}
-		if candidate.costFactor > 0 && candidate.costFactor < minCostFactor {
-			minCostFactor = candidate.costFactor
-		}
-	}
-	if minCostFactor == math.MaxFloat64 {
-		minCostFactor = 1
-	}
-	for index, candidate := range candidates {
-		staticWeight := float64(candidate.weight)
-		if staticWeight <= 0 {
-			staticWeight = 1
-		}
-		priceScore := 100.0
-		if candidate.costFactor > 0 {
-			priceScore = minCostFactor / candidate.costFactor * 100
-		}
-		availabilityScore := candidate.channel.PreviousDayProbeSuccessRate
-		// haveLiveScore separates "measured" from "unknown". The legacy fallback
-		// below rewrites a zero to 100 because a zero PreviousDayProbeSuccessRate
-		// means "no probe data yesterday", not "totally broken". A live health
-		// score of 0 means the exact opposite: it is a measured, current verdict
-		// that every request failed. Without this flag the fallback would hand a
-		// dead channel full marks, which is most visible with availability_weight
-		// at 100 where nothing else can compensate.
-		haveLiveScore := false
-		if healthActive && healthScoreGetter != nil {
-			// The live score is blended over [0,1], the legacy input over [0,100].
-			// A missing snapshot means "no information yet", so the legacy value
-			// is kept as the prior rather than jumping to a neutral 100.
-			if liveScore, ok := healthScoreGetter(candidate.channel.Id, route, modelName); ok {
-				availabilityScore = liveScore * 100
-				haveLiveScore = true
-			}
-		}
-		if math.IsNaN(availabilityScore) || math.IsInf(availabilityScore, 0) {
-			availabilityScore = 100
-		} else if availabilityScore < 0 {
-			availabilityScore = 0
-		} else if availabilityScore == 0 && !haveLiveScore {
-			// Legacy-only path: zero means "unknown", so keep the old benefit of
-			// the doubt. A measured live zero is left at zero on purpose.
-			availabilityScore = 100
-		}
-		if availabilityScore > 100 {
-			availabilityScore = 100
-		}
-		loadScore := 100.0
-		if maxResponseTime > 0 && candidate.channel.ResponseTime > 0 {
-			loadScore = float64(maxResponseTime) / float64(candidate.channel.ResponseTime) * 100
-		}
-		dynamicScore := priceScore*strategyConfig.PriceWeight/100 +
-			availabilityScore*strategyConfig.AvailabilityWeight/100 +
-			loadScore*strategyConfig.LoadWeight/100
-		weights[index] = staticWeight * dynamicScore
-	}
-
-	total := 0.0
-	for _, weight := range weights {
-		if weight > 0 && !math.IsNaN(weight) && !math.IsInf(weight, 0) {
-			total += weight
-		}
-	}
-	if total <= 0 || math.IsNaN(total) || math.IsInf(total, 0) {
-		return candidates[0].channel
-	}
-	choice := rand.Float64() * total
-	for index, candidate := range candidates {
-		if weights[index] <= 0 {
-			continue
-		}
-		choice -= weights[index]
-		if choice < 0 {
-			return candidate.channel
-		}
-	}
-	return candidates[0].channel
-}
-
-// FilterRealRouteChannels excludes channels reserved for managed mock tests
-// from normal traffic. Mock requests never enter channel routing.
-func FilterRealRouteChannels(entries []BillingGroupChannel) ([]BillingGroupChannel, error) {
-	return filterRouteChannelsByMockSetting(entries, false)
-}
-
-func filterRouteChannelsByMockSetting(entries []BillingGroupChannel, mock bool) ([]BillingGroupChannel, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	channelsByID := make(map[int]*Channel, len(entries))
-	if !common.MemoryCacheEnabled {
-		channelIDs := make([]int, 0, len(entries))
-		seen := make(map[int]struct{}, len(entries))
-		for _, entry := range entries {
-			if !entry.Enabled {
-				continue
-			}
-			if _, ok := seen[entry.ChannelId]; ok {
-				continue
-			}
-			seen[entry.ChannelId] = struct{}{}
-			channelIDs = append(channelIDs, entry.ChannelId)
-		}
-		channels, err := GetChannelsByIds(channelIDs)
-		if err != nil {
-			return nil, err
-		}
-		for _, channel := range channels {
-			channelsByID[channel.Id] = channel
-		}
-	}
-	filtered := make([]BillingGroupChannel, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.Enabled {
-			continue
-		}
-		channel := channelsByID[entry.ChannelId]
-		if common.MemoryCacheEnabled {
-			var err error
-			channel, err = CacheGetChannel(entry.ChannelId)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if channel != nil && channel.Status == common.ChannelStatusEnabled && channel.GetSetting().MockLoadTest == mock {
-			filtered = append(filtered, entry)
-		}
-	}
-	return filtered, nil
 }
 
 // HasSatisfiedChannelExcluding reports whether at least one eligible channel
@@ -608,31 +457,6 @@ func CacheGetChannelInfo(id int) (*ChannelInfo, error) {
 	return &c.ChannelInfo, nil
 }
 
-func CacheUpdateChannelStatus(id int, status int) {
-	if !common.MemoryCacheEnabled {
-		return
-	}
-	channelSyncLock.Lock()
-	defer channelSyncLock.Unlock()
-	if channel, ok := channelsIDM[id]; ok {
-		channel.Status = status
-	}
-	if status != common.ChannelStatusEnabled {
-		// delete the channel from group2model2channels
-		for group, model2channels := range group2model2channels {
-			for model, channels := range model2channels {
-				for i, channelId := range channels {
-					if channelId == id {
-						// remove the channel from the slice
-						group2model2channels[group][model] = append(channels[:i], channels[i+1:]...)
-						break
-					}
-				}
-			}
-		}
-	}
-}
-
 func CacheUpdateChannel(channel *Channel) {
 	if !common.MemoryCacheEnabled {
 		return
@@ -648,6 +472,12 @@ func CacheUpdateChannel(channel *Channel) {
 	}
 	if oldChannel, ok := channelsIDM[channel.Id]; ok {
 		logger.LogDebug(nil, "CacheUpdateChannel before: id=%d, name=%s, status=%d, polling_index=%d", channel.Id, channel.Name, channel.Status, oldChannel.ChannelInfo.MultiKeyPollingIndex)
+		// These metrics are computed outside the channels table. Preserve them
+		// when a caller replaces the cached channel with a persisted copy.
+		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
+		channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
 	}
 	channelsIDM[channel.Id] = channel
 	if channel2advancedCustomConfig == nil {
@@ -664,6 +494,92 @@ func CacheUpdateChannel(channel *Channel) {
 	// InvalidatePricingCache. GetPricing acquires updatePricingLock first and then
 	// channelSyncLock.RLock (via loadPricingAdvancedCustomConfigs); acquiring
 	// updatePricingLock while holding channelSyncLock would be an AB-BA deadlock.
+	channelSyncLock.Unlock()
+	InvalidatePricingCache()
+}
+
+// SyncChannelCacheEntry refreshes one channel and its enabled abilities after
+// an atomic status update, without rebuilding the complete channel cache.
+func SyncChannelCacheEntry(channel *Channel) {
+	if !common.MemoryCacheEnabled || channel == nil || channel.Id <= 0 {
+		return
+	}
+	var abilities []Ability
+	if channel.Status == common.ChannelStatusEnabled {
+		if err := DB.Where("channel_id = ? AND enabled = ?", channel.Id, true).Find(&abilities).Error; err != nil {
+			common.SysLog(fmt.Sprintf("failed to sync channel abilities into cache: channel_id=%d, error=%v", channel.Id, err))
+			abilities = nil
+		}
+	}
+
+	channelSyncLock.Lock()
+	if channelsIDM == nil {
+		channelsIDM = make(map[int]*Channel)
+	}
+	oldChannel := channelsIDM[channel.Id]
+	if oldChannel != nil {
+		// PreviousDayProbeSuccessRate is computed outside the channels table.
+		// Preserve it across status-only updates so replacing the cached model
+		// does not temporarily make a channel look like it has a 0% success rate.
+		channel.PreviousDayProbeSuccessRate = oldChannel.PreviousDayProbeSuccessRate
+		channel.PreviousDayProbeSampleCount = oldChannel.PreviousDayProbeSampleCount
+		channel.PreviousDayAverageTTFTMs = oldChannel.PreviousDayAverageTTFTMs
+		channel.LastTestTTFTMs = oldChannel.LastTestTTFTMs
+	}
+	if channel.ChannelInfo.IsMultiKey {
+		channel.Keys = channel.GetKeys()
+		if oldChannel != nil && oldChannel.ChannelInfo.IsMultiKey &&
+			oldChannel.ChannelInfo.MultiKeyMode == constant.MultiKeyModePolling &&
+			channel.ChannelInfo.MultiKeyMode == constant.MultiKeyModePolling {
+			channel.ChannelInfo.MultiKeyPollingIndex = oldChannel.ChannelInfo.MultiKeyPollingIndex
+		}
+	}
+	channelsIDM[channel.Id] = channel
+	if channel2advancedCustomConfig == nil {
+		channel2advancedCustomConfig = make(map[int]*dto.AdvancedCustomConfig)
+	}
+	delete(channel2advancedCustomConfig, channel.Id)
+	if channel.Type == constant.ChannelTypeAdvancedCustom {
+		if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
+			channel2advancedCustomConfig[channel.Id] = config
+		}
+	}
+
+	for group, model2channels := range group2model2channels {
+		for modelName, channelIDs := range model2channels {
+			filtered := channelIDs[:0]
+			for _, channelID := range channelIDs {
+				if channelID != channel.Id {
+					filtered = append(filtered, channelID)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(model2channels, modelName)
+			} else {
+				model2channels[modelName] = filtered
+			}
+		}
+		if len(model2channels) == 0 {
+			delete(group2model2channels, group)
+		}
+	}
+	if channel.Status == common.ChannelStatusEnabled {
+		if group2model2channels == nil {
+			group2model2channels = make(map[string]map[string][]int)
+		}
+		for _, ability := range abilities {
+			group := strings.TrimSpace(ability.Group)
+			modelName := strings.TrimSpace(ability.Model)
+			if group == "" || modelName == "" {
+				continue
+			}
+			if group2model2channels[group] == nil {
+				group2model2channels[group] = make(map[string][]int)
+			}
+			group2model2channels[group][modelName] = append(group2model2channels[group][modelName], channel.Id)
+			sort.Ints(group2model2channels[group][modelName])
+		}
+	}
 	channelSyncLock.Unlock()
 	InvalidatePricingCache()
 }

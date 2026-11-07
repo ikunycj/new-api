@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,16 +18,16 @@ func SystemPerformanceCheck() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/v1/messages") {
 			if err := checkSystemPerformance(); err != nil {
-				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToClaudeError(),
+				c.JSON(err.PublicStatusCode(), gin.H{
+					"error": err.ToPublicClaudeError(),
 				})
 				c.Abort()
 				return
 			}
 		} else {
 			if err := checkSystemPerformance(); err != nil {
-				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToOpenAIError(),
+				c.JSON(err.PublicStatusCode(), gin.H{
+					"error": err.ToPublicOpenAIError(),
 				})
 				c.Abort()
 				return
@@ -51,12 +51,6 @@ func checkSystemPerformance() *types.NewAPIError {
 		return types.NewErrorWithStatusCode(
 			fmt.Errorf("system cpu overloaded (current: %.1f%%, threshold: %d%%)", status.CPUUsage, config.CPUThreshold),
 			"system_cpu_overloaded", http.StatusServiceUnavailable)
-	}
-
-	if config.IOWaitThreshold > 0 && int(status.CPUWaitPercent) > config.IOWaitThreshold {
-		return types.NewErrorWithStatusCode(
-			fmt.Errorf("system io wait overloaded (current: %.1f%%, threshold: %d%%)", status.CPUWaitPercent, config.IOWaitThreshold),
-			"system_io_wait_overloaded", http.StatusServiceUnavailable)
 	}
 
 	// 检查内存

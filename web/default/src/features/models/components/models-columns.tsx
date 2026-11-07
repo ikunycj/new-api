@@ -53,7 +53,10 @@ function getCompactModelIcon(iconKey: string) {
 /**
  * Generate models columns configuration
  */
-export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
+export function useModelsColumns(
+  vendors: Vendor[] = [],
+  groupLabels: Record<string, string> = {}
+): ColumnDef<Model>[] {
   const { t } = useTranslation()
 
   // Get translated configs
@@ -359,7 +362,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           <BadgeListCell
             max={3}
             items={(groups ?? []).map((g) => (
-              <GroupBadge key={g} group={g} size='sm' />
+              <GroupBadge
+                key={g}
+                group={g}
+                label={groupLabels[g] || g}
+                size='sm'
+              />
             ))}
           />
         )

@@ -51,6 +51,7 @@ export function buildSearchParams(
       return {
         ...baseParams,
         ...(commonFilters.keyword && { keyword: commonFilters.keyword }),
+        ...(commonFilters.group && { group: commonFilters.group }),
       }
     }
     case 'drawing': {

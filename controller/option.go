@@ -8,11 +8,10 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -33,35 +32,6 @@ var completionRatioMetaOptionKeys = []string{
 
 func isPaymentComplianceOptionKey(key string) bool {
 	return strings.HasPrefix(key, "payment_setting.compliance_")
-}
-
-func isPositiveOptionValue(value string) bool {
-	intValue, err := strconv.Atoi(strings.TrimSpace(value))
-	if err == nil {
-		return intValue > 0
-	}
-	floatValue, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	return err == nil && floatValue > 0
-}
-
-func validateTimeoutOption(key, value string) error {
-	n, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		return fmt.Errorf("%s must be an integer", key)
-	}
-	min, max := 1, 3600
-	switch key {
-	case "RelayTimeout", "RelayIdleConnTimeout":
-		min = 0
-	case "StreamClientWriteTimeout":
-		max = 600
-	case "ShutdownTimeoutSeconds":
-		max = 900
-	}
-	if n < min || n > max {
-		return fmt.Errorf("%s must be between %d and %d", key, min, max)
-	}
-	return nil
 }
 
 func collectModelNamesFromOptionValue(raw string, modelNames map[string]struct{}) {
@@ -139,6 +109,56 @@ type OptionUpdateRequest struct {
 	Value any    `json:"value"`
 }
 
+type pricingGroupConfigurationUpdateRequest struct {
+	GroupRatio                  string  `json:"group_ratio"`
+	PricingGroupEnabled         string  `json:"pricing_group_enabled"`
+	PricingGroupDisplayName     *string `json:"pricing_group_display_name"`
+	PricingGroupOrder           string  `json:"pricing_group_order"`
+	PricingGroupRetryPolicy     string  `json:"pricing_group_retry_policy"`
+	PricingGroupRoutingStrategy string  `json:"pricing_group_routing_strategy"`
+	PricingGroupRemark          *string `json:"pricing_group_remark"`
+}
+
+// PricingGroupRoutingStrategy CRUD is intentionally represented by the same
+// atomic pricing-group payload as enabled state, ratios, order and retry
+// policies. The controller accepts the catalog/binding JSON as one field so a
+// strategy edit and the corresponding group assignment cannot partially commit.
+
+func UpdatePricingGroupConfiguration(c *gin.Context) {
+	var request pricingGroupConfigurationUpdateRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorMsg(c, "无效的参数")
+		return
+	}
+	var optionalJSON []string
+	if request.PricingGroupRemark != nil || request.PricingGroupDisplayName != nil {
+		remarkJSON := ratio_setting.PricingGroupRemark2JSONString()
+		if request.PricingGroupRemark != nil {
+			remarkJSON = *request.PricingGroupRemark
+		}
+		displayNameJSON := ratio_setting.PricingGroupDisplayName2JSONString()
+		if request.PricingGroupDisplayName != nil {
+			displayNameJSON = *request.PricingGroupDisplayName
+		}
+		optionalJSON = []string{remarkJSON, displayNameJSON}
+	}
+	if err := model.UpdatePricingGroupConfiguration(
+		request.GroupRatio,
+		request.PricingGroupEnabled,
+		request.PricingGroupOrder,
+		request.PricingGroupRetryPolicy,
+		request.PricingGroupRoutingStrategy,
+		optionalJSON...,
+	); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "option.update", map[string]interface{}{
+		"key": "pricing_groups",
+	})
+	common.ApiSuccess(c, nil)
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -159,45 +179,13 @@ func UpdateOption(c *gin.Context) {
 	default:
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
-	switch option.Key {
-	case common.ChannelCircuitEnabledOptionKey:
-		if _, parseErr := strconv.ParseBool(strings.TrimSpace(option.Value.(string))); parseErr != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "ChannelCircuitEnabled must be a boolean",
-			})
-			return
-		}
-	case model.ChannelCircuitConfigOptionKey:
-		normalized, parseErr := model.NormalizeChannelCircuitConfigJSONString(option.Value.(string))
-		if parseErr != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": parseErr.Error(),
-			})
-			return
-		}
-		option.Value = normalized
-	case "GlobalApiRateLimitEnabled", "GlobalApiRateLimitNum", "GlobalApiRateLimitDuration",
-		"GlobalWebRateLimitEnabled", "GlobalWebRateLimitNum", "GlobalWebRateLimitDuration",
-		"CriticalRateLimitEnabled", "CriticalRateLimitNum", "CriticalRateLimitDuration":
-		if err = setting.CheckRouteRateLimitOption(option.Key, option.Value.(string)); err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
-	case "QuotaForInviter", "QuotaForInvitee":
-		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
-			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
-			return
-		}
-	default:
-		if isPaymentComplianceOptionKey(option.Key) {
-			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
-			return
-		}
+	if isPaymentComplianceOptionKey(option.Key) {
+		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
+		return
+	}
+	if option.Key == "GroupRatio" || option.Key == "PricingGroupEnabled" || option.Key == "PricingGroupRemark" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" {
+		common.ApiErrorMsg(c, "定价分组配置必须统一保存")
+		return
 	}
 	switch option.Key {
 	case "GitHubOAuthEnabled":
@@ -265,15 +253,6 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "GroupRatio":
-		err = ratio_setting.CheckGroupRatio(option.Value.(string))
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
-			return
-		}
 	case "BillingUSDToCNYRate":
 		rate, parseErr := strconv.ParseFloat(strings.TrimSpace(option.Value.(string)), 64)
 		if parseErr != nil || rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
@@ -283,17 +262,39 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "loadtest_setting.max_duration_seconds", "loadtest_setting.max_rps", "loadtest_setting.max_concurrency", "loadtest_setting.max_output_tokens", "loadtest_setting.request_timeout_seconds":
-		if err = operation_setting.ValidateLoadTestOption(option.Key, option.Value.(string)); err != nil {
+	case "theme.frontend":
+		if option.Value != "default" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "Classic 前端已移除，主题只能设置为 default",
+			})
+			return
+		}
+	case "gemini.safety_settings":
+		err = model_setting.ValidateGeminiSafetySettings(option.Value.(string))
+		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": err.Error(),
 			})
 			return
 		}
-	case "RelayTimeout", "StreamingTimeout", "RelayIdleConnTimeout", "StreamClientWriteTimeout", "ShutdownTimeoutSeconds":
-		if err = validateTimeoutOption(option.Key, option.Value.(string)); err != nil {
-			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+	case "claude.default_max_tokens":
+		err = model_setting.ValidateClaudeDefaultMaxTokens(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case operation_setting.ToolPriceOptionKey:
+		err = operation_setting.ValidateToolPricesJSON(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
 			return
 		}
 	case "ImageRatio":
@@ -400,9 +401,6 @@ func UpdateOption(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
-	}
-	if option.Key == "RelayTimeout" || option.Key == "RelayIdleConnTimeout" {
-		service.InitHttpClient()
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]interface{}{

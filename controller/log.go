@@ -10,32 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// getTeamUserIds builds the set [parentId, child1, child2, ...] for team queries.
-// Returns (nil, false) if the caller is itself a child account (parent_id != 0).
-func getTeamUserIds(c *gin.Context) ([]int, bool) {
-	userId := c.GetInt("id")
-	user, err := model.GetUserById(userId, false)
-	if err != nil {
-		common.ApiError(c, err)
-		return nil, false
-	}
-	if user.ParentId != 0 {
-		common.ApiErrorMsg(c, "子账号不能查看团队数据")
-		return nil, false
-	}
-	children, err := model.GetUserChildren(userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return nil, false
-	}
-	ids := make([]int, 0, len(children)+1)
-	ids = append(ids, userId)
-	for _, ch := range children {
-		ids = append(ids, ch.Id)
-	}
-	return ids, true
-}
-
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -73,8 +47,7 @@ func GetUserLogs(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
 	requestId := c.Query("request_id")
-	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
+	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -83,6 +56,38 @@ func GetUserLogs(c *gin.Context) {
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+func GetTeamLogs(c *gin.Context) {
+	userIds, ok := getTeamUserIds(c)
+	if !ok {
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	logType, _ := strconv.Atoi(c.Query("type"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	logs, total, err := model.GetTeamLogs(
+		userIds,
+		logType,
+		startTimestamp,
+		endTimestamp,
+		c.Query("model_name"),
+		c.Query("keyword"),
+		c.Query("token_name"),
+		pageInfo.GetStartIdx(),
+		pageInfo.GetPageSize(),
+		c.Query("group"),
+		c.Query("request_id"),
+		"",
+	)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
+	common.ApiSuccess(c, pageInfo)
 }
 
 // Deprecated: SearchAllLogs 已废弃，前端未使用该接口。
@@ -161,62 +166,61 @@ func GetLogsStat(c *gin.Context) {
 	return
 }
 
-func GetTeamLogs(c *gin.Context) {
-	userIds, ok := getTeamUserIds(c)
-	if !ok {
-		return
-	}
-	pageInfo := common.GetPageQuery(c)
+func GetLogAnalytics(c *gin.Context) {
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	keyword := c.Query("keyword")
-	group := c.Query("group")
-	requestId := c.Query("request_id")
-	upstreamRequestId := c.Query("upstream_request_id")
-	logs, total, err := model.GetTeamLogs(userIds, logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId)
+	channel, _ := strconv.Atoi(c.Query("channel"))
+	userLimit, _ := strconv.Atoi(c.Query("user_limit"))
+	timezoneOffset, _ := strconv.Atoi(c.Query("timezone_offset"))
+
+	analytics, err := model.GetLogAnalytics(model.LogAnalyticsFilters{
+		LogType:        logType,
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ModelName:      c.Query("model_name"),
+		Keyword:        c.Query("keyword"),
+		TokenName:      c.Query("token_name"),
+		Channel:        channel,
+		Group:          c.Query("group"),
+		Granularity:    c.DefaultQuery("granularity", "hour"),
+		TimezoneOffset: timezoneOffset,
+		UserKeyword:    c.Query("user_keyword"),
+		UserLimit:      userLimit,
+	})
 	if err != nil {
-		common.ApiError(c, err)
+		common.ApiErrorMsg(c, err.Error())
 		return
 	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
-	common.ApiSuccess(c, pageInfo)
+	common.ApiSuccess(c, analytics)
 }
 
-func GetTeamLogsStat(c *gin.Context) {
-	userIds, ok := getTeamUserIds(c)
-	if !ok {
-		return
-	}
-	logType, _ := strconv.Atoi(c.Query("type"))
+func GetLogCacheTrend(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	tokenName := c.Query("token_name")
-	modelName := c.Query("model_name")
-	group := c.Query("group")
-	stat, err := model.SumTeamUsedQuota(userIds, logType, startTimestamp, endTimestamp, modelName, tokenName, group)
+	timezoneOffset, _ := strconv.Atoi(c.Query("timezone_offset"))
+
+	trend, err := model.GetLogCacheTrend(model.LogCacheTrendFilters{
+		Dimension:      model.LogCacheTrendDimension(c.DefaultQuery("dimension", "group")),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		Granularity:    c.DefaultQuery("granularity", "hour"),
+		TimezoneOffset: timezoneOffset,
+	})
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	common.ApiSuccess(c, trend)
+}
+
+func GetLogFilterOptions(c *gin.Context) {
+	options, err := model.GetLogFilterOptions()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data": gin.H{
-			"quota":                   stat.Quota,
-			"rpm":                     stat.Rpm,
-			"tpm":                     stat.Tpm,
-			"cache_input_tokens":      stat.CacheInputTokens,
-			"cache_read_tokens":       stat.CacheReadTokens,
-			"cache_write_tokens":      stat.CacheWriteTokens,
-			"cache_hit_requests":      stat.CacheHitRequests,
-			"cache_eligible_requests": stat.CacheEligibleRequests,
-			"cache_hit_rate":          stat.CacheHitRate,
-		},
-	})
+	common.ApiSuccess(c, options)
 }
 
 func GetLogsSelfStat(c *gin.Context) {
@@ -227,9 +231,8 @@ func GetLogsSelfStat(c *gin.Context) {
 	tokenName := c.Query("token_name")
 	modelName := c.Query("model_name")
 	keyword := c.Query("keyword")
-	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, channel, group, userId)
+	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, keyword, tokenName, 0, group, userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -252,4 +255,28 @@ func GetLogsSelfStat(c *gin.Context) {
 		},
 	})
 	return
+}
+
+func GetTeamLogsStat(c *gin.Context) {
+	userIds, ok := getTeamUserIds(c)
+	if !ok {
+		return
+	}
+	logType, _ := strconv.Atoi(c.Query("type"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	stat, err := model.SumTeamUsedQuota(
+		userIds,
+		logType,
+		startTimestamp,
+		endTimestamp,
+		c.Query("model_name"),
+		c.Query("token_name"),
+		c.Query("group"),
+	)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stat)
 }

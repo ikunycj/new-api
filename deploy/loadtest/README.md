@@ -1,19 +1,18 @@
-# new-api 1000-user load test
+# new-api isolated test stack
 
-This stack is isolated from production and uses a local deterministic OpenAI-compatible upstream. It creates 1000 test users and API tokens, drives requests with k6, stores metrics in Prometheus, visualizes them in Grafana, sends alerts through Alertmanager, and collects Go profiles with pprof and Pyroscope.
+This stack is isolated from production and uses deterministic OpenAI-compatible mock upstreams. It creates test users and API tokens and exposes the application API, mock controls, and pprof endpoints for integration and performance testing with an external client.
 
 ## Safety boundary
 
-The seed data points only to `http://mock-upstream:8080`. The stack has no real-provider credentials. Do not replace the mock channel with a real provider until cost, provider rate limits, and the target environment have been explicitly approved.
+Seed data points only to `http://mock-upstream:8080` and the stack contains no real-provider credentials. Do not replace a mock channel with a real provider until the target, cost ceiling, rate limit, and test window have been explicitly approved.
 
 ## Prerequisites
 
 - Docker Engine 24+ and Docker Compose v2
-- At least 4 CPU cores and 8 GB RAM for the complete observability stack
-- For a 10,000-VU burst, use at least 8 CPU cores and 12 GB RAM, or distribute k6 across multiple load generators
+- At least 4 CPU cores and 8 GB RAM for the local stack
 - Host ports in [`.env.example`](.env.example) available
 
-## Start monitoring
+## Start the local stack
 
 ```sh
 cd deploy/loadtest
@@ -21,51 +20,23 @@ cp .env.example .env
 ./up.sh
 ```
 
-Open:
+Useful endpoints:
 
-- Grafana: http://localhost:3001/d/new-api-loadtest (anonymous viewer access, or `admin` / `GRAFANA_ADMIN_PASSWORD`)
-- Prometheus: http://localhost:9090
-- Alertmanager: http://localhost:9093
-- Alert sink: http://localhost:19094/alerts
-- Pyroscope: http://localhost:4040
-- Application metrics: http://localhost:8006/metrics
-- Load-test API: http://localhost:3100/api/status
-- pprof: http://localhost:8005/debug/pprof/
+- Load-test API: `http://localhost:3100/api/status`
+- pprof: `http://localhost:8005/debug/pprof/`
+- Mock channel A: `http://localhost:18080`
+- Mock channel B: `http://localhost:18081`
 
-The authenticated AllToken admin page at `/failover` includes the same current metrics, Alertmanager alerts, and embedded Grafana dashboard. The backend reads Prometheus and Alertmanager over the private Compose network; only `FAILOVER_GRAFANA_PUBLIC_URL` is sent to the browser.
+## Deterministic channel failover
 
-## Run profiles
-
-```sh
-./run.sh smoke   # 10 VUs for 1 minute, validates the stack
-./run.sh step    # 50 -> 100 -> 250 -> 500 -> 750 -> 1000 VUs
-./run.sh steady  # 1000 VUs for 30 minutes
-./run.sh spike   # ramp from 50 to 1000 VUs in 10 seconds
-./run.sh burst   # LOADTEST_USERS VUs, one request each
-./run.sh stream  # 1000 concurrent SSE connections
-./run.sh mixed   # 700 stream + 200 non-stream + 100 model-list VUs
-./run.sh soak    # 500 VUs for 2 hours, leak check
-./run.sh capacity # configured RPS steps against the single mock channel
-./run.sh channel-failover # deterministic primary-channel -> fallback-channel scenario
-```
-
-The default is `smoke`. Results are written to `results/summary.json`. The k6 container publishes its metrics to Prometheus through remote write, so the Grafana panel can correlate load with server and dependency metrics.
-
-All workload, pacing, profile stages, request defaults, thresholds, mock usage, channel latency, token balances, and failure distributions are kept in [`loadtest.config.json`](loadtest.config.json). Edit that file to change the test workload; `compose.yml` mounts the same read-only file into k6 and all three mock channels. Environment variables in `.env` remain available for one-off overrides such as the target URL, profile, token list, and host ports.
-
-The `capacity` profile uses an arrival-rate executor instead of VUs as the target. It holds each rate from `CAPACITY_RATES` after a short ramp and records input, output, and total Token TPS from the upstream `usage` response. The default mock returns 10 prompt and 20 completion tokens per successful request, so output Token TPS should be approximately `successful RPS * 20`. The highest valid step is the last rate with no dropped iterations, error rate below 1%, latency within the configured thresholds, and no sustained database or Redis pool alerts.
-
-### Deterministic channel failover
-
-The default mock response usage and channel consumption are configured in `loadtest.config.json` (currently 10 input + 20 output usage and 30 consumed channel tokens). Channel A is exposed on port `18080` and Channel B on `18081`. Channel balances, fixed latency, error rates, and failure-status distributions can be changed per channel in the same file:
+Each successful mock response consumes exactly 30 tokens. Channel A has a deliberately small balance so requests eventually move to Channel B:
 
 ```sh
 curl -X POST 'http://localhost:18080/control/reset?tokens=300'
 curl -X POST 'http://localhost:18081/control/reset?tokens=3000'
-./run.sh channel-failover
 ```
 
-Control individual failure stages while watching Grafana:
+Control the mock state directly:
 
 ```sh
 curl -X POST 'http://localhost:18080/control/exhaust'
@@ -74,68 +45,36 @@ curl -X POST 'http://localhost:18080/control/enable'
 curl 'http://localhost:18080/control/state'
 ```
 
-The expected sequence is Channel A consumption, a `205001-CH<id>` exhaustion error, then a switch to Channel B. Verify `alltoken_channel_requests_total`, `alltoken_channel_switch_total`, `alltoken_channel_circuit_state`, stable error codes, and firing/resolved alerts in Grafana and Alertmanager.
-
-For a short preliminary run:
+Send requests with a seeded token through the local API:
 
 ```sh
-CAPACITY_RATES=100,200,300,400,500,600 \
-CAPACITY_RAMP_DURATION=10s \
-CAPACITY_STAGE_DURATION=30s \
-./run.sh capacity
+curl 'http://localhost:3100/v1/chat/completions' \
+  -H 'Authorization: Bearer sk-loadtest00001' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"test"}]}'
 ```
 
-For a capacity result suitable for planning, keep each step for at least two minutes and repeat the highest passing rate for 30 minutes. Do not point this profile at a paid or production provider until the account, cost ceiling, rate limit, and maintenance window have been approved.
+Each successful mock response consumes exactly 30 tokens. Repeated requests eventually exhaust Channel A and exercise fallback to Channel B. Compare application logs with the mock control state to verify the request sequence and error code.
 
-### Local k6 against a remote API
+The startup scripts bind host ports to `127.0.0.1`. Go module download settings are configurable in `.env` through `GOPROXY`, `GOSUMDB`, and `GOTOOLCHAIN`. On Colima, `forward-colima-ports.sh` repairs the API, database, Redis, mock, and pprof forwards when needed.
 
-The load generator can run locally while the target API is remote. Use dedicated remote test tokens and an explicit confirmation gate:
+## Inspecting a run
 
-```sh
-CONFIRM_REMOTE_LOADTEST=yes \
-REMOTE_BASE_URL=https://approved-test-api.example.com \
-LOADTEST_TOKENS=sk-test-1,sk-test-2,sk-test-3 \
-K6_PROMETHEUS_RW_SERVER_URL=https://approved-prometheus.example.com/api/v1/write \
-CAPACITY_RATES=100,200,300 \
-./run-remote.sh capacity
-```
+1. Compare the external client's request, error, latency, and token-usage results.
+2. Compare application logs with the mock control state when testing failover.
+3. Use pprof for point-in-time captures, for example:
 
-For a local token file, use `LOADTEST_TOKEN_FILE=/absolute/path/tokens.txt`; each line may be either a token or `name token`. The file is read locally and is not part of the repository. A URL ending in `/v1` is normalized automatically, so both `https://host` and `https://host/v1` are accepted.
+   ```sh
+   go tool pprof http://localhost:8005/debug/pprof/profile?seconds=30
+   ```
 
-`run-remote.sh` does not start or seed the local new-api/PostgreSQL/Redis services; it only runs k6 on the existing Compose network. The remote Prometheus endpoint must accept authenticated remote-write traffic, or keep the default local endpoint and inspect only local k6 metrics. To see remote CPU, memory, Go, PostgreSQL and Redis panels, the remote Prometheus must scrape the corresponding remote exporters and the remote Grafana must use that Prometheus. Keep metrics and exporter endpoints on a private network or VPN; never expose them publicly just for a load test.
-
-The startup scripts build `new-api` before pulling the monitoring images and use `goproxy.cn` by default. The Go proxy is configurable in `.env`; for a private mirror set `GOPROXY`, `GOSUMDB`, and optionally `GOTOOLCHAIN` there. A successful `go mod download` is cached by the legacy Docker layer keyed by `go.mod` and `go.sum`, so source-only changes do not download modules again. Host ports are bound to `127.0.0.1` so the stack stays local. On Colima, the scripts also repair missing SSH port forwards for long-lived VMs.
-
-`Dockerfile.dev` builds for the container's native architecture and does not enable experimental Go runtime features. This avoids emulation overhead on Apple Silicon and keeps profiling stable during long runs.
-
-The default application pool is 80 open and 40 idle PostgreSQL connections because the bundled PostgreSQL service defaults to 100 total connections. Increase both only after raising the database limit and watching connection pressure in Grafana.
-
-## Alert rehearsal
-
-To verify the full alert path without a load test, restart the application or inject mock errors:
-
-```sh
-MOCK_ERROR_RATE=1 docker compose -f compose.yml up -d mock-upstream
-curl -s http://localhost:19094/alerts | jq
-```
-
-Restore the normal mock with `MOCK_ERROR_RATE=0 docker compose -f compose.yml up -d mock-upstream`. Alert rules cover application availability, relay 5xx rate, latency, in-flight requests, Go heap/goroutines, database pool utilization and waits, Redis pool timeouts, exporter availability, PostgreSQL connection pressure, Redis rejected connections, and unexpected mock errors.
-
-## What to inspect during a run
-
-1. In Grafana, watch relay RPS, P95/P99, in-flight requests, database pool waits, Redis pool timeouts, Go heap/goroutines, and container CPU/memory.
-2. If P95 rises while mock latency stays flat, compare database/Redis waits and CPU. A flat RPS with rising latency marks the saturation point.
-3. Open Pyroscope and inspect `new-api-loadtest` profiles for CPU, allocations, goroutines, mutex and block contention.
-4. Use pprof endpoints for a point-in-time capture, for example `go tool pprof http://localhost:8005/debug/pprof/profile?seconds=30`.
-5. Check `curl http://localhost:19094/alerts` for the last Alertmanager notification and inspect Prometheus `/alerts` for firing/resolved state.
+4. Treat a run as invalid when the load generator itself is CPU-, memory-, network-, or file-descriptor-bound.
 
 ## Shutdown and reset
 
 ```sh
-./down.sh             # stop containers, keep volumes
-./reset.sh            # stop and delete load-test volumes/data
+./down.sh   # stop containers and keep volumes
+./reset.sh  # stop containers and remove only this stack's volumes
 ```
 
-`reset.sh` removes only the Docker volumes declared by this stack (`loadtest_*`); it does not touch the project's normal development volumes.
-
-If a legacy-builder host reports `no space left on device`, inspect usage with `docker system df`, then run `docker image prune -f` to remove dangling images. This intentionally remains a manual recovery step because pruning also discards reusable Go dependency layers and makes the next build slower.
+`reset.sh` removes only the Docker volumes declared by this Compose file (`loadtest_postgres`); it does not touch normal development volumes.

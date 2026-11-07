@@ -11,14 +11,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/relayconvert"
-	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -332,13 +332,13 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 
 		switch info.RelayFormat {
 		case types.RelayFormatClaude:
-			c.JSON(newAPIError.StatusCode, gin.H{
+			c.JSON(newAPIError.PublicStatusCode(), gin.H{
 				"type":  "error",
-				"error": newAPIError.ToClaudeError(),
+				"error": newAPIError.ToPublicClaudeError(),
 			})
 		default:
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
+			c.JSON(newAPIError.PublicStatusCode(), gin.H{
+				"error": newAPIError.ToPublicOpenAIError(),
 			})
 		}
 		return &usage, nil

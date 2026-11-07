@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
+import { AnnouncementsSection } from '../content/announcements-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 
 const noticeSchema = z.object({
@@ -45,9 +46,15 @@ type NoticeFormValues = z.infer<typeof noticeSchema>
 
 type NoticeSectionProps = {
   defaultValue: string
+  announcements: string
+  announcementsEnabled: boolean
 }
 
-export function NoticeSection({ defaultValue }: NoticeSectionProps) {
+export function NoticeSection({
+  defaultValue,
+  announcements,
+  announcementsEnabled,
+}: NoticeSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
   const form = useForm<NoticeFormValues>({
@@ -73,35 +80,41 @@ export function NoticeSection({ defaultValue }: NoticeSectionProps) {
   }
 
   return (
-    <SettingsSection title={t('System Notice')}>
-      <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
-            saveLabel='Save notice'
-          />
-          <FormField
-            control={form.control}
-            name='Notice'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Announcement content')}</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={8}
-                    placeholder={t(
-                      'Planned maintenance on Friday at 22:00 UTC...'
-                    )}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </SettingsForm>
-      </Form>
-    </SettingsSection>
+    <>
+      <SettingsSection title={t('System Notice')}>
+        <Form {...form}>
+          <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+            <SettingsPageFormActions
+              onSave={form.handleSubmit(onSubmit)}
+              isSaving={updateOption.isPending}
+              saveLabel='Save notice'
+            />
+            <FormField
+              control={form.control}
+              name='Notice'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Announcement content')}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={8}
+                      placeholder={t(
+                        'Planned maintenance on Friday at 22:00 UTC...'
+                      )}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </SettingsForm>
+        </Form>
+      </SettingsSection>
+      <AnnouncementsSection
+        enabled={announcementsEnabled}
+        data={announcements}
+      />
+    </>
   )
 }

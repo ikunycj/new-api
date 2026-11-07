@@ -38,7 +38,10 @@ func TestTokenGroupCandidatesEmptyAndMalformed(t *testing.T) {
 }
 
 func TestTokenGroupCandidatesStorageIsNotExposedByModelJSON(t *testing.T) {
-	token := Token{Group: "auto", GroupCandidates: `["openai-low","claude-low"]`}
+	token := Token{
+		Group:           "auto",
+		GroupCandidates: `["openai-low","claude-low"]`,
+	}
 	data, err := common.Marshal(token)
 	require.NoError(t, err)
 

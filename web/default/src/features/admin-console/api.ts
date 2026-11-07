@@ -17,9 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import type { TimeGranularity } from '@/lib/time'
 
 import type {
   AdminConsoleResponse,
+  AdminConsoleCacheTrendDimension,
+  AdminConsoleCacheTrendPoint,
+  AdminConsoleCacheTrendResponse,
   AdminConsoleRealtimeResponse,
   AdminConsoleRealtimeStats,
   AdminConsoleStats,
@@ -27,8 +31,23 @@ import type {
   AdminConsoleSystemLoadResponse,
 } from './types'
 
-export async function getAdminConsoleStats(): Promise<AdminConsoleStats> {
-  const response = await api.get<AdminConsoleResponse>('/api/admin/console')
+export interface AdminConsoleTimeRange {
+  start_timestamp?: number
+  end_timestamp?: number
+}
+
+export interface AdminConsoleCacheTrendParams extends AdminConsoleTimeRange {
+  dimension: AdminConsoleCacheTrendDimension
+  granularity: Extract<TimeGranularity, 'hour' | 'day' | 'week'>
+  timezone_offset: number
+}
+
+export async function getAdminConsoleStats(
+  params?: AdminConsoleTimeRange
+): Promise<AdminConsoleStats> {
+  const response = await api.get<AdminConsoleResponse>('/api/admin/console', {
+    params,
+  })
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '管理控制台数据加载失败')
   }
@@ -45,12 +64,28 @@ export async function getAdminConsoleSystemLoad(): Promise<AdminConsoleSystemLoa
   return response.data.data
 }
 
-export async function getAdminConsoleRealtimeStats(): Promise<AdminConsoleRealtimeStats> {
+export async function getAdminConsoleRealtimeStats(
+  params?: AdminConsoleTimeRange
+): Promise<AdminConsoleRealtimeStats> {
   const response = await api.get<AdminConsoleRealtimeResponse>(
-    '/api/admin/realtime'
+    '/api/admin/realtime',
+    { params }
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || '实时统计数据加载失败')
+  }
+  return response.data.data
+}
+
+export async function getAdminConsoleCacheTrend(
+  params: AdminConsoleCacheTrendParams
+): Promise<AdminConsoleCacheTrendPoint[]> {
+  const response = await api.get<AdminConsoleCacheTrendResponse>(
+    '/api/log/cache-trend',
+    { params }
+  )
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || '缓存命中率数据加载失败')
   }
   return response.data.data
 }

@@ -8,11 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetRequestURLForImageGeneration(t *testing.T) {
@@ -118,6 +123,30 @@ func TestDoResponseForImageGeneration(t *testing.T) {
 	if strings.Contains(body, `"image_urls"`) {
 		t.Fatalf("response body = %s, should not expose raw MiniMax image_urls payload", body)
 	}
+}
+
+func TestMiniMaxFixedImageBillsReturnedQuantity(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	const expression = `tier("image", fixed(0.0035)) * image_count`
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeImagesGenerations, StartTime: time.Unix(1700000000, 0),
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode: "tiered_expr", ExprString: expression, ExprHash: billingexpr.ExprHashString(expression),
+			GroupRatio: 1, QuotaPerUnit: 500000, BillingUSDToCNYRate: 1,
+			EstimatedImageCount: common.GetPointer(3), EstimatedBillingUnit: billingexpr.BillingUnitRequest,
+		},
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       ioNopCloser(`{"data":{"image_urls":["first","second"]}}`),
+	}
+	_, apiErr := (&Adaptor{}).DoResponse(c, resp, info)
+	require.Nil(t, apiErr)
+	ok, quota, result := service.TryTieredSettle(info, billingexpr.TokenParams{})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	assert.Equal(t, 3500, quota)
+	assert.Equal(t, 2, *result.ImageCount)
 }
 
 type nopReadCloser struct {

@@ -5,7 +5,7 @@ import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/relay"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -83,10 +83,6 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		//http router
 		httpRouter := relayV1Router.Group("")
-		// RelayTrace must wrap the response writer before any handler writes, and
-		// must run after TokenAuth so user/token ids are available. No-op unless
-		// RELAY_TRACE_ENABLED is set.
-		httpRouter.Use(middleware.RelayTrace())
 		httpRouter.Use(middleware.Distribute())
 
 		// claude related routes
@@ -108,6 +104,9 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 		httpRouter.POST("/responses/compact", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIResponsesCompaction)
+		})
+		httpRouter.POST("/alpha/search", func(c *gin.Context) {
+			controller.Relay(c, types.RelayFormatOpenAIAlphaSearch)
 		})
 
 		// image related routes
@@ -196,7 +195,6 @@ func SetRelayRouter(router *gin.Engine) {
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())
 	relayGeminiRouter.Use(middleware.TokenAuth())
 	relayGeminiRouter.Use(middleware.ModelRequestRateLimit())
-	relayGeminiRouter.Use(middleware.RelayTrace())
 	relayGeminiRouter.Use(middleware.Distribute())
 	{
 		// Gemini API 路径格式: /v1beta/models/{model_name}:{action}
@@ -208,6 +206,7 @@ func SetRelayRouter(router *gin.Engine) {
 
 func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {
 	relayMjRouter.GET("/image/:id", relay.RelayMidjourneyImage)
+	relayMjRouter.GET("/video/:id", relay.RelayMidjourneyVideo)
 	relayMjRouter.Use(middleware.TokenAuth(), middleware.Distribute())
 	{
 		relayMjRouter.POST("/submit/action", controller.RelayMidjourney)

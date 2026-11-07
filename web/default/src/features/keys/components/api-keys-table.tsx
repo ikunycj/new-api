@@ -61,6 +61,7 @@ import {
   ERROR_MESSAGES,
 } from '../constants'
 import type { ApiKey } from '../types'
+import { ApiKeyUsageCell } from './api-key-usage-cell'
 import { ApiKeyCell } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
 import { useApiKeys } from './api-keys-provider'
@@ -96,6 +97,10 @@ function ApiKeysMobileSkeleton() {
             <Skeleton className='h-8 w-16' />
           </div>
           <Skeleton className='h-3 w-28' />
+          <div className='flex flex-col gap-1.5 border-t pt-2'>
+            <Skeleton className='ml-auto h-3 w-40' />
+            <Skeleton className='ml-auto h-3 w-44' />
+          </div>
         </div>
       ))}
     </div>
@@ -167,11 +172,13 @@ function ApiKeysMobileList({
               )}
             </div>
 
-            <div className='flex min-w-0 items-center justify-between gap-2'>
-              <div className='min-w-0 flex-1 [&_button:first-child]:max-w-full [&_button:first-child]:truncate [&_button:first-child]:px-0'>
+            <div className='min-w-0 space-y-1.5'>
+              <div className='min-w-0 [&_button:first-child]:max-w-full [&_button:first-child]:truncate [&_button:first-child]:px-0'>
                 <ApiKeyCell apiKey={apiKey} />
               </div>
-              <DataTableRowActions row={row} />
+              <div className='flex justify-end'>
+                <DataTableRowActions row={row} />
+              </div>
             </div>
 
             <div className='flex items-center justify-between gap-2 text-xs'>
@@ -187,6 +194,10 @@ function ApiKeysMobileList({
                   </span>
                 </span>
               )}
+            </div>
+
+            <div className='border-border/60 flex justify-end border-t pt-2'>
+              <ApiKeyUsageCell apiKey={apiKey} />
             </div>
           </div>
         )
@@ -303,6 +314,11 @@ export function ApiKeysTable() {
     columns,
     enableRowSelection: true,
     columnFilters,
+    initialColumnVisibility: {
+      quota: false,
+      model_limits: false,
+      allow_ips: false,
+    },
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,
     pagination,

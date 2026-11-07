@@ -31,7 +31,7 @@ const DASHBOARD_SECTIONS = [
   },
   {
     id: 'models',
-    titleKey: 'Model Call Analytics',
+    titleKey: 'Throughput trend',
     build: () => null,
   },
   {
@@ -39,23 +39,9 @@ const DASHBOARD_SECTIONS = [
     titleKey: 'Flow',
     build: () => null,
   },
-  {
-    id: 'users',
-    titleKey: 'User Analytics',
-    adminOnly: true,
-    build: () => null,
-  },
-  {
-    id: 'packages',
-    titleKey: 'Package comparison',
-    adminOnly: true,
-    build: () => null,
-  },
 ] as const
 
 export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
-
-const ADMIN_ONLY_SECTIONS = new Set<string>(['users', 'packages'])
 
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,
@@ -73,14 +59,8 @@ export const DASHBOARD_DEFAULT_SECTION = dashboardRegistry.defaultSection
 
 export function getDashboardSectionNavItems(
   t: TFunction,
-  options?: { isAdmin?: boolean; canManageTeamScope?: boolean }
+  options?: { isAdmin?: boolean }
 ) {
-  const all = dashboardRegistry.getSectionNavItems(t)
-  if (options?.isAdmin) return all
-  return all.filter((_, idx) => {
-    const id = DASHBOARD_SECTIONS[idx].id
-    if (id === 'packages') return false
-    if (id === 'users') return options?.canManageTeamScope ?? false
-    return true
-  })
+  void options
+  return dashboardRegistry.getSectionNavItems(t)
 }

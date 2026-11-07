@@ -16,12 +16,18 @@ func TestGetEndpointTypesByChannelTypeCodex(t *testing.T) {
 		{
 			name:      "responses",
 			modelName: "gpt-5.4",
-			expected:  []constant.EndpointType{constant.EndpointTypeOpenAIResponse},
+			expected: []constant.EndpointType{
+				constant.EndpointTypeOpenAIResponse,
+				constant.EndpointTypeOpenAIAlphaSearch,
+			},
 		},
 		{
 			name:      "responses compact",
 			modelName: "gpt-5.4-openai-compact",
-			expected:  []constant.EndpointType{constant.EndpointTypeOpenAIResponseCompact},
+			expected: []constant.EndpointType{
+				constant.EndpointTypeOpenAIResponseCompact,
+				constant.EndpointTypeOpenAIAlphaSearch,
+			},
 		},
 	}
 

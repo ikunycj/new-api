@@ -8,12 +8,13 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -278,6 +279,70 @@ func TestCalculateTextQuotaSummaryUsesPromptTokensForOpenAIUpstreamCacheStats(t 
 	require.True(t, summary.CacheStatsAvailable)
 }
 
+func TestCacheStatsInputTokensUsesPromptTokensWithUsageSource(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		PromptTokens: 4387,
+		UsageSource:  dto.BillingUsageSourceOAIChat,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 3840,
+		},
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
+func TestCacheStatsInputTokensNormalizesOpenAIBillingUsage(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		BillingUsage: dto.NewOpenAIChatBillingUsage(&dto.Usage{
+			PromptTokens: 4387,
+			PromptTokensDetails: dto.InputTokenDetails{
+				CachedTokens: 3840,
+			},
+		}),
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
+func TestCacheStatsInputTokensUsesPromptTokensForGeminiCacheStats(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatGemini}
+	usage := &dto.Usage{
+		BillingUsage: dto.NewGeminiChatBillingUsage(&dto.GeminiUsageMetadata{
+			PromptTokenCount:        4387,
+			CachedContentTokenCount: 3840,
+		}),
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.True(t, ok)
+	require.Equal(t, 4387, inputTokens)
+}
+
+func TestCacheStatsInputTokensDoesNotInferClaudeUsageSource(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}
+	usage := &dto.Usage{
+		PromptTokens: 4387,
+		UsageSource:  dto.BillingUsageSourceClaudeMessages,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 3840,
+		},
+	}
+
+	inputTokens, ok := CacheStatsInputTokens(relayInfo, usage)
+
+	require.False(t, ok)
+	require.Zero(t, inputTokens)
+}
+
 func TestCalculateTextQuotaSummaryDoesNotInferClaudeCacheStatsFromPromptTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -538,6 +603,29 @@ func TestCalculateTextQuotaSummaryBillsOpenAICacheWriteTokens(t *testing.T) {
 	})
 }
 
+func TestCalculateTextQuotaSummaryPricesTwelveHourCacheWrites(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-5.6-terra",
+		PriceData: types.PriceData{
+			ModelRatio: 1, CompletionRatio: 6, CacheRatio: 0.1, CacheCreationRatio: 1.25,
+			BillingUSDToCNYRate: 1, GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
+		},
+		StartTime: time.Now(),
+	}
+	usage := &dto.Usage{
+		PromptTokens: 1000, CompletionTokens: 100,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 100, CacheWriteTokens: 400, CacheCreationInputTokens: 300,
+			CacheWriteTokensDetails: &dto.CacheWriteTokenDetails{TTL30mTokens: 200, TTL12hTokens: 200},
+		},
+	}
+	summary := calculateTextQuotaSummary(ctx, info, usage)
+	assert.Equal(t, 400, summary.CacheCreationTokens)
+	assert.Equal(t, 200, summary.CacheCreationTokens12h)
+	assert.Equal(t, 1860, summary.Quota)
+}
+
 func TestCalculateTextQuotaSummarySeparatesOpenRouterCacheReadFromPromptBilling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -696,6 +784,32 @@ func TestComposeTieredTextQuotaKeepsToolCallSurcharges(t *testing.T) {
 
 	require.Equal(t, int64(13000), summary.ToolCallSurchargeQuota.Round(0).IntPart())
 	require.Equal(t, 14000, quota)
+}
+
+func TestCalculateTextQuotaSummaryKeepsZeroTokenToolSurcharge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	relayInfo := &relaycommon.RelayInfo{
+		OriginModelName: "alpha-search-model",
+		PriceData: types.PriceData{
+			ModelRatio:      1,
+			CompletionRatio: 1,
+			GroupRatioInfo:  types.GroupRatioInfo{GroupRatio: 1},
+		},
+		ResponsesUsageInfo: &relaycommon.ResponsesUsageInfo{
+			BuiltInTools: map[string]*relaycommon.BuildInToolInfo{
+				dto.BuildInToolWebSearchPreview: {CallCount: 1},
+			},
+		},
+		StartTime: time.Now(),
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, &dto.Usage{})
+
+	require.True(t, summary.hasBillableUsage())
+	require.NotZero(t, summary.ToolCallSurchargeQuota)
+	require.Greater(t, summary.Quota, 0)
 }
 
 func TestComposeTieredTextQuotaFallbackKeepsToolCallSurcharges(t *testing.T) {

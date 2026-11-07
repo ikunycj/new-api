@@ -24,16 +24,13 @@ import { createSectionRegistry } from '@/features/system-settings/utils/section-
 const USAGE_LOGS_SECTIONS = [
   {
     id: 'common',
-    titleKey: 'Common Logs',
+    titleKey: 'Usage Logs',
     build: () => null, // Content is rendered directly in the page component
   },
-  // Keep the historical URL as a stable alias for call logs. The page
-  // normalizes this id to the common log table, so existing bookmarks keep
-  // the same filters and cost statistics.
   {
     id: 'call',
-    titleKey: 'Call Logs',
-    build: () => null,
+    titleKey: '调用日志',
+    build: () => null, // Content is rendered directly in the page component
   },
   {
     id: 'drawing',

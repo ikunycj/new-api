@@ -262,16 +262,31 @@ func InitLogDB() (err error) {
 }
 
 func migrateDB() error {
-	// Migrate price_amount column from float/double to decimal for existing tables
-	migrateSubscriptionPlanPriceAmount()
+	if err := migrateSubscriptionPlanPriceAmount(); err != nil {
+		return err
+	}
 	// Migrate model_limits column from varchar to text for existing tables
 	if err := migrateTokenModelLimitsToText(); err != nil {
+		return err
+	}
+	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
+		return err
+	}
+	if err := removeLegacyChannelProbePolicyColumns(); err != nil {
+		return err
+	}
+	if err := migrateChannelProbePeriod(); err != nil {
 		return err
 	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
-
+	if err := removeLegacyUserClassificationColumn(); err != nil {
+		return err
+	}
+	if err := resetChannelMonitorSchema(); err != nil {
+		return err
+	}
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
@@ -285,7 +300,6 @@ func migrateDB() error {
 		&Midjourney{},
 		&TopUp{},
 		&QuotaData{},
-		&QuotaDataDimension{},
 		&Task{},
 		&Model{},
 		&Vendor{},
@@ -294,27 +308,23 @@ func migrateDB() error {
 		&TwoFA{},
 		&TwoFABackupCode{},
 		&Checkin{},
+		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
-		&ChannelHealthHistory{},
 		&SystemInstance{},
 		&SystemTask{},
 		&SystemTaskLock{},
 		&ChannelMonitor{},
 		&ChannelMonitorHistory{},
-		&GroupBenchConfig{},
-		&GroupBenchRun{},
-		&GroupBenchArtifact{},
 		&ChannelProbeState{},
 		&ChannelProbeHistory{},
 		&ChannelCostEntry{},
 		&BillingGroupRoute{},
 		&BillingGroupChannel{},
-		&UpstreamErrorMapping{},
 		&CasbinRule{},
 		&AuthzRole{},
 		&AffiliateRuleVersion{},
@@ -332,51 +342,35 @@ func migrateDB() error {
 		&AffiliateCashLedger{},
 		&AffiliateCashTransfer{},
 		&AffiliateQuotaGrant{},
-		&CostReconciliationRollup{},
-		&LoadTestAgent{},
-		&LoadTestRun{},
-		&LoadTestRunWorker{},
 	)
 	if err != nil {
 		return err
 	}
-	if err := EnsureDefaultUserGroup(); err != nil {
+	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
-	if err := normalizeLoadTestExecutionModes(); err != nil {
+	if err := removeRetiredOptions(); err != nil {
 		return err
-	}
-	if err := removeLegacyUserTypeColumn(); err != nil {
-		return err
-	}
-	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
-		return err
-	}
-	// Pre-aggregate dashboard filter dimensions once per boot; incremental
-	// upkeep happens in SaveQuotaDataCache afterwards. Rows written before
-	// this table existed are picked up here.
-	if n, err := BackfillQuotaDataDimensions(); err != nil {
-		common.SysLog("quota_data_dimensions backfill failed: " + err.Error())
-	} else if n > 0 {
-		common.SysLog(fmt.Sprintf("quota_data_dimensions backfill touched %d rows", n))
-	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
-			return err
-		}
-	} else {
-		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
-			return err
-		}
 	}
 	return nil
 }
 
 func migrateDBFast() error {
+	if err := removeLegacyTokenGroupRetryTimesColumn(); err != nil {
+		return err
+	}
+	if err := removeLegacyChannelProbePolicyColumns(); err != nil {
+		return err
+	}
 	if err := migrateUsernameToNonUnique(); err != nil {
 		return err
 	}
-
+	if err := removeLegacyUserClassificationColumn(); err != nil {
+		return err
+	}
+	if err := resetChannelMonitorSchema(); err != nil {
+		return err
+	}
 	var wg sync.WaitGroup
 
 	migrations := []struct {
@@ -403,27 +397,23 @@ func migrateDBFast() error {
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
 		{&Checkin{}, "Checkin"},
+		{&SubscriptionPlan{}, "SubscriptionPlan"},
 		{&SubscriptionOrder{}, "SubscriptionOrder"},
 		{&UserSubscription{}, "UserSubscription"},
 		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
-		{&ChannelHealthHistory{}, "ChannelHealthHistory"},
 		{&SystemInstance{}, "SystemInstance"},
 		{&SystemTask{}, "SystemTask"},
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&ChannelMonitor{}, "ChannelMonitor"},
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
-		{&GroupBenchConfig{}, "GroupBenchConfig"},
-		{&GroupBenchRun{}, "GroupBenchRun"},
-		{&GroupBenchArtifact{}, "GroupBenchArtifact"},
 		{&ChannelProbeState{}, "ChannelProbeState"},
 		{&ChannelProbeHistory{}, "ChannelProbeHistory"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&BillingGroupRoute{}, "BillingGroupRoute"},
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
-		{&UpstreamErrorMapping{}, "UpstreamErrorMapping"},
 		{&AffiliateRuleVersion{}, "AffiliateRuleVersion"},
 		{&AffiliateUserOverride{}, "AffiliateUserOverride"},
 		{&AffiliateReferral{}, "AffiliateReferral"},
@@ -439,10 +429,6 @@ func migrateDBFast() error {
 		{&AffiliateCashLedger{}, "AffiliateCashLedger"},
 		{&AffiliateCashTransfer{}, "AffiliateCashTransfer"},
 		{&AffiliateQuotaGrant{}, "AffiliateQuotaGrant"},
-		{&CostReconciliationRollup{}, "CostReconciliationRollup"},
-		{&LoadTestAgent{}, "LoadTestAgent"},
-		{&LoadTestRun{}, "LoadTestRun"},
-		{&LoadTestRunWorker{}, "LoadTestRunWorker"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -467,50 +453,13 @@ func migrateDBFast() error {
 			return err
 		}
 	}
-	if err := normalizeLoadTestExecutionModes(); err != nil {
+	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
-	if err := removeLegacyUserTypeColumn(); err != nil {
-		return err
-	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
-			return err
-		}
-	} else {
-		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
-			return err
-		}
-	}
-	if err := removeLegacyChannelMonitorAvailabilityColumns(); err != nil {
+	if err := removeRetiredOptions(); err != nil {
 		return err
 	}
 	common.SysLog("database migrated")
-	if err := EnsureDefaultUserGroup(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func normalizeLoadTestExecutionModes() error {
-	if DB == nil || !DB.Migrator().HasTable(&LoadTestRun{}) {
-		return nil
-	}
-	return DB.Model(&LoadTestRun{}).
-		Where("execution_mode IS NULL OR execution_mode = ?", "").
-		Update("execution_mode", LoadTestExecutionSingle).Error
-}
-
-// removeLegacyUserTypeColumn drops the obsolete account-scope column after
-// code has switched to users.group. GORM provides SQLite table-rebuild
-// behavior and native ALTER support for MySQL/PostgreSQL.
-func removeLegacyUserTypeColumn() error {
-	if DB == nil || !DB.Migrator().HasTable(&User{}) || !DB.Migrator().HasColumn(&User{}, "user_type") {
-		return nil
-	}
-	if err := DB.Migrator().DropColumn(&User{}, "user_type"); err != nil {
-		return fmt.Errorf("remove legacy users.user_type column: %w", err)
-	}
 	return nil
 }
 
@@ -605,18 +554,227 @@ HAVING COUNT(*) = 1 AND MAX(kcu.column_name) = ?`, "users", "username").Scan(&co
 	}
 }
 
-func removeLegacyChannelMonitorAvailabilityColumns() error {
-	legacy := &channelMonitorLegacyAvailability{}
+func resetChannelMonitorSchema() error {
 	migrator := DB.Migrator()
-	if !migrator.HasTable(legacy) {
+	if migrator.HasTable(&Option{}) {
+		if err := DB.Where(commonKeyCol+" = ?", "ChannelMonitorEncryptionKey").Delete(&Option{}).Error; err != nil {
+			return fmt.Errorf("remove obsolete channel monitor encryption option: %w", err)
+		}
+	}
+	if !migrator.HasTable(&ChannelMonitor{}) {
 		return nil
 	}
-	for _, column := range []string{"manual_availability_7d", "manual_availability_30d"} {
-		if !migrator.HasColumn(legacy, column) {
+	legacyColumns := []string{"name", "api_url", "api_key_encrypted", "manual_availability_7d", "manual_availability_30d"}
+	hasObsoleteSchema := !migrator.HasColumn(&ChannelMonitor{}, "pricing_group")
+	for _, column := range legacyColumns {
+		if migrator.HasColumn(&ChannelMonitor{}, column) {
+			hasObsoleteSchema = true
+			break
+		}
+	}
+	if !hasObsoleteSchema {
+		if migrator.HasColumn(&ChannelMonitor{}, "retry_count") {
+			if err := migrator.DropColumn(&ChannelMonitor{}, "retry_count"); err != nil {
+				return fmt.Errorf("remove obsolete channel monitor retry count: %w", err)
+			}
+		}
+		return nil
+	}
+	if migrator.HasTable(&ChannelMonitorHistory{}) {
+		if err := migrator.DropTable(&ChannelMonitorHistory{}); err != nil {
+			return fmt.Errorf("drop obsolete channel monitor history: %w", err)
+		}
+	}
+	if err := migrator.DropTable(&ChannelMonitor{}); err != nil {
+		return fmt.Errorf("drop obsolete channel monitors: %w", err)
+	}
+	return nil
+}
+
+type legacyUserClassificationColumn struct {
+	Value string `gorm:"column:user_type"`
+}
+
+func (legacyUserClassificationColumn) TableName() string {
+	return "users"
+}
+
+func removeLegacyUserClassificationColumn() error {
+	legacy := &legacyUserClassificationColumn{}
+	migrator := DB.Migrator()
+	if !migrator.HasTable(legacy) || !migrator.HasColumn(legacy, "user_type") {
+		return nil
+	}
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		var indexes []struct {
+			Name string
+			SQL  string
+		}
+		if err := DB.Raw("SELECT name, sql FROM sqlite_master WHERE type = ? AND tbl_name = ? AND sql IS NOT NULL", "index", "users").Scan(&indexes).Error; err != nil {
+			return fmt.Errorf("inspect users.user_type indexes: %w", err)
+		}
+		for _, index := range indexes {
+			if !strings.Contains(strings.ToLower(index.SQL), "user_type") {
+				continue
+			}
+			if err := migrator.DropIndex(legacy, index.Name); err != nil {
+				return fmt.Errorf("remove users.user_type index %s: %w", index.Name, err)
+			}
+		}
+		if err := DB.Exec("ALTER TABLE ? DROP COLUMN ?", clause.Table{Name: "users"}, clause.Column{Name: "user_type"}).Error; err != nil {
+			return fmt.Errorf("remove legacy users.user_type column: %w", err)
+		}
+		return nil
+	}
+	if err := migrator.DropColumn(legacy, "user_type"); err != nil {
+		return fmt.Errorf("remove legacy users.user_type column: %w", err)
+	}
+	return nil
+}
+
+// migrateChannelProbePeriod converts the old per-channel second interval to
+// minute-based period groups, then removes obsolete scheduling columns.
+func migrateChannelProbePeriod() error {
+	if DB == nil {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		migrator := tx.Migrator()
+		if migrator.HasTable(&Channel{}) {
+			hasLegacyInterval := migrator.HasColumn(&Channel{}, "probe_interval_seconds")
+			hasProbePeriod := migrator.HasColumn(&Channel{}, "probe_period_minutes")
+			if hasLegacyInterval {
+				type legacyProbeInterval struct {
+					ID      int `gorm:"column:id"`
+					Seconds int `gorm:"column:probe_interval_seconds"`
+				}
+				var intervals []legacyProbeInterval
+				if err := tx.Table("channels").Select("id", "probe_interval_seconds").Find(&intervals).Error; err != nil {
+					return fmt.Errorf("read legacy channel probe intervals: %w", err)
+				}
+				if !hasProbePeriod {
+					if err := migrator.RenameColumn(&Channel{}, "probe_interval_seconds", "probe_period_minutes"); err != nil {
+						return fmt.Errorf("rename channel probe interval column: %w", err)
+					}
+				} else if err := migrator.DropColumn(&Channel{}, "probe_interval_seconds"); err != nil {
+					return fmt.Errorf("remove legacy channel probe interval column: %w", err)
+				}
+				for _, interval := range intervals {
+					minutes := DefaultChannelProbePeriodMinutes
+					if interval.Seconds > 0 {
+						minutes = (interval.Seconds + 59) / 60
+						if minutes > MaxChannelProbePeriodMinutes {
+							minutes = MaxChannelProbePeriodMinutes
+						}
+					}
+					if err := tx.Table("channels").Where("id = ?", interval.ID).Update("probe_period_minutes", minutes).Error; err != nil {
+						return fmt.Errorf("convert channel %d probe period: %w", interval.ID, err)
+					}
+				}
+			}
+			if migrator.HasColumn(&Channel{}, "auto_disabled_probe_interval_seconds") {
+				if err := migrator.DropColumn(&Channel{}, "auto_disabled_probe_interval_seconds"); err != nil {
+					return fmt.Errorf("remove auto-disabled channel probe interval column: %w", err)
+				}
+			}
+		}
+		if migrator.HasTable(&ChannelProbeState{}) && migrator.HasColumn(&ChannelProbeState{}, "next_probe_at") {
+			if err := migrator.DropColumn(&ChannelProbeState{}, "next_probe_at"); err != nil {
+				return fmt.Errorf("remove per-channel next probe column: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// removeLegacyChannelProbePolicyColumns 仅删除旧开关，不推导或覆盖统一开关。
+func removeLegacyChannelProbePolicyColumns() error {
+	migrator := DB.Migrator()
+	if !migrator.HasTable(&Channel{}) {
+		return nil
+	}
+	for _, column := range []string{"probe_failure_auto_ban", "probe_success_auto_enable"} {
+		if !migrator.HasColumn(&Channel{}, column) {
 			continue
 		}
-		if err := migrator.DropColumn(legacy, column); err != nil {
-			return fmt.Errorf("remove legacy channel monitor column %s: %w", column, err)
+		if err := DB.Exec("ALTER TABLE ? DROP COLUMN IF EXISTS ?", clause.Table{Name: "channels"}, clause.Column{Name: column}).Error; err != nil {
+			return fmt.Errorf("remove legacy channel probe column %s: %w", column, err)
+		}
+	}
+	return nil
+}
+
+// removeLegacyTokenGroupRetryTimesColumn removes the API-key-specific retry
+// override that is no longer part of the token contract. AutoMigrate does not
+// drop columns removed from a model, so keep this cleanup explicit and
+// idempotent for existing databases.
+func removeLegacyTokenGroupRetryTimesColumn() error {
+	migrator := DB.Migrator()
+	if !migrator.HasTable(&Token{}) || !migrator.HasColumn(&Token{}, "group_retry_times") {
+		return nil
+	}
+	if err := DB.Exec("ALTER TABLE ? DROP COLUMN ?", clause.Table{Name: "tokens"}, clause.Column{Name: "group_retry_times"}).Error; err != nil {
+		return fmt.Errorf("remove legacy token group retry times column: %w", err)
+	}
+	return nil
+}
+
+// normalizeLegacyUserGroups repairs values created by the old shared
+// user/pricing-group namespace. Token, ability, channel, and historical log
+// groups are intentionally untouched because they belong to pricing/routing.
+func normalizeLegacyUserGroups() error {
+	if DB == nil || !DB.Migrator().HasTable(&User{}) || !DB.Migrator().HasColumn(&User{}, "group") {
+		return nil
+	}
+	if err := EnsureDefaultUserGroup(); err != nil {
+		return err
+	}
+	condition := commonGroupCol + " IS NULL OR TRIM(" + commonGroupCol + ") = ''"
+	var ids []int
+	if err := DB.Model(&User{}).Where(condition).Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return normalizeUnknownUserGroups()
+	}
+	if err := DB.Model(&User{}).Where(condition).
+		Update("group", DefaultUserGroup).Error; err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := invalidateUserCache(id); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate normalized user group cache for user %d: %v", id, err))
+		}
+	}
+	return normalizeUnknownUserGroups()
+}
+
+func normalizeUnknownUserGroups() error {
+	var groups []string
+	if err := DB.Model(&User{}).
+		Where(commonGroupCol+" IS NOT NULL AND TRIM("+commonGroupCol+") <> '' AND "+commonGroupCol+" <> ?", DefaultUserGroup).
+		Distinct().Pluck("group", &groups).Error; err != nil {
+		return err
+	}
+	for _, group := range groups {
+		known, err := IsUserGroupName(group)
+		if err != nil {
+			return err
+		}
+		if known {
+			continue
+		}
+		var ids []int
+		if err := DB.Model(&User{}).Where(commonGroupCol+" = ?", group).Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if err := DB.Model(&User{}).Where(commonGroupCol+" = ?", group).Update("group", DefaultUserGroup).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := invalidateUserCache(id); err != nil {
+				common.SysLog(fmt.Sprintf("failed to invalidate normalized user group cache for user %d: %v", id, err))
+			}
 		}
 	}
 	return nil
@@ -626,18 +784,29 @@ func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
-	return LOG_DB.AutoMigrate(&Log{})
+	if err := LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	if common.UsingLogDatabase(common.DatabaseTypePostgreSQL) && logRollupEnabled() {
+		// The previous development-only schema used an ID checkpoint and price
+		// dimensions. Remove it once before creating the final day-based schema.
+		legacyCheckpointTable := LOG_DB.Migrator().HasTable("log_rollup_checkpoints")
+		legacyRollupSchema := LOG_DB.Migrator().HasTable("channel_usage_rollups") &&
+			(LOG_DB.Migrator().HasColumn("channel_usage_rollups", "group_ratio_raw") ||
+				LOG_DB.Migrator().HasColumn("channel_usage_rollups", "billing_rate_raw"))
+		if legacyCheckpointTable || legacyRollupSchema {
+			if err := LOG_DB.Migrator().DropTable("channel_usage_rollups", "log_rollup_checkpoints", "log_rollup_state"); err != nil {
+				return err
+			}
+		}
+		return LOG_DB.AutoMigrate(&ChannelUsageRollup{}, &LogRollupState{})
+	}
+	return nil
 }
 
 func migrateClickHouseLogDB() error {
 	ttlDays := clickHouseLogTTLDays()
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
-		return err
-	}
-	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS subscription_plan_id Int32 DEFAULT 0").Error; err != nil {
-		return err
-	}
-	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS subscription_plan_title String DEFAULT ''").Error; err != nil {
 		return err
 	}
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS input_tokens_total Int32 DEFAULT 0").Error; err != nil {
@@ -704,8 +873,6 @@ CREATE TABLE IF NOT EXISTS logs (
 	ip String DEFAULT '',
 	request_id String DEFAULT '',
 	upstream_request_id String DEFAULT '',
-	subscription_plan_id Int32 DEFAULT 0,
-	subscription_plan_title String DEFAULT '',
 	other String DEFAULT ''
 )
 ENGINE = MergeTree()
@@ -742,86 +909,26 @@ func clickHouseCreateTableHasTTL(createTableSQL string) bool {
 	return strings.Contains(upperSQL, "\nTTL ") || strings.Contains(upperSQL, " TTL ")
 }
 
-type sqliteColumnDef struct {
-	Name string
-	DDL  string
-}
-
-func ensureSubscriptionPlanTableSQLite() error {
-	if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+func migrateSubscriptionPlanPriceAmount() error {
+	if !common.UsingMainDatabase(common.DatabaseTypePostgreSQL) ||
+		!DB.Migrator().HasTable(&SubscriptionPlan{}) ||
+		!DB.Migrator().HasColumn(&SubscriptionPlan{}, "price_amount") {
 		return nil
 	}
-	tableName := "subscription_plans"
-	if !DB.Migrator().HasTable(tableName) {
-		createSQL := `CREATE TABLE ` + "`" + tableName + "`" + ` (
-` + "`id`" + ` integer,
-` + "`title`" + ` varchar(128) NOT NULL,
-` + "`subtitle`" + ` varchar(255) DEFAULT '',
-` + "`price_amount`" + ` decimal(10,6) NOT NULL,
-` + "`currency`" + ` varchar(8) NOT NULL DEFAULT 'USD',
-` + "`duration_unit`" + ` varchar(16) NOT NULL DEFAULT 'month',
-` + "`duration_value`" + ` integer NOT NULL DEFAULT 1,
-` + "`custom_seconds`" + ` bigint NOT NULL DEFAULT 0,
-` + "`enabled`" + ` numeric DEFAULT 1,
-` + "`sort_order`" + ` integer DEFAULT 0,
-` + "`allow_balance_pay`" + ` numeric DEFAULT 1,
-` + "`allow_wallet_overflow`" + ` numeric DEFAULT 1,
-` + "`stripe_price_id`" + ` varchar(128) DEFAULT '',
-` + "`creem_product_id`" + ` varchar(128) DEFAULT '',
-` + "`waffo_pancake_product_id`" + ` varchar(128) DEFAULT '',
-` + "`max_purchase_per_user`" + ` integer DEFAULT 0,
-` + "`upgrade_group`" + ` varchar(64) DEFAULT '',
-` + "`downgrade_group`" + ` varchar(64) DEFAULT '',
-` + "`total_amount`" + ` bigint NOT NULL DEFAULT 0,
-` + "`quota_reset_period`" + ` varchar(16) DEFAULT 'never',
-` + "`quota_reset_custom_seconds`" + ` bigint DEFAULT 0,
-` + "`created_at`" + ` bigint,
-` + "`updated_at`" + ` bigint,
-PRIMARY KEY (` + "`id`" + `)
-)`
-		return DB.Exec(createSQL).Error
+
+	var dataType string
+	if err := DB.Raw(`SELECT data_type FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
+		"subscription_plans", "price_amount").Scan(&dataType).Error; err != nil {
+		return fmt.Errorf("inspect subscription_plans.price_amount: %w", err)
 	}
-	var cols []struct {
-		Name string `gorm:"column:name"`
+	if dataType == "numeric" {
+		return nil
 	}
-	if err := DB.Raw("PRAGMA table_info(`" + tableName + "`)").Scan(&cols).Error; err != nil {
-		return err
-	}
-	existing := make(map[string]struct{}, len(cols))
-	for _, c := range cols {
-		existing[c.Name] = struct{}{}
-	}
-	required := []sqliteColumnDef{
-		{Name: "title", DDL: "`title` varchar(128) NOT NULL"},
-		{Name: "subtitle", DDL: "`subtitle` varchar(255) DEFAULT ''"},
-		{Name: "price_amount", DDL: "`price_amount` decimal(10,6) NOT NULL"},
-		{Name: "currency", DDL: "`currency` varchar(8) NOT NULL DEFAULT 'USD'"},
-		{Name: "duration_unit", DDL: "`duration_unit` varchar(16) NOT NULL DEFAULT 'month'"},
-		{Name: "duration_value", DDL: "`duration_value` integer NOT NULL DEFAULT 1"},
-		{Name: "custom_seconds", DDL: "`custom_seconds` bigint NOT NULL DEFAULT 0"},
-		{Name: "enabled", DDL: "`enabled` numeric DEFAULT 1"},
-		{Name: "sort_order", DDL: "`sort_order` integer DEFAULT 0"},
-		{Name: "allow_balance_pay", DDL: "`allow_balance_pay` numeric DEFAULT 1"},
-		{Name: "allow_wallet_overflow", DDL: "`allow_wallet_overflow` numeric DEFAULT 1"},
-		{Name: "stripe_price_id", DDL: "`stripe_price_id` varchar(128) DEFAULT ''"},
-		{Name: "creem_product_id", DDL: "`creem_product_id` varchar(128) DEFAULT ''"},
-		{Name: "waffo_pancake_product_id", DDL: "`waffo_pancake_product_id` varchar(128) DEFAULT ''"},
-		{Name: "max_purchase_per_user", DDL: "`max_purchase_per_user` integer DEFAULT 0"},
-		{Name: "upgrade_group", DDL: "`upgrade_group` varchar(64) DEFAULT ''"},
-		{Name: "downgrade_group", DDL: "`downgrade_group` varchar(64) DEFAULT ''"},
-		{Name: "total_amount", DDL: "`total_amount` bigint NOT NULL DEFAULT 0"},
-		{Name: "quota_reset_period", DDL: "`quota_reset_period` varchar(16) DEFAULT 'never'"},
-		{Name: "quota_reset_custom_seconds", DDL: "`quota_reset_custom_seconds` bigint DEFAULT 0"},
-		{Name: "created_at", DDL: "`created_at` bigint"},
-		{Name: "updated_at", DDL: "`updated_at` bigint"},
-	}
-	for _, col := range required {
-		if _, ok := existing[col.Name]; ok {
-			continue
-		}
-		if err := DB.Exec("ALTER TABLE `" + tableName + "` ADD COLUMN " + col.DDL).Error; err != nil {
-			return err
-		}
+	if err := DB.Exec(`ALTER TABLE subscription_plans
+		ALTER COLUMN price_amount TYPE decimal(10,6)
+		USING price_amount::decimal(10,6)`).Error; err != nil {
+		return fmt.Errorf("migrate subscription_plans.price_amount: %w", err)
 	}
 	return nil
 }
@@ -877,66 +984,6 @@ func migrateTokenModelLimitsToText() error {
 		common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to text", tableName, columnName))
 	}
 	return nil
-}
-
-// migrateSubscriptionPlanPriceAmount migrates price_amount column from float/double to decimal(10,6)
-// This is safe to run multiple times - it checks the column type first
-func migrateSubscriptionPlanPriceAmount() {
-	// SQLite doesn't support ALTER COLUMN, and its type affinity handles this automatically
-	// Skip early to avoid GORM parsing the existing table DDL which may cause issues
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		return
-	}
-
-	tableName := "subscription_plans"
-	columnName := "price_amount"
-
-	// Check if table exists first
-	if !DB.Migrator().HasTable(tableName) {
-		return
-	}
-
-	// Check if column exists
-	if !DB.Migrator().HasColumn(&SubscriptionPlan{}, columnName) {
-		return
-	}
-
-	var alterSQL string
-	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		// PostgreSQL: Check if already decimal/numeric
-		var dataType string
-		if err := DB.Raw(`SELECT data_type FROM information_schema.columns
-			WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
-			tableName, columnName).Scan(&dataType).Error; err != nil {
-			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
-		} else if dataType == "numeric" {
-			return // Already decimal/numeric
-		}
-		alterSQL = fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN %s TYPE decimal(10,6) USING %s::decimal(10,6)`,
-			tableName, columnName, columnName)
-	} else if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
-		// MySQL: Check if already decimal
-		var columnType string
-		if err := DB.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
-				WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
-			tableName, columnName).Scan(&columnType).Error; err != nil {
-			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
-		} else if strings.HasPrefix(strings.ToLower(columnType), "decimal") {
-			return // Already decimal
-		}
-		alterSQL = fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s decimal(10,6) NOT NULL DEFAULT 0",
-			tableName, columnName)
-	} else {
-		return
-	}
-
-	if alterSQL != "" {
-		if err := DB.Exec(alterSQL).Error; err != nil {
-			common.SysLog(fmt.Sprintf("Warning: failed to migrate %s.%s to decimal: %v", tableName, columnName, err))
-		} else {
-			common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to decimal(10,6)", tableName, columnName))
-		}
-	}
 }
 
 func closeDB(db *gorm.DB) error {

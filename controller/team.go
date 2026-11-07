@@ -3,15 +3,31 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
+
+func getTeamUserIds(c *gin.Context) ([]int, bool) {
+	parentId := c.GetInt("id")
+	children, err := model.GetUserChildren(parentId)
+	if err != nil {
+		common.ApiError(c, err)
+		return nil, false
+	}
+	userIds := make([]int, 0, len(children)+1)
+	userIds = append(userIds, parentId)
+	for _, child := range children {
+		userIds = append(userIds, child.Id)
+	}
+	return userIds, true
+}
 
 // teamMemberView is the per-member payload returned by GET /api/team/members.
 type teamMemberView struct {
@@ -53,9 +69,8 @@ func GetTeamMembers(c *gin.Context) {
 }
 
 // GetTeamGroups returns the usable groups for a team member (or the parent
-// itself when user_id is omitted). Sub-accounts share the same group
-// eligibility rules as their parent, so we resolve against the queried user's
-// own group assignment.
+// itself when user_id is omitted). Eligibility follows the target member's
+// account group, using the same pricing-group rules as token creation.
 // GET /api/team/groups?user_id=<int>
 func GetTeamGroups(c *gin.Context) {
 	parentId := c.GetInt("id")
@@ -72,35 +87,17 @@ func GetTeamGroups(c *gin.Context) {
 		targetId = uid
 	}
 
-	userGroup, _ := model.GetUserGroup(targetId, false)
-	isToBUser := false
-	if user, err := model.GetUserById(targetId, false); err == nil {
-		isToBUser = user.IsToB()
-	}
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	pricingGroups, err := model.GetPricingGroupNames()
+	userGroup, err := model.GetUserGroup(targetId, true)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	usableGroups := make(map[string]map[string]interface{})
-	for _, groupName := range pricingGroups {
-		if isToBUser && !model.IsBillingGroupToB(groupName) {
-			continue
-		}
-		if desc, ok := userUsableGroups[groupName]; ok {
-			usableGroups[groupName] = map[string]interface{}{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
-				"desc":  desc,
-			}
-		}
-	}
-	if !isToBUser {
-		if _, ok := userUsableGroups["auto"]; ok {
-			usableGroups["auto"] = map[string]interface{}{
-				"ratio": "自动",
-				"desc":  setting.GetUsableGroupDescription("auto"),
-			}
+	userUsableGroups := service.GetUserGroupPricingGroups(userGroup)
+	usableGroups := make(map[string]map[string]interface{}, len(userUsableGroups))
+	for groupName, description := range userUsableGroups {
+		usableGroups[groupName] = map[string]interface{}{
+			"ratio": ratio_setting.GetGroupRatio(groupName),
+			"desc":  description,
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": usableGroups})
@@ -222,12 +219,13 @@ func UpdateTeamTokenStatus(c *gin.Context) {
 func CreateTeamToken(c *gin.Context) {
 	parentId := c.GetInt("id")
 	var body struct {
-		UserId         int    `json:"user_id" binding:"required"`
-		Name           string `json:"name" binding:"required"`
-		Group          string `json:"group"`
-		RemainQuota    int    `json:"remain_quota"`
-		UnlimitedQuota bool   `json:"unlimited_quota"`
-		ExpiredTime    int64  `json:"expired_time"`
+		UserId          int       `json:"user_id" binding:"required"`
+		Name            string    `json:"name" binding:"required"`
+		Group           string    `json:"group"`
+		GroupCandidates *[]string `json:"group_candidates"`
+		RemainQuota     int       `json:"remain_quota"`
+		UnlimitedQuota  bool      `json:"unlimited_quota"`
+		ExpiredTime     int64     `json:"expired_time"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		common.ApiError(c, err)
@@ -269,13 +267,14 @@ func CreateTeamToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if body.Group != "" {
-		if err := service.ValidateTokenGroup(memberGroup, body.Group); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
-			return
-		}
-	} else {
-		body.Group = memberGroup
+	if (body.GroupCandidates == nil || len(*body.GroupCandidates) == 0) && strings.TrimSpace(body.Group) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "请选择至少一个模型计费分组"})
+		return
+	}
+	selection := model.Token{Group: body.Group}
+	if err := applyTokenGroupSelection(&selection, memberGroup, body.GroupCandidates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
 	}
 
 	expiredTime := body.ExpiredTime
@@ -290,15 +289,17 @@ func CreateTeamToken(c *gin.Context) {
 	}
 
 	token := model.Token{
-		UserId:         body.UserId,
-		Name:           body.Name,
-		Key:            key,
-		CreatedTime:    common.GetTimestamp(),
-		AccessedTime:   common.GetTimestamp(),
-		ExpiredTime:    expiredTime,
-		RemainQuota:    body.RemainQuota,
-		UnlimitedQuota: body.UnlimitedQuota,
-		Group:          body.Group,
+		UserId:          body.UserId,
+		Name:            body.Name,
+		Key:             key,
+		CreatedTime:     common.GetTimestamp(),
+		AccessedTime:    common.GetTimestamp(),
+		ExpiredTime:     expiredTime,
+		RemainQuota:     body.RemainQuota,
+		UnlimitedQuota:  body.UnlimitedQuota,
+		Group:           selection.Group,
+		GroupCandidates: selection.GroupCandidates,
+		CrossGroupRetry: selection.CrossGroupRetry,
 	}
 	if err := token.Insert(); err != nil {
 		common.ApiError(c, err)

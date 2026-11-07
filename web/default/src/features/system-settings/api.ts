@@ -16,13 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   AffiliateSettings,
   AffiliateSettingsResponse,
-  AffiliateCampaign,
-  AffiliateCampaignResponse,
   AffiliateAdminRewardsResponse,
   AffiliateAdjustmentResponse,
   AffiliateUserOverride,
@@ -31,6 +29,7 @@ import type {
   ConfirmPaymentComplianceResponse,
   FetchUpstreamRatiosRequest,
   LogCleanupTask,
+  PricingGroupConfigurationRequest,
   SystemOptionsResponse,
   SystemTaskListResponse,
   SystemTaskResponse,
@@ -55,25 +54,20 @@ export async function updateAffiliateSettings(request: AffiliateSettings) {
   return res.data
 }
 
-export async function getAffiliateCampaign() {
-  const res = await api.get<AffiliateCampaignResponse>(
-    '/api/affiliate/admin/campaign'
-  )
-  return res.data
-}
-
-export async function updateAffiliateCampaign(request: AffiliateCampaign) {
-  const res = await api.put<AffiliateCampaignResponse>(
-    '/api/affiliate/admin/campaign',
-    request
-  )
-  return res.data
-}
-
-export async function searchAffiliateUserOverrides(keyword: string) {
+export async function searchAffiliateUserOverrides(params: {
+  keyword: string
+  page: number
+  pageSize: number
+}) {
   const res = await api.get<AffiliateUserOverridesResponse>(
     '/api/affiliate/admin/user-overrides',
-    { params: { keyword, p: 1, page_size: 20 } }
+    {
+      params: {
+        keyword: params.keyword,
+        p: params.page,
+        page_size: params.pageSize,
+      },
+    }
   )
   return res.data
 }
@@ -127,13 +121,42 @@ export async function adjustAffiliateReward(
   return res.data
 }
 
-export async function getSystemOptions() {
-  const res = await api.get<SystemOptionsResponse>('/api/option/')
+export async function getSystemOptions(config?: ApiRequestConfig) {
+  const res = await api.get<SystemOptionsResponse>('/api/option/', config)
   return res.data
 }
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
-  const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  const res = await api.put<UpdateOptionResponse>('/api/option/', request, {
+    skipBusinessError: true,
+  })
+  if (!res.data.success) throw new Error(res.data.message || '保存设置失败')
+  return res.data
+}
+
+export async function applyUpstreamPrices(
+  updates: Array<{ key: string; value: string }>
+) {
+  const res = await api.post<UpdateOptionResponse>(
+    '/api/ratio_sync/apply',
+    {
+      updates: Object.fromEntries(
+        updates.map((update) => [update.key, update.value])
+      ),
+    },
+    { skipBusinessError: true, skipErrorHandler: true }
+  )
+  if (!res.data.success) throw new Error(res.data.message || '价格同步失败')
+  return res.data
+}
+
+export async function updatePricingGroupConfiguration(
+  request: PricingGroupConfigurationRequest
+) {
+  const res = await api.put<UpdateOptionResponse>(
+    '/api/option/pricing-groups',
+    request
+  )
   return res.data
 }
 
@@ -153,6 +176,17 @@ export async function startLogCleanupTask(targetTimestamp: number) {
       params: { target_timestamp: targetTimestamp },
     }
   )
+  return res.data
+}
+
+export async function deleteLogUsageRollups(beforeDate: string) {
+  const res = await api.delete<{
+    success: boolean
+    message?: string
+    data?: { deleted_count: number }
+  }>('/api/system-task/log-rollup', {
+    params: { before_date: beforeDate },
+  })
   return res.data
 }
 
@@ -197,7 +231,8 @@ export async function getUpstreamChannels() {
 export async function fetchUpstreamRatios(request: FetchUpstreamRatiosRequest) {
   const res = await api.post<UpstreamRatiosResponse>(
     '/api/ratio_sync/fetch',
-    request
+    request,
+    { skipBusinessError: true, skipErrorHandler: true }
   )
   return res.data
 }

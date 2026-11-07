@@ -35,29 +35,16 @@ import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { ModelsChartPreferences } from './components/models/models-chart-preferences'
-import { ModelsFilter } from './components/models/models-filter-dialog'
+import { DashboardChartControls } from './components/dashboard-chart-controls'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
-import { PackageComparison } from './components/packages/package-comparison'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
-import {
-  buildDefaultDashboardFilters,
-  getDefaultDays,
-  getSavedChartPreferences,
-  getSavedGranularity,
-  saveChartPreferences,
-} from './lib'
+import { buildDefaultDashboardFilters } from './lib'
 import {
   type DashboardSectionId,
   DASHBOARD_DEFAULT_SECTION,
   DASHBOARD_SECTION_IDS,
 } from './section-registry'
-import type {
-  DashboardChartPreferences,
-  DashboardFilters,
-  QuotaDataItem,
-  UserChartsFilters,
-} from './types'
+import type { DashboardFilters, QuotaDataItem } from './types'
 
 const route = getRouteApi('/_authenticated/dashboard/$section')
 
@@ -67,18 +54,7 @@ const LOG_STAT_CARD_FALLBACK_KEYS = [
   'tokens',
   'average-rpm',
   'average-tpm',
-  'cache-hit-rate',
 ] as const
-const PERFORMANCE_METRIC_FALLBACK_KEYS = [
-  'success-rate',
-  'average-latency',
-  'throughput',
-] as const
-const PERFORMANCE_MODEL_FALLBACK_KEYS = [
-  'primary-model',
-  'secondary-model',
-] as const
-
 const LazyLogStatCards = lazy(() =>
   import('./components/models/log-stat-cards').then((m) => ({
     default: m.LogStatCards,
@@ -97,47 +73,6 @@ const LazyConsumptionDistributionChart = lazy(() =>
   }))
 )
 
-const LazyPerformanceOverview = lazy(() =>
-  import('./components/models/performance-overview').then((m) => ({
-    default: m.PerformanceOverview,
-  }))
-)
-
-const LazyTokenUsageCard = lazy(() =>
-  import('./components/models/token-usage-card').then((m) => ({
-    default: m.TokenUsageCard,
-  }))
-)
-
-const LazyRealtimeMetricsPanel = lazy(() =>
-  import('./components/models/realtime-metrics-panel').then((m) => ({
-    default: m.RealtimeMetricsPanel,
-  }))
-)
-
-/** Placeholder matching the realtime panel's three-column row. */
-function RealtimeMetricsFallback() {
-  return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
-        {[0, 1, 2].map((index) => (
-          <div key={index} className='px-3 py-3 sm:px-5 sm:py-4'>
-            <Skeleton className='h-3 w-12' />
-            <Skeleton className='mt-2 h-6 w-24' />
-            <Skeleton className='mt-1.5 h-4 w-32' />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const LazyUserCharts = lazy(() =>
-  import('./components/users/user-charts').then((m) => ({
-    default: m.UserCharts,
-  }))
-)
-
 const LazyFlowCharts = lazy(() =>
   import('./components/flow/flow-charts').then((m) => ({
     default: m.FlowCharts,
@@ -147,7 +82,7 @@ const LazyFlowCharts = lazy(() =>
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-6'>
+      <div className='divide-border/60 grid grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-5'>
         {LOG_STAT_CARD_FALLBACK_KEYS.map((key, index) => (
           <div
             key={key}
@@ -184,44 +119,15 @@ function ModelChartsFallback() {
   )
 }
 
-function PerformanceOverviewFallback() {
-  return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-5'>
-        <div className='flex items-center gap-2'>
-          <Skeleton className='h-4 w-24' />
-        </div>
-        {PERFORMANCE_METRIC_FALLBACK_KEYS.map((key) => (
-          <div key={key} className='flex items-center gap-1.5'>
-            <Skeleton className='h-3 w-14' />
-            <Skeleton className='h-4 w-16' />
-          </div>
-        ))}
-        <div className='ml-auto flex items-center gap-2'>
-          {PERFORMANCE_MODEL_FALLBACK_KEYS.map((key) => (
-            <Skeleton key={key} className='h-5 w-28 rounded-full' />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   overview: {
     titleKey: 'Overview',
   },
   models: {
-    titleKey: 'Model Call Analytics',
+    titleKey: 'Throughput trend',
   },
   flow: {
     titleKey: 'Flow',
-  },
-  users: {
-    titleKey: 'User Analytics',
-  },
-  packages: {
-    titleKey: 'Package comparison',
   },
 }
 
@@ -229,37 +135,24 @@ export function Dashboard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const params = route.useParams()
-  const user = useAuthStore((state) => state.auth.user)
-  const userRole = user?.role
   const activeSection = (params.section ??
     DASHBOARD_DEFAULT_SECTION) as DashboardSectionId
+  const user = useAuthStore((state) => state.auth.user)
 
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
-  const [chartPreferences, setChartPreferences] =
-    useState<DashboardChartPreferences>(() => getSavedChartPreferences())
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters(getSavedChartPreferences())
-  )
-  const [userChartsFilters, setUserChartsFilters] = useState<UserChartsFilters>(
-    () => {
-      const granularity = getSavedGranularity()
-      return {
-        timeGranularity: granularity,
-        selectedRange: getDefaultDays(granularity),
-        topUserLimit: 10,
-      }
-    }
+    buildDefaultDashboardFilters()
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
+  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const canManageTeamScope =
+    !isAdmin && Boolean(user?.has_children) && (user?.parent_id ?? 0) === 0
+  const [isTeamView, setIsTeamView] = useState(false)
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
     setModelFilters(filters)
   }, [])
-
-  const handleResetFilters = useCallback(() => {
-    setModelFilters(buildDefaultDashboardFilters(chartPreferences))
-  }, [chartPreferences])
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {
@@ -269,31 +162,10 @@ export function Dashboard() {
     []
   )
 
-  const handleChartPreferencesChange = useCallback(
-    (preferences: DashboardChartPreferences) => {
-      setChartPreferences(preferences)
-      setModelFilters(buildDefaultDashboardFilters(preferences))
-      saveChartPreferences(preferences)
-    },
-    []
-  )
-
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
-  const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
-  const canManageTeamScope =
-    !isAdmin &&
-    Boolean(user?.has_children) &&
-    (user?.parent_id ?? 0) === 0
-  const [isTeamView, setIsTeamView] = useState(false)
   const visibleSections = useMemo(
-    () =>
-      DASHBOARD_SECTION_IDS.filter(
-        (section) =>
-          section !== 'overview' &&
-          section !== 'packages' &&
-          (section !== 'users' || isAdmin || (canManageTeamScope && isTeamView))
-      ),
-    [isAdmin, canManageTeamScope, isTeamView]
+    () => DASHBOARD_SECTION_IDS.filter((section) => section !== 'overview'),
+    []
   )
   const handleSectionChange = useCallback(
     (section: string) => {
@@ -312,7 +184,7 @@ export function Dashboard() {
         {canManageTeamScope && (
           <Tabs
             value={isTeamView ? 'team' : 'self'}
-            onValueChange={(v) => setIsTeamView(v === 'team')}
+            onValueChange={(value) => setIsTeamView(value === 'team')}
           >
             <TabsList>
               <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
@@ -320,15 +192,9 @@ export function Dashboard() {
             </TabsList>
           </Tabs>
         )}
-        <ModelsChartPreferences
-          preferences={chartPreferences}
-          onPreferencesChange={handleChartPreferencesChange}
-        />
-        <ModelsFilter
-          preferences={chartPreferences}
-          currentFilters={modelFilters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
+        <DashboardChartControls
+          filters={modelFilters}
+          onChange={handleFilterChange}
         />
       </>
     ) : null
@@ -338,7 +204,7 @@ export function Dashboard() {
         {canManageTeamScope && (
           <Tabs
             value={isTeamView ? 'team' : 'self'}
-            onValueChange={(v) => setIsTeamView(v === 'team')}
+            onValueChange={(value) => setIsTeamView(value === 'team')}
           >
             <TabsList>
               <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
@@ -370,29 +236,13 @@ export function Dashboard() {
               : t('Show sensitive data')}
           </TooltipContent>
         </Tooltip>
-        <ModelsFilter
-          preferences={chartPreferences}
-          currentFilters={modelFilters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-          titleKey='Flow Filters'
-          descriptionKey='Filter the traffic flow view by time range and user.'
+        <DashboardChartControls
+          filters={modelFilters}
+          onChange={handleFilterChange}
         />
       </>
     ) : null
-  const usersActions =
-    activeSection === 'users' && canManageTeamScope ? (
-      <Tabs
-        value={isTeamView ? 'team' : 'self'}
-        onValueChange={(v) => setIsTeamView(v === 'team')}
-      >
-        <TabsList>
-          <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
-          <TabsTrigger value='team'>{t('Team Logs')}</TabsTrigger>
-        </TabsList>
-      </Tabs>
-    ) : null
-  const sectionActions = modelActions ?? flowActions ?? usersActions
+  const sectionActions = modelActions ?? flowActions
 
   return (
     <SectionPageLayout>
@@ -425,76 +275,39 @@ export function Dashboard() {
           {activeSection === 'models' && (
             <>
               <FadeIn>
-                <Suspense fallback={<RealtimeMetricsFallback />}>
-                  <LazyRealtimeMetricsPanel isTeamView={isTeamView} />
-                </Suspense>
-              </FadeIn>
-              <FadeIn delay={0.05}>
                 <Suspense fallback={<LogStatCardsFallback />}>
                   <LazyLogStatCards
                     filters={modelFilters}
-                    isTeamView={isTeamView}
                     onDataUpdate={handleDataUpdate}
+                    includeAdminData={false}
+                    isTeamView={isTeamView}
                   />
                 </Suspense>
               </FadeIn>
-              {isAdmin && (
-                <FadeIn delay={0.1}>
-                  <Suspense fallback={<PerformanceOverviewFallback />}>
-                    <LazyPerformanceOverview />
-                  </Suspense>
-                </FadeIn>
-              )}
-              <FadeIn delay={0.15}>
+              <FadeIn delay={0.1}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart
                     data={modelData}
                     loading={dataLoading}
-                    filters={modelFilters}
-                    onFilterChange={handleFilterChange}
-                    defaultChartType={
-                      chartPreferences.consumptionDistributionChart
-                    }
                     timeGranularity={
                       modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
                     }
+                    metric={modelFilters.metric}
                   />
                 </Suspense>
               </FadeIn>
-              <FadeIn delay={0.2}>
+              <FadeIn delay={0.15}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyModelCharts
                     data={modelData}
                     loading={dataLoading}
-                    defaultChartTab={chartPreferences.modelAnalyticsChart}
                     timeGranularity={
                       modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
                     }
                   />
                 </Suspense>
               </FadeIn>
-              <FadeIn delay={0.25}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyTokenUsageCard filters={modelFilters} isTeamView={isTeamView} />
-                </Suspense>
-              </FadeIn>
             </>
-          )}
-          {activeSection === 'users' && (isAdmin || (canManageTeamScope && isTeamView)) && (
-            <FadeIn>
-              <Suspense fallback={<ModelChartsFallback />}>
-                <LazyUserCharts
-                  filters={userChartsFilters}
-                  onFiltersChange={setUserChartsFilters}
-                  isTeamView={canManageTeamScope && isTeamView}
-                />
-              </Suspense>
-            </FadeIn>
-          )}
-          {activeSection === 'packages' && isAdmin && (
-            <FadeIn>
-              <PackageComparison />
-            </FadeIn>
           )}
           {activeSection === 'flow' && (
             <FadeIn>
@@ -502,7 +315,8 @@ export function Dashboard() {
                 <LazyFlowCharts
                   filters={modelFilters}
                   sensitiveVisible={flowSensitiveVisible}
-                  isTeamView={canManageTeamScope && isTeamView}
+                  includeAdminData={false}
+                  isTeamView={isTeamView}
                 />
               </Suspense>
             </FadeIn>

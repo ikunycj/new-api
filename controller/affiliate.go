@@ -35,15 +35,6 @@ func GetAffiliateSummary(c *gin.Context) {
 	common.ApiSuccess(c, summary)
 }
 
-func GetAffiliateCampaign(c *gin.Context) {
-	campaign, err := model.GetAffiliateCampaign()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	common.ApiSuccess(c, campaign)
-}
-
 func GetAffiliateInviteeTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	startAt, _ := strconv.ParseInt(c.Query("start_at"), 10, 64)
@@ -107,27 +98,6 @@ func AdminGetAffiliateSettings(c *gin.Context) {
 	common.ApiSuccess(c, model.GetGlobalAffiliateSetting())
 }
 
-func AdminGetAffiliateCampaign(c *gin.Context) {
-	GetAffiliateCampaign(c)
-}
-
-func AdminUpdateAffiliateCampaign(c *gin.Context) {
-	var request model.AffiliateCampaign
-	if err := c.ShouldBindJSON(&request); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	campaign, err := model.UpdateAffiliateCampaign(request)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	recordManageAudit(c, "affiliate.campaign.update", map[string]interface{}{
-		"enabled": request.Enabled, "starts_at": request.StartsAt, "ends_at": request.EndsAt,
-	})
-	common.ApiSuccess(c, campaign)
-}
-
 func AdminUpdateAffiliateSettings(c *gin.Context) {
 	var request operation_setting.AffiliateSetting
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -148,19 +118,12 @@ func AdminUpdateAffiliateSettings(c *gin.Context) {
 
 func AdminGetAffiliateUserOverrides(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.SearchUsers(c.Query("keyword"), "", nil, nil, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	items, total, err := model.SearchAffiliateUserOverrides(
+		c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize(),
+	)
 	if err != nil {
 		common.ApiError(c, err)
 		return
-	}
-	items := make([]*model.AffiliateUserOverrideView, 0, len(users))
-	for _, user := range users {
-		view, viewErr := model.GetAffiliateUserOverrideView(user.Id)
-		if viewErr != nil {
-			common.ApiError(c, viewErr)
-			return
-		}
-		items = append(items, view)
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(items)

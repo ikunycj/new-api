@@ -35,6 +35,10 @@ export interface AdminConsolePeriodStats {
   total: number
 }
 
+export interface AdminConsoleTokenStats extends AdminConsolePeriodStats {
+  cache_hit_rate: number
+}
+
 export interface AdminConsoleUserStats {
   today: number
   total: number
@@ -50,6 +54,7 @@ export interface AdminConsoleRevenueStats {
 }
 
 export interface AdminConsolePerformanceStats {
+  average_response_seconds: number
   today_response_p50_seconds: number
   today_response_p90_seconds: number
   today_response_p99_seconds: number
@@ -59,6 +64,9 @@ export interface AdminConsolePerformanceStats {
   today_tpm_p50: number
   today_tpm_p90: number
   today_tpm_p99: number
+  concurrency_p50: number
+  concurrency_p90: number
+  concurrency_p99: number
   month_concurrency_p50: number
   month_concurrency_p90: number
   month_concurrency_p95: number
@@ -82,11 +90,23 @@ export interface AdminConsoleStats {
   channels: AdminConsoleChannelStats
   requests: AdminConsolePeriodStats
   users: AdminConsoleUserStats
-  tokens: AdminConsolePeriodStats
+  tokens: AdminConsoleTokenStats
   quota: AdminConsolePeriodStats
   revenue: AdminConsoleRevenueStats
   performance: AdminConsolePerformanceStats
   system_load: AdminConsoleSystemLoad
+}
+
+export interface AdminConsoleDataState {
+  stats?: AdminConsoleStats
+  realtimeStats?: AdminConsoleRealtimeStats
+  systemLoad?: AdminConsoleSystemLoad
+  statsLoading: boolean
+  realtimeStatsLoading: boolean
+  systemLoadLoading: boolean
+  statsError: boolean
+  realtimeStatsError: boolean
+  systemLoadError: boolean
 }
 
 export interface AdminConsoleResponse {
@@ -105,4 +125,24 @@ export interface AdminConsoleRealtimeResponse {
   success: boolean
   message?: string
   data?: AdminConsoleRealtimeStats
+}
+
+export type AdminConsoleCacheTrendDimension = 'group' | 'channel'
+
+export interface AdminConsoleCacheTrendPoint {
+  timestamp: number
+  name: string
+  channel_id?: number
+  cache_input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  cache_hit_requests: number
+  cache_eligible_requests: number
+  cache_hit_rate: number
+}
+
+export interface AdminConsoleCacheTrendResponse {
+  success: boolean
+  message?: string
+  data?: AdminConsoleCacheTrendPoint[]
 }

@@ -26,16 +26,6 @@ import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
-function formatJsonForEditor(value: string, fallback: string) {
-  const raw = (value ?? '').toString().trim()
-  if (!raw) return fallback
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return fallback
-  }
-}
-
 const MODELS_SECTIONS = [
   {
     id: 'global',
@@ -43,28 +33,17 @@ const MODELS_SECTIONS = [
     build: (settings: ModelSettings) => (
       <GlobalSettingsCard
         defaultValues={{
-          global: {
-            pass_through_request_enabled:
-              settings['global.pass_through_request_enabled'],
-            thinking_model_blacklist: formatJsonForEditor(
-              settings['global.thinking_model_blacklist'],
-              '[]'
-            ),
-            chat_completions_to_responses_policy: formatJsonForEditor(
-              settings['global.chat_completions_to_responses_policy'],
-              '{}'
-            ),
-          },
-          general_setting: {
-            ping_interval_enabled:
-              settings['general_setting.ping_interval_enabled'],
-            ping_interval_seconds:
-              settings['general_setting.ping_interval_seconds'],
-          },
-          PreferredModels: formatJsonForEditor(
-            settings.PreferredModels,
-            '[]'
-          ),
+          'global.pass_through_request_enabled':
+            settings['global.pass_through_request_enabled'],
+          'global.thinking_model_blacklist':
+            settings['global.thinking_model_blacklist'],
+          'global.chat_completions_to_responses_policy':
+            settings['global.chat_completions_to_responses_policy'],
+          PreferredModels: settings.PreferredModels,
+          'general_setting.ping_interval_enabled':
+            settings['general_setting.ping_interval_enabled'],
+          'general_setting.ping_interval_seconds':
+            settings['general_setting.ping_interval_seconds'],
         }}
       />
     ),
@@ -75,43 +54,12 @@ const MODELS_SECTIONS = [
     build: (settings: ModelSettings) => (
       <RoutingReliabilitySection
         defaultValues={{
-          RetryTimes: settings.RetryTimes,
-          ChannelCircuitEnabled: settings.ChannelCircuitEnabled,
-          ChannelCircuitConfig: formatJsonForEditor(
-            settings.ChannelCircuitConfig,
-            '{}'
-          ),
-          ChannelHealthEnabled: settings.ChannelHealthEnabled,
-          ChannelHealthMode: settings.ChannelHealthMode,
-          PublicErrorMode: settings.PublicErrorMode,
-          ChannelHealthHalfLifeSeconds: settings.ChannelHealthHalfLifeSeconds,
-          ChannelHealthMinSamples: settings.ChannelHealthMinSamples,
-          ChannelHealthLatencyHalfLifeSeconds:
-            settings.ChannelHealthLatencyHalfLifeSeconds,
-          ChannelHealthStateTTLSeconds: settings.ChannelHealthStateTTLSeconds,
-          ChannelHealthProbeEnabled: settings.ChannelHealthProbeEnabled,
-          ChannelHealthProbeIntervalSeconds:
-            settings.ChannelHealthProbeIntervalSeconds,
-          ChannelHealthProbeIdleGraceSeconds:
-            settings.ChannelHealthProbeIdleGraceSeconds,
-          ChannelHealthHistoryEnabled: settings.ChannelHealthHistoryEnabled,
-          ChannelHealthHistoryBucketSeconds:
-            settings.ChannelHealthHistoryBucketSeconds,
-          ChannelHealthHistoryRetentionDays:
-            settings.ChannelHealthHistoryRetentionDays,
           ChannelDisableThreshold: settings.ChannelDisableThreshold,
           AutomaticDisableChannelEnabled:
             settings.AutomaticDisableChannelEnabled,
-          AutomaticEnableChannelEnabled: settings.AutomaticEnableChannelEnabled,
           AutomaticDisableKeywords: settings.AutomaticDisableKeywords,
           AutomaticDisableStatusCodes: settings.AutomaticDisableStatusCodes,
           AutomaticRetryStatusCodes: settings.AutomaticRetryStatusCodes,
-          'monitor_setting.auto_test_channel_enabled':
-            settings['monitor_setting.auto_test_channel_enabled'],
-          'monitor_setting.auto_test_channel_minutes':
-            settings['monitor_setting.auto_test_channel_minutes'],
-          'monitor_setting.channel_test_mode':
-            settings['monitor_setting.channel_test_mode'],
         }}
       />
     ),

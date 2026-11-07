@@ -16,9 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useStatus } from '@/hooks/use-status'
-
 import { SettingsPage } from '../components/settings-page'
+import { SMTP_EMAIL_TEMPLATE_DEFAULTS } from '../integrations/email-template-defaults'
 import type { OperationsSettings } from '../types'
 import {
   OPERATIONS_DEFAULT_SECTION,
@@ -36,6 +35,7 @@ const defaultOperationsSettings: OperationsSettings = {
   SMTPAccount: '',
   SMTPFrom: '',
   SMTPToken: '',
+  ...SMTP_EMAIL_TEMPLATE_DEFAULTS,
   SMTPSSLEnabled: false,
   SMTPStartTLSEnabled: false,
   SMTPInsecureSkipVerify: false,
@@ -50,25 +50,15 @@ const defaultOperationsSettings: OperationsSettings = {
   'performance_setting.disk_cache_path': '',
   'performance_setting.monitor_enabled': false,
   'performance_setting.monitor_cpu_threshold': 90,
-  'performance_setting.monitor_iowait_threshold': 95,
   'performance_setting.monitor_memory_threshold': 90,
   'performance_setting.monitor_disk_threshold': 95,
   'perf_metrics_setting.enabled': true,
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
-  'loadtest_setting.max_duration_seconds': 600,
-  'loadtest_setting.max_rps': 20,
-  'loadtest_setting.max_concurrency': 10,
-  'loadtest_setting.max_output_tokens': 256,
-  'loadtest_setting.request_timeout_seconds': 120,
-  RelayTimeout: 0, StreamingTimeout: 300, RelayIdleConnTimeout: 90,
-  StreamClientWriteTimeout: 30, ShutdownTimeoutSeconds: 120,
 }
 
 export function OperationsSettings() {
-  const { status } = useStatus()
-
   return (
     <SettingsPage
       routePath='/_authenticated/system-settings/operations/$section'
@@ -76,10 +66,6 @@ export function OperationsSettings() {
       defaultSection={OPERATIONS_DEFAULT_SECTION}
       getSectionContent={getOperationsSectionContent}
       getSectionMeta={getOperationsSectionMeta}
-      extraArgs={[
-        status?.version as string | undefined,
-        status?.start_time as number | null | undefined,
-      ]}
       loadingMessage='Loading maintenance settings...'
     />
   )

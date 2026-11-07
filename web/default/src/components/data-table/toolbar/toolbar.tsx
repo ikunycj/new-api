@@ -69,6 +69,10 @@ export type DataTableToolbarProps<TData> = {
    */
   filters?: FilterDef[]
   /**
+   * Additional controls rendered immediately after the filter chips.
+   */
+  filterActions?: ReactNode
+  /**
    * Replaces the default search input entirely. Use when the primary
    * "search" is something custom — e.g. a date-time range picker.
    */
@@ -348,6 +352,7 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
           {props.customSearch !== undefined ? props.customSearch : searchInput}
           {props.additionalSearch}
           {filterChips}
+          {props.filterActions}
           <div className='ms-auto flex shrink-0 items-center gap-1.5 sm:gap-2'>
             {expandToggle}
           </div>
@@ -383,6 +388,7 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
       {props.customSearch !== undefined ? props.customSearch : searchInput}
       {props.additionalSearch}
       {filterChips}
+      {props.filterActions}
       {expanded && hasExpandable && props.expandable}
 
       <div className='ms-auto flex shrink-0 items-center gap-1.5 sm:gap-2'>

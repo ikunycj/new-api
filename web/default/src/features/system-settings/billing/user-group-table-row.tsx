@@ -87,6 +87,13 @@ export function UserGroupTableRow(props: UserGroupTableRowProps) {
     ],
     [props.pricingGroupOptions]
   )
+  const pricingGroupLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        props.pricingGroupOptions.map((option) => [option.value, option.label])
+      ),
+    [props.pricingGroupOptions]
+  )
 
   const trimmedName = draftName.trim()
   const parsedTopupRatio = Number(draftTopupRatio)
@@ -95,7 +102,9 @@ export function UserGroupTableRow(props: UserGroupTableRowProps) {
   if (pricingGroupsAll) {
     pricingGroupsLabel = '全部'
   } else if (draftPricingGroups.length > 0) {
-    pricingGroupsLabel = draftPricingGroups.join('、')
+    pricingGroupsLabel = draftPricingGroups
+      .map((group) => pricingGroupLabels[group] || group)
+      .join('、')
   }
   const isDirty =
     trimmedName !== props.group.name ||

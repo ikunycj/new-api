@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { PlaygroundChat } from './components/chat/playground-chat'
+import { PlaygroundConversationSidebar } from './components/chat/playground-conversation-sidebar'
 import { PlaygroundInput } from './components/input/playground-input'
 import {
   useChatHandler,
@@ -35,6 +37,7 @@ type PlaygroundProps = {
 }
 
 export function Playground(props: PlaygroundProps) {
+  const { t } = useTranslation()
   const hasHandledAutoSendRef = useRef(false)
   const initialModel = props.initialModel
   const autoSendPrompt = props.autoSendPrompt
@@ -52,12 +55,21 @@ export function Playground(props: PlaygroundProps) {
     updateConfig,
     updateParameterEnabled,
     clearMessages,
+    conversationSummary,
+    conversations,
+    activeConversationId,
+    updateConversationSummary,
+    createNewConversation,
+    selectConversation,
+    deleteConversation,
   } = usePlaygroundState(props.initialModel, props.initialGroup)
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
     parameterEnabled,
     onMessageUpdate: updateMessages,
+    conversationSummary,
+    onConversationSummaryUpdate: updateConversationSummary,
   })
 
   const {
@@ -119,45 +131,64 @@ export function Playground(props: PlaygroundProps) {
   ])
 
   return (
-    <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>
-      {/* Full-width scroll container: scrolling works even over side whitespace */}
-      <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-        <PlaygroundChat
-          messages={messages}
-          isLoadingMessages={isLoadingMessages}
-          onRegenerateMessage={handleRegenerateMessage}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onSelectPrompt={handleSendMessage}
-          isGenerating={isGenerating}
-          editingKey={editingMessageKey}
-          onCancelEdit={handleEditOpenChange}
-          onSaveEdit={(newContent) => applyEdit(newContent, false)}
-          onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
-        />
-      </div>
+    <div className='relative flex size-full min-h-0 overflow-hidden'>
+      <PlaygroundConversationSidebar
+        activeConversationId={activeConversationId}
+        conversations={conversations}
+        onDeleteConversation={deleteConversation}
+        onNewConversation={createNewConversation}
+        onSelectConversation={selectConversation}
+      />
+      <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
+        <div className='flex items-center gap-2 border-b px-3 py-2 md:hidden'>
+          <PlaygroundConversationSidebar
+            activeConversationId={activeConversationId}
+            conversations={conversations}
+            mobile
+            onDeleteConversation={deleteConversation}
+            onNewConversation={createNewConversation}
+            onSelectConversation={selectConversation}
+          />
+          <span className='text-muted-foreground text-sm'>{t('History')}</span>
+        </div>
+        <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+          <PlaygroundChat
+            messages={messages}
+            isLoadingMessages={isLoadingMessages}
+            onRegenerateMessage={handleRegenerateMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onSelectPrompt={handleSendMessage}
+            isGenerating={isGenerating}
+            editingKey={editingMessageKey}
+            onCancelEdit={handleEditOpenChange}
+            onSaveEdit={(newContent) => applyEdit(newContent, false)}
+            onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+          />
+        </div>
 
-      {/* Input area: center content and constrain to the same container width */}
-      <div className='mx-auto w-full max-w-4xl'>
-        <PlaygroundInput
-          config={config}
-          disabled={isGenerating}
-          groups={groups}
-          groupValue={config.group}
-          isGenerating={isGenerating}
-          isModelLoading={isLoadingModels}
-          modelValue={config.model}
-          models={models}
-          onGroupChange={(value) => updateConfig('group', value)}
-          onConfigChange={updateConfig}
-          onClearMessages={handleClearMessages}
-          onModelChange={(value) => updateConfig('model', value)}
-          onParameterEnabledChange={updateParameterEnabled}
-          onStop={stopGeneration}
-          onSubmit={handleSendMessage}
-          parameterEnabled={parameterEnabled}
-          hasMessages={messages.length > 0}
-        />
+        {/* Input area: center content and constrain to the same container width */}
+        <div className='mx-auto w-full max-w-4xl'>
+          <PlaygroundInput
+            config={config}
+            disabled={isGenerating || isLoadingMessages}
+            groups={groups}
+            groupValue={config.group}
+            isGenerating={isGenerating}
+            isModelLoading={isLoadingModels}
+            modelValue={config.model}
+            models={models}
+            onGroupChange={(value) => updateConfig('group', value)}
+            onConfigChange={updateConfig}
+            onClearMessages={handleClearMessages}
+            onModelChange={(value) => updateConfig('model', value)}
+            onParameterEnabledChange={updateParameterEnabled}
+            onStop={stopGeneration}
+            onSubmit={handleSendMessage}
+            parameterEnabled={parameterEnabled}
+            hasMessages={messages.length > 0}
+          />
+        </div>
       </div>
     </div>
   )

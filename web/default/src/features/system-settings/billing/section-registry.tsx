@@ -26,8 +26,7 @@ import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { AffiliateSettingsSection } from './affiliate-settings-section'
-import { getGroupDefaults, getModelDefaults } from './billing-defaults'
-import { BillingGroupPricingSection } from './group-pricing-section'
+import { getGroupDefaults, getModelDefaults } from './settings-defaults'
 
 const BILLING_SECTIONS = [
   {
@@ -85,13 +84,6 @@ const BILLING_SECTIONS = [
         toolPricesDefault={settings['tool_price_setting.prices']}
         visibleTabs={['models', 'unset-models', 'tool-prices', 'upstream-sync']}
       />
-    ),
-  },
-  {
-    id: 'group-pricing',
-    titleKey: 'Group Pricing',
-    build: (settings: BillingSettings) => (
-      <BillingGroupPricingSection settings={settings} />
     ),
   },
   {

@@ -91,43 +91,25 @@ func rateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gi
 	}
 }
 
-func dynamicRateLimit(c *gin.Context, enabled bool, maxRequestNum int, duration int64, mark string) {
-	if !enabled {
-		c.Next()
-		return
-	}
-	if common.RedisEnabled {
-		redisRateLimiter(c, maxRequestNum, duration, mark)
-		return
-	}
-	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
-	memoryRateLimiter(c, maxRequestNum, duration, mark)
-}
-
 func GlobalWebRateLimit() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		dynamicRateLimit(c, common.GlobalWebRateLimitEnable, common.GlobalWebRateLimitNum, common.GlobalWebRateLimitDuration, "GW")
+	if common.GlobalWebRateLimitEnable {
+		return rateLimitFactory(common.GlobalWebRateLimitNum, common.GlobalWebRateLimitDuration, "GW")
 	}
+	return defNext
 }
 
 func GlobalAPIRateLimit() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		dynamicRateLimit(c, common.GlobalApiRateLimitEnable, common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
+	if common.GlobalApiRateLimitEnable {
+		return rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
 	}
+	return defNext
 }
 
 func CriticalRateLimit() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		dynamicRateLimit(c, common.CriticalRateLimitEnable, common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "CT")
+	if common.CriticalRateLimitEnable {
+		return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "CT")
 	}
-}
-
-// TokenKeyRateLimit uses a separate bucket for bulk key retrieval so legacy
-// per-key requests cannot exhaust the limit for the load-test key selector.
-func TokenKeyRateLimit() func(c *gin.Context) {
-	return func(c *gin.Context) {
-		dynamicRateLimit(c, common.CriticalRateLimitEnable, common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "TK")
-	}
+	return defNext
 }
 
 func DownloadRateLimit() func(c *gin.Context) {

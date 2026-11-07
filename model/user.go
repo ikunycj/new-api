@@ -8,12 +8,27 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
 )
+
+// DefaultUserGroup is the built-in account group. Pricing/routing groups live
+// in token/channel/ability data and are separate from users.group.
+const DefaultUserGroup = "default"
+
+// NormalizeUserGroup trims account-group values and falls back to default for
+// empty values. It does not validate catalog membership; controllers validate
+// user-provided names against user_groups before persistence.
+func NormalizeUserGroup(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return DefaultUserGroup
+	}
+	return group
+}
 
 // CurrentOnboardingVersion is the latest onboarding flow shown to newly
 // registered users. A nil user value means the user is not enrolled in the
@@ -44,7 +59,7 @@ type User struct {
 	Quota             int                        `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota         int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount      int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group             string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
+	Group             string                     `json:"group" gorm:"type:varchar(64);default:'default';index"`
 	AffCode           string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount          int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota          int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -60,24 +75,23 @@ type User struct {
 	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer    string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt         int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	CreatedIP         string                     `json:"created_ip,omitempty" gorm:"column:created_ip;type:varchar(45)"`
 	LastLoginAt       int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	LastLoginIP       string                     `json:"last_login_ip,omitempty" gorm:"column:last_login_ip;type:varchar(45)"`
+	LastUsedAt        int64                      `json:"last_used_at" gorm:"default:0;column:last_used_at"`
+	LastUsedIP        string                     `json:"last_used_ip,omitempty" gorm:"column:last_used_ip;type:varchar(45)"`
 	OnboardingVersion *int                       `json:"-" gorm:"column:onboarding_version;type:int"`
 	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
-// UserGroupHasToBAccess is the single account-scope rule. Pricing and routing
-// groups remain independent from this account classification.
-func UserGroupHasToBAccess(group string) bool {
-	switch strings.ToLower(strings.TrimSpace(group)) {
-	case "vip", "enterprise":
-		return true
-	default:
-		return false
-	}
+func (user *User) BeforeCreate(_ *gorm.DB) error {
+	user.Group = NormalizeUserGroup(user.Group)
+	return nil
 }
 
-func (user *User) IsToB() bool {
-	return user != nil && UserGroupHasToBAccess(user.Group)
+func (user *User) BeforeUpdate(_ *gorm.DB) error {
+	user.Group = NormalizeUserGroup(user.Group)
+	return nil
 }
 
 // NewUserOnboardingVersion enrolls a newly self-registered user in the
@@ -101,7 +115,7 @@ func (user *User) OnboardingStatus() UserOnboardingStatus {
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
 		Id:       user.Id,
-		Group:    user.Group,
+		Group:    NormalizeUserGroup(user.Group),
 		Quota:    user.Quota,
 		Status:   user.Status,
 		Username: user.Username,
@@ -455,6 +469,9 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	} else {
 		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
+	if err == nil {
+		user.Group = NormalizeUserGroup(user.Group)
+	}
 	return &user, err
 }
 
@@ -484,6 +501,7 @@ func HardDeleteUserById(id int) error {
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
+	user.Group = NormalizeUserGroup(user.Group)
 	user.Email = NormalizeEmail(user.Email)
 	user.Username = ResolveUsername(user.Username, user.Email)
 	if user.Username == "" {
@@ -653,6 +671,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		}
 	}
 	newUser := *user
+	newUser.Group = NormalizeUserGroup(newUser.Group)
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -664,7 +683,12 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if newUser.Username == "" {
 		return ErrUsernameEmpty
 	}
-	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count").Updates(newUser).Error; err != nil {
+	if err = tx.Model(&current).Omit(
+		"quota", "used_quota", "request_count",
+		"created_at", "created_ip",
+		"last_login_at", "last_login_ip",
+		"last_used_at", "last_used_ip",
+	).Updates(newUser).Error; err != nil {
 		return err
 	}
 	return tx.First(user, user.Id).Error
@@ -687,6 +711,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 
 	newUser := *user
+	newUser.Group = NormalizeUserGroup(newUser.Group)
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -979,6 +1004,7 @@ func ValidateAccessToken(token string) (*User, error) {
 		}
 		return nil, fmt.Errorf("%w: %v", ErrDatabase, err)
 	}
+	user.Group = NormalizeUserGroup(user.Group)
 	return user, nil
 }
 
@@ -1035,7 +1061,7 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 	if !fromDB && common.RedisEnabled {
 		group, err := getUserGroupCache(id)
 		if err == nil {
-			return group, nil
+			return NormalizeUserGroup(group), nil
 		}
 		// Don't return error - fall through to DB
 	}
@@ -1045,7 +1071,7 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 		return "", err
 	}
 
-	return group, nil
+	return NormalizeUserGroup(group), nil
 }
 
 // GetUserSetting gets setting from Redis first, falls back to DB if needed
@@ -1090,38 +1116,31 @@ func SetUserParentId(userId, parentId int) error {
 	return DB.Model(&User{}).Where("id = ?", userId).Update("parent_id", parentId).Error
 }
 
-// GetUserChildren returns all users whose parent_id equals parentId.
 func GetUserChildren(parentId int) ([]*User, error) {
 	var users []*User
 	err := DB.Where("parent_id = ?", parentId).Find(&users).Error
 	return users, err
 }
 
-// HasChildren reports whether a user already has sub-accounts.
 func HasChildren(userId int) (bool, error) {
 	var count int64
 	err := DB.Model(&User{}).Where("parent_id = ?", userId).Count(&count).Error
 	return count > 0, err
 }
 
-// GetTeamUsageSummary returns the aggregate used_quota and request_count for
-// the given set of user ids (a parent account + its children).
 func GetTeamUsageSummary(userIds []int) (usedQuota int64, requestCount int64, err error) {
 	type result struct {
 		UsedQuota    int64
 		RequestCount int64
 	}
-	var r result
+	var summary result
 	err = DB.Model(&User{}).
 		Select("COALESCE(SUM(used_quota), 0) AS used_quota, COALESCE(SUM(request_count), 0) AS request_count").
 		Where("id IN ?", userIds).
-		Scan(&r).Error
-	return r.UsedQuota, r.RequestCount, err
+		Scan(&summary).Error
+	return summary.UsedQuota, summary.RequestCount, err
 }
 
-// GetBillingUserId returns the user ID whose quota should be charged for a
-// request. If the user belongs to a parent account (ParentId != 0), the parent
-// is the billing target; otherwise the user bills themselves.
 func GetBillingUserId(userId int) (int, error) {
 	var parentId int
 	err := DB.Model(&User{}).Where("id = ?", userId).Select("parent_id").Scan(&parentId).Error
@@ -1206,8 +1225,37 @@ func GetRootUser() (user *User) {
 }
 
 func UpdateUserLastLoginAt(id int) {
-	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", common.GetTimestamp()).Error; err != nil {
+	UpdateUserLastLoginAtWithIP(id, "")
+}
+
+// UpdateUserLastLoginAtWithIP records the successful login timestamp and, when
+// available, the client IP that produced it. Keeping the legacy timestamp-only
+// wrapper avoids changing callers that do not have an HTTP request context.
+func UpdateUserLastLoginAtWithIP(id int, ip string) {
+	if DB == nil || id == 0 {
+		return
+	}
+	updates := map[string]interface{}{
+		"last_login_at": common.GetTimestamp(),
+	}
+	if ip = strings.TrimSpace(ip); ip != "" {
+		updates["last_login_ip"] = ip
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		common.SysLog("failed to update user last_login_at: " + err.Error())
+	}
+}
+
+// UpdateUserLastUsedIP records the client IP for the latest settled usage.
+// Usage timestamps and quota accounting are updated by their existing paths;
+// this helper only fills the accompanying audit field when an IP is known.
+func UpdateUserLastUsedIP(id int, ip string) {
+	ip = strings.TrimSpace(ip)
+	if DB == nil || id == 0 || ip == "" {
+		return
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_used_ip", ip).Error; err != nil {
+		common.SysLog("failed to update user last_used_ip: " + err.Error())
 	}
 }
 
@@ -1240,6 +1288,7 @@ func updateUserUsedQuotaAndRequestCount(id int, quota int, count int) {
 		map[string]interface{}{
 			"used_quota":    gorm.Expr("used_quota + ?", quota),
 			"request_count": gorm.Expr("request_count + ?", count),
+			"last_used_at":  common.GetTimestamp(),
 		},
 	).Error
 	if err != nil {
@@ -1258,13 +1307,16 @@ func updateUserQuotaUsedQuotaAndRequestCount(id int, quota int, usedQuota int, r
 		return
 	}
 
-	err := DB.Model(&User{}).Where("id = ?", id).Updates(
-		map[string]interface{}{
-			"quota":         gorm.Expr("quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
-			"request_count": gorm.Expr("request_count + ?", requestCount),
-		},
-	).Error
+	updates := map[string]interface{}{
+		"quota":         gorm.Expr("quota + ?", quota),
+		"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
+		"request_count": gorm.Expr("request_count + ?", requestCount),
+	}
+	if requestCount != 0 {
+		updates["last_used_at"] = common.GetTimestamp()
+	}
+
+	err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 	if err != nil {
 		common.SysLog("failed to batch update user quota, used quota and request count: " + err.Error())
 	}
@@ -1343,9 +1395,6 @@ func (user *User) FillUserByFeishuId() error {
 	return DB.Where("feishu_id = ?", user.FeishuId).First(user).Error
 }
 
-// UpdateFeishuIdentity persists Feishu's union_id and user_id for a user when
-// present. Empty values are skipped so a user whose Feishu app lacks the
-// corresponding scope is not overwritten with blanks.
 func UpdateFeishuIdentity(userId int, unionId, feishuUserId string) error {
 	updates := map[string]interface{}{}
 	if unionId != "" {
@@ -1368,4 +1417,3 @@ func RootUserExists() bool {
 	}
 	return true
 }
-

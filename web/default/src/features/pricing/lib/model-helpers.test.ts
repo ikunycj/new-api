@@ -47,7 +47,7 @@ const models: PricingModel[] = [
 ]
 
 describe('model group display entries', () => {
-  test('returns one model with all available groups ordered by price', () => {
+  test('returns each model with its enabled catalog groups ordered by price', () => {
     const result = expandModelsByGroup(
       models,
       ['default', 'vip', 'enterprise', 'pro'],
@@ -56,13 +56,15 @@ describe('model group display entries', () => {
         vip: 0.8,
         enterprise: 1.2,
         pro: 1.5,
-      }
+      },
+      { vip: 'ChatGPT企业' }
     )
 
     assert.deepEqual(
       result.map((model) => [
         model.model_name,
         model.display_group,
+        model.display_group_label,
         model.display_group_ratio,
         model.key,
         model.display_groups,
@@ -71,25 +73,14 @@ describe('model group display entries', () => {
         [
           'grouped-model',
           'vip',
+          'ChatGPT企业',
           0.8,
           'grouped-model',
           [
-            { group: 'vip', ratio: 0.8 },
-            { group: 'default', ratio: 1 },
-            { group: 'enterprise', ratio: 1.2 },
-            { group: 'pro', ratio: 1.5 },
-          ],
-        ],
-        [
-          'wildcard-model',
-          'vip',
-          0.8,
-          'wildcard-model',
-          [
-            { group: 'vip', ratio: 0.8 },
-            { group: 'default', ratio: 1 },
-            { group: 'enterprise', ratio: 1.2 },
-            { group: 'pro', ratio: 1.5 },
+            { group: 'vip', label: 'ChatGPT企业', ratio: 0.8 },
+            { group: 'default', label: 'default', ratio: 1 },
+            { group: 'enterprise', label: 'enterprise', ratio: 1.2 },
+            { group: 'pro', label: 'pro', ratio: 1.5 },
           ],
         ],
       ]
@@ -103,16 +94,14 @@ describe('model group display entries', () => {
       result.map((model) => [
         model.model_name,
         model.display_group,
+        model.display_group_label,
         model.display_group_ratio,
       ]),
-      [
-        ['grouped-model', 'default', 1],
-        ['wildcard-model', 'default', 1],
-      ]
+      [['grouped-model', 'default', 'default', 1]]
     )
   })
 
-  test('does not render unavailable or reserved groups', () => {
+  test('keeps a literal all group scoped to models that enable it', () => {
     const result = expandModelsByGroup(models, ['default', 'auto', 'all'], {
       default: 1,
       auto: 0.5,
@@ -120,61 +109,57 @@ describe('model group display entries', () => {
     })
 
     assert.deepEqual(
-      result.map((model) => model.display_group),
-      ['default', 'default']
+      result.map((model) => model.display_groups),
+      [
+        [{ group: 'default', label: 'default', ratio: 1 }],
+        [{ group: 'all', label: 'all', ratio: 0.1 }],
+      ]
     )
   })
 
-  test('shows all ToC groups by default and separates ToB groups dynamically', () => {
-    const result = expandModelsByGroup(
-      models,
-      ['default', 'vip', 'enterprise', 'pro'],
-      { default: 1, vip: 0.8, enterprise: 1.2, pro: 1.5 },
-      { default: 'toC', vip: 'toC', enterprise: 'toB', pro: 'toB' }
-    )
-
-    assert.deepEqual(result[0].display_groups, [
-      { group: 'vip', ratio: 0.8 },
-      { group: 'default', ratio: 1 },
-    ])
-    assert.deepEqual(result[0].tob_display_groups, [
-      { group: 'enterprise', ratio: 1.2 },
-      { group: 'pro', ratio: 1.5 },
-    ])
-    assert.equal(result[0].display_group, 'vip')
-  })
-
-  test('keeps ToB-only models without exposing a hidden group as the summary', () => {
+  test('omits models with no enabled catalog groups', () => {
     const result = expandModelsByGroup(
       [
         {
           id: 3,
-          model_name: 'business-only-model',
+          model_name: 'catalog-only-model',
           quota_type: 0,
           model_ratio: 1,
           completion_ratio: 1,
-          enable_groups: ['enterprise'],
+          enable_groups: [],
         },
       ],
-      ['enterprise'],
-      { enterprise: 0.5 },
-      { enterprise: 'toB' }
+      ['default', 'vip'],
+      { default: 1, vip: 0.8 }
     )
 
-    assert.equal(result.length, 1)
-    assert.equal(result[0].display_group, '')
-    assert.equal(result[0].display_group_ratio, 1)
-    assert.equal(getDisplayGroupRatio(result[0], result[0].display_group), 1)
-    assert.deepEqual(result[0].display_groups, [])
-    assert.deepEqual(result[0].tob_display_groups, [
-      { group: 'enterprise', ratio: 0.5 },
-    ])
+    assert.deepEqual(result, [])
   })
 
-  test('treats the all capability group as matching a selected group', () => {
+  test('ignores a selected group absent from model abilities', () => {
+    const model = {
+      ...models[0],
+      enable_groups: ['default'],
+      group_ratio: { default: 1, vip: 0.8 },
+    }
+
+    assert.equal(getDisplayGroupRatio(model, 'vip'), 1)
+  })
+
+  test('uses the lowest ratio among enabled model groups', () => {
+    const model = {
+      ...models[0],
+      enable_groups: ['default'],
+      group_ratio: { default: 1, vip: 0.8 },
+    }
+
+    assert.equal(getDisplayGroupRatio(model), 1)
+  })
+
+  test('filters models by their enabled groups', () => {
     assert.deepEqual(
-      filterByGroup(models, 'vip').map((model) => model.model_name),
-      ['grouped-model', 'wildcard-model']
+      filterByGroup(models, ['vip']).map((model) => model.model_name),
+      ['grouped-model']
     )
   })
 
