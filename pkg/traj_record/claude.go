@@ -2,6 +2,7 @@ package traj_record
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"strings"
 
@@ -20,11 +21,14 @@ var claudeClient = &client{
 	summarize:  summarizeClaudeResponse,
 }
 
-// claudeRequestIds reads the ids Claude Code packs into metadata.user_id.
+// claudeRequestIds reads the ids Claude Code packs into metadata.user_id,
+// falling back to the X-Claude-Code-Session-Id header (on storie 11/07 the two
+// agreed on all 23,767 calls that had both).
 func claudeRequestIds(rec *callRecord, top map[string]json.RawMessage) string {
 	md := top["metadata"]
 	if md == nil {
-		return ""
+		rec.SessionId = rec.Headers["X-Claude-Code-Session-Id"]
+		return rec.SessionId
 	}
 	var meta struct {
 		UserId string `json:"user_id"`
@@ -42,6 +46,7 @@ func claudeRequestIds(rec *callRecord, top map[string]json.RawMessage) string {
 		rest, rec.SessionId, _ = strings.Cut(rest, "_session_")
 		rec.DeviceId, rec.AccountUuid, _ = strings.Cut(rest, "_account_")
 	}
+	rec.SessionId = cmp.Or(rec.SessionId, rec.Headers["X-Claude-Code-Session-Id"])
 	return rec.SessionId
 }
 

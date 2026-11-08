@@ -23,7 +23,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 
 	"github.com/gin-gonic/gin"
-	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,6 +55,7 @@ func newTestRecorder(t *testing.T, cfg Config) *recorder {
 	fw, err := newFileWriter(cfg)
 	require.NoError(t, err)
 	r := &recorder{cfg: cfg, fw: fw}
+	r.initStats()
 	r.resetFileState()
 	t.Cleanup(func() { _ = fw.close() })
 	return r
@@ -80,24 +80,20 @@ func process(r *recorder, rid string, body []byte) {
 }
 
 type storedLine struct {
-	ReqSize       int                        `json:"req_size"`
-	ReqCompacted  bool                       `json:"req_compacted"`
-	RespComplete  bool                       `json:"resp_complete"`
-	RespTruncated bool                       `json:"resp_truncated"`
-	Type          string                     `json:"type"`
-	Rid           string                     `json:"rid"`
-	Hash          string                     `json:"hash"`
-	Data          json.RawMessage            `json:"data"`
-	ParentRid     string                     `json:"parent_rid"`
-	PrefixLen     int                        `json:"prefix_len"`
-	HistoryKey    string                     `json:"history_key"`
-	Refs          map[string]string          `json:"refs"`
-	KeyOrder      []string                   `json:"key_order"`
-	ReqSha256     string                     `json:"req_sha256"`
-	Params        map[string]json.RawMessage `json:"params"`
-	Append        []json.RawMessage          `json:"append"`
-	Resp          string                     `json:"resp"`
-	ReqRaw        string                     `json:"req_raw"`
+	Type       string                     `json:"type"`
+	Rid        string                     `json:"rid"`
+	Hash       string                     `json:"hash"`
+	Data       json.RawMessage            `json:"data"`
+	ParentRid  string                     `json:"parent_rid"`
+	PrefixLen  int                        `json:"prefix_len"`
+	HistoryKey string                     `json:"history_key"`
+	Refs       map[string]string          `json:"refs"`
+	KeyOrder   []string                   `json:"key_order"`
+	ReqSha256  string                     `json:"req_sha256"`
+	Params     map[string]json.RawMessage `json:"params"`
+	Append     []json.RawMessage          `json:"append"`
+	Resp       string                     `json:"resp"`
+	ReqRaw     string                     `json:"req_raw"`
 }
 
 // reconstruct replays one file the way offline tooling would and returns every
@@ -280,38 +276,6 @@ func TestNonCanonicalBodies(t *testing.T) {
 
 	assert.Equal(t, string(legacy), string(bodies["legacy"]))
 	assert.Contains(t, string(data), `"session_id":"S9","device_id":"dev","account_uuid":"acc"`)
-}
-
-func TestRotationKeepsFilesSelfContained(t *testing.T) {
-	r := newTestRecorder(t, Config{ZstdWindowMB: 1})
-	u1 := `{"role":"user","content":"a"}`
-	a1 := `{"role":"assistant","content":"b"}`
-	u2 := `{"role":"user","content":"c"}`
-	process(r, "r1", claudeBody("S", u1))
-	r.fw.maxBytes = 1 // rotate before the next record
-	process(r, "r2", claudeBody("S", u1, a1, u2))
-	require.NoError(t, r.fw.close())
-
-	matches, err := filepath.Glob(filepath.Join(r.cfg.Dir, rotatePrefix+"*.jsonl.zst"))
-	require.NoError(t, err)
-	require.Len(t, matches, 1)
-	f, err := os.Open(matches[0])
-	require.NoError(t, err)
-	defer f.Close()
-	zr, err := zstd.NewReader(f)
-	require.NoError(t, err)
-	defer zr.Close()
-	old, err := io.ReadAll(zr)
-	require.NoError(t, err)
-	oldBodies, _ := reconstruct(t, old)
-	assert.Contains(t, oldBodies, "r1")
-
-	cur, err := os.ReadFile(r.fw.activePath())
-	require.NoError(t, err)
-	bodies, calls := reconstruct(t, cur)
-	assert.Equal(t, string(claudeBody("S", u1, a1, u2)), string(bodies["r2"]))
-	assert.Empty(t, calls["r2"].ParentRid, "new file starts with a keyframe")
-	assert.Equal(t, 2, bytes.Count(cur, []byte(`"type":"blob"`)), "blobs are repeated in the new file")
 }
 
 const testCodexSSE = "event: response.created\n" +

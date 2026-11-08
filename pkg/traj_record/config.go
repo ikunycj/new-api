@@ -54,6 +54,9 @@ type Config struct {
 
 	// MaxBackups is how many rotated files to keep. 0 keeps everything,
 	// which is the default because the files are training data, not logs.
+	// Do not set it with format v4: it deletes single files, and the later
+	// files of a 录制日 need the earlier ones (prefixes and blobs carry over),
+	// while the day's manifest still lists them.
 	MaxBackups int
 
 	// ZstdWindowMB is the zstd window used to compress rotated files. A long

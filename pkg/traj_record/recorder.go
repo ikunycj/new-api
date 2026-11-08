@@ -19,18 +19,21 @@ import (
 )
 
 // recordVersion 2 added client and history_key, and replaced system_ref and
-// tools_ref with refs.
-const recordVersion = 3
+// tools_ref with refs. 3 split api_family from agent. 4 added channel-side
+// attempts, end_reason, response headers, header clues, stats lines and files
+// sealed per UTC day (see docs/traj_record/recording-v4-design-20261104.md).
+const recordVersion = 4
 
 // job is one finished request handed from the request goroutine to the writer.
 // Full parsing happens on the writer side; partial sampling reads session IDs
 // on the request path before copying bytes.
 type job struct {
-	ws     *wsRecord
-	client *client
-	rec    callRecord
-	body   []byte
-	resp   []byte
+	ws      *wsRecord
+	client  *client
+	rec     callRecord
+	body    []byte
+	resp    []byte
+	channel []rawAttempt
 }
 
 // callRecord is the "call" line. Fields filled in the request goroutine are
@@ -58,6 +61,10 @@ type callRecord struct {
 	Stream   bool              `json:"stream"`
 	ClientIP string            `json:"client_ip,omitempty"`
 	Headers  map[string]string `json:"headers,omitempty"`
+	// HeadersDropped names the credential headers left out of Headers.
+	HeadersDropped     []string          `json:"headers_dropped,omitempty"`
+	RespHeaders        map[string]string `json:"resp_headers,omitempty"`
+	RespHeadersDropped []string          `json:"resp_headers_dropped,omitempty"`
 
 	UserId       int          `json:"user_id"`
 	Username     string       `json:"username,omitempty"`
@@ -80,6 +87,22 @@ type callRecord struct {
 	ThreadId       string `json:"thread_id,omitempty"`
 	ParentThreadId string `json:"parent_thread_id,omitempty"`
 	TurnId         string `json:"turn_id,omitempty"`
+	// Request body keys any client may send.
+	PromptCacheKey     string `json:"prompt_cache_key,omitempty"`
+	PreviousResponseId string `json:"previous_response_id,omitempty"`
+	// Header clues, see headerClues.
+	AgentId       string `json:"agent_id,omitempty"`
+	ParentAgentId string `json:"parent_agent_id,omitempty"`
+	WindowId      string `json:"window_id,omitempty"`
+	Subagent      string `json:"subagent,omitempty"`
+	// From Codex x-codex-turn-metadata, see codexRequestIds.
+	RequestKind  string `json:"request_kind,omitempty"`
+	ThreadSource string `json:"thread_source,omitempty"`
+	// LoneSurrogates counts \uXXXX escapes in the request body that are
+	// surrogates without their pair. They cannot be stored as UTF-8: the
+	// gateway's decoder turns each into U+FFFD before the channel sees it,
+	// and the library defers such sessions.
+	LoneSurrogates int `json:"lone_surrogates,omitempty"`
 
 	ReqSize      int    `json:"req_size"`
 	ReqSha256    string `json:"req_sha256"`
@@ -108,12 +131,14 @@ type callRecord struct {
 	// ClientCanceled is set when the client had gone away by the time the
 	// handler returned, telling an aborted call (the agent interrupted or
 	// restarted the turn) apart from an upstream that stopped mid-stream.
-	ClientCanceled bool            `json:"client_canceled,omitempty"`
-	RespId         string          `json:"resp_id,omitempty"`
-	RespModel      string          `json:"resp_model,omitempty"`
-	StopReason     string          `json:"stop_reason,omitempty"`
-	UsageStart     json.RawMessage `json:"usage_start,omitempty"`
-	Usage          json.RawMessage `json:"usage,omitempty"`
+	ClientCanceled bool `json:"client_canceled,omitempty"`
+	// EndReason says why the response ended, see endReason.
+	EndReason  string          `json:"end_reason,omitempty"`
+	RespId     string          `json:"resp_id,omitempty"`
+	RespModel  string          `json:"resp_model,omitempty"`
+	StopReason string          `json:"stop_reason,omitempty"`
+	UsageStart json.RawMessage `json:"usage_start,omitempty"`
+	Usage      json.RawMessage `json:"usage,omitempty"`
 	// ToolUses lists tool_use ids (Claude) or call_ids (Codex) with names.
 	ToolUses []toolUse `json:"resp_tool_uses,omitempty"`
 	// Claude: thinking blocks, and signatures on any block.
@@ -124,6 +149,10 @@ type callRecord struct {
 	EncryptedItems int    `json:"encrypted_items,omitempty"`
 	Resp           string `json:"resp,omitempty"`
 	RespB64        []byte `json:"resp_b64,omitempty"`
+
+	// Channel lists every request the gateway sent to a channel for this
+	// call, retries included, as a delta against the client-side request.
+	Channel []*channelAttempt `json:"channel,omitempty"`
 }
 
 // upstreamInfo flags gateway-side rewrites that make the upstream request
@@ -179,6 +208,12 @@ type recorder struct {
 	failed     atomic.Int64
 	diskPaused atomic.Int64
 	lastWarn   atomic.Int64
+
+	// stats counts calls per API family; statsLast and statsSince are the
+	// baseline of the last stats line (writer goroutine).
+	stats      map[string]*familyStats
+	statsLast  map[string]statsCounts
+	statsSince time.Time
 }
 
 var (
@@ -210,6 +245,7 @@ func Init(cfg Config) error {
 		done:   make(chan struct{}),
 		fw:     fw,
 	}
+	r.initStats()
 	r.resetFileState()
 	r.wg.Go(r.run)
 	active = r
@@ -236,6 +272,10 @@ func Stats() (written, dropped, failed, diskPaused int64) {
 		return 0, 0, 0, 0
 	}
 	return r.written.Load(), r.dropped.Load(), r.failed.Load(), r.diskPaused.Load()
+}
+
+func (r *recorder) initStats() {
+	r.stats, r.statsLast, r.statsSince = newFamilyStats(), map[string]statsCounts{}, r.fw.now()
 }
 
 func current() *recorder {
@@ -267,6 +307,9 @@ func (r *recorder) submit(j *job) {
 		case <-timer.C:
 		}
 	}
+	if j.ws == nil {
+		r.stats[j.client.apiFamily].droppedQueue.Add(1)
+	}
 	n := r.dropped.Add(1)
 	r.warnf("traj record queue full, dropped rid=%s (total dropped %d)", j.rec.Rid, n)
 }
@@ -284,12 +327,16 @@ func (r *recorder) warnf(format string, args ...any) {
 func (r *recorder) run() {
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
-	lastSweep := time.Now()
+	lastSweep, lastSeal := time.Now(), time.Now()
 	for {
 		select {
 		case j := <-r.ch:
 			r.process(j)
 		case now := <-ticker.C:
+			r.maybeRotate()
+			if now.Sub(r.statsSince) >= statsInterval {
+				r.writeStats(now)
+			}
 			if err := r.fw.flush(); err != nil {
 				r.failed.Add(1)
 				r.warnf("traj record flush failed: %v", err)
@@ -298,12 +345,20 @@ func (r *recorder) run() {
 				r.idx.evict(now)
 				lastSweep = now
 			}
+			// A day whose compression failed has no manifest and is not
+			// uploaded. Rotations retry it too, but an instance that writes
+			// less than MaxFileMB a day only rotates at UTC midnight.
+			if now.Sub(lastSeal) > sealRetryInterval {
+				r.fw.sealPendingDays()
+				lastSeal = now
+			}
 		case <-r.done:
 			for {
 				select {
 				case j := <-r.ch:
 					r.process(j)
 				default:
+					r.writeStats(time.Now())
 					_ = r.fw.close()
 					return
 				}
@@ -313,28 +368,60 @@ func (r *recorder) run() {
 }
 
 // resetFileState starts a new self-contained segment: the index and blob set
-// are cleared so no record in the file references anything outside it.
+// are cleared so no later record references anything before it. Segments
+// start at process start and at UTC midnight.
 func (r *recorder) resetFileState() {
 	r.idx = newPrefixIndex(time.Duration(r.cfg.IndexTTLMin)*time.Minute, r.cfg.IndexMaxEntries)
 	r.blobs = map[string]bool{}
-	line, _ := common.Marshal(map[string]any{
+	marker := map[string]any{
 		"v": recordVersion, "type": "segment_start", "instance": r.cfg.Instance,
-		"pid": os.Getpid(), "ts": time.Now().UnixMilli(),
-	})
-	if err := r.fw.writeLines(line); err != nil {
-		r.warnf("traj record write segment marker failed: %v", err)
+		"pid": os.Getpid(), "ts": r.fw.now().UnixMilli(), "day": r.fw.day,
 	}
+	if r.fw.recovered > 0 {
+		// A crash cut the previous segment short by this many bytes.
+		marker["recovered_bytes"] = r.fw.recovered
+		r.fw.recovered = 0
+	}
+	r.writeMarker(marker)
+}
+
+func (r *recorder) writeMarker(marker map[string]any) {
+	line, _ := common.Marshal(marker)
+	if err := r.fw.writeLines(line); err != nil {
+		r.warnf("traj record write %s failed: %v", marker["type"], err)
+	}
+}
+
+// maybeRotate rotates at UTC midnight and when the active file is full. A full
+// file continues the day's segment in the next file (file_start); a new day
+// starts a new segment and the old day is sealed.
+func (r *recorder) maybeRotate() {
+	now := r.fw.now()
+	newDay := utcDay(now) != r.fw.day
+	if !newDay && !r.fw.full() {
+		return
+	}
+	r.writeStats(now)
+	if err := r.fw.rotate(); err != nil {
+		r.warnf("traj record rotate failed: %v", err)
+		return
+	}
+	// Seals the day just rotated out of, and retries any earlier day whose
+	// compression failed: with no manifest it would never be uploaded.
+	r.fw.sealPendingDays()
+	if newDay {
+		r.resetFileState()
+		return
+	}
+	r.writeMarker(map[string]any{
+		"v": recordVersion, "type": "file_start", "instance": r.cfg.Instance,
+		"pid": os.Getpid(), "ts": now.UnixMilli(), "day": r.fw.day,
+	})
 }
 
 func (r *recorder) process(j *job) {
 	now := time.Now()
-	if r.fw.full() {
-		if err := r.fw.rotate(); err != nil {
-			r.warnf("traj record rotate failed: %v", err)
-		} else {
-			r.resetFileState()
-		}
-	}
+	r.maybeRotate()
 	if j.ws != nil {
 		line, err := common.Marshal(j.ws)
 		if err == nil {
@@ -355,11 +442,15 @@ func (r *recorder) process(j *job) {
 	r.seq++
 	rec := &j.rec
 	cl := j.client
+	// Counted here rather than in submit, so the writer counts enqueued and
+	// written in the same stats interval and a dropped call is never counted.
+	r.stats[cl.apiFamily].enqueued.Add(1)
 	rec.V, rec.Type, rec.Instance, rec.Seq = recordVersion, "call", r.cfg.Instance, r.seq
 	rec.Client, rec.HistoryKey, rec.APIFamily = cl.name, cl.historyKey, cl.apiFamily
 	if rec.Transport == "" {
 		rec.Transport = "http"
 	}
+	headerClues(rec)
 	ua := rec.Headers["User-Agent"]
 	for _, known := range clients {
 		for _, prefix := range known.uaPrefixes {
@@ -370,6 +461,19 @@ func (r *recorder) process(j *job) {
 	}
 	storeResponse(rec, j.resp)
 	cl.summarize(rec, j.resp)
+	var blobLines [][]byte
+	var newBlobs []string
+	addBlob := func(kind string, raw []byte) string {
+		h := sha256.Sum256(raw)
+		ref := hex.EncodeToString(h[:16])
+		if r.blobs[ref] || slices.Contains(newBlobs, ref) {
+			return ref
+		}
+		head, _ := common.Marshal(map[string]any{"v": recordVersion, "type": "blob", "kind": kind, "hash": ref})
+		blobLines = append(blobLines, spliceRaw(head, "data", raw))
+		newBlobs = append(newBlobs, ref)
+		return ref
+	}
 
 	body := j.body
 	rec.ReqSize = len(body)
@@ -378,10 +482,19 @@ func (r *recorder) process(j *job) {
 
 	var top map[string]json.RawMessage
 	var history []json.RawMessage
+	rec.LoneSurrogates = countLoneSurrogates(body)
 	parsed := utf8.Valid(body) && common.Unmarshal(body, &top) == nil
 	if parsed {
-		cl.requestIds(rec, top)
+		requestIds(cl, rec, top)
+		_ = common.Unmarshal(top["prompt_cache_key"], &rec.PromptCacheKey)
+		_ = common.Unmarshal(top["previous_response_id"], &rec.PreviousResponseId)
+	} else {
+		top = nil
 	}
+	for _, a := range j.channel {
+		rec.Channel = append(rec.Channel, diffChannel(cl, a, body, top, j.resp, rec.RespContentType, addBlob))
+	}
+	rec.EndReason = endReason(rec)
 	if parsed && top[cl.historyKey] != nil && common.Unmarshal(top[cl.historyKey], &history) == nil {
 		rec.KeyOrder = keyOrder(body, top, cl.historyKey, history)
 	}
@@ -394,7 +507,7 @@ func (r *recorder) process(j *job) {
 		} else {
 			rec.ReqRawB64 = j.body
 		}
-		r.write(rec, nil, nil, nil, nil)
+		r.write(rec, blobLines, nil, nil, newBlobs)
 		return
 	}
 	rec.NHistory = len(history)
@@ -408,25 +521,15 @@ func (r *recorder) process(j *job) {
 	hashes := prefixHashes(scope, history)
 	rec.ParentRid, rec.PrefixLen = r.idx.match(hashes)
 
-	var blobLines [][]byte
-	var newBlobs []string
 	for _, kind := range cl.blobKeys {
 		raw := top[kind]
 		if raw == nil {
 			continue
 		}
-		h := sha256.Sum256(raw)
-		ref := hex.EncodeToString(h[:16])
 		if rec.Refs == nil {
 			rec.Refs = map[string]string{}
 		}
-		rec.Refs[kind] = ref
-		if r.blobs[ref] || slices.Contains(newBlobs, ref) {
-			continue
-		}
-		head, _ := common.Marshal(map[string]any{"v": recordVersion, "type": "blob", "kind": kind, "hash": ref})
-		blobLines = append(blobLines, spliceRaw(head, "data", raw))
-		newBlobs = append(newBlobs, ref)
+		rec.Refs[kind] = addBlob(kind, raw)
 	}
 
 	params := map[string]json.RawMessage{}
@@ -443,8 +546,10 @@ func (r *recorder) process(j *job) {
 // write appends the blobs and the call line, and only then marks blobs as
 // present, so a failed write never leaves a reference to a missing blob.
 func (r *recorder) write(rec *callRecord, blobLines [][]byte, params map[string]json.RawMessage, appendMsgs []json.RawMessage, newBlobs []string) bool {
+	stats := r.stats[rec.APIFamily]
 	meta, err := common.Marshal(rec)
 	if err != nil {
+		stats.writeFailed.Add(1)
 		r.failed.Add(1)
 		r.warnf("traj record marshal failed rid=%s: %v", rec.Rid, err)
 		return false
@@ -480,9 +585,11 @@ func (r *recorder) write(rec *callRecord, blobLines [][]byte, params map[string]
 	}
 	if err := r.fw.writeLines(append(blobLines, line)...); err != nil {
 		if errors.Is(err, errDiskLow) {
+			stats.diskPaused.Add(1)
 			r.diskPaused.Add(1)
 			return false
 		}
+		stats.writeFailed.Add(1)
 		r.failed.Add(1)
 		r.warnf("traj record write failed rid=%s: %v", rec.Rid, err)
 		return false
@@ -490,8 +597,34 @@ func (r *recorder) write(rec *callRecord, blobLines [][]byte, params map[string]
 	for _, b := range newBlobs {
 		r.blobs[b] = true
 	}
+	stats.written.Add(1)
 	r.written.Add(1)
 	return true
+}
+
+// endReason says why the client-side response ended. The channel-side
+// attempts tell a cut or error at the channel from one at the gateway.
+func endReason(rec *callRecord) string {
+	switch {
+	case rec.RespTruncated:
+		return "truncated"
+	case rec.RespComplete:
+		return "complete"
+	case rec.ClientCanceled:
+		return "client_canceled"
+	case len(rec.Channel) > 0:
+		last := rec.Channel[len(rec.Channel)-1]
+		switch {
+		case last.Error != "" || last.Status >= 400 || last.Status == 0:
+			return "channel_error"
+		case !last.RespComplete && !last.RespTruncated:
+			return "channel_cut"
+		}
+		return "gateway_error"
+	case rec.Status >= 400:
+		return "gateway_error"
+	}
+	return "unknown"
 }
 
 // keyOrder recovers the top-level key order by walking body as the exact

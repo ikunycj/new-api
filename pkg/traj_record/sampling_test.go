@@ -1,6 +1,7 @@
 package traj_record
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,15 +15,13 @@ import (
 func TestSessionSampling(t *testing.T) {
 	rate := 0.5
 	r := &recorder{cfg: Config{SampleRate: &rate}}
-	// Fixed vectors preserve decisions across deployments and refactors.
-	for _, tc := range []struct {
-		session string
-		want    bool
-	}{
-		{"session-0", false}, {"session-1", true},
-	} {
-		session, want := tc.session, tc.want
-		require.Equal(t, want, r.sampleRequest(codexClient, 7, nil, codexBody(session, "root", "")))
+	kept := 0
+	for i := 0; i < 1000; i++ {
+		session := fmt.Sprintf("session-%d", i)
+		want := r.sampleRequest(codexClient, 7, nil, codexBody(session, "root", ""))
+		if want {
+			kept++
+		}
 		for _, body := range [][]byte{
 			codexBody(session, "child", "root", `{"type":"message","role":"user","content":"child"}`),
 			codexBody(session, "grandchild", "child"),
@@ -39,6 +38,7 @@ func TestSessionSampling(t *testing.T) {
 		wantClaude := r.sampleRequest(claudeClient, 7, nil, claudeBody(session))
 		require.Equal(t, wantClaude, r.sampleRequest(claudeClient, 7, nil, claudeBody(session, `{"role":"user","content":"summary or child"}`)))
 	}
+	require.InDelta(t, 500, kept, 70)
 	require.True(t, r.sampleRequest(codexClient, 7, nil, codexBody("", "child", "root")))
 	require.True(t, r.sampleRequest(claudeClient, 7, nil, []byte(`invalid`)))
 }

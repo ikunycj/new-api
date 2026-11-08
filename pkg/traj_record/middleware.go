@@ -59,10 +59,6 @@ func (w *captureWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// headerDenySubstrings keeps credentials out of the files. Matching on
-// substrings rather than an exact list also covers custom auth headers.
-var headerDenySubstrings = []string{"auth", "key", "token", "secret", "cookie", "password"}
-
 // Middleware records the calls of the enabled clients (see clients.go).
 //
 // Mount after TokenAuth (user and token ids exist) and before Distribute (the
@@ -76,13 +72,15 @@ func Middleware() gin.HandlerFunc {
 			return
 		}
 		rt, ok := r.routes[c.Request.URL.Path]
-		ua := c.Request.UserAgent()
-		if !ok || !matchesUA(rt, ua) {
+		if !ok {
 			c.Next()
 			return
 		}
+		stats := r.stats[rt.client.apiFamily]
+		stats.seen.Add(1)
 		userId := common.GetContextKeyInt(c, constant.ContextKeyUserId)
-		if len(r.cfg.Users) > 0 && !r.cfg.Users[userId] {
+		if !matchesUA(rt, c.Request.UserAgent()) || (len(r.cfg.Users) > 0 && !r.cfg.Users[userId]) {
+			stats.filtered.Add(1)
 			c.Next()
 			return
 		}
@@ -90,11 +88,13 @@ func Middleware() gin.HandlerFunc {
 		start := time.Now()
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
+			stats.bodyError.Add(1)
 			c.Next()
 			return
 		}
 		full, err := storage.Bytes()
 		if err != nil {
+			stats.bodyError.Add(1)
 			c.Next()
 			return
 		}
@@ -102,11 +102,13 @@ func Middleware() gin.HandlerFunc {
 		// storage so every downstream reader still sees the complete body.
 		c.Request.Body = io.NopCloser(bytes.NewReader(full))
 		if _, err := storage.Seek(0, io.SeekStart); err != nil {
+			stats.bodyError.Add(1)
 			c.Next()
 			return
 		}
 
 		if !r.sampleRequest(rt.client, userId, c.Request.Header, full) {
+			stats.sampledOut.Add(1)
 			c.Next()
 			return
 		}
@@ -115,11 +117,15 @@ func Middleware() gin.HandlerFunc {
 
 		writer := &captureWriter{ResponseWriter: c.Writer, maxSize: r.cfg.MaxRespMB << 20}
 		c.Writer = writer
+		channel := &channelCapture{maxResp: r.cfg.MaxRespMB << 20}
+		c.Set(channelCaptureKey, channel)
 
 		// Deferred so the record survives a panicking handler.
 		defer func() {
 			c.Writer = writer.ResponseWriter
-			r.submit(newJob(c, rt.client, writer, body, start))
+			j := newJob(c, rt.client, writer, body, start)
+			j.channel = channel.snapshot()
+			r.submit(j)
 		}()
 		c.Next()
 	}
@@ -129,13 +135,8 @@ func Middleware() gin.HandlerFunc {
 // that needs parsing is left to the writer goroutine.
 func newJob(c *gin.Context, cl *client, w *captureWriter, body []byte, start time.Time) *job {
 	end := time.Now()
-	headers := map[string]string{}
-	for name, values := range c.Request.Header {
-		lower := strings.ToLower(name)
-		if !slices.ContainsFunc(headerDenySubstrings, func(sub string) bool { return strings.Contains(lower, sub) }) {
-			headers[name] = strings.Join(values, ", ")
-		}
-	}
+	headers, dropped := filterHeaders(c.Request.Header)
+	respHeaders, respDropped := filterHeaders(w.Header())
 	channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
 	modelMapping := common.GetContextKeyString(c, constant.ContextKeyChannelModelMapping)
 	if modelMapping == "{}" {
@@ -144,25 +145,28 @@ func newJob(c *gin.Context, cl *client, w *captureWriter, body []byte, start tim
 	overrideOps, bodyOverride := summarizeParamOverride(common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride))
 	headerOverrideKeys := slices.Sorted(maps.Keys(common.GetContextKeyStringMap(c, constant.ContextKeyChannelHeaderOverride)))
 	rec := callRecord{
-		Rid:          c.GetString(common.RequestIdKey),
-		TsStart:      start.UnixMilli(),
-		TsEnd:        end.UnixMilli(),
-		Method:       c.Request.Method,
-		Path:         c.Request.URL.Path,
-		Status:       w.Status(),
-		Stream:       common.GetContextKeyBool(c, constant.ContextKeyIsStream),
-		ClientIP:     c.ClientIP(),
-		Headers:      headers,
-		UserId:       common.GetContextKeyInt(c, constant.ContextKeyUserId),
-		Username:     common.GetContextKeyString(c, constant.ContextKeyUserName),
-		UserGroup:    common.GetContextKeyString(c, constant.ContextKeyUserGroup),
-		TokenId:      common.GetContextKeyInt(c, constant.ContextKeyTokenId),
-		TokenName:    c.GetString("token_name"),
-		Group:        common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
-		ChannelId:    common.GetContextKeyInt(c, constant.ContextKeyChannelId),
-		ChannelName:  common.GetContextKeyString(c, constant.ContextKeyChannelName),
-		ChannelType:  common.GetContextKeyInt(c, constant.ContextKeyChannelType),
-		ChannelTries: c.GetStringSlice("use_channel"),
+		Rid:                c.GetString(common.RequestIdKey),
+		TsStart:            start.UnixMilli(),
+		TsEnd:              end.UnixMilli(),
+		Method:             c.Request.Method,
+		Path:               c.Request.URL.Path,
+		Status:             w.Status(),
+		Stream:             common.GetContextKeyBool(c, constant.ContextKeyIsStream),
+		ClientIP:           c.ClientIP(),
+		Headers:            headers,
+		HeadersDropped:     dropped,
+		RespHeaders:        respHeaders,
+		RespHeadersDropped: respDropped,
+		UserId:             common.GetContextKeyInt(c, constant.ContextKeyUserId),
+		Username:           common.GetContextKeyString(c, constant.ContextKeyUserName),
+		UserGroup:          common.GetContextKeyString(c, constant.ContextKeyUserGroup),
+		TokenId:            common.GetContextKeyInt(c, constant.ContextKeyTokenId),
+		TokenName:          c.GetString("token_name"),
+		Group:              common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
+		ChannelId:          common.GetContextKeyInt(c, constant.ContextKeyChannelId),
+		ChannelName:        common.GetContextKeyString(c, constant.ContextKeyChannelName),
+		ChannelType:        common.GetContextKeyInt(c, constant.ContextKeyChannelType),
+		ChannelTries:       c.GetStringSlice("use_channel"),
 		Upstream: upstreamInfo{
 			PassThrough:          model_setting.GetGlobalSettings().PassThroughRequestEnabled || channelSetting.PassThroughBodyEnabled,
 			SystemPrompt:         channelSetting.SystemPrompt != "",

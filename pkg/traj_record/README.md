@@ -1,8 +1,23 @@
 # traj_record：按 API 协议记录调用
 
-本分支基于 `ikunycj/new-api` 的 `d9af547`。HTTP 录制已接入现有 `/v1` 路由，位于 RelayTrace 之后、Distribute 之前；没有替换 RelayTrace。目标基线没有 Responses WebSocket relay，因此本分支提供 `BeginWebSocket` 录制接口及单测，但没有可用的 WebSocket 接线。下文 WebSocket 格式描述接口契约，不表示本分支已部署该传输。
+本分支基于 `ikunycj/new-api` 的 `d9af547`。HTTP 录制接在 `/v1` 路由上，位于 RelayTrace 之后、Distribute 之前，没有替换 RelayTrace；渠道侧录制接在 `relay/channel/api_request.go` 的 `doRequest`。目标基线没有 Responses WebSocket relay，所以本分支带了 `BeginWebSocket` 录制接口和单测，但没有接线；下文的 WebSocket 格式是接口约定，不表示本分支已录 WebSocket。下文提到的设计文档、Python 读取和导出工具在独立的采集仓库里，不属于本 PR。
 
-## 当前行为（记录格式 v3）
+## 记录格式 v4（2026-11-04）
+
+在 v3 上加了下面几项，v3 的字段和读法不变。设计和取舍：`docs/traj_record/recording-v4-design-20261104.md`；读取：`atk_traj.traj_record.capture`。
+
+- **按 UTC 天封口（录制日）**：UTC 0 点轮转，文件名 `traj-<YYYYMMDD>-<NNN>.jsonl.zst`，日期和序号都是 UTC。一天之内按大小轮转时，新文件以 `file_start` 开头，前缀索引和 blob 不清空，所以**一天的文件要按序号连起来读**；只有 `segment_start`（进程启动、新的一天）清空。一天结束后写 `traj-<YYYYMMDD>.manifest.json`（文件名、大小、sha256）。v3 时代按本地时间命名的旧文件不动。
+- **封口的重试**：每次轮转都会给今天之前还没有 manifest 的录制日重压、重写 manifest（`sealPendingDays`）。开了压缩时 manifest 等所有文件都压好才写，所以压缩失败的那天不会被封口，也不会被上传，下一次轮转重试，不用等重启。
+- **启动恢复**：删掉 `*.tmp`（压缩和 manifest 都先写临时文件再改名），重压没压完的文件（只碰当天的，以及还没封口的那些天）；`traj.jsonl` 末尾不完整的一行截掉，字节数写进下一个 `segment_start` 的 `recovered_bytes`；`traj.jsonl` 属于前一天就立即封口；补写前几天缺的 manifest。轮转、压缩、manifest 都 fsync。
+- **渠道侧**（`channel` 数组）：`relay/channel/api_request.go` 的 `doRequest` 里每次发往渠道的请求记一项，重试也在。请求存成相对客户端侧请求的差量：`req_same`（规范 JSON 相同）、`req_delta`（`set` / `refs` / `del` / `history`），差量不比原文小一半时存 `req_raw`。两侧字节不同而存成 `req_same` 或 `req_delta` 时，另记 `req_canonical_sha256`（渠道侧请求体规范 JSON 的 sha256），还原结果靠它核对；字节相同时 `req_sha256` 和客户端侧的相同，还原就是客户端侧原文。规范 JSON：key 排序、无空白、数字照原文写、不做 HTML 转义（U+2028/2029 仍转义）。响应：`resp_same`，或者 `resp_lines`（只记不同的 SSE data 行），或者 `resp` 原文。SSE 的 `resp_same`、`resp_lines` 只比 data 行，event 行由网关重新生成、不比，渠道侧的 event 名不留；不同的 data 行不是合法 UTF-8 时改存整份（`resp_b64`）。非流式响应只有在两边都是合法 UTF-8、没有孤立代理字符、且 `json.Valid` 认为整份正好是一个 JSON 值时才按规范 JSON 比较，否则存整份：Go 的解码器会把非法 UTF-8 和孤立代理字符换成 U+FFFD、并忽略第一个值之后的内容，这几种差异一旦判成相同就补不回来了。请求侧同理，渠道侧请求体里还留着孤立代理字符时存 `req_raw`，不走差量。`resp_complete` 是渠道自己有没有发结束事件。URL 不带 query。
+- **渠道侧请求头**：除了下面的规则，请求头覆盖写过的头一律不记，名字进 `headers_dropped`，和 `upstream.header_override_keys` 一样只留名字：这些头的值通常是渠道凭据。键由挂点传进来（`GetEffectiveHeaderOverride(info)`），所以运行时覆盖（`param_override` 的 `set_header`/`copy_header`/`move_header`）写的头也在内。例外是值和客户端发来的同名头相同的：`pass_headers`（比如内置的亲和性规则 `claude cli trace`）把客户端的头原样复制进覆盖表，这些头不是渠道凭据，客户端侧已经按同样的规则记过，渠道侧照常记录。另外几个标识渠道账号、名字不含任何敏感子串的头也整个不记：`chatgpt-account-id`（Codex OAuth）、`appid`（baidu_v2，它是渠道 key 用 `|` 拆出来的第二段）、`openai-organization`、`x-goog-user-project`（Vertex 服务账号的项目 ID）。WSS 走的是 `DoWssRequest`，不经过 `doRequest`，所以 `Sec-WebSocket-Protocol` 里的 key 现在不会被记；以后接 WSS 挂点要处理它。
+- **`end_reason`**：`complete`、`truncated`、`client_canceled`、`channel_error`、`channel_cut`（渠道流没结束事件也没报错）、`gateway_error`、`unknown`。
+- **请求头**：`authorization`、`x-api-key` 等凭据头整个不记，名字进 `headers_dropped`；名字含 `auth`、`key`、`token`、`secret`、`cookie`、`password` 的其他头，值换成 `sha256:<前 16 位>`。网关回给客户端的响应头记在 `resp_headers`。
+- **线索字段**：`prompt_cache_key`、`previous_response_id`（请求体），`agent_id`、`parent_agent_id`（Claude Code 子代理头），`window_id`、`subagent`（Codex 头），`request_kind`、`thread_source`（Codex `x-codex-turn-metadata`，区分用户回合和辅助请求）；`lone_surrogates`（请求体里孤立代理字符的个数，网关会把它们换成 U+FFFD）。Claude Code 的 `session_id` 在 `metadata.user_id` 没有时退回 `X-Claude-Code-Session-Id` 头。其他客户端（任何协议）都没有会话 ID 时，退回 `X-Session-Id` 头（opencode 1.17 在 messages 和 responses 上都发，11/08 storie 实测）。
+- **计数行 `stats`**：每分钟、每次轮转前、关闭时一行，按 `api_family` 记上一行以来的 `seen`、`filtered`、`body_error`、`sampled_out`、`enqueued`、`dropped_queue`、`written`、`disk_paused`、`write_failed`。`written` 之和等于两行之间的 `call` 行数，录制审计逐行核对。
+
+## 记录格式 v3
+
 
 默认采集 `/v1/messages`、`/v1/responses`、`/v1/responses/compact`、`/v1/chat/completions` 的 POST 请求，不要求已知 User-Agent。`TRAJ_RECORD_ENABLED=true` 仍是总开关。Pi、OpenCode 使用这些接口时均可采集。
 
@@ -14,7 +29,16 @@
 - Responses WebSocket 录制接口供 relay 在读取客户端消息及实际写回消息处调用（本分支尚未接线）。`ws_open` / `ws_message` / `ws_call` / `ws_close` 保留连接 ID、连接内序号、方向、时间、原始消息、截断/IO 失败，以及调用关联信息；包含控制消息、网关错误、单独发送的终止事件。保存的是 WebSocket 应用消息，不是 TCP 分片。每条消息上限使用 `MAX_RESP_MB`；所有记录复用有界队列、磁盘保护和丢弃计数。
 - `ws_call` 另外保存该次原始 create 和 user/channel/request 等元数据，便于审计；当前 WebSocket 原始事件不做前缀去重。连接内序号的缺口可提示丢记录；连接 ID 不代表真实聊天 session。断连或轮转后仍须保留相关文件才能分析整个连接。
 
-生产样本验证结果见 [2026-10-26 验证报告](validation-20261026.md)。独立采集仓库的 Python 导出器可以逐字节重建 v2/v3 HTTP 请求；该离线工具不属于本 PR。WebSocket 事件须按原生事件分析，不能当作完整 HTTP 调用。
+导出并校验原文（原始文件不变）：
+
+```sh
+python scripts/traj_capture.py /path/to/traj-records --out out/capture-export
+# 可选：把可解析的 HTTP 调用导入中央库；未知身份保持独立
+python scripts/traj_capture.py /path/to/traj-records --out out/capture-export \
+  --library /path/to/library --source-id storie
+```
+
+导出目录的 `calls/` 包含原始请求字节（base64）、原始响应和采集元数据；`unparsed/` 留下不能解析的请求；`websocket/` 保留原生事件。**WebSocket 事件暂不自动导入中央库构图**，不会伪装成完整 HTTP 调用。旧版 ATIF CLI 仍只支持 Messages/Responses；Chat Completions 使用中央库导入路径。
 
 ### 单 key 回放（2026-10-23）
 
@@ -31,7 +55,7 @@
 
 traj_record 在网关上按 API 协议记录每一次选中的调用：完整请求、完整原始响应（包括 Claude 的 thinking 和 signature、Codex 的 reasoning 和 encrypted_content），以及尽量多的关联线索。存下来的数据用于离线重建 agent 轨迹，交给大模型打分，之后可能用于训练。
 
-traj_record 使用独立配置和输出文件。RelayTrace 面向通用请求审计，traj_record 面向保留调用底稿与离线重建，两个中间件可以分别或同时启用。
+traj_record 与 RelayTrace 无关：RelayTrace 面向所有流量做通用落盘，traj_record 为离线重建轨迹保留调用底稿，所以格式、去重、截断策略都按这个目标单独设计。
 
 默认关闭。设置 `TRAJ_RECORD_ENABLED=true` 才会生效。
 
@@ -81,7 +105,7 @@ signature 是这份数据里最需要保住的东西，有这几条约束：
 - **存 SSE 原文，不在网关里解析**：`resp` 是逐字节的 SSE。`thinking_blocks` 和 `signatures` 只是方便检索的计数。离线工具从原文重新组装块，thinking、text、tool_use 的交错顺序，以及每个 signature 属于哪个块，都不会丢。
 - **以响应为准，不以历史为准**：样本里 Claude Code 回传的 thinking 和 signature 和响应逐字节一致，但历史里同一条消息的其他部分（tool_use.input）可能被改过。所以 agent step 一律取当次调用的原始响应。
 - **正文可能是空的**：正文是否下发由请求里的 `thinking.display` 决定。签名对应的是服务端的原始思维链，不是下发的正文。当前 Claude Code 对 Opus 发的是 `{"type":"adaptive","display":"updates"}`：大多数 thinking 块正文为空、只有 signature，少数块带一两句进度文字。即使有正文，也只是摘要或进度，不是原始推理。
-- **转格式时的取舍**：ATIF 的 `extra.anthropic_content` 保留原始块，签名和块的对应关系完整。OpenAI 格式没有标准字段，用扩展字段 `reasoning_content` 和 `thinking_signatures`。一条消息里有多个 thinking 块时，这两个字段对不齐，需要精确对应时以 ATIF 为准（离线转换工具不在本 PR 中）。
+- **转格式时的取舍**：ATIF 的 `extra.anthropic_content` 保留原始块，签名和块的对应关系完整。OpenAI 格式没有标准字段，用扩展字段 `reasoning_content` 和 `thinking_signatures`。一条消息里有多个 thinking 块时，这两个字段对不齐，需要精确对应时以 ATIF 为准（见 `../../scripts/README.md`）。
 
 ### 其余取舍
 
@@ -302,7 +326,7 @@ for line in file:
 | `TRAJ_RECORD_ENQUEUE_TIMEOUT_MS` | `200` | 队列满时的最长等待时间 |
 | `TRAJ_RECORD_MAX_RESP_MB` | `64` | 单个响应的捕获上限 |
 | `TRAJ_RECORD_MAX_FILE_MB` | `1024` | 轮转阈值 |
-| `TRAJ_RECORD_MAX_BACKUPS` | `0`（全部保留） | 保留的轮转文件数 |
+| `TRAJ_RECORD_MAX_BACKUPS` | `0`（全部保留） | 保留的轮转文件数。v4 下不要设：它按文件删，一个录制日后面的文件要靠前面的前缀和 blob 才能还原，manifest 也还列着删掉的文件 |
 | `TRAJ_RECORD_ZSTD_WINDOW_MB` | `128` | 轮转文件的 zstd 窗口；0 表示不压缩 |
 | `TRAJ_RECORD_MIN_FREE_DISK_MB` | `2048` | 剩余空间低于此值时暂停；0 表示不检查 |
 | `TRAJ_RECORD_INDEX_TTL_MIN` | `360` | 会话在索引中的空闲过期时间 |
@@ -326,5 +350,5 @@ TRAJ_RECORD_SAMPLES=/path/gpt-trace-samples.jsonl go test -run TestReplaySamples
 
 - 未验证：压缩请求本身（Claude Code 发起的"请总结"请求）是否是旧历史的前缀延伸；`claude --resume` 恢复会话时 session_id 和历史字节是否保持一致。这两点都只影响去重率，不影响正确性。
 - 记录的是 agent 侧字节，不是上游实际收到的字节（见第 1 节）。上游侧记录点留待后续实现。new-api 的 Codex 渠道（ChatGPT 订阅）在转发前会补空的 `instructions`、强制 `store=false`，并删掉 `max_output_tokens`、`temperature` 等字段。
-- Responses WebSocket 录制 API 已包含单测，但目标基线没有相应 relay，尚未接线。
-- 离线格式转换和会话构图不属于此插件的运行路径。
+- Responses WebSocket 录制接口已带单测，但目标基线没有相应 relay，尚未接线。
+- 离线脚本 `scripts/traj_to_atif.py` 暂时只转换 Claude 记录，Codex 记录会被跳过并计数。

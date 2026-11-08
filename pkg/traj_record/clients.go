@@ -2,6 +2,7 @@ package traj_record
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -36,6 +37,15 @@ type client struct {
 }
 
 var clients = []*client{claudeClient, codexClient, chatClient}
+
+// requestIds runs the client's own extraction, then falls back to
+// X-Session-Id, which clients outside the uaPrefixes send on every protocol
+// (opencode 1.17, seen on storie 11/08, also copies it to
+// X-Session-Affinity).
+func requestIds(cl *client, rec *callRecord, top map[string]json.RawMessage) {
+	cl.requestIds(rec, top)
+	rec.SessionId = cmp.Or(rec.SessionId, rec.Headers["X-Session-Id"])
+}
 
 func clientByName(name string) *client {
 	for _, cl := range clients {

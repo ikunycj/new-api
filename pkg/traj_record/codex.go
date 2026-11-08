@@ -34,12 +34,23 @@ func codexRequestIds(rec *callRecord, top map[string]json.RawMessage) string {
 		TurnId         string `json:"turn_id"`
 		ParentThreadId string `json:"x-codex-parent-thread-id"`
 		InstallationId string `json:"x-codex-installation-id"`
+		TurnMetadata   string `json:"x-codex-turn-metadata"`
 	}
 	if md := top["client_metadata"]; md != nil {
 		_ = common.Unmarshal(md, &meta)
 	}
 	rec.SessionId, rec.ThreadId, rec.TurnId = meta.SessionId, meta.ThreadId, meta.TurnId
 	rec.ParentThreadId, rec.DeviceId = meta.ParentThreadId, meta.InstallationId
+	// x-codex-turn-metadata is a JSON string. request_kind ("turn",
+	// "compaction") and thread_source ("subagent", "guardian_review") tell
+	// the user's own turns from the client's auxiliary requests.
+	var turn struct {
+		RequestKind  string `json:"request_kind"`
+		ThreadSource string `json:"thread_source"`
+	}
+	if tm := cmp.Or(meta.TurnMetadata, rec.Headers["X-Codex-Turn-Metadata"]); tm != "" && common.UnmarshalJsonStr(tm, &turn) == nil {
+		rec.RequestKind, rec.ThreadSource = turn.RequestKind, turn.ThreadSource
+	}
 	// The ids are also sent as headers: Session_id by older Codex,
 	// Session-Id and Thread-Id since 0.15x.
 	rec.SessionId = cmp.Or(rec.SessionId, rec.Headers["Session-Id"], rec.Headers["Session_id"])
