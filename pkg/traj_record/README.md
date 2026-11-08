@@ -49,7 +49,7 @@ python scripts/traj_capture.py /path/to/traj-records --out out/capture-export \
 | GPT | 2,103 | 294.5 MB | 156.2 MB | 46,801 | 5.45 MB |
 | Claude | 1,824 | 96.2 MB | 37.6 MB | 15,834 | 2.39 MB |
 
-没有证据支持现在替换算法，因此本次保留现有索引及上限。活跃 token scope 不会按内部旧项独立过期、超限可能整块淘汰的问题仍在；轮转清空索引，缺失命中只影响文件大小。以上内存仅是索引留存的近似测量，不是进程峰值、队列或响应缓存。复现：在打好补丁的上游源码运行 `TRAJ_INDEX_SAMPLES=/path/samples.jsonl go test ./pkg/traj_record -run TestReplaySingleKeyIndex -v`。
+没有证据支持现在替换算法，因此本次保留现有索引及上限。活跃 token scope 不会按内部旧项独立过期、超限可能整块淘汰的问题仍在；新的一天清空索引（v4 起同一天内按大小轮转不清），缺失命中只影响文件大小。以上内存仅是索引留存的近似测量，不是进程峰值、队列或响应缓存。复现：在打好补丁的上游源码运行 `TRAJ_INDEX_SAMPLES=/path/samples.jsonl go test ./pkg/traj_record -run TestReplaySingleKeyIndex -v`。
 
 下文的 Claude Code/Codex 行为分析说明原始设计动机；客户端假设不作为 v3 通用采集的准入条件。
 
@@ -111,7 +111,7 @@ signature 是这份数据里最需要保住的东西，有这几条约束：
 
 - **在 agent 侧记录**：记的是 Claude Code 实际发出和收到的字节，不是网关转给上游的字节。网关可能改写的地方都记在 `upstream` 字段里，离线分析能判断两者是否等价（第 1 节）。
 - **网关只留线索，关联放到离线做**：会话、分支、子 agent、压缩的拼接都不在网关里判断。网关只尽量多地留下 `session_id`、`parent_rid`、`resp_tool_uses`、时间戳等线索（第 6 节）。网关的逻辑保持简单，关联规则改了也只需离线重算。
-- **每个文件自包含**：文件轮转时清空索引，每个文件可以单独重建、单独删除（第 7 节）。
+- **每个录制日自包含**：UTC 0 点清空索引，一个录制日的文件按序号连起来可以单独重建、单独删除（第 7 节）。
 
 ### 会话采样
 
@@ -254,7 +254,7 @@ Claude Code 每轮会改写历史末尾的一两条消息：`cache_control` 断�
 
 请求头按名称过滤：名称中含 `auth`、`key`、`token`、`secret`、`cookie`、`password`（不区分大小写）的请求头一律不记录，所以 Authorization、X-Api-Key 不会落盘。
 
-## 7. 文件格式与自包含
+## 7. 文件格式与录制日
 
 目录 `TRAJ_RECORD_DIR`（默认 `./logs/traj-record`），当前文件为 `traj.jsonl`，文件及轮转压缩文件的创建权限为 0640，目录为 0750，允许同组用户读取（实际创建权限受进程 umask 影响）。已有文件和目录的权限不会自动修改，升级时需按需执行 `chmod g+rx "$TRAJ_RECORD_DIR"` 和 `chmod g+r "$TRAJ_RECORD_DIR"/traj*.jsonl*`。每行一个 JSON 对象，`type` 字段区分三种行：
 
@@ -272,9 +272,9 @@ v2 相对 v1 的变化：新增 `client`、`history_key`，`n_messages` 改名�
 `client_canceled` 表示 handler 返回时客户端已经断开。agent 中途放弃一次生成（用户打断，或者 Codex 收到子 agent 的消息后重开这一轮）时，响应停在半截，`resp_complete` 为 false，同时 `client_canceled` 为 true。上游自己中断时，`client_canceled` 为 false。注意 Codex 常在收到 `response.completed` 后立即断开，而 new-api 还要等上游流结束、做计费，所以完整的响应也经常带 `client_canceled: true`。只有和 `resp_complete: false` 同时出现时，它才表示中途放弃。
 
 - blob 行总是写在引用它的 call 行之前。
-- **每个文件自包含**：文件超过 `TRAJ_RECORD_MAX_FILE_MB` 时轮转，轮转同时清空前缀索引和 blob 集合，并在新文件开头写 `segment_start`。新文件中每个会话的第一条记录都是 keyframe，所有 parent_rid 和 blob 引用都能在同一个文件内找到。任意一个文件可以单独处理、单独删除。
-- 进程重启也会写 `segment_start`，并且内存索引从空开始。因此离线工具在遇到 `segment_start` 时应清空自己的状态。重建器只需要按行顺序读取一个文件。
-- 轮转后的文件改名为 `traj-<YYYYMMDD-HHMMSS.mmm>.jsonl`，并在后台压缩成 `.jsonl.zst`。`TRAJ_RECORD_MAX_BACKUPS` 默认为 0，即全部保留（这些文件是训练数据，不是日志）。
+- **按录制日分段**：UTC 0 点轮转，清空前缀索引和 blob 集合，新文件以 `segment_start` 开头，每个会话的第一条记录都是 keyframe。同一天内文件超过 `TRAJ_RECORD_MAX_FILE_MB` 也轮转，但新文件以 `file_start` 开头，索引和 blob 不清，后面的文件会引用前面文件里的 `parent_rid` 和 blob。所以单个文件不能单独处理：一个录制日的文件要按序号连起来读，整天处理、整天删除，有 manifest 的那天才算完整。
+- 进程重启也会写 `segment_start`，并且内存索引从空开始，所以一个录制日里可能有几段。离线工具遇到 `segment_start` 时清空自己的状态，遇到 `file_start` 不清。重建器把一天的文件按序号连起来，按行顺序读。
+- 轮转后的文件改名为 `traj-<YYYYMMDD>-<NNN>.jsonl`（UTC 日期和当天序号），并在后台压缩成 `.jsonl.zst`；那天的文件都压好后写 `traj-<YYYYMMDD>.manifest.json`。v3 时代按本地时间命名的 `traj-<YYYYMMDD-HHMMSS.mmm>.jsonl` 不动。`TRAJ_RECORD_MAX_BACKUPS` 默认为 0，即全部保留（这些文件是训练数据，不是日志）。
 
 重建算法（`traj_record_test.go` 中的 `reconstruct` 是参考实现）：
 

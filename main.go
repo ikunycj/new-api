@@ -257,8 +257,8 @@ func main() {
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
 	}
-	// 落盘缓冲区中剩余的 trace 记录，避免重启丢失已接收的审计数据
 	traj_record.Close()
+	// 落盘缓冲区中剩余的 trace 记录，避免重启丢失已接收的审计数据
 	relaytrace.Close()
 	common.SysLog("server exited")
 }
