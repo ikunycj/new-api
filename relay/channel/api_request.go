@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	common2 "github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/traj_record"
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -506,7 +509,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	}
 
+	var attempt *traj_record.ChannelAttempt
+	if info.ChannelMeta != nil {
+		attempt = traj_record.ChannelRequest(c, req, info.RetryIndex, info.ChannelId, info.ChannelType, info.UpstreamModelName,
+			slices.Collect(maps.Keys(common.GetEffectiveHeaderOverride(info))))
+	}
 	resp, err := client.Do(req)
+	attempt.Response(resp, err)
 	if err != nil {
 		logger.LogError(c, "do request failed: "+err.Error())
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
