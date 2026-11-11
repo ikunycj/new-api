@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"gorm.io/gorm"
 )
 
 const adminConsoleStatsCacheTTL = time.Minute
@@ -13,6 +14,10 @@ var adminConsoleStatsCache = struct {
 	sync.Mutex
 	expiresAt time.Time
 	stats     AdminConsoleStats
+	// A failed refresh is remembered briefly so repeated page loads do not
+	// rerun the expensive queries back to back.
+	errExpiresAt time.Time
+	err          error
 }{}
 
 type AdminConsoleKeyStats struct {
@@ -160,7 +165,7 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		return getAdminConsoleStatsPortable(now)
 	}
 	var stats AdminConsoleStats
-	todayStart, tomorrowStart, weekStart, rollingMonthStart, monthStart := adminConsoleTimeBounds(now)
+	todayStart, tomorrowStart, _, _, monthStart := adminConsoleTimeBounds(now)
 	metricEnd := now.Unix()
 
 	var mainRow adminConsoleMainRow
@@ -185,63 +190,47 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 				AND (paid_cents > 0 OR money > 0)
 				AND COALESCE(payment_method, '') <> ?
 		) successful_topups`
-	if err := DB.Raw(
-		mainQuery,
-		common.TokenStatusEnabled,
-		common.ChannelStatusEnabled,
-		common.ChannelStatusAutoDisabled,
-		todayStart,
-		tomorrowStart,
-		todayStart,
-		tomorrowStart,
-		monthStart,
-		tomorrowStart,
-		common.TopUpStatusSuccess,
-		PaymentMethodBalance,
-	).Scan(&mainRow).Error; err != nil {
+	if err := adminConsoleMainQuery(func(tx *gorm.DB) error {
+		return tx.Raw(
+			mainQuery,
+			common.TokenStatusEnabled,
+			common.ChannelStatusEnabled,
+			common.ChannelStatusAutoDisabled,
+			todayStart,
+			tomorrowStart,
+			todayStart,
+			tomorrowStart,
+			monthStart,
+			tomorrowStart,
+			common.TopUpStatusSuccess,
+			PaymentMethodBalance,
+		).Scan(&mainRow).Error
+	}); err != nil {
 		return stats, err
 	}
 
-	var logRow adminConsoleLogRow
-	logQuery := `
-		SELECT
-			COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS requests_today,
-			COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS requests_month,
-			COUNT(*) AS requests_total,
-			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_today,
-			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS tokens_month,
-			COALESCE(SUM(prompt_tokens::bigint + completion_tokens::bigint), 0) AS tokens_total,
-			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_today,
-			COALESCE(SUM(quota) FILTER (WHERE created_at >= ? AND created_at < ?), 0) AS quota_month,
-			COALESCE(SUM(quota), 0) AS quota_total,
-			COUNT(DISTINCT token_id) FILTER (WHERE token_id <> 0 AND created_at >= ? AND created_at < ?) AS active_keys_today,
-			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_today,
-			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_week,
-			COUNT(DISTINCT user_id) FILTER (WHERE user_id <> 0 AND created_at >= ? AND created_at < ?) AS active_users_month,
-			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p50_seconds_today,
-			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p90_seconds_today,
-			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY use_time) FILTER (WHERE use_time > 0 AND created_at >= ? AND created_at < ?), 0) AS response_p99_seconds_today
-		FROM logs
-		WHERE type = ?`
-	if err := LOG_DB.Raw(
-		logQuery,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		monthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		weekStart, tomorrowStart,
-		rollingMonthStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		todayStart, tomorrowStart,
-		LogTypeConsume,
-	).Scan(&logRow).Error; err != nil {
+	logRow, err := getAdminConsoleUsage(now)
+	if err != nil {
 		return stats, err
 	}
+	var responseRow struct {
+		P50 float64 `gorm:"column:p50"`
+		P90 float64 `gorm:"column:p90"`
+		P99 float64 `gorm:"column:p99"`
+	}
+	responseQuery := `
+		SELECT
+			COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY use_time), 0) AS p50,
+			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY use_time), 0) AS p90,
+			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY use_time), 0) AS p99
+		FROM logs
+		WHERE type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?`
+	if err := adminConsoleLogQuery(func(tx *gorm.DB) error {
+		return tx.Raw(responseQuery, LogTypeConsume, todayStart, tomorrowStart).Scan(&responseRow).Error
+	}); err != nil {
+		return stats, err
+	}
+	logRow.ResponseP50SecondsToday, logRow.ResponseP90SecondsToday, logRow.ResponseP99SecondsToday = responseRow.P50, responseRow.P90, responseRow.P99
 
 	var throughputRow adminConsoleThroughputRow
 	// Include every elapsed minute so the percentiles represent today, including
@@ -275,18 +264,12 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY tpm), 0) AS tpm_p90,
 			COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY tpm), 0) AS tpm_p99
 		FROM minute_buckets`
-	if err := LOG_DB.Raw(
-		throughputQuery,
-		todayStart,
-		metricEnd,
-		LogTypeConsume,
-		todayStart,
-		metricEnd,
-	).Scan(&throughputRow).Error; err != nil {
+	if err := adminConsoleLogQuery(func(tx *gorm.DB) error {
+		return tx.Raw(throughputQuery, todayStart, metricEnd, LogTypeConsume, todayStart, metricEnd).Scan(&throughputRow).Error
+	}); err != nil {
 		return stats, err
 	}
 
-	var concurrencyRow adminConsoleConcurrencyRow
 	// Consume logs are written at completion, so rebuild time-weighted request
 	// intervals and include the zero-concurrency segments from month start to now.
 	concurrencyQuery := `
@@ -346,18 +329,13 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.90), 0) AS p90,
 			COALESCE(MIN(concurrency) FILTER (WHERE cumulative_duration >= total_duration * 0.95), 0) AS p95
 		FROM ranked`
-	if err := LOG_DB.Raw(
-		concurrencyQuery,
-		monthStart,
-		metricEnd,
-		LogTypeConsume,
-		monthStart,
-		metricEnd,
-		monthStart,
-		metricEnd,
-	).Scan(&concurrencyRow).Error; err != nil {
-		return stats, err
-	}
+	concurrency := cachedAdminConsoleConcurrency(now, func() ([3]int64, error) {
+		var row adminConsoleConcurrencyRow
+		err := adminConsoleLogQuery(func(tx *gorm.DB) error {
+			return tx.Raw(concurrencyQuery, monthStart, metricEnd, LogTypeConsume, monthStart, metricEnd, monthStart, metricEnd).Scan(&row).Error
+		})
+		return [3]int64{row.P50, row.P90, row.P95}, err
+	})
 
 	stats.APIKeys = AdminConsoleKeyStats{Total: mainRow.APIKeysTotal, Active: logRow.ActiveKeysToday, Enabled: mainRow.APIKeysEnabled}
 	stats.Channels = AdminConsoleChannelStats{Total: mainRow.ChannelsTotal, Enabled: mainRow.ChannelsEnabled, AutoDisabled: mainRow.ChannelsAutoDisabled}
@@ -379,9 +357,9 @@ func getAdminConsoleStatsAt(now time.Time) (AdminConsoleStats, error) {
 		TodayTPMP50:             throughputRow.TPMP50,
 		TodayTPMP90:             throughputRow.TPMP90,
 		TodayTPMP99:             throughputRow.TPMP99,
-		MonthConcurrencyP50:     concurrencyRow.P50,
-		MonthConcurrencyP90:     concurrencyRow.P90,
-		MonthConcurrencyP95:     concurrencyRow.P95,
+		MonthConcurrencyP50:     concurrency[0],
+		MonthConcurrencyP90:     concurrency[1],
+		MonthConcurrencyP95:     concurrency[2],
 	}
 	stats.SystemLoad = getAdminConsoleSystemLoad(false)
 	return stats, nil
@@ -394,8 +372,13 @@ func GetAdminConsoleStats() (AdminConsoleStats, error) {
 	if now.Before(adminConsoleStatsCache.expiresAt) {
 		return adminConsoleStatsCache.stats, nil
 	}
+	if now.Before(adminConsoleStatsCache.errExpiresAt) {
+		return AdminConsoleStats{}, adminConsoleStatsCache.err
+	}
 	stats, err := getAdminConsoleStatsAt(now)
 	if err != nil {
+		adminConsoleStatsCache.err = err
+		adminConsoleStatsCache.errExpiresAt = now.Add(adminConsoleErrorBackoff)
 		return AdminConsoleStats{}, err
 	}
 	adminConsoleStatsCache.stats = stats

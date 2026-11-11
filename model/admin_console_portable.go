@@ -23,7 +23,7 @@ type portableAdminConsoleLog struct {
 
 func getAdminConsoleStatsPortable(now time.Time) (AdminConsoleStats, error) {
 	var stats AdminConsoleStats
-	todayStart, tomorrowStart, weekStart, rollingMonthStart, monthStart := adminConsoleTimeBounds(now)
+	todayStart, tomorrowStart, _, _, monthStart := adminConsoleTimeBounds(now)
 	metricEnd := now.Unix()
 
 	var count int64
@@ -73,35 +73,8 @@ func getAdminConsoleStatsPortable(now time.Time) (AdminConsoleStats, error) {
 		}
 	}
 
-	var logRow struct {
-		RequestsToday, RequestsMonth, RequestsTotal int64
-		TokensToday, TokensMonth, TokensTotal       int64
-		QuotaToday, QuotaMonth, QuotaTotal          int64
-		ActiveKeysToday, ActiveUsersToday           int64
-		ActiveUsersWeek, ActiveUsersMonth           int64
-	}
-	logQuery := `SELECT
-		SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS requests_today,
-		SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS requests_month,
-		COUNT(*) AS requests_total,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN prompt_tokens + completion_tokens ELSE 0 END), 0) AS tokens_today,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN prompt_tokens + completion_tokens ELSE 0 END), 0) AS tokens_month,
-		COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens_total,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN quota ELSE 0 END), 0) AS quota_today,
-		COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN quota ELSE 0 END), 0) AS quota_month,
-		COALESCE(SUM(quota), 0) AS quota_total,
-		COUNT(DISTINCT CASE WHEN token_id <> 0 AND created_at >= ? AND created_at < ? THEN token_id END) AS active_keys_today,
-		COUNT(DISTINCT CASE WHEN user_id <> 0 AND created_at >= ? AND created_at < ? THEN user_id END) AS active_users_today,
-		COUNT(DISTINCT CASE WHEN user_id <> 0 AND created_at >= ? AND created_at < ? THEN user_id END) AS active_users_week,
-		COUNT(DISTINCT CASE WHEN user_id <> 0 AND created_at >= ? AND created_at < ? THEN user_id END) AS active_users_month
-		FROM logs WHERE type = ?`
-	if err := LOG_DB.Raw(logQuery,
-		todayStart, tomorrowStart, monthStart, tomorrowStart,
-		todayStart, tomorrowStart, monthStart, tomorrowStart,
-		todayStart, tomorrowStart, monthStart, tomorrowStart,
-		todayStart, tomorrowStart, todayStart, tomorrowStart,
-		weekStart, tomorrowStart, rollingMonthStart, tomorrowStart,
-		LogTypeConsume).Scan(&logRow).Error; err != nil {
+	logRow, err := getAdminConsoleUsage(now)
+	if err != nil {
 		return stats, err
 	}
 	stats.Requests = AdminConsolePeriodStats{Today: logRow.RequestsToday, Month: logRow.RequestsMonth, Total: logRow.RequestsTotal}
@@ -126,11 +99,13 @@ func getAdminConsoleStatsPortable(now time.Time) (AdminConsoleStats, error) {
 	stats.Performance.TodayRPMP50, stats.Performance.TodayRPMP90, stats.Performance.TodayRPMP99 = rpm[0], rpm[1], rpm[2]
 	stats.Performance.TodayTPMP50, stats.Performance.TodayTPMP90, stats.Performance.TodayTPMP99 = tpm[0], tpm[1], tpm[2]
 
-	var concurrencyLogs []portableAdminConsoleLog
-	if err := LOG_DB.Model(&Log{}).Select("created_at, use_time").Where("type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?", LogTypeConsume, monthStart, metricEnd).Find(&concurrencyLogs).Error; err != nil {
-		return stats, err
-	}
-	concurrency := portableConcurrencyPercentiles(concurrencyLogs, monthStart, metricEnd)
+	concurrency := cachedAdminConsoleConcurrency(now, func() ([3]int64, error) {
+		var concurrencyLogs []portableAdminConsoleLog
+		if err := LOG_DB.Model(&Log{}).Select("created_at, use_time").Where("type = ? AND use_time > 0 AND created_at >= ? AND created_at < ?", LogTypeConsume, monthStart, metricEnd).Find(&concurrencyLogs).Error; err != nil {
+			return [3]int64{}, err
+		}
+		return portableConcurrencyPercentiles(concurrencyLogs, monthStart, metricEnd), nil
+	})
 	stats.Performance.MonthConcurrencyP50, stats.Performance.MonthConcurrencyP90, stats.Performance.MonthConcurrencyP95 = concurrency[0], concurrency[1], concurrency[2]
 	stats.SystemLoad = getAdminConsoleSystemLoad(false)
 	return stats, nil
