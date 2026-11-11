@@ -61,10 +61,9 @@ New API 把多个模型厂商和异构接口收敛到一个可管理的入口。
 ```bash
 git clone https://github.com/QuantumNous/new-api.git
 cd new-api
-cp .env.example .env
 ```
 
-编辑 `.env`，取消注释或补充以下必需配置并替换示例值：
+首次配置请参考 `.env.example`。根目录 `.env` 为受保护配置，已有文件不得直接覆盖；创建或修改配置前应明确目标环境和字段授权。以下仅列出完整本地栈使用的配置项：
 
 ```dotenv
 POSTGRES_USER=new_api
@@ -104,7 +103,7 @@ docker run --name new-api -d --restart always \
 
 未设置 `SQL_DSN` 时，服务会使用 `/data`（或 `SQLITE_PATH` 指定位置）下的 SQLite 数据库。生产环境建议使用 PostgreSQL 或 MySQL，设置稳定的 `SESSION_SECRET` 和 `CRYPTO_SECRET`，并固定镜像版本而不是使用 `latest`。
 
-更多生产部署方式见 [部署文档](./docs/development-deployment.md) 和 [官方文档](https://docs.newapi.pro/zh/docs/installation)。
+更多生产部署方式见 [部署文档](./docs/deployment/README.md) 和 [官方文档](https://docs.newapi.pro/zh/docs/installation)。
 
 ## 本地开发
 
@@ -120,11 +119,7 @@ docker run --name new-api -d --restart always \
 
 ### 方式一：本机运行 Go 和前端
 
-复制配置模板并按实际环境填写。只做轻量试用时可以省略 `SQL_DSN`，程序会回退到 SQLite；团队联调时请明确配置测试数据库和 Redis。
-
-```bash
-cp .env.example .env
-```
+使用已配置好的本地 `.env`，并确认它连接约定的测试 PostgreSQL 和 Redis。普通开发、启动与构建不得修改该文件，也不得从部署环境复制配置；首次配置或字段调整见[配置边界](./docs/deployment/README.md#配置边界)。
 
 首次拉取代码时，先安装依赖并生成 Go 后端需要嵌入的前端资源：
 
@@ -192,14 +187,14 @@ docker compose -f docker-compose.dev.yml down
 
 - 新功能按 `router -> controller -> service -> model` 分层；厂商适配器放在 `relay/channel/`。
 - JSON 的序列化和反序列化使用 `common/json.go` 提供的包装函数，不在业务代码中直接调用 `encoding/json` 的操作函数。
-- 数据库代码必须同时兼容 SQLite、MySQL（>= 5.7.8）和 PostgreSQL（>= 9.6）；优先使用 GORM 查询方法，确有必要使用原生 SQL 时提供各数据库分支。
+- 新增或修改数据库代码面向 PostgreSQL（>= 9.6），优先使用 GORM；不为新功能新增 SQLite/MySQL 兼容分支，已有兼容路径按任务要求维护。
 - 请求中的可选数值字段使用指针类型保留显式的 `0`、`false` 等值；涉及额度、计费和任务时遵守 `pkg/billingexpr/expr.md` 及项目中的额度饱和规则。
 - 不在代码、提交记录、日志或截图中写入 API Key、数据库密码、会话密钥和其他敏感配置。
 
 ### 前端
 
 - 技术栈为 React 19、TypeScript、TanStack Router、TanStack Query、Zustand、Base UI 和 Tailwind CSS。
-- 所有用户可见文案都通过 `react-i18next` 的 `t()` 提供翻译；新增或修改文案时同步维护 `web/default/src/i18n/locales/`。
+- 普通用户、公共页面和共享组件的文案通过 `react-i18next` 的 `t()` 提供翻译，并同步维护 `web/default/src/i18n/locales/`；管理员专用内部界面按项目约定使用中文。
 - 功能页面放在 `web/default/src/features/<feature>/`，通用组件和工具分别放在 `src/components/`、`src/lib/`。
 - 使用项目已有的 UI 组件和图标，保持键盘操作、表单校验、错误提示和响应式布局的一致性。
 
@@ -263,17 +258,18 @@ go build -o new-api .
 docker build -t new-api:local .
 ```
 
-生产发布应使用经过审查的 commit SHA、版本标签或镜像 digest，并在上线前完成数据库备份、健康检查和最小业务请求验证。详细流程见 [开发、构建与部署](./docs/development-deployment.md)。
+既有服务器发布按部署技能核对指定目标分支和提交，在工作站构建、上传制品并保留回滚版本，不在生产主机执行源码镜像构建。上线前完成数据库备份、健康检查和最小业务请求验证。详细流程见 [开发、构建与部署](./docs/deployment/README.md)。
 
 ## 文档导航
 
-- [开发、构建与部署](./docs/development-deployment.md)：本地开发、Compose、服务器上线、验证和回滚。
+- [仓库文档总索引](./docs/README.md)：开发运维、渠道路由、计费、接口、翻译和历史设计。
+- [开发、构建与部署](./docs/deployment/README.md)：本地开发、Compose、服务器上线、验证和回滚。
 - [环境变量参考](./.env.example)：配置项名称和用途；真实环境配置不应提交。
 - [官方文档](https://docs.newapi.pro/zh/docs)：安装、API、功能和常见问题。
 - [管理 API OpenAPI 描述](./docs/openapi/api.json)。
 - [模型中转接口 OpenAPI 描述](./docs/openapi/relay.json)。
 - [计费表达式说明](./pkg/billingexpr/expr.md)：动态计费和额度换算规则。
-- `deploy/` 与 `docs/` 下的 README 和专题文档：对应部署、压测、监控等局部场景。
+- [压测工具说明](./deploy/loadtest/README.md)：对应压测场景的配置与执行。
 
 ## 贡献与许可证
 
