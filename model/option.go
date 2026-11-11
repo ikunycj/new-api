@@ -66,6 +66,7 @@ func InitOptionMap() {
 	common.OptionMap[common.ChannelHealthHistoryRetentionDaysOptionKey] = strconv.Itoa(common.ChannelHealthHistoryRetentionDays())
 	common.OptionMap[common.PublicErrorModeOptionKey] = common.PublicErrorMode()
 	common.OptionMap["LogConsumeEnabled"] = strconv.FormatBool(common.LogConsumeEnabled)
+	common.OptionMap["RequestLogAsyncEnabled"] = strconv.FormatBool(common.RequestLogAsyncEnabled)
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
 	common.OptionMap["DrawingEnabled"] = strconv.FormatBool(common.DrawingEnabled)
@@ -416,6 +417,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.SetChannelHealthHistoryEnabled(boolValue)
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
+		case "RequestLogAsyncEnabled":
+			common.RequestLogAsyncEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
 			// 兼容旧字段：同步到新配置 general_setting.quota_display_type（运行时生效）
 			// true -> USD, false -> TOKENS

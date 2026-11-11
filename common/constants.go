@@ -88,6 +88,12 @@ var ObservabilityEventLogEnabled = true
 
 var LogConsumeEnabled = true
 
+// RequestLogAsyncEnabled moves consume/error log INSERTs off the relay path to
+// the background writer in model/log_writer.go. Off by default; turning it off
+// at runtime switches new rows back to synchronous writes immediately, while
+// rows already queued are still flushed.
+var RequestLogAsyncEnabled = false
+
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
 

@@ -6607,6 +6607,8 @@
     "Animations": "Animations",
     "Contains script": "Contains script",
     "Truncated": "Truncated",
-    "Bench output": "Bench output"
+    "Bench output": "Bench output",
+    "Write request logs asynchronously": "Write request logs asynchronously",
+    "Batch consume and error log writes in the background so a slow database does not hold requests open. Turn off to switch back to synchronous writes immediately; queued logs are still saved.": "Batch consume and error log writes in the background so a slow database does not hold requests open. Turn off to switch back to synchronous writes immediately; queued logs are still saved."
 }
 }
