@@ -6650,6 +6650,8 @@
     "Animations": "动画",
     "Contains script": "含脚本",
     "Truncated": "已截断",
-    "Bench output": "巡检产物"
+    "Bench output": "巡检产物",
+    "Write request logs asynchronously": "异步写入请求日志",
+    "Batch consume and error log writes in the background so a slow database does not hold requests open. Turn off to switch back to synchronous writes immediately; queued logs are still saved.": "在后台批量写入消费和错误日志，避免数据库变慢时拖住请求。关闭后立即恢复同步写入，已排队的日志仍会保存。"
 }
 }

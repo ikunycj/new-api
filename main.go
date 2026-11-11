@@ -105,6 +105,9 @@ func main() {
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
+	// 后台批量写请求日志；是否启用由 RequestLogAsyncEnabled 选项控制，关闭时仍为同步写入
+	model.StartRequestLogWriter()
+
 	// 周期性重载授权策略，保证多节点/多 master 部署下权限变更能传播到每个实例
 	go authz.StartPolicySync(common.SyncFrequency)
 
@@ -271,6 +274,8 @@ func main() {
 			common.SysError(fmt.Sprintf("metrics server forced to shutdown: %v", err))
 		}
 	}
+	// 请求结束后再落盘队列中的日志，避免重启丢失已受理的计费记录
+	model.StopRequestLogWriter()
 	// 内存中的看板数据保存入库，避免重启丢失未落库数据 (issue #5679)
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()

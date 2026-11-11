@@ -80,12 +80,14 @@ import type { LogCleanupTask } from '../types'
 
 const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
+  RequestLogAsyncEnabled: z.boolean(),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
 
 type LogSettingsSectionProps = {
   defaultEnabled: boolean
+  defaultAsyncEnabled: boolean
 }
 
 type ServerLogInfo = {
@@ -141,6 +143,7 @@ function isActiveLogCleanupTask(task: LogCleanupTask | null) {
 
 export function LogSettingsSection({
   defaultEnabled,
+  defaultAsyncEnabled,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -148,6 +151,7 @@ export function LogSettingsSection({
     resolver: zodResolver(logSettingsSchema),
     defaultValues: {
       LogConsumeEnabled: defaultEnabled,
+      RequestLogAsyncEnabled: defaultAsyncEnabled,
     },
   })
 
@@ -174,8 +178,11 @@ export function LogSettingsSection({
   }, [])
 
   useEffect(() => {
-    form.reset({ LogConsumeEnabled: defaultEnabled })
-  }, [defaultEnabled, form])
+    form.reset({
+      LogConsumeEnabled: defaultEnabled,
+      RequestLogAsyncEnabled: defaultAsyncEnabled,
+    })
+  }, [defaultEnabled, defaultAsyncEnabled, form])
 
   useEffect(() => {
     fetchServerLogInfo()
@@ -257,11 +264,18 @@ export function LogSettingsSection({
   }, [logCleanupActive, logCleanupTaskId, t])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
-    if (values.LogConsumeEnabled === defaultEnabled) return
-    await updateOption.mutateAsync({
-      key: 'LogConsumeEnabled',
-      value: values.LogConsumeEnabled,
-    })
+    if (values.LogConsumeEnabled !== defaultEnabled) {
+      await updateOption.mutateAsync({
+        key: 'LogConsumeEnabled',
+        value: values.LogConsumeEnabled,
+      })
+    }
+    if (values.RequestLogAsyncEnabled !== defaultAsyncEnabled) {
+      await updateOption.mutateAsync({
+        key: 'RequestLogAsyncEnabled',
+        value: values.RequestLogAsyncEnabled,
+      })
+    }
   }
 
   const handleRequestCleanLogs = () => {
@@ -353,6 +367,30 @@ export function LogSettingsSection({
                   <FormDescription>
                     {t(
                       'Track per-request consumption to power usage analytics. Keeping this on increases database writes.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='RequestLogAsyncEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Write request logs asynchronously')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Batch consume and error log writes in the background so a slow database does not hold requests open. Turn off to switch back to synchronous writes immediately; queued logs are still saved.'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>

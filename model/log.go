@@ -397,7 +397,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		SubscriptionPlanTitle: planTitle,
 		Other:                 otherStr,
 	}
-	err := createLog(log)
+	err := submitRequestLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
@@ -496,7 +496,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		SubscriptionPlanTitle: planTitle,
 		Other:                 otherStr,
 	}
-	err := createLog(log)
+	err := submitRequestLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
