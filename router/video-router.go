@@ -10,6 +10,7 @@ import (
 func SetVideoRouter(router *gin.Engine) {
 	// Video proxy: accepts either session auth (dashboard) or token auth (API clients)
 	videoProxyRouter := router.Group("/v1")
+	videoProxyRouter.Use(middleware.PublicRelayResponse())
 	videoProxyRouter.Use(middleware.RouteTag("relay"))
 	videoProxyRouter.Use(middleware.TokenOrUserAuth())
 	{
@@ -17,6 +18,7 @@ func SetVideoRouter(router *gin.Engine) {
 	}
 
 	videoV1Router := router.Group("/v1")
+	videoV1Router.Use(middleware.PublicRelayResponse())
 	videoV1Router.Use(middleware.RouteTag("relay"))
 	videoV1Router.Use(middleware.TokenAuth(), middleware.Distribute())
 	{
@@ -32,6 +34,7 @@ func SetVideoRouter(router *gin.Engine) {
 	}
 
 	klingV1Router := router.Group("/kling/v1")
+	klingV1Router.Use(middleware.PublicRelayResponse())
 	klingV1Router.Use(middleware.RouteTag("relay"))
 	klingV1Router.Use(middleware.KlingRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
 	{
@@ -43,6 +46,7 @@ func SetVideoRouter(router *gin.Engine) {
 
 	// Jimeng official API routes - direct mapping to official API format
 	jimengOfficialGroup := router.Group("jimeng")
+	jimengOfficialGroup.Use(middleware.PublicRelayResponse())
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))
 	jimengOfficialGroup.Use(middleware.JimengRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
 	{

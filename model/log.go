@@ -78,6 +78,10 @@ func buildLogContainsCondition(column string, value string) (string, string) {
 }
 
 func applyLogKeywordFilter(tx *gorm.DB, keyword string) (*gorm.DB, error) {
+	return applyLogKeywordFilterForAudience(tx, keyword, false)
+}
+
+func applyLogKeywordFilterForAudience(tx *gorm.DB, keyword string, public bool) (*gorm.DB, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return tx, nil
@@ -90,7 +94,9 @@ func applyLogKeywordFilter(tx *gorm.DB, keyword string) (*gorm.DB, error) {
 		"logs.username",
 		"logs." + logGroupCol,
 		"logs.request_id",
-		"logs.upstream_request_id",
+	}
+	if !public {
+		columns = append(columns, "logs.upstream_request_id")
 	}
 	conditions := make([]string, 0, len(columns)+2)
 	args := make([]interface{}, 0, len(columns)+2)
@@ -100,7 +106,7 @@ func applyLogKeywordFilter(tx *gorm.DB, keyword string) (*gorm.DB, error) {
 		args = append(args, pattern)
 	}
 
-	if channelID, err := strconv.Atoi(keyword); err == nil {
+	if channelID, err := strconv.Atoi(keyword); err == nil && !public {
 		conditions = append(conditions, "logs.channel_id = ?")
 		args = append(args, channelID)
 	}
@@ -328,21 +334,57 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 }
 
 func formatUserLogs(logs []*Log, startIdx int) {
-	for i := range logs {
-		logs[i].ChannelName = ""
-		var otherMap map[string]interface{}
-		otherMap, _ = common.StrToMap(logs[i].Other)
-		if otherMap != nil {
-			// Remove admin-only debug fields.
-			delete(otherMap, "admin_info")
-			// Remove operation-audit details (operator/route info), admin-only.
-			delete(otherMap, "audit_info")
-			// delete(otherMap, "reject_reason")
-			delete(otherMap, "stream_status")
+	for i, original := range logs {
+		view := *original
+		view.ChannelId = common.PublicChannelID
+		view.ChannelName = common.PublicChannelName
+		view.UpstreamRequestId = ""
+		other := map[string]interface{}{}
+		if original.Other != "" {
+			if err := common.UnmarshalJsonStr(original.Other, &other); err != nil {
+				common.SysError(fmt.Sprintf("cannot project log metadata for request %s: %v", original.RequestId, err))
+				other = nil
+			}
 		}
-		logs[i].Other = common.MapToJsonStr(otherMap)
+		// Public accounting fields are selected explicitly: adding an internal
+		// diagnostic field must not automatically expose it to log owners.
+		publicOther := make(map[string]interface{})
+		for _, key := range publicLogOtherFields {
+			if value, ok := other[key]; ok {
+				publicOther[key] = value
+			}
+		}
+		if original.Type == LogTypeError || (original.Type == LogTypeRefund && original.ChannelId > 0) {
+			// Only a recorded raw error message can match a message rule; do not
+			// strip status prefixes or guess codes from historical log prose.
+			errorCode := common.Interface2String(other["error_code"])
+			publicCode, publicMessage := common.PublicChannelError(errorCode, original.Content)
+			view.Content = publicMessage
+			publicOther["error_code"] = publicCode
+			if _, ok := other["reason"]; ok {
+				reason, _ := other["reason"].(string)
+				_, publicOther["reason"] = common.PublicChannelError(errorCode, reason)
+			}
+		}
+		view.Other = common.MapToJsonStr(publicOther)
+		logs[i] = &view
 	}
 	assignDisplayLogIds(logs, startIdx)
+}
+
+var publicLogOtherFields = []string{
+	"model_ratio", "group_ratio", "completion_ratio", "cache_tokens", "cache_ratio", "model_price",
+	"user_group_ratio", "billing_usd_to_cny_rate", "frt", "reasoning_effort", "request_path",
+	"ws", "audio", "audio_input", "audio_output", "text_input", "text_output", "audio_ratio", "audio_completion_ratio",
+	"cache_creation_tokens", "cache_creation_ratio", "cache_creation_tokens_5m", "cache_creation_ratio_5m",
+	"cache_creation_tokens_1h", "cache_creation_ratio_1h", "cache_creation_tokens_12h", "cache_creation_ratio_12h",
+	"billing_source", "billing_preference", "subscription_id", "subscription_pre_consumed", "subscription_post_delta",
+	"subscription_plan_id", "subscription_plan_title", "subscription_total", "subscription_used", "subscription_remain",
+	"subscription_consumed", "wallet_quota_deducted", "billing_mode", "billing_unit", "expr_b64", "matched_tier",
+	"fixed_price", "image_count", "image", "image_ratio", "image_output", "web_search", "web_search_call_count", "web_search_price",
+	"file_search", "file_search_call_count", "file_search_price", "audio_input_seperate_price", "audio_input_token_count",
+	"audio_input_price", "image_generation_call", "image_generation_call_price", "is_task", "task_id",
+	"pre_consumed_quota", "actual_quota", "login_method", "user_agent", "op",
 }
 
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
@@ -766,6 +808,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 const logSearchCountLimit = 10000
 
 func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+	if upstreamRequestId != "" {
+		return nil, 0, errors.New("不支持按上游请求 ID 查询")
+	}
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -776,7 +821,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
 		return nil, 0, err
 	}
-	if tx, err = applyLogKeywordFilter(tx, keyword); err != nil {
+	if tx, err = applyLogKeywordFilterForAudience(tx, keyword, true); err != nil {
 		return nil, 0, err
 	}
 	if tokenName != "" {
@@ -784,9 +829,6 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if requestId != "" {
 		tx = tx.Where("logs.request_id = ?", requestId)
-	}
-	if upstreamRequestId != "" {
-		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
@@ -833,19 +875,22 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func querySumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, keyword string, tokenName string, channel int, group string, userId int) (stat Stat, err error) {
+	if userId != 0 && channel != 0 {
+		return stat, errors.New("不支持按内部渠道查询")
+	}
 	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
 	cacheQuery := LOG_DB.Table("logs").Select("COALESCE(sum(input_tokens_total), 0) cache_input_tokens, COALESCE(sum(cache_read_tokens), 0) cache_read_tokens, COALESCE(sum(cache_write_tokens), 0) cache_write_tokens, COALESCE(sum(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END), 0) cache_hit_requests, count(*) cache_eligible_requests")
 
-	if tx, err = applyLogKeywordFilter(tx, keyword); err != nil {
+	if tx, err = applyLogKeywordFilterForAudience(tx, keyword, userId != 0); err != nil {
 		return stat, err
 	}
-	if rpmTpmQuery, err = applyLogKeywordFilter(rpmTpmQuery, keyword); err != nil {
+	if rpmTpmQuery, err = applyLogKeywordFilterForAudience(rpmTpmQuery, keyword, userId != 0); err != nil {
 		return stat, err
 	}
-	if cacheQuery, err = applyLogKeywordFilter(cacheQuery, keyword); err != nil {
+	if cacheQuery, err = applyLogKeywordFilterForAudience(cacheQuery, keyword, userId != 0); err != nil {
 		return stat, err
 	}
 	if userId != 0 {

@@ -111,6 +111,15 @@ export function useDrawingLogsColumns(
     },
   ]
 
+  if (!isAdmin) {
+    columns.push({
+      id: 'channel',
+      header: t('Channel'),
+      cell: () => <span className='font-mono text-xs'>auto</span>,
+      size: 90,
+    })
+  }
+
   if (isAdmin) {
     columns.push(
       createChannelColumn<MidjourneyLog>({ headerLabel: t('Channel') })

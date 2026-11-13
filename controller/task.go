@@ -37,6 +37,10 @@ func GetAllTask(c *gin.Context) {
 }
 
 func GetUserTask(c *gin.Context) {
+	if c.Query("channel") != "" || c.Query("channel_id") != "" {
+		common.ApiErrorMsg(c, "不支持按内部渠道查询")
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
 
 	userId := c.GetInt("id")
@@ -82,7 +86,11 @@ func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
 				task.Username = user.Username
 			}
 		}
-		result[i] = relay.TaskModel2Dto(task)
+		if fillUser {
+			result[i] = relay.TaskModel2Dto(task)
+		} else {
+			result[i] = relay.TaskModel2PublicDto(task)
+		}
 	}
 	return result
 }

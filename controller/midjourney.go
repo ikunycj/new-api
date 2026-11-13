@@ -319,6 +319,10 @@ func GetAllMidjourney(c *gin.Context) {
 }
 
 func GetUserMidjourney(c *gin.Context) {
+	if c.Query("channel") != "" || c.Query("channel_id") != "" {
+		common.ApiErrorMsg(c, "不支持按内部渠道查询")
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
 
 	userId := c.GetInt("id")
@@ -331,12 +335,29 @@ func GetUserMidjourney(c *gin.Context) {
 
 	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.CountAllUserTask(userId, queryParams)
+	for i, item := range items {
+		items[i] = item.PublicMidjourney()
+	}
 
-	if setting.MjForwardUrlEnabled {
-		for i, midjourney := range items {
+	for i, midjourney := range items {
+		if midjourney.ImageUrl != "" {
 			midjourney.ImageUrl = system_setting.ServerAddress + "/mj/image/" + midjourney.MjId
-			items[i] = midjourney
 		}
+		if midjourney.VideoUrl != "" {
+			midjourney.VideoUrl = system_setting.ServerAddress + "/mj/video/" + midjourney.MjId
+		}
+		if midjourney.VideoUrls != "" {
+			var videoURLs []dto.ImgUrls
+			if err := common.UnmarshalJsonStr(midjourney.VideoUrls, &videoURLs); err == nil {
+				for j := range videoURLs {
+					videoURLs[j].Url = system_setting.ServerAddress + "/mj/video/" + midjourney.MjId
+				}
+				if data, err := common.Marshal(videoURLs); err == nil {
+					midjourney.VideoUrls = string(data)
+				}
+			}
+		}
+		items[i] = midjourney
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(items)

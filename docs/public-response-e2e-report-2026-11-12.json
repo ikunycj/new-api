@@ -1,0 +1,417 @@
+{
+  "date": "2026-11-12",
+  "timezone": "Asia/Shanghai",
+  "final_regression": {
+    "root_go_test_count_1": "passed",
+    "relaykit_go_test_count_1": "passed",
+    "targeted_postgres_tests_with_local_real_database": "passed",
+    "go_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "branch": "feature/new-master",
+  "base_commit": "5c31c4a995ba5215679f453dbdc52f1d0d45cad2",
+  "runtime": {
+    "source": "current working tree including uncommitted changes",
+    "url": "http://127.0.0.1:50314",
+    "postgres_database": "new_api_dev",
+    "redis_database": 1,
+    "existing_port_3000_unchanged": true,
+    "temporary_process_role": "slave",
+    "binary_sha256": "2a4f6cb56ba82a9fef67455b379e63231b75717a0f092e759719f84e467095e2"
+  },
+  "real_requests": {
+    "gateway_requests_reaching_upstream": 19,
+    "logged_upstream_attempts": 27,
+    "channel_ids": [
+      20,
+      21,
+      23,
+      24
+    ],
+    "successful_requests": 9,
+    "quota": 315,
+    "prompt_tokens": 45,
+    "completion_tokens": 9,
+    "test_user_remaining_quota": 999685,
+    "test_user_used_quota": 315
+  },
+  "checks": [
+    {
+      "name": "whitelist-custom-save",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-custom-message",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-custom-identity",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-nonmatch-save",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-exact-match",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-passthrough-save",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-code-passthrough",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-passthrough-identity",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "whitelist-invalid-rejected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "real-consume-log-created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "internal-channel-preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "internal-accounting-positive",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "public-log-has-record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "public-log-channel",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "public-log-accounting-intact",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "public-log-no-diagnostics",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "admin-channel-preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "admin-diagnostics-preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "channel-keyword-no-internal-search",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "internal-error-preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "admin-original-error-preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "public-error-log-normalized",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "chat-success-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "chat-stream-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "responses-success-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "claude-chat-success-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "claude-chat-stream-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "messages-success-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "advancedcustom-success-headers",
+      "pass": true,
+      "detail": "[]"
+    },
+    {
+      "name": "caller-invalid-http400",
+      "pass": true
+    },
+    {
+      "name": "stats-public-identity",
+      "pass": true
+    },
+    {
+      "name": "real-chat-after-fix",
+      "pass": true
+    },
+    {
+      "name": "real-sse-after-fix",
+      "pass": true
+    },
+    {
+      "name": "real404-normalized-after-fix",
+      "pass": true
+    },
+    {
+      "name": "real400-claude-normalized-after-fix",
+      "pass": true
+    },
+    {
+      "name": "local-request-lookup-after-fix",
+      "pass": true
+    },
+    {
+      "name": "real-accounting-after-fix",
+      "pass": true
+    },
+    {
+      "name": "whitelist-default-restored",
+      "pass": true
+    },
+    {
+      "name": "env-unchanged",
+      "pass": true
+    }
+  ],
+  "postgres_regressions": {
+    "result": "passed",
+    "tests": [
+      "TestRelayInvalidCallerRequestReturnsBadRequest",
+      "TestUserQuotaResponseProjectsChannelWithoutChangingAdminDataPostgres",
+      "TestPublicLogSearchDoesNotProbeChannelOrUpstreamIDPostgres"
+    ]
+  },
+  "fixes": [
+    {
+      "file": "controller/relay.go",
+      "issue": "local invalid caller request returned HTTP 500",
+      "resolved": "HTTP 400 and diagnostic message retained"
+    },
+    {
+      "file": "controller/usedata.go",
+      "issue": "public quota statistics channel_id was zero",
+      "resolved": "channel_id=1 and channel_name=auto; internal rows preserved"
+    }
+  ],
+  "findings": [
+    {
+      "kind": "upstream_availability",
+      "channel_ids": [
+        20,
+        21
+      ],
+      "http_status": 404,
+      "detail": "gpt-5.5 was unavailable for the upstream pricing group; errors were normalized, not counted as successful inference"
+    },
+    {
+      "kind": "explicit_passthrough",
+      "detail": "Code passthrough allows the upstream message, including its embedded request ID, by design. Default configuration was restored."
+    }
+  ],
+  "not_verified": [
+    "real upstream 5xx and 429 responses",
+    "SSE errors after response commitment",
+    "Realtime WebSocket",
+    "real video, Midjourney and Suno tasks; no enabled matching channels",
+    "native Gemini upstream",
+    "exact message whitelist with a stable real error; real errors contained changing upstream request IDs",
+    "browser login/settings/log-page interactions"
+  ],
+  "cleanup": {
+    "temporary_user_count": 6,
+    "remaining_test_users": 0,
+    "remaining_test_tokens": 0,
+    "token_rejected_after_cleanup": true,
+    "whitelist_restored_to_original_absence": true,
+    "test_logs_retained": 27,
+    "temporary_postgres_schemas_removed": true,
+    "channel_statuses": [
+      [
+        17,
+        2
+      ],
+      [
+        18,
+        3
+      ],
+      [
+        19,
+        3
+      ],
+      [
+        20,
+        1
+      ],
+      [
+        21,
+        1
+      ],
+      [
+        22,
+        3
+      ],
+      [
+        23,
+        1
+      ],
+      [
+        24,
+        1
+      ]
+    ],
+    "env_sha256_unchanged": true,
+    "temporary_test_process_stopped": true,
+    "existing_port_3000_healthy": true
+  },
+  "evidence": [
+    {
+      "name": "fixed-chat-success",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "request_id": "202611120314172649240008268d9d6nzYxcxd8",
+      "seconds": 8.849
+    },
+    {
+      "name": "fixed-chat-stream",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "request_id": "202611120314261151800008268d9d6iU8RvSch",
+      "seconds": 18.762
+    },
+    {
+      "name": "messages-success",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "202611120302056144210008268d9d63w6V4BX0",
+      "seconds": 11.231
+    },
+    {
+      "name": "responses-claude-success",
+      "path": "/v1/responses",
+      "status": 200,
+      "request_id": "202611120302316375220008268d9d63dvkJ2TD",
+      "seconds": 4.165
+    },
+    {
+      "name": "responses-stream-success",
+      "path": "/v1/responses",
+      "status": 200,
+      "request_id": "202611120308278591490008268d9d6s3gyQnEk",
+      "seconds": 13.042
+    },
+    {
+      "name": "advancedcustom-success",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "202611120302358031200008268d9d6OnEHVTNe",
+      "seconds": 5.613
+    },
+    {
+      "name": "fixed-real400",
+      "path": "/v1/messages",
+      "status": 400,
+      "request_id": "202611120314479417240008268d9d69vEZW7ns",
+      "seconds": 1.527
+    },
+    {
+      "name": "fixed-real404",
+      "path": "/v1/responses",
+      "status": 404,
+      "request_id": "202611120314448794340008268d9d6VCq1Cezj",
+      "seconds": 3.061
+    },
+    {
+      "name": "whitelist-custom-result",
+      "path": "/v1/responses",
+      "status": 404,
+      "request_id": "202611120307035106810008268d9d6IIJkRFaR",
+      "seconds": 3.401
+    },
+    {
+      "name": "whitelist-passthrough-result",
+      "path": "/v1/responses",
+      "status": 404,
+      "request_id": "202611120307098655420008268d9d6ZksInGrW",
+      "seconds": 2.822
+    },
+    {
+      "name": "user-log-by-request",
+      "path": "/api/log/self?request_id=202611120259182059090008268d9d6cTq2PJF7",
+      "status": 200,
+      "request_id": "202611120307127652170008268d9d68LtvhbgE",
+      "seconds": 0.015
+    },
+    {
+      "name": "admin-log-by-request",
+      "path": "/api/log/?request_id=202611120259182059090008268d9d6cTq2PJF7",
+      "status": 200,
+      "request_id": "202611120307127814860008268d9d6XSYWqDBV",
+      "seconds": 0.638
+    },
+    {
+      "name": "fixed-caller-invalid",
+      "path": "/v1/chat/completions",
+      "status": 400,
+      "request_id": "202611120314172247650008268d9d6O8g0mgKk",
+      "seconds": 0.039
+    },
+    {
+      "name": "fixed-user-stats",
+      "path": "/api/data/self?start_timestamp=1794449657&end_timestamp=1794453257",
+      "status": 200,
+      "request_id": "202611120314172563420008268d9d6uS4FMRaf",
+      "seconds": 0.008
+    }
+  ],
+  "final_passed_assertions": 39,
+  "final_failed_assertions": 0
+}

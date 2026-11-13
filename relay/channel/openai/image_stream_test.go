@@ -485,5 +485,5 @@ func TestOpenaiImageStreamHandlerRecordsUpstreamErrorEvent(t *testing.T) {
 	// rebuilt from the JSON "type" field (upstream_error). The error message
 	// is still forwarded in the data: payload (stream ID 77).
 	require.Contains(t, recorder.Body.String(), `event: upstream_error`)
-	require.Contains(t, recorder.Body.String(), `stream ID 77`)
+	require.NotContains(t, recorder.Body.String(), `stream ID 77`)
 }

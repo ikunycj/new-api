@@ -74,6 +74,7 @@ export const SECURITY_SECTION_IDS: readonly string[] = [
   'sensitive-words',
   'ssrf',
   'token-limits',
+  'channel-error-whitelist',
 ]
 export const SECURITY_DEFAULT_SECTION = 'rate-limit'
 

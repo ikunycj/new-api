@@ -77,6 +77,10 @@ func GetUserQuotaDates(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	for _, date := range dates {
+		date.ChannelID = common.PublicChannelID
+		date.ChannelName = common.PublicChannelName
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

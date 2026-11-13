@@ -520,6 +520,7 @@ export type SecuritySettings = {
   'fetch_setting.allowed_ports': number[]
   'fetch_setting.apply_ip_filter_for_domain': boolean
   'token_setting.max_user_tokens': number
+  'console_setting.channel_error_whitelist': string
 }
 
 export type UpstreamChannel = {

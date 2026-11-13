@@ -453,9 +453,9 @@ func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
 	require.Equal(t, []string{sharedModel, firstOnlyModel, secondOnlyModel}, lo.Map(firstPayload.Data, func(item dto.OpenAIModels, _ int) string {
 		return item.Id
 	}))
-	require.Equal(t, "openai", firstPayload.Data[0].OwnedBy)
-	require.Equal(t, "codex", firstPayload.Data[1].OwnedBy)
-	require.Equal(t, "openai", firstPayload.Data[2].OwnedBy)
+	require.Equal(t, "gateway", firstPayload.Data[0].OwnedBy)
+	require.Equal(t, "gateway", firstPayload.Data[1].OwnedBy)
+	require.Equal(t, "gateway", firstPayload.Data[2].OwnedBy)
 
 	secondRecorder := httptest.NewRecorder()
 	secondContext, _ := gin.CreateTestContext(secondRecorder)
@@ -470,7 +470,7 @@ func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
 	require.Equal(t, []string{sharedModel, secondOnlyModel, firstOnlyModel}, lo.Map(secondPayload.Data, func(item dto.OpenAIModels, _ int) string {
 		return item.Id
 	}))
-	require.Equal(t, "openai", secondPayload.Data[0].OwnedBy)
+	require.Equal(t, "gateway", secondPayload.Data[0].OwnedBy)
 }
 
 func TestListModelsOrdersEnabledModelsForEveryGroupMode(t *testing.T) {

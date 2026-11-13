@@ -284,7 +284,9 @@ func ListModels(c *gin.Context, modelType int) {
 	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
 	for _, modelName := range userModelNames {
 		endpointTypes := model.GetModelSupportEndpointTypesForGroups(modelName, ownerGroups)
-		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel, endpointTypes))
+		modelItem := buildOpenAIModel(modelName, ownerByModel, endpointTypes)
+		modelItem.OwnedBy = "gateway"
+		userOpenAiModels = append(userOpenAiModels, modelItem)
 	}
 
 	switch modelType {
@@ -354,6 +356,7 @@ func EnabledListModels(c *gin.Context) {
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
 	if aiModel, ok := openAIModelsMap[modelId]; ok {
+		aiModel.OwnedBy = "gateway"
 		switch modelType {
 		case constant.ChannelTypeAnthropic:
 			c.JSON(200, dto.AnthropicModel{

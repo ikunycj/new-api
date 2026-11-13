@@ -177,6 +177,18 @@ func main() {
 	server := gin.New()
 	server.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
+		if middleware.IsPublicRelayPath(c.Request.URL.Path) {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"message":      common.DefaultPublicChannelErrorMessage(),
+					"type":         "server_error",
+					"code":         common.PublicErrorCode,
+					"channel_id":   common.PublicChannelID,
+					"channel_name": common.PublicChannelName,
+				},
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
 				"message": fmt.Sprintf("Panic detected, error: %v", err),

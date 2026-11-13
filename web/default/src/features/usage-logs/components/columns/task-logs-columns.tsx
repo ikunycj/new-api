@@ -119,6 +119,15 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
     },
   ]
 
+  if (!isAdmin) {
+    columns.push({
+      id: 'channel',
+      header: t('Channel'),
+      cell: () => <span className='font-mono text-xs'>auto</span>,
+      size: 90,
+    })
+  }
+
   if (isAdmin) {
     columns.push(createChannelColumn<TaskLog>({ headerLabel: t('Channel') }), {
       id: 'user',

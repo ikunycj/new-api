@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -23,22 +24,33 @@ func CloseResponseBodyGracefully(httpResponse *http.Response) {
 	}
 }
 
-// ShouldCopyUpstreamHeader checks whether a given upstream response header
-// should be copied to the client response. It returns false for Content-Length
-// (managed separately) and X-Oneapi-Request-Id (to preserve the local instance
-// ID). When the upstream header is X-Oneapi-Request-Id, the value is captured
-// into the Gin context for later logging.
+// ShouldCopyUpstreamHeader permits protocol headers, not supplier diagnostics.
+// Gateway-owned CORS, authentication and request IDs are set independently.
 func ShouldCopyUpstreamHeader(c *gin.Context, k string, v []string) bool {
-	if strings.EqualFold(k, "Content-Length") {
-		return false
-	}
-	if strings.EqualFold(k, common.RequestIdKey) {
+	name := strings.ToLower(k)
+	if strings.EqualFold(k, common.RequestIdKey) || name == "x-request-id" || name == "request-id" || name == "x-upstream-request-id" {
 		if c != nil && len(v) > 0 {
 			c.Set(common.UpstreamRequestIdKey, v[0])
 		}
 		return false
 	}
-	return true
+	switch name {
+	case "content-type", "content-disposition", "content-encoding", "content-range", "accept-ranges",
+		"cache-control", "expires", "last-modified", "x-reasoning-included", "x-codex-turn-state":
+		return true
+	case "retry-after":
+		if len(v) != 1 {
+			return false
+		}
+		value := strings.TrimSpace(v[0])
+		if _, err := strconv.ParseUint(value, 10, 32); err == nil {
+			return true
+		}
+		_, err := http.ParseTime(value)
+		return err == nil
+	default:
+		return false
+	}
 }
 
 func IOCopyBytesGracefully(c *gin.Context, src *http.Response, data []byte) {

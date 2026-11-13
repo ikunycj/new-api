@@ -6,8 +6,12 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 var (
@@ -60,6 +64,9 @@ func getJSONList(jsonStr string) []map[string]interface{} {
 }
 
 func ValidateConsoleSettings(settingsStr string, settingType string) error {
+	if settingType == "ChannelErrorWhitelist" {
+		return validateChannelErrorWhitelist(settingsStr)
+	}
 	if settingsStr == "" {
 		return nil
 	}
@@ -76,6 +83,64 @@ func ValidateConsoleSettings(settingsStr string, settingType string) error {
 	default:
 		return fmt.Errorf("未知的设置类型：%s", settingType)
 	}
+}
+
+func validateChannelErrorWhitelist(raw string) error {
+	var rules []ChannelErrorWhitelistRule
+	if err := common.UnmarshalJsonStr(raw, &rules); err != nil {
+		return fmt.Errorf("渠道错误白名单格式错误：%w", err)
+	}
+	if rules == nil {
+		return fmt.Errorf("渠道错误白名单必须是数组，清空规则请保存 []")
+	}
+	if len(rules) > 200 {
+		return fmt.Errorf("渠道错误白名单不能超过200条")
+	}
+	seen := make(map[string]struct{}, len(rules))
+	for index, rule := range rules {
+		matchType := rule.MatchType
+		matchValue := rule.MatchValue
+		responseMode := rule.ResponseMode
+		if matchType != "status" && matchType != "error" {
+			return fmt.Errorf("第%d条规则的匹配项必须是 status 或 error", index+1)
+		}
+		if strings.TrimSpace(matchValue) == "" || utf8.RuneCountInString(matchValue) > 512 {
+			return fmt.Errorf("第%d条规则的匹配值不能为空且不能超过512字符", index+1)
+		}
+		if matchType == "status" {
+			status, err := strconv.Atoi(strings.TrimSpace(matchValue))
+			if err != nil || status < 400 || status > 599 {
+				return fmt.Errorf("第%d条规则的 HTTP 状态码必须是400到599之间的整数", index+1)
+			}
+		}
+		if responseMode != "passthrough" && responseMode != "custom" {
+			return fmt.Errorf("第%d条规则的返回方式必须是 passthrough 或 custom", index+1)
+		}
+		if responseMode == "custom" {
+			customFields := []struct {
+				name  string
+				value string
+			}{
+				{name: "custom_code", value: rule.CustomCode},
+				{name: "custom_type", value: rule.CustomType},
+				{name: "custom_message", value: rule.CustomMessage},
+			}
+			for _, field := range customFields {
+				fieldName, value := field.name, field.value
+				if strings.TrimSpace(value) == "" || utf8.RuneCountInString(value) > 2000 {
+					return fmt.Errorf("第%d条规则的%s不能为空且不能超过2000字符", index+1, fieldName)
+				}
+			}
+		} else if rule.CustomCode != "" || rule.CustomType != "" || rule.CustomMessage != "" {
+			return fmt.Errorf("第%d条透传规则不能填写自定义 error 字段", index+1)
+		}
+		key := matchType + "\x00" + matchValue
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("第%d条规则与已有规则重复", index+1)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
 }
 
 func validateApiInfo(apiInfoStr string) error {

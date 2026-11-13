@@ -4,10 +4,20 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
 )
+
+func IsPublicRelayPath(path string) bool {
+	for _, prefix := range []string{"/v1", "/v1beta", "/pg/", "/mj/", "/suno/", "/kling/", "/jimeng/"} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 func RelayPanicRecover() gin.HandlerFunc {
 	return func(c *gin.Context) {

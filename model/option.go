@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -384,6 +385,11 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == common.ChannelErrorWhitelistOptionKey {
+		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
+			return err
+		}
+	}
 	if isRetiredOptionKey(key) {
 		return errRetiredOption
 	}
@@ -483,6 +489,11 @@ func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrde
 // is touched — safe for callers that must commit a set of related options
 // atomically (e.g. payment gateway binding).
 func UpdateOptionsBulk(values map[string]string) error {
+	if value, ok := values[common.ChannelErrorWhitelistOptionKey]; ok {
+		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
+			return err
+		}
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -524,6 +535,13 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	// Persisted configuration is an independent input boundary on refresh.
+	// Reject malformed rules before replacing the last valid public policy.
+	if key == common.ChannelErrorWhitelistOptionKey {
+		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
+			return err
+		}
+	}
 	if isRetiredOptionKey(key) {
 		return errRetiredOption
 	}

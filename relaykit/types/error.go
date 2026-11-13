@@ -122,21 +122,43 @@ const (
 )
 
 type NewAPIError struct {
-	Err            error
-	RelayError     any
-	skipRetry      bool
-	recordErrorLog *bool
-	errorType      ErrorType
-	errorCode      ErrorCode
-	StatusCode     int
-	Metadata       json.RawMessage
-	errorSource    ErrorSource
-	retryable      *bool
-	requestID      string
-	attemptCount   int
-	cause          *ErrorCause
-	channelID      int
-	channelName    string
+	Err             error
+	RelayError      any
+	skipRetry       bool
+	recordErrorLog  *bool
+	errorType       ErrorType
+	errorCode       ErrorCode
+	StatusCode      int
+	Metadata        json.RawMessage
+	errorSource     ErrorSource
+	retryable       *bool
+	requestID       string
+	attemptCount    int
+	cause           *ErrorCause
+	channelID       int
+	channelName     string
+	upstreamFailure *UpstreamFailure
+}
+
+// UpstreamFailure retains the original error before status remapping, metadata
+// decoration or failover wrapping. It is internal and never serialized to users.
+type UpstreamFailure struct {
+	StatusCode int
+	Code       string
+	Message    string
+}
+
+func (e *NewAPIError) CaptureUpstreamFailure(status int, code, message string) {
+	if e != nil && e.upstreamFailure == nil {
+		e.upstreamFailure = &UpstreamFailure{StatusCode: status, Code: code, Message: message}
+	}
+}
+
+func (e *NewAPIError) OriginalUpstreamFailure() (UpstreamFailure, bool) {
+	if e == nil || e.upstreamFailure == nil {
+		return UpstreamFailure{}, false
+	}
+	return *e.upstreamFailure, true
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -536,6 +558,7 @@ func WithOpenAIError(openAIError OpenAIError, statusCode int, ops ...NewAPIError
 		errorCode:   ErrorCode(code),
 		errorSource: source,
 	}
+	e.CaptureUpstreamFailure(statusCode, code, openAIError.Message)
 	// OpenRouter
 	if len(openAIError.Metadata) > 0 {
 		openAIError.Message = fmt.Sprintf("%s (%s)", openAIError.Message, openAIError.Metadata)
@@ -560,6 +583,7 @@ func WithClaudeError(claudeError ClaudeError, statusCode int, ops ...NewAPIError
 		Err:        errors.New(claudeError.Message),
 		errorCode:  ErrorCode(claudeError.Type),
 	}
+	e.CaptureUpstreamFailure(statusCode, claudeError.Type, claudeError.Message)
 	for _, op := range ops {
 		op(e)
 	}
@@ -630,6 +654,9 @@ func NewUpstreamExhaustedError(lastErr *NewAPIError, attemptCount int) *NewAPIEr
 	e.cause = cause
 	e.channelID = lastErr.channelID
 	e.channelName = lastErr.channelName
+	if original, ok := lastErr.OriginalUpstreamFailure(); ok {
+		e.upstreamFailure = &original
+	}
 	e.SetRetryable(true)
 	return e
 }

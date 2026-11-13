@@ -682,7 +682,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
               mono
             />
           )}
-          {props.log.upstream_request_id && (
+          {props.isAdmin && props.log.upstream_request_id && (
             <DetailRow
               label={t('Upstream Request ID')}
               value={props.log.upstream_request_id}
@@ -706,6 +706,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
               }
               mono
             />
+          )}
+
+          {!props.isAdmin && props.log.channel > 0 && (
+            <DetailRow label={t('Channel')} value='auto' mono />
           )}
 
           {channelChain && props.isAdmin && (
@@ -1068,7 +1072,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
         )}
 
         {/* System prompt override */}
-        {other?.is_system_prompt_overwritten && (
+        {props.isAdmin && other?.is_system_prompt_overwritten && (
           <DetailRow
             label={t('System Prompt')}
             value={
@@ -1083,7 +1087,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
         )}
 
         {/* Model mapping */}
-        {other?.is_model_mapped && other?.upstream_model_name && (
+        {props.isAdmin && other?.is_model_mapped && other?.upstream_model_name && (
           <DetailSection label={t('Model Mapping')}>
             <DetailRow
               label={t('Request Model')}

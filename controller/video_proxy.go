@@ -22,6 +22,9 @@ import (
 
 // videoProxyError returns a standardized OpenAI-style error response.
 func videoProxyError(c *gin.Context, status int, errType, message string) {
+	if errType == "server_error" {
+		message = common.DefaultPublicChannelErrorMessage()
+	}
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"message": message,
@@ -170,6 +173,9 @@ func VideoProxy(c *gin.Context) {
 	}
 
 	for key, values := range resp.Header {
+		if !service.ShouldCopyUpstreamHeader(c, key, values) {
+			continue
+		}
 		for _, value := range values {
 			c.Writer.Header().Add(key, value)
 		}

@@ -17,6 +17,7 @@ func SetRelayRouter(router *gin.Engine) {
 	router.Use(middleware.StatsMiddleware())
 	// https://platform.openai.com/docs/api-reference/introduction
 	modelsRouter := router.Group("/v1/models")
+	modelsRouter.Use(middleware.PublicRelayResponse())
 	modelsRouter.Use(middleware.RouteTag("relay"))
 	modelsRouter.Use(middleware.TokenAuth())
 	{
@@ -42,6 +43,7 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	geminiRouter := router.Group("/v1beta/models")
+	geminiRouter.Use(middleware.PublicRelayResponse())
 	geminiRouter.Use(middleware.RouteTag("relay"))
 	geminiRouter.Use(middleware.TokenAuth())
 	{
@@ -51,6 +53,7 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	geminiCompatibleRouter := router.Group("/v1beta/openai/models")
+	geminiCompatibleRouter.Use(middleware.PublicRelayResponse())
 	geminiCompatibleRouter.Use(middleware.RouteTag("relay"))
 	geminiCompatibleRouter.Use(middleware.TokenAuth())
 	{
@@ -60,6 +63,7 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	playgroundRouter := router.Group("/pg")
+	playgroundRouter.Use(middleware.PublicRelayResponse())
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
 	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
@@ -68,6 +72,7 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundRouter.POST("/images/generations", controller.PlaygroundImage)
 	}
 	relayV1Router := router.Group("/v1")
+	relayV1Router.Use(middleware.PublicRelayResponse())
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
 	relayV1Router.Use(middleware.TokenAuth())
@@ -170,17 +175,27 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	relayMjRouter := router.Group("/mj")
+	relayMjRouter.Use(middleware.PublicRelayResponse())
 	relayMjRouter.Use(middleware.RouteTag("relay"))
 	relayMjRouter.Use(middleware.SystemPerformanceCheck())
 	registerMjRouterGroup(relayMjRouter)
 
 	relayMjModeRouter := router.Group("/:mode/mj")
+	relayMjModeRouter.Use(middleware.PublicRelayResponse())
 	relayMjModeRouter.Use(middleware.RouteTag("relay"))
 	relayMjModeRouter.Use(middleware.SystemPerformanceCheck())
 	registerMjRouterGroup(relayMjModeRouter)
 	//relayMjRouter.Use()
 
 	relaySunoRouter := router.Group("/suno")
+	sunoMediaRouter := router.Group("/suno")
+	sunoMediaRouter.Use(middleware.PublicRelayResponse())
+	sunoMediaRouter.Use(middleware.RouteTag("relay"))
+	sunoMediaRouter.Use(middleware.TokenAuth())
+	{
+		sunoMediaRouter.GET("/media/:task_id/:clip_id/:kind", relay.RelaySunoMedia)
+	}
+	relaySunoRouter.Use(middleware.PublicRelayResponse())
 	relaySunoRouter.Use(middleware.RouteTag("relay"))
 	relaySunoRouter.Use(middleware.SystemPerformanceCheck())
 	relaySunoRouter.Use(middleware.TokenAuth(), middleware.Distribute())
@@ -191,6 +206,7 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	relayGeminiRouter := router.Group("/v1beta")
+	relayGeminiRouter.Use(middleware.PublicRelayResponse())
 	relayGeminiRouter.Use(middleware.RouteTag("relay"))
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())
 	relayGeminiRouter.Use(middleware.TokenAuth())
@@ -206,6 +222,7 @@ func SetRelayRouter(router *gin.Engine) {
 
 func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {
 	relayMjRouter.GET("/image/:id", relay.RelayMidjourneyImage)
+	relayMjRouter.GET("/video/:id", relay.RelayMidjourneyVideo)
 	relayMjRouter.Use(middleware.TokenAuth(), middleware.Distribute())
 	{
 		relayMjRouter.POST("/submit/action", controller.RelayMidjourney)

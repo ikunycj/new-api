@@ -37,6 +37,10 @@ func GetAllLogs(c *gin.Context) {
 }
 
 func GetUserLogs(c *gin.Context) {
+	if c.Query("channel") != "" || c.Query("channel_id") != "" || c.Query("upstream_request_id") != "" {
+		common.ApiErrorMsg(c, "不支持按内部渠道或上游请求 ID 查询")
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
 	userId := c.GetInt("id")
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -76,6 +80,10 @@ func SearchUserLogs(c *gin.Context) {
 }
 
 func GetLogByKey(c *gin.Context) {
+	if c.Query("channel") != "" || c.Query("channel_id") != "" || c.Query("upstream_request_id") != "" {
+		common.ApiErrorMsg(c, "不支持按内部渠道或上游请求 ID 查询")
+		return
+	}
 	tokenId := c.GetInt("token_id")
 	if tokenId == 0 {
 		c.JSON(200, gin.H{

@@ -128,16 +128,11 @@ func Distribute() func(c *gin.Context) {
 					Retry:       common.GetPointer(0),
 				})
 				if err != nil {
-					showGroup := usingGroup
-					if usingGroup == "auto" {
-						showGroup = fmt.Sprintf("auto(%s)", selectGroup)
-					}
-					message := i18n.T(c, i18n.MsgDistributorGetChannelFailed, map[string]any{"Group": showGroup, "Model": modelRequest.Model, "Error": err.Error()})
-					abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
+					abortWithPublicChannelMessage(c, http.StatusServiceUnavailable)
 					return
 				}
 				if channel == nil {
-					abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
+					abortWithPublicChannelMessage(c, http.StatusServiceUnavailable)
 					return
 				}
 

@@ -26,6 +26,19 @@ func abortWithOpenAiMessage(c *gin.Context, statusCode int, message string, code
 	logger.LogError(c.Request.Context(), fmt.Sprintf("user %d | %s", userId, message))
 }
 
+func abortWithPublicChannelMessage(c *gin.Context, statusCode int) {
+	c.JSON(statusCode, gin.H{
+		"error": gin.H{
+			"message":      common.DefaultPublicChannelErrorMessage(),
+			"type":         "server_error",
+			"code":         common.PublicErrorCode,
+			"channel_id":   common.PublicChannelID,
+			"channel_name": common.PublicChannelName,
+		},
+	})
+	c.Abort()
+}
+
 func abortWithMidjourneyMessage(c *gin.Context, statusCode int, code int, description string) {
 	c.JSON(statusCode, gin.H{
 		"description": description,

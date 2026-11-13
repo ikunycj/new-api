@@ -85,7 +85,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		ws, err = upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-			helper.WssError(c, ws, newAPIError.ToOpenAIError())
+			service.WritePublicRelayError(c, types.RelayFormatOpenAIRealtime, ws, newAPIError)
 			return
 		}
 		defer ws.Close()
@@ -98,28 +98,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			newAPIError.SetRequestID(requestId)
 			newAPIError.SetAttemptCount(len(c.GetStringSlice("use_channel")))
-			if source := newAPIError.GetErrorSource(); source != types.ErrorSourceUnknown {
-				c.Header("X-Error-Source", string(source))
-			}
-			c.Header("X-Error-Source-Code", newAPIError.SourceCode())
-			c.Header("X-Error-Stable-Code", fmt.Sprintf("%06d", newAPIError.StableCode()))
-			c.Header("X-Error-Ref", newAPIError.ErrorRef())
-			c.Header("X-Error-Retryable", fmt.Sprintf("%t", newAPIError.IsRetryable()))
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
-			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
-			switch relayFormat {
-			case types.RelayFormatOpenAIRealtime:
-				helper.WssError(c, ws, newAPIError.ToOpenAIError())
-			case types.RelayFormatClaude:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"type":  "error",
-					"error": newAPIError.ToClaudeError(),
-				})
-			default:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"error": newAPIError.ToOpenAIError(),
-				})
-			}
+			service.WritePublicRelayError(c, relayFormat, ws, newAPIError)
 		}
 	}()
 
@@ -129,7 +109,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if common.IsRequestBodyTooLargeError(err) || errors.Is(err, common.ErrRequestBodyTooLarge) {
 			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
 		} else {
-			newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest)
+			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		return
 	}
@@ -270,6 +250,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)
 			newAPIError.EnsureErrorSource(types.ResolveErrorSource(relayInfo.ChannelSetting.ErrorSource, relayInfo.ChannelBaseUrl))
 			newAPIError.SetChannelLocation(channel.Id, channel.Name)
+			if newAPIError.GetErrorSource() == types.ErrorSourceChannel {
+				newAPIError.CaptureUpstreamFailure(newAPIError.StatusCode, string(newAPIError.GetErrorCode()), newAPIError.Error())
+			}
 			switch newAPIError.FailureScope() {
 			case "credential", "channel":
 				retryParam.HandleChannelFailure(channel.Id, newAPIError.ErrorAction())
@@ -571,9 +554,11 @@ func RelayMidjourney(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"description": fmt.Sprintf("failed to generate relay info: %s", err.Error()),
-			"type":        "upstream_error",
-			"code":        4,
+			"description":  common.DefaultPublicChannelErrorMessage(),
+			"type":         "upstream_error",
+			"code":         common.PublicErrorCode,
+			"channel_id":   common.PublicChannelID,
+			"channel_name": common.PublicChannelName,
 		})
 		return
 	}
@@ -600,9 +585,11 @@ func RelayMidjourney(c *gin.Context) {
 			statusCode = http.StatusTooManyRequests
 		}
 		c.JSON(statusCode, gin.H{
-			"description": fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result),
-			"type":        "upstream_error",
-			"code":        mjErr.Code,
+			"description":  common.DefaultPublicChannelErrorMessage(),
+			"type":         "upstream_error",
+			"code":         common.PublicErrorCode,
+			"channel_id":   common.PublicChannelID,
+			"channel_name": common.PublicChannelName,
 		})
 		channelId := c.GetInt("channel_id")
 		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)))
@@ -636,10 +623,11 @@ func RelayNotFound(c *gin.Context) {
 func RelayTaskFetch(c *gin.Context) {
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, &taskdto.TaskError{
+		respondTaskError(c, &taskdto.TaskError{
 			Code:       "gen_relay_info_failed",
 			Message:    err.Error(),
 			StatusCode: http.StatusInternalServerError,
+			LocalError: true,
 		})
 		return
 	}
@@ -651,10 +639,11 @@ func RelayTaskFetch(c *gin.Context) {
 func RelayTask(c *gin.Context) {
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, &taskdto.TaskError{
+		respondTaskError(c, &taskdto.TaskError{
 			Code:       "gen_relay_info_failed",
 			Message:    err.Error(),
 			StatusCode: http.StatusInternalServerError,
+			LocalError: true,
 		})
 		return
 	}
@@ -806,10 +795,7 @@ func RelayTask(c *gin.Context) {
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
-	if taskErr.StatusCode == http.StatusTooManyRequests {
-		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
-	}
-	c.JSON(taskErr.StatusCode, taskErr)
+	c.JSON(taskErr.StatusCode, service.PublicTaskError(taskErr))
 }
 
 func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *taskdto.TaskError, retryTimes int) bool {

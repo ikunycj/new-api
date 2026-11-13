@@ -62,7 +62,7 @@ func RelayMidjourneyImage(c *gin.Context) {
 	}
 	if validateErr != nil {
 		c.JSON(http.StatusForbidden, gin.H{
-			"error": fmt.Sprintf("request blocked: %v", validateErr),
+			"error": common.DefaultPublicChannelErrorMessage(),
 		})
 		return
 	}
@@ -75,9 +75,8 @@ func RelayMidjourneyImage(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
 		c.JSON(resp.StatusCode, gin.H{
-			"error": string(responseBody),
+			"error": common.DefaultPublicChannelErrorMessage(),
 		})
 		return
 	}
@@ -95,6 +94,62 @@ func RelayMidjourneyImage(c *gin.Context) {
 		log.Println("Failed to stream image:", err)
 	}
 	return
+}
+
+func RelayMidjourneyVideo(c *gin.Context) {
+	task := model.GetByOnlyMJId(c.Param("id"))
+	if task == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	relayMidjourneyMedia(c, task.ChannelId, task.VideoUrl, "video/mp4")
+}
+
+func relayMidjourneyMedia(c *gin.Context, channelID int, mediaURL, defaultContentType string) {
+	if strings.TrimSpace(mediaURL) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	channel, err := model.CacheGetChannel(channelID)
+	if err != nil || channel == nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	httpClient := service.GetSSRFProtectedHTTPClient()
+	if proxy := channel.GetSetting().Proxy; proxy != "" {
+		httpClient, err = service.NewProxyHttpClient(proxy)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+			return
+		}
+	}
+	var validateErr error
+	if proxy := channel.GetSetting().Proxy; proxy == "" {
+		validateErr = service.ValidateSSRFProtectedFetchURL(mediaURL)
+	} else {
+		fetchSetting := system_setting.GetFetchSetting()
+		validateErr = common.ValidateURLWithFetchSetting(mediaURL, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain)
+	}
+	if validateErr != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	resp, err := httpClient.Get(mediaURL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.JSON(resp.StatusCode, gin.H{"error": common.DefaultPublicChannelErrorMessage()})
+		return
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = defaultContentType
+	}
+	c.Header("Content-Type", contentType)
+	_, _ = io.Copy(c.Writer, resp.Body)
 }
 
 func RelayMidjourneyNotify(c *gin.Context) *dto.MidjourneyResponse {
@@ -141,6 +196,7 @@ func RelayMidjourneyNotify(c *gin.Context) *dto.MidjourneyResponse {
 }
 
 func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjourneyTask dto.MidjourneyDto) {
+	originTask = originTask.PublicMidjourney()
 	midjourneyTask.MjId = originTask.MjId
 	midjourneyTask.Progress = originTask.Progress
 	midjourneyTask.PromptEn = originTask.PromptEn
@@ -149,7 +205,7 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 	midjourneyTask.StartTime = originTask.StartTime
 	midjourneyTask.FinishTime = originTask.FinishTime
 	midjourneyTask.ImageUrl = ""
-	if originTask.ImageUrl != "" && setting.MjForwardUrlEnabled {
+	if originTask.ImageUrl != "" {
 		midjourneyTask.ImageUrl = system_setting.ServerAddress + "/mj/image/" + originTask.MjId
 		if originTask.Status != "SUCCESS" {
 			midjourneyTask.ImageUrl += "?rand=" + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -158,7 +214,7 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 		midjourneyTask.ImageUrl = originTask.ImageUrl
 	}
 	if originTask.VideoUrl != "" {
-		midjourneyTask.VideoUrl = originTask.VideoUrl
+		midjourneyTask.VideoUrl = system_setting.ServerAddress + "/mj/video/" + originTask.MjId
 	}
 	midjourneyTask.Status = originTask.Status
 	midjourneyTask.FailReason = originTask.FailReason
@@ -176,6 +232,11 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 		var videoUrls []dto.ImgUrls
 		err := json.Unmarshal([]byte(originTask.VideoUrls), &videoUrls)
 		if err == nil {
+			for i := range videoUrls {
+				if videoUrls[i].Url != "" {
+					videoUrls[i].Url = system_setting.ServerAddress + "/mj/video/" + originTask.MjId
+				}
+			}
 			midjourneyTask.VideoUrls = videoUrls
 		}
 	}
@@ -285,6 +346,9 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 	if err != nil {
 		return service.MidjourneyErrorWrapper(constant.MjRequestError, "unmarshal_response_body_failed")
 	}
+	if publicBody, projectionErr := common.PublicTaskJSON(respBody); projectionErr == nil {
+		respBody = publicBody
+	}
 	_, err = io.Copy(c.Writer, bytes.NewBuffer(respBody))
 	if err != nil {
 		return service.MidjourneyErrorWrapper(constant.MjRequestError, "copy_response_body_failed")
@@ -316,10 +380,22 @@ func RelayMidjourneyTaskImageSeed(c *gin.Context) *dto.MidjourneyResponse {
 		return &midjResponseWithStatus.Response
 	}
 	midjResponse := &midjResponseWithStatus.Response
+	if midjResponse.Code != 1 {
+		c.JSON(midjResponseWithStatus.StatusCode, gin.H{
+			"code":         common.PublicErrorCode,
+			"description":  common.DefaultPublicChannelErrorMessage(),
+			"channel_id":   common.PublicChannelID,
+			"channel_name": common.PublicChannelName,
+		})
+		return nil
+	}
 	c.Writer.WriteHeader(midjResponseWithStatus.StatusCode)
 	respBody, err := json.Marshal(midjResponse)
 	if err != nil {
 		return service.MidjourneyErrorWrapper(constant.MjRequestError, "unmarshal_response_body_failed")
+	}
+	if publicBody, projectionErr := common.PublicTaskJSON(respBody); projectionErr == nil {
+		respBody = publicBody
 	}
 	service.IOCopyBytesGracefully(c, nil, respBody)
 	return nil
@@ -653,6 +729,10 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 	//}
 	c.Writer.WriteHeader(midjResponseWithStatus.StatusCode)
 
+	publicBody, projectionErr := common.PublicTaskJSON(responseBody)
+	if projectionErr == nil {
+		bodyReader = io.NopCloser(bytes.NewReader(publicBody))
+	}
 	_, err = io.Copy(c.Writer, bodyReader)
 	if err != nil {
 		return &dto.MidjourneyResponse{

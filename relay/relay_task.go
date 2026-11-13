@@ -357,7 +357,7 @@ func sunoFetchRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.Ta
 			return
 		}
 		for _, task := range taskModels {
-			tasks = append(tasks, TaskModel2Dto(task))
+			tasks = append(tasks, TaskModel2PublicDto(task))
 		}
 	} else {
 		tasks = make([]any, 0)
@@ -385,7 +385,7 @@ func sunoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dt
 
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2PublicDto(originTask),
 	})
 	return
 }
@@ -428,7 +428,18 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 				taskResp = service.TaskErrorWrapper(err, "convert_to_openai_video_failed", http.StatusInternalServerError)
 				return
 			}
-			respBody = openAIVideoData
+			respBody, err = common.PublicTaskJSON(openAIVideoData)
+			if err != nil {
+				taskResp = service.TaskErrorWrapper(err, "invalid_video_response", http.StatusBadGateway)
+				return
+			}
+			var publicVideo map[string]any
+			if err := common.Unmarshal(respBody, &publicVideo); err == nil {
+				if metadata, ok := publicVideo["metadata"].(map[string]any); ok {
+					metadata["url"] = taskcommon.BuildProxyURL(originTask.TaskID)
+				}
+				respBody, _ = common.Marshal(publicVideo)
+			}
 			return
 		}
 		taskResp = service.TaskErrorWrapperLocal(fmt.Errorf("not_implemented:%s", originTask.Platform), "not_implemented", http.StatusNotImplemented)
@@ -438,7 +449,7 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// 通用 TaskDto 格式
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2PublicDto(originTask),
 	})
 	if err != nil {
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
@@ -521,7 +532,12 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"metadata": nil,
 		"status":   mapTaskStatusToSimple(task.Status),
 		"task_id":  task.TaskID,
-		"url":      task.GetResultURL(),
+		"url":      "",
+	}
+	if task.Status == model.TaskStatusSuccess {
+		out["url"] = taskcommon.BuildProxyURL(task.TaskID)
+	} else if task.Status == model.TaskStatusFailure {
+		out["error"] = map[string]string{"code": common.PublicErrorCode, "message": common.DefaultPublicChannelErrorMessage()}
 	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
@@ -592,4 +608,38 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Username:   task.Username,
 		Data:       task.Data,
 	}
+}
+
+// TaskModel2PublicDto is only for downstream and self-service task views.
+// Administrator responses keep using TaskModel2Dto.
+func TaskModel2PublicDto(task *model.Task) *dto.TaskDto {
+	view := TaskModel2Dto(task)
+	view.ChannelId = common.PublicChannelID
+	properties := task.Properties
+	properties.UpstreamModelName = ""
+	view.Properties = properties
+	view.FailReason = ""
+	view.ResultURL = ""
+	if task.Status == model.TaskStatusFailure {
+		_, view.FailReason = common.PublicChannelError("", task.FailReason)
+	}
+	if task.Status == model.TaskStatusSuccess {
+		if task.Platform != constant.TaskPlatformSuno {
+			view.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+		}
+	}
+	data := task.Data
+	var err error
+	if task.Platform == constant.TaskPlatformSuno {
+		data, err = common.PublicSunoData(task.TaskID, task.Data)
+	} else {
+		data, err = common.PublicVideoData(task.TaskID, task.Data)
+	}
+	if err != nil {
+		common.SysError(fmt.Sprintf("cannot project task %s metadata: %v", task.TaskID, err))
+		view.Data = nil
+	} else {
+		view.Data = data
+	}
+	return view
 }

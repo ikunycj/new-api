@@ -19,7 +19,11 @@ func SystemPerformanceCheck() gin.HandlerFunc {
 		if strings.HasPrefix(path, "/v1/messages") {
 			if err := checkSystemPerformance(); err != nil {
 				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToClaudeError(),
+					"error": err.ToPublicClaudeError(types.PublicErrorOptions{
+						Message: common.DefaultPublicChannelErrorMessage(),
+						Code:    types.PublicErrorCode,
+						Type:    "server_error",
+					}),
 				})
 				c.Abort()
 				return
@@ -27,7 +31,11 @@ func SystemPerformanceCheck() gin.HandlerFunc {
 		} else {
 			if err := checkSystemPerformance(); err != nil {
 				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToOpenAIError(),
+					"error": err.ToPublicOpenAIError(types.PublicErrorOptions{
+						Message: common.DefaultPublicChannelErrorMessage(),
+						Code:    types.PublicErrorCode,
+						Type:    "server_error",
+					}),
 				})
 				c.Abort()
 				return
