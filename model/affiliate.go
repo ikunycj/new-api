@@ -4,12 +4,15 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -56,6 +59,8 @@ var (
 	ErrAffiliateRewardNotFound   = errors.New("affiliate reward not found")
 	ErrAffiliateRuleInvalid      = errors.New("invalid affiliate rule")
 	ErrAffiliateTransferTooSmall = errors.New("cashback transfer is below the minimum")
+	ErrAffiliateDomainInvalid    = errors.New("invalid affiliate domain")
+	ErrAffiliateDomainTaken      = errors.New("affiliate domain is already assigned")
 )
 
 type AffiliateRuleVersion struct {
@@ -96,6 +101,8 @@ type AffiliateUserOverride struct {
 	HoldSeconds               *int64  `json:"hold_seconds" gorm:"type:bigint"`
 	MinimumTransferQuota      *int64  `json:"minimum_transfer_quota" gorm:"type:bigint"`
 	ShowInviteeTopUps         *bool   `json:"show_invitee_topups"`
+	AffiliateDomain           *string `json:"affiliate_domain" gorm:"type:varchar(255);uniqueIndex"`
+	Remark                    *string `json:"remark" gorm:"-"`
 	UpdatedBy                 int     `json:"updated_by" gorm:"index;not null"`
 	UpdatedAt                 int64   `json:"updated_at" gorm:"autoUpdateTime"`
 	ChangeReason              string  `json:"change_reason" gorm:"type:varchar(500);not null"`
@@ -273,20 +280,52 @@ type AffiliateInviteeTopUp struct {
 }
 
 type AffiliateUserOverrideView struct {
-	UserID            int                    `json:"user_id"`
-	Username          string                 `json:"username"`
-	Email             string                 `json:"email"`
-	UpdatedByUsername string                 `json:"updated_by_username"`
-	Override          *AffiliateUserOverride `json:"override"`
-	GlobalRule        AffiliateEffectiveRule `json:"global_rule"`
-	EffectiveRule     AffiliateEffectiveRule `json:"effective_rule"`
+	UserID            int                     `json:"user_id"`
+	Username          string                  `json:"username"`
+	Email             string                  `json:"email"`
+	Remark            string                  `json:"remark"`
+	InviteInfo        AffiliateUserInviteInfo `json:"invite_info"`
+	UpdatedByUsername string                  `json:"updated_by_username"`
+	Override          *AffiliateUserOverride  `json:"override"`
+	GlobalRule        AffiliateEffectiveRule  `json:"global_rule"`
+	EffectiveRule     AffiliateEffectiveRule  `json:"effective_rule"`
 }
+
+type AffiliateUserInviteInfo struct {
+	UserID                  int    `json:"user_id"`
+	InvitedCount            int64  `json:"invited_count"`
+	IncomeCents             int64  `json:"income_cents"`
+	InviterUserID           int    `json:"inviter_user_id"`
+	InviterUsername         string `json:"inviter_username"`
+	InviterEmail            string `json:"inviter_email"`
+	LifetimeEarnedQuota     int64  `json:"-"`
+	LifetimeEarnedCashCents int64  `json:"-"`
+}
+
+type AffiliateAdminReferralActivity struct {
+	ID                      int    `json:"id"`
+	InviteeUserID           int    `json:"invitee_user_id"`
+	Username                string `json:"username"`
+	Email                   string `json:"email"`
+	OperationType           string `json:"operation_type"`
+	TopUpAmountCents        int64  `json:"topup_amount_cents" gorm:"column:topup_amount_cents"`
+	CashbackAmountCents     int64  `json:"cashback_amount_cents"`
+	CumulativeCashbackCents int64  `json:"cumulative_cashback_cents"`
+	OccurredAt              int64  `json:"occurred_at"`
+}
+
+const (
+	AffiliateActivityInvitation = "invitation"
+	AffiliateActivityTopUp      = "top_up"
+)
 
 type AffiliateAdminReward struct {
 	ID               int    `json:"id"`
 	InviterUserID    int    `json:"inviter_user_id"`
 	InviterUsername  string `json:"inviter_username"`
+	InviterEmail     string `json:"inviter_email"`
 	InviteeUserID    int    `json:"invitee_user_id"`
+	InviteeUsername  string `json:"invitee_username"`
 	InviteeEmail     string `json:"invitee_email"`
 	InvitationCode   string `json:"invitation_code"`
 	TopUpID          int    `json:"topup_id"`
@@ -301,47 +340,7 @@ type AffiliateAdminReward struct {
 }
 
 func normalizedAffiliateSetting() operation_setting.AffiliateSetting {
-	setting := *operation_setting.GetAffiliateSetting()
-	maxQuota := int64(common.MaxQuota)
-	for _, item := range []*int64{
-		&setting.InviterRewardQuota,
-		&setting.InviteeRewardQuota,
-		&setting.FixedRewardQuota,
-		&setting.MaximumRewardQuota,
-		&setting.MinimumTransferQuota,
-	} {
-		if *item < 0 {
-			*item = 0
-		} else if *item > maxQuota {
-			*item = maxQuota
-		}
-	}
-	if setting.RewardRateBps < 0 {
-		setting.RewardRateBps = 0
-	} else if setting.RewardRateBps > 10_000 {
-		setting.RewardRateBps = 10_000
-	}
-	if setting.MinimumTopUpCents < 0 {
-		setting.MinimumTopUpCents = 0
-	}
-	if setting.HoldSeconds < 0 {
-		setting.HoldSeconds = 0
-	} else if setting.HoldSeconds > 365*24*60*60 {
-		setting.HoldSeconds = 365 * 24 * 60 * 60
-	}
-	if setting.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerRegistrationSuccess &&
-		setting.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerFirstQualifiedTopUp {
-		setting.RegistrationRewardTrigger = operation_setting.AffiliateRegistrationTriggerRegistrationSuccess
-	}
-	if setting.RewardMode != operation_setting.AffiliateRewardModePercentage &&
-		setting.RewardMode != operation_setting.AffiliateRewardModeFixed {
-		setting.RewardMode = operation_setting.AffiliateRewardModePercentage
-	}
-	if setting.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyFirstQualified &&
-		setting.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyEveryTopUp {
-		setting.CashbackFrequency = operation_setting.AffiliateCashbackFrequencyFirstQualified
-	}
-	return setting
+	return normalizeAffiliateSettingValues(*operation_setting.GetAffiliateSetting())
 }
 
 func globalAffiliateRule() AffiliateEffectiveRule {
@@ -379,15 +378,12 @@ func validateAffiliateRule(rule AffiliateEffectiveRule) error {
 	if !rule.UnlimitedReward && rule.MaximumRewardQuota <= 0 {
 		return ErrAffiliateRuleInvalid
 	}
-	if rule.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerRegistrationSuccess &&
-		rule.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerFirstQualifiedTopUp {
-		return ErrAffiliateRuleInvalid
-	}
-	if rule.RewardMode != operation_setting.AffiliateRewardModePercentage && rule.RewardMode != operation_setting.AffiliateRewardModeFixed {
-		return ErrAffiliateRuleInvalid
-	}
-	if rule.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyFirstQualified &&
-		rule.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyEveryTopUp {
+	if rule.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerDisabled ||
+		rule.RewardMode != operation_setting.AffiliateRewardModePercentage ||
+		rule.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyEveryTopUp ||
+		rule.InviterRewardQuota != 0 || rule.InviteeRewardQuota != 0 ||
+		rule.FixedRewardQuota != 0 || rule.MinimumTopUpCents != 0 ||
+		rule.MinimumTransferQuota != 0 {
 		return ErrAffiliateRuleInvalid
 	}
 	return nil
@@ -398,60 +394,17 @@ func applyAffiliateOverride(rule AffiliateEffectiveRule, override *AffiliateUser
 		return rule
 	}
 	applied := false
-	if override.Enabled != nil {
-		rule.Enabled = *override.Enabled
-		applied = true
-	}
-	if override.InviterRewardQuota != nil {
-		rule.InviterRewardQuota = *override.InviterRewardQuota
-		applied = true
-	}
-	if override.InviteeRewardQuota != nil {
-		rule.InviteeRewardQuota = *override.InviteeRewardQuota
-		applied = true
-	}
-	if override.RegistrationRewardTrigger != nil {
-		rule.RegistrationRewardTrigger = *override.RegistrationRewardTrigger
-		applied = true
-	}
-	if override.RewardMode != nil {
-		rule.RewardMode = *override.RewardMode
-		applied = true
-	}
-	if override.CashbackFrequency != nil {
-		rule.CashbackFrequency = *override.CashbackFrequency
-		applied = true
-	}
 	if override.RewardRateBps != nil {
 		rule.RewardRateBps = *override.RewardRateBps
 		applied = true
 	}
-	if override.FixedRewardQuota != nil {
-		rule.FixedRewardQuota = *override.FixedRewardQuota
-		applied = true
-	}
-	if override.UnlimitedReward != nil {
-		rule.UnlimitedReward = *override.UnlimitedReward
-		applied = true
-	}
 	if override.MaximumRewardQuota != nil {
 		rule.MaximumRewardQuota = *override.MaximumRewardQuota
-		applied = true
-	}
-	if override.MinimumTopUpCents != nil {
-		rule.MinimumTopUpCents = *override.MinimumTopUpCents
+		rule.UnlimitedReward = *override.MaximumRewardQuota <= 0
 		applied = true
 	}
 	if override.HoldSeconds != nil {
 		rule.HoldSeconds = *override.HoldSeconds
-		applied = true
-	}
-	if override.MinimumTransferQuota != nil {
-		rule.MinimumTransferQuota = *override.MinimumTransferQuota
-		applied = true
-	}
-	if override.ShowInviteeTopUps != nil {
-		rule.ShowInviteeTopUps = *override.ShowInviteeTopUps
 		applied = true
 	}
 	if applied {
@@ -710,25 +663,12 @@ func createAffiliateRewardWithTx(tx *gorm.DB, relation *AffiliateReferral, rule 
 	if err := appendAffiliateQuotaLedgerWithTx(tx, account, entry); err != nil {
 		return nil, false, err
 	}
+	if status == AffiliateRewardStatusAvailable {
+		if err := transferAvailableAffiliateRewardWithTx(tx, reward.ID); err != nil {
+			return nil, false, err
+		}
+	}
 	return &reward, true, nil
-}
-
-func grantAffiliateRegistrationRewardsWithTx(tx *gorm.DB, relation *AffiliateReferral, rule AffiliateEffectiveRule, topUpID *int) error {
-	version, err := ensureAffiliateRuleVersionWithTx(tx, relation.InviterUserID, rule)
-	if err != nil {
-		return err
-	}
-	if _, _, err := createAffiliateRewardWithTx(tx, relation, rule, version.ID,
-		AffiliateRewardTypeInviter, relation.InviterUserID, rule.InviterRewardQuota,
-		topUpID, 0, relation.CumulativePaidCents,
-		fmt.Sprintf("referral:%d:%s", relation.ID, AffiliateRewardTypeInviter)); err != nil {
-		return err
-	}
-	_, _, err = createAffiliateRewardWithTx(tx, relation, rule, version.ID,
-		AffiliateRewardTypeInvitee, relation.InviteeUserID, rule.InviteeRewardQuota,
-		topUpID, 0, relation.CumulativePaidCents,
-		fmt.Sprintf("referral:%d:%s", relation.ID, AffiliateRewardTypeInvitee))
-	return err
 }
 
 func bindAffiliateReferralWithTx(tx *gorm.DB, invitee *User, inviterID int, issueRegistrationRewards bool) error {
@@ -758,14 +698,11 @@ func bindAffiliateReferralWithTx(tx *gorm.DB, invitee *User, inviterID int, issu
 	if err := tx.Model(&User{}).Where("id = ?", inviterID).Update("aff_count", gorm.Expr("aff_count + 1")).Error; err != nil {
 		return err
 	}
-	if !issueRegistrationRewards || inviter.Status != common.UserStatusEnabled {
-		return nil
-	}
-	rule, _, err := effectiveAffiliateRuleWithTx(tx, inviterID)
-	if err != nil || !rule.Enabled || rule.RegistrationRewardTrigger != operation_setting.AffiliateRegistrationTriggerRegistrationSuccess {
-		return err
-	}
-	return grantAffiliateRegistrationRewardsWithTx(tx, &relation, rule, nil)
+	// Registration rewards were removed from the current product behavior. Keep
+	// the parameter for call-site compatibility with the existing registration
+	// transaction, but do not create inviter or invitee rewards here.
+	_ = issueRegistrationRewards
+	return nil
 }
 
 func initializeAffiliateUserWithTx(tx *gorm.DB, user *User, inviterID int, issueRegistrationRewards bool) error {
@@ -855,6 +792,9 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 	if completedAt <= 0 {
 		completedAt = common.GetTimestamp()
 	}
+	if completedAt < relation.BoundAt {
+		return nil
+	}
 	var invitee User
 	if err := tx.Select("email").Where("id = ?", relation.InviteeUserID).First(&invitee).Error; err != nil {
 		return err
@@ -914,11 +854,6 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 		relation.QualifyingTopUpID = &topUp.Id
 		event.Qualified = true
 		baseCents = relation.CumulativePaidCents
-		if rule.RegistrationRewardTrigger == operation_setting.AffiliateRegistrationTriggerFirstQualifiedTopUp {
-			if err := grantAffiliateRegistrationRewardsWithTx(tx, &relation, rule, &topUp.Id); err != nil {
-				return err
-			}
-		}
 	} else if rule.CashbackFrequency != operation_setting.AffiliateCashbackFrequencyEveryTopUp {
 		return tx.Save(&event).Error
 	}
@@ -959,9 +894,31 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 	return tx.Save(&event).Error
 }
 
+// Invalidate only after committing wallet changes, so a cache miss cannot
+// repopulate the previous balance from an uncommitted transaction.
+func invalidateAffiliateUserCache(userID int) {
+	if err := InvalidateUserCache(userID); err != nil {
+		common.SysError(fmt.Sprintf("invalidate affiliate wallet cache for user %d: %v", userID, err))
+	}
+}
+
+func invalidateAffiliateTopUpUserCaches(inviteeID int) {
+	invalidateAffiliateUserCache(inviteeID)
+	var relation AffiliateReferral
+	err := DB.Select("inviter_user_id").Where("invitee_user_id = ?", inviteeID).First(&relation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return
+	}
+	if err != nil {
+		common.SysError(fmt.Sprintf("find affiliate wallet recipient for user %d: %v", inviteeID, err))
+		return
+	}
+	invalidateAffiliateUserCache(relation.InviterUserID)
+}
+
 func ProcessAffiliateTopUp(topUpID int) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var topUp TopUp
+	var topUp TopUp
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockForUpdate(tx).Where("id = ?", topUpID).First(&topUp).Error; err != nil {
 			return err
 		}
@@ -970,6 +927,10 @@ func ProcessAffiliateTopUp(topUpID int) error {
 		}
 		return qualifyAffiliateTopUpWithTx(tx, &topUp)
 	})
+	if err == nil {
+		invalidateAffiliateTopUpUserCaches(topUp.UserId)
+	}
+	return err
 }
 
 func lockAffiliateRewardWithRecipient(tx *gorm.DB, rewardID int) (*AffiliateReward, error) {
@@ -986,6 +947,78 @@ func lockAffiliateRewardWithRecipient(tx *gorm.DB, rewardID int) (*AffiliateRewa
 		return nil, err
 	}
 	return &reward, nil
+}
+
+func transferAvailableAffiliateRewardWithTx(tx *gorm.DB, rewardID int) error {
+	reward, err := lockAffiliateRewardWithRecipient(tx, rewardID)
+	if err != nil {
+		return err
+	}
+	if reward.Status != AffiliateRewardStatusAvailable {
+		return nil
+	}
+	amountQuota := reward.ActualQuota - reward.AdjustedQuota - reward.TransferredQuota
+	if amountQuota <= 0 {
+		return nil
+	}
+	// The recipient and reward stay locked through the wallet and ledger writes.
+	// A later increase advances from the previous transferred amount, so retries
+	// cannot collide with the reward's original automatic transfer.
+	requestKey := fmt.Sprintf("auto-reward:%d:%d", reward.ID, reward.TransferredQuota)
+	var user User
+	if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", reward.RecipientUserID).First(&user).Error; err != nil {
+		return err
+	}
+	account, err := ensureAffiliateQuotaAccountWithTx(tx, reward.RecipientUserID)
+	if err != nil {
+		return err
+	}
+	if account.AvailableQuota < amountQuota {
+		return ErrAffiliateBalance
+	}
+	quotaAfter := int64(user.Quota) + amountQuota
+	if quotaAfter > int64(common.MaxQuota) {
+		// Keep the reward available until the wallet has room. A cashback
+		// transfer must not reject an otherwise successful customer payment.
+		return nil
+	}
+	transfer := AffiliateBalanceTransfer{
+		UserID: user.Id, RequestKey: requestKey, AmountQuota: amountQuota,
+		AffiliateBalanceBefore: account.AvailableQuota,
+		AffiliateBalanceAfter:  account.AvailableQuota - amountQuota,
+		UserQuotaBefore:        user.Quota, UserQuotaAfter: int(quotaAfter),
+	}
+	result := tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "request_key"}},
+		DoNothing: true,
+	}).Create(&transfer)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil
+	}
+	reward.TransferredQuota += amountQuota
+	if reward.TransferredQuota+reward.AdjustedQuota >= reward.ActualQuota {
+		reward.Status = AffiliateRewardStatusTransferred
+	}
+	account.AvailableQuota -= amountQuota
+	account.TransferredQuota += amountQuota
+	if err := tx.Save(reward).Error; err != nil {
+		return err
+	}
+	if err := tx.Save(account).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&User{}).Where("id = ?", user.Id).Update("quota", int(quotaAfter)).Error; err != nil {
+		return err
+	}
+	return appendAffiliateQuotaLedgerWithTx(tx, account, AffiliateQuotaLedger{
+		EntryType: AffiliateLedgerTypeBalanceTransfer, ReferenceType: AffiliateReferenceTransfer,
+		ReferenceID: transfer.ID, AmountQuota: amountQuota,
+		AvailableDeltaQuota: -amountQuota, TransferredDeltaQuota: amountQuota,
+		IdempotencyKey: "balance-transfer:" + strconv.Itoa(transfer.ID),
+	})
 }
 
 func releaseAffiliateRewardWithTx(tx *gorm.DB, rewardID int, now int64) (bool, error) {
@@ -1023,50 +1056,69 @@ func releaseAffiliateRewardWithTx(tx *gorm.DB, rewardID int, now int64) (bool, e
 	return true, nil
 }
 
-func ReleaseDueAffiliateRewards(now int64, limit int) (int, error) {
+// ReleaseDueAffiliateRewards processes one page after afterID. The returned
+// cursor advances for every inspected reward, including wallet-full rewards,
+// and is unchanged when no rows remain.
+func ReleaseDueAffiliateRewards(now int64, afterID int, limit int) (int, int, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	var ids []int
-	if err := DB.Model(&AffiliateReward{}).
-		Where("status = ? AND available_at <= ?", AffiliateRewardStatusPending, now).
-		Order("id asc").Limit(limit).Pluck("id", &ids).Error; err != nil {
-		return 0, err
+	var rewards []AffiliateReward
+	if err := DB.Select("id", "recipient_user_id").Model(&AffiliateReward{}).
+		Where("id > ?", afterID).
+		Where("(status = ? AND available_at <= ?) OR (status = ? AND actual_quota - adjusted_quota - transferred_quota > 0)", AffiliateRewardStatusPending, now, AffiliateRewardStatusAvailable).
+		Order("id asc").Limit(limit).Find(&rewards).Error; err != nil {
+		return 0, afterID, err
 	}
 	released := 0
-	for _, id := range ids {
+	for _, reward := range rewards {
+		id := reward.ID
 		changed := false
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			var err error
 			changed, err = releaseAffiliateRewardWithTx(tx, id, now)
-			return err
+			if err != nil {
+				return err
+			}
+			return transferAvailableAffiliateRewardWithTx(tx, id)
 		})
 		if err != nil {
-			return released, err
+			return released, afterID, err
 		}
+		afterID = id
+		invalidateAffiliateUserCache(reward.RecipientUserID)
 		if changed {
 			released++
 		}
 	}
-	return released, nil
+	return released, afterID, nil
 }
 
 func releaseDueAffiliateRewardsForUser(userID int, now int64) error {
-	var ids []int
-	if err := DB.Model(&AffiliateReward{}).
-		Where("recipient_user_id = ? AND status = ? AND available_at <= ?", userID, AffiliateRewardStatusPending, now).
-		Order("id asc").Limit(500).Pluck("id", &ids).Error; err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if err := DB.Transaction(func(tx *gorm.DB) error {
-			_, err := releaseAffiliateRewardWithTx(tx, id, now)
-			return err
-		}); err != nil {
+	for afterID := 0; ; {
+		var ids []int
+		if err := DB.Model(&AffiliateReward{}).
+			Where("id > ?", afterID).
+			Where("recipient_user_id = ? AND ((status = ? AND available_at <= ?) OR (status = ? AND actual_quota - adjusted_quota - transferred_quota > 0))", userID, AffiliateRewardStatusPending, now, AffiliateRewardStatusAvailable).
+			Order("id asc").Limit(500).Pluck("id", &ids).Error; err != nil {
 			return err
 		}
+		for _, id := range ids {
+			if err := DB.Transaction(func(tx *gorm.DB) error {
+				if _, err := releaseAffiliateRewardWithTx(tx, id, now); err != nil {
+					return err
+				}
+				return transferAvailableAffiliateRewardWithTx(tx, id)
+			}); err != nil {
+				return err
+			}
+			afterID = id
+			invalidateAffiliateUserCache(userID)
+		}
+		if len(ids) < 500 {
+			return nil
+		}
 	}
-	return nil
 }
 
 func GetAffiliateQuotaAccount(userID int) (*AffiliateQuotaAccount, error) {
@@ -1161,13 +1213,6 @@ func CreateAffiliateBalanceTransfer(userID int, amountQuota int64, requestKey st
 			return nil
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
-		}
-		rule, _, err := effectiveAffiliateRuleWithTx(tx, userID)
-		if err != nil {
-			return err
-		}
-		if amountQuota < rule.MinimumTransferQuota {
-			return ErrAffiliateTransferTooSmall
 		}
 		var user User
 		if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", userID).First(&user).Error; err != nil {
@@ -1548,7 +1593,7 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 
 func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endAt int64, startIdx int, limit int) ([]AffiliateAdminReward, int64, error) {
 	query := DB.Table("affiliate_rewards AS ar").
-		Select("ar.id, ar.inviter_user_id, inviter.username AS inviter_username, ar.invitee_user_id, invitee.email AS invitee_email, r.code_snapshot AS invitation_code, ar.top_up_id, t.trade_no, ar.paid_cents, ar.actual_quota, ar.adjusted_quota, ar.transferred_quota, ar.status, ar.available_at, ar.created_at").
+		Select("ar.id, ar.inviter_user_id, inviter.username AS inviter_username, inviter.email AS inviter_email, ar.invitee_user_id, invitee.username AS invitee_username, invitee.email AS invitee_email, r.code_snapshot AS invitation_code, ar.top_up_id, t.trade_no, ar.paid_cents, ar.actual_quota, ar.adjusted_quota, ar.transferred_quota, ar.status, ar.available_at, ar.created_at").
 		Joins("JOIN affiliate_referrals AS r ON r.id = ar.referral_id").
 		Joins("JOIN users AS inviter ON inviter.id = ar.inviter_user_id").
 		Joins("JOIN users AS invitee ON invitee.id = ar.invitee_user_id").
@@ -1557,16 +1602,20 @@ func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endA
 
 	keyword = strings.TrimSpace(keyword)
 	if keyword != "" {
-		pattern, err := sanitizeLikePattern(keyword)
+		pattern, err := sanitizeLikePattern(strings.ToLower(keyword))
 		if err != nil {
 			return nil, 0, err
 		}
+		pattern = "%" + pattern + "%"
+		condition := "LOWER(inviter.username) LIKE ? ESCAPE '!' OR LOWER(inviter.email) LIKE ? ESCAPE '!' OR LOWER(invitee.username) LIKE ? ESCAPE '!' OR LOWER(invitee.email) LIKE ? ESCAPE '!' OR LOWER(inviter.remark) LIKE ? ESCAPE '!'"
+		args := []interface{}{pattern, pattern, pattern, pattern, pattern}
 		if userID, err := strconv.Atoi(keyword); err == nil && userID > 0 {
-			query = query.Where("(inviter.username LIKE ? ESCAPE '!' OR inviter.email LIKE ? ESCAPE '!' OR invitee.username LIKE ? ESCAPE '!' OR invitee.email LIKE ? ESCAPE '!' OR r.code_snapshot LIKE ? ESCAPE '!' OR t.trade_no LIKE ? ESCAPE '!' OR ar.inviter_user_id = ? OR ar.invitee_user_id = ?)", pattern, pattern, pattern, pattern, pattern, pattern, userID, userID)
-		} else {
-			query = query.Where("(inviter.username LIKE ? ESCAPE '!' OR inviter.email LIKE ? ESCAPE '!' OR invitee.username LIKE ? ESCAPE '!' OR invitee.email LIKE ? ESCAPE '!' OR r.code_snapshot LIKE ? ESCAPE '!' OR t.trade_no LIKE ? ESCAPE '!')", pattern, pattern, pattern, pattern, pattern, pattern)
+			condition += " OR ar.inviter_user_id = ? OR ar.invitee_user_id = ?"
+			args = append(args, userID, userID)
 		}
+		query = query.Where("("+condition+")", args...)
 	}
+
 	switch status {
 	case AffiliateRewardStatusPending, AffiliateRewardStatusAvailable, AffiliateRewardStatusTransferred, AffiliateRewardStatusAdjusted:
 		query = query.Where("ar.status = ?", status)
@@ -1586,83 +1635,345 @@ func GetAffiliateAdminRewards(keyword string, status string, startAt int64, endA
 	if err := query.Order("ar.created_at desc, ar.id desc").Offset(startIdx).Limit(limit).Scan(&items).Error; err != nil {
 		return nil, 0, err
 	}
-	for index := range items {
-		items[index].InviteeEmail = maskAffiliateEmail(items[index].InviteeEmail, items[index].InviteeUserID)
-	}
 	return items, total, nil
 }
 
-const affiliateUserOverrideConfiguredCondition = `(
-	affiliate_user_overrides.inviter_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.invitee_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.reward_rate_bps IS NOT NULL OR
-	affiliate_user_overrides.fixed_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.maximum_reward_quota IS NOT NULL OR
-	affiliate_user_overrides.minimum_top_up_cents IS NOT NULL OR
-	affiliate_user_overrides.hold_seconds IS NOT NULL
-)`
+func affiliateServerBaseDomain() string {
+	serverAddress := strings.TrimSpace(system_setting.ServerAddress)
+	if serverAddress == "" {
+		return ""
+	}
+	parsed, err := url.Parse(serverAddress)
+	if err != nil || parsed.Hostname() == "" {
+		return ""
+	}
+	baseDomain := strings.ToLower(parsed.Hostname())
+	if baseDomain == "localhost" || net.ParseIP(baseDomain) != nil {
+		return ""
+	}
+	return baseDomain
+}
 
-func hasAffiliateUserOverrideValues(override *AffiliateUserOverride) bool {
+func normalizeAffiliateDomain(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
+	if strings.ContainsAny(value, "/\\?:@") || net.ParseIP(value) != nil {
+		return "", ErrAffiliateDomainInvalid
+	}
+	if !strings.Contains(value, ".") {
+		if len(value) > 63 || strings.HasPrefix(value, "-") || strings.HasSuffix(value, "-") {
+			return "", ErrAffiliateDomainInvalid
+		}
+		for _, char := range value {
+			if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+				return "", ErrAffiliateDomainInvalid
+			}
+		}
+		if _, reserved := reservedAffiliateSubdomainLabels[value]; reserved {
+			return "", ErrAffiliateDomainInvalid
+		}
+		if baseDomain := affiliateServerBaseDomain(); baseDomain != "" {
+			value += "." + baseDomain
+		} else {
+			return value, nil
+		}
+	}
+	if len(value) > 253 {
+		return "", ErrAffiliateDomainInvalid
+	}
+	labels := strings.Split(value, ".")
+	if len(labels) < 3 {
+		return "", ErrAffiliateDomainInvalid
+	}
+	for _, label := range labels {
+		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return "", ErrAffiliateDomainInvalid
+		}
+		for _, char := range label {
+			if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+				return "", ErrAffiliateDomainInvalid
+			}
+		}
+	}
+	return value, nil
+}
+
+var reservedAffiliateSubdomainLabels = map[string]struct{}{
+	"admin":  {},
+	"api":    {},
+	"cdn":    {},
+	"static": {},
+	"www":    {},
+}
+
+func affiliateDomainMatchesServer(value string) bool {
+	labels := strings.Split(value, ".")
+	if len(labels) == 0 {
+		return false
+	}
+	if _, reserved := reservedAffiliateSubdomainLabels[labels[0]]; reserved {
+		return false
+	}
+
+	baseDomain := affiliateServerBaseDomain()
+	if baseDomain == "" {
+		return true
+	}
+	suffix := "." + baseDomain
+	if !strings.HasSuffix(value, suffix) {
+		return false
+	}
+	prefix := strings.TrimSuffix(value, suffix)
+	return prefix != "" && !strings.Contains(prefix, ".")
+}
+
+// ResolveAffiliateInviterByHost resolves a configured affiliate domain to the
+// inviter user ID. Unknown, malformed, disabled, and root hosts are treated as
+// an unmatched host so callers can preserve the ordinary registration path.
+func ResolveAffiliateInviterByHost(host string) (int, bool, error) {
+	normalized, err := normalizeAffiliateDomain(host)
+	if err != nil || normalized == "" {
+		return 0, false, nil
+	}
+	if !affiliateDomainMatchesServer(normalized) {
+		return 0, false, nil
+	}
+
+	var override struct {
+		UserID int `gorm:"column:user_id"`
+	}
+	err = DB.Table("affiliate_user_overrides").
+		Select("user_id").
+		Where("affiliate_domain = ?", normalized).
+		First(&override).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) && strings.Contains(normalized, ".") {
+		prefix := strings.SplitN(normalized, ".", 2)[0]
+		err = DB.Table("affiliate_user_overrides").
+			Select("user_id").
+			Where("affiliate_domain = ?", prefix).
+			First(&override).Error
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+
+	var user User
+	if err := DB.Select("id", "status").
+		Where("id = ? AND deleted_at IS NULL", override.UserID).
+		First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if user.Status != common.UserStatusEnabled {
+		return 0, false, nil
+	}
+	return user.Id, true, nil
+}
+
+// An override row also records agent membership when all reward fields inherit
+// the global settings and no domain has been assigned.
+const affiliateUserOverrideConfiguredCondition = "affiliate_user_overrides.id IS NOT NULL"
+
+func hasAffiliateRewardOverrideValues(override *AffiliateUserOverride) bool {
 	if override == nil {
 		return false
 	}
-	return override.InviterRewardQuota != nil ||
-		override.InviteeRewardQuota != nil ||
-		override.RewardRateBps != nil ||
-		override.FixedRewardQuota != nil ||
+	return override.RewardRateBps != nil ||
 		override.MaximumRewardQuota != nil ||
-		override.MinimumTopUpCents != nil ||
 		override.HoldSeconds != nil
 }
 
-// User-specific strategies may only override fields in the global
-// configuration section. Preferences and rule fields remain global-only.
+// Agent-specific settings may override only the active global configuration
+// fields. Registration rewards, thresholds, visibility, and transfer limits are
+// legacy behavior and cannot be written through the agent API.
 func hasAffiliateUserOverrideDisallowedValues(override *AffiliateUserOverride) bool {
 	if override == nil {
 		return false
 	}
 	return override.Enabled != nil ||
+		override.InviterRewardQuota != nil ||
+		override.InviteeRewardQuota != nil ||
 		override.RegistrationRewardTrigger != nil ||
-		override.CashbackFrequency != nil ||
 		override.RewardMode != nil ||
+		override.CashbackFrequency != nil ||
+		override.FixedRewardQuota != nil ||
 		override.UnlimitedReward != nil ||
+		override.MinimumTopUpCents != nil ||
 		override.MinimumTransferQuota != nil ||
 		override.ShowInviteeTopUps != nil
 }
 
 func SaveAffiliateUserOverride(userID int, adminUserID int, override AffiliateUserOverride) (*AffiliateUserOverrideView, error) {
-	changeReason := strings.TrimSpace(override.ChangeReason)
-	if userID <= 0 || adminUserID <= 0 || len(changeReason) > 500 ||
-		hasAffiliateUserOverrideDisallowedValues(&override) ||
-		!hasAffiliateUserOverrideValues(&override) {
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		return saveAffiliateUserOverrideWithTx(tx, userID, adminUserID, override)
+	}); err != nil {
+		return nil, err
+	}
+	return GetAffiliateUserOverrideView(userID)
+}
+
+type AffiliateAgentUpdate struct {
+	UserID         int                   `json:"user_id"`
+	Override       AffiliateUserOverride `json:"override"`
+	InviteeUserIDs []int                 `json:"invitee_user_ids"`
+}
+
+// SaveAffiliateAgents commits the complete form together. A failed row leaves
+// every row unchanged, and the whole save consumes one critical-rate-limit slot.
+func SaveAffiliateAgents(adminUserID int, updates []AffiliateAgentUpdate) ([]*AffiliateUserOverrideView, error) {
+	if adminUserID <= 0 || len(updates) == 0 || len(updates) > 1000 {
 		return nil, ErrAffiliateRuleInvalid
 	}
-	global := globalAffiliateRule()
-	if (global.RewardMode == operation_setting.AffiliateRewardModePercentage && override.FixedRewardQuota != nil) ||
-		(global.RewardMode == operation_setting.AffiliateRewardModeFixed && override.RewardRateBps != nil) {
-		return nil, ErrAffiliateRuleInvalid
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		for _, update := range updates {
+			if err := saveAffiliateUserOverrideWithTx(tx, update.UserID, adminUserID, update.Override); err != nil {
+				return fmt.Errorf("代理人 %d：%w", update.UserID, err)
+			}
+			if len(update.InviteeUserIDs) > 100 {
+				return ErrAffiliateRuleInvalid
+			}
+			for _, inviteeID := range update.InviteeUserIDs {
+				if err := bindAffiliateInviteeWithTx(tx, update.UserID, inviteeID); err != nil {
+					return fmt.Errorf("被邀请者 %d：%w", inviteeID, err)
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	views := make([]*AffiliateUserOverrideView, 0, len(updates))
+	for _, update := range updates {
+		view, err := GetAffiliateUserOverrideView(update.UserID)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
+	}
+	return views, nil
+}
+
+func bindAffiliateInviteeWithTx(tx *gorm.DB, inviterID int, inviteeID int) error {
+	if inviterID <= 0 || inviteeID <= 0 || inviterID == inviteeID {
+		return errors.New("邀请者与被邀请者必须是不同的有效用户")
+	}
+	var invitee User
+	if err := lockForUpdate(tx).Where("id = ?", inviteeID).First(&invitee).Error; err != nil {
+		return err
+	}
+	if invitee.InviterId != 0 && invitee.InviterId != inviterID {
+		return errors.New("用户已绑定其他邀请者")
+	}
+	var referral AffiliateReferral
+	err := tx.Where("invitee_user_id = ?", inviteeID).First(&referral).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if err == nil && referral.InviterUserID != inviterID {
+		return errors.New("用户已绑定其他邀请者")
+	}
+	if invitee.InviterId == inviterID {
+		return nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := bindAffiliateReferralWithTx(tx, &invitee, inviterID, false); err != nil {
+			return err
+		}
+	}
+	return tx.Model(&invitee).Update("inviter_id", inviterID).Error
+}
+
+func saveAffiliateUserOverrideWithTx(tx *gorm.DB, userID int, adminUserID int, override AffiliateUserOverride) error {
+	changeReason := strings.TrimSpace(override.ChangeReason)
+	hasDomainUpdate := override.AffiliateDomain != nil
+	if override.Remark != nil {
+		remark := strings.TrimSpace(*override.Remark)
+		if len(remark) > 255 {
+			return ErrAffiliateRuleInvalid
+		}
+		override.Remark = &remark
+	}
+	if userID <= 0 || adminUserID <= 0 || len(changeReason) > 500 ||
+		hasAffiliateUserOverrideDisallowedValues(&override) {
+		return ErrAffiliateRuleInvalid
+	}
+	if override.AffiliateDomain != nil {
+		normalizedDomain, err := normalizeAffiliateDomain(*override.AffiliateDomain)
+		if err != nil {
+			return err
+		}
+		if normalizedDomain != "" && !affiliateDomainMatchesServer(normalizedDomain) {
+			return ErrAffiliateDomainInvalid
+		}
+		if normalizedDomain == "" {
+			override.AffiliateDomain = nil
+		} else {
+			override.AffiliateDomain = &normalizedDomain
+		}
+	}
+	if hasAffiliateRewardOverrideValues(&override) {
+		rule := applyAffiliateOverride(globalAffiliateRule(), &override)
+		if err := validateAffiliateRule(rule); err != nil {
+			return err
+		}
 	}
 	override.UserID = userID
 	override.ID = 0
 	override.UpdatedBy = adminUserID
 	override.ChangeReason = changeReason
-	rule := applyAffiliateOverride(global, &override)
-	if err := validateAffiliateRule(rule); err != nil {
-		return nil, err
+	var user User
+	if err := tx.Select("id", "remark").Where("id = ?", userID).First(&user).Error; err != nil {
+		return err
 	}
-	if err := DB.Transaction(func(tx *gorm.DB) error {
-		var user User
-		if err := tx.Select("id").Where("id = ?", userID).First(&user).Error; err != nil {
+	var existing AffiliateUserOverride
+	if err := tx.Where("user_id = ?", userID).First(&existing).Error; err == nil {
+		if override.RewardRateBps == nil {
+			override.RewardRateBps = existing.RewardRateBps
+		}
+		if override.MaximumRewardQuota == nil {
+			override.MaximumRewardQuota = existing.MaximumRewardQuota
+		}
+		if override.HoldSeconds == nil {
+			override.HoldSeconds = existing.HoldSeconds
+		}
+		if !hasDomainUpdate {
+			override.AffiliateDomain = existing.AffiliateDomain
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if override.Remark != nil {
+		if err := tx.Model(&User{}).Where("id = ?", userID).Update("remark", *override.Remark).Error; err != nil {
 			return err
 		}
-		return tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}},
-			UpdateAll: true,
-		}).Create(&override).Error
-	}); err != nil {
-		return nil, err
+		override.Remark = nil
 	}
-	return GetAffiliateUserOverrideView(userID)
+	if override.AffiliateDomain != nil {
+		var count int64
+		if err := tx.Model(&AffiliateUserOverride{}).
+			Where("affiliate_domain = ? AND user_id <> ?", *override.AffiliateDomain, userID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrAffiliateDomainTaken
+		}
+	}
+	return tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}},
+		UpdateAll: true,
+	}).Create(&override).Error
 }
 
 func DeleteAffiliateUserOverride(userID int) error {
@@ -1692,8 +2003,8 @@ func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*A
 			return nil, 0, err
 		}
 		pattern = "%" + pattern + "%"
-		condition := "LOWER(users.username) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!' OR LOWER(users.display_name) LIKE ? ESCAPE '!' OR LOWER(users.remark) LIKE ? ESCAPE '!'"
-		args := []interface{}{pattern, pattern, pattern, pattern}
+		condition := "LOWER(users.username) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!' OR LOWER(users.display_name) LIKE ? ESCAPE '!' OR LOWER(users.remark) LIKE ? ESCAPE '!' OR LOWER(affiliate_user_overrides.affiliate_domain) LIKE ? ESCAPE '!'"
+		args := []interface{}{pattern, pattern, pattern, pattern, pattern}
 		if userID, err := strconv.Atoi(keyword); err == nil && userID > 0 {
 			condition = "users.id = ? OR " + condition
 			args = append([]interface{}{userID}, args...)
@@ -1718,18 +2029,98 @@ func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*A
 
 	items := make([]*AffiliateUserOverrideView, 0, len(userIDs))
 	for _, userID := range userIDs {
-		item, err := GetAffiliateUserOverrideView(userID)
+		item, err := getAffiliateUserOverrideView(userID)
 		if err != nil {
 			return nil, 0, err
 		}
 		items = append(items, item)
 	}
+	inviteInfos, err := GetAffiliateUserInviteInfos(userIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	inviteInfoByUserID := make(map[int]AffiliateUserInviteInfo, len(inviteInfos))
+	for _, inviteInfo := range inviteInfos {
+		inviteInfoByUserID[inviteInfo.UserID] = inviteInfo
+	}
+	for _, item := range items {
+		item.InviteInfo = inviteInfoByUserID[item.UserID]
+	}
 	return items, total, nil
 }
 
+func GetAffiliateUserInviteInfos(userIDs []int) ([]AffiliateUserInviteInfo, error) {
+	if len(userIDs) == 0 {
+		return []AffiliateUserInviteInfo{}, nil
+	}
+	var items []AffiliateUserInviteInfo
+	if err := DB.Table("users AS u").
+		Select(`u.id AS user_id,
+COALESCE(quota_account.lifetime_earned_quota, u.aff_history, 0) AS lifetime_earned_quota,
+COALESCE(cash_account.lifetime_earned_cents, 0) AS lifetime_earned_cash_cents,
+u.inviter_id AS inviter_user_id,
+COALESCE(inviter.username, '') AS inviter_username,
+COALESCE(inviter.email, '') AS inviter_email`).
+		Joins("LEFT JOIN affiliate_quota_accounts AS quota_account ON quota_account.user_id = u.id").
+		Joins("LEFT JOIN affiliate_cash_accounts AS cash_account ON cash_account.user_id = u.id").
+		Joins("LEFT JOIN users AS inviter ON inviter.id = u.inviter_id").
+		Where("u.id IN ?", userIDs).
+		Scan(&items).Error; err != nil {
+		return nil, err
+	}
+	var invitedCounts []struct {
+		UserID       int
+		InvitedCount int64
+	}
+	if err := DB.Table("users AS invitee").
+		Select("COALESCE(NULLIF(referral.inviter_user_id, 0), invitee.inviter_id) AS user_id, COUNT(DISTINCT invitee.id) AS invited_count").
+		Joins("LEFT JOIN affiliate_referrals AS referral ON referral.invitee_user_id = invitee.id").
+		Where("invitee.inviter_id IN ? OR referral.inviter_user_id IN ?", userIDs, userIDs).
+		Group("COALESCE(NULLIF(referral.inviter_user_id, 0), invitee.inviter_id)").
+		Scan(&invitedCounts).Error; err != nil {
+		return nil, err
+	}
+	byUserID := make(map[int]*AffiliateUserInviteInfo, len(items))
+	for i := range items {
+		byUserID[items[i].UserID] = &items[i]
+	}
+	for _, count := range invitedCounts {
+		if info := byUserID[count.UserID]; info != nil {
+			info.InvitedCount = count.InvitedCount
+		}
+	}
+	exchangeRate := operation_setting.USDExchangeRate
+	if exchangeRate <= 0 {
+		exchangeRate = 1
+	}
+	for i := range items {
+		quotaIncome := decimal.NewFromInt(items[i].LifetimeEarnedQuota).
+			Div(decimal.NewFromFloat(common.QuotaPerUnit)).
+			Mul(decimal.NewFromFloat(exchangeRate)).
+			Mul(decimal.NewFromInt(100)).Round(0).IntPart()
+		items[i].IncomeCents = quotaIncome + items[i].LifetimeEarnedCashCents
+	}
+	return items, nil
+}
+
 func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error) {
+	view, err := getAffiliateUserOverrideView(userID)
+	if err != nil {
+		return nil, err
+	}
+	inviteInfos, err := GetAffiliateUserInviteInfos([]int{userID})
+	if err != nil {
+		return nil, err
+	}
+	if len(inviteInfos) > 0 {
+		view.InviteInfo = inviteInfos[0]
+	}
+	return view, nil
+}
+
+func getAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error) {
 	var user User
-	if err := DB.Select("id", "username", "email").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := DB.Select("id", "username", "email", "remark").Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	global := globalAffiliateRule()
@@ -1737,9 +2128,7 @@ func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error
 	var overridePtr *AffiliateUserOverride
 	updatedByUsername := ""
 	if err := DB.Where("user_id = ?", userID).First(&override).Error; err == nil {
-		if hasAffiliateUserOverrideValues(&override) {
-			overridePtr = &override
-		}
+		overridePtr = &override
 		if override.UpdatedBy > 0 {
 			var updatedBy User
 			if err := DB.Unscoped().Select("username").Where("id = ?", override.UpdatedBy).First(&updatedBy).Error; err == nil {
@@ -1753,19 +2142,119 @@ func GetAffiliateUserOverrideView(userID int) (*AffiliateUserOverrideView, error
 	}
 	effective := applyAffiliateOverride(global, overridePtr)
 	return &AffiliateUserOverrideView{
-		UserID: user.Id, Username: user.Username, Email: user.Email,
+		UserID: user.Id, Username: user.Username, Email: user.Email, Remark: user.Remark,
 		UpdatedByUsername: updatedByUsername,
 		Override:          overridePtr, GlobalRule: global, EffectiveRule: effective,
 	}, nil
 }
 
+func GetAffiliateAdminReferralActivities(inviterUserID int, keyword string, operationType string, startIdx int, limit int) ([]AffiliateAdminReferralActivity, int64, error) {
+	if inviterUserID <= 0 {
+		return nil, 0, ErrAffiliateRuleInvalid
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	if operationType != "" && operationType != AffiliateActivityInvitation && operationType != AffiliateActivityTopUp {
+		return nil, 0, ErrAffiliateRuleInvalid
+	}
+
+	activityCTE := `WITH activity AS (
+  SELECT invitee.id AS id, invitee.id AS invitee_user_id,
+         COALESCE(invitee.username, '') AS username, COALESCE(invitee.email, '') AS email,
+         '` + AffiliateActivityInvitation + `' AS operation_type,
+         COALESCE(NULLIF(referral.bound_at, 0), invitee.created_at) AS occurred_at,
+         CAST(0 AS BIGINT) AS topup_amount_cents,
+         CAST(0 AS BIGINT) AS cashback_amount_cents
+  FROM users AS invitee
+  LEFT JOIN affiliate_referrals AS referral ON referral.invitee_user_id = invitee.id
+  WHERE invitee.inviter_id = ? OR referral.inviter_user_id = ?
+
+  UNION ALL
+
+  SELECT topup.id AS id, invitee.id AS invitee_user_id,
+         COALESCE(invitee.username, '') AS username, COALESCE(invitee.email, '') AS email,
+         '` + AffiliateActivityTopUp + `' AS operation_type,
+         COALESCE(NULLIF(topup.complete_time, 0), topup.create_time) AS occurred_at,
+         CAST(COALESCE(NULLIF(topup.paid_cents, 0), ROUND(topup.money * 100), 0) AS BIGINT) AS topup_amount_cents,
+         CAST(CASE WHEN cash_reward.id IS NOT NULL THEN cash_reward.cashback_cents
+                   ELSE COALESCE(ROUND((quota_reward.actual_quota - quota_reward.adjusted_quota)
+                     * quota_reward.cny_exchange_rate_snapshot * 100
+                     / NULLIF(quota_reward.quota_per_unit_snapshot, 0)), 0)
+              END AS BIGINT) AS cashback_amount_cents
+  FROM top_ups AS topup
+  JOIN users AS invitee ON invitee.id = topup.user_id
+  LEFT JOIN affiliate_top_up_events AS topup_event ON topup_event.top_up_id = topup.id
+  LEFT JOIN affiliate_rewards AS quota_reward ON quota_reward.id = topup_event.reward_id
+  LEFT JOIN affiliate_cash_rewards AS cash_reward ON cash_reward.id = topup_event.cash_reward_id
+  WHERE topup.status = ?
+    AND topup.completion_source = ?
+    AND (invitee.inviter_id = ? OR EXISTS (
+      SELECT 1 FROM affiliate_referrals AS referral
+      WHERE referral.invitee_user_id = invitee.id AND referral.inviter_user_id = ?
+    ))
+), activity_with_cumulative AS (
+  SELECT activity.*,
+         SUM(cashback_amount_cents) OVER (
+           PARTITION BY invitee_user_id
+           ORDER BY occurred_at, CASE WHEN operation_type = '` + AffiliateActivityInvitation + `' THEN 0 ELSE 1 END, id
+           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+         ) AS cumulative_cashback_cents,
+         SUM(cashback_amount_cents) OVER (
+           PARTITION BY invitee_user_id
+         ) AS lifetime_cashback_cents
+  FROM activity
+)`
+	args := []interface{}{
+		inviterUserID,
+		inviterUserID,
+		common.TopUpStatusSuccess,
+		TopUpCompletionSourceOnlineWallet,
+		inviterUserID,
+		inviterUserID,
+	}
+	filters := make([]string, 0, 2)
+	filterArgs := make([]interface{}, 0, 5)
+	if keyword = strings.TrimSpace(keyword); keyword != "" {
+		pattern := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(keyword))
+		pattern = "%" + pattern + "%"
+		filters = append(filters, "(CAST(invitee_user_id AS TEXT) = ? OR LOWER(username) LIKE ? ESCAPE '!' OR LOWER(email) LIKE ? ESCAPE '!')")
+		filterArgs = append(filterArgs, keyword, pattern, pattern)
+	}
+	if operationType != "" {
+		filters = append(filters, "operation_type = ?")
+		filterArgs = append(filterArgs, operationType)
+	}
+	whereClause := ""
+	if len(filters) > 0 {
+		whereClause = " WHERE " + strings.Join(filters, " AND ")
+	}
+
+	var total int64
+	if err := DB.Raw(activityCTE+" SELECT COUNT(*) FROM activity_with_cumulative"+whereClause, append(args, filterArgs...)...).Scan(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []AffiliateAdminReferralActivity
+	query := activityCTE + " SELECT id, invitee_user_id, username, email, operation_type, topup_amount_cents, cashback_amount_cents, CASE WHEN operation_type = '" + AffiliateActivityInvitation + "' THEN lifetime_cashback_cents ELSE cumulative_cashback_cents END AS cumulative_cashback_cents, occurred_at FROM activity_with_cumulative" + whereClause + " ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?"
+	if err := DB.Raw(query, append(append(args, filterArgs...), limit, startIdx)...).Scan(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+// AdjustAffiliateReward records a deduction for a positive amount and an increase
+// for a negative amount. AdjustedQuota keeps the net deduction from ActualQuota.
 func AdjustAffiliateReward(rewardID int, adminUserID int, amountQuota int64, reason string, requestKey string) (*AffiliateAdjustment, error) {
 	reason = strings.TrimSpace(reason)
 	requestKey = strings.TrimSpace(requestKey)
-	if rewardID <= 0 || adminUserID <= 0 || amountQuota <= 0 || amountQuota > int64(common.MaxQuota) || reason == "" || len(reason) > 500 || requestKey == "" || len(requestKey) > 64 {
+	if rewardID <= 0 || adminUserID <= 0 || amountQuota == 0 || amountQuota < -int64(common.MaxQuota) || amountQuota > int64(common.MaxQuota) || reason == "" || len(reason) > 500 || requestKey == "" || len(requestKey) > 64 {
 		return nil, ErrAffiliateAmountInvalid
 	}
 	var adjustment AffiliateAdjustment
+	var recipientUserID int
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("reward_id = ? AND request_key = ?", rewardID, requestKey).First(&adjustment).Error; err == nil {
 			return nil
@@ -1779,18 +2268,35 @@ func AdjustAffiliateReward(rewardID int, adminUserID int, amountQuota int64, rea
 			}
 			return err
 		}
+		recipientUserID = reward.RecipientUserID
 		if reward.RewardType != AffiliateRewardTypeCashback {
 			return ErrAffiliateAmountInvalid
 		}
-		remaining := reward.ActualQuota - reward.AdjustedQuota - reward.TransferredQuota
-		if remaining < 0 {
-			remaining = 0
+		isIncrease := amountQuota < 0
+		if isIncrease {
+			if reward.ActualQuota-reward.AdjustedQuota-amountQuota > int64(common.MaxQuota) {
+				return ErrAffiliateAmountInvalid
+			}
+			// A fully deducted frozen reward can become pending again. An unlocked
+			// reward, including one already transferred, receives the increase now.
+			if reward.Status == AffiliateRewardStatusPending || reward.AvailableAt > common.GetTimestamp() {
+				reward.Status = AffiliateRewardStatusPending
+			} else {
+				reward.Status = AffiliateRewardStatusAvailable
+			}
 		}
 		applied := amountQuota
-		if applied > remaining {
-			applied = remaining
+		manual := int64(0)
+		if !isIncrease {
+			remaining := reward.ActualQuota - reward.AdjustedQuota - reward.TransferredQuota
+			if remaining < 0 {
+				remaining = 0
+			}
+			if applied > remaining {
+				applied = remaining
+			}
+			manual = amountQuota - applied
 		}
-		manual := amountQuota - applied
 		status := AffiliateAdjustmentStatusApplied
 		if manual > 0 {
 			status = AffiliateAdjustmentStatusManualRequired
@@ -1834,6 +2340,9 @@ func AdjustAffiliateReward(rewardID int, adminUserID int, amountQuota int64, rea
 			account.AvailableQuota -= applied
 			entry.AvailableDeltaQuota = -applied
 		}
+		if isIncrease {
+			account.LifetimeEarnedQuota += -applied
+		}
 		reward.AdjustedQuota += applied
 		if reward.AdjustedQuota+reward.TransferredQuota >= reward.ActualQuota {
 			reward.Status = AffiliateRewardStatusAdjusted
@@ -1844,45 +2353,100 @@ func AdjustAffiliateReward(rewardID int, adminUserID int, amountQuota int64, rea
 		if err := tx.Save(reward).Error; err != nil {
 			return err
 		}
-		return appendAffiliateQuotaLedgerWithTx(tx, account, entry)
+		if err := appendAffiliateQuotaLedgerWithTx(tx, account, entry); err != nil {
+			return err
+		}
+		if isIncrease && reward.Status == AffiliateRewardStatusAvailable {
+			return transferAvailableAffiliateRewardWithTx(tx, reward.ID)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+	if recipientUserID > 0 {
+		invalidateAffiliateUserCache(recipientUserID)
 	}
 	return &adjustment, nil
 }
 
 func UpdateAffiliateSetting(next operation_setting.AffiliateSetting) error {
+	// Only the active global fields are writable. Normalize all legacy fields so
+	// old option rows cannot re-enable removed registration or transfer rules.
+	setting := normalizedAffiliateSetting()
+	setting.Enabled = next.Enabled
+	setting.RewardRateBps = next.RewardRateBps
+	setting.MaximumRewardQuota = next.MaximumRewardQuota
+	setting.HoldSeconds = next.HoldSeconds
+	setting = normalizeAffiliateSettingValues(setting)
+
 	rule := AffiliateEffectiveRule{
-		Enabled: next.Enabled, InviterRewardQuota: next.InviterRewardQuota,
-		InviteeRewardQuota: next.InviteeRewardQuota, RegistrationRewardTrigger: next.RegistrationRewardTrigger,
-		RewardMode: next.RewardMode, CashbackFrequency: next.CashbackFrequency,
-		RewardRateBps: next.RewardRateBps, FixedRewardQuota: next.FixedRewardQuota,
-		UnlimitedReward: next.UnlimitedReward, MaximumRewardQuota: next.MaximumRewardQuota,
-		MinimumTopUpCents: next.MinimumTopUpCents, HoldSeconds: next.HoldSeconds,
-		MinimumTransferQuota: next.MinimumTransferQuota, ShowInviteeTopUps: next.ShowInviteeTopUps,
-		Source: "global",
+		Enabled:                   setting.Enabled,
+		InviterRewardQuota:        setting.InviterRewardQuota,
+		InviteeRewardQuota:        setting.InviteeRewardQuota,
+		RegistrationRewardTrigger: setting.RegistrationRewardTrigger,
+		RewardMode:                setting.RewardMode,
+		CashbackFrequency:         setting.CashbackFrequency,
+		RewardRateBps:             setting.RewardRateBps,
+		FixedRewardQuota:          setting.FixedRewardQuota,
+		UnlimitedReward:           setting.UnlimitedReward,
+		MaximumRewardQuota:        setting.MaximumRewardQuota,
+		MinimumTopUpCents:         setting.MinimumTopUpCents,
+		HoldSeconds:               setting.HoldSeconds,
+		MinimumTransferQuota:      setting.MinimumTransferQuota,
+		ShowInviteeTopUps:         setting.ShowInviteeTopUps,
+		Source:                    "global",
 	}
 	if err := validateAffiliateRule(rule); err != nil {
 		return err
 	}
 	values := map[string]string{
-		"affiliate_setting.enabled":                     strconv.FormatBool(next.Enabled),
-		"affiliate_setting.inviter_reward_quota":        strconv.FormatInt(next.InviterRewardQuota, 10),
-		"affiliate_setting.invitee_reward_quota":        strconv.FormatInt(next.InviteeRewardQuota, 10),
-		"affiliate_setting.registration_reward_trigger": next.RegistrationRewardTrigger,
-		"affiliate_setting.reward_mode":                 next.RewardMode,
-		"affiliate_setting.cashback_frequency":          next.CashbackFrequency,
-		"affiliate_setting.reward_rate_bps":             strconv.FormatInt(next.RewardRateBps, 10),
-		"affiliate_setting.fixed_reward_quota":          strconv.FormatInt(next.FixedRewardQuota, 10),
-		"affiliate_setting.unlimited_reward":            strconv.FormatBool(next.UnlimitedReward),
-		"affiliate_setting.maximum_reward_quota":        strconv.FormatInt(next.MaximumRewardQuota, 10),
-		"affiliate_setting.minimum_topup_cents":         strconv.FormatInt(next.MinimumTopUpCents, 10),
-		"affiliate_setting.hold_seconds":                strconv.FormatInt(next.HoldSeconds, 10),
-		"affiliate_setting.minimum_transfer_quota":      strconv.FormatInt(next.MinimumTransferQuota, 10),
-		"affiliate_setting.show_invitee_topups":         strconv.FormatBool(next.ShowInviteeTopUps),
+		"affiliate_setting.enabled":                     strconv.FormatBool(setting.Enabled),
+		"affiliate_setting.inviter_reward_quota":        strconv.FormatInt(setting.InviterRewardQuota, 10),
+		"affiliate_setting.invitee_reward_quota":        strconv.FormatInt(setting.InviteeRewardQuota, 10),
+		"affiliate_setting.registration_reward_trigger": setting.RegistrationRewardTrigger,
+		"affiliate_setting.reward_mode":                 setting.RewardMode,
+		"affiliate_setting.cashback_frequency":          setting.CashbackFrequency,
+		"affiliate_setting.reward_rate_bps":             strconv.FormatInt(setting.RewardRateBps, 10),
+		"affiliate_setting.fixed_reward_quota":          strconv.FormatInt(setting.FixedRewardQuota, 10),
+		"affiliate_setting.unlimited_reward":            strconv.FormatBool(setting.UnlimitedReward),
+		"affiliate_setting.maximum_reward_quota":        strconv.FormatInt(setting.MaximumRewardQuota, 10),
+		"affiliate_setting.minimum_topup_cents":         strconv.FormatInt(setting.MinimumTopUpCents, 10),
+		"affiliate_setting.hold_seconds":                strconv.FormatInt(setting.HoldSeconds, 10),
+		"affiliate_setting.minimum_transfer_quota":      strconv.FormatInt(setting.MinimumTransferQuota, 10),
+		"affiliate_setting.show_invitee_topups":         strconv.FormatBool(setting.ShowInviteeTopUps),
 	}
 	return UpdateOptionsBulk(values)
+}
+
+func normalizeAffiliateSettingValues(setting operation_setting.AffiliateSetting) operation_setting.AffiliateSetting {
+	maxQuota := int64(common.MaxQuota)
+	if setting.RewardRateBps < 0 {
+		setting.RewardRateBps = 0
+	} else if setting.RewardRateBps > 10_000 {
+		setting.RewardRateBps = 10_000
+	}
+	if setting.MaximumRewardQuota < 0 {
+		setting.MaximumRewardQuota = 0
+	} else if setting.MaximumRewardQuota > maxQuota {
+		setting.MaximumRewardQuota = maxQuota
+	}
+	if setting.HoldSeconds < 0 {
+		setting.HoldSeconds = 0
+	} else if setting.HoldSeconds > 365*24*60*60 {
+		setting.HoldSeconds = 365 * 24 * 60 * 60
+	}
+	setting.InviterRewardQuota = 0
+	setting.InviteeRewardQuota = 0
+	setting.RegistrationRewardTrigger = operation_setting.AffiliateRegistrationTriggerDisabled
+	setting.RewardMode = operation_setting.AffiliateRewardModePercentage
+	setting.CashbackFrequency = operation_setting.AffiliateCashbackFrequencyEveryTopUp
+	setting.FixedRewardQuota = 0
+	setting.UnlimitedReward = setting.MaximumRewardQuota <= 0
+	setting.MinimumTopUpCents = 0
+	setting.MinimumTransferQuota = 0
+	setting.ShowInviteeTopUps = true
+	return setting
 }
 
 func GetGlobalAffiliateSetting() operation_setting.AffiliateSetting {

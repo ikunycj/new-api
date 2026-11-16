@@ -28,7 +28,16 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { InviteInfoCell } from '@/components/invite-info-cell'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import {
   Field,
@@ -44,7 +53,6 @@ import {
   InputGroupText,
 } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
-import { Switch } from '@/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -54,17 +62,21 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { parseQuotaFromCNY, quotaUnitsToCNY } from '@/lib/format'
-import { cn } from '@/lib/utils'
 
 import {
+  deleteAffiliateUserOverride,
   getAffiliateSettings,
   searchAffiliateUserOverrides,
-  updateAffiliateUserOverride,
   updateAffiliateSettings,
-  deleteAffiliateUserOverride,
+  saveAffiliateAgents,
 } from '../api'
 import {
   SettingsForm,
@@ -73,9 +85,7 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import type {
-  AffiliateCashbackFrequency,
-  AffiliateRegistrationRewardTrigger,
-  AffiliateRewardMode,
+  AffiliateAgentUpdate,
   AffiliateSettings,
   AffiliateUserOverride,
   AffiliateUserOverrideView,
@@ -83,746 +93,170 @@ import type {
 import { AffiliateAdjustmentsSection } from './affiliate-adjustments-section'
 
 const SECONDS_PER_DAY = 86_400
-const AFFILIATE_OVERRIDES_PAGE_SIZE = 20
+const AFFILIATE_AGENTS_PAGE_SIZE = 20
 
-type RuleFieldKey = keyof AffiliateSettings
-
-type RuleDraft = {
+type GlobalDraft = {
   enabled: boolean
-  inviterReward: string
-  inviteeReward: string
-  registrationRewardTrigger: AffiliateRegistrationRewardTrigger
-  rewardMode: AffiliateRewardMode
-  cashbackFrequency: AffiliateCashbackFrequency
   rewardRate: string
-  fixedReward: string
-  unlimitedReward: boolean
-  maximumReward: string
-  minimumTopUp: string
-  holdDays: string
-  minimumTransfer: string
-  showInviteeTopUps: boolean
-}
-
-type AffiliateConfigDraft = {
-  inviterReward: string
-  inviteeReward: string
-  rewardValue: string
-  minimumTopUp: string
   maximumReward: string
   holdDays: string
 }
 
-const affiliateConfigFieldKeys = [
-  'inviter_reward_quota',
-  'invitee_reward_quota',
-  'reward_value',
-  'minimum_topup_cents',
-  'maximum_reward_quota',
-  'hold_seconds',
-] as const
+type AgentConfigKey = 'rewardRate' | 'maximumReward' | 'holdDays'
 
-type AffiliateConfigFieldKey = (typeof affiliateConfigFieldKeys)[number]
-
-const affiliateConfigDraftKeys: Record<
-  AffiliateConfigFieldKey,
-  keyof AffiliateConfigDraft
-> = {
-  inviter_reward_quota: 'inviterReward',
-  invitee_reward_quota: 'inviteeReward',
-  reward_value: 'rewardValue',
-  minimum_topup_cents: 'minimumTopUp',
-  maximum_reward_quota: 'maximumReward',
-  hold_seconds: 'holdDays',
+type AgentDraft = {
+  isNew: boolean
+  invitees: AffiliateUserOverrideView[]
+  rewardRate: string
+  maximumReward: string
+  holdDays: string
+  affiliateDomain: string
+  remark: string
+  dirty: Record<AgentConfigKey, boolean>
+  domainDirty: boolean
+  remarkDirty: boolean
 }
 
-type AffiliateConfigFollowing = Record<AffiliateConfigFieldKey, boolean>
-
-type AffiliateUserRowDraft = {
-  config: AffiliateConfigDraft
-  following: AffiliateConfigFollowing
-  note: string
-}
-
-function settingsToConfigDraft(
-  settings: AffiliateSettings & { reward_mode: AffiliateRewardMode }
-): AffiliateConfigDraft {
-  return {
-    inviterReward: String(quotaUnitsToCNY(settings.inviter_reward_quota)),
-    inviteeReward: String(quotaUnitsToCNY(settings.invitee_reward_quota)),
-    rewardValue:
-      settings.reward_mode === 'percentage'
-        ? String(settings.reward_rate_bps / 100)
-        : String(quotaUnitsToCNY(settings.fixed_reward_quota)),
-    minimumTopUp: String(settings.minimum_topup_cents / 100),
-    maximumReward: String(quotaUnitsToCNY(settings.maximum_reward_quota)),
-    holdDays: String(settings.hold_seconds / SECONDS_PER_DAY),
-  }
-}
-
-function buildAffiliateConfigOverride(
-  draft: AffiliateConfigDraft,
-  rewardMode: AffiliateRewardMode,
-  unlimitedReward: boolean,
-  following: AffiliateConfigFollowing,
-  note: string
-): AffiliateUserOverride | null {
-  const hasOverrides = affiliateConfigFieldKeys.some((key) => !following[key])
-  if (!hasOverrides) return null
-
-  const rawValues: Record<AffiliateConfigFieldKey, string> = {
-    inviter_reward_quota: draft.inviterReward,
-    invitee_reward_quota: draft.inviteeReward,
-    reward_value: draft.rewardValue,
-    minimum_topup_cents: draft.minimumTopUp,
-    maximum_reward_quota: draft.maximumReward,
-    hold_seconds: draft.holdDays,
-  }
-  const draftValues: Record<AffiliateConfigFieldKey, number | null> = {
-    inviter_reward_quota: following.inviter_reward_quota
-      ? null
-      : Number(draft.inviterReward),
-    invitee_reward_quota: following.invitee_reward_quota
-      ? null
-      : Number(draft.inviteeReward),
-    reward_value: following.reward_value ? null : Number(draft.rewardValue),
-    minimum_topup_cents: following.minimum_topup_cents
-      ? null
-      : Number(draft.minimumTopUp),
-    maximum_reward_quota: following.maximum_reward_quota
-      ? null
-      : Number(draft.maximumReward),
-    hold_seconds: following.hold_seconds ? null : Number(draft.holdDays),
-  }
-  const activeValues = affiliateConfigFieldKeys
-    .map((key) => draftValues[key])
-    .filter((value): value is number => value !== null)
-  const hasBlankValue = affiliateConfigFieldKeys.some((key) => {
-    return !following[key] && rawValues[key].trim() === ''
-  })
-  const rewardValue = draftValues.reward_value
-  const maximumReward = draftValues.maximum_reward_quota
-  const holdDays = draftValues.hold_seconds
-  if (
-    hasBlankValue ||
-    activeValues.some((value) => !Number.isFinite(value) || value < 0) ||
-    (rewardValue !== null &&
-      rewardMode === 'percentage' &&
-      rewardValue > 100) ||
-    (maximumReward !== null && !unlimitedReward && maximumReward <= 0) ||
-    (holdDays !== null &&
-      (!Number.isInteger(holdDays) || holdDays < 0 || holdDays > 365))
-  ) {
-    return null
-  }
-  return {
-    enabled: null,
-    inviter_reward_quota:
-      draftValues.inviter_reward_quota === null
-        ? null
-        : parseQuotaFromCNY(draftValues.inviter_reward_quota),
-    invitee_reward_quota:
-      draftValues.invitee_reward_quota === null
-        ? null
-        : parseQuotaFromCNY(draftValues.invitee_reward_quota),
-    registration_reward_trigger: null,
-    reward_mode: null,
-    cashback_frequency: null,
-    reward_rate_bps:
-      rewardMode === 'percentage' && rewardValue !== null
-        ? Math.round(rewardValue * 100)
-        : null,
-    fixed_reward_quota:
-      rewardMode === 'fixed' && rewardValue !== null
-        ? parseQuotaFromCNY(rewardValue)
-        : null,
-    unlimited_reward: null,
-    maximum_reward_quota:
-      maximumReward === null ? null : parseQuotaFromCNY(maximumReward),
-    minimum_topup_cents:
-      draftValues.minimum_topup_cents === null
-        ? null
-        : Math.round(draftValues.minimum_topup_cents * 100),
-    hold_seconds: holdDays === null ? null : holdDays * SECONDS_PER_DAY,
-    minimum_transfer_quota: null,
-    show_invitee_topups: null,
-    change_reason: note.trim(),
-  }
-}
-
-function getAffiliateConfigFollowing(
-  view: AffiliateUserOverrideView
-): AffiliateConfigFollowing {
-  const override = view.override
-  const rewardMode = view.global_rule.reward_mode
-  return {
-    inviter_reward_quota: override?.inviter_reward_quota == null,
-    invitee_reward_quota: override?.invitee_reward_quota == null,
-    reward_value:
-      rewardMode === 'percentage'
-        ? override?.reward_rate_bps == null
-        : override?.fixed_reward_quota == null,
-    minimum_topup_cents: override?.minimum_topup_cents == null,
-    maximum_reward_quota: override?.maximum_reward_quota == null,
-    hold_seconds: override?.hold_seconds == null,
-  }
-}
-
-function affiliateViewToRowDraft(
-  view: AffiliateUserOverrideView
-): AffiliateUserRowDraft {
-  return {
-    config: settingsToConfigDraft(view.effective_rule),
-    following: getAffiliateConfigFollowing(view),
-    note: view.override?.change_reason ?? '',
-  }
-}
-
-function affiliateViewToGlobalRowDraft(
-  view: AffiliateUserOverrideView
-): AffiliateUserRowDraft {
-  return {
-    config: settingsToConfigDraft(view.global_rule),
-    following: {
-      inviter_reward_quota: true,
-      invitee_reward_quota: true,
-      reward_value: true,
-      minimum_topup_cents: true,
-      maximum_reward_quota: true,
-      hold_seconds: true,
-    },
-    note: '',
-  }
-}
-
-function hasAffiliateConfigurationOverride(
-  view: AffiliateUserOverrideView
-): boolean {
-  const override = view.override
-  return Boolean(
-    override &&
-    (override.inviter_reward_quota != null ||
-      override.invitee_reward_quota != null ||
-      override.reward_rate_bps != null ||
-      override.fixed_reward_quota != null ||
-      override.maximum_reward_quota != null ||
-      override.minimum_topup_cents != null ||
-      override.hold_seconds != null)
-  )
-}
-
-interface AffiliateConfigTableCellProps {
-  value: string
-  following: boolean
-  unit: string
-  label: string
-  inputProps?: {
-    min?: number
-    max?: number
-    step?: number | string
-  }
-  disabled: boolean
-  onValueChange: (value: string) => void
-  onFollowingChange: (following: boolean) => void
-}
-
-function AffiliateConfigTableCell(props: AffiliateConfigTableCellProps) {
-  const { t } = useTranslation()
-  return (
-    <TableCell className='align-top'>
-      <div className='grid min-w-36 gap-1.5'>
-        <label className='text-muted-foreground flex items-center gap-1 text-xs'>
-          <Switch
-            size='sm'
-            checked={props.following}
-            onCheckedChange={props.onFollowingChange}
-            disabled={props.disabled}
-            aria-label={`${props.label}: ${t('Follow global')}`}
-          />
-          <span>{t('Follow global')}</span>
-        </label>
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            value={props.value}
-            onChange={(event) => props.onValueChange(event.target.value)}
-            disabled={props.disabled || props.following}
-            aria-label={props.label}
-            {...props.inputProps}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{props.unit}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>
-      </div>
-    </TableCell>
-  )
-}
-
-function settingsToDraft(settings: AffiliateSettings): RuleDraft {
+function settingsToDraft(settings: AffiliateSettings): GlobalDraft {
   return {
     enabled: settings.enabled,
-    inviterReward: String(quotaUnitsToCNY(settings.inviter_reward_quota)),
-    inviteeReward: String(quotaUnitsToCNY(settings.invitee_reward_quota)),
-    registrationRewardTrigger: settings.registration_reward_trigger,
-    rewardMode: settings.reward_mode,
-    cashbackFrequency: settings.cashback_frequency,
     rewardRate: String(settings.reward_rate_bps / 100),
-    fixedReward: String(quotaUnitsToCNY(settings.fixed_reward_quota)),
-    unlimitedReward: settings.unlimited_reward,
     maximumReward: String(quotaUnitsToCNY(settings.maximum_reward_quota)),
-    minimumTopUp: String(settings.minimum_topup_cents / 100),
     holdDays: String(settings.hold_seconds / SECONDS_PER_DAY),
-    minimumTransfer: String(quotaUnitsToCNY(settings.minimum_transfer_quota)),
-    showInviteeTopUps: settings.show_invitee_topups,
   }
 }
 
-function draftToSettings(draft: RuleDraft): AffiliateSettings | null {
+function draftToSettings(draft: GlobalDraft): AffiliateSettings | null {
   const rewardRate = Number(draft.rewardRate)
-  const minimumTopUp = Number(draft.minimumTopUp)
+  const maximumReward = Number(draft.maximumReward)
   const holdDays = Number(draft.holdDays)
-  const quotaAmounts = [
-    draft.inviterReward,
-    draft.inviteeReward,
-    draft.fixedReward,
-    draft.maximumReward,
-    draft.minimumTransfer,
-  ].map(Number)
   if (
     !Number.isFinite(rewardRate) ||
     rewardRate < 0 ||
     rewardRate > 100 ||
-    !Number.isFinite(minimumTopUp) ||
-    minimumTopUp < 0 ||
+    !Number.isFinite(maximumReward) ||
+    maximumReward < 0 ||
     !Number.isInteger(holdDays) ||
     holdDays < 0 ||
-    holdDays > 365 ||
-    quotaAmounts.some((amount) => !Number.isFinite(amount) || amount < 0) ||
-    (!draft.unlimitedReward && Number(draft.maximumReward) <= 0)
+    holdDays > 365
   ) {
     return null
   }
   return {
     enabled: draft.enabled,
-    inviter_reward_quota: parseQuotaFromCNY(Number(draft.inviterReward)),
-    invitee_reward_quota: parseQuotaFromCNY(Number(draft.inviteeReward)),
-    registration_reward_trigger: draft.registrationRewardTrigger,
-    reward_mode: draft.rewardMode,
-    cashback_frequency: draft.cashbackFrequency,
     reward_rate_bps: Math.round(rewardRate * 100),
-    fixed_reward_quota: parseQuotaFromCNY(Number(draft.fixedReward)),
-    unlimited_reward: draft.unlimitedReward,
-    maximum_reward_quota: parseQuotaFromCNY(Number(draft.maximumReward)),
-    minimum_topup_cents: Math.round(minimumTopUp * 100),
+    maximum_reward_quota: parseQuotaFromCNY(maximumReward),
     hold_seconds: holdDays * SECONDS_PER_DAY,
-    minimum_transfer_quota: parseQuotaFromCNY(Number(draft.minimumTransfer)),
-    show_invitee_topups: draft.showInviteeTopUps,
   }
 }
 
-interface RuleEditorProps {
-  draft: RuleDraft
-  onChange: (draft: RuleDraft) => void
-  following?: Record<RuleFieldKey, boolean>
-  onFollowingChange?: (key: RuleFieldKey, following: boolean) => void
-  disabled?: boolean
-  grouped?: boolean
+function affiliateDomainToSubdomain(domain: string | null | undefined) {
+  if (!domain) return ''
+  const labels = domain.split('.')
+  return labels.length >= 3 ? labels[0] : domain
 }
 
-function RuleEditor(props: RuleEditorProps) {
-  const { t } = useTranslation()
-  const update = <K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) =>
-    props.onChange({ ...props.draft, [key]: value })
-  const isDisabled = (key: RuleFieldKey) =>
-    props.disabled || props.following?.[key] === true
+function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
+  return {
+    isNew: !view.override,
+    invitees: [],
+    rewardRate: String(view.effective_rule.reward_rate_bps / 100),
+    maximumReward: String(
+      quotaUnitsToCNY(view.effective_rule.maximum_reward_quota)
+    ),
+    holdDays: String(view.effective_rule.hold_seconds / SECONDS_PER_DAY),
+    affiliateDomain: affiliateDomainToSubdomain(
+      view.override?.affiliate_domain
+    ),
+    remark: view.remark,
+    dirty: {
+      rewardRate: false,
+      maximumReward: false,
+      holdDays: false,
+    },
+    domainDirty: false,
+    remarkDirty: false,
+  }
+}
 
-  function ruleField(
-    key: RuleFieldKey,
-    label: string,
-    content: ReactNode,
-    description?: string
+function buildAgentOverride(draft: AgentDraft): AffiliateUserOverride | null {
+  const rewardRate = Number(draft.rewardRate)
+  const maximumReward = Number(draft.maximumReward)
+  const holdDays = Number(draft.holdDays)
+  if (
+    (draft.dirty.rewardRate &&
+      (!Number.isFinite(rewardRate) || rewardRate < 0 || rewardRate > 100)) ||
+    (draft.dirty.maximumReward &&
+      (!Number.isFinite(maximumReward) || maximumReward < 0)) ||
+    (draft.dirty.holdDays &&
+      (!Number.isInteger(holdDays) || holdDays < 0 || holdDays > 365))
   ) {
-    const following = props.following?.[key]
-    return (
-      <Field key={key} data-disabled={isDisabled(key)}>
-        <div className='flex min-h-5 items-center justify-between gap-3'>
-          <FieldLabel>{label}</FieldLabel>
-          {following !== undefined ? (
-            <label className='text-muted-foreground flex items-center gap-2 text-xs'>
-              {t('Follow global')}
-              <Switch
-                checked={following}
-                onCheckedChange={(checked) =>
-                  props.onFollowingChange?.(key, checked)
-                }
-                disabled={props.disabled}
-              />
-            </label>
-          ) : null}
-        </div>
-        {content}
-        {description ? (
-          <FieldDescription>{description}</FieldDescription>
-        ) : null}
-      </Field>
-    )
+    return null
   }
 
-  function switchField(
-    key: RuleFieldKey,
-    label: string,
-    checked: boolean,
-    onCheckedChange: (checked: boolean) => void,
-    description?: string
-  ) {
-    const following = props.following?.[key]
-    return (
-      <div key={key} className='flex items-center justify-between gap-3'>
-        <SettingsSwitchField
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          label={label}
-          description={description}
-          disabled={isDisabled(key)}
-          aria-label={label}
-          className='min-w-0 flex-1'
-        />
-        {following !== undefined ? (
-          <label className='text-muted-foreground flex shrink-0 items-center gap-2 text-xs'>
-            {t('Follow global')}
-            <Switch
-              checked={following}
-              onCheckedChange={(next) => props.onFollowingChange?.(key, next)}
-              disabled={props.disabled}
-            />
-          </label>
-        ) : null}
-      </div>
-    )
+  const override: AffiliateUserOverride = {}
+  if (draft.dirty.rewardRate) {
+    override.reward_rate_bps = Math.round(rewardRate * 100)
   }
-
-  const enabledField = ruleField(
-    'enabled',
-    t('Enable referral cashback'),
-    <Switch
-      checked={props.draft.enabled}
-      onCheckedChange={(checked) => update('enabled', checked)}
-      disabled={isDisabled('enabled')}
-    />,
-    t('The invitation code remains valid when rewards are disabled.')
-  )
-  const registrationRewardTriggerField = ruleField(
-    'registration_reward_trigger',
-    t('Registration reward timing'),
-    <ToggleGroup
-      value={[props.draft.registrationRewardTrigger]}
-      onValueChange={(values) => {
-        const next = values[0] as AffiliateRegistrationRewardTrigger
-        if (next) update('registrationRewardTrigger', next)
-      }}
-      disabled={isDisabled('registration_reward_trigger')}
-      className='grid h-auto min-h-10 w-full grid-cols-2'
-    >
-      <ToggleGroupItem
-        value='registration_success'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('After registration')}
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value='first_qualified_topup'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('After first qualification')}
-      </ToggleGroupItem>
-    </ToggleGroup>
-  )
-  const inviterRewardField = ruleField(
-    'inviter_reward_quota',
-    t('Inviter reward'),
-    <InputGroup>
-      <InputGroupInput
-        type='number'
-        min={0}
-        step='0.01'
-        value={props.draft.inviterReward}
-        onChange={(event) => update('inviterReward', event.target.value)}
-        disabled={isDisabled('inviter_reward_quota')}
-      />
-      <InputGroupAddon align='inline-end'>
-        <InputGroupText>{t('CNY')}</InputGroupText>
-      </InputGroupAddon>
-    </InputGroup>,
-    t('The inviter reward uses the same hold period as cashback.')
-  )
-  const inviteeRewardField = ruleField(
-    'invitee_reward_quota',
-    t('Invitee reward'),
-    <InputGroup>
-      <InputGroupInput
-        type='number'
-        min={0}
-        step='0.01'
-        value={props.draft.inviteeReward}
-        onChange={(event) => update('inviteeReward', event.target.value)}
-        disabled={isDisabled('invitee_reward_quota')}
-      />
-      <InputGroupAddon align='inline-end'>
-        <InputGroupText>{t('CNY')}</InputGroupText>
-      </InputGroupAddon>
-    </InputGroup>,
-    t('The invitee reward is credited directly to account balance.')
-  )
-  const cashbackFrequencyField = ruleField(
-    'cashback_frequency',
-    t('Cashback frequency'),
-    <ToggleGroup
-      value={[props.draft.cashbackFrequency]}
-      onValueChange={(values) => {
-        const next = values[0] as AffiliateCashbackFrequency
-        if (next) update('cashbackFrequency', next)
-      }}
-      disabled={isDisabled('cashback_frequency')}
-      className='grid h-auto min-h-10 w-full grid-cols-2'
-    >
-      <ToggleGroupItem
-        value='first_qualified'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('First qualification only')}
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value='every_topup'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('Every top-up')}
-      </ToggleGroupItem>
-    </ToggleGroup>
-  )
-  const rewardModeField = ruleField(
-    'reward_mode',
-    t('Cashback method'),
-    <ToggleGroup
-      value={[props.draft.rewardMode]}
-      onValueChange={(values) => {
-        const next = values[0] as AffiliateRewardMode
-        if (next) update('rewardMode', next)
-      }}
-      disabled={isDisabled('reward_mode')}
-      className='grid h-auto min-h-10 w-full grid-cols-2'
-    >
-      <ToggleGroupItem
-        value='percentage'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('Percentage')}
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value='fixed'
-        className='h-auto min-h-10 w-full min-w-0 py-2 text-center leading-tight whitespace-normal'
-      >
-        {t('Fixed amount')}
-      </ToggleGroupItem>
-    </ToggleGroup>
-  )
-  const rewardValueField =
-    props.draft.rewardMode === 'percentage'
-      ? ruleField(
-          'reward_rate_bps',
-          t('Cashback rate'),
-          <InputGroup>
-            <InputGroupInput
-              type='number'
-              min={0}
-              max={100}
-              step='0.01'
-              value={props.draft.rewardRate}
-              onChange={(event) => update('rewardRate', event.target.value)}
-              disabled={isDisabled('reward_rate_bps')}
-            />
-            <InputGroupAddon align='inline-end'>
-              <InputGroupText>%</InputGroupText>
-            </InputGroupAddon>
-          </InputGroup>
-        )
-      : ruleField(
-          'fixed_reward_quota',
-          t('Fixed cashback'),
-          <InputGroup>
-            <InputGroupInput
-              type='number'
-              min={0}
-              step='0.01'
-              value={props.draft.fixedReward}
-              onChange={(event) => update('fixedReward', event.target.value)}
-              disabled={isDisabled('fixed_reward_quota')}
-            />
-            <InputGroupAddon align='inline-end'>
-              <InputGroupText>{t('CNY')}</InputGroupText>
-            </InputGroupAddon>
-          </InputGroup>
-        )
-  const minimumTopUpField = ruleField(
-    'minimum_topup_cents',
-    t('First qualifying cumulative top-up'),
-    <InputGroup>
-      <InputGroupInput
-        type='number'
-        min={0}
-        step='0.01'
-        value={props.draft.minimumTopUp}
-        onChange={(event) => update('minimumTopUp', event.target.value)}
-        disabled={isDisabled('minimum_topup_cents')}
-      />
-      <InputGroupAddon align='inline-end'>
-        <InputGroupText>{t('CNY')}</InputGroupText>
-      </InputGroupAddon>
-    </InputGroup>,
-    t('After qualification, later top-ups have no minimum amount.')
-  )
-  const maximumRewardField = props.draft.unlimitedReward
-    ? null
-    : ruleField(
-        'maximum_reward_quota',
-        t('Maximum cashback per invitee'),
-        <InputGroup>
-          <InputGroupInput
-            type='number'
-            min={0.01}
-            step='0.01'
-            value={props.draft.maximumReward}
-            onChange={(event) => update('maximumReward', event.target.value)}
-            disabled={isDisabled('maximum_reward_quota')}
-          />
-          <InputGroupAddon align='inline-end'>
-            <InputGroupText>{t('CNY')}</InputGroupText>
-          </InputGroupAddon>
-        </InputGroup>
-      )
-  const holdPeriodField = ruleField(
-    'hold_seconds',
-    t('Hold period'),
-    <InputGroup>
-      <InputGroupInput
-        type='number'
-        min={0}
-        max={365}
-        step={1}
-        value={props.draft.holdDays}
-        onChange={(event) => update('holdDays', event.target.value)}
-        disabled={isDisabled('hold_seconds')}
-      />
-      <InputGroupAddon align='inline-end'>
-        <InputGroupText>{t('Days')}</InputGroupText>
-      </InputGroupAddon>
-    </InputGroup>
-  )
-  const minimumTransferField = ruleField(
-    'minimum_transfer_quota',
-    t('Minimum balance transfer'),
-    <InputGroup>
-      <InputGroupInput
-        type='number'
-        min={0}
-        step='0.01'
-        value={props.draft.minimumTransfer}
-        onChange={(event) => update('minimumTransfer', event.target.value)}
-        disabled={isDisabled('minimum_transfer_quota')}
-      />
-      <InputGroupAddon align='inline-end'>
-        <InputGroupText>{t('CNY')}</InputGroupText>
-      </InputGroupAddon>
-    </InputGroup>
-  )
-
-  if (!props.grouped) {
-    return (
-      <FieldGroup className='grid gap-5 md:grid-cols-2'>
-        {enabledField}
-        {registrationRewardTriggerField}
-        {inviterRewardField}
-        {inviteeRewardField}
-        {cashbackFrequencyField}
-        {rewardModeField}
-        {rewardValueField}
-        {minimumTopUpField}
-        {ruleField(
-          'unlimited_reward',
-          t('Unlimited cashback per invitee'),
-          <Switch
-            checked={props.draft.unlimitedReward}
-            onCheckedChange={(checked) => update('unlimitedReward', checked)}
-            disabled={isDisabled('unlimited_reward')}
-          />
-        )}
-        {maximumRewardField}
-        {holdPeriodField}
-        {minimumTransferField}
-        {ruleField(
-          'show_invitee_topups',
-          t('Allow invitee top-up records'),
-          <Switch
-            checked={props.draft.showInviteeTopUps}
-            onCheckedChange={(checked) => update('showInviteeTopUps', checked)}
-            disabled={isDisabled('show_invitee_topups')}
-          />,
-          t('Emails are masked before records are returned to the inviter.')
-        )}
-      </FieldGroup>
-    )
+  if (draft.dirty.maximumReward) {
+    override.maximum_reward_quota = parseQuotaFromCNY(maximumReward)
   }
+  if (draft.dirty.holdDays) {
+    override.hold_seconds = holdDays * SECONDS_PER_DAY
+  }
+  if (draft.domainDirty) {
+    override.affiliate_domain = draft.affiliateDomain.trim()
+  }
+  if (draft.remarkDirty) {
+    override.remark = draft.remark
+  }
+  return override
+}
 
+function hasAgentChanges(draft: AgentDraft): boolean {
   return (
-    <div className='space-y-6'>
-      <section className='space-y-3'>
-        <h4 className='text-sm font-semibold'>{t('Preferences')}</h4>
-        <div className='divide-y rounded-lg border px-3'>
-          {switchField(
-            'enabled',
-            t('Enable referral cashback'),
-            props.draft.enabled,
-            (checked) => update('enabled', checked),
-            t('The invitation code remains valid when rewards are disabled.')
-          )}
-          {switchField(
-            'unlimited_reward',
-            t('Unlimited cashback per invitee'),
-            props.draft.unlimitedReward,
-            (checked) => update('unlimitedReward', checked)
-          )}
-          {switchField(
-            'show_invitee_topups',
-            t('Allow invitee top-up records'),
-            props.draft.showInviteeTopUps,
-            (checked) => update('showInviteeTopUps', checked),
-            t('Emails are masked before records are returned to the inviter.')
-          )}
-        </div>
-      </section>
+    draft.isNew ||
+    draft.invitees.length > 0 ||
+    draft.domainDirty ||
+    draft.dirty.rewardRate ||
+    draft.dirty.maximumReward ||
+    draft.dirty.holdDays ||
+    draft.remarkDirty
+  )
+}
 
-      <section className='space-y-3 border-t pt-5'>
-        <h4 className='text-sm font-semibold'>{t('Rules')}</h4>
-        <div className='grid gap-4 sm:grid-cols-2'>
-          {registrationRewardTriggerField}
-          {cashbackFrequencyField}
-          {rewardModeField}
-        </div>
-      </section>
-
-      <section className='space-y-3 border-t pt-5'>
-        <h4 className='text-sm font-semibold'>{t('Configuration')}</h4>
-        <div className='grid gap-4 sm:grid-cols-2'>
-          {inviterRewardField}
-          {inviteeRewardField}
-          {rewardValueField}
-          {minimumTopUpField}
-          {maximumRewardField}
-          {holdPeriodField}
-          {minimumTransferField}
-        </div>
-      </section>
-    </div>
+function SettingNumberField(props: {
+  label: string
+  value: string
+  unit: string
+  description?: string
+  min?: number
+  max?: number
+  step?: number | string
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  return (
+    <Field>
+      <FieldLabel>{props.label}</FieldLabel>
+      <InputGroup>
+        <InputGroupInput
+          type='number'
+          value={props.value}
+          min={props.min}
+          max={props.max}
+          step={props.step}
+          onChange={(event) => props.onChange(event.target.value)}
+          disabled={props.disabled}
+        />
+        <InputGroupAddon align='inline-end'>
+          <InputGroupText>{props.unit}</InputGroupText>
+        </InputGroupAddon>
+      </InputGroup>
+      {props.description ? (
+        <FieldDescription>{props.description}</FieldDescription>
+      ) : null}
+    </Field>
   )
 }
 
@@ -834,23 +268,29 @@ function GlobalAffiliateSettings() {
     queryFn: getAffiliateSettings,
     select: (response) => response.data,
   })
-  const [draft, setDraft] = useState<RuleDraft>()
+  const [draft, setDraft] = useState<GlobalDraft>()
   const [dirty, setDirty] = useState(false)
+
   useEffect(() => {
     if (!query.data) return
     setDraft(settingsToDraft(query.data))
     setDirty(false)
   }, [query.data])
+
   const mutation = useMutation({
     mutationFn: updateAffiliateSettings,
     onSuccess: async (response) => {
-      if (!response.success || !response.data) return
-      toast.success(t('Referral cashback settings saved'))
+      if (!response.success || !response.data) {
+        toast.error(response.message || t('Save failed'))
+        return
+      }
       setDraft(settingsToDraft(response.data))
       setDirty(false)
-      await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate'],
-      })
+      toast.success(t('Referral cashback settings saved'))
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'affiliate'] })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : t('Save failed'))
     },
   })
 
@@ -865,9 +305,7 @@ function GlobalAffiliateSettings() {
     mutation.mutate(settings)
   }
 
-  if (!draft) {
-    return <Spinner className='mx-auto my-12' />
-  }
+  if (!draft) return <Spinner className='mx-auto my-12' />
 
   return (
     <SettingsForm onSubmit={submit} autoComplete='off'>
@@ -877,16 +315,194 @@ function GlobalAffiliateSettings() {
         isSaveDisabled={!dirty}
         saveLabel='Save referral cashback settings'
       />
-      <RuleEditor
-        draft={draft}
-        onChange={(next) => {
-          setDraft(next)
-          setDirty(true)
-        }}
-        disabled={mutation.isPending}
-        grouped
-      />
+      <div className='space-y-6'>
+        <section className='space-y-3'>
+          <div className='rounded-lg border px-3'>
+            <SettingsSwitchField
+              checked={draft.enabled}
+              onCheckedChange={(checked) => {
+                setDraft((current) =>
+                  current ? { ...current, enabled: checked } : current
+                )
+                setDirty(true)
+              }}
+              label={t('Enable referral cashback')}
+              description={t(
+                'The invitation code remains valid when rewards are disabled.'
+              )}
+              disabled={mutation.isPending}
+              aria-label={t('Enable referral cashback')}
+              className='py-3'
+            />
+          </div>
+        </section>
+
+        <section className='space-y-3 border-t pt-5'>
+          <h4 className='text-sm font-semibold'>{t('Configuration')}</h4>
+          <FieldGroup className='grid max-w-2xl gap-5'>
+            <SettingNumberField
+              label={t('Cashback rate')}
+              value={draft.rewardRate}
+              unit='%'
+              min={0}
+              max={100}
+              step='0.01'
+              description={t(
+                'Every successful online top-up is eligible for percentage cashback.'
+              )}
+              disabled={mutation.isPending}
+              onChange={(value) => {
+                setDraft((current) =>
+                  current ? { ...current, rewardRate: value } : current
+                )
+                setDirty(true)
+              }}
+            />
+            <SettingNumberField
+              label={t('Maximum cashback per invitee')}
+              value={draft.maximumReward}
+              unit={t('CNY')}
+              min={0}
+              step='0.01'
+              description={t('Set to 0 for unlimited cashback.')}
+              disabled={mutation.isPending}
+              onChange={(value) => {
+                setDraft((current) =>
+                  current ? { ...current, maximumReward: value } : current
+                )
+                setDirty(true)
+              }}
+            />
+            <SettingNumberField
+              label={t('Hold period')}
+              value={draft.holdDays}
+              unit={t('Days')}
+              min={0}
+              max={365}
+              step={1}
+              description={t(
+                'Cashback becomes available after the hold period ends.'
+              )}
+              disabled={mutation.isPending}
+              onChange={(value) => {
+                setDraft((current) =>
+                  current ? { ...current, holdDays: value } : current
+                )
+                setDirty(true)
+              }}
+            />
+          </FieldGroup>
+        </section>
+      </div>
     </SettingsForm>
+  )
+}
+
+function CopyableText(props: { value: string; className?: string }) {
+  const { copyToClipboard } = useCopyToClipboard()
+  const displayValue = props.value || '-'
+
+  return (
+    <TooltipProvider delay={200}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type='button'
+              className={`block max-w-full min-w-0 cursor-copy text-left ${props.className ?? ''}`}
+              disabled={!props.value}
+              onClick={() => {
+                if (props.value) void copyToClipboard(props.value)
+              }}
+            />
+          }
+        >
+          <span className='block truncate'>{displayValue}</span>
+        </TooltipTrigger>
+        <TooltipContent side='top' className='max-w-sm break-all'>
+          {displayValue}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+function AgentNumberCell(props: {
+  label: string
+  value: string
+  unit: string
+  min?: number
+  max?: number
+  step?: number | string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  return (
+    <TableCell className='align-top'>
+      <div className='grid min-w-36 gap-1.5'>
+        <label className='text-muted-foreground text-xs'>{props.label}</label>
+        <InputGroup>
+          <InputGroupInput
+            type='number'
+            value={props.value}
+            min={props.min}
+            max={props.max}
+            step={props.step}
+            aria-label={props.label}
+            onChange={(event) => props.onChange(event.target.value)}
+            disabled={props.disabled}
+          />
+          <InputGroupAddon align='inline-end'>
+            <InputGroupText>{props.unit}</InputGroupText>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
+    </TableCell>
+  )
+}
+
+function AgentSearchResults(props: {
+  items: AffiliateUserOverrideView[]
+  addedUserIDs: Set<number>
+  onAdd: (view: AffiliateUserOverrideView) => void
+}) {
+  const { t } = useTranslation()
+  if (props.items.length === 0) return null
+  return (
+    <div className='rounded-lg border'>
+      <div className='border-b px-4 py-3 text-sm font-medium'>
+        {t('Search results')}
+      </div>
+      <div className='divide-y'>
+        {props.items.map((view) => {
+          const added =
+            props.addedUserIDs.has(view.user_id) || Boolean(view.override)
+          return (
+            <div
+              key={view.user_id}
+              className='flex flex-wrap items-center justify-between gap-3 px-4 py-3'
+            >
+              <div className='min-w-0'>
+                <div className='font-medium'>{view.username}</div>
+                <div className='text-muted-foreground text-sm'>
+                  {view.email || '-'}
+                  {view.remark ? ` · ${view.remark}` : ''}
+                </div>
+              </div>
+              <Button
+                type='button'
+                size='sm'
+                variant={added ? 'outline' : 'default'}
+                disabled={added}
+                onClick={() => props.onAdd(view)}
+              >
+                {added ? t('Added') : t('Add agent')}
+              </Button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -896,21 +512,33 @@ function PersonalizedAffiliateSettings() {
   const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
-  const [rowDrafts, setRowDrafts] = useState<
-    Record<number, AffiliateUserRowDraft>
+  const [addedAgents, setAddedAgents] = useState<
+    Record<number, AffiliateUserOverrideView>
   >({})
-  const globalSettingsQuery = useQuery({
-    queryKey: ['admin', 'affiliate', 'settings'],
-    queryFn: getAffiliateSettings,
-    select: (response) => response.data,
-  })
-  const query = useQuery({
-    queryKey: ['admin', 'affiliate', 'user-overrides', keyword, page],
+  const [rowDrafts, setRowDrafts] = useState<Record<number, AgentDraft>>({})
+  const [inviteTarget, setInviteTarget] =
+    useState<AffiliateUserOverrideView | null>(null)
+  const [inviteSearch, setInviteSearch] = useState('')
+  const [inviteKeyword, setInviteKeyword] = useState('')
+  const inviteeQuery = useQuery({
+    queryKey: ['admin', 'affiliate', 'invitee-search', inviteKeyword],
     queryFn: () =>
       searchAffiliateUserOverrides({
-        keyword,
+        keyword: inviteKeyword,
+        page: 1,
+        pageSize: 20,
+      }),
+    enabled: inviteTarget !== null && inviteKeyword !== '',
+    select: (response) => response.data?.items ?? [],
+  })
+
+  const agentsQuery = useQuery({
+    queryKey: ['admin', 'affiliate', 'agents', page],
+    queryFn: () =>
+      searchAffiliateUserOverrides({
+        keyword: '',
         page,
-        pageSize: AFFILIATE_OVERRIDES_PAGE_SIZE,
+        pageSize: AFFILIATE_AGENTS_PAGE_SIZE,
       }),
     select: (response) =>
       response.data ?? {
@@ -918,150 +546,191 @@ function PersonalizedAffiliateSettings() {
         total: 0,
       },
   })
+  const searchQuery = useQuery({
+    queryKey: ['admin', 'affiliate', 'agent-search', keyword],
+    queryFn: () =>
+      searchAffiliateUserOverrides({
+        keyword,
+        page: 1,
+        pageSize: AFFILIATE_AGENTS_PAGE_SIZE,
+      }),
+    enabled: keyword.trim() !== '',
+    select: (response) => response.data?.items ?? [],
+  })
 
-  const items = useMemo(() => query.data?.items ?? [], [query.data])
-  const total = query.data?.total ?? 0
-  const rewardMode =
-    globalSettingsQuery.data?.reward_mode ??
-    items[0]?.global_rule.reward_mode ??
-    'percentage'
+  const agentItems = useMemo(() => {
+    const items = [
+      ...Object.values(addedAgents),
+      ...(agentsQuery.data?.items ?? []),
+    ]
+    const unique = new Map<number, AffiliateUserOverrideView>()
+    for (const item of items) unique.set(item.user_id, item)
+    return [...unique.values()]
+  }, [addedAgents, agentsQuery.data?.items])
+  const total = agentsQuery.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / AFFILIATE_AGENTS_PAGE_SIZE))
+  const addedUserIDs = useMemo(
+    () => new Set(agentItems.map((item) => item.user_id)),
+    [agentItems]
+  )
 
-  useEffect(() => {
-    if (!query.data) return
-    const next: Record<number, AffiliateUserRowDraft> = {}
-    for (const view of items) {
-      next[view.user_id] = affiliateViewToRowDraft(view)
-    }
-    setRowDrafts(next)
-  }, [items, query.data])
+  function addAgent(view: AffiliateUserOverrideView) {
+    setAddedAgents((current) => ({ ...current, [view.user_id]: view }))
+    setRowDrafts((current) => ({
+      ...current,
+      [view.user_id]: viewToAgentDraft(view),
+    }))
+    setKeyword('')
+    setSearchInput('')
+  }
 
-  function updateRowConfig(
+  function updateRow(
     view: AffiliateUserOverrideView,
-    key: AffiliateConfigFieldKey,
+    key: AgentConfigKey,
     value: string
   ) {
-    const draftKey = affiliateConfigDraftKeys[key]
     setRowDrafts((current) => {
-      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
+      const row = current[view.user_id] ?? viewToAgentDraft(view)
       return {
         ...current,
         [view.user_id]: {
           ...row,
-          config: { ...row.config, [draftKey]: value },
-          following: { ...row.following, [key]: false },
+          [key]: value,
+          dirty: { ...row.dirty, [key]: true },
         },
       }
     })
   }
 
-  function updateRowFollowing(
-    view: AffiliateUserOverrideView,
-    key: AffiliateConfigFieldKey,
-    following: boolean
-  ) {
-    const draftKey = affiliateConfigDraftKeys[key]
-    const globalConfig = settingsToConfigDraft(view.global_rule)
+  function updateDomain(view: AffiliateUserOverrideView, value: string) {
     setRowDrafts((current) => {
-      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
+      const row = current[view.user_id] ?? viewToAgentDraft(view)
       return {
         ...current,
-        [view.user_id]: {
-          ...row,
-          config: following
-            ? { ...row.config, [draftKey]: globalConfig[draftKey] }
-            : row.config,
-          following: { ...row.following, [key]: following },
-        },
+        [view.user_id]: { ...row, affiliateDomain: value, domainDirty: true },
       }
     })
   }
 
-  function updateRowNote(view: AffiliateUserOverrideView, note: string) {
+  function updateRemark(view: AffiliateUserOverrideView, value: string) {
     setRowDrafts((current) => {
-      const row = current[view.user_id] ?? affiliateViewToRowDraft(view)
-      return { ...current, [view.user_id]: { ...row, note } }
+      const row = current[view.user_id] ?? viewToAgentDraft(view)
+      return {
+        ...current,
+        [view.user_id]: { ...row, remark: value, remarkDirty: true },
+      }
     })
   }
 
   const saveMutation = useMutation({
-    mutationFn: (request: {
-      userId: number
-      override: AffiliateUserOverride
-    }) => updateAffiliateUserOverride(request.userId, request.override),
-    onSuccess: async (response, request) => {
+    mutationFn: saveAffiliateAgents,
+    onSuccess: async (response) => {
       if (!response.success || !response.data) {
-        toast.error(response.message || t('Failed to save settings'))
+        toast.error(response.message || t('Save failed'))
         return
       }
-      const savedView = response.data
-      setRowDrafts((current) => ({
-        ...current,
-        [request.userId]: affiliateViewToRowDraft(savedView),
-      }))
-      toast.success(t('User-specific cashback settings saved'))
-      await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate', 'user-overrides'],
-      })
+      const savedIDs = new Set(response.data.map((view) => view.user_id))
+      setAddedAgents((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([id]) => !savedIDs.has(Number(id)))
+        )
+      )
+      setRowDrafts((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([id]) => !savedIDs.has(Number(id)))
+        )
+      )
+      toast.success(t('Agent settings saved'))
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'affiliate'] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : t('Save failed'))
     },
   })
 
-  const resetMutation = useMutation({
+  const removeMutation = useMutation({
     mutationFn: (userId: number) => deleteAffiliateUserOverride(userId),
     onSuccess: async (response, userId) => {
       if (!response.success) {
-        toast.error(response.message || t('Failed to reset settings'))
+        toast.error(response.message || t('Failed to remove agent'))
         return
       }
-      const view = items.find((item) => item.user_id === userId)
-      if (view) {
-        setRowDrafts((current) => ({
-          ...current,
-          [userId]: affiliateViewToGlobalRowDraft(view),
-        }))
-      }
-      toast.success(t('User now follows global cashback settings'))
+      setAddedAgents((current) => {
+        const next = { ...current }
+        delete next[userId]
+        return next
+      })
+      setRowDrafts((current) => {
+        const next = { ...current }
+        delete next[userId]
+        return next
+      })
+      setRemoveTarget(null)
+      toast.success(t('Agent removed'))
       await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate', 'user-overrides'],
+        queryKey: ['admin', 'affiliate', 'agents'],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : t('Reset failed'))
+      toast.error(error instanceof Error ? error.message : t('Remove failed'))
     },
   })
 
-  function saveRow(view: AffiliateUserOverrideView) {
-    const row = rowDrafts[view.user_id] ?? affiliateViewToRowDraft(view)
-    const override = buildAffiliateConfigOverride(
-      row.config,
-      view.global_rule.reward_mode,
-      view.global_rule.unlimited_reward,
-      row.following,
-      row.note
-    )
-    if (!override) {
-      toast.error(t('Check the cashback settings and try again'))
-      return
+  const hasPendingChanges = Object.values(rowDrafts).some(hasAgentChanges)
+  const [removeTarget, setRemoveTarget] =
+    useState<AffiliateUserOverrideView | null>(null)
+
+  function saveAllAgents() {
+    const requests: AffiliateAgentUpdate[] = []
+    for (const [userId, draft] of Object.entries(rowDrafts)) {
+      if (!hasAgentChanges(draft)) continue
+      const override = buildAgentOverride(draft)
+      if (!override) {
+        toast.error(t('Check the agent settings and try again'))
+        return
+      }
+      requests.push({
+        user_id: Number(userId),
+        override,
+        invitee_user_ids: draft.invitees.map((invitee) => invitee.user_id),
+      })
     }
-    saveMutation.mutate({ userId: view.user_id, override })
+    if (requests.length > 0) saveMutation.mutate(requests)
   }
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(total / AFFILIATE_OVERRIDES_PAGE_SIZE)
-  )
+  function removeAgent(view: AffiliateUserOverrideView) {
+    setRemoveTarget(view)
+  }
 
-  let results: ReactNode
-  if (query.isLoading) {
-    results = (
+  function confirmRemoveAgent() {
+    if (!removeTarget) return
+    if (!removeTarget.override) {
+      setAddedAgents((current) => {
+        const next = { ...current }
+        delete next[removeTarget.user_id]
+        return next
+      })
+      setRowDrafts((current) => {
+        const next = { ...current }
+        delete next[removeTarget.user_id]
+        return next
+      })
+      setRemoveTarget(null)
+      return
+    }
+    removeMutation.mutate(removeTarget.user_id)
+  }
+
+  let content: ReactNode
+  if (agentsQuery.isLoading) {
+    content = (
       <div className='flex justify-center py-12'>
         <Spinner />
       </div>
     )
-  } else if (query.isError) {
-    results = (
+  } else if (agentsQuery.isError) {
+    content = (
       <Empty className='min-h-40'>
         <EmptyHeader>
           <EmptyTitle>{t('Loading failed')}</EmptyTitle>
@@ -1069,231 +738,158 @@ function PersonalizedAffiliateSettings() {
       </Empty>
     )
   } else {
-    results = (
-      <div className='min-w-0 rounded-lg border'>
-        <Table>
+    content = (
+      <div className='min-w-0 overflow-x-auto rounded-lg border'>
+        <Table className='min-w-[1560px] table-fixed'>
           <TableHeader>
             <TableRow>
-              <TableHead className='min-w-44'>{t('User')}</TableHead>
-              <TableHead className='min-w-52'>{t('Email')}</TableHead>
-              <TableHead className='min-w-44'>{t('Inviter reward')}</TableHead>
-              <TableHead className='min-w-44'>{t('Invitee reward')}</TableHead>
-              <TableHead className='min-w-44'>
-                {rewardMode === 'fixed'
-                  ? t('Fixed cashback')
-                  : t('Cashback rate')}
-              </TableHead>
-              <TableHead className='min-w-48'>
-                {t('First qualifying cumulative top-up')}
-              </TableHead>
-              <TableHead className='min-w-48'>
+              <TableHead className='w-40'>{t('User')}</TableHead>
+              <TableHead className='w-52'>{t('Email')}</TableHead>
+              <TableHead className='w-56'>{t('Invite Info')}</TableHead>
+              <TableHead className='w-40'>{t('Remark')}</TableHead>
+              <TableHead className='w-64'>{t('Affiliate domain')}</TableHead>
+              <TableHead className='w-36'>{t('Cashback rate')}</TableHead>
+              <TableHead className='w-48'>
                 {t('Maximum cashback per invitee')}
               </TableHead>
-              <TableHead className='min-w-36'>{t('Hold period')}</TableHead>
-              <TableHead className='min-w-52'>
-                {t('Note')} ({t('Optional')})
-              </TableHead>
-              <TableHead className='sticky right-0 z-30 min-w-44 bg-[var(--table-header)] text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))]'>
+              <TableHead className='w-36'>{t('Hold period')}</TableHead>
+              <TableHead className='sticky right-0 z-30 w-40 bg-[var(--table-header)] text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))]'>
                 {t('Action')}
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.length === 0 ? (
+            {agentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className='h-36 text-center'>
+                <TableCell colSpan={9} className='h-36 text-center'>
                   <div className='mx-auto flex max-w-md flex-col items-center gap-1'>
-                    <p className='font-medium'>
-                      {keyword ? t('No matching users') : t('No users')}
-                    </p>
+                    <p className='font-medium'>{t('No agents')}</p>
                     <p className='text-muted-foreground text-sm'>
-                      {t(
-                        'No users available. Try adjusting your search or filters.'
-                      )}
+                      {t('Search for a user above to add an agent.')}
                     </p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : null}
-            {items.map((view) => {
-              const row =
-                rowDrafts[view.user_id] ?? affiliateViewToRowDraft(view)
-              const customized = hasAffiliateConfigurationOverride(view)
-              const hasOverride = Boolean(view.override)
-              const rowClassName =
-                keyword && !customized
-                  ? 'bg-muted/30 text-muted-foreground hover:bg-muted/40'
-                  : undefined
-              const disabled = saveMutation.isPending || resetMutation.isPending
+            {agentItems.map((view) => {
+              const row = rowDrafts[view.user_id] ?? viewToAgentDraft(view)
+              const disabled =
+                saveMutation.isPending || removeMutation.isPending
               return (
-                <TableRow key={view.user_id} className={rowClassName}>
-                  <TableCell className='align-top font-medium'>
-                    <div>{view.username}</div>
-                    <div className='text-muted-foreground text-xs'>
-                      #{view.user_id}
-                    </div>
-                  </TableCell>
-                  <TableCell className='align-top'>
-                    {view.email || '-'}
-                  </TableCell>
-                  <AffiliateConfigTableCell
-                    value={row.config.inviterReward}
-                    following={row.following.inviter_reward_quota}
-                    unit={t('CNY')}
-                    label={t('Inviter reward')}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'inviter_reward_quota', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(
-                        view,
-                        'inviter_reward_quota',
-                        following
-                      )
-                    }
-                  />
-                  <AffiliateConfigTableCell
-                    value={row.config.inviteeReward}
-                    following={row.following.invitee_reward_quota}
-                    unit={t('CNY')}
-                    label={t('Invitee reward')}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'invitee_reward_quota', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(
-                        view,
-                        'invitee_reward_quota',
-                        following
-                      )
-                    }
-                  />
-                  <AffiliateConfigTableCell
-                    value={row.config.rewardValue}
-                    following={row.following.reward_value}
-                    unit={
-                      view.global_rule.reward_mode === 'percentage'
-                        ? '%'
-                        : t('CNY')
-                    }
-                    label={
-                      view.global_rule.reward_mode === 'percentage'
-                        ? t('Cashback rate')
-                        : t('Fixed cashback')
-                    }
-                    inputProps={
-                      view.global_rule.reward_mode === 'percentage'
-                        ? { min: 0, max: 100, step: '0.01' }
-                        : { min: 0, step: '0.01' }
-                    }
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'reward_value', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(view, 'reward_value', following)
-                    }
-                  />
-                  <AffiliateConfigTableCell
-                    value={row.config.minimumTopUp}
-                    following={row.following.minimum_topup_cents}
-                    unit={t('CNY')}
-                    label={t('First qualifying cumulative top-up')}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'minimum_topup_cents', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(view, 'minimum_topup_cents', following)
-                    }
-                  />
-                  <AffiliateConfigTableCell
-                    value={row.config.maximumReward}
-                    following={row.following.maximum_reward_quota}
-                    unit={t('CNY')}
-                    label={t('Maximum cashback per invitee')}
-                    inputProps={{
-                      min: view.global_rule.unlimited_reward ? 0 : 0.01,
-                      step: '0.01',
-                    }}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'maximum_reward_quota', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(
-                        view,
-                        'maximum_reward_quota',
-                        following
-                      )
-                    }
-                  />
-                  <AffiliateConfigTableCell
-                    value={row.config.holdDays}
-                    following={row.following.hold_seconds}
-                    unit={t('Days')}
-                    label={t('Hold period')}
-                    inputProps={{ min: 0, max: 365, step: 1 }}
-                    disabled={disabled}
-                    onValueChange={(value) =>
-                      updateRowConfig(view, 'hold_seconds', value)
-                    }
-                    onFollowingChange={(following) =>
-                      updateRowFollowing(view, 'hold_seconds', following)
-                    }
-                  />
-                  <TableCell className='align-top'>
-                    <Textarea
-                      aria-label={`${t('Note')} (${t('Optional')})`}
-                      className='min-h-16 min-w-48 resize-y'
-                      maxLength={500}
-                      value={row.note}
-                      placeholder={`${t('Note')} (${t('Optional')})`}
-                      onChange={(event) =>
-                        updateRowNote(view, event.target.value)
-                      }
-                      disabled={disabled}
+                <TableRow key={view.user_id}>
+                  <TableCell className='max-w-40 align-top font-medium'>
+                    <CopyableText
+                      value={view.username}
+                      className='max-w-36 font-medium'
+                    />
+                    <CopyableText
+                      value={String(view.user_id)}
+                      className='text-muted-foreground max-w-24 text-xs'
                     />
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      'sticky right-0 z-10 min-w-44 bg-background align-top text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))] group-hover:[background-color:color-mix(in_oklch,var(--muted)_50%,var(--background))]',
-                      rowClassName && 'bg-muted/30 group-hover:bg-muted/40'
-                    )}
-                  >
-                    <div className='flex flex-wrap justify-end gap-2'>
+                  <TableCell className='max-w-52 align-top'>
+                    <CopyableText value={view.email} className='max-w-48' />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    <InviteInfoCell
+                      userId={view.user_id}
+                      info={view.invite_info}
+                      className='min-w-0 break-words whitespace-normal'
+                    />
+                  </TableCell>
+                  <TableCell className='max-w-40 align-top'>
+                    <InputGroup className='max-w-40 min-w-0'>
+                      <InputGroupInput
+                        className='min-w-0 truncate'
+                        value={row.remark}
+                        title={row.remark || undefined}
+                        maxLength={255}
+                        aria-label={t('Remark')}
+                        onChange={(event) =>
+                          updateRemark(view, event.target.value)
+                        }
+                        disabled={disabled}
+                      />
+                    </InputGroup>
+                  </TableCell>
+                  <TableCell className='max-w-64 align-top'>
+                    <InputGroup className='max-w-64 min-w-0'>
+                      <InputGroupInput
+                        className='min-w-0 truncate'
+                        value={row.affiliateDomain}
+                        title={row.affiliateDomain || undefined}
+                        placeholder={t('Enter subdomain, e.g. a')}
+                        aria-label={t('Affiliate domain')}
+                        onChange={(event) =>
+                          updateDomain(view, event.target.value)
+                        }
+                        disabled={disabled}
+                      />
+                    </InputGroup>
+                  </TableCell>
+                  <AgentNumberCell
+                    label={t('Cashback rate')}
+                    value={row.rewardRate}
+                    unit='%'
+                    min={0}
+                    max={100}
+                    step='0.01'
+                    disabled={disabled}
+                    onChange={(value) => updateRow(view, 'rewardRate', value)}
+                  />
+                  <AgentNumberCell
+                    label={t('Maximum cashback per invitee')}
+                    value={row.maximumReward}
+                    unit={t('CNY')}
+                    min={0}
+                    step='0.01'
+                    disabled={disabled}
+                    onChange={(value) =>
+                      updateRow(view, 'maximumReward', value)
+                    }
+                  />
+                  <AgentNumberCell
+                    label={t('Hold period')}
+                    value={row.holdDays}
+                    unit={t('Days')}
+                    min={0}
+                    max={365}
+                    step={1}
+                    disabled={disabled}
+                    onChange={(value) => updateRow(view, 'holdDays', value)}
+                  />
+                  <TableCell className='bg-background sticky right-0 z-10 w-40 text-right align-top shadow-[-8px_0_10px_-10px_hsl(var(--foreground))]'>
+                    <div className='flex flex-col items-end gap-2'>
                       <Button
                         type='button'
                         size='sm'
-                        disabled={
-                          disabled ||
-                          affiliateConfigFieldKeys.every(
-                            (key) => row.following[key]
-                          )
-                        }
-                        onClick={() => saveRow(view)}
+                        variant='outline'
+                        disabled={disabled}
+                        onClick={() => {
+                          setInviteTarget(view)
+                          setInviteSearch('')
+                          setInviteKeyword('')
+                        }}
                       >
-                        {saveMutation.isPending ? (
-                          <Spinner data-icon='inline-start' />
-                        ) : null}
-                        {t('Save')}
+                        添加被邀请者
                       </Button>
-                      {hasOverride ? (
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant='outline'
-                          disabled={disabled}
-                          onClick={() => resetMutation.mutate(view.user_id)}
-                          aria-label={t('Follow all global settings')}
-                          title={t('Follow all global settings')}
-                        >
-                          <RotateCcw data-icon='inline-start' />
-                          {t('Reset')}
-                        </Button>
+                      {row.invitees.length > 0 ? (
+                        <span className='text-muted-foreground text-xs'>
+                          待添加 {row.invitees.length} 人
+                        </span>
                       ) : null}
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled={disabled}
+                        onClick={() => removeAgent(view)}
+                        aria-label={t('Remove agent')}
+                        title={t('Remove agent')}
+                      >
+                        <RotateCcw data-icon='inline-start' />
+                        {t('Remove')}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1304,8 +900,8 @@ function PersonalizedAffiliateSettings() {
         {total > 0 ? (
           <div className='border-border flex items-center justify-between gap-3 border-t px-4 py-3'>
             <div className='text-muted-foreground text-xs'>
-              {t('Showing')} {(page - 1) * AFFILIATE_OVERRIDES_PAGE_SIZE + 1}-
-              {Math.min(page * AFFILIATE_OVERRIDES_PAGE_SIZE, total)} {t('of')}{' '}
+              {t('Showing')} {(page - 1) * AFFILIATE_AGENTS_PAGE_SIZE + 1}-
+              {Math.min(page * AFFILIATE_AGENTS_PAGE_SIZE, total)} {t('of')}{' '}
               {total}
             </div>
             <div className='flex items-center gap-2'>
@@ -1345,24 +941,29 @@ function PersonalizedAffiliateSettings() {
 
   return (
     <div className='grid gap-5'>
+      <SettingsPageFormActions
+        onSave={saveAllAgents}
+        isSaving={saveMutation.isPending}
+        isSaveDisabled={!hasPendingChanges}
+        saveLabel='Save'
+      />
       <form
         className='max-w-xl'
         onSubmit={(event) => {
           event.preventDefault()
-          setPage(1)
           setKeyword(searchInput.trim())
         }}
       >
         <Field>
-          <FieldLabel htmlFor='affiliate-user-search'>
-            {t('Search user')}
+          <FieldLabel htmlFor='affiliate-agent-search'>
+            {t('Add agent')}
           </FieldLabel>
           <InputGroup>
             <InputGroupInput
-              id='affiliate-user-search'
+              id='affiliate-agent-search'
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={t('Username, email, or user ID')}
+              placeholder='用户 ID、名称或邮箱'
             />
             <InputGroupAddon align='inline-end'>
               <InputGroupButton type='submit' aria-label={t('Search')}>
@@ -1373,7 +974,167 @@ function PersonalizedAffiliateSettings() {
         </Field>
       </form>
 
-      {results}
+      {searchQuery.isFetching ? <Spinner className='mx-auto' /> : null}
+      {!searchQuery.isFetching && keyword ? (
+        <AgentSearchResults
+          items={searchQuery.data ?? []}
+          addedUserIDs={addedUserIDs}
+          onAdd={addAgent}
+        />
+      ) : null}
+      {content}
+      <Dialog
+        open={inviteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setInviteTarget(null)
+        }}
+      >
+        <DialogContent className='sm:max-w-xl'>
+          <DialogHeader>
+            <DialogTitle>添加被邀请者 · {inviteTarget?.username}</DialogTitle>
+            <DialogDescription>
+              选择尚未绑定邀请者的用户，最后通过页面右上角保存。历史充值不补发返现。
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              setInviteKeyword(inviteSearch.trim())
+            }}
+          >
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor='affiliate-invitee-search'>
+                  被邀请者
+                </FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id='affiliate-invitee-search'
+                    value={inviteSearch}
+                    onChange={(event) => setInviteSearch(event.target.value)}
+                    placeholder='用户 ID、名称或邮箱'
+                  />
+                  <InputGroupAddon align='inline-end'>
+                    <InputGroupButton type='submit' aria-label='搜索被邀请者'>
+                      <Search />
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+              </Field>
+            </FieldGroup>
+          </form>
+          <div className='max-h-80 overflow-y-auto'>
+            {inviteeQuery.isFetching ? <Spinner className='mx-auto' /> : null}
+            {inviteeQuery.isError ? (
+              <p className='text-destructive text-sm'>搜索失败，请重试</p>
+            ) : null}
+            {inviteKeyword &&
+            !inviteeQuery.isFetching &&
+            inviteeQuery.data?.length === 0 ? (
+              <p className='text-muted-foreground text-sm'>未找到用户</p>
+            ) : null}
+            {inviteeQuery.data?.map((invitee) => {
+              if (!inviteTarget) return null
+              const draft =
+                rowDrafts[inviteTarget.user_id] ??
+                viewToAgentDraft(inviteTarget)
+              const staged = Object.values(rowDrafts).some((row) =>
+                row.invitees.some((user) => user.user_id === invitee.user_id)
+              )
+              const bound = Boolean(invitee.invite_info?.inviter_user_id)
+              const unavailable =
+                staged || bound || invitee.user_id === inviteTarget.user_id
+              let addLabel = '添加'
+              if (staged) addLabel = '已选择'
+              else if (bound) addLabel = '已绑定邀请者'
+              return (
+                <div
+                  key={invitee.user_id}
+                  className='flex items-center justify-between gap-3 border-b py-3'
+                >
+                  <div className='min-w-0'>
+                    <p className='truncate font-medium'>
+                      {invitee.username} · {invitee.user_id}
+                    </p>
+                    <p
+                      className='text-muted-foreground truncate text-sm'
+                      title={invitee.email}
+                    >
+                      {invitee.email || '-'}
+                    </p>
+                  </div>
+                  <Button
+                    type='button'
+                    size='sm'
+                    disabled={unavailable || saveMutation.isPending}
+                    onClick={() =>
+                      setRowDrafts((current) => ({
+                        ...current,
+                        [inviteTarget.user_id]: {
+                          ...draft,
+                          invitees: [...draft.invitees, invitee],
+                        },
+                      }))
+                    }
+                  >
+                    {addLabel}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+          {inviteTarget
+            ? (rowDrafts[inviteTarget.user_id]?.invitees ?? []).map(
+                (invitee) => (
+                  <div
+                    key={invitee.user_id}
+                    className='flex items-center justify-between gap-3'
+                  >
+                    <span className='truncate text-sm'>
+                      {invitee.username} · {invitee.email || invitee.user_id}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      disabled={saveMutation.isPending}
+                      onClick={() =>
+                        setRowDrafts((current) => {
+                          const draft = current[inviteTarget.user_id]
+                          return {
+                            ...current,
+                            [inviteTarget.user_id]: {
+                              ...draft,
+                              invitees: draft.invitees.filter(
+                                (user) => user.user_id !== invitee.user_id
+                              ),
+                            },
+                          }
+                        })
+                      }
+                    >
+                      移除
+                    </Button>
+                  </div>
+                )
+              )
+            : null}
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => {
+          if (!open && !removeMutation.isPending) setRemoveTarget(null)
+        }}
+        title={t('Remove agent')}
+        desc={t(
+          'Remove this agent configuration? Existing referral records will be kept.'
+        )}
+        destructive
+        confirmText={t('Remove')}
+        handleConfirm={confirmRemoveAgent}
+        isLoading={removeMutation.isPending}
+      />
     </div>
   )
 }
@@ -1391,10 +1152,10 @@ export function AffiliateSettingsSection() {
             {t('Global settings')}
           </TabsTrigger>
           <TabsTrigger
-            value='personalized'
+            value='agents'
             className='h-auto min-h-9 py-2 text-center leading-tight whitespace-normal'
           >
-            {t('User-specific settings')}
+            {t('Agents')}
           </TabsTrigger>
           <TabsTrigger
             value='adjustments'
@@ -1406,7 +1167,7 @@ export function AffiliateSettingsSection() {
         <TabsContent value='global' className='pt-5'>
           <GlobalAffiliateSettings />
         </TabsContent>
-        <TabsContent value='personalized' className='pt-5'>
+        <TabsContent value='agents' className='pt-5'>
           <PersonalizedAffiliateSettings />
         </TabsContent>
         <TabsContent value='adjustments' className='pt-5'>

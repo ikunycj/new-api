@@ -24,13 +24,7 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { getOAuthState } from '../api'
-import {
-  buildGitHubOAuthUrl,
-  buildDiscordOAuthUrl,
-  buildOIDCOAuthUrl,
-  buildLinuxDOOAuthUrl,
-} from '../lib/oauth'
+import { getAffiliateCode } from '../lib/storage'
 import type { SystemStatus, CustomOAuthProviderInfo } from '../types'
 
 type LogoutRequestConfig = AxiosRequestConfig & {
@@ -95,20 +89,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
 
     try {
       await resetSession()
-      const state = await getOAuthState()
-      if (!state) {
-        toast.error(t('Failed to initialize OAuth'))
-        if (githubTimeoutRef.current) {
-          clearTimeout(githubTimeoutRef.current)
-        }
-        setIsLoading(false)
-        setGithubButtonText(t('Continue with GitHub'))
-        setGithubButtonDisabled(false)
-        return
-      }
-
-      const url = buildGitHubOAuthUrl(status.github_client_id, state)
-      window.open(url, '_self')
+      const query = new URLSearchParams({ aff: getAffiliateCode() || '' })
+      window.location.assign(`/api/oauth/start/github?${query}`)
     } catch {
       toast.error(t('Failed to start GitHub login'))
       if (githubTimeoutRef.current) {
@@ -126,14 +108,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
-      if (!state) {
-        toast.error(t('Failed to initialize OAuth'))
-        return
-      }
-
-      const url = buildDiscordOAuthUrl(status.discord_client_id, state)
-      window.open(url, '_self')
+      const query = new URLSearchParams({ aff: getAffiliateCode() || '' })
+      window.location.assign(`/api/oauth/start/discord?${query}`)
     } catch {
       toast.error(t('Failed to start Discord login'))
     } finally {
@@ -147,18 +123,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
-      if (!state) {
-        toast.error(t('Failed to initialize OAuth'))
-        return
-      }
-
-      const url = buildOIDCOAuthUrl(
-        status.oidc_authorization_endpoint,
-        status.oidc_client_id,
-        state
-      )
-      window.open(url, '_self')
+      const query = new URLSearchParams({ aff: getAffiliateCode() || '' })
+      window.location.assign(`/api/oauth/start/oidc?${query}`)
     } catch {
       toast.error(t('Failed to start OIDC login'))
     } finally {
@@ -172,14 +138,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
-      if (!state) {
-        toast.error(t('Failed to initialize OAuth'))
-        return
-      }
-
-      const url = buildLinuxDOOAuthUrl(status.linuxdo_client_id, state)
-      window.open(url, '_self')
+      const query = new URLSearchParams({ aff: getAffiliateCode() || '' })
+      window.location.assign(`/api/oauth/start/linuxdo?${query}`)
     } catch {
       toast.error(t('Failed to start LinuxDO login'))
     } finally {
@@ -197,23 +157,10 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
-      if (!state) {
-        toast.error(t('Failed to initialize OAuth'))
-        return
-      }
-
-      const redirectUri = `${window.location.origin}/oauth/${provider.slug}`
-      const url = new URL(provider.authorization_endpoint)
-      url.searchParams.set('client_id', provider.client_id)
-      url.searchParams.set('redirect_uri', redirectUri)
-      url.searchParams.set('response_type', 'code')
-      url.searchParams.set('state', state)
-      if (provider.scopes) {
-        url.searchParams.set('scope', provider.scopes)
-      }
-
-      window.open(url.toString(), '_self')
+      const query = new URLSearchParams({ aff: getAffiliateCode() || '' })
+      window.location.assign(
+        `/api/oauth/start/${encodeURIComponent(provider.slug)}?${query}`
+      )
     } catch {
       toast.error(
         t('Failed to start {{provider}} login', { provider: provider.name })

@@ -1,11 +1,15 @@
 package operation_setting
 
 import (
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
 const (
+	// AffiliateRegistrationTriggerDisabled is retained in rule snapshots so the
+	// current configuration explicitly records that registration rewards are off.
+	AffiliateRegistrationTriggerDisabled = "disabled"
+
+	// Legacy values remain available for historical rule snapshots and old data.
 	AffiliateRegistrationTriggerRegistrationSuccess = "registration_success"
 	AffiliateRegistrationTriggerFirstQualifiedTopUp = "first_qualified_topup"
 
@@ -16,6 +20,9 @@ const (
 	AffiliateCashbackFrequencyEveryTopUp     = "every_topup"
 )
 
+// AffiliateSetting keeps legacy fields so existing option rows and historical
+// reward snapshots remain readable. New settings writes normalize the legacy
+// rule fields to the current product behavior in model.UpdateAffiliateSetting.
 type AffiliateSetting struct {
 	Enabled                   bool   `json:"enabled"`
 	InviterRewardQuota        int64  `json:"inviter_reward_quota"`
@@ -36,17 +43,17 @@ type AffiliateSetting struct {
 var affiliateSetting = AffiliateSetting{
 	Enabled:                   true,
 	InviterRewardQuota:        0,
-	InviteeRewardQuota:        int64(common.QuotaPerUnit),
-	RegistrationRewardTrigger: AffiliateRegistrationTriggerRegistrationSuccess,
+	InviteeRewardQuota:        0,
+	RegistrationRewardTrigger: AffiliateRegistrationTriggerDisabled,
 	RewardMode:                AffiliateRewardModePercentage,
 	CashbackFrequency:         AffiliateCashbackFrequencyEveryTopUp,
 	RewardRateBps:             500,
-	FixedRewardQuota:          int64(5 * common.QuotaPerUnit),
+	FixedRewardQuota:          0,
 	UnlimitedReward:           true,
 	MaximumRewardQuota:        0,
-	MinimumTopUpCents:         10 * 100,
+	MinimumTopUpCents:         0,
 	HoldSeconds:               3 * 24 * 60 * 60,
-	MinimumTransferQuota:      int64(common.QuotaPerUnit),
+	MinimumTransferQuota:      0,
 	ShowInviteeTopUps:         true,
 }
 

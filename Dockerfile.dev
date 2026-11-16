@@ -14,6 +14,9 @@ ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB} GOTOOLCHAIN=${GOTOOLCHAIN}
 WORKDIR /build
 
 ADD go.mod go.sum ./
+# relaykit is a local module referenced via replace; include its go.mod before
+# downloading the main module graph.
+ADD relaykit/go.mod ./relaykit/go.mod
 RUN go env GOPROXY GOSUMDB GOTOOLCHAIN && go mod download
 
 COPY . .

@@ -17,7 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, MinusCircle, Search } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -61,7 +66,6 @@ import {
   formatQuotaAsCNY,
   formatTimestampToDate,
   parseQuotaFromCNY,
-  quotaUnitsToCNY,
 } from '@/lib/format'
 
 import { adjustAffiliateReward, getAffiliateAdminRewards } from '../api'
@@ -86,6 +90,7 @@ export function AffiliateAdjustmentsSection() {
   const [status, setStatus] = useState('')
   const [selected, setSelected] = useState<AffiliateAdminReward>()
   const [amount, setAmount] = useState('')
+  const [isIncrease, setIsIncrease] = useState(true)
   const [reason, setReason] = useState('')
   const query = useQuery({
     queryKey: ['admin', 'affiliate', 'rewards', page, keyword, status],
@@ -148,9 +153,8 @@ export function AffiliateAdjustmentsSection() {
 
   function openAdjustment(reward: AffiliateAdminReward) {
     setSelected(reward)
-    setAmount(
-      String(quotaUnitsToCNY(reward.actual_quota - reward.adjusted_quota))
-    )
+    setAmount('')
+    setIsIncrease(true)
     setReason('')
   }
 
@@ -164,7 +168,7 @@ export function AffiliateAdjustmentsSection() {
     }
     mutation.mutate({
       rewardId: selected.id,
-      amount_quota: amountQuota,
+      amount_quota: isIncrease ? -amountQuota : amountQuota,
       reason: reason.trim(),
       request_key: crypto.randomUUID(),
     })
@@ -195,7 +199,7 @@ export function AffiliateAdjustmentsSection() {
               id='affiliate-reward-search'
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={t('User, email, invitation code, or order number')}
+              placeholder={t('User, email, or inviter remark')}
             />
             <InputGroupAddon align='inline-end'>
               <InputGroupButton
@@ -261,10 +265,12 @@ export function AffiliateAdjustmentsSection() {
             {items.map((reward) => (
               <TableRow key={reward.id}>
                 <TableCell className='whitespace-nowrap'>
-                  {reward.inviter_username} #{reward.inviter_user_id}
+                  {reward.inviter_email || reward.inviter_username || '-'}{' '}
+                  {reward.inviter_user_id}
                 </TableCell>
                 <TableCell className='whitespace-nowrap'>
-                  {reward.invitee_email}
+                  {reward.invitee_email || reward.invitee_username || '-'}{' '}
+                  {reward.invitee_user_id}
                 </TableCell>
                 <TableCell className='font-mono text-xs whitespace-nowrap'>
                   {reward.trade_no || `#${reward.topup_id}`}
@@ -273,7 +279,11 @@ export function AffiliateAdjustmentsSection() {
                   {formatTimestampToDate(reward.created_at)}
                 </TableCell>
                 <TableCell>{formatCNY(reward.paid_cents)}</TableCell>
-                <TableCell>{formatQuotaAsCNY(reward.actual_quota)}</TableCell>
+                <TableCell>
+                  {formatQuotaAsCNY(
+                    reward.actual_quota - reward.adjusted_quota
+                  )}
+                </TableCell>
                 <TableCell>
                   {formatQuotaAsCNY(reward.transferred_quota)}
                 </TableCell>
@@ -285,10 +295,9 @@ export function AffiliateAdjustmentsSection() {
                     type='button'
                     size='sm'
                     variant='outline'
-                    disabled={reward.adjusted_quota >= reward.actual_quota}
                     onClick={() => openAdjustment(reward)}
                   >
-                    <MinusCircle data-icon='inline-start' />
+                    <SlidersHorizontal data-icon='inline-start' />
                     {t('Adjust cashback')}
                   </Button>
                 </TableCell>
@@ -361,7 +370,7 @@ export function AffiliateAdjustmentsSection() {
               <DialogTitle>{t('Adjust cashback')}</DialogTitle>
               <DialogDescription>
                 {t(
-                  'Reduce the original cashback after a refund or chargeback. This action is recorded in the affiliate ledger.'
+                  'Increase or decrease cashback. Changes are recorded in the affiliate ledger.'
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -375,10 +384,12 @@ export function AffiliateAdjustmentsSection() {
                 </div>
                 <div>
                   <div className='text-muted-foreground'>
-                    {t('Already adjusted')}
+                    {t('Net adjustment')}
                   </div>
                   <div className='mt-1 font-semibold'>
-                    {formatQuotaAsCNY(selected?.adjusted_quota ?? 0)}
+                    {formatQuotaAsCNY(
+                      selected?.adjusted_quota ? -selected.adjusted_quota : 0
+                    )}
                   </div>
                 </div>
                 <div>
@@ -391,6 +402,34 @@ export function AffiliateAdjustmentsSection() {
                 </div>
               </div>
               <Field>
+                <FieldLabel htmlFor='affiliate-adjustment-direction'>
+                  {t('Adjustment direction')}
+                </FieldLabel>
+                <NativeSelect
+                  id='affiliate-adjustment-direction'
+                  className='w-full'
+                  value={isIncrease ? 'increase' : 'decrease'}
+                  onChange={(event) =>
+                    setIsIncrease(event.target.value === 'increase')
+                  }
+                  disabled={mutation.isPending}
+                >
+                  <NativeSelectOption value='increase'>
+                    {t('Increase cashback')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='decrease'>
+                    {t('Decrease cashback')}
+                  </NativeSelectOption>
+                </NativeSelect>
+                {isIncrease ? (
+                  <FieldDescription>
+                    {t(
+                      'Added cashback follows the original unlock time and is automatically transferred when available.'
+                    )}
+                  </FieldDescription>
+                ) : null}
+              </Field>
+              <Field>
                 <FieldLabel htmlFor='affiliate-adjustment-amount'>
                   {t('Adjustment amount')}
                 </FieldLabel>
@@ -398,6 +437,7 @@ export function AffiliateAdjustmentsSection() {
                   <InputGroupInput
                     id='affiliate-adjustment-amount'
                     type='number'
+                    required
                     min='0.01'
                     step='0.01'
                     value={amount}
@@ -407,7 +447,7 @@ export function AffiliateAdjustmentsSection() {
                     <InputGroupText>{t('CNY')}</InputGroupText>
                   </InputGroupAddon>
                 </InputGroup>
-                {requestedQuota > untransferredQuota ? (
+                {!isIncrease && requestedQuota > untransferredQuota ? (
                   <FieldDescription className='text-amber-700 dark:text-amber-400'>
                     {t(
                       'The transferred portion cannot be deducted automatically and will require separate manual handling.'
@@ -421,6 +461,7 @@ export function AffiliateAdjustmentsSection() {
                 </FieldLabel>
                 <Textarea
                   id='affiliate-adjustment-reason'
+                  required
                   maxLength={500}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
@@ -440,7 +481,7 @@ export function AffiliateAdjustmentsSection() {
                 {mutation.isPending ? (
                   <Spinner data-icon='inline-start' />
                 ) : (
-                  <MinusCircle data-icon='inline-start' />
+                  <SlidersHorizontal data-icon='inline-start' />
                 )}
                 {t('Confirm adjustment')}
               </Button>

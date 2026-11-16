@@ -20,6 +20,30 @@ type affiliateBalanceTransferRequest struct {
 	RequestKey  string `json:"request_key"`
 }
 
+type affiliateSettingsRequest struct {
+	Enabled            bool  `json:"enabled"`
+	RewardRateBps      int64 `json:"reward_rate_bps"`
+	MaximumRewardQuota int64 `json:"maximum_reward_quota"`
+	HoldSeconds        int64 `json:"hold_seconds"`
+}
+
+type affiliateSettingsResponse struct {
+	Enabled            bool  `json:"enabled"`
+	RewardRateBps      int64 `json:"reward_rate_bps"`
+	MaximumRewardQuota int64 `json:"maximum_reward_quota"`
+	HoldSeconds        int64 `json:"hold_seconds"`
+}
+
+func getAffiliateSettingsResponse() affiliateSettingsResponse {
+	setting := model.GetGlobalAffiliateSetting()
+	return affiliateSettingsResponse{
+		Enabled:            setting.Enabled,
+		RewardRateBps:      setting.RewardRateBps,
+		MaximumRewardQuota: setting.MaximumRewardQuota,
+		HoldSeconds:        setting.HoldSeconds,
+	}
+}
+
 type affiliateAdjustmentRequest struct {
 	AmountQuota int64  `json:"amount_quota" binding:"required"`
 	Reason      string `json:"reason" binding:"required"`
@@ -95,25 +119,31 @@ func GetAffiliateBalanceTransfers(c *gin.Context) {
 }
 
 func AdminGetAffiliateSettings(c *gin.Context) {
-	common.ApiSuccess(c, model.GetGlobalAffiliateSetting())
+	common.ApiSuccess(c, getAffiliateSettingsResponse())
 }
 
 func AdminUpdateAffiliateSettings(c *gin.Context) {
-	var request operation_setting.AffiliateSetting
+	var request affiliateSettingsRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if err := model.UpdateAffiliateSetting(request); err != nil {
+	if err := model.UpdateAffiliateSetting(operation_setting.AffiliateSetting{
+		Enabled:            request.Enabled,
+		RewardRateBps:      request.RewardRateBps,
+		MaximumRewardQuota: request.MaximumRewardQuota,
+		HoldSeconds:        request.HoldSeconds,
+	}); err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	recordManageAudit(c, "affiliate.settings.update", map[string]interface{}{
-		"enabled":            request.Enabled,
-		"reward_mode":        request.RewardMode,
-		"cashback_frequency": request.CashbackFrequency,
+		"enabled":              request.Enabled,
+		"reward_rate_bps":      request.RewardRateBps,
+		"maximum_reward_quota": request.MaximumRewardQuota,
+		"hold_seconds":         request.HoldSeconds,
 	})
-	common.ApiSuccess(c, model.GetGlobalAffiliateSetting())
+	common.ApiSuccess(c, getAffiliateSettingsResponse())
 }
 
 func AdminGetAffiliateUserOverrides(c *gin.Context) {
@@ -144,6 +174,29 @@ func AdminGetAffiliateUserOverride(c *gin.Context) {
 	common.ApiSuccess(c, view)
 }
 
+func AdminGetAffiliateReferralActivities(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	items, total, err := model.GetAffiliateAdminReferralActivities(
+		userID,
+		c.Query("keyword"),
+		c.Query("operation_type"),
+		pageInfo.GetStartIdx(),
+		pageInfo.GetPageSize(),
+	)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(items)
+	common.ApiSuccess(c, pageInfo)
+}
+
 func AdminUpdateAffiliateUserOverride(c *gin.Context) {
 	userID, err := strconv.Atoi(c.Param("user_id"))
 	if err != nil {
@@ -165,6 +218,23 @@ func AdminUpdateAffiliateUserOverride(c *gin.Context) {
 		"change_reason": request.ChangeReason,
 	})
 	common.ApiSuccess(c, view)
+}
+
+func AdminSaveAffiliateAgents(c *gin.Context) {
+	var request struct {
+		Agents []model.AffiliateAgentUpdate `json:"agents" binding:"required,min=1,max=1000"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	views, err := model.SaveAffiliateAgents(c.GetInt("id"), request.Agents)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "affiliate.agents.save", map[string]interface{}{"agents": request.Agents})
+	common.ApiSuccess(c, views)
 }
 
 func AdminDeleteAffiliateUserOverride(c *gin.Context) {

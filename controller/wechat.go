@@ -98,7 +98,16 @@ func WeChatAuth(c *gin.Context) {
 			user.CreatedIP = c.ClientIP()
 			user.OnboardingVersion = model.NewUserOnboardingVersion()
 
-			if err := user.Insert(0); err != nil {
+			inviterID, _, err := model.ResolveAffiliateInviterByHost(c.Request.Host)
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": err.Error(),
+				})
+				return
+			}
+			user.InviterId = inviterID
+			if err := user.Insert(inviterID); err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
 					"message": err.Error(),

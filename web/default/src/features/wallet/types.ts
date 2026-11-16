@@ -48,7 +48,10 @@ export interface AffiliateEffectiveRule {
   enabled: boolean
   inviter_reward_quota: number
   invitee_reward_quota: number
-  registration_reward_trigger: 'registration_success' | 'first_qualified_topup'
+  registration_reward_trigger:
+    | 'disabled'
+    | 'registration_success'
+    | 'first_qualified_topup'
   reward_mode: AffiliateRewardMode
   cashback_frequency: AffiliateCashbackFrequency
   reward_rate_bps: number

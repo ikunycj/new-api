@@ -1,6 +1,8 @@
 package model
 
 import (
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -116,7 +118,7 @@ func TestAffiliateCampaignCreditsCashAndInviteeBonusOnce(t *testing.T) {
 	var reward AffiliateCashReward
 	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
 	assert.Equal(t, int64(2500), reward.CashbackCents)
-	assert.Equal(t, AffiliateRewardStatusAvailable, reward.Status)
+	assert.Equal(t, AffiliateRewardStatusTransferred, reward.Status)
 
 	var grant AffiliateQuotaGrant
 	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&grant).Error)
@@ -130,7 +132,8 @@ func TestAffiliateCampaignCreditsCashAndInviteeBonusOnce(t *testing.T) {
 
 	var account AffiliateCashAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
-	assert.Equal(t, int64(2500), account.AvailableCents)
+	assert.Zero(t, account.AvailableCents)
+	assert.Equal(t, int64(2500), account.TransferredCents)
 	assert.Equal(t, int64(2500), account.LifetimeEarnedCents)
 	var legacyRewardCount int64
 	require.NoError(t, DB.Model(&AffiliateReward{}).Where("top_up_id = ?", topUp.Id).Count(&legacyRewardCount).Error)
@@ -139,7 +142,8 @@ func TestAffiliateCampaignCreditsCashAndInviteeBonusOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, items, 1)
-	assert.Equal(t, int64(2500), items[0].AvailableRewardCents)
+	assert.Zero(t, items[0].AvailableRewardCents)
+	assert.Equal(t, AffiliateRewardStatusTransferred, items[0].Status)
 }
 
 func TestAffiliateCampaignUsesStartInclusiveEndExclusiveWindow(t *testing.T) {
@@ -183,11 +187,11 @@ func TestAffiliateCampaignCashReleaseAndTransfer(t *testing.T) {
 	require.NoError(t, DB.Save(topUp).Error)
 	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
 
-	released, err := ReleaseDueAffiliateCashRewards(topUp.CompleteTime+10, 100)
+	released, _, err := ReleaseDueAffiliateCashRewards(topUp.CompleteTime+10, 0, 100)
 	require.NoError(t, err)
 	assert.Equal(t, 1, released)
-	transfer, err := CreateAffiliateCashTransfer(inviter.Id, 2500, "campaign-transfer-request")
-	require.NoError(t, err)
+	var transfer AffiliateCashTransfer
+	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&transfer).Error)
 	assert.Equal(t, int64(2500), transfer.AmountCents)
 	assert.Equal(t, int64(25*common.QuotaPerUnit), transfer.CreditedQuota)
 
@@ -197,7 +201,7 @@ func TestAffiliateCampaignCashReleaseAndTransfer(t *testing.T) {
 	assert.Equal(t, int64(2500), account.TransferredCents)
 }
 
-func TestAffiliateEveryTopUpUsesCumulativeFirstRewardThenCurrentPayment(t *testing.T) {
+func TestAffiliateEveryTopUpUsesCurrentPayment(t *testing.T) {
 	truncateTables(t)
 	unit := configureAffiliateTest(t, nil)
 	inviter, invitee := createAffiliateUsers(t, "alice@example.com")
@@ -212,33 +216,34 @@ func TestAffiliateEveryTopUpUsesCumulativeFirstRewardThenCurrentPayment(t *testi
 
 	var rewards []AffiliateReward
 	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeCashback).Order("id asc").Find(&rewards).Error)
-	require.Len(t, rewards, 2)
-	assert.Equal(t, 4*unit, rewards[0].ActualQuota)
-	assert.Equal(t, unit/5, rewards[1].ActualQuota)
-	assert.Equal(t, int64(2000), rewards[0].CumulativePaidCents)
-	assert.Equal(t, int64(100), rewards[1].PaidCents)
+	require.Len(t, rewards, 3)
+	assert.Equal(t, 2*unit, rewards[0].ActualQuota)
+	assert.Equal(t, 2*unit, rewards[1].ActualQuota)
+	assert.Equal(t, unit/5, rewards[2].ActualQuota)
+	assert.Equal(t, int64(1000), rewards[0].CumulativePaidCents)
+	assert.Equal(t, int64(1000), rewards[1].CumulativePaidCents)
+	assert.Equal(t, int64(100), rewards[2].PaidCents)
 
 	var relation AffiliateReferral
 	require.NoError(t, DB.Where("invitee_user_id = ?", invitee.Id).First(&relation).Error)
 	assert.Equal(t, AffiliateReferralStatusQualified, relation.Status)
-	assert.Equal(t, second.Id, *relation.QualifyingTopUpID)
+	assert.Equal(t, first.Id, *relation.QualifyingTopUpID)
 	assert.Equal(t, 4*unit+unit/5, relation.CashbackRewardedQuota)
 
 	var account AffiliateQuotaAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
-	assert.Equal(t, 4*unit+unit/5, account.AvailableQuota)
+	assert.Zero(t, account.AvailableQuota)
+	assert.Equal(t, 4*unit+unit/5, account.TransferredQuota)
 
 	var eventCount int64
 	require.NoError(t, DB.Model(&AffiliateTopUpEvent{}).Count(&eventCount).Error)
 	assert.Equal(t, int64(3), eventCount)
 }
 
-func TestAffiliateFixedRewardHonorsPerReferralCap(t *testing.T) {
+func TestAffiliateMaximumRewardCapAppliesToPercentageCashback(t *testing.T) {
 	truncateTables(t)
 	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
-		setting.RewardMode = operation_setting.AffiliateRewardModeFixed
-		setting.FixedRewardQuota = 5 * int64(common.QuotaPerUnit)
-		setting.UnlimitedReward = false
+		setting.RewardRateBps = 5000
 		setting.MaximumRewardQuota = 8 * int64(common.QuotaPerUnit)
 	})
 	inviter, invitee := createAffiliateUsers(t, "")
@@ -250,51 +255,75 @@ func TestAffiliateFixedRewardHonorsPerReferralCap(t *testing.T) {
 
 	var rewards []AffiliateReward
 	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeCashback).Order("id asc").Find(&rewards).Error)
-	require.Len(t, rewards, 2)
-	assert.Equal(t, 5*unit, rewards[0].ActualQuota)
-	assert.Equal(t, 3*unit, rewards[1].ActualQuota)
+	require.Len(t, rewards, 1)
+	assert.Equal(t, 8*unit, rewards[0].ActualQuota)
 	var eventCount int64
 	require.NoError(t, DB.Model(&AffiliateTopUpEvent{}).Count(&eventCount).Error)
 	assert.Equal(t, int64(3), eventCount)
 
 	var account AffiliateQuotaAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
-	assert.Equal(t, 8*unit, account.AvailableQuota)
+	assert.Zero(t, account.AvailableQuota)
+	assert.Equal(t, 8*unit, account.TransferredQuota)
 }
 
-func TestAffiliateRegistrationRewardsFreezeReleaseAndTransfer(t *testing.T) {
+func TestAffiliateRegistrationRewardsAreDisabledAndRewardsAutoTransfer(t *testing.T) {
 	truncateTables(t)
-	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
-		setting.RegistrationRewardTrigger = operation_setting.AffiliateRegistrationTriggerRegistrationSuccess
-		setting.InviterRewardQuota = 2 * int64(common.QuotaPerUnit)
-		setting.InviteeRewardQuota = int64(common.QuotaPerUnit)
-		setting.HoldSeconds = 60
+	configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
+		setting.RewardRateBps = 1000
+		setting.HoldSeconds = 0
 	})
 	inviter, invitee := createAffiliateUsers(t, "")
 
-	var account AffiliateQuotaAccount
-	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
-	assert.Equal(t, 2*unit, account.PendingQuota)
-	assert.Zero(t, account.AvailableQuota)
+	var rewards []AffiliateReward
+	require.NoError(t, DB.Find(&rewards).Error)
+	assert.Empty(t, rewards)
 	var refreshedInvitee User
 	require.NoError(t, DB.Select("quota").Where("id = ?", invitee.Id).First(&refreshedInvitee).Error)
-	assert.Equal(t, int(unit), refreshedInvitee.Quota)
+	assert.Zero(t, refreshedInvitee.Quota)
 
-	released, err := ReleaseDueAffiliateRewards(time.Now().Unix()+120, 100)
+	topUp := createAffiliateTopUp(t, invitee.Id, "affiliate-registration-disabled", 10, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+	var reward AffiliateReward
+	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
+	assert.Equal(t, AffiliateRewardStatusTransferred, reward.Status)
+	assert.Equal(t, reward.ActualQuota, reward.TransferredQuota)
+	var transfer AffiliateBalanceTransfer
+	require.NoError(t, DB.Where("user_id = ? AND amount_quota = ?", inviter.Id, reward.ActualQuota).First(&transfer).Error)
+}
+
+func TestAffiliateRewardsAutoTransferAfterHold(t *testing.T) {
+	truncateTables(t)
+	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
+		setting.HoldSeconds = 60
+		setting.RewardRateBps = 1000
+	})
+	inviter, invitee := createAffiliateUsers(t, "auto-transfer@example.com")
+	topUp := createAffiliateTopUp(t, invitee.Id, "affiliate-auto-transfer", 10, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+
+	var reward AffiliateReward
+	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
+	assert.Equal(t, AffiliateRewardStatusPending, reward.Status)
+
+	released, _, err := ReleaseDueAffiliateRewards(reward.AvailableAt, 0, 100)
 	require.NoError(t, err)
 	assert.Equal(t, 1, released)
-	firstTransfer, err := CreateAffiliateBalanceTransfer(inviter.Id, unit, "transfer-1")
-	require.NoError(t, err)
-	duplicate, err := CreateAffiliateBalanceTransfer(inviter.Id, unit, "transfer-1")
-	require.NoError(t, err)
-	assert.Equal(t, firstTransfer.ID, duplicate.ID)
+	require.NoError(t, DB.First(&reward, reward.ID).Error)
+	assert.Equal(t, AffiliateRewardStatusTransferred, reward.Status)
+	assert.Equal(t, reward.ActualQuota, reward.TransferredQuota)
 
+	var account AffiliateQuotaAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
-	assert.Equal(t, unit, account.AvailableQuota)
-	assert.Equal(t, unit, account.TransferredQuota)
+	assert.Zero(t, account.AvailableQuota)
+	assert.Equal(t, reward.ActualQuota, account.TransferredQuota)
+	var transfer AffiliateBalanceTransfer
+	require.NoError(t, DB.Where("user_id = ? AND amount_quota = ?", inviter.Id, reward.ActualQuota).First(&transfer).Error)
+
 	var refreshedInviter User
 	require.NoError(t, DB.Select("quota").Where("id = ?", inviter.Id).First(&refreshedInviter).Error)
-	assert.Equal(t, int(unit), refreshedInviter.Quota)
+	assert.Equal(t, int(reward.ActualQuota), refreshedInviter.Quota)
+	_ = unit
 }
 
 func TestAffiliateQuotaAccountMigratesLegacyBalancesOnce(t *testing.T) {
@@ -377,14 +406,9 @@ func TestAffiliateUserOverrideSearchSupportsCustomizedAndUncustomizedUsers(t *te
 	configureAffiliateTest(t, nil)
 	inviter, invitee := createAffiliateUsers(t, "")
 	rate := int64(5000)
-	legacyRewardMode := operation_setting.AffiliateRewardModeFixed
 	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
 		RewardRateBps: &rate,
 		ChangeReason:  "partner agreement",
-	})
-	createAffiliateUserOverride(t, invitee.Id, inviter.Id, AffiliateUserOverride{
-		RewardMode:   &legacyRewardMode,
-		ChangeReason: "legacy rule override",
 	})
 
 	items, total, err := SearchAffiliateUserOverrides("", 0, 20)
@@ -419,10 +443,10 @@ func TestAffiliateUserOverrideSaveAndDelete(t *testing.T) {
 	truncateTables(t)
 	configureAffiliateTest(t, nil)
 	inviter, _ := createAffiliateUsers(t, "")
-	_, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
-		ChangeReason: "   ",
-	})
-	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+	defaultView, err := SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{})
+	require.NoError(t, err)
+	require.NotNil(t, defaultView.Override)
+	assert.Equal(t, "global", defaultView.EffectiveRule.Source)
 	require.ErrorIs(t, DeleteAffiliateUserOverride(0), ErrAffiliateRuleInvalid)
 
 	rate := int64(5000)
@@ -499,7 +523,7 @@ func TestAffiliateUserOverrideSaveRejectsPreferencesAndRules(t *testing.T) {
 	_, err = SaveAffiliateUserOverride(inviter.Id, inviter.Id, AffiliateUserOverride{
 		RewardRateBps: &rate,
 	})
-	require.ErrorIs(t, err, ErrAffiliateRuleInvalid)
+	require.NoError(t, err)
 }
 
 func TestAffiliateAdminCompletedTopUpIsExcluded(t *testing.T) {
@@ -522,7 +546,7 @@ func TestAffiliateAdminCompletedTopUpIsExcluded(t *testing.T) {
 	assert.Zero(t, count)
 }
 
-func TestAffiliateInviteeTopUpsMasksEmailAndHonorsVisibilityOverride(t *testing.T) {
+func TestAffiliateInviteeTopUpsMasksEmail(t *testing.T) {
 	truncateTables(t)
 	configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
 		setting.MinimumTopUpCents = 0
@@ -555,13 +579,6 @@ func TestAffiliateInviteeTopUpsMasksEmailAndHonorsVisibilityOverride(t *testing.
 	require.Len(t, items, 1)
 	assert.Equal(t, "a***e@example.com", items[0].MaskedEmail)
 
-	visible := false
-	createAffiliateUserOverride(t, inviter.Id, inviter.Id, AffiliateUserOverride{
-		ShowInviteeTopUps: &visible,
-		ChangeReason:      "privacy request",
-	})
-	_, _, err = GetAffiliateInviteeTopUps(inviter.Id, "", "", 0, 0, 0, 10)
-	assert.ErrorIs(t, err, ErrAffiliateTopUpsHidden)
 }
 
 func TestAffiliateInviteeTopUpsSearchesRechargeTimeAndSorts(t *testing.T) {
@@ -570,6 +587,7 @@ func TestAffiliateInviteeTopUpsSearchesRechargeTimeAndSorts(t *testing.T) {
 		setting.MinimumTopUpCents = 0
 	})
 	inviter, invitee := createAffiliateUsers(t, "timeline@example.com")
+	require.NoError(t, DB.Model(&AffiliateReferral{}).Where("invitee_user_id = ?", invitee.Id).Update("bound_at", time.Date(2026, time.July, 31, 0, 0, 0, 0, time.Local).Unix()).Error)
 	first := createAffiliateTopUp(t, invitee.Id, "affiliate-timeline-first", 10, TopUpCompletionSourceOnlineWallet)
 	first.CompleteTime = time.Date(2026, time.August, 1, 9, 30, 0, 0, time.Local).Unix()
 	require.NoError(t, DB.Model(first).Update("complete_time", first.CompleteTime).Error)
@@ -615,62 +633,282 @@ func TestAffiliateRewardBalanceTransferMovesOnlySelectedReward(t *testing.T) {
 	var rewards []AffiliateReward
 	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeCashback).Order("id asc").Find(&rewards).Error)
 	require.Len(t, rewards, 2)
-	transfer, err := CreateAffiliateRewardBalanceTransfer(inviter.Id, rewards[0].ID, "row-transfer-1")
-	require.NoError(t, err)
-	assert.Equal(t, 2*unit, transfer.AmountQuota)
-
 	var firstReward, secondReward AffiliateReward
 	require.NoError(t, DB.First(&firstReward, rewards[0].ID).Error)
 	require.NoError(t, DB.First(&secondReward, rewards[1].ID).Error)
 	assert.Equal(t, AffiliateRewardStatusTransferred, firstReward.Status)
-	assert.Equal(t, AffiliateRewardStatusAvailable, secondReward.Status)
+	assert.Equal(t, AffiliateRewardStatusTransferred, secondReward.Status)
 	assert.Equal(t, 2*unit, firstReward.TransferredQuota)
-	assert.Zero(t, secondReward.TransferredQuota)
+	assert.Equal(t, 2*unit, secondReward.TransferredQuota)
 
-	_, err = CreateAffiliateRewardBalanceTransfer(inviter.Id, rewards[0].ID, "row-transfer-again")
+	_, err := CreateAffiliateRewardBalanceTransfer(inviter.Id, rewards[0].ID, "row-transfer-again")
 	assert.ErrorIs(t, err, ErrAffiliateBalance)
 }
 
 func TestAffiliateAdjustmentLeavesTransferredAmountForManualHandling(t *testing.T) {
 	truncateTables(t)
 	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
-		setting.RewardMode = operation_setting.AffiliateRewardModeFixed
-		setting.FixedRewardQuota = 5 * int64(common.QuotaPerUnit)
+		setting.RewardRateBps = 10000
 		setting.MinimumTopUpCents = 0
 	})
 	inviter, invitee := createAffiliateUsers(t, "adjusted@example.com")
-	topUp := createAffiliateTopUp(t, invitee.Id, "affiliate-adjustment", 1, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", inviter.Id).Update("remark", "East VIP agent").Error)
+	topUp := createAffiliateTopUp(t, invitee.Id, "affiliate-adjustment", 5, TopUpCompletionSourceOnlineWallet)
 	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
-	_, err := CreateAffiliateBalanceTransfer(inviter.Id, 3*unit, "transfer-before-adjustment")
-	require.NoError(t, err)
-
 	var reward AffiliateReward
 	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeCashback).First(&reward).Error)
 	adjustment, err := AdjustAffiliateReward(reward.ID, inviter.Id, 5*unit, "refunded payment", "refund-adjustment-1")
 	require.NoError(t, err)
-	assert.Equal(t, 2*unit, adjustment.AppliedQuota)
-	assert.Equal(t, 3*unit, adjustment.PendingManualQuota)
+	assert.Zero(t, adjustment.AppliedQuota)
+	assert.Equal(t, 5*unit, adjustment.PendingManualQuota)
 	assert.Equal(t, AffiliateAdjustmentStatusManualRequired, adjustment.Status)
 
 	repeated, err := AdjustAffiliateReward(reward.ID, inviter.Id, 5*unit, "refunded payment", "refund-adjustment-1")
 	require.NoError(t, err)
 	assert.Equal(t, adjustment.ID, repeated.ID)
 
-	var inviterReward AffiliateReward
-	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeInviter).First(&inviterReward).Error)
-	_, err = AdjustAffiliateReward(inviterReward.ID, inviter.Id, unit, "invalid reward type", "refund-adjustment-2")
-	assert.ErrorIs(t, err, ErrAffiliateAmountInvalid)
-
 	items, total, err := GetAffiliateAdminRewards("affiliate-invitee", "", 0, 0, 0, 10)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, items, 1)
 	assert.Equal(t, reward.ID, items[0].ID)
-	assert.Equal(t, 2*unit, items[0].AdjustedQuota)
-	assert.Equal(t, "a***d@example.com", items[0].InviteeEmail)
+	assert.Zero(t, items[0].AdjustedQuota)
+	assert.Equal(t, "adjusted@example.com", items[0].InviteeEmail)
+
+	items, total, err = GetAffiliateAdminRewards("east vip", "", 0, 0, 0, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Len(t, items, 1)
+
+	items, total, err = GetAffiliateAdminRewards("affiliate-adjustment", "", 0, 0, 0, 10)
+	require.NoError(t, err)
+	assert.Zero(t, total)
+	assert.Empty(t, items)
 
 	var account AffiliateQuotaAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
 	assert.Zero(t, account.AvailableQuota)
-	assert.Equal(t, 3*unit, account.TransferredQuota)
+	assert.Equal(t, 5*unit, account.TransferredQuota)
+}
+
+func setupPostgresAffiliateTestDB(t *testing.T) {
+	t.Helper()
+	setupPostgresAnalyticsTestDB(t,
+		&User{}, &TopUp{}, &AffiliateRuleVersion{}, &AffiliateUserOverride{},
+		&AffiliateReferral{}, &AffiliateReward{}, &AffiliateQuotaAccount{},
+		&AffiliateQuotaLedger{}, &AffiliateBalanceTransfer{}, &AffiliateAdjustment{},
+		&AffiliateTopUpEvent{}, &AffiliateCampaign{}, &AffiliateCashReward{},
+		&AffiliateCashAccount{}, &AffiliateCashLedger{}, &AffiliateCashTransfer{},
+		&AffiliateQuotaGrant{},
+	)
+}
+
+func TestAffiliateAdjustmentIncreasePostgres(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		holdSeconds  int64
+		fullyDeduct  bool
+		wantNetUnits int64
+	}{
+		{name: "frozen", holdSeconds: 3600, wantNetUnits: 3},
+		{name: "already transferred", wantNetUnits: 3},
+		{name: "fully deducted frozen reward", holdSeconds: 3600, fullyDeduct: true, wantNetUnits: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setupPostgresAffiliateTestDB(t)
+			unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
+				setting.HoldSeconds = test.holdSeconds
+			})
+			inviter, invitee := createAffiliateUsers(t, "cashback@example.com")
+			topUp := createAffiliateTopUp(t, invitee.Id, "increase-order", 5, TopUpCompletionSourceOnlineWallet)
+			require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+			var reward AffiliateReward
+			require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
+			require.Equal(t, unit, reward.ActualQuota)
+			if test.fullyDeduct {
+				_, err := AdjustAffiliateReward(reward.ID, inviter.Id, unit, "refund", "deduct-all")
+				require.NoError(t, err)
+			}
+
+			adjustment, err := AdjustAffiliateReward(reward.ID, inviter.Id, -2*unit, "additional cashback", "increase-1")
+			require.NoError(t, err)
+			assert.Equal(t, -2*unit, adjustment.RequestedQuota)
+			assert.Equal(t, -2*unit, adjustment.AppliedQuota)
+			assert.Zero(t, adjustment.PendingManualQuota)
+			assert.Equal(t, AffiliateAdjustmentStatusApplied, adjustment.Status)
+			repeated, err := AdjustAffiliateReward(reward.ID, inviter.Id, -2*unit, "additional cashback", "increase-1")
+			require.NoError(t, err)
+			assert.Equal(t, adjustment.ID, repeated.ID)
+
+			var account AffiliateQuotaAccount
+			require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
+			require.NoError(t, DB.First(&reward, reward.ID).Error)
+			assert.Equal(t, unit, reward.ActualQuota)
+			assert.Equal(t, test.wantNetUnits*unit, reward.ActualQuota-reward.AdjustedQuota)
+			assert.Equal(t, 3*unit, account.LifetimeEarnedQuota)
+			var ledger AffiliateQuotaLedger
+			require.NoError(t, DB.Where("reference_type = ? AND reference_id = ?", AffiliateReferenceAdjustment, adjustment.ID).First(&ledger).Error)
+			assert.Equal(t, 2*unit, ledger.AmountQuota)
+			if test.holdSeconds > 0 {
+				assert.Equal(t, AffiliateRewardStatusPending, reward.Status)
+				assert.Equal(t, test.wantNetUnits*unit, account.PendingQuota)
+				assert.Equal(t, 2*unit, ledger.PendingDeltaQuota)
+				released, _, err := ReleaseDueAffiliateRewards(reward.AvailableAt, 0, 20)
+				require.NoError(t, err)
+				assert.Equal(t, 1, released)
+			} else {
+				assert.Equal(t, AffiliateRewardStatusTransferred, reward.Status)
+				assert.Equal(t, 2*unit, ledger.AvailableDeltaQuota)
+				_, err := AdjustAffiliateReward(reward.ID, inviter.Id, -unit, "second increase", "increase-2")
+				require.NoError(t, err)
+			}
+
+			require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
+			require.NoError(t, DB.First(&reward, reward.ID).Error)
+			var user User
+			require.NoError(t, DB.First(&user, inviter.Id).Error)
+			assert.Zero(t, account.PendingQuota)
+			assert.Zero(t, account.AvailableQuota)
+			assert.Equal(t, reward.ActualQuota-reward.AdjustedQuota, reward.TransferredQuota)
+			assert.Equal(t, reward.TransferredQuota, account.TransferredQuota)
+			assert.Equal(t, reward.TransferredQuota, int64(user.Quota))
+		})
+	}
+}
+
+func TestAffiliateAdjustmentBoundsAndRollbackPostgres(t *testing.T) {
+	setupPostgresAffiliateTestDB(t)
+	unit := configureAffiliateTest(t, nil)
+	inviter, invitee := createAffiliateUsers(t, "bounds@example.com")
+	topUp := createAffiliateTopUp(t, invitee.Id, "bounds-order", 5, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+	var reward AffiliateReward
+	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
+	// Preserve the transfer format written by the previous implementation.
+	require.NoError(t, DB.Model(&AffiliateBalanceTransfer{}).Where("user_id = ?", inviter.Id).
+		Update("request_key", "auto-reward:"+strconv.Itoa(reward.ID)).Error)
+	for _, amount := range []int64{0, math.MinInt64, int64(common.MaxQuota) + 1, -int64(common.MaxQuota) - 1, -int64(common.MaxQuota)} {
+		_, err := AdjustAffiliateReward(reward.ID, inviter.Id, amount, "invalid amount", "invalid")
+		assert.ErrorIs(t, err, ErrAffiliateAmountInvalid)
+	}
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", inviter.Id).Update("quota", common.MaxQuota).Error)
+	adjustment, err := AdjustAffiliateReward(reward.ID, inviter.Id, -unit, "wallet full; keep cashback available", "overflow")
+	require.NoError(t, err)
+	assert.Equal(t, -unit, adjustment.AppliedQuota)
+	require.NoError(t, DB.First(&reward, reward.ID).Error)
+	assert.Equal(t, -unit, reward.AdjustedQuota)
+	assert.Equal(t, unit, reward.TransferredQuota)
+	assert.Equal(t, AffiliateRewardStatusAvailable, reward.Status)
+	var account AffiliateQuotaAccount
+	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
+	assert.Equal(t, 2*unit, account.LifetimeEarnedQuota)
+	assert.Equal(t, unit, account.AvailableQuota)
+	var user User
+	require.NoError(t, DB.First(&user, inviter.Id).Error)
+	assert.Equal(t, common.MaxQuota, user.Quota)
+
+	// Existing deployments already have an automatic transfer for this reward.
+	// Once wallet space is restored, that record must not block the increase.
+	require.NoError(t, DB.Model(inviter).Update("quota", common.MaxQuota-int(unit)).Error)
+	_, _, err = ReleaseDueAffiliateRewards(common.GetTimestamp(), 0, 20)
+	require.NoError(t, err)
+	require.NoError(t, DB.First(&user, inviter.Id).Error)
+	assert.Equal(t, common.MaxQuota, user.Quota)
+	require.NoError(t, DB.First(&reward, reward.ID).Error)
+	assert.Equal(t, AffiliateRewardStatusTransferred, reward.Status)
+	assert.Equal(t, 2*unit, reward.TransferredQuota)
+	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
+	assert.Zero(t, account.AvailableQuota)
+	assert.Equal(t, 2*unit, account.TransferredQuota)
+
+	// Repeating both the adjustment request and settlement cannot credit twice.
+	repeated, err := AdjustAffiliateReward(reward.ID, inviter.Id, -unit, "wallet full; keep cashback available", "overflow")
+	require.NoError(t, err)
+	assert.Equal(t, adjustment.ID, repeated.ID)
+	_, _, err = ReleaseDueAffiliateRewards(common.GetTimestamp(), 0, 20)
+	require.NoError(t, err)
+	require.NoError(t, DB.First(&user, inviter.Id).Error)
+	assert.Equal(t, common.MaxQuota, user.Quota)
+	var transfers int64
+	require.NoError(t, DB.Model(&AffiliateBalanceTransfer{}).Where("user_id = ?", inviter.Id).Count(&transfers).Error)
+	assert.Equal(t, int64(2), transfers)
+}
+
+func TestAffiliateAdjustmentDecreaseFrozenPostgres(t *testing.T) {
+	setupPostgresAffiliateTestDB(t)
+	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
+		setting.HoldSeconds = 3600
+	})
+	inviter, invitee := createAffiliateUsers(t, "deduct@example.com")
+	topUp := createAffiliateTopUp(t, invitee.Id, "deduct-order", 5, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+	var reward AffiliateReward
+	require.NoError(t, DB.Where("top_up_id = ?", topUp.Id).First(&reward).Error)
+	adjustment, err := AdjustAffiliateReward(reward.ID, inviter.Id, unit/2, "partial refund", "deduct-half")
+	require.NoError(t, err)
+	assert.Equal(t, unit/2, adjustment.AppliedQuota)
+	assert.Zero(t, adjustment.PendingManualQuota)
+	var account AffiliateQuotaAccount
+	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
+	assert.Equal(t, unit/2, account.PendingQuota)
+	released, _, err := ReleaseDueAffiliateRewards(reward.AvailableAt, 0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, 1, released)
+	var user User
+	require.NoError(t, DB.First(&user, inviter.Id).Error)
+	assert.Equal(t, unit/2, int64(user.Quota))
+}
+
+func TestAffiliateAdminRewardsSearchAndEmailPostgres(t *testing.T) {
+	setupPostgresAffiliateTestDB(t)
+	configureAffiliateTest(t, nil)
+	inviter, invitee := createAffiliateUsers(t, "bob@customer.example")
+	require.NoError(t, DB.Model(inviter).Updates(map[string]interface{}{
+		"username": "AliceAgent", "email": "alice@sales.example", "remark": "华东 VIP_!客户",
+	}).Error)
+	require.NoError(t, DB.Model(invitee).Update("username", "BobCustomer").Error)
+	topUp := createAffiliateTopUp(t, invitee.Id, "order-only-742", 5, TopUpCompletionSourceOnlineWallet)
+	require.NoError(t, ProcessAffiliateTopUp(topUp.Id))
+	for _, keyword := range []string{
+		"lice", "BOBC", "SALES.EXAMPLE", "customer.ex", "华东", "vip_!", strconv.Itoa(inviter.Id), strconv.Itoa(invitee.Id),
+	} {
+		t.Run(keyword, func(t *testing.T) {
+			items, total, err := GetAffiliateAdminRewards(keyword, "", 0, 0, 0, 10)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), total)
+			require.Len(t, items, 1)
+			assert.Equal(t, "bob@customer.example", items[0].InviteeEmail)
+		})
+	}
+	for _, keyword := range []string{"order-only", inviter.AffCode, "vipX!"} {
+		items, total, err := GetAffiliateAdminRewards(keyword, "", 0, 0, 0, 10)
+		require.NoError(t, err)
+		assert.Zero(t, total)
+		assert.Empty(t, items)
+	}
+}
+
+func TestAffiliateGlobalRuleUsesCurrentPercentageCashbackContract(t *testing.T) {
+	configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
+		setting.InviterRewardQuota = 3 * int64(common.QuotaPerUnit)
+		setting.InviteeRewardQuota = 2 * int64(common.QuotaPerUnit)
+		setting.RegistrationRewardTrigger = operation_setting.AffiliateRegistrationTriggerRegistrationSuccess
+		setting.RewardMode = operation_setting.AffiliateRewardModeFixed
+		setting.FixedRewardQuota = 4 * int64(common.QuotaPerUnit)
+		setting.CashbackFrequency = operation_setting.AffiliateCashbackFrequencyFirstQualified
+		setting.MinimumTopUpCents = 1000
+		setting.MinimumTransferQuota = 500 * int64(common.QuotaPerUnit)
+		setting.MaximumRewardQuota = 0
+	})
+
+	rule := globalAffiliateRule()
+	assert.Zero(t, rule.InviterRewardQuota)
+	assert.Zero(t, rule.InviteeRewardQuota)
+	assert.Equal(t, operation_setting.AffiliateRegistrationTriggerDisabled, rule.RegistrationRewardTrigger)
+	assert.Equal(t, operation_setting.AffiliateRewardModePercentage, rule.RewardMode)
+	assert.Equal(t, operation_setting.AffiliateCashbackFrequencyEveryTopUp, rule.CashbackFrequency)
+	assert.Zero(t, rule.FixedRewardQuota)
+	assert.Zero(t, rule.MinimumTopUpCents)
+	assert.Zero(t, rule.MinimumTransferQuota)
+	assert.True(t, rule.UnlimitedReward)
 }

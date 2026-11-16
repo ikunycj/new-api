@@ -35,7 +35,7 @@ export function DocsReferralRewards() {
     <DocsShell
       pageId='referral-rewards'
       title='推荐奖励'
-      description='了解邀请码、邀请关系、注册与充值奖励、待结算时间以及如何把可用奖励转入钱包。'
+      description='了解邀请码、邀请关系、注册与充值奖励、待结算时间以及自动转入钱包规则。'
       toc={[
         { id: 'how-it-works', label: '奖励如何运作' },
         { id: 'share-link', label: '获取并分享推荐链接' },
@@ -56,8 +56,8 @@ export function DocsReferralRewards() {
             '邀请人复制自己的推荐链接并分享给尚未注册的新用户。',
             '新用户通过该链接完成注册，邀请关系绑定到双方账户。',
             '活动配置了注册奖励时，系统按触发条件发放；配置了充值奖励时，在符合条件的在线充值成功后计算。',
-            '需要等待的奖励先进入待结算状态，到期后自动变为可转入。',
-            '邀请人把可用奖励转入主钱包余额，再用于模型调用或站点允许的消费。',
+            '需要等待的奖励先进入待结算状态，到期后由系统自动转入主钱包。',
+            '转入完成后，奖励额度会进入邀请人的主钱包，可用于模型调用或站点允许的消费。',
           ]}
         />
         <Alert className='mt-6'>
@@ -104,17 +104,17 @@ export function DocsReferralRewards() {
               {
                 key: 'available',
                 cells: [
-                  '可转入',
-                  '等待期结束且奖励可用于转入主钱包',
-                  '达到最低转入额度后发起转入',
+                  '自动转入',
+                  '等待期结束后由系统自动转入主钱包',
+                  '无需邀请人手动操作',
                 ],
               },
               {
                 key: 'partial',
                 cells: [
-                  '部分转入',
-                  '一条奖励只转入了其中一部分',
-                  '剩余可用金额可在后续继续转入',
+                  '转入中',
+                  '系统正在处理奖励转入主钱包',
+                  '刷新奖励记录查看最新状态',
                 ],
               },
               {
@@ -139,18 +139,17 @@ export function DocsReferralRewards() {
       </section>
 
       <section id='transfer' className='scroll-mt-28'>
-        <h2 className='text-2xl font-semibold'>转入钱包余额</h2>
+        <h2 className='text-2xl font-semibold'>自动转入钱包余额</h2>
         <NumberedSteps
           items={[
-            '在钱包的推荐奖励卡片中确认“可转入”余额。',
-            '打开推荐奖励中心，点击转入余额。',
-            '输入不低于页面最低值且不超过可用余额的数量。',
-            '确认后提交一次，不要在请求处理中连续点击。',
-            '转入成功后核对推荐余额减少、钱包余额增加，并在转入记录中找到对应条目。',
+            '奖励先按照当前规则进入待结算状态。',
+            '等待时间结束后，系统自动把可用奖励转入邀请人的主钱包。',
+            '转入完成后，主钱包余额增加，奖励记录会显示为已转入。',
+            '如果奖励仍处于待结算状态，请等待系统结算任务完成后再刷新页面。',
           ]}
         />
         <p className='text-muted-foreground mt-4 leading-7'>
-          推荐奖励转入是站内额度划转，不是向银行卡、支付宝或其他外部账户提现。转入主钱包后，使用和计费方式与普通钱包余额一致。
+          推荐奖励转入是站内额度划转，不是向银行卡、支付宝或其他外部账户提现。邀请人不需要手动提交转入请求。
         </p>
       </section>
 
@@ -231,9 +230,9 @@ export function DocsReferralRewards() {
             </p>
           </div>
           <div>
-            <h3 className='font-semibold'>转入失败怎么办？</h3>
+            <h3 className='font-semibold'>奖励没有自动转入怎么办？</h3>
             <p className='text-muted-foreground mt-2 leading-7'>
-              检查可用奖励、最低转入额度和输入数量。刷新页面避免使用旧余额；仍失败时保留时间和错误信息联系客服，不要连续重复提交。
+              先确认奖励是否仍在等待期。等待时间结束后刷新页面；如果长时间仍未转入，请保留奖励记录、时间和错误信息联系客服。
             </p>
           </div>
         </div>

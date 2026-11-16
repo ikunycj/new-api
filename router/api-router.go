@@ -47,6 +47,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/user/reset", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.ResetPassword)
 		// OAuth routes - specific routes must come before :provider wildcard
 		apiRouter.GET("/oauth/state", middleware.CriticalRateLimit(), controller.GenerateOAuthCode)
+		apiRouter.GET("/oauth/start/:provider", middleware.CriticalRateLimit(), controller.StartOAuthLogin)
 		apiRouter.POST("/oauth/email/bind", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.EmailBind)
 		// Non-standard OAuth (WeChat, Telegram) - keep original routes
 		apiRouter.GET("/oauth/wechat", middleware.CriticalRateLimit(), controller.WeChatAuth)
@@ -165,8 +166,10 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			affiliateAdminRoute.GET("/settings", controller.AdminGetAffiliateSettings)
 			affiliateAdminRoute.PUT("/settings", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateSettings)
+			affiliateAdminRoute.PUT("/agents", middleware.CriticalRateLimit(), controller.AdminSaveAffiliateAgents)
 			affiliateAdminRoute.GET("/user-overrides", controller.AdminGetAffiliateUserOverrides)
 			affiliateAdminRoute.GET("/user-overrides/:user_id", controller.AdminGetAffiliateUserOverride)
+			affiliateAdminRoute.GET("/users/:user_id/invite-activities", controller.AdminGetAffiliateReferralActivities)
 			affiliateAdminRoute.PUT("/user-overrides/:user_id", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateUserOverride)
 			affiliateAdminRoute.DELETE("/user-overrides/:user_id", middleware.CriticalRateLimit(), controller.AdminDeleteAffiliateUserOverride)
 			affiliateAdminRoute.GET("/rewards", controller.AdminGetAffiliateRewards)

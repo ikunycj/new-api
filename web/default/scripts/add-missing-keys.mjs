@@ -3716,6 +3716,508 @@ for (const [locale, translations] of Object.entries(
   Object.assign(newKeys[locale], translations)
 }
 
+const affiliateTranslations = {
+  en: {
+    Agents: 'Agents',
+    'Every successful online top-up is eligible for percentage cashback.':
+      'Every successful online top-up is eligible for percentage cashback.',
+    'Set to 0 for unlimited cashback.': 'Set to 0 for unlimited cashback.',
+    'Cashback becomes available after the hold period ends.':
+      'Cashback becomes available after the hold period ends.',
+    'Search and add agent': 'Search and add agent',
+    'Search results': 'Search results',
+    'Add agent': 'Add agent',
+    Added: 'Added',
+    'Agent settings saved': 'Agent settings saved',
+    'Failed to remove agent': 'Failed to remove agent',
+    'Agent removed': 'Agent removed',
+    'Remove agent': 'Remove agent',
+    Remove: 'Remove',
+    'No agents': 'No agents',
+    'Search for a user above to add an agent.':
+      'Search for a user above to add an agent.',
+    'Username, email, remark, or user ID':
+      'Username, email, remark, or user ID',
+    Remark: 'Remark',
+    'Change an agent setting or enter an affiliate domain':
+      'Change an agent setting or enter an affiliate domain',
+  },
+  zh: {
+    Agents: '代理人',
+    'Every successful online top-up is eligible for percentage cashback.':
+      '每次成功的在线充值都可以按比例返现。',
+    'Set to 0 for unlimited cashback.': '设置为 0 表示不限额。',
+    'Cashback becomes available after the hold period ends.':
+      '冻结期结束后返现可用。',
+    'Search and add agent': '搜索并添加代理人',
+    'Search results': '搜索结果',
+    'Add agent': '添加代理人',
+    Added: '已添加',
+    'Agent settings saved': '代理人设置已保存',
+    'Failed to remove agent': '移除代理人失败',
+    'Agent removed': '代理人已移除',
+    'Remove agent': '移除代理人',
+    Remove: '移除',
+    'No agents': '暂无代理人',
+    'Search for a user above to add an agent.':
+      '请在上方搜索用户并添加代理人。',
+    'Username, email, remark, or user ID': '用户名、邮箱、备注或用户 ID',
+    Remark: '备注',
+    'Change an agent setting or enter an affiliate domain':
+      '修改代理人设置或填写代理域名',
+  },
+  fr: {
+    Agents: 'Agents',
+    'Every successful online top-up is eligible for percentage cashback.':
+      'Chaque recharge en ligne réussie peut bénéficier d’un cashback proportionnel.',
+    'Set to 0 for unlimited cashback.':
+      'Saisissez 0 pour un cashback illimité.',
+    'Cashback becomes available after the hold period ends.':
+      'Le cashback devient disponible à la fin de la période de blocage.',
+    'Search and add agent': 'Rechercher et ajouter un agent',
+    'Search results': 'Résultats de recherche',
+    'Add agent': 'Ajouter un agent',
+    Added: 'Ajouté',
+    'Agent settings saved': 'Paramètres de l’agent enregistrés',
+    'Failed to remove agent': 'Impossible de supprimer l’agent',
+    'Agent removed': 'Agent supprimé',
+    'Remove agent': 'Supprimer l’agent',
+    Remove: 'Supprimer',
+    'No agents': 'Aucun agent',
+    'Search for a user above to add an agent.':
+      'Recherchez un utilisateur ci-dessus pour ajouter un agent.',
+    'Username, email, remark, or user ID':
+      'Nom d’utilisateur, e-mail, remarque ou ID utilisateur',
+    Remark: 'Remarque',
+    'Change an agent setting or enter an affiliate domain':
+      'Modifiez un paramètre ou saisissez un domaine affilié',
+  },
+  ja: {
+    Agents: 'エージェント',
+    'Every successful online top-up is eligible for percentage cashback.':
+      '成功したオンラインチャージはすべて割合還元の対象です。',
+    'Set to 0 for unlimited cashback.': '0 にすると還元上限なしになります。',
+    'Cashback becomes available after the hold period ends.':
+      '凍結期間が終了すると還元を利用できます。',
+    'Search and add agent': 'エージェントを検索して追加',
+    'Search results': '検索結果',
+    'Add agent': 'エージェントを追加',
+    Added: '追加済み',
+    'Agent settings saved': 'エージェント設定を保存しました',
+    'Failed to remove agent': 'エージェントを削除できませんでした',
+    'Agent removed': 'エージェントを削除しました',
+    'Remove agent': 'エージェントを削除',
+    Remove: '削除',
+    'No agents': 'エージェントはいません',
+    'Search for a user above to add an agent.':
+      '上でユーザーを検索してエージェントを追加してください。',
+    'Username, email, remark, or user ID':
+      'ユーザー名、メール、備考、またはユーザー ID',
+    Remark: '備考',
+    'Change an agent setting or enter an affiliate domain':
+      'エージェント設定を変更するか、アフィリエイトドメインを入力してください',
+  },
+  ru: {
+    Agents: 'Агенты',
+    'Every successful online top-up is eligible for percentage cashback.':
+      'Каждое успешное онлайн-пополнение участвует в процентном кэшбэке.',
+    'Set to 0 for unlimited cashback.':
+      'Значение 0 означает отсутствие лимита кэшбэка.',
+    'Cashback becomes available after the hold period ends.':
+      'Кэшбэк становится доступен после окончания заморозки.',
+    'Search and add agent': 'Найти и добавить агента',
+    'Search results': 'Результаты поиска',
+    'Add agent': 'Добавить агента',
+    Added: 'Добавлен',
+    'Agent settings saved': 'Настройки агента сохранены',
+    'Failed to remove agent': 'Не удалось удалить агента',
+    'Agent removed': 'Агент удалён',
+    'Remove agent': 'Удалить агента',
+    Remove: 'Удалить',
+    'No agents': 'Агентов нет',
+    'Search for a user above to add an agent.':
+      'Найдите пользователя выше, чтобы добавить агента.',
+    'Username, email, remark, or user ID':
+      'Имя пользователя, почта, примечание или ID пользователя',
+    Remark: 'Примечание',
+    'Change an agent setting or enter an affiliate domain':
+      'Измените настройку агента или введите партнёрский домен',
+  },
+  vi: {
+    Agents: 'Đại lý',
+    'Every successful online top-up is eligible for percentage cashback.':
+      'Mọi lần nạp tiền trực tuyến thành công đều được hoàn tiền theo tỷ lệ.',
+    'Set to 0 for unlimited cashback.': 'Đặt 0 để không giới hạn hoàn tiền.',
+    'Cashback becomes available after the hold period ends.':
+      'Khoản hoàn tiền có thể dùng sau khi hết thời gian đóng băng.',
+    'Search and add agent': 'Tìm và thêm đại lý',
+    'Search results': 'Kết quả tìm kiếm',
+    'Add agent': 'Thêm đại lý',
+    Added: 'Đã thêm',
+    'Agent settings saved': 'Đã lưu cài đặt đại lý',
+    'Failed to remove agent': 'Không thể xóa đại lý',
+    'Agent removed': 'Đã xóa đại lý',
+    'Remove agent': 'Xóa đại lý',
+    Remove: 'Xóa',
+    'No agents': 'Chưa có đại lý',
+    'Search for a user above to add an agent.':
+      'Tìm người dùng ở trên để thêm đại lý.',
+    'Username, email, remark, or user ID':
+      'Tên người dùng, email, ghi chú hoặc ID người dùng',
+    Remark: 'Ghi chú',
+    'Change an agent setting or enter an affiliate domain':
+      'Thay đổi cài đặt đại lý hoặc nhập tên miền liên kết',
+  },
+  'zh-TW': {
+    Agents: '代理人',
+    'Every successful online top-up is eligible for percentage cashback.':
+      '每次成功的線上儲值都可以按比例返現。',
+    'Set to 0 for unlimited cashback.': '設定為 0 表示不限額。',
+    'Cashback becomes available after the hold period ends.':
+      '凍結期結束後返現可用。',
+    'Search and add agent': '搜尋並新增代理人',
+    'Search results': '搜尋結果',
+    'Add agent': '新增代理人',
+    Added: '已新增',
+    'Agent settings saved': '代理人設定已儲存',
+    'Failed to remove agent': '移除代理人失敗',
+    'Agent removed': '代理人已移除',
+    'Remove agent': '移除代理人',
+    Remove: '移除',
+    'No agents': '目前沒有代理人',
+    'Search for a user above to add an agent.':
+      '請在上方搜尋使用者並新增代理人。',
+    'Username, email, remark, or user ID': '使用者名稱、電郵、備註或使用者 ID',
+    Remark: '備註',
+    'Change an agent setting or enter an affiliate domain':
+      '修改代理人設定或填寫代理網域',
+  },
+}
+
+for (const [locale, translations] of Object.entries(affiliateTranslations)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const affiliateInteractionTranslations = {
+  en: {
+    'Add invitee': 'Add invitee',
+    'Invitee ID, username, or email': 'Invitee ID, username, or email',
+    'Adjust cashback': 'Adjust cashback',
+    'Cashback adjustment recorded': 'Cashback adjustment recorded',
+    'Confirm adjustment': 'Confirm adjustment',
+    'Enter an adjustment amount and reason':
+      'Enter an adjustment amount and reason',
+    'User, email, or inviter remark': 'User, email, or inviter remark',
+    'Adjustment direction': 'Adjustment direction',
+    'Adjustment amount': 'Adjustment amount',
+    'Increase cashback': 'Increase cashback',
+    'Decrease cashback': 'Decrease cashback',
+    'Net adjustment': 'Net adjustment',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      'Increase or decrease cashback. Changes are recorded in the affiliate ledger.',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      'Added cashback follows the original unlock time and is automatically transferred when available.',
+    'Enter subdomain, e.g. a': 'Enter subdomain, e.g. a',
+    'Check the agent settings and try again':
+      'Check the agent settings and try again',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      'Remove this agent configuration? Existing referral records will be kept.',
+  },
+  zh: {
+    'Add invitee': '添加被邀请者',
+    'Invitee ID, username, or email': '被邀请者 ID、名称或邮箱',
+    'Adjust cashback': '调整返现',
+    'Cashback adjustment recorded': '返现调整已记录',
+    'Confirm adjustment': '确认调整',
+    'Enter an adjustment amount and reason': '请输入调整额度和原因',
+    'User, email, or inviter remark': '用户、邮箱或邀请者备注',
+    'Adjustment direction': '调整方向',
+    'Adjustment amount': '调整额度',
+    'Increase cashback': '增加返现',
+    'Decrease cashback': '减少返现',
+    'Net adjustment': '累计调整',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      '可以增加或减少返现，变更会记录到邀请返现账本。',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      '增加的返现沿用原解冻时间，达到可用时间后自动转入余额。',
+    'Enter subdomain, e.g. a': '输入二级域名前缀，例如 a',
+    'Check the agent settings and try again': '请检查代理人设置后重试',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      '确定移除该代理人配置吗？已有邀请记录会保留。',
+  },
+  fr: {
+    'Add invitee': 'Ajouter un filleul',
+    'Invitee ID, username, or email': 'ID, nom ou e-mail du filleul',
+    'Adjust cashback': 'Ajuster le cashback',
+    'Cashback adjustment recorded': 'Ajustement du cashback enregistré',
+    'Confirm adjustment': "Confirmer l'ajustement",
+    'Enter an adjustment amount and reason':
+      'Saisissez un montant et un motif d’ajustement',
+    'User, email, or inviter remark':
+      'Utilisateur, e-mail ou remarque du parrain',
+    'Adjustment direction': 'Sens de l’ajustement',
+    'Adjustment amount': "Montant de l'ajustement",
+    'Increase cashback': 'Augmenter le cashback',
+    'Decrease cashback': 'Réduire le cashback',
+    'Net adjustment': 'Ajustement net',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      'Augmentez ou réduisez le cashback. Les changements sont enregistrés dans le registre des affiliés.',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      'Le cashback ajouté suit le délai de déblocage initial et est transféré automatiquement dès qu’il est disponible.',
+    'Enter subdomain, e.g. a':
+      'Saisissez le préfixe du sous-domaine, par ex. a',
+    'Check the agent settings and try again':
+      'Vérifiez les paramètres de l’agent et réessayez',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      'Supprimer cette configuration d’agent ? Les parrainages existants seront conservés.',
+  },
+  ja: {
+    'Add invitee': '招待ユーザーを追加',
+    'Invitee ID, username, or email': '招待ユーザーの ID、名前、またはメール',
+    'Adjust cashback': '還元を調整',
+    'Cashback adjustment recorded': '還元調整を記録しました',
+    'Confirm adjustment': '調整を確定',
+    'Enter an adjustment amount and reason': '調整額と理由を入力してください',
+    'User, email, or inviter remark': 'ユーザー、メール、紹介者の備考',
+    'Adjustment direction': '調整方向',
+    'Adjustment amount': '調整額',
+    'Increase cashback': '還元を増やす',
+    'Decrease cashback': '還元を減らす',
+    'Net adjustment': '調整合計',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      '還元を増減できます。変更は紹介報酬台帳に記録されます。',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      '追加した還元は元の解放時刻に従い、利用可能になると自動的に残高へ移されます。',
+    'Enter subdomain, e.g. a': 'サブドメインの接頭辞を入力（例: a）',
+    'Check the agent settings and try again':
+      'エージェント設定を確認して、もう一度お試しください',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      'このエージェント設定を削除しますか？既存の紹介記録は保持されます。',
+  },
+  ru: {
+    'Add invitee': 'Добавить приглашённого',
+    'Invitee ID, username, or email': 'ID, имя или почта приглашённого',
+    'Adjust cashback': 'Изменить кэшбэк',
+    'Cashback adjustment recorded': 'Изменение кэшбэка записано',
+    'Confirm adjustment': 'Подтвердить изменение',
+    'Enter an adjustment amount and reason':
+      'Введите сумму и причину изменения',
+    'User, email, or inviter remark':
+      'Пользователь, почта или примечание пригласившего',
+    'Adjustment direction': 'Направление изменения',
+    'Adjustment amount': 'Сумма корректировки',
+    'Increase cashback': 'Увеличить кэшбэк',
+    'Decrease cashback': 'Уменьшить кэшбэк',
+    'Net adjustment': 'Итоговое изменение',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      'Кэшбэк можно увеличить или уменьшить. Изменения записываются в партнёрский журнал.',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      'Добавленный кэшбэк сохраняет исходное время разблокировки и автоматически переводится после его наступления.',
+    'Enter subdomain, e.g. a': 'Введите префикс поддомена, например a',
+    'Check the agent settings and try again':
+      'Проверьте настройки агента и повторите попытку',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      'Удалить настройки агента? Существующие реферальные записи сохранятся.',
+  },
+  vi: {
+    'Add invitee': 'Thêm người được mời',
+    'Invitee ID, username, or email': 'ID, tên hoặc email người được mời',
+    'Adjust cashback': 'Điều chỉnh tiền hoàn',
+    'Cashback adjustment recorded': 'Đã ghi nhận điều chỉnh tiền hoàn',
+    'Confirm adjustment': 'Xác nhận điều chỉnh',
+    'Enter an adjustment amount and reason': 'Nhập số tiền và lý do điều chỉnh',
+    'User, email, or inviter remark':
+      'Người dùng, email hoặc ghi chú người mời',
+    'Adjustment direction': 'Hướng điều chỉnh',
+    'Adjustment amount': 'Số tiền điều chỉnh',
+    'Increase cashback': 'Tăng tiền hoàn',
+    'Decrease cashback': 'Giảm tiền hoàn',
+    'Net adjustment': 'Điều chỉnh ròng',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      'Có thể tăng hoặc giảm tiền hoàn. Các thay đổi được ghi vào sổ cái liên kết.',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      'Tiền hoàn thêm sẽ theo thời điểm mở khóa ban đầu và tự động chuyển vào số dư khi có thể sử dụng.',
+    'Enter subdomain, e.g. a': 'Nhập tiền tố tên miền phụ, ví dụ a',
+    'Check the agent settings and try again':
+      'Kiểm tra cài đặt đại lý rồi thử lại',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      'Xóa cấu hình đại lý này? Các bản ghi giới thiệu hiện có sẽ được giữ lại.',
+  },
+  'zh-TW': {
+    'Add invitee': '新增被邀請者',
+    'Invitee ID, username, or email': '被邀請者 ID、名稱或電郵',
+    'Adjust cashback': '調整返現',
+    'Cashback adjustment recorded': '返現調整已記錄',
+    'Confirm adjustment': '確認調整',
+    'Enter an adjustment amount and reason': '請輸入調整額度和原因',
+    'User, email, or inviter remark': '使用者、電郵或邀請者備註',
+    'Adjustment direction': '調整方向',
+    'Adjustment amount': '調整額度',
+    'Increase cashback': '增加返現',
+    'Decrease cashback': '減少返現',
+    'Net adjustment': '累計調整',
+    'Increase or decrease cashback. Changes are recorded in the affiliate ledger.':
+      '可以增加或減少返現，變更會記錄到邀請返現帳本。',
+    'Added cashback follows the original unlock time and is automatically transferred when available.':
+      '增加的返現沿用原解凍時間，達到可用時間後會自動轉入餘額。',
+    'Enter subdomain, e.g. a': '輸入子網域前綴，例如 a',
+    'Check the agent settings and try again': '請檢查代理人設定後重試',
+    'Remove this agent configuration? Existing referral records will be kept.':
+      '確定移除這個代理人設定嗎？現有邀請記錄會保留。',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  affiliateInteractionTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
+const inviteInfoTranslations = {
+  en: {
+    'Invited: {{count}}': 'Invited: {{count}}',
+    'Revenue: {{amount}}': 'Revenue: {{amount}}',
+    'Inviter: {{name}}': 'Inviter: {{name}}',
+    Details: 'Details',
+    'Invitation details': 'Invitation details',
+    'View invitation and successful top-up records for this user.':
+      'View invitation and successful top-up records for this user.',
+    'Search by user ID, username, or email':
+      'Search by user ID, username, or email',
+    'Operation type': 'Operation type',
+    'All operations': 'All operations',
+    Invitation: 'Invitation',
+    'Top-up': 'Top-up',
+    'User ID': 'User ID',
+    'Top-up amount': 'Top-up amount',
+    'Cashback amount': 'Cashback amount',
+    'Cumulative cashback': 'Cumulative cashback',
+    'No referral records': 'No referral records',
+  },
+  zh: {
+    'Invited: {{count}}': '已邀: {{count}}',
+    'Revenue: {{amount}}': '收入: {{amount}}',
+    'Inviter: {{name}}': '邀请人: {{name}}',
+    Details: '详情',
+    'Invitation details': '邀请详情',
+    'View invitation and successful top-up records for this user.':
+      '查看该用户的邀请和成功充值记录。',
+    'Search by user ID, username, or email': '按用户 ID、用户名或邮箱搜索',
+    'Operation type': '操作类型',
+    'All operations': '全部操作',
+    Invitation: '邀请',
+    'Top-up': '充值',
+    'User ID': '用户ID',
+    'Top-up amount': '充值金额',
+    'Cashback amount': '返现金额',
+    'Cumulative cashback': '累计返现',
+    'No referral records': '暂无邀请记录',
+  },
+  fr: {
+    'Invited: {{count}}': 'Invités : {{count}}',
+    'Revenue: {{amount}}': 'Revenus : {{amount}}',
+    'Inviter: {{name}}': 'Invitant : {{name}}',
+    Details: 'Détails',
+    'Invitation details': 'Détails des invitations',
+    'View invitation and successful top-up records for this user.':
+      'Consultez les invitations et les recharges réussies de cet utilisateur.',
+    'Search by user ID, username, or email':
+      'Rechercher par ID, nom d’utilisateur ou e-mail',
+    'Operation type': 'Type d’opération',
+    'All operations': 'Toutes les opérations',
+    Invitation: 'Invitation',
+    'Top-up': 'Recharge',
+    'User ID': 'ID utilisateur',
+    'Top-up amount': 'Montant de la recharge',
+    'Cashback amount': 'Montant du cashback',
+    'Cumulative cashback': 'Cashback cumulé',
+    'No referral records': 'Aucun enregistrement de parrainage',
+  },
+  ja: {
+    'Invited: {{count}}': '招待済み: {{count}}',
+    'Revenue: {{amount}}': '収益: {{amount}}',
+    'Inviter: {{name}}': '招待者: {{name}}',
+    Details: '詳細',
+    'Invitation details': '招待詳細',
+    'View invitation and successful top-up records for this user.':
+      'このユーザーの招待と成功したチャージの記録を表示します。',
+    'Search by user ID, username, or email':
+      'ユーザー ID、ユーザー名、メールで検索',
+    'Operation type': '操作種別',
+    'All operations': 'すべての操作',
+    Invitation: '招待',
+    'Top-up': 'チャージ',
+    'User ID': 'ユーザー ID',
+    'Top-up amount': 'チャージ金額',
+    'Cashback amount': '還元額',
+    'Cumulative cashback': '累計還元',
+    'No referral records': '招待記録はありません',
+  },
+  ru: {
+    'Invited: {{count}}': 'Приглашено: {{count}}',
+    'Revenue: {{amount}}': 'Доход: {{amount}}',
+    'Inviter: {{name}}': 'Пригласивший: {{name}}',
+    Details: 'Подробнее',
+    'Invitation details': 'Детали приглашений',
+    'View invitation and successful top-up records for this user.':
+      'Просмотр приглашений и успешных пополнений этого пользователя.',
+    'Search by user ID, username, or email':
+      'Поиск по ID, имени пользователя или почте',
+    'Operation type': 'Тип операции',
+    'All operations': 'Все операции',
+    Invitation: 'Приглашение',
+    'Top-up': 'Пополнение',
+    'User ID': 'ID пользователя',
+    'Top-up amount': 'Сумма пополнения',
+    'Cashback amount': 'Сумма кэшбэка',
+    'Cumulative cashback': 'Накопленный кэшбэк',
+    'No referral records': 'Реферальных записей нет',
+  },
+  vi: {
+    'Invited: {{count}}': 'Đã mời: {{count}}',
+    'Revenue: {{amount}}': 'Thu nhập: {{amount}}',
+    'Inviter: {{name}}': 'Người mời: {{name}}',
+    Details: 'Chi tiết',
+    'Invitation details': 'Chi tiết lời mời',
+    'View invitation and successful top-up records for this user.':
+      'Xem lời mời và các lần nạp tiền thành công của người dùng này.',
+    'Search by user ID, username, or email':
+      'Tìm theo ID, tên người dùng hoặc email',
+    'Operation type': 'Loại thao tác',
+    'All operations': 'Tất cả thao tác',
+    Invitation: 'Mời',
+    'Top-up': 'Nạp tiền',
+    'User ID': 'ID người dùng',
+    'Top-up amount': 'Số tiền nạp',
+    'Cashback amount': 'Số tiền hoàn',
+    'Cumulative cashback': 'Tổng tiền hoàn',
+    'No referral records': 'Chưa có bản ghi giới thiệu',
+  },
+  'zh-TW': {
+    'Invited: {{count}}': '已邀: {{count}}',
+    'Revenue: {{amount}}': '收入: {{amount}}',
+    'Inviter: {{name}}': '邀請人: {{name}}',
+    Details: '詳情',
+    'Invitation details': '邀請詳情',
+    'View invitation and successful top-up records for this user.':
+      '查看此使用者的邀請和成功儲值記錄。',
+    'Search by user ID, username, or email': '按使用者 ID、名稱或電郵搜尋',
+    'Operation type': '操作類型',
+    'All operations': '全部操作',
+    Invitation: '邀請',
+    'Top-up': '儲值',
+    'User ID': '使用者 ID',
+    'Top-up amount': '儲值金額',
+    'Cashback amount': '返現金額',
+    'Cumulative cashback': '累計返現',
+    'No referral records': '目前沒有邀請記錄',
+  },
+}
+
+for (const [locale, translations] of Object.entries(inviteInfoTranslations)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const retiredKeys = new Set([
   'No About Content Set',
   'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.',

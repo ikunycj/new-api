@@ -239,6 +239,12 @@ func Register(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgUserAffCodeInvalid)
 			return
 		}
+	} else {
+		inviterId, _, err = model.ResolveAffiliateInviterByHost(c.Request.Host)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	cleanUser := model.User{
 		Username:          user.Username,
@@ -302,8 +308,9 @@ func Register(c *gin.Context) {
 
 type userListResponse struct {
 	*model.User
-	CurrentConcurrency  int  `json:"current_concurrency"`
-	ConcurrencyDegraded bool `json:"concurrency_degraded"`
+	CurrentConcurrency  int                            `json:"current_concurrency"`
+	ConcurrencyDegraded bool                           `json:"concurrency_degraded"`
+	InviteInfo          *model.AffiliateUserInviteInfo `json:"invite_info,omitempty"`
 }
 
 func buildUserListResponses(users []*model.User) []*userListResponse {
@@ -323,6 +330,30 @@ func buildUserListResponses(users []*model.User) []*userListResponse {
 	return responses
 }
 
+func enrichUserListResponsesWithInviteInfo(responses []*userListResponse) error {
+	userIDs := make([]int, 0, len(responses))
+	for _, response := range responses {
+		if response != nil && response.User != nil {
+			userIDs = append(userIDs, response.User.Id)
+		}
+	}
+	infos, err := model.GetAffiliateUserInviteInfos(userIDs)
+	if err != nil {
+		return err
+	}
+	byUserID := make(map[int]*model.AffiliateUserInviteInfo, len(infos))
+	for i := range infos {
+		byUserID[infos[i].UserID] = &infos[i]
+	}
+	for _, response := range responses {
+		if response == nil || response.User == nil {
+			continue
+		}
+		response.InviteInfo = byUserID[response.User.Id]
+	}
+	return nil
+}
+
 func GetAllUsers(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	users, total, err := model.GetAllUsers(pageInfo)
@@ -337,8 +368,13 @@ func GetAllUsers(c *gin.Context) {
 		common.SysLog("failed to fill users recent IPs: " + err.Error())
 	}
 
+	responses := buildUserListResponses(users)
+	if err := enrichUserListResponsesWithInviteInfo(responses); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildUserListResponses(users))
+	pageInfo.SetItems(responses)
 
 	common.ApiSuccess(c, pageInfo)
 	return
@@ -372,8 +408,13 @@ func SearchUsers(c *gin.Context) {
 		common.SysLog("failed to fill users recent IPs: " + err.Error())
 	}
 
+	responses := buildUserListResponses(users)
+	if err := enrichUserListResponsesWithInviteInfo(responses); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(buildUserListResponses(users))
+	pageInfo.SetItems(responses)
 	common.ApiSuccess(c, pageInfo)
 	return
 }

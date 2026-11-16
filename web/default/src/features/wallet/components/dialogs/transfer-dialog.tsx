@@ -29,10 +29,6 @@ import {
   parseQuotaFromDollars,
   quotaUnitsToDollars,
 } from '@/lib/format'
-import {
-  DEFAULT_CURRENCY_CONFIG,
-  useSystemConfigStore,
-} from '@/stores/system-config-store'
 
 interface TransferDialogProps {
   open: boolean
@@ -50,19 +46,16 @@ export function TransferDialog({
   transferring,
 }: TransferDialogProps) {
   const { t } = useTranslation()
-  const currencyConfig = useSystemConfigStore((state) => state.config.currency)
-  const minimumQuota = Math.ceil(
-    currencyConfig.quotaPerUnit > 0
-      ? currencyConfig.quotaPerUnit
-      : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-  )
+  // Quota is stored as an integer. One quota unit is the smallest transferable
+  // amount; there is no product-level minimum balance transfer anymore.
+  const minimumQuota = 1
   const minimumAmount = quotaUnitsToDollars(minimumQuota)
   const maximumAmount = quotaUnitsToDollars(availableQuota)
   const [amount, setAmount] = useState(minimumAmount)
   const transferQuota = parseQuotaFromDollars(amount)
   const canTransfer =
     Number.isFinite(amount) &&
-    transferQuota >= minimumQuota &&
+    transferQuota > 0 &&
     transferQuota <= availableQuota
 
   useEffect(() => {
@@ -138,9 +131,6 @@ export function TransferDialog({
             step={minimumAmount}
             className='font-mono text-lg'
           />
-          <p className='text-muted-foreground text-xs'>
-            {t('Minimum:')} {formatQuota(minimumQuota)}
-          </p>
         </div>
       </div>
     </Dialog>

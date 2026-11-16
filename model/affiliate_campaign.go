@@ -276,6 +276,11 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 	if err := appendAffiliateCashLedgerWithTx(tx, account, ledger); err != nil {
 		return err
 	}
+	if status == AffiliateRewardStatusAvailable {
+		if err := autoTransferAffiliateCashRewardWithTx(tx, reward.ID); err != nil {
+			return err
+		}
+	}
 
 	var invitee User
 	if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", relation.InviteeUserID).First(&invitee).Error; err != nil {
@@ -312,6 +317,98 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 		return err
 	}
 	return tx.Save(event).Error
+}
+
+func autoTransferAffiliateCashRewardWithTx(tx *gorm.DB, rewardID int) error {
+	var identity AffiliateCashReward
+	if err := tx.Select("inviter_user_id").Where("id = ?", rewardID).First(&identity).Error; err != nil {
+		return err
+	}
+	var user User
+	if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", identity.InviterUserID).First(&user).Error; err != nil {
+		return err
+	}
+	var reward AffiliateCashReward
+	if err := lockForUpdate(tx).Where("id = ?", rewardID).First(&reward).Error; err != nil {
+		return err
+	}
+	if reward.Status != AffiliateRewardStatusAvailable {
+		return nil
+	}
+	requestKey := "auto-cash-reward:" + strconv.Itoa(rewardID)
+	var existing AffiliateCashTransfer
+	if err := tx.Where("user_id = ? AND request_key = ?", reward.InviterUserID, requestKey).First(&existing).Error; err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	amountCents := reward.CashbackCents - reward.TransferredCents
+	if amountCents <= 0 {
+		return nil
+	}
+	account, err := ensureAffiliateCashAccountWithTx(tx, reward.InviterUserID)
+	if err != nil {
+		return err
+	}
+	if account.AvailableCents < amountCents {
+		return ErrAffiliateBalance
+	}
+	exchangeRate := operation_setting.USDExchangeRate
+	if exchangeRate <= 0 {
+		exchangeRate = 1
+	}
+	creditedQuota, clamp := common.QuotaFromDecimalChecked(decimal.NewFromInt(amountCents).
+		Div(decimal.NewFromInt(100)).Div(decimal.NewFromFloat(exchangeRate)).
+		Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
+	if clamp != nil {
+		return clamp
+	}
+	if creditedQuota <= 0 {
+		return ErrAffiliateAmountInvalid
+	}
+	if int64(user.Quota)+int64(creditedQuota) > int64(common.MaxQuota) {
+		// Leave the cash reward available; retry after the wallet has room.
+		return nil
+	}
+	transfer := AffiliateCashTransfer{
+		UserID: user.Id, RequestKey: requestKey, AmountCents: amountCents,
+		CashBalanceBefore: account.AvailableCents,
+		CashBalanceAfter:  account.AvailableCents - amountCents,
+		CNYExchangeRate:   exchangeRate, CreditedQuota: int64(creditedQuota),
+		UserQuotaBefore: user.Quota, UserQuotaAfter: user.Quota + creditedQuota,
+	}
+	result := tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "request_key"}},
+		DoNothing: true,
+	}).Create(&transfer)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil
+	}
+	reward.TransferredCents += amountCents
+	if reward.TransferredCents >= reward.CashbackCents {
+		reward.Status = AffiliateRewardStatusTransferred
+	}
+	account.AvailableCents -= amountCents
+	account.TransferredCents += amountCents
+	if err := tx.Save(&reward).Error; err != nil {
+		return err
+	}
+	if err := tx.Save(account).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&User{}).Where("id = ?", user.Id).Update("quota", transfer.UserQuotaAfter).Error; err != nil {
+		return err
+	}
+	return appendAffiliateCashLedgerWithTx(tx, account, AffiliateCashLedger{
+		EntryType: AffiliateCashLedgerTypeBalanceTransfer, ReferenceType: AffiliateCashReferenceTransfer,
+		ReferenceID: transfer.ID, AmountCents: amountCents,
+		AvailableDeltaCents: -amountCents, TransferredDeltaCents: amountCents,
+		IdempotencyKey: "campaign-cash-transfer:" + strconv.Itoa(transfer.ID),
+	})
 }
 
 func releaseAffiliateCashRewardWithTx(tx *gorm.DB, rewardID int, now int64) (bool, error) {
@@ -357,50 +454,68 @@ func releaseAffiliateCashRewardWithTx(tx *gorm.DB, rewardID int, now int64) (boo
 	return true, nil
 }
 
-func ReleaseDueAffiliateCashRewards(now int64, limit int) (int, error) {
+// ReleaseDueAffiliateCashRewards uses the same cursor contract as quota rewards:
+// wallet-full records advance the cursor and remain available for the next run.
+func ReleaseDueAffiliateCashRewards(now int64, afterID int, limit int) (int, int, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	var ids []int
-	if err := DB.Model(&AffiliateCashReward{}).
-		Where("status = ? AND available_at <= ?", AffiliateRewardStatusPending, now).
-		Order("id asc").Limit(limit).Pluck("id", &ids).Error; err != nil {
-		return 0, err
+	var rewards []AffiliateCashReward
+	if err := DB.Select("id", "inviter_user_id").Model(&AffiliateCashReward{}).
+		Where("id > ?", afterID).
+		Where("(status = ? AND available_at <= ?) OR (status = ? AND cashback_cents - transferred_cents > 0)", AffiliateRewardStatusPending, now, AffiliateRewardStatusAvailable).
+		Order("id asc").Limit(limit).Find(&rewards).Error; err != nil {
+		return 0, afterID, err
 	}
 	released := 0
-	for _, id := range ids {
+	for _, reward := range rewards {
+		id := reward.ID
 		changed := false
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			var err error
 			changed, err = releaseAffiliateCashRewardWithTx(tx, id, now)
-			return err
+			if err != nil {
+				return err
+			}
+			return autoTransferAffiliateCashRewardWithTx(tx, id)
 		})
 		if err != nil {
-			return released, err
+			return released, afterID, err
 		}
+		afterID = id
+		invalidateAffiliateUserCache(reward.InviterUserID)
 		if changed {
 			released++
 		}
 	}
-	return released, nil
+	return released, afterID, nil
 }
 
 func releaseDueAffiliateCashRewardsForUser(userID int, now int64) error {
-	var ids []int
-	if err := DB.Model(&AffiliateCashReward{}).
-		Where("inviter_user_id = ? AND status = ? AND available_at <= ?", userID, AffiliateRewardStatusPending, now).
-		Order("id asc").Limit(500).Pluck("id", &ids).Error; err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if err := DB.Transaction(func(tx *gorm.DB) error {
-			_, err := releaseAffiliateCashRewardWithTx(tx, id, now)
-			return err
-		}); err != nil {
+	for afterID := 0; ; {
+		var ids []int
+		if err := DB.Model(&AffiliateCashReward{}).
+			Where("id > ?", afterID).
+			Where("inviter_user_id = ? AND ((status = ? AND available_at <= ?) OR (status = ? AND cashback_cents - transferred_cents > 0))", userID, AffiliateRewardStatusPending, now, AffiliateRewardStatusAvailable).
+			Order("id asc").Limit(500).Pluck("id", &ids).Error; err != nil {
 			return err
 		}
+		for _, id := range ids {
+			if err := DB.Transaction(func(tx *gorm.DB) error {
+				if _, err := releaseAffiliateCashRewardWithTx(tx, id, now); err != nil {
+					return err
+				}
+				return autoTransferAffiliateCashRewardWithTx(tx, id)
+			}); err != nil {
+				return err
+			}
+			afterID = id
+			invalidateAffiliateUserCache(userID)
+		}
+		if len(ids) < 500 {
+			return nil
+		}
 	}
-	return nil
 }
 
 func GetAffiliateCashAccount(userID int) (*AffiliateCashAccount, error) {

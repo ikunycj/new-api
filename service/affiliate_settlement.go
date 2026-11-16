@@ -34,39 +34,42 @@ func (affiliateSettlementHandler) NewPayload() any {
 
 func (affiliateSettlementHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	result := affiliateSettlementResult{}
-	for {
+	now := time.Now().Unix()
+	for afterID := 0; ; {
 		select {
 		case <-ctx.Done():
 			failSystemTask(task, runnerID, ctx.Err())
 			return
 		default:
 		}
-		released, err := model.ReleaseDueAffiliateRewards(time.Now().Unix(), affiliateSettlementBatchSize)
+		released, nextID, err := model.ReleaseDueAffiliateRewards(now, afterID, affiliateSettlementBatchSize)
 		if err != nil {
 			failSystemTask(task, runnerID, err)
 			return
 		}
 		result.ReleasedRewards += released
-		if released < affiliateSettlementBatchSize {
+		if nextID == afterID {
 			break
 		}
+		afterID = nextID
 	}
-	for {
+	for afterID := 0; ; {
 		select {
 		case <-ctx.Done():
 			failSystemTask(task, runnerID, ctx.Err())
 			return
 		default:
 		}
-		released, err := model.ReleaseDueAffiliateCashRewards(time.Now().Unix(), affiliateSettlementBatchSize)
+		released, nextID, err := model.ReleaseDueAffiliateCashRewards(now, afterID, affiliateSettlementBatchSize)
 		if err != nil {
 			failSystemTask(task, runnerID, err)
 			return
 		}
 		result.ReleasedCashRewards += released
-		if released < affiliateSettlementBatchSize {
+		if nextID == afterID {
 			break
 		}
+		afterID = nextID
 	}
 	if err := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); err != nil {
 		logSystemTaskLockError(ctx, task, err)

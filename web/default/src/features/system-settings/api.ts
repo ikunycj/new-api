@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
+  AffiliateAgentUpdate,
+  AffiliateAgentsResponse,
   AffiliateSettings,
   AffiliateSettingsResponse,
   AffiliateAdminRewardsResponse,
@@ -79,6 +81,14 @@ export async function updateAffiliateUserOverride(
   const res = await api.put<AffiliateUserOverrideResponse>(
     `/api/affiliate/admin/user-overrides/${userId}`,
     request
+  )
+  return res.data
+}
+
+export async function saveAffiliateAgents(agents: AffiliateAgentUpdate[]) {
+  const res = await api.put<AffiliateAgentsResponse>(
+    '/api/affiliate/admin/agents',
+    { agents }
   )
   return res.data
 }

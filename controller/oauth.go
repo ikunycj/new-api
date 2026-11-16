@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -20,15 +23,126 @@ func providerParams(name string) map[string]any {
 	return map[string]any{"Provider": name}
 }
 
+// StartOAuthLogin moves login initiation to the configured callback origin
+// before issuing state. The authentication session remains host-only.
+func StartOAuthLogin(c *gin.Context) {
+	providerName := c.Param("provider")
+	provider := oauth.GetProvider(providerName)
+	if provider == nil || !provider.IsEnabled() {
+		common.ApiErrorI18n(c, i18n.MsgOAuthNotEnabled, providerParams(providerName))
+		return
+	}
+	base, err := url.Parse(strings.TrimRight(system_setting.ServerAddress, "/"))
+	if err != nil || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
+		common.ApiError(c, errors.New("invalid server address for OAuth login"))
+		return
+	}
+	affCode := strings.TrimSpace(c.Query("aff"))
+	if !strings.EqualFold(c.Request.Host, base.Host) {
+		if affCode == "" {
+			inviterID, matched, err := model.ResolveAffiliateInviterByHost(c.Request.Host)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			if matched {
+				if err := model.EnsureAffiliateProfile(inviterID); err != nil {
+					common.ApiError(c, err)
+					return
+				}
+				inviter, err := model.GetUserById(inviterID, false)
+				if err != nil {
+					common.ApiError(c, err)
+					return
+				}
+				affCode = inviter.AffCode
+			}
+		}
+		target := *base
+		target.Path += "/api/oauth/start/" + providerName
+		query := url.Values{}
+		if affCode != "" {
+			query.Set("aff", affCode)
+		}
+		target.RawQuery = query.Encode()
+		c.Redirect(http.StatusSeeOther, target.String())
+		return
+	}
+
+	state := common.GetRandomString(32)
+	redirectURI := base.String() + "/oauth/" + providerName
+	var endpoint, clientID, scope string
+	switch providerName {
+	case "github":
+		endpoint, clientID, scope = "https://github.com/login/oauth/authorize", common.GitHubClientId, "user:email"
+	case "discord":
+		endpoint, clientID, scope = "https://discord.com/oauth2/authorize", system_setting.GetDiscordSettings().ClientId, "identify email"
+	case "oidc":
+		settings := system_setting.GetOIDCSettings()
+		endpoint, clientID, scope = settings.AuthorizationEndpoint, settings.ClientId, "openid profile email"
+	case "linuxdo":
+		endpoint, clientID = "https://connect.linux.do/oauth2/authorize", common.LinuxDOClientId
+	default:
+		generic, ok := provider.(*oauth.GenericOAuthProvider)
+		if !ok {
+			common.ApiErrorI18n(c, i18n.MsgOAuthUnknownProvider)
+			return
+		}
+		config := generic.GetConfig()
+		endpoint, clientID, scope = config.AuthorizationEndpoint, config.ClientId, config.Scopes
+	}
+	authorizationURL, err := url.Parse(endpoint)
+	if err != nil || authorizationURL.Host == "" {
+		common.ApiError(c, errors.New("invalid OAuth authorization endpoint"))
+		return
+	}
+	query := authorizationURL.Query()
+	query.Set("client_id", clientID)
+	query.Set("redirect_uri", redirectURI)
+	query.Set("response_type", "code")
+	query.Set("state", state)
+	if scope != "" {
+		query.Set("scope", scope)
+	}
+	authorizationURL.RawQuery = query.Encode()
+
+	session := sessions.Default(c)
+	session.Clear() // This endpoint starts a login, never an account binding.
+	session.Set("oauth_state", state)
+	session.Set("oauth_started_at", common.GetTimestamp())
+	if affCode != "" {
+		session.Set("aff", affCode)
+	}
+	if err := session.Save(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, authorizationURL.String())
+}
+
 // GenerateOAuthCode generates a state code for OAuth CSRF protection
 func GenerateOAuthCode(c *gin.Context) {
 	session := sessions.Default(c)
 	state := common.GetRandomString(12)
-	affCode := c.Query("aff")
+	affCode := strings.TrimSpace(c.Query("aff"))
 	if affCode != "" {
 		session.Set("aff", affCode)
+		session.Delete("affiliate_inviter_id")
+	} else {
+		session.Delete("aff")
+		inviterID, matched, err := model.ResolveAffiliateInviterByHost(c.Request.Host)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if matched {
+			session.Set("affiliate_inviter_id", strconv.Itoa(inviterID))
+		} else {
+			session.Delete("affiliate_inviter_id")
+		}
 	}
 	session.Set("oauth_state", state)
+	session.Set("oauth_started_at", common.GetTimestamp())
 	err := session.Save()
 	if err != nil {
 		common.ApiError(c, err)
@@ -62,6 +176,17 @@ func HandleOAuth(c *gin.Context) {
 			"success": false,
 			"message": i18n.T(c, i18n.MsgOAuthStateInvalid),
 		})
+		return
+	}
+	startedAt, ok := session.Get("oauth_started_at").(int64)
+	if !ok || common.GetTimestamp()-startedAt > 600 {
+		common.ApiErrorI18n(c, i18n.MsgOAuthStateInvalid)
+		return
+	}
+	session.Delete("oauth_state")
+	session.Delete("oauth_started_at")
+	if err := session.Save(); err != nil {
+		common.ApiError(c, err)
 		return
 	}
 
@@ -272,11 +397,14 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	user.CreatedIP = c.ClientIP()
 	user.OnboardingVersion = model.NewUserOnboardingVersion()
 
-	// Handle affiliate code
+	// Handle the existing invitation code first. A domain-based inviter is only
+	// used when OAuth started without an explicit invitation code.
 	affCode := session.Get("aff")
 	inviterId := 0
 	if affCode != nil {
 		inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
+	} else if rawInviterID, ok := session.Get("affiliate_inviter_id").(string); ok {
+		inviterId, _ = strconv.Atoi(rawInviterID)
 	}
 	user.InviterId = inviterId
 

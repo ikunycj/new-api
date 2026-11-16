@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { InviteInfo } from '@/components/invite-info-cell'
+
 export type SystemOption = {
   key: string
   value: string
@@ -346,55 +348,32 @@ export type BillingSettings = {
   'affiliate_setting.show_invitee_topups': boolean
 }
 
-export type AffiliateRegistrationRewardTrigger =
-  | 'registration_success'
-  | 'first_qualified_topup'
-export type AffiliateRewardMode = 'percentage' | 'fixed'
-export type AffiliateCashbackFrequency = 'first_qualified' | 'every_topup'
-
 export type AffiliateSettings = {
   enabled: boolean
-  inviter_reward_quota: number
-  invitee_reward_quota: number
-  registration_reward_trigger: AffiliateRegistrationRewardTrigger
-  reward_mode: AffiliateRewardMode
-  cashback_frequency: AffiliateCashbackFrequency
   reward_rate_bps: number
-  fixed_reward_quota: number
-  unlimited_reward: boolean
   maximum_reward_quota: number
-  minimum_topup_cents: number
   hold_seconds: number
-  minimum_transfer_quota: number
-  show_invitee_topups: boolean
 }
 
 export type AffiliateUserOverride = {
   id?: number
   user_id?: number
-  enabled: boolean | null
-  inviter_reward_quota: number | null
-  invitee_reward_quota: number | null
-  registration_reward_trigger: AffiliateRegistrationRewardTrigger | null
-  reward_mode: AffiliateRewardMode | null
-  cashback_frequency: AffiliateCashbackFrequency | null
-  reward_rate_bps: number | null
-  fixed_reward_quota: number | null
-  unlimited_reward: boolean | null
-  maximum_reward_quota: number | null
-  minimum_topup_cents: number | null
-  hold_seconds: number | null
-  minimum_transfer_quota: number | null
-  show_invitee_topups: boolean | null
+  reward_rate_bps?: number | null
+  maximum_reward_quota?: number | null
+  hold_seconds?: number | null
+  affiliate_domain?: string | null
+  remark?: string
   updated_by?: number
   updated_at?: number
-  change_reason: string
+  change_reason?: string
 }
 
 export type AffiliateUserOverrideView = {
   user_id: number
   username: string
   email: string
+  remark: string
+  invite_info?: InviteInfo
   updated_by_username: string
   override: AffiliateUserOverride | null
   global_rule: AffiliateSettings & { source: string }
@@ -422,11 +401,25 @@ export type AffiliateUserOverrideResponse = {
   data?: AffiliateUserOverrideView
 }
 
+export type AffiliateAgentUpdate = {
+  user_id: number
+  override: AffiliateUserOverride
+  invitee_user_ids: number[]
+}
+
+export type AffiliateAgentsResponse = {
+  success: boolean
+  message: string
+  data?: AffiliateUserOverrideView[]
+}
+
 export type AffiliateAdminReward = {
   id: number
   inviter_user_id: number
   inviter_username: string
+  inviter_email: string
   invitee_user_id: number
+  invitee_username: string
   invitee_email: string
   invitation_code: string
   topup_id: number
