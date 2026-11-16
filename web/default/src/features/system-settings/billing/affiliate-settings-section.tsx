@@ -69,7 +69,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { parseQuotaFromCNY, quotaUnitsToCNY } from '@/lib/format'
 
 import {
   deleteAffiliateUserOverride,
@@ -98,17 +97,15 @@ const AFFILIATE_AGENTS_PAGE_SIZE = 20
 type GlobalDraft = {
   enabled: boolean
   rewardRate: string
-  maximumReward: string
   holdDays: string
 }
 
-type AgentConfigKey = 'rewardRate' | 'maximumReward' | 'holdDays'
+type AgentConfigKey = 'rewardRate' | 'holdDays'
 
 type AgentDraft = {
   isNew: boolean
   invitees: AffiliateUserOverrideView[]
   rewardRate: string
-  maximumReward: string
   holdDays: string
   affiliateDomain: string
   remark: string
@@ -121,21 +118,17 @@ function settingsToDraft(settings: AffiliateSettings): GlobalDraft {
   return {
     enabled: settings.enabled,
     rewardRate: String(settings.reward_rate_bps / 100),
-    maximumReward: String(quotaUnitsToCNY(settings.maximum_reward_quota)),
     holdDays: String(settings.hold_seconds / SECONDS_PER_DAY),
   }
 }
 
 function draftToSettings(draft: GlobalDraft): AffiliateSettings | null {
   const rewardRate = Number(draft.rewardRate)
-  const maximumReward = Number(draft.maximumReward)
   const holdDays = Number(draft.holdDays)
   if (
     !Number.isFinite(rewardRate) ||
     rewardRate < 0 ||
     rewardRate > 100 ||
-    !Number.isFinite(maximumReward) ||
-    maximumReward < 0 ||
     !Number.isInteger(holdDays) ||
     holdDays < 0 ||
     holdDays > 365
@@ -145,7 +138,6 @@ function draftToSettings(draft: GlobalDraft): AffiliateSettings | null {
   return {
     enabled: draft.enabled,
     reward_rate_bps: Math.round(rewardRate * 100),
-    maximum_reward_quota: parseQuotaFromCNY(maximumReward),
     hold_seconds: holdDays * SECONDS_PER_DAY,
   }
 }
@@ -161,9 +153,6 @@ function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
     isNew: !view.override,
     invitees: [],
     rewardRate: String(view.effective_rule.reward_rate_bps / 100),
-    maximumReward: String(
-      quotaUnitsToCNY(view.effective_rule.maximum_reward_quota)
-    ),
     holdDays: String(view.effective_rule.hold_seconds / SECONDS_PER_DAY),
     affiliateDomain: affiliateDomainToSubdomain(
       view.override?.affiliate_domain
@@ -171,7 +160,6 @@ function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
     remark: view.remark,
     dirty: {
       rewardRate: false,
-      maximumReward: false,
       holdDays: false,
     },
     domainDirty: false,
@@ -181,13 +169,10 @@ function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
 
 function buildAgentOverride(draft: AgentDraft): AffiliateUserOverride | null {
   const rewardRate = Number(draft.rewardRate)
-  const maximumReward = Number(draft.maximumReward)
   const holdDays = Number(draft.holdDays)
   if (
     (draft.dirty.rewardRate &&
       (!Number.isFinite(rewardRate) || rewardRate < 0 || rewardRate > 100)) ||
-    (draft.dirty.maximumReward &&
-      (!Number.isFinite(maximumReward) || maximumReward < 0)) ||
     (draft.dirty.holdDays &&
       (!Number.isInteger(holdDays) || holdDays < 0 || holdDays > 365))
   ) {
@@ -197,9 +182,6 @@ function buildAgentOverride(draft: AgentDraft): AffiliateUserOverride | null {
   const override: AffiliateUserOverride = {}
   if (draft.dirty.rewardRate) {
     override.reward_rate_bps = Math.round(rewardRate * 100)
-  }
-  if (draft.dirty.maximumReward) {
-    override.maximum_reward_quota = parseQuotaFromCNY(maximumReward)
   }
   if (draft.dirty.holdDays) {
     override.hold_seconds = holdDays * SECONDS_PER_DAY
@@ -219,7 +201,6 @@ function hasAgentChanges(draft: AgentDraft): boolean {
     draft.invitees.length > 0 ||
     draft.domainDirty ||
     draft.dirty.rewardRate ||
-    draft.dirty.maximumReward ||
     draft.dirty.holdDays ||
     draft.remarkDirty
   )
@@ -354,21 +335,6 @@ function GlobalAffiliateSettings() {
               onChange={(value) => {
                 setDraft((current) =>
                   current ? { ...current, rewardRate: value } : current
-                )
-                setDirty(true)
-              }}
-            />
-            <SettingNumberField
-              label={t('Maximum cashback per invitee')}
-              value={draft.maximumReward}
-              unit={t('CNY')}
-              min={0}
-              step='0.01'
-              description={t('Set to 0 for unlimited cashback.')}
-              disabled={mutation.isPending}
-              onChange={(value) => {
-                setDraft((current) =>
-                  current ? { ...current, maximumReward: value } : current
                 )
                 setDirty(true)
               }}
@@ -740,7 +706,7 @@ function PersonalizedAffiliateSettings() {
   } else {
     content = (
       <div className='min-w-0 overflow-x-auto rounded-lg border'>
-        <Table className='min-w-[1560px] table-fixed'>
+        <Table className='min-w-[1400px] table-fixed'>
           <TableHeader>
             <TableRow>
               <TableHead className='w-40'>{t('User')}</TableHead>
@@ -749,9 +715,6 @@ function PersonalizedAffiliateSettings() {
               <TableHead className='w-40'>{t('Remark')}</TableHead>
               <TableHead className='w-64'>{t('Affiliate domain')}</TableHead>
               <TableHead className='w-36'>{t('Cashback rate')}</TableHead>
-              <TableHead className='w-48'>
-                {t('Maximum cashback per invitee')}
-              </TableHead>
               <TableHead className='w-36'>{t('Hold period')}</TableHead>
               <TableHead className='sticky right-0 z-30 w-40 bg-[var(--table-header)] text-right shadow-[-8px_0_10px_-10px_hsl(var(--foreground))]'>
                 {t('Action')}
@@ -761,7 +724,7 @@ function PersonalizedAffiliateSettings() {
           <TableBody>
             {agentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className='h-36 text-center'>
+                <TableCell colSpan={8} className='h-36 text-center'>
                   <div className='mx-auto flex max-w-md flex-col items-center gap-1'>
                     <p className='font-medium'>{t('No agents')}</p>
                     <p className='text-muted-foreground text-sm'>
@@ -836,17 +799,6 @@ function PersonalizedAffiliateSettings() {
                     step='0.01'
                     disabled={disabled}
                     onChange={(value) => updateRow(view, 'rewardRate', value)}
-                  />
-                  <AgentNumberCell
-                    label={t('Maximum cashback per invitee')}
-                    value={row.maximumReward}
-                    unit={t('CNY')}
-                    min={0}
-                    step='0.01'
-                    disabled={disabled}
-                    onChange={(value) =>
-                      updateRow(view, 'maximumReward', value)
-                    }
                   />
                   <AgentNumberCell
                     label={t('Hold period')}

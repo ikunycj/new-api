@@ -57,7 +57,6 @@ export interface AffiliateEffectiveRule {
   reward_rate_bps: number
   fixed_reward_quota: number
   unlimited_reward: boolean
-  maximum_reward_quota: number
   minimum_topup_cents: number
   hold_seconds: number
   minimum_transfer_quota: number

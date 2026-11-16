@@ -341,7 +341,6 @@ export type BillingSettings = {
   'affiliate_setting.reward_rate_bps': number
   'affiliate_setting.fixed_reward_quota': number
   'affiliate_setting.unlimited_reward': boolean
-  'affiliate_setting.maximum_reward_quota': number
   'affiliate_setting.minimum_topup_cents': number
   'affiliate_setting.hold_seconds': number
   'affiliate_setting.minimum_transfer_quota': number
@@ -351,7 +350,6 @@ export type BillingSettings = {
 export type AffiliateSettings = {
   enabled: boolean
   reward_rate_bps: number
-  maximum_reward_quota: number
   hold_seconds: number
 }
 
@@ -359,7 +357,6 @@ export type AffiliateUserOverride = {
   id?: number
   user_id?: number
   reward_rate_bps?: number | null
-  maximum_reward_quota?: number | null
   hold_seconds?: number | null
   affiliate_domain?: string | null
   remark?: string

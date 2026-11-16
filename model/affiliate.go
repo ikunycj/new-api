@@ -398,11 +398,6 @@ func applyAffiliateOverride(rule AffiliateEffectiveRule, override *AffiliateUser
 		rule.RewardRateBps = *override.RewardRateBps
 		applied = true
 	}
-	if override.MaximumRewardQuota != nil {
-		rule.MaximumRewardQuota = *override.MaximumRewardQuota
-		rule.UnlimitedReward = *override.MaximumRewardQuota <= 0
-		applied = true
-	}
 	if override.HoldSeconds != nil {
 		rule.HoldSeconds = *override.HoldSeconds
 		applied = true
@@ -866,15 +861,6 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 	rewardQuota, err := calculateAffiliateCashbackQuota(baseCents, rule)
 	if err != nil {
 		return err
-	}
-	if !rule.UnlimitedReward {
-		remaining := rule.MaximumRewardQuota - relation.CashbackRewardedQuota
-		if remaining < 0 {
-			remaining = 0
-		}
-		if rewardQuota > remaining {
-			rewardQuota = remaining
-		}
 	}
 	if rewardQuota <= 0 {
 		if err := tx.Save(&relation).Error; err != nil {
@@ -2432,17 +2418,15 @@ func UpdateAffiliateSetting(next operation_setting.AffiliateSetting) error {
 }
 
 func normalizeAffiliateSettingValues(setting operation_setting.AffiliateSetting) operation_setting.AffiliateSetting {
-	maxQuota := int64(common.MaxQuota)
 	if setting.RewardRateBps < 0 {
 		setting.RewardRateBps = 0
 	} else if setting.RewardRateBps > 10_000 {
 		setting.RewardRateBps = 10_000
 	}
-	if setting.MaximumRewardQuota < 0 {
-		setting.MaximumRewardQuota = 0
-	} else if setting.MaximumRewardQuota > maxQuota {
-		setting.MaximumRewardQuota = maxQuota
-	}
+	// The per-invitee cashback cap is retired. Keep the persisted field for
+	// compatibility with existing option rows, but always expose the unlimited
+	// behavior so legacy values cannot re-enable the removed restriction.
+	setting.MaximumRewardQuota = 0
 	if setting.HoldSeconds < 0 {
 		setting.HoldSeconds = 0
 	} else if setting.HoldSeconds > 365*24*60*60 {
@@ -2454,7 +2438,7 @@ func normalizeAffiliateSettingValues(setting operation_setting.AffiliateSetting)
 	setting.RewardMode = operation_setting.AffiliateRewardModePercentage
 	setting.CashbackFrequency = operation_setting.AffiliateCashbackFrequencyEveryTopUp
 	setting.FixedRewardQuota = 0
-	setting.UnlimitedReward = setting.MaximumRewardQuota <= 0
+	setting.UnlimitedReward = true
 	setting.MinimumTopUpCents = 0
 	setting.MinimumTransferQuota = 0
 	setting.ShowInviteeTopUps = true

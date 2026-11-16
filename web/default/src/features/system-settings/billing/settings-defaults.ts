@@ -107,7 +107,6 @@ export const defaultBillingSettings: BillingSettings = {
   'affiliate_setting.reward_rate_bps': 500,
   'affiliate_setting.fixed_reward_quota': 0,
   'affiliate_setting.unlimited_reward': true,
-  'affiliate_setting.maximum_reward_quota': 0,
   'affiliate_setting.minimum_topup_cents': 0,
   'affiliate_setting.hold_seconds': 259_200,
   'affiliate_setting.minimum_transfer_quota': 0,

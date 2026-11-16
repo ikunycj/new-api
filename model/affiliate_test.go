@@ -240,7 +240,7 @@ func TestAffiliateEveryTopUpUsesCurrentPayment(t *testing.T) {
 	assert.Equal(t, int64(3), eventCount)
 }
 
-func TestAffiliateMaximumRewardCapAppliesToPercentageCashback(t *testing.T) {
+func TestAffiliatePercentageCashbackIgnoresMaximumRewardCap(t *testing.T) {
 	truncateTables(t)
 	unit := configureAffiliateTest(t, func(setting *operation_setting.AffiliateSetting) {
 		setting.RewardRateBps = 5000
@@ -255,8 +255,10 @@ func TestAffiliateMaximumRewardCapAppliesToPercentageCashback(t *testing.T) {
 
 	var rewards []AffiliateReward
 	require.NoError(t, DB.Where("reward_type = ?", AffiliateRewardTypeCashback).Order("id asc").Find(&rewards).Error)
-	require.Len(t, rewards, 1)
-	assert.Equal(t, 8*unit, rewards[0].ActualQuota)
+	require.Len(t, rewards, 3)
+	assert.Equal(t, 10*unit, rewards[0].ActualQuota)
+	assert.Equal(t, unit/2, rewards[1].ActualQuota)
+	assert.Equal(t, unit/2, rewards[2].ActualQuota)
 	var eventCount int64
 	require.NoError(t, DB.Model(&AffiliateTopUpEvent{}).Count(&eventCount).Error)
 	assert.Equal(t, int64(3), eventCount)
@@ -264,7 +266,7 @@ func TestAffiliateMaximumRewardCapAppliesToPercentageCashback(t *testing.T) {
 	var account AffiliateQuotaAccount
 	require.NoError(t, DB.Where("user_id = ?", inviter.Id).First(&account).Error)
 	assert.Zero(t, account.AvailableQuota)
-	assert.Equal(t, 8*unit, account.TransferredQuota)
+	assert.Equal(t, 11*unit, account.TransferredQuota)
 }
 
 func TestAffiliateRegistrationRewardsAreDisabledAndRewardsAutoTransfer(t *testing.T) {
