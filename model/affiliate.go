@@ -582,6 +582,12 @@ func createAffiliateRewardWithTx(tx *gorm.DB, relation *AffiliateReferral, rule 
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, err
 	}
+	if rewardType != AffiliateRewardTypeInvitee {
+		var recipient User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", recipientUserID).First(&recipient).Error; err != nil {
+			return nil, false, err
+		}
+	}
 	now := common.GetTimestamp()
 	status := AffiliateRewardStatusCredited
 	availableAt := now
@@ -2178,7 +2184,7 @@ func GetAffiliateAdminReferralActivities(inviterUserID int, keyword string, oper
   SELECT topup.id AS id, invitee.id AS invitee_user_id,
          COALESCE(invitee.username, '') AS username, COALESCE(invitee.email, '') AS email,
          '` + AffiliateActivityTopUp + `' AS operation_type,
-         COALESCE(NULLIF(topup.complete_time, 0), topup.create_time) AS occurred_at,
+         COALESCE(NULLIF(topup_event.completed_at, 0), NULLIF(topup.complete_time, 0), topup.create_time) AS occurred_at,
          CAST(COALESCE(NULLIF(topup.paid_cents, 0), ROUND(topup.money * 100), 0) AS BIGINT) AS topup_amount_cents,
          CAST(CASE WHEN cash_reward.id IS NOT NULL THEN cash_reward.cashback_cents
                    ELSE COALESCE(ROUND((quota_reward.actual_quota - quota_reward.adjusted_quota)
@@ -2187,11 +2193,16 @@ func GetAffiliateAdminReferralActivities(inviterUserID int, keyword string, oper
               END AS BIGINT) AS cashback_amount_cents
   FROM top_ups AS topup
   JOIN users AS invitee ON invitee.id = topup.user_id
+  LEFT JOIN affiliate_referrals AS referral ON referral.invitee_user_id = invitee.id
   LEFT JOIN affiliate_top_up_events AS topup_event ON topup_event.top_up_id = topup.id
   LEFT JOIN affiliate_rewards AS quota_reward ON quota_reward.id = topup_event.reward_id
   LEFT JOIN affiliate_cash_rewards AS cash_reward ON cash_reward.id = topup_event.cash_reward_id
   WHERE topup.status = ?
     AND topup.completion_source = ?
+    AND COALESCE(NULLIF(topup_event.completed_at, 0), NULLIF(topup.complete_time, 0), topup.create_time) >= CASE
+      WHEN referral.inviter_user_id = ? THEN COALESCE(NULLIF(referral.bound_at, 0), invitee.created_at)
+      ELSE invitee.created_at
+    END
     AND (invitee.inviter_id = ? OR EXISTS (
       SELECT 1 FROM affiliate_referrals AS referral
       WHERE referral.invitee_user_id = invitee.id AND referral.inviter_user_id = ?
@@ -2213,6 +2224,7 @@ func GetAffiliateAdminReferralActivities(inviterUserID int, keyword string, oper
 		inviterUserID,
 		common.TopUpStatusSuccess,
 		TopUpCompletionSourceOnlineWallet,
+		inviterUserID,
 		inviterUserID,
 		inviterUserID,
 	}

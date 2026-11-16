@@ -38,6 +38,11 @@ func TestAffiliateAdminReferralActivitiesIncludeInviteAndTopUps(t *testing.T) {
 		Status: common.TopUpStatusSuccess, CompletionSource: TopUpCompletionSourceOnlineWallet,
 		CreateTime: 290, CompleteTime: 300,
 	}
+	preBindingTopUp := &TopUp{
+		UserId: invitee.Id, Money: 5, PaidCents: 500, TradeNo: "activity-pre-binding-topup",
+		Status: common.TopUpStatusSuccess, CompletionSource: TopUpCompletionSourceOnlineWallet,
+		CreateTime: 90,
+	}
 	adminTopUp := &TopUp{
 		UserId: invitee.Id, Money: 30, PaidCents: 3000, TradeNo: "activity-admin-topup",
 		Status: common.TopUpStatusSuccess, CompletionSource: TopUpCompletionSourceAdmin,
@@ -45,6 +50,7 @@ func TestAffiliateAdminReferralActivitiesIncludeInviteAndTopUps(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(firstTopUp).Error)
 	require.NoError(t, DB.Create(secondTopUp).Error)
+	require.NoError(t, DB.Create(preBindingTopUp).Error)
 	require.NoError(t, DB.Create(adminTopUp).Error)
 	quotaReward := &AffiliateReward{
 		ReferralID: referral.ID, InviterUserID: inviter.Id, InviteeUserID: invitee.Id,

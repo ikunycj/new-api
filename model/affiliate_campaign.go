@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -233,6 +234,22 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 	if rewardCents <= 0 || bonusQuota <= 0 {
 		return ErrAffiliateAmountInvalid
 	}
+	userIDs := []int{relation.InviterUserID, relation.InviteeUserID}
+	sort.Ints(userIDs)
+	var invitee User
+	for _, userID := range userIDs {
+		var user User
+		columns := []string{"id"}
+		if userID == relation.InviteeUserID {
+			columns = append(columns, "quota")
+		}
+		if err := lockForUpdate(tx).Select(columns).Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+		if userID == relation.InviteeUserID {
+			invitee = user
+		}
+	}
 
 	account, err := ensureAffiliateCashAccountWithTx(tx, relation.InviterUserID)
 	if err != nil {
@@ -282,10 +299,6 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 		}
 	}
 
-	var invitee User
-	if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", relation.InviteeUserID).First(&invitee).Error; err != nil {
-		return err
-	}
 	quotaAfter := int64(invitee.Quota) + int64(bonusQuota)
 	if quotaAfter > int64(common.MaxQuota) {
 		return ErrAffiliateAmountInvalid
