@@ -128,8 +128,9 @@ func setupChannelRecoveryControllerDB(t *testing.T) (*gorm.DB, *model.Channel, i
 	require.NoError(t, err)
 	require.NoError(t, db.Create(&model.User{Id: userID, Username: "probe-test", Role: common.RoleRootUser, Status: common.UserStatusEnabled, Group: "default", Setting: string(settings)}).Error)
 	channel := &model.Channel{Id: userID, Type: constant.ChannelTypeOpenAI, Name: "probe-test", Key: "first", BaseURL: common.GetPointer("http://127.0.0.1"),
-		Status: common.ChannelStatusAutoDisabled, AutoProbeEnabled: common.GetPointer(true), AutoBan: common.GetPointer(0),
-		Models: "gpt-4o", TestModel: common.GetPointer("gpt-4o"), Group: "default"}
+		Status: common.ChannelStatusAutoDisabled, AutoBan: common.GetPointer(0), NotifyOnStatusChange: common.GetPointer(true),
+		AutoProbeEnabled: common.GetPointer(true),
+		Models:           "gpt-4o", TestModel: common.GetPointer("gpt-4o"), Group: "default"}
 	require.NoError(t, db.Create(channel).Error)
 	require.NoError(t, db.Create(&model.Ability{ChannelId: channel.Id, Model: "gpt-4o", Group: "default"}).Error)
 	responseTimeUpdated := make(chan struct{}, 8)
@@ -254,6 +255,46 @@ func TestManualChannelTestsRecoverOnlyWithCurrentPolicy(t *testing.T) {
 				var ability model.Ability
 				require.NoError(t, db.First(&ability, "channel_id = ?", channel.Id).Error)
 				assert.Equal(t, wantStatus == common.ChannelStatusEnabled, ability.Enabled)
+			})
+		}
+	}
+}
+
+func TestChannelStatusNotificationsAreOptIn(t *testing.T) {
+	for _, notifyEnabled := range []bool{false, true} {
+		for _, transition := range []string{"disable", "enable"} {
+			t.Run(fmt.Sprintf("notify=%t/%s", notifyEnabled, transition), func(t *testing.T) {
+				db, channel, _, transport, _ := setupChannelRecoveryControllerDB(t)
+				channel.NotifyOnStatusChange = common.GetPointer(notifyEnabled)
+				wantStatus := common.ChannelStatusAutoDisabled
+				if transition == "disable" {
+					channel.Status = common.ChannelStatusEnabled
+					channel.AutoBan = common.GetPointer(1)
+				} else {
+					wantStatus = common.ChannelStatusEnabled
+				}
+				require.NoError(t, db.Save(channel).Error)
+
+				if transition == "disable" {
+					service.DisableChannel(*types.NewChannelError(
+						channel.Id, channel.Type, channel.Name, false, channel.Key, channel.GetAutoBan(),
+					), "upstream failure")
+				} else {
+					service.EnableChannel(channel.Id, channel.Key, channel.Name)
+				}
+
+				var stored model.Channel
+				require.NoError(t, db.First(&stored, channel.Id).Error)
+				assert.Equal(t, wantStatus, stored.Status)
+				if notifyEnabled {
+					waitChannelRecoveryEffect(t, transport.notified)
+				} else {
+					select {
+					case <-transport.notified:
+						t.Fatal("disabled channel notifications were sent")
+					default:
+					}
+				}
 			})
 		}
 	}

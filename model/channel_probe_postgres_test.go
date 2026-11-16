@@ -18,6 +18,35 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestChannelStatusNotificationSettingPersists(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{})
+	channel := Channel{
+		Id:     10,
+		Name:   "notification-test",
+		Key:    "channel-key",
+		Models: "gpt-4o",
+		Group:  "default",
+		Status: common.ChannelStatusEnabled,
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.False(t, stored.ShouldNotifyOnStatusChange())
+
+	channel.NotifyOnStatusChange = common.GetPointer(true)
+	require.NoError(t, channel.Update("notify_on_status_change"))
+	stored = Channel{}
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.True(t, stored.ShouldNotifyOnStatusChange())
+
+	channel.NotifyOnStatusChange = common.GetPointer(false)
+	require.NoError(t, channel.Update("notify_on_status_change"))
+	stored = Channel{}
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.False(t, stored.ShouldNotifyOnStatusChange())
+}
+
 func TestGetChannelProbeCandidatesFiltersAndOrdersPeriodGroups(t *testing.T) {
 	setupPostgresAnalyticsTestDB(t, &Channel{})
 	channels := []Channel{

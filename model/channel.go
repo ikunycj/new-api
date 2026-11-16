@@ -47,6 +47,7 @@ type Channel struct {
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping           *string  `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	AutoBan                     *int     `json:"auto_ban" gorm:"default:0"`
+	NotifyOnStatusChange        *bool    `json:"notify_on_status_change"`
 	AutoProbeEnabled            *bool    `json:"auto_probe_enabled"`
 	ProbePeriodMinutes          int      `json:"probe_period_minutes"`
 	ProbeRandomDelayEnabled     bool     `json:"probe_random_delay_enabled"`
@@ -434,6 +435,10 @@ func (channel *Channel) GetAutoBan() bool {
 		return false
 	}
 	return *channel.AutoBan == 1
+}
+
+func (channel *Channel) ShouldNotifyOnStatusChange() bool {
+	return channel.NotifyOnStatusChange != nil && *channel.NotifyOnStatusChange
 }
 
 func (channel *Channel) GetProbePeriodMinutes() int {

@@ -92,6 +92,8 @@ describe('channel form API mapping', () => {
     assert.deepEqual(
       {
         auto_ban: CHANNEL_FORM_DEFAULT_VALUES.auto_ban,
+        notify_on_status_change:
+          CHANNEL_FORM_DEFAULT_VALUES.notify_on_status_change,
         auto_probe_enabled: CHANNEL_FORM_DEFAULT_VALUES.auto_probe_enabled,
         probe_period_minutes: CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes,
         probe_random_delay_enabled:
@@ -102,16 +104,31 @@ describe('channel form API mapping', () => {
         price_multiplier: CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
       },
       {
-        auto_ban: 0,
-        auto_probe_enabled: false,
+        auto_ban: 1,
+        notify_on_status_change: false,
+        auto_probe_enabled: true,
         probe_period_minutes: 5,
-        probe_random_delay_enabled: false,
-        probe_stream_enabled: false,
+        probe_random_delay_enabled: true,
+        probe_stream_enabled: true,
         upstream_max_retries: 0,
         max_concurrency: 1000,
         price_multiplier: 1,
       }
     )
+
+    const createPayload = transformFormDataToCreatePayload(
+      channelFormSchema.parse({
+        ...CHANNEL_FORM_DEFAULT_VALUES,
+        name: 'primary',
+        models: 'gpt-5.6-sol',
+        group: ['default'],
+        test_model: 'gpt-5.6-sol',
+      })
+    ).channel
+    assert.equal(createPayload.auto_ban, 1)
+    assert.equal(createPayload.auto_probe_enabled, true)
+    assert.equal(createPayload.probe_random_delay_enabled, true)
+    assert.equal(createPayload.probe_stream_enabled, true)
 
     const defaults = transformChannelToFormDefaults(
       channel({
@@ -124,6 +141,7 @@ describe('channel form API mapping', () => {
     )
 
     assert.equal(defaults.auto_ban, 0)
+    assert.equal(defaults.notify_on_status_change, false)
     assert.equal(defaults.auto_probe_enabled, false)
     assert.equal(defaults.probe_period_minutes, 5)
     assert.equal(defaults.probe_random_delay_enabled, false)
@@ -138,6 +156,40 @@ describe('channel form API mapping', () => {
 
     assert.equal(parsed.key, undefined)
     assert.equal(transformChannelToFormDefaults(parsed).key, '')
+  })
+
+  test('channel status notifications default off and round-trip the selection', () => {
+    const defaults = transformChannelToFormDefaults(
+      channel({ notify_on_status_change: null })
+    )
+    assert.equal(defaults.notify_on_status_change, false)
+
+    const defaultPayload = channelFormSchema.parse(defaults)
+    assert.equal(
+      transformFormDataToCreatePayload(defaultPayload).channel
+        .notify_on_status_change,
+      false
+    )
+    assert.equal(
+      transformFormDataToUpdatePayload(defaultPayload, 42)
+        .notify_on_status_change,
+      false
+    )
+
+    const enabled = transformChannelToFormDefaults(
+      channel({ notify_on_status_change: true })
+    )
+    const enabledPayload = channelFormSchema.parse(enabled)
+    assert.equal(
+      transformFormDataToCreatePayload(enabledPayload).channel
+        .notify_on_status_change,
+      true
+    )
+    assert.equal(
+      transformFormDataToUpdatePayload(enabledPayload, 42)
+        .notify_on_status_change,
+      true
+    )
   })
 
   for (const enabled of [true, false]) {

@@ -334,6 +334,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.weight ||
     (values.auto_ban ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    values.notify_on_status_change ||
     values.auto_probe_enabled === true ||
     values.probe_period_minutes !==
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
@@ -772,6 +773,7 @@ export function ChannelMutateDrawer({
   const currentWeight = form.watch('weight')
   const currentTestModel = form.watch('test_model')
   const currentAutoBan = form.watch('auto_ban')
+  const currentNotifyOnStatusChange = form.watch('notify_on_status_change')
   const currentAutoProbeEnabled = form.watch('auto_probe_enabled')
   const currentProbePeriodMinutes = form.watch('probe_period_minutes')
   const currentProbeRandomDelayEnabled = form.watch(
@@ -1048,6 +1050,7 @@ export function ChannelMutateDrawer({
     currentTestModel?.trim() ||
     (currentAutoBan ?? CHANNEL_FORM_DEFAULT_VALUES.auto_ban) !==
       CHANNEL_FORM_DEFAULT_VALUES.auto_ban ||
+    currentNotifyOnStatusChange ||
     currentAutoProbeEnabled === true ||
     currentProbePeriodMinutes !==
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
@@ -3750,6 +3753,29 @@ export function ChannelMutateDrawer({
                                   )}
                                 />
                               </div>
+                              <FormField
+                                control={form.control}
+                                name='notify_on_status_change'
+                                render={({ field }) => (
+                                  <FormItem className='gap-1'>
+                                    <div className='flex items-center justify-between gap-2'>
+                                      <FormLabel>
+                                        渠道状态变化通知管理员
+                                      </FormLabel>
+                                      <FormControl>
+                                        <Switch
+                                          className='shrink-0'
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                        />
+                                      </FormControl>
+                                    </div>
+                                    <FormDescription>
+                                      开启后，渠道自动禁用或恢复启用时通知根管理员
+                                    </FormDescription>
+                                  </FormItem>
+                                )}
+                              />
                               <Link
                                 to='/system-settings/models/$section'
                                 params={{ section: 'routing-reliability' }}

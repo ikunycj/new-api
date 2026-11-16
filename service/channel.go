@@ -28,6 +28,9 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 
 	success := model.UpdateChannelStatus(channelError.ChannelId, channelError.UsingKey, common.ChannelStatusAutoDisabled, reason)
 	if success {
+		if !channelStatusChangeNotificationsEnabled(channelError.ChannelId) {
+			return
+		}
 		subject := fmt.Sprintf("通道「%s」（#%d）已被禁用", channelError.ChannelName, channelError.ChannelId)
 		content := fmt.Sprintf("通道「%s」（#%d）已被禁用，原因：%s", channelError.ChannelName, channelError.ChannelId, reason)
 		NotifyRootUser(formatNotifyType(channelError.ChannelId, common.ChannelStatusAutoDisabled), subject, content)
@@ -37,10 +40,22 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 func EnableChannel(channelId int, usingKey string, channelName string) {
 	success := model.UpdateChannelStatus(channelId, usingKey, common.ChannelStatusEnabled, "")
 	if success {
+		if !channelStatusChangeNotificationsEnabled(channelId) {
+			return
+		}
 		subject := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
 		content := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
 		NotifyRootUser(formatNotifyType(channelId, common.ChannelStatusEnabled), subject, content)
 	}
+}
+
+func channelStatusChangeNotificationsEnabled(channelID int) bool {
+	channel, err := model.GetChannelById(channelID, false)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to load channel notification settings: channel_id=%d, error=%v", channelID, err))
+		return false
+	}
+	return channel.ShouldNotifyOnStatusChange()
 }
 
 // CompleteChannelProbe notifies only after the lease-guarded result and channel
@@ -69,6 +84,9 @@ func RecoverChannelAfterTest(ctx context.Context, channelID int, usingKey string
 }
 
 func notifyChannelProbeStatus(channel *model.Channel, reason string) {
+	if !channel.ShouldNotifyOnStatusChange() {
+		return
+	}
 	subject := fmt.Sprintf("通道「%s」（#%d）已被启用", channel.Name, channel.Id)
 	content := subject
 	if channel.Status == common.ChannelStatusAutoDisabled {
