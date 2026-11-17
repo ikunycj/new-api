@@ -67,6 +67,11 @@ export function MessageError({
         <AlertTitle>{t('Model Price Not Configured')}</AlertTitle>
         <AlertDescription className='space-y-2'>
           <p>{content}</p>
+          {message.requestId && (
+            <p className='text-muted-foreground text-xs'>
+              {t('Request ID')}: <code>{message.requestId}</code>
+            </p>
+          )}
           {errorState.showSettingsLink && (
             <Button
               variant='outline'
@@ -93,6 +98,11 @@ export function MessageError({
             ? t(FALLBACK_ERROR_CONTENT)
             : errorState.content}
         </p>
+        {message.requestId && (
+          <p className='text-muted-foreground text-xs'>
+            {t('Request ID')}: <code>{message.requestId}</code>
+          </p>
+        )}
         {actions}
       </AlertDescription>
     </Alert>

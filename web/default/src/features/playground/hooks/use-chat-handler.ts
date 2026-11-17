@@ -212,7 +212,7 @@ export function useChatHandler({
 
   // Handle stream error
   const handleStreamError = useCallback(
-    (error: string, errorCode?: string) => {
+    (error: string, errorCode?: string, requestId?: string) => {
       flushStreamUpdates()
       setIsRequesting(false)
       abortControllerRef.current = null
@@ -224,7 +224,8 @@ export function useChatHandler({
           prev,
           displayError,
           errorCode,
-          errorTitle
+          errorTitle,
+          requestId
         )
       )
     },
@@ -343,7 +344,12 @@ export function useChatHandler({
         }
         abortControllerRef.current = null
         setIsRequesting(false)
-        handleStreamError(getContextErrorMessage(error))
+        const details = parseRequestErrorDetails(error)
+        handleStreamError(
+          getContextErrorMessage(error),
+          details.errorCode,
+          details.requestId
+        )
       }
     },
     [
@@ -403,7 +409,8 @@ export function useChatHandler({
           error instanceof ConversationContextError
             ? getContextErrorMessage(error)
             : details.errorMessage,
-          details.errorCode
+          details.errorCode,
+          details.requestId
         )
       } finally {
         if (requestIdRef.current === requestId) {
@@ -477,12 +484,14 @@ export function useChatHandler({
       } catch (error: unknown) {
         if (abortController.signal.aborted) return
 
-        const { errorCode, errorMessage } = parseRequestErrorDetails(error)
+        const { errorCode, errorMessage, requestId } =
+          parseRequestErrorDetails(error)
         handleStreamError(
           error instanceof ConversationContextError
             ? getContextErrorMessage(error)
             : errorMessage,
-          errorCode
+          errorCode,
+          requestId
         )
       } finally {
         if (requestIdRef.current === requestId) {

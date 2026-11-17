@@ -28,7 +28,8 @@ export function updateAssistantMessageWithError(
   messages: Message[],
   errorMessage: string,
   errorCode?: string,
-  title: string = ERROR_MESSAGES.API_REQUEST_ERROR
+  title: string = ERROR_MESSAGES.API_REQUEST_ERROR,
+  requestId?: string
 ): Message[] {
   return updateLastAssistantMessage(messages, (message) => {
     const updatedMessage = updateCurrentVersionContent(
@@ -41,6 +42,7 @@ export function updateAssistantMessageWithError(
       status: MESSAGE_STATUS.ERROR,
       isReasoningStreaming: false,
       errorCode: errorCode || null,
+      requestId: requestId || null,
     })
   })
 }

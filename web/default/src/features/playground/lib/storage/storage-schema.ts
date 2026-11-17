@@ -100,6 +100,7 @@ const messageSchema = z.object({
   isContentComplete: z.boolean().optional(),
   status: messageStatusSchema.optional(),
   errorCode: z.string().nullable().optional(),
+  requestId: z.string().nullable().optional(),
   images: z.array(generatedImageSchema).min(1).optional(),
 })
 

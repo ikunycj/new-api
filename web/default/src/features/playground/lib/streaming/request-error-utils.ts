@@ -24,25 +24,47 @@ type RequestErrorLike = {
     data?: {
       error?: {
         code?: string
+        message?: string
+        request_id?: string
       }
       message?: string
+      request_id?: string
     }
+    headers?: Record<string, string | string[] | undefined>
   }
 }
 
 export type RequestErrorDetails = {
   errorCode?: string
   errorMessage: string
+  requestId?: string
+}
+
+function getRequestIdFromHeaders(
+  headers?: Record<string, string | string[] | undefined>
+): string | undefined {
+  const entry = Object.entries(headers ?? {}).find(
+    ([key]) => key.toLowerCase() === 'x-oneapi-request-id'
+  )
+  const value = entry?.[1]
+  if (Array.isArray(value)) return value[0] || undefined
+  return value || undefined
 }
 
 export function parseRequestErrorDetails(error: unknown): RequestErrorDetails {
   const requestError = error as RequestErrorLike
+  const errorData = requestError?.response?.data
 
   return {
-    errorCode: requestError?.response?.data?.error?.code || undefined,
+    errorCode: errorData?.error?.code || undefined,
     errorMessage:
-      requestError?.response?.data?.message ||
+      errorData?.error?.message ||
+      errorData?.message ||
       requestError?.message ||
       ERROR_MESSAGES.API_REQUEST_ERROR,
+    requestId:
+      errorData?.error?.request_id ||
+      errorData?.request_id ||
+      getRequestIdFromHeaders(requestError?.response?.headers),
   }
 }

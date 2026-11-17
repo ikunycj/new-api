@@ -62,6 +62,7 @@ export interface Message {
   isContentComplete?: boolean
   status?: MessageStatus
   errorCode?: string | null
+  requestId?: string | null
   images?: GeneratedImage[]
 }
 

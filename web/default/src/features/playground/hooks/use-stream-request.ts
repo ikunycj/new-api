@@ -54,7 +54,7 @@ export function useStreamRequest() {
       payload: ChatCompletionRequest,
       onUpdate: (type: 'reasoning' | 'content', chunk: string) => void,
       onComplete: () => void,
-      onError: (error: string, errorCode?: string) => void
+      onError: (error: string, errorCode?: string, requestId?: string) => void
     ) => {
       sseSourceRef.current?.close()
 
@@ -68,9 +68,13 @@ export function useStreamRequest() {
       isStreamCompleteRef.current = false
       setIsStreaming(true)
 
-      const handleError = (errorMessage: string, errorCode?: string) => {
+      const handleError = (
+        errorMessage: string,
+        errorCode?: string,
+        requestId?: string
+      ) => {
         if (!isStreamCompleteRef.current) {
-          onError(errorMessage, errorCode)
+          onError(errorMessage, errorCode, requestId)
           closeActiveStream(source)
         }
       }
@@ -92,19 +96,32 @@ export function useStreamRequest() {
         } catch (error) {
           // eslint-disable-next-line no-console
           console.error('Failed to parse SSE message:', error)
-          handleError(ERROR_MESSAGES.PARSE_ERROR)
+          handleError(
+            ERROR_MESSAGES.PARSE_ERROR,
+            undefined,
+            source.xhr?.getResponseHeader('X-Oneapi-Request-Id') || undefined
+          )
         }
       })
 
-      source.addEventListener('error', (e: Event & { data?: string }) => {
-        // Only handle errors if stream didn't complete normally
-        if (!isStreamClosedReadyState(source.readyState)) {
-          // eslint-disable-next-line no-console
-          console.error('SSE Error:', e)
-          const { errorCode, errorMessage } = parseStreamErrorDetails(e.data)
-          handleError(errorMessage, errorCode)
+      source.addEventListener(
+        'error',
+        (e: Event & { data?: string; headers?: Record<string, string[]> }) => {
+          // Only handle errors if stream didn't complete normally
+          if (!isStreamClosedReadyState(source.readyState)) {
+            // eslint-disable-next-line no-console
+            console.error('SSE Error:', e)
+            const { errorCode, errorMessage, requestId } =
+              parseStreamErrorDetails(e.data)
+            const responseRequestId =
+              requestId ||
+              e.headers?.['x-oneapi-request-id']?.[0] ||
+              source.xhr?.getResponseHeader('X-Oneapi-Request-Id') ||
+              undefined
+            handleError(errorMessage, errorCode, responseRequestId)
+          }
         }
-      })
+      )
 
       source.addEventListener(
         'readystatechange',
@@ -112,7 +129,11 @@ export function useStreamRequest() {
           const errorMessage = getStreamReadyStateError(e.readyState, source)
 
           if (errorMessage) {
-            handleError(errorMessage)
+            handleError(
+              errorMessage,
+              undefined,
+              source.xhr?.getResponseHeader('X-Oneapi-Request-Id') || undefined
+            )
           }
         }
       )
