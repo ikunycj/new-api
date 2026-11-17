@@ -355,15 +355,18 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			}
 		}
 		if original.Type == LogTypeError || (original.Type == LogTypeRefund && original.ChannelId > 0) {
-			// Only a recorded raw error message can match a message rule; do not
-			// strip status prefixes or guess codes from historical log prose.
+			// Match recorded error fields before projecting the public view; do
+			// not infer missing status or codes from historical log prose.
+			statusCode, _ := other["status_code"].(float64)
 			errorCode := common.Interface2String(other["error_code"])
-			publicCode, publicMessage := common.PublicChannelError(errorCode, original.Content)
-			view.Content = publicMessage
-			publicOther["error_code"] = publicCode
+			errorType, _ := other["error_type"].(string)
+			fields, _ := common.PublicChannelErrorFields(int(statusCode), errorCode, errorType, original.Content)
+			view.Content = fields.Message
+			publicOther["error_code"] = fields.Code
 			if _, ok := other["reason"]; ok {
 				reason, _ := other["reason"].(string)
-				_, publicOther["reason"] = common.PublicChannelError(errorCode, reason)
+				reasonFields, _ := common.PublicChannelErrorFields(int(statusCode), errorCode, errorType, reason)
+				publicOther["reason"] = reasonFields.Message
 			}
 		}
 		view.Other = common.MapToJsonStr(publicOther)
