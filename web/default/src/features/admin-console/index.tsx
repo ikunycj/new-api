@@ -125,8 +125,12 @@ function ConsoleCardGrid(props: { data: AdminConsoleDataState }) {
             启用 {formatCompactNumber(stats?.channels.enabled ?? 0)}
           </span>
           {' / '}
+          <span className='text-warning'>
+            自动禁用 {formatCompactNumber(stats?.channels.auto_disabled ?? 0)}
+          </span>
+          {' / '}
           <span className='text-destructive'>
-            异常 {formatCompactNumber(stats?.channels.auto_disabled ?? 0)}
+            禁用 {formatCompactNumber(stats?.channels.disabled ?? 0)}
           </span>
         </>
       ),

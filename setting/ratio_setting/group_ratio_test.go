@@ -265,11 +265,12 @@ func TestPricingGroupRetryPolicyDefaultsToActiveChannels(t *testing.T) {
 
 func TestPricingGroupRoutingStrategyPresetsAndDefaults(t *testing.T) {
 	assert.Equal(t, PricingGroupRoutingStrategy{
-		Strategy:           PricingGroupRoutingStrategyPriceFirst,
-		PriceWeight:        65,
-		AvailabilityWeight: 20,
-		LoadWeight:         15,
-		TTFTWeight:         0,
+		Strategy:               PricingGroupRoutingStrategyPriceFirst,
+		PriceWeight:            65,
+		AvailabilityWeight:     20,
+		LoadWeight:             15,
+		TTFTWeight:             0,
+		IQTestConfidenceWeight: 0,
 	}, PricingGroupRoutingStrategyPreset(PricingGroupRoutingStrategyPriceFirst))
 	assert.Equal(t, DefaultPricingGroupRoutingStrategy(), PricingGroupRoutingStrategyPreset("unknown"))
 
@@ -305,7 +306,8 @@ func TestPricingGroupRoutingConfigurationCRUDValidation(t *testing.T) {
 	assert.Equal(t, "企业稳定", configuration.Strategies["custom"].Name)
 
 	for _, value := range []string{
-		`{"strategies":{"bad":{"name":"错误","price_weight":50,"availability_weight":20,"load_weight":20}},"group_bindings":{"alpha":"bad","beta":"bad"}}`,
+		`{"strategies":{"bad":{"name":"错误","price_weight":-1,"availability_weight":20,"load_weight":20}},"group_bindings":{"alpha":"bad","beta":"bad"}}`,
+		`{"strategies":{"zero":{"name":"零权重","price_weight":0,"availability_weight":0,"load_weight":0}},"group_bindings":{"alpha":"zero","beta":"zero"}}`,
 		`{"strategies":{"one":{"name":"重复","price_weight":40,"availability_weight":40,"load_weight":20},"two":{"name":"重复","price_weight":20,"availability_weight":60,"load_weight":20}},"group_bindings":{"alpha":"one","beta":"two"}}`,
 		`{"strategies":{"one":{"name":"存在","price_weight":40,"availability_weight":40,"load_weight":20}},"group_bindings":{"alpha":"missing","beta":"one"}}`,
 		`{"strategies":{"one":{"name":"存在","price_weight":40,"availability_weight":40,"load_weight":20}},"group_bindings":{"alpha":"one"}}`,
@@ -318,12 +320,13 @@ func TestPricingGroupRoutingConfigurationCRUDValidation(t *testing.T) {
 
 func TestPricingGroupRoutingConfigurationSupportsTTFTWeight(t *testing.T) {
 	configuration, err := ParsePricingGroupRoutingConfiguration(`{
-		"strategies":{"latency":{"name":"低延迟","price_weight":20,"availability_weight":20,"load_weight":10,"ttft_weight":25,"recent_test_ttft_weight":25}},
+		"strategies":{"latency":{"name":"低延迟","price_weight":20,"availability_weight":20,"load_weight":10,"ttft_weight":20,"recent_test_ttft_weight":20,"iq_test_confidence_weight":10}},
 		"group_bindings":{"alpha":"latency"}
 	}`, map[string]float64{"alpha": 1})
 	require.NoError(t, err)
-	assert.Equal(t, float64(25), configuration.Strategies["latency"].TTFTWeight)
-	assert.Equal(t, float64(25), configuration.Strategies["latency"].RecentTestTTFTWeight)
+	assert.Equal(t, float64(20), configuration.Strategies["latency"].TTFTWeight)
+	assert.Equal(t, float64(20), configuration.Strategies["latency"].RecentTestTTFTWeight)
+	assert.Equal(t, float64(10), configuration.Strategies["latency"].IQTestConfidenceWeight)
 
 	// Existing persisted configurations omit ttft_weight and retain their
 	// original three-weight total.
@@ -334,18 +337,29 @@ func TestPricingGroupRoutingConfigurationSupportsTTFTWeight(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, legacy.Strategies["legacy"].TTFTWeight)
 	assert.Zero(t, legacy.Strategies["legacy"].RecentTestTTFTWeight)
-
-	_, err = ParsePricingGroupRoutingConfiguration(`{
-		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"ttft_weight":10}},
-		"group_bindings":{"alpha":"invalid"}
-	}`, map[string]float64{"alpha": 1})
-	require.Error(t, err)
+	assert.Zero(t, legacy.Strategies["legacy"].IQTestConfidenceWeight)
 
 	_, err = ParsePricingGroupRoutingConfiguration(`{
 		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"recent_test_ttft_weight":-1}},
 		"group_bindings":{"alpha":"invalid"}
 	}`, map[string]float64{"alpha": 1})
 	require.Error(t, err)
+	_, err = ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"invalid":{"name":"无效","price_weight":30,"availability_weight":30,"load_weight":20,"iq_test_confidence_weight":-1}},
+		"group_bindings":{"alpha":"invalid"}
+	}`, map[string]float64{"alpha": 1})
+	require.Error(t, err)
+}
+
+func TestPricingGroupRoutingConfigurationAcceptsRelativeWeights(t *testing.T) {
+	configuration, err := ParsePricingGroupRoutingConfiguration(`{
+		"strategies":{"relative":{"name":"相对权重","price_weight":10,"availability_weight":10,"load_weight":1000}},
+		"group_bindings":{"alpha":"relative"}
+	}`, map[string]float64{"alpha": 1})
+	require.NoError(t, err)
+	assert.Equal(t, PricingGroupRoutingStrategy{
+		Strategy: "relative", Name: "相对权重", PriceWeight: 10, AvailabilityWeight: 10, LoadWeight: 1000,
+	}, configuration.Strategies["relative"])
 }
 
 func TestPricingGroupRoutingConfigurationRejectsDeletingReferencedStrategy(t *testing.T) {

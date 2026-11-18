@@ -346,6 +346,9 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
+	if err := normalizeChannelIQProbeDefaults(); err != nil {
+		return err
+	}
 	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
@@ -453,6 +456,9 @@ func migrateDBFast() error {
 			return err
 		}
 	}
+	if err := normalizeChannelIQProbeDefaults(); err != nil {
+		return err
+	}
 	if err := normalizeLegacyUserGroups(); err != nil {
 		return err
 	}
@@ -461,6 +467,61 @@ func migrateDBFast() error {
 	}
 	common.SysLog("database migrated")
 	return nil
+}
+
+// normalizeChannelIQProbeDefaults fills values added after the initial channel
+// and probe-state schema was created. AutoMigrate preserves existing rows and
+// therefore leaves newly added nullable columns as NULL; the runtime models
+// and lease predicates require concrete defaults.
+func normalizeChannelIQProbeDefaults() error {
+	if DB == nil {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if tx.Migrator().HasTable(&Channel{}) {
+			updates := []struct {
+				column string
+				value  any
+				where  string
+			}{
+				{"iq_probe_enabled", false, "iq_probe_enabled IS NULL"},
+				{"iq_probe_period_minutes", DefaultChannelIQProbePeriodMinutes, "iq_probe_period_minutes IS NULL OR iq_probe_period_minutes = 0"},
+				{"iq_probe_sample_count", DefaultChannelIQProbeSampleCount, "iq_probe_sample_count IS NULL OR iq_probe_sample_count = 0"},
+				{"iq_probe_engine", DefaultChannelIQProbeEngine, "iq_probe_engine IS NULL OR iq_probe_engine = ''"},
+				{"iq_auto_disable_degraded", false, "iq_auto_disable_degraded IS NULL"},
+			}
+			for _, update := range updates {
+				if !tx.Migrator().HasColumn(&Channel{}, update.column) {
+					continue
+				}
+				if err := tx.Model(&Channel{}).
+					Where(update.where).
+					Update(update.column, update.value).Error; err != nil {
+					return err
+				}
+			}
+			if tx.Migrator().HasColumn(&Channel{}, "iq_probe_engine") {
+				if err := tx.Model(&Channel{}).
+					Where("iq_probe_engine IS NULL OR iq_probe_engine = '' OR iq_probe_engine <> ?", DefaultChannelIQProbeEngine).
+					Update("iq_probe_engine", DefaultChannelIQProbeEngine).Error; err != nil {
+					return err
+				}
+			}
+		}
+		if tx.Migrator().HasTable(&ChannelProbeState{}) {
+			for _, column := range []string{"last_iq_probe_at", "iq_lease_until"} {
+				if !tx.Migrator().HasColumn(&ChannelProbeState{}, column) {
+					continue
+				}
+				if err := tx.Model(&ChannelProbeState{}).
+					Where(column+" IS NULL").
+					Update(column, int64(0)).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 // migrateUsernameToNonUnique removes the legacy username uniqueness constraint.

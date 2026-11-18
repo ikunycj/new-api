@@ -225,7 +225,7 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 		`["alpha"]`,
 		`{"alpha":{"mode":"active_channels","retry_times":0}}`,
 		`{
-			"strategies":{"enterprise":{"name":"企业策略","price_weight":45,"availability_weight":20,"load_weight":10,"ttft_weight":5,"recent_test_ttft_weight":20}},
+			"strategies":{"enterprise":{"name":"企业策略","price_weight":45,"availability_weight":20,"load_weight":10,"ttft_weight":5,"recent_test_ttft_weight":20,"iq_test_confidence_weight":2.5}},
 			"group_bindings":{"alpha":"enterprise"}
 		}`,
 	))
@@ -237,6 +237,7 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 	assert.Equal(t, float64(10), strategy.LoadWeight)
 	assert.Equal(t, float64(5), strategy.TTFTWeight)
 	assert.Equal(t, float64(20), strategy.RecentTestTTFTWeight)
+	assert.Equal(t, 2.5, strategy.IQTestConfidenceWeight)
 
 	var stored Option
 	require.NoError(t, DB.Where(commonKeyCol+" = ?", "PricingGroupRoutingStrategy").First(&stored).Error)
@@ -249,6 +250,7 @@ func TestUpdatePricingGroupConfigurationPersistsRoutingStrategies(t *testing.T) 
 	assert.Equal(t, float64(10), persistedStrategy.LoadWeight)
 	assert.Equal(t, float64(5), persistedStrategy.TTFTWeight)
 	assert.Equal(t, float64(20), persistedStrategy.RecentTestTTFTWeight)
+	assert.Equal(t, 2.5, persistedStrategy.IQTestConfidenceWeight)
 	assert.Equal(t, "enterprise", persisted.GroupBindings["alpha"])
 }
 

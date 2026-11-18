@@ -66,7 +66,28 @@ func CompleteChannelProbe(ctx context.Context, channelID int, result model.Chann
 		return 0, false, err
 	}
 	if changed {
-		notifyChannelProbeStatus(channel, result.ErrorMessage)
+		reason := result.ErrorMessage
+		if statusReason, ok := channel.GetOtherInfo()["status_reason"].(string); ok && statusReason != "" {
+			reason = statusReason
+		}
+		notifyChannelProbeStatus(channel, reason)
+	}
+	return channel.Status, changed, nil
+}
+
+// CompleteChannelIQProbe commits an IQ result as probe history and reuses the
+// regular status notification path when auto-ban/recovery changes the channel.
+func CompleteChannelIQProbe(ctx context.Context, channelID int, result *model.ChannelProbeHistory, leaseUntil int64, usingKey, testModel string, analysis *model.ChannelIQProbeAnalysis) (int, bool, error) {
+	channel, changed, err := model.CompleteChannelIQProbe(ctx, channelID, result, leaseUntil, usingKey, testModel, analysis)
+	if err != nil {
+		return 0, false, err
+	}
+	if changed {
+		reason := result.ErrorMessage
+		if statusReason, ok := channel.GetOtherInfo()["status_reason"].(string); ok && statusReason != "" {
+			reason = statusReason
+		}
+		notifyChannelProbeStatus(channel, reason)
 	}
 	return channel.Status, changed, nil
 }
@@ -74,6 +95,17 @@ func CompleteChannelProbe(ctx context.Context, channelID int, result model.Chann
 // RecoverChannelAfterTest 仅在安全恢复事务提交后通知，不使用请求开始时的渠道快照。
 func RecoverChannelAfterTest(ctx context.Context, channelID int, usingKey string) error {
 	channel, changed, err := model.RecoverChannelAfterTest(ctx, channelID, usingKey)
+	if err != nil {
+		return err
+	}
+	if changed {
+		notifyChannelProbeStatus(channel, "")
+	}
+	return nil
+}
+
+func CompleteManualChannelIQTest(ctx context.Context, channelID int, testModel, usingKey string, analysis *model.ChannelIQProbeAnalysis) error {
+	channel, changed, err := model.CompleteManualChannelIQTest(ctx, channelID, testModel, usingKey, analysis)
 	if err != nil {
 		return err
 	}

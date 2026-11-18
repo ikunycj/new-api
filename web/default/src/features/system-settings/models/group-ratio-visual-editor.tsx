@@ -82,6 +82,11 @@ import type {
 import { formatQuota } from '@/lib/format'
 
 import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
+import {
+  STRATEGY_WEIGHT_FIELDS,
+  strategyWeightPercentages,
+  type StrategyWeightDraft,
+} from './routing-strategy-weights'
 
 type GroupRatioVisualEditorProps = {
   groupRatio: string
@@ -125,6 +130,7 @@ type PricingGroupRoutingStrategy = {
   load_weight: number
   ttft_weight: number
   recent_test_ttft_weight: number
+  iq_test_confidence_weight: number
 }
 
 type PricingGroupRoutingConfiguration = {
@@ -132,15 +138,10 @@ type PricingGroupRoutingConfiguration = {
   group_bindings: Record<string, string>
 }
 
-type StrategyDraft = {
+type StrategyDraft = StrategyWeightDraft & {
   _id: string
   id: string
   name: string
-  priceWeight: string
-  availabilityWeight: string
-  loadWeight: string
-  ttftWeight: string
-  recentTestTTFTWeight: string
 }
 
 type GroupPricingEditorState = {
@@ -162,14 +163,12 @@ const RETRY_MODE_ITEMS = [
 const DEFAULT_ROUTING_STRATEGY_DEFINITIONS: Array<{
   id: string
   name: string
-  weights: [number, number, number, number, number]
+  weights: [number, number, number, number, number, number]
 }> = [
-  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0, 0] },
-  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0, 0] },
-  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0, 0] },
+  { id: 'price_first', name: '价格优先', weights: [65, 20, 15, 0, 0, 0] },
+  { id: 'balanced', name: '均衡', weights: [40, 40, 20, 0, 0, 0] },
+  { id: 'stable', name: '稳定', weights: [20, 60, 20, 0, 0, 0] },
 ]
-const STRATEGY_WEIGHT_EPSILON = 0.0001
-
 let groupPricingIdCounter = 0
 function createGroupPricingId() {
   groupPricingIdCounter += 1
@@ -307,6 +306,7 @@ function parsePricingGroupRoutingConfiguration(
               load_weight: definition.weights[2],
               ttft_weight: definition.weights[3],
               recent_test_ttft_weight: definition.weights[4],
+              iq_test_confidence_weight: definition.weights[5],
             },
           ])
         ),
@@ -334,6 +334,8 @@ function parsePricingGroupRoutingConfiguration(
       ttft_weight: readWeight('ttft_weight') || 0,
       // Older saved configurations predate recent-test TTFT routing.
       recent_test_ttft_weight: readWeight('recent_test_ttft_weight') || 0,
+      // Older saved configurations predate IQ confidence routing.
+      iq_test_confidence_weight: readWeight('iq_test_confidence_weight') || 0,
     }
   }
 
@@ -359,6 +361,7 @@ function strategyDraftsFromConfiguration(
     loadWeight: String(strategy.load_weight),
     ttftWeight: String(strategy.ttft_weight),
     recentTestTTFTWeight: String(strategy.recent_test_ttft_weight),
+    iqTestConfidenceWeight: String(strategy.iq_test_confidence_weight),
   }))
 }
 
@@ -385,32 +388,13 @@ function isValidGroupRatio(value: string): boolean {
   return Number.isFinite(ratio) && ratio >= 0
 }
 
-function isValidStrategyWeight(value: string): boolean {
-  if (value.trim() === '') return false
-  const weight = Number(value)
-  return Number.isFinite(weight) && weight >= 0
-}
-
 function isValidStrategyDraft(strategy: StrategyDraft): boolean {
-  if (
-    strategy.id.trim() === '' ||
-    strategy.id.trim() !== strategy.id ||
-    strategy.name.trim() === '' ||
-    !isValidStrategyWeight(strategy.priceWeight) ||
-    !isValidStrategyWeight(strategy.availabilityWeight) ||
-    !isValidStrategyWeight(strategy.loadWeight) ||
-    !isValidStrategyWeight(strategy.ttftWeight) ||
-    !isValidStrategyWeight(strategy.recentTestTTFTWeight)
-  ) {
-    return false
-  }
-  const total =
-    Number(strategy.priceWeight) +
-    Number(strategy.availabilityWeight) +
-    Number(strategy.loadWeight) +
-    Number(strategy.ttftWeight) +
-    Number(strategy.recentTestTTFTWeight)
-  return Math.abs(total - 100) <= STRATEGY_WEIGHT_EPSILON
+  return (
+    strategy.id.trim() !== '' &&
+    strategy.id.trim() === strategy.id &&
+    strategy.name.trim() !== '' &&
+    strategyWeightPercentages(strategy) !== null
+  )
 }
 
 function isValidGroupPricingRow(
@@ -534,6 +518,7 @@ function serializeGroupPricingState(
       load_weight: Number(strategy.loadWeight),
       ttft_weight: Number(strategy.ttftWeight),
       recent_test_ttft_weight: Number(strategy.recentTestTTFTWeight),
+      iq_test_confidence_weight: Number(strategy.iqTestConfidenceWeight),
     }
   }
 
@@ -928,13 +913,7 @@ function GroupPricingTable({
   const updateStrategy = useCallback(
     (
       draftId: string,
-      field:
-        | 'name'
-        | 'priceWeight'
-        | 'availabilityWeight'
-        | 'loadWeight'
-        | 'ttftWeight'
-        | 'recentTestTTFTWeight',
+      field: 'name' | keyof StrategyWeightDraft,
       value: string
     ) => {
       const nextStrategies = currentStrategies.map((strategy) =>
@@ -975,6 +954,7 @@ function GroupPricingTable({
         loadWeight: '20',
         ttftWeight: '0',
         recentTestTTFTWeight: '0',
+        iqTestConfidenceWeight: '0',
       },
     ])
   }, [currentRows, currentStrategies, emitState])
@@ -1073,8 +1053,8 @@ function GroupPricingTable({
     (row) =>
       row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
   )
-  const hasInvalidStrategyDefinition = currentStrategies.some(
-    (strategy) => !isValidStrategyDraft(strategy)
+  const hasEmptyStrategyName = currentStrategies.some(
+    (strategy) => strategy.name.trim() === ''
   )
   const duplicateStrategyNames = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1444,7 +1424,7 @@ function GroupPricingTable({
                 <div>
                   <div className='text-sm font-semibold'>策略设置</div>
                   <div className='text-muted-foreground text-xs'>
-                    策略独立于定价分组维护，五项权重总和必须为 100。
+                    按相对权重计分，权重为 0 的项目不参与评分。
                   </div>
                 </div>
                 <Button
@@ -1458,73 +1438,74 @@ function GroupPricingTable({
                 </Button>
               </div>
               <div className='space-y-3 p-4'>
-                {currentStrategies.map((strategy) => (
-                  <div
-                    key={strategy._id}
-                    className='grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(10rem,1fr)_repeat(5,7rem)_2.5rem] md:items-end'
-                  >
-                    <div className='space-y-1'>
-                      <Label className='text-xs'>名称</Label>
-                      <Input
-                        value={strategy.name}
-                        aria-invalid={
-                          strategy.name.trim() === '' ||
-                          duplicateStrategyNames.has(strategy.name.trim())
-                        }
-                        onChange={(event) =>
-                          updateStrategy(
-                            strategy._id,
-                            'name',
-                            event.target.value
-                          )
-                        }
-                      />
-                    </div>
-                    {(
-                      [
-                        ['价格', 'priceWeight'],
-                        ['可用性', 'availabilityWeight'],
-                        ['负载', 'loadWeight'],
-                        ['昨日平均TTFT', 'ttftWeight'],
-                        ['最近测试TTFT', 'recentTestTTFTWeight'],
-                      ] as const
-                    ).map(([label, field]) => (
-                      <div key={field} className='space-y-1'>
-                        <Label className='text-xs'>{label}权重</Label>
+                {currentStrategies.map((strategy) => {
+                  const percentages = strategyWeightPercentages(strategy)
+                  return (
+                    <div
+                      key={strategy._id}
+                      className='grid gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_repeat(6,7rem)_2.5rem] xl:items-end'
+                    >
+                      <div className='space-y-1'>
+                        <Label className='text-xs'>名称</Label>
                         <Input
-                          type='number'
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={strategy[field]}
-                          aria-label={`${strategy.name} ${label}权重`}
+                          value={strategy.name}
+                          aria-invalid={
+                            strategy.name.trim() === '' ||
+                            duplicateStrategyNames.has(strategy.name.trim())
+                          }
                           onChange={(event) =>
                             updateStrategy(
                               strategy._id,
-                              field,
+                              'name',
                               event.target.value
                             )
                           }
                         />
                       </div>
-                    ))}
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      aria-label='删除策略'
-                      title='删除策略'
-                      onClick={() => removeStrategy(strategy._id)}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} />
-                    </Button>
-                    <div className='text-muted-foreground text-xs md:col-span-7'>
-                      当前比例：{strategy.priceWeight}% /{' '}
-                      {strategy.availabilityWeight}% / {strategy.loadWeight}% /{' '}
-                      {strategy.ttftWeight}% / {strategy.recentTestTTFTWeight}%
+                      {STRATEGY_WEIGHT_FIELDS.map(([label, field]) => (
+                        <div key={field} className='space-y-1'>
+                          <Label className='text-xs'>{label}权重</Label>
+                          <Input
+                            type='number'
+                            min={0}
+                            step='any'
+                            value={strategy[field]}
+                            aria-label={`${strategy.name} ${label}权重`}
+                            onChange={(event) =>
+                              updateStrategy(
+                                strategy._id,
+                                field,
+                                event.target.value
+                              )
+                            }
+                          />
+                        </div>
+                      ))}
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        aria-label='删除策略'
+                        title='删除策略'
+                        onClick={() => removeStrategy(strategy._id)}
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} />
+                      </Button>
+                      {percentages ? (
+                        <div className='text-muted-foreground text-xs md:col-span-2 xl:col-span-8'>
+                          评分占比：
+                          {percentages
+                            .map((p) => `${Number(p.toFixed(2))}%`)
+                            .join(' / ')}
+                        </div>
+                      ) : (
+                        <p className='text-destructive text-xs md:col-span-2 xl:col-span-8'>
+                          每项权重都要填写非负数，且至少一项大于 0。
+                        </p>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -1560,10 +1541,9 @@ function GroupPricingTable({
                 固定重试次数必须是 0 到 100 之间的整数
               </p>
             )}
-            {(hasInvalidStrategyDefinition ||
-              duplicateStrategyNames.size > 0) && (
+            {(hasEmptyStrategyName || duplicateStrategyNames.size > 0) && (
               <p className='text-destructive text-sm'>
-                策略名称不能为空或重复；各项权重必须大于等于 0，且总和为 100
+                策略名称不能为空或重复。
               </p>
             )}
             {hasInvalidStrategyBinding && (

@@ -19,6 +19,7 @@ type AdminConsoleChannelStats struct {
 	Total        int64 `json:"total"`
 	Enabled      int64 `json:"enabled"`
 	AutoDisabled int64 `json:"auto_disabled"`
+	Disabled     int64 `json:"disabled"`
 }
 
 type AdminConsolePeriodStats struct {
@@ -96,6 +97,7 @@ type adminConsoleMainRow struct {
 	ChannelsTotal        int64   `gorm:"column:channels_total"`
 	ChannelsEnabled      int64   `gorm:"column:channels_enabled"`
 	ChannelsAutoDisabled int64   `gorm:"column:channels_auto_disabled"`
+	ChannelsDisabled     int64   `gorm:"column:channels_disabled"`
 	UsersToday           int64   `gorm:"column:users_today"`
 	UsersTotal           int64   `gorm:"column:users_total"`
 	RevenueToday         float64 `gorm:"column:revenue_today"`
@@ -221,6 +223,7 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 			(SELECT COUNT(*) FROM channels) AS channels_total,
 			(SELECT COUNT(*) FROM channels WHERE status = ?) AS channels_enabled,
 			(SELECT COUNT(*) FROM channels WHERE status = ?) AS channels_auto_disabled,
+			(SELECT COUNT(*) FROM channels WHERE status = ?) AS channels_disabled,
 			(SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?) AS users_today,
 			(SELECT COUNT(*) FROM users) AS users_total,
 			COALESCE(SUM(CASE WHEN completed_at >= ? AND completed_at < ? THEN paid_amount ELSE 0 END), 0) AS revenue_today,
@@ -240,6 +243,7 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 		common.TokenStatusEnabled,
 		common.ChannelStatusEnabled,
 		common.ChannelStatusAutoDisabled,
+		common.ChannelStatusManuallyDisabled,
 		metricStart,
 		metricEnd,
 		metricStart,
@@ -417,7 +421,7 @@ func getAdminConsoleStatsAtRange(now time.Time, selectedRange adminConsoleTimeRa
 	}
 
 	stats.APIKeys = AdminConsoleKeyStats{Total: mainRow.APIKeysTotal, Active: logRow.ActiveKeysToday, Enabled: mainRow.APIKeysEnabled}
-	stats.Channels = AdminConsoleChannelStats{Total: mainRow.ChannelsTotal, Enabled: mainRow.ChannelsEnabled, AutoDisabled: mainRow.ChannelsAutoDisabled}
+	stats.Channels = AdminConsoleChannelStats{Total: mainRow.ChannelsTotal, Enabled: mainRow.ChannelsEnabled, AutoDisabled: mainRow.ChannelsAutoDisabled, Disabled: mainRow.ChannelsDisabled}
 	stats.Requests = AdminConsolePeriodStats{Today: logRow.RequestsToday, Month: logRow.RequestsMonth, Total: logRow.RequestsTotal}
 	stats.Users = AdminConsoleUserStats{
 		Today: mainRow.UsersToday, Total: mainRow.UsersTotal,

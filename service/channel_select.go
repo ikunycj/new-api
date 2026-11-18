@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -870,7 +871,10 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 			}
 			candidatesForGroup = append(candidatesForGroup, candidate)
 		}
-		groupCandidates[index] = candidatesForGroup
+		// A zero score excludes a route in this group, not the shared channel.
+		// Filter before both retry affinity and force-priority group selection.
+		annotateDynamicCandidateScores(candidatesForGroup)
+		groupCandidates[index] = slices.DeleteFunc(candidatesForGroup, func(c dynamicChannelCandidate) bool { return c.score == 0 })
 	}
 
 	if p != nil && p.attempted && !groupCandidatesHaveCrossForce(groupCandidates) {
@@ -1210,19 +1214,20 @@ func routingStrategyForCandidates(candidates []dynamicChannelCandidate) ratio_se
 			strategy = ratio_setting.DefaultPricingGroupRoutingStrategy()
 		}
 	}
-	return normalizeRoutingStrategy(strategy)
+	return strategy
 }
 
 func normalizeRoutingStrategy(strategy ratio_setting.PricingGroupRoutingStrategy) ratio_setting.PricingGroupRoutingStrategy {
-	weightTotal := strategy.PriceWeight + strategy.AvailabilityWeight + strategy.LoadWeight + strategy.TTFTWeight + strategy.RecentTestTTFTWeight
 	// Strategy IDs are administrator-defined catalog keys. They are not a
 	// closed enum; only an empty ID or invalid weights should fall back.
-	if strings.TrimSpace(strategy.Strategy) == "" ||
-		strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 || strategy.RecentTestTTFTWeight < 0 ||
-		math.IsNaN(weightTotal) || math.IsInf(weightTotal, 0) || math.Abs(weightTotal-100) > 0.0001 {
+	if strings.TrimSpace(strategy.Strategy) == "" {
 		return ratio_setting.DefaultPricingGroupRoutingStrategy()
 	}
-	return strategy
+	normalized, err := strategy.WithNormalizedWeights()
+	if err != nil {
+		return ratio_setting.DefaultPricingGroupRoutingStrategy()
+	}
+	return normalized
 }
 
 func dynamicAvailabilityScore(channel *model.Channel) float64 {
@@ -1306,6 +1311,17 @@ func dynamicRecentTestTTFTScore(channel *model.Channel, baseline float64) float6
 	return math.Min(1, math.Max(0, score))
 }
 
+func dynamicIQTestConfidenceScore(channel *model.Channel) float64 {
+	if channel == nil || channel.IQTestConfidence == nil {
+		return 1
+	}
+	confidence := *channel.IQTestConfidence
+	if math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
+		return 1
+	}
+	return confidence
+}
+
 func dynamicCandidateFeatures(candidate dynamicChannelCandidate, minPrice float64) (float64, float64, float64) {
 	if candidate.channel == nil {
 		return 0, 0, 0
@@ -1336,7 +1352,7 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 	if len(ttftBaselines) > 0 {
 		ttftBaseline = ttftBaselines[0]
 	}
-	priceSum, availabilitySum, ttftSum, recentTestTTFTSum, weightSum := 0.0, 0.0, 0.0, 0.0, 0.0
+	priceSum, availabilitySum, ttftSum, recentTestTTFTSum, iqConfidenceSum, weightSum := 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 	recentTestTTFTBaseline := dynamicRecentTestTTFTBaseline(candidates)
 	totalCapacity, totalCurrent := 0.0, 0.0
 	if len(ttftBaselines) > 1 {
@@ -1361,6 +1377,7 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 		availabilitySum += availability * weight
 		ttftSum += dynamicTTFTScore(candidate.channel, ttftBaseline) * weight
 		recentTestTTFTSum += dynamicRecentTestTTFTScore(candidate.channel, recentTestTTFTBaseline) * weight
+		iqConfidenceSum += dynamicIQTestConfidenceScore(candidate.channel) * weight
 		weightSum += weight
 
 		// At the group level, load represents aggregate remaining capacity.
@@ -1385,11 +1402,12 @@ func dynamicGroupScore(candidates []dynamicChannelCandidate, minPrice float64, s
 		loadScore = 1 - totalCurrent/totalCapacity
 		loadScore = math.Min(1, math.Max(0, loadScore))
 	}
-	return 100 * ((strategy.PriceWeight/100)*(priceSum/weightSum) +
-		(strategy.AvailabilityWeight/100)*(availabilitySum/weightSum) +
-		(strategy.LoadWeight/100)*loadScore +
-		(strategy.TTFTWeight/100)*(ttftSum/weightSum) +
-		(strategy.RecentTestTTFTWeight/100)*(recentTestTTFTSum/weightSum))
+	return strategy.PriceWeight*(priceSum/weightSum) +
+		strategy.AvailabilityWeight*(availabilitySum/weightSum) +
+		strategy.LoadWeight*loadScore +
+		strategy.TTFTWeight*(ttftSum/weightSum) +
+		strategy.RecentTestTTFTWeight*(recentTestTTFTSum/weightSum) +
+		strategy.IQTestConfidenceWeight*(iqConfidenceSum/weightSum)
 }
 
 func smoothWeightedCandidateIndex(p *RetryParam, candidates []dynamicChannelCandidate) int {
@@ -1511,11 +1529,12 @@ func dynamicCandidateScore(candidate dynamicChannelCandidate, minPrice float64, 
 	if len(ttftBaselines) > 1 {
 		recentTestTTFTBaseline = ttftBaselines[1]
 	}
-	return 100 * ((strategy.PriceWeight/100)*priceScore +
-		(strategy.AvailabilityWeight/100)*availability +
-		(strategy.LoadWeight/100)*load +
-		(strategy.TTFTWeight/100)*dynamicTTFTScore(candidate.channel, ttftBaseline) +
-		(strategy.RecentTestTTFTWeight/100)*dynamicRecentTestTTFTScore(candidate.channel, recentTestTTFTBaseline))
+	return strategy.PriceWeight*priceScore +
+		strategy.AvailabilityWeight*availability +
+		strategy.LoadWeight*load +
+		strategy.TTFTWeight*dynamicTTFTScore(candidate.channel, ttftBaseline) +
+		strategy.RecentTestTTFTWeight*dynamicRecentTestTTFTScore(candidate.channel, recentTestTTFTBaseline) +
+		strategy.IQTestConfidenceWeight*dynamicIQTestConfidenceScore(candidate.channel)
 }
 
 func dynamicCandidateUtilization(candidate dynamicChannelCandidate) float64 {

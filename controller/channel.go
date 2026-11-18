@@ -84,6 +84,7 @@ func enrichCurrentChannelConcurrency(channels []*model.Channel) {
 }
 
 func enrichChannelRuntimeMetrics(channels []*model.Channel) {
+	model.EnrichChannelIQProbeMetrics(channels)
 	for _, channel := range channels {
 		clearChannelInfo(channel)
 	}
@@ -601,6 +602,19 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	}
 	if channel.ProbePeriodMinutes == 0 {
 		channel.ProbePeriodMinutes = model.DefaultChannelProbePeriodMinutes
+	}
+	if channel.IQProbePeriodMinutes < 0 || channel.IQProbePeriodMinutes > model.MaxChannelIQProbePeriodMinutes {
+		return fmt.Errorf("IQ probe period must be between 0 and %d minutes", model.MaxChannelIQProbePeriodMinutes)
+	}
+	if channel.IQProbePeriodMinutes == 0 {
+		channel.IQProbePeriodMinutes = model.DefaultChannelIQProbePeriodMinutes
+	}
+	channel.IQProbeEngine = model.DefaultChannelIQProbeEngine
+	if channel.IQProbeSampleCount < 0 || channel.IQProbeSampleCount > model.MaxChannelIQProbeSampleCount {
+		return fmt.Errorf("IQ probe sample count must be between 0 and %d", model.MaxChannelIQProbeSampleCount)
+	}
+	if channel.IQProbeSampleCount == 0 {
+		channel.IQProbeSampleCount = model.DefaultChannelIQProbeSampleCount
 	}
 	if channel.UpstreamMaxRetries != nil && (*channel.UpstreamMaxRetries < 0 || *channel.UpstreamMaxRetries > model.MaxChannelUpstreamRetries) {
 		return fmt.Errorf("upstream max retries must be between 0 and %d", model.MaxChannelUpstreamRetries)

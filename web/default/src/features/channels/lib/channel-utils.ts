@@ -583,6 +583,28 @@ export function getAttentionReason(channel: Channel): string | null {
   return null
 }
 
+/**
+ * A successful fingerprint probe can identify a channel as responding like a
+ * different model than the configured test model. Keep this as a runtime
+ * presentation helper because the marker is persisted in channel metadata.
+ */
+export function isChannelIQDegraded(channel: Channel): boolean {
+  if (channel?.iq_probe_degraded === true) {
+    return true
+  }
+  if (!channel?.other_info) {
+    return false
+  }
+  try {
+    const otherInfo = JSON.parse(channel.other_info) as {
+      iq_probe_degraded?: unknown
+    }
+    return otherInfo.iq_probe_degraded === true
+  } catch {
+    return false
+  }
+}
+
 // ============================================================================
 // Tag Aggregation Utilities
 // ============================================================================

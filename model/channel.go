@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
+	"slices"
 	"strings"
 	"sync"
 
@@ -45,34 +47,44 @@ type Channel struct {
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
 	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
-	StatusCodeMapping           *string  `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
-	AutoBan                     *int     `json:"auto_ban" gorm:"default:0"`
-	NotifyOnStatusChange        *bool    `json:"notify_on_status_change"`
-	AutoProbeEnabled            *bool    `json:"auto_probe_enabled"`
-	ProbePeriodMinutes          int      `json:"probe_period_minutes"`
-	ProbeRandomDelayEnabled     bool     `json:"probe_random_delay_enabled"`
-	ProbeStreamEnabled          bool     `json:"probe_stream_enabled"`
-	UpstreamMaxRetries          *int     `json:"upstream_max_retries"`
-	MaxConcurrency              *int     `json:"max_concurrency"`
-	CurrentConcurrency          int      `json:"current_concurrency" gorm:"-"`
-	PriceMultiplier             float64  `json:"price_multiplier"`
-	PriceMultiplierMode         string   `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
-	DailyTokens                 int64    `json:"daily_tokens" gorm:"-"`
-	TotalTokens                 int64    `json:"total_tokens" gorm:"-"`
-	DailyCostCNY                *float64 `json:"daily_cost_cny" gorm:"-"`
-	TotalCostCNY                *float64 `json:"total_cost_cny" gorm:"-"`
-	ForcePriority               *bool    `json:"force_priority"`
-	ForcePriorityScope          string   `json:"force_priority_scope" gorm:"type:varchar(16)"`
-	PreviousDayProbeSuccessRate float64  `json:"previous_day_probe_success_rate" gorm:"-"`
-	PreviousDayProbeSampleCount int      `json:"-" gorm:"-"`
-	PreviousDayAverageTTFTMs    float64  `json:"previous_day_average_ttft_ms" gorm:"-"`
-	PriorityScore               *float64 `json:"priority_score,omitempty" gorm:"-"`
-	OtherInfo                   string   `json:"other_info"`
-	Tag                         *string  `json:"tag" gorm:"index"`
-	Setting                     *string  `json:"setting" gorm:"type:text"` // 渠道额外设置
-	ParamOverride               *string  `json:"param_override" gorm:"type:text"`
-	HeaderOverride              *string  `json:"header_override" gorm:"type:text"`
-	Remark                      *string  `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	StatusCodeMapping           *string            `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
+	AutoBan                     *int               `json:"auto_ban" gorm:"default:0"`
+	NotifyOnStatusChange        *bool              `json:"notify_on_status_change"`
+	AutoProbeEnabled            *bool              `json:"auto_probe_enabled"`
+	ProbePeriodMinutes          int                `json:"probe_period_minutes"`
+	ProbeRandomDelayEnabled     bool               `json:"probe_random_delay_enabled"`
+	ProbeStreamEnabled          bool               `json:"probe_stream_enabled"`
+	IQProbeEnabled              bool               `json:"iq_probe_enabled"`
+	IQProbePeriodMinutes        int                `json:"iq_probe_period_minutes"`
+	IQProbeEngine               string             `json:"-" gorm:"type:varchar(16)"`
+	IQProbeSampleCount          int                `json:"iq_probe_sample_count"`
+	IQAutoDisableDegraded       bool               `json:"iq_auto_disable_degraded"`
+	IQTestConfidence            *float64           `json:"iq_test_confidence" gorm:"-"`
+	IQProbePrediction           string             `json:"iq_probe_prediction" gorm:"-"`
+	IQProbeConfidence           *float64           `json:"iq_probe_confidence,omitempty" gorm:"-"`
+	IQProbeModelConfidences     map[string]float64 `json:"iq_probe_model_confidences" gorm:"-"`
+	IQProbeAt                   int64              `json:"iq_probe_at" gorm:"-"`
+	UpstreamMaxRetries          *int               `json:"upstream_max_retries"`
+	MaxConcurrency              *int               `json:"max_concurrency"`
+	CurrentConcurrency          int                `json:"current_concurrency" gorm:"-"`
+	PriceMultiplier             float64            `json:"price_multiplier"`
+	PriceMultiplierMode         string             `json:"price_multiplier_mode" gorm:"type:varchar(16)"`
+	DailyTokens                 int64              `json:"daily_tokens" gorm:"-"`
+	TotalTokens                 int64              `json:"total_tokens" gorm:"-"`
+	DailyCostCNY                *float64           `json:"daily_cost_cny" gorm:"-"`
+	TotalCostCNY                *float64           `json:"total_cost_cny" gorm:"-"`
+	ForcePriority               *bool              `json:"force_priority"`
+	ForcePriorityScope          string             `json:"force_priority_scope" gorm:"type:varchar(16)"`
+	PreviousDayProbeSuccessRate float64            `json:"previous_day_probe_success_rate" gorm:"-"`
+	PreviousDayProbeSampleCount int                `json:"-" gorm:"-"`
+	PreviousDayAverageTTFTMs    float64            `json:"previous_day_average_ttft_ms" gorm:"-"`
+	PriorityScore               *float64           `json:"priority_score,omitempty" gorm:"-"`
+	OtherInfo                   string             `json:"other_info"`
+	Tag                         *string            `json:"tag" gorm:"index"`
+	Setting                     *string            `json:"setting" gorm:"type:text"` // 渠道额外设置
+	ParamOverride               *string            `json:"param_override" gorm:"type:text"`
+	HeaderOverride              *string            `json:"header_override" gorm:"type:text"`
+	Remark                      *string            `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -84,10 +96,15 @@ type Channel struct {
 
 const (
 	DefaultChannelProbePeriodMinutes    = 5
+	DefaultChannelIQProbePeriodMinutes  = 60
+	DefaultChannelIQProbeEngine         = "fingerprint"
+	DefaultChannelIQProbeSampleCount    = 3
 	DefaultChannelUpstreamMaxRetries    = 0
 	DefaultChannelMaxConcurrency        = 1000
 	MaxChannelMaxConcurrency            = 10000
 	MaxChannelProbePeriodMinutes        = 7 * 24 * 60
+	MaxChannelIQProbePeriodMinutes      = 7 * 24 * 60
+	MaxChannelIQProbeSampleCount        = 3
 	MaxChannelUpstreamRetries           = 100
 	MaxChannelPriceMultiplier           = 1000
 	ChannelPriceMultiplierModeUSD       = "usd"
@@ -400,23 +417,81 @@ func (channel *Channel) NormalizeGroups() {
 }
 
 func (channel *Channel) GetOtherInfo() map[string]interface{} {
-	otherInfo := make(map[string]interface{})
+	var otherInfo map[string]interface{}
 	if channel.OtherInfo != "" {
 		err := common.Unmarshal([]byte(channel.OtherInfo), &otherInfo)
 		if err != nil {
 			common.SysLog(fmt.Sprintf("failed to unmarshal other info: channel_id=%d, tag=%s, name=%s, error=%v", channel.Id, channel.GetTag(), channel.Name, err))
 		}
 	}
+	if otherInfo == nil {
+		return make(map[string]interface{})
+	}
 	return otherInfo
 }
 
-func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
+// Keep untouched JSON values verbatim when changing individual metadata fields.
+func channelMetadataForUpdate(raw string) (map[string]any, error) {
+	var fields map[string]json.RawMessage
+	if raw != "" {
+		if err := common.UnmarshalJsonStr(raw, &fields); err != nil {
+			return nil, fmt.Errorf("invalid channel other_info: %w", err)
+		}
+	}
+	info := make(map[string]any, len(fields))
+	for key, value := range fields {
+		info[key] = value
+	}
+	return info, nil
+}
+
+// Fingerprints belong to the channel that was measured, not to its configuration.
+// Ordinary configuration edits also retain the reason for the existing status.
+func (channel *Channel) retainProbeMetadata(stored string, keepStatus bool) error {
+	if channel.OtherInfo == stored {
+		return nil
+	}
+	var measured map[string]any
+	if common.GetJsonType(json.RawMessage(stored)) == "object" {
+		var err error
+		measured, err = channelMetadataForUpdate(stored)
+		if err != nil {
+			return err
+		}
+		for key := range measured {
+			if !strings.HasPrefix(key, "iq_probe_") && !(keepStatus && (key == "status_reason" || key == "status_time")) {
+				delete(measured, key)
+			}
+		}
+	}
+	if len(measured) == 0 && common.GetJsonType(json.RawMessage(channel.OtherInfo)) != "object" {
+		return nil // Non-object legacy metadata contains no top-level observations to remove.
+	}
+	info, err := channelMetadataForUpdate(channel.OtherInfo)
+	if err != nil {
+		return err
+	}
+	before := len(info)
+	for key := range info {
+		if strings.HasPrefix(key, "iq_probe_") {
+			delete(info, key)
+		}
+	}
+	if len(info) == before && len(measured) == 0 {
+		return nil
+	}
+	maps.Copy(info, measured)
+	return channel.SetOtherInfo(info)
+}
+
+func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) error {
 	otherInfoBytes, err := common.Marshal(otherInfo)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to marshal other info: channel_id=%d, tag=%s, name=%s, error=%v", channel.Id, channel.GetTag(), channel.Name, err))
-		return
+		return err
 	}
 	channel.OtherInfo = string(otherInfoBytes)
+	return nil
 }
 
 func (channel *Channel) GetTag() string {
@@ -446,6 +521,38 @@ func (channel *Channel) GetProbePeriodMinutes() int {
 		return DefaultChannelProbePeriodMinutes
 	}
 	return channel.ProbePeriodMinutes
+}
+
+func (channel *Channel) GetIQProbePeriodMinutes() int {
+	if channel == nil || channel.IQProbePeriodMinutes <= 0 {
+		return DefaultChannelIQProbePeriodMinutes
+	}
+	return channel.IQProbePeriodMinutes
+}
+
+func (channel *Channel) ShouldIQProbe() bool {
+	return channel != nil && channel.IQProbeEnabled
+}
+
+func (channel *Channel) GetIQProbeEngine() string {
+	return DefaultChannelIQProbeEngine
+}
+
+func (channel *Channel) GetIQProbeSampleCount() int {
+	if channel == nil || channel.IQProbeSampleCount <= 0 {
+		return DefaultChannelIQProbeSampleCount
+	}
+	if channel.IQProbeSampleCount > MaxChannelIQProbeSampleCount {
+		return MaxChannelIQProbeSampleCount
+	}
+	return channel.IQProbeSampleCount
+}
+
+func (channel *Channel) IQProbeDegraded() bool {
+	if channel == nil {
+		return false
+	}
+	return channel.GetOtherInfo()["iq_probe_degraded"] == true
 }
 
 func (channel *Channel) ShouldAutoProbe() bool {
@@ -623,6 +730,12 @@ func BatchInsertChannels(channels []Channel) error {
 	if len(channels) == 0 {
 		return nil
 	}
+	for index := range channels {
+		channels[index].NormalizeGroups()
+		if err := channels[index].retainProbeMetadata("", false); err != nil {
+			return err
+		}
+	}
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -633,9 +746,6 @@ func BatchInsertChannels(channels []Channel) error {
 		}
 	}()
 
-	for index := range channels {
-		channels[index].NormalizeGroups()
-	}
 	for _, chunk := range lo.Chunk(channels, 50) {
 		if err := tx.Create(&chunk).Error; err != nil {
 			tx.Rollback()
@@ -697,6 +807,9 @@ func (channel *Channel) GetStatusCodeMapping() string {
 
 func (channel *Channel) Insert() error {
 	channel.NormalizeGroups()
+	if err := channel.retainProbeMetadata("", false); err != nil {
+		return err
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(channel).Error; err != nil {
 			return err
@@ -749,6 +862,16 @@ func (channel *Channel) Update(fields ...string) error {
 		}
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if slices.Contains(fields, "other_info") || (len(fields) == 0 && channel.OtherInfo != "") {
+			var current Channel
+			if err := lockForUpdate(tx).Select("other_info").First(&current, channel.Id).Error; err != nil {
+				return err
+			}
+			writesStatus := slices.Contains(fields, "status") || (len(fields) == 0 && channel.Status != 0)
+			if err := channel.retainProbeMetadata(current.OtherInfo, !writesStatus); err != nil {
+				return err
+			}
+		}
 		updateQuery := tx.Model(channel)
 		if len(fields) > 0 {
 			updateQuery = updateQuery.Select(fields)

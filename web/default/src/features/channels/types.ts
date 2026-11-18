@@ -64,6 +64,16 @@ export const channelSchema = z.object({
   probe_period_minutes: z.number().default(5),
   probe_random_delay_enabled: z.boolean().default(false),
   probe_stream_enabled: z.boolean().default(false),
+  iq_probe_enabled: z.boolean().default(true),
+  iq_auto_disable_degraded: z.boolean().default(false),
+  iq_probe_period_minutes: z.number().default(60),
+  iq_probe_sample_count: z.number().default(3),
+  iq_probe_degraded: z.boolean().optional(),
+  iq_test_confidence: z.number().min(0).max(1).default(1),
+  iq_probe_prediction: z.string().nullish(),
+  iq_probe_confidence: z.number().min(0).max(1).nullish(),
+  iq_probe_model_confidences: z.record(z.string(), z.number()).default({}),
+  iq_probe_at: z.number().default(0),
   upstream_max_retries: z.number().nullish(),
   max_concurrency: z.number().nullish(),
   current_concurrency: z.number().default(0),
@@ -199,6 +209,8 @@ export interface GetChannelResponse {
   data?: Channel
 }
 
+export type ChannelIQTestEngine = 'pelican' | 'fingerprint'
+
 export interface ChannelTestResponse {
   success: boolean
   message?: string
@@ -211,6 +223,22 @@ export interface ChannelTestResponse {
     response?: string
     response_bytes?: number
     finish_reason?: string
+    engine?: ChannelIQTestEngine
+    analysis?: ChannelIQTestAnalysis
+  }
+}
+
+export interface ChannelIQTestAnalysis {
+  decision: string
+  prediction?: string
+  prediction_name?: string
+  family_prediction?: string
+  family_prediction_name?: string
+  probability?: number | null
+  probability_status?: string
+  used_outputs?: number
+  evidence?: {
+    label?: string
   }
 }
 
@@ -431,6 +459,16 @@ export interface ChannelFormData {
   probe_period_minutes?: number
   probe_random_delay_enabled?: boolean
   probe_stream_enabled?: boolean
+  iq_probe_enabled?: boolean
+  iq_auto_disable_degraded?: boolean
+  iq_probe_period_minutes?: number
+  iq_probe_sample_count?: number
+  iq_probe_degraded?: boolean
+  iq_test_confidence?: number
+  iq_probe_prediction?: string | null
+  iq_probe_confidence?: number | null
+  iq_probe_model_confidences?: Record<string, number>
+  iq_probe_at?: number
   upstream_max_retries?: number | null
   max_concurrency?: number | null
   price_multiplier?: number

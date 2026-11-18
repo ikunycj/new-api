@@ -64,6 +64,229 @@ func TestGetChannelProbeCandidatesFiltersAndOrdersPeriodGroups(t *testing.T) {
 	assert.Empty(t, candidates[1].Key)
 }
 
+func TestSaveChannelIQProbeAnalysisPersistsManualTestConfidence(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &ChannelProbeHistory{})
+	previousCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
+
+	testModel := "model-b"
+	channel := Channel{Id: 10, Key: "channel-key", TestModel: &testModel, Status: common.ChannelStatusEnabled, OtherInfo: `{"preserved":"value"}`}
+	require.NoError(t, DB.Create(&channel).Error)
+	require.NoError(t, DB.Create(&ChannelProbeHistory{ChannelID: channel.Id, Success: true, CheckedAt: 100}).Error)
+
+	_, _, err := CompleteManualChannelIQTest(context.Background(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+		Prediction: "model-a",
+		ModelConfidences: map[string]float64{
+			"model-a": 0.91,
+			"model-b": 0.04,
+		},
+	})
+	require.NoError(t, err)
+
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.Equal(t, "value", stored.GetOtherInfo()["preserved"])
+	assert.Equal(t, "model-a", stored.GetOtherInfo()["iq_probe_prediction"])
+	assert.True(t, stored.GetOtherInfo()["iq_probe_degraded"].(bool))
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	var historyCount int64
+	require.NoError(t, DB.Model(&ChannelProbeHistory{}).Where("channel_id = ?", channel.Id).Count(&historyCount).Error)
+	assert.Equal(t, int64(1), historyCount)
+
+	EnrichChannelIQProbeMetrics([]*Channel{&stored})
+	require.NotNil(t, stored.IQTestConfidence)
+	assert.InDelta(t, 0.04, *stored.IQTestConfidence, 0.0001)
+	require.NotNil(t, stored.IQProbeConfidence)
+	assert.InDelta(t, 0.91, *stored.IQProbeConfidence, 0.0001)
+
+	_, _, err = CompleteManualChannelIQTest(context.Background(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+		Prediction: "model-b",
+		ModelConfidences: map[string]float64{
+			"model-a": 0.02,
+			"model-b": 0.88,
+		},
+	})
+	require.NoError(t, err)
+	stored = Channel{}
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.False(t, stored.GetOtherInfo()["iq_probe_degraded"].(bool))
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	require.NoError(t, DB.Model(&ChannelProbeHistory{}).Where("channel_id = ?", channel.Id).Count(&historyCount).Error)
+	assert.Equal(t, int64(1), historyCount)
+}
+
+func TestChannelEditPreservesLatestIQProbeResult(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{})
+	testModel := "model-b"
+	channel := Channel{
+		Key: "test-key", Models: testModel, Group: "default", TestModel: &testModel,
+		IQProbeEnabled: true, IQAutoDisableDegraded: true, OtherInfo: `{"provider":{"id":9007199254740995}}`,
+	}
+	require.NoError(t, channel.Insert())
+	// The edit was prepared before the scheduled probe disabled the channel.
+	edit := channel
+	lease := common.GetTimestamp() + 300
+	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: lease}).Error)
+	observed, changed, err := CompleteChannelIQProbe(t.Context(), channel.Id, &ChannelProbeHistory{Success: true}, lease, "", testModel, &ChannelIQProbeAnalysis{
+		Prediction: "model-a", ModelConfidences: map[string]float64{"model-a": 0.95, testModel: 0.05},
+	})
+	require.NoError(t, err)
+	require.True(t, changed)
+	assert.Contains(t, observed.OtherInfo, `"id":9007199254740995`)
+	edit.OtherInfo = `{"provider":{"id":9007199254740993}}`
+	require.NoError(t, edit.Update("other_info"))
+	var stored Channel
+	require.NoError(t, DB.First(&stored, channel.Id).Error)
+	assert.Contains(t, stored.OtherInfo, `"id":9007199254740993`)
+	EnrichChannelIQProbeMetrics([]*Channel{&stored})
+	require.NotNil(t, stored.IQTestConfidence)
+	assert.Equal(t, 0.05, *stored.IQTestConfidence)
+	assert.Equal(t, "model-a", stored.IQProbePrediction)
+	assert.True(t, stored.IQProbeDegraded())
+	// Editing unrelated metadata must not remove the reason required for manual recovery.
+	recovered, changed, err := CompleteManualChannelIQTest(t.Context(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+		Prediction: testModel, ModelConfidences: map[string]float64{testModel: 1},
+	})
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Equal(t, common.ChannelStatusEnabled, recovered.Status)
+	assert.Contains(t, recovered.OtherInfo, `"id":9007199254740993`)
+}
+
+func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{})
+	previousCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
+
+	testModel := "model-b"
+	degradedInfo := `{"status_reason":"IQ probe detected model degradation"}`
+	channels := []Channel{
+		{Id: 20, TestModel: &testModel, Status: common.ChannelStatusAutoDisabled, IQAutoDisableDegraded: true, OtherInfo: degradedInfo},
+		{Id: 21, TestModel: &testModel, Status: common.ChannelStatusAutoDisabled, AutoProbeEnabled: common.GetPointer(true), IQAutoDisableDegraded: true, OtherInfo: degradedInfo},
+	}
+	require.NoError(t, DB.Create(&channels).Error)
+	require.NoError(t, DB.Create(&[]Ability{
+		{ChannelId: 20, Group: "test", Model: testModel, Enabled: false},
+		{ChannelId: 21, Group: "test", Model: testModel, Enabled: false},
+	}).Error)
+
+	stored, changed, err := CompleteManualChannelIQTest(context.Background(), 20, testModel, "", &ChannelIQProbeAnalysis{
+		Prediction:       testModel,
+		ModelConfidences: map[string]float64{"model-a": 0.02, testModel: 0.88},
+	})
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+
+	var recoveredAbility Ability
+	require.NoError(t, DB.First(&recoveredAbility, "channel_id = ?", 20).Error)
+	assert.True(t, recoveredAbility.Enabled)
+
+	stored, changed, err = CompleteManualChannelIQTest(context.Background(), 21, testModel, "", &ChannelIQProbeAnalysis{
+		Prediction:       "model-a",
+		ModelConfidences: map[string]float64{"model-a": 0.91, testModel: 0.04},
+	})
+	require.NoError(t, err)
+	assert.False(t, changed)
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+	// A later, matching result for another model is diagnostic only, even with regular probing on.
+	previous := stored.OtherInfo
+	_, changed, err = CompleteManualChannelIQTest(context.Background(), 21, "model-a", "", &ChannelIQProbeAnalysis{
+		Prediction: "model-a", ModelConfidences: map[string]float64{"model-a": 1},
+	})
+	require.NoError(t, err)
+	assert.False(t, changed)
+	require.NoError(t, DB.First(&stored, 21).Error)
+	assert.Equal(t, previous, stored.OtherInfo)
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+	var disabledAbility Ability
+	require.NoError(t, DB.First(&disabledAbility, "channel_id = ?", 21).Error)
+	assert.False(t, disabledAbility.Enabled)
+}
+
+func TestCompleteChannelIQProbeAutoDisablesDegradedUntilAHealthyIQProbe(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{})
+	previousCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
+
+	testModel := "model-b"
+	channel := Channel{
+		Id:                    12,
+		Key:                   "channel-key",
+		TestModel:             &testModel,
+		Status:                common.ChannelStatusEnabled,
+		AutoProbeEnabled:      common.GetPointer(true),
+		IQProbeEnabled:        true,
+		IQAutoDisableDegraded: true,
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+	require.NoError(t, DB.Create(&Ability{ChannelId: channel.Id, Group: "test", Model: testModel, Enabled: true}).Error)
+	lease := common.GetTimestamp() + 300
+	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: lease}).Error)
+
+	stored, changed, err := CompleteChannelIQProbe(context.Background(), channel.Id, &ChannelProbeHistory{Success: true}, lease, "", testModel, &ChannelIQProbeAnalysis{
+		Prediction:       "model-a",
+		ModelConfidences: map[string]float64{"model-a": 0.91, "model-b": 0.04},
+	})
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+	assert.Equal(t, "IQ probe detected model degradation", stored.GetOtherInfo()["status_reason"])
+
+	var history ChannelProbeHistory
+	require.NoError(t, DB.First(&history, "channel_id = ?", channel.Id).Error)
+	assert.True(t, history.Success)
+	var ability Ability
+	require.NoError(t, DB.First(&ability, "channel_id = ?", channel.Id).Error)
+	assert.False(t, ability.Enabled)
+
+	availabilityLease := common.GetTimestamp() + 400
+	require.NoError(t, DB.Model(&ChannelProbeState{}).Where("channel_id = ?", channel.Id).Update("lease_until", availabilityLease).Error)
+	stored, changed, err = CompleteChannelProbe(context.Background(), channel.Id, ChannelProbeHistory{Success: true}, availabilityLease, "")
+	require.NoError(t, err)
+	assert.False(t, changed)
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+
+	healthyIQLease := common.GetTimestamp() + 500
+	require.NoError(t, DB.Model(&ChannelProbeState{}).Where("channel_id = ?", channel.Id).Update("iq_lease_until", healthyIQLease).Error)
+	stored, changed, err = CompleteChannelIQProbe(context.Background(), channel.Id, &ChannelProbeHistory{Success: true}, healthyIQLease, "", testModel, &ChannelIQProbeAnalysis{
+		Prediction:       testModel,
+		ModelConfidences: map[string]float64{"model-a": 0.02, testModel: 0.88},
+	})
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	require.NoError(t, DB.First(&ability, "channel_id = ?", channel.Id).Error)
+	assert.True(t, ability.Enabled)
+}
+
+func TestEligibleChannelsIncludeIQConfidenceForDynamicRouting(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeHistory{}, &Log{})
+	previousCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
+
+	testModel := "model-b"
+	channel := Channel{
+		Id:        11,
+		Key:       "channel-key",
+		TestModel: &testModel,
+		OtherInfo: `{"iq_probe_at":123,"iq_probe_prediction":"model-a","iq_probe_model_confidences":{"model-a":0.91,"model-b":0.04}}`,
+		Status:    common.ChannelStatusEnabled,
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+	require.NoError(t, DB.Create(&Ability{ChannelId: channel.Id, Group: "test", Model: "shared-model", Enabled: true}).Error)
+
+	candidates, err := GetEligibleChannels("test", "shared-model", "", nil)
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	require.NotNil(t, candidates[0].IQTestConfidence)
+	assert.InDelta(t, 0.04, *candidates[0].IQTestConfidence, 0.0001)
+}
+
 func TestCompleteChannelProbeUsesCurrentStatusAndUnifiedPeriod(t *testing.T) {
 	cases := []struct {
 		name       string

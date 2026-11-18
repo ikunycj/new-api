@@ -99,6 +99,13 @@ describe('channel form API mapping', () => {
         probe_random_delay_enabled:
           CHANNEL_FORM_DEFAULT_VALUES.probe_random_delay_enabled,
         probe_stream_enabled: CHANNEL_FORM_DEFAULT_VALUES.probe_stream_enabled,
+        iq_probe_enabled: CHANNEL_FORM_DEFAULT_VALUES.iq_probe_enabled,
+        iq_auto_disable_degraded:
+          CHANNEL_FORM_DEFAULT_VALUES.iq_auto_disable_degraded,
+        iq_probe_period_minutes:
+          CHANNEL_FORM_DEFAULT_VALUES.iq_probe_period_minutes,
+        iq_probe_sample_count:
+          CHANNEL_FORM_DEFAULT_VALUES.iq_probe_sample_count,
         upstream_max_retries: CHANNEL_FORM_DEFAULT_VALUES.upstream_max_retries,
         max_concurrency: CHANNEL_FORM_DEFAULT_VALUES.max_concurrency,
         price_multiplier: CHANNEL_FORM_DEFAULT_VALUES.price_multiplier,
@@ -110,6 +117,10 @@ describe('channel form API mapping', () => {
         probe_period_minutes: 5,
         probe_random_delay_enabled: true,
         probe_stream_enabled: true,
+        iq_probe_enabled: true,
+        iq_auto_disable_degraded: false,
+        iq_probe_period_minutes: 60,
+        iq_probe_sample_count: 3,
         upstream_max_retries: 0,
         max_concurrency: 1000,
         price_multiplier: 1,
@@ -129,6 +140,10 @@ describe('channel form API mapping', () => {
     assert.equal(createPayload.auto_probe_enabled, true)
     assert.equal(createPayload.probe_random_delay_enabled, true)
     assert.equal(createPayload.probe_stream_enabled, true)
+    assert.equal(createPayload.iq_probe_enabled, true)
+    assert.equal(createPayload.iq_auto_disable_degraded, false)
+    assert.equal(createPayload.iq_probe_period_minutes, 60)
+    assert.equal(createPayload.iq_probe_sample_count, 3)
 
     const defaults = transformChannelToFormDefaults(
       channel({
@@ -146,6 +161,10 @@ describe('channel form API mapping', () => {
     assert.equal(defaults.probe_period_minutes, 5)
     assert.equal(defaults.probe_random_delay_enabled, false)
     assert.equal(defaults.probe_stream_enabled, false)
+    assert.equal(defaults.iq_probe_enabled, true)
+    assert.equal(defaults.iq_auto_disable_degraded, false)
+    assert.equal(defaults.iq_probe_period_minutes, 60)
+    assert.equal(defaults.iq_probe_sample_count, 3)
     assert.equal(defaults.upstream_max_retries, 0)
     assert.equal(defaults.max_concurrency, 1000)
     assert.equal(defaults.price_multiplier, 1)
@@ -156,6 +175,14 @@ describe('channel form API mapping', () => {
 
     assert.equal(parsed.key, undefined)
     assert.equal(transformChannelToFormDefaults(parsed).key, '')
+  })
+
+  test('preserves an explicitly disabled IQ probe setting', () => {
+    assert.equal(
+      transformChannelToFormDefaults(channel({ iq_probe_enabled: false }))
+        .iq_probe_enabled,
+      false
+    )
   })
 
   test('channel status notifications default off and round-trip the selection', () => {
@@ -188,6 +215,32 @@ describe('channel form API mapping', () => {
     assert.equal(
       transformFormDataToUpdatePayload(enabledPayload, 42)
         .notify_on_status_change,
+      true
+    )
+  })
+
+  test('round-trips automatic channel disabling after a degraded IQ probe', () => {
+    const values = channelFormSchema.parse({
+      ...CHANNEL_FORM_DEFAULT_VALUES,
+      name: 'primary',
+      models: 'gpt-5.6-sol',
+      group: ['default'],
+      test_model: 'gpt-5.6-sol',
+      iq_auto_disable_degraded: true,
+    })
+
+    assert.equal(
+      transformFormDataToCreatePayload(values).channel.iq_auto_disable_degraded,
+      true
+    )
+    assert.equal(
+      transformFormDataToUpdatePayload(values, 42).iq_auto_disable_degraded,
+      true
+    )
+    assert.equal(
+      transformChannelToFormDefaults(
+        channel({ iq_auto_disable_degraded: true })
+      ).iq_auto_disable_degraded,
       true
     )
   })

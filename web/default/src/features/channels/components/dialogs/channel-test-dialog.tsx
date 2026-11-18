@@ -98,6 +98,7 @@ import {
 } from '../../lib'
 import type {
   Channel,
+  ChannelIQTestEngine,
   GetChannelsResponse,
   SearchChannelsResponse,
 } from '../../types'
@@ -374,6 +375,7 @@ function ChannelTestDialogContent({
   > | null>(null)
   const [endpointType, setEndpointType] = useState('auto')
   const [isStreamTest, setIsStreamTest] = useState(false)
+  const [iqTestEngine, setIQTestEngine] = useState<ChannelIQTestEngine>('pelican')
   const [searchTerm, setSearchTerm] = useState('')
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
   const [iqTestResults, setIQTestResults] = useState<
@@ -459,6 +461,7 @@ function ChannelTestDialogContent({
     iqAbortControllersRef.current.clear()
     setEndpointType('auto')
     setIsStreamTest(false)
+    setIQTestEngine('pelican')
     setSearchTerm('')
     setTestResults({})
     setIQTestResults({})
@@ -709,28 +712,44 @@ function ChannelTestDialogContent({
             model: normalizedModel,
             endpoint_type: endpointType === 'auto' ? undefined : endpointType,
             iq_test: true,
+            iq_test_engine: iqTestEngine,
           },
           abortController.signal
         )
         const completedAt = Date.now()
-        if (!response.success || !response.data?.response) {
+        if (
+          !response.success ||
+          (!response.data?.response && !response.data?.analysis)
+        ) {
           if (session === iqTestSessionRef.current) {
             iqSourceCacheRef.current.delete(normalizedModel)
+          }
+          const analysis = response.data?.analysis
+          let errorMessage = response.message || response.data?.error || t('Test failed')
+          if (analysis?.decision === 'not_model') {
+            errorMessage = t('Not a model reply')
+          } else if (analysis?.decision === 'unscorable') {
+            errorMessage = t('Not scored')
           }
           result = {
             status: 'error',
             completedAt,
             responseTime: response.data?.response_time,
-            error: response.message || response.data?.error || t('Test failed'),
+            engine: iqTestEngine,
+            analysis,
+            error: errorMessage,
           }
         } else {
-          const sourceBytes = new TextEncoder().encode(
-            response.data.response
-          ).byteLength
+          const responseText = response.data.response ?? ''
+          const sourceBytes = new TextEncoder().encode(responseText).byteLength
           if (session === iqTestSessionRef.current) {
-            iqSourceCacheRef.current.set(normalizedModel, {
-              source: response.data.response,
-            })
+            if (response.data.engine === 'fingerprint') {
+              iqSourceCacheRef.current.delete(normalizedModel)
+            } else {
+              iqSourceCacheRef.current.set(normalizedModel, {
+                source: responseText,
+              })
+            }
           }
           result = {
             status: 'success',
@@ -738,6 +757,8 @@ function ChannelTestDialogContent({
             finishReason: response.data.finish_reason,
             responseTime: response.data.response_time,
             completedAt,
+            engine: response.data.engine,
+            analysis: response.data.analysis,
           }
         }
       } catch (error: unknown) {
@@ -778,15 +799,13 @@ function ChannelTestDialogContent({
       }
       return result
     },
-    [currentRow.id, endpointType, refreshChannelLists, t]
+    [currentRow.id, endpointType, iqTestEngine, refreshChannelLists, t]
   )
 
   const openIQPreview = useCallback((model: string) => {
     const entry = iqSourceCacheRef.current.get(model)
-    if (!entry) return
-
     setPreviewIQModel(model)
-    setPreviewIQSource(entry.source)
+    setPreviewIQSource(entry?.source)
   }, [])
 
   const handleBatchIQTest = useCallback(
@@ -1212,7 +1231,14 @@ function ChannelTestDialogContent({
                 result={iqTestResults[model]}
                 model={model}
                 isTesting={iqTestingModels.has(model)}
-                hasSource={iqSourceCacheRef.current.has(model)}
+                hasSource={
+                  iqTestResults[model]?.engine !== 'fingerprint' &&
+                  iqSourceCacheRef.current.has(model)
+                }
+                canOpenPreview={
+                  iqSourceCacheRef.current.has(model) ||
+                  Boolean(iqTestResults[model]?.analysis)
+                }
                 onOpenPreview={openIQPreview}
                 onRun={() => void testIQModel(model)}
               />
@@ -1345,16 +1371,44 @@ function ChannelTestDialogContent({
             </div>
             <div className='grid gap-2'>
               <Label htmlFor='stream-toggle'>{t('Stream Mode')}</Label>
-              <div className='flex items-center gap-2'>
-                <Switch
-                  id='stream-toggle'
-                  checked={effectiveStreamTest}
-                  onCheckedChange={setIsStreamTest}
-                  disabled={streamDisabled}
-                />
-                <span className='text-sm'>
-                  {effectiveStreamTest ? t('Enabled') : t('Disabled')}
-                </span>
+              <div className='flex flex-wrap items-center gap-2 md:flex-nowrap'>
+                <div className='flex items-center gap-2'>
+                  <Switch
+                    id='stream-toggle'
+                    checked={effectiveStreamTest}
+                    onCheckedChange={setIsStreamTest}
+                    disabled={streamDisabled}
+                  />
+                  <span className='text-sm'>
+                    {effectiveStreamTest ? t('Enabled') : t('Disabled')}
+                  </span>
+                </div>
+                <Select<ChannelIQTestEngine>
+                  value={iqTestEngine}
+                  items={{
+                    pelican: t('Pelican test'),
+                    fingerprint: t('Fingerprint test'),
+                  }}
+                  disabled={isIQBatchTesting || iqTestingModels.size > 0}
+                  onValueChange={(engine) => {
+                    if (!engine || engine === iqTestEngine) return
+                    setIQTestEngine(engine)
+                    setIQTestResults({})
+                    iqSourceCacheRef.current.clear()
+                    setPreviewIQModel(null)
+                    setPreviewIQSource(undefined)
+                  }}
+                >
+                  <SelectTrigger size='sm' aria-label={t('IQ test engine')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='pelican'>{t('Pelican test')}</SelectItem>
+                    <SelectItem value='fingerprint'>
+                      {t('Fingerprint test')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <p className='text-muted-foreground text-xs'>
                 {t('Enable streaming mode for the test request.')}
@@ -1559,6 +1613,7 @@ function IQTestResultCell({
   model,
   isTesting,
   hasSource,
+  canOpenPreview,
   onOpenPreview,
   onRun,
 }: {
@@ -1566,11 +1621,13 @@ function IQTestResultCell({
   model: string
   isTesting: boolean
   hasSource: boolean
+  canOpenPreview: boolean
   onOpenPreview: (model: string) => void
   onRun: () => void
 }) {
   const { t } = useTranslation()
   const isRunning = isTesting || result?.status === 'testing'
+  const engineLabel = getIQTestEngineLabel(result?.engine, t)
 
   return (
     <div className='flex min-w-0 items-start gap-1.5 text-xs'>
@@ -1589,7 +1646,12 @@ function IQTestResultCell({
           {result.error || t('Test failed')}
         </span>
       )}
-      {!isRunning && result?.status === 'success' && hasSource && (
+      {!isRunning && result?.status === 'success' && engineLabel && (
+        <span className='text-muted-foreground shrink-0 whitespace-nowrap'>
+          [{engineLabel}]
+        </span>
+      )}
+      {!isRunning && canOpenPreview && (
         <Button
           variant='ghost'
           size='sm'
@@ -1600,11 +1662,14 @@ function IQTestResultCell({
           {t('View result')}
         </Button>
       )}
-      {!isRunning && result?.status === 'success' && !hasSource && (
-        <span className='text-muted-foreground'>
-          {t('Result not retained; run again')}
-        </span>
-      )}
+      {!isRunning &&
+        result?.status === 'success' &&
+        result.engine !== 'fingerprint' &&
+        !hasSource && (
+          <span className='text-muted-foreground'>
+            {t('Result not retained; run again')}
+          </span>
+        )}
       {!isRunning && (
         <Button
           variant='ghost'
@@ -1618,6 +1683,15 @@ function IQTestResultCell({
       )}
     </div>
   )
+}
+
+function getIQTestEngineLabel(
+  engine: string | undefined,
+  t: (key: string) => string
+): string | undefined {
+  if (engine === 'fingerprint') return t('Fingerprint test')
+  if (engine === 'pelican') return t('Pelican test')
+  return undefined
 }
 
 function TestResultCell({

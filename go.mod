@@ -5,6 +5,7 @@ go 1.25.1
 
 require (
 	github.com/Calcium-Ion/go-epay v0.0.4
+	github.com/Ikaleio/lm-detector/sdk/go v0.2.0
 	github.com/abema/go-mp4 v1.4.1
 	github.com/andybalholm/brotli v1.1.1
 	github.com/anknown/ahocorasick v0.0.0-20190904063843-d75dbd5169c0
@@ -128,7 +129,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

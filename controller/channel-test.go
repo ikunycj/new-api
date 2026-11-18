@@ -11,8 +11,10 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	lmfpd "github.com/Ikaleio/lm-detector/sdk/go"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
@@ -35,29 +37,149 @@ import (
 )
 
 type testResult struct {
-	context          *gin.Context
-	localErr         error
-	newAPIError      *types.NewAPIError
-	ttftMs           int64
-	response         string
-	responseBytes    int
-	rawResponseBytes int
-	reasoningTokens  int
-	finishReason     string
+	context               *gin.Context
+	localErr              error
+	newAPIError           *types.NewAPIError
+	upstreamFailureStatus int // Nonzero only for failures attributable to an upstream request.
+	ttftMs                int64
+	response              string
+	responseBytes         int
+	rawResponseBytes      int
+	reasoningTokens       int
+	finishReason          string
+	iqEngine              string
+	fingerprintAnalysis   *lmfpd.Analysis
+	fingerprintSamples    []channelIQTestSample
 }
 
 const (
-	modelTestTokenName            = model.ChannelTestTokenName
-	channelProbeTokenName         = model.ChannelProbeTokenName
-	channelIQTestPrompt           = "Create an HTML file with an SVG 2D animation of a pelican riding a bicycle"
-	channelIQTestOutputContract   = "Return only one self-contained HTML document with an inline SVG containing visible shapes and CSS or SVG animation. Do not add comments, libraries, external assets, network requests, Markdown fences, or explanations."
-	channelIQTestMaxResponseBytes = 512 << 10
-	channelIQTestTimeout          = 90 * time.Second
+	modelTestTokenName             = model.ChannelTestTokenName
+	channelProbeTokenName          = model.ChannelProbeTokenName
+	channelIQTestPrompt            = "Create an HTML file with an SVG 2D animation of a pelican riding a bicycle"
+	channelIQTestOutputContract    = "Return only one self-contained HTML document with an inline SVG containing visible shapes and CSS or SVG animation. Do not add comments, libraries, external assets, network requests, Markdown fences, or explanations."
+	channelIQTestMaxResponseBytes  = 512 << 10
+	channelIQTestTimeout           = 90 * time.Second
+	channelIQTestEnginePelican     = "pelican"
+	channelIQTestEngineFingerprint = "fingerprint"
 )
+
+var fingerprintDetectorState struct {
+	sync.Mutex
+	detector *lmfpd.Detector
+}
+
+func normalizeChannelIQTestEngine(engine string) string {
+	switch strings.ToLower(strings.TrimSpace(engine)) {
+	case "", channelIQTestEnginePelican:
+		return channelIQTestEnginePelican
+	case channelIQTestEngineFingerprint:
+		return channelIQTestEngineFingerprint
+	default:
+		return ""
+	}
+}
+
+func loadFingerprintDetector(ctx context.Context) (*lmfpd.Detector, error) {
+	fingerprintDetectorState.Lock()
+	defer fingerprintDetectorState.Unlock()
+	if fingerprintDetectorState.detector != nil {
+		return fingerprintDetectorState.detector, nil
+	}
+	detector, err := lmfpd.Load(ctx, lmfpd.LoadOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("load fingerprint detector: %w", err)
+	}
+	fingerprintDetectorState.detector = detector
+	return detector, nil
+}
+
+func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, testUserID int, testModel, endpointType, tokenName string) testResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, channelIQTestTimeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return testResult{localErr: err, iqEngine: channelIQTestEngineFingerprint}
+	}
+
+	detector, err := loadFingerprintDetector(ctx)
+	if err != nil {
+		return testResult{localErr: err, iqEngine: channelIQTestEngineFingerprint}
+	}
+	challenges, err := lmfpd.GenerateChallenges(channel.GetIQProbeSampleCount())
+	if err != nil {
+		return testResult{localErr: fmt.Errorf("generate fingerprint challenges: %w", err), iqEngine: channelIQTestEngineFingerprint}
+	}
+
+	outputs := make([]lmfpd.Output, 0, len(challenges))
+	samples := make([]channelIQTestSample, 0, len(challenges))
+	var lastResult testResult
+	responseBytes, rawResponseBytes, reasoningTokens := 0, 0, 0
+	for _, challenge := range challenges {
+		if err := ctx.Err(); err != nil {
+			return testResult{localErr: err, iqEngine: channelIQTestEngineFingerprint}
+		}
+		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint)
+		if result.localErr != nil {
+			result.iqEngine = channelIQTestEngineFingerprint
+			return result
+		}
+		outputs = append(outputs, lmfpd.Output{Text: result.response, ExpectedCount: challenge.ExpectedCount})
+		samples = append(samples, channelIQTestSample{
+			ChallengeID: challenge.ID, ExpectedCount: challenge.ExpectedCount, Text: result.response,
+		})
+		responseBytes += result.responseBytes
+		rawResponseBytes += result.rawResponseBytes
+		reasoningTokens += result.reasoningTokens
+		lastResult = result
+	}
+	// Short runs can rank models, but only three valid samples yield calibrated probabilities.
+	analysis, err := detector.Analyze(outputs, len(challenges) == model.MaxChannelIQProbeSampleCount)
+	if err != nil {
+		return testResult{localErr: fmt.Errorf("analyze fingerprint test responses: %w", err), iqEngine: channelIQTestEngineFingerprint}
+	}
+	if analysis == nil {
+		return testResult{localErr: errors.New("fingerprint test returned no analysis"), iqEngine: channelIQTestEngineFingerprint}
+	}
+	lastResult.iqEngine = channelIQTestEngineFingerprint
+	lastResult.fingerprintAnalysis = analysis
+	lastResult.fingerprintSamples = samples
+	lastResult.response = analysis.PredictionName
+	lastResult.responseBytes = responseBytes
+	lastResult.rawResponseBytes = rawResponseBytes
+	lastResult.reasoningTokens = reasoningTokens
+	return lastResult
+}
 
 type testResponseBody struct {
 	io.ReadCloser
 	info *relaycommon.RelayInfo
+}
+
+type channelIQTestSample struct {
+	ChallengeID   string `json:"challenge_id"`
+	ExpectedCount int    `json:"expected_count"`
+	Text          string `json:"text"`
+}
+
+func channelIQProbeAnalysis(analysis *lmfpd.Analysis) *model.ChannelIQProbeAnalysis {
+	if analysis == nil || analysis.Decision != "scored" || analysis.ProbabilityStatus != "reference_calibrated" {
+		return nil
+	}
+	result := &model.ChannelIQProbeAnalysis{
+		Prediction:       strings.TrimSpace(analysis.Prediction),
+		ModelConfidences: make(map[string]float64, len(analysis.Results)),
+	}
+	for _, candidate := range analysis.Results {
+		modelName := strings.TrimSpace(candidate.Model)
+		if modelName == "" || candidate.Probability == nil {
+			continue
+		}
+		confidence := *candidate.Probability
+		result.ModelConfidences[modelName] = confidence
+	}
+	return result
 }
 
 func (body *testResponseBody) Read(p []byte) (int, error) {
@@ -94,18 +216,36 @@ func supportsChannelTest(channelType int) bool {
 	}
 }
 
-func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
-	normalized := strings.TrimSpace(endpointType)
-	if normalized != "" {
-		return normalized
+// Resolve the endpoint and path once using the same rules for probe eligibility and relay requests.
+func channelTestEndpoint(channel *model.Channel, modelName, endpointType string) (string, string) {
+	endpointType = strings.TrimSpace(endpointType)
+	if endpointType == "" {
+		switch {
+		case strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix):
+			endpointType = string(constant.EndpointTypeOpenAIResponseCompact)
+		case channel.Type == constant.ChannelTypeCodex:
+			endpointType = string(constant.EndpointTypeOpenAIResponse)
+		}
 	}
-	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
-		return string(constant.EndpointTypeOpenAIResponseCompact)
+	if endpointType != "" {
+		if endpoint, ok := common.GetDefaultEndpointInfo(constant.EndpointType(endpointType)); ok {
+			return endpointType, endpoint.Path
+		}
+		return endpointType, "/v1/chat/completions"
 	}
-	if channel != nil && channel.Type == constant.ChannelTypeCodex {
-		return string(constant.EndpointTypeOpenAIResponse)
+	switch {
+	case strings.Contains(strings.ToLower(modelName), "codex"):
+		return "", "/v1/responses"
+	case channel.Type == constant.ChannelTypeVolcEngine && strings.Contains(modelName, "seedream"):
+		return "", "/v1/images/generations"
+	case strings.Contains(strings.ToLower(modelName), "embedding"), strings.HasPrefix(modelName, "m3e"),
+		strings.Contains(modelName, "bge-"), strings.Contains(modelName, "embed"), channel.Type == constant.ChannelTypeMokaAI:
+		return "", "/v1/embeddings"
+	case strings.Contains(strings.ToLower(modelName), "rerank"):
+		return "", "/v1/rerank"
+	default:
+		return "", "/v1/chat/completions"
 	}
-	return normalized
 }
 
 func resolveChannelTestUserID(c *gin.Context) (int, error) {
@@ -162,8 +302,16 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 }
 
 func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string, prompt string) testResult {
+	return testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, isStream, tokenName, pricingGroup, prompt, channelIQTestEnginePelican)
+}
+
+func testChannelWithPromptEngine(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string, prompt string, iqEngine string) testResult {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	iqEngine = normalizeChannelIQTestEngine(iqEngine)
+	if iqEngine == "" {
+		return testResult{localErr: errors.New("invalid IQ test engine")}
 	}
 	if prompt != "" {
 		var cancel context.CancelFunc
@@ -192,53 +340,14 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 		return testResult{localErr: errors.New("test model is required")}
 	}
 
-	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
-
-	requestPath := "/v1/chat/completions"
-
-	// 如果指定了端点类型，使用指定的端点类型
-	if endpointType != "" {
-		if endpointInfo, ok := common.GetDefaultEndpointInfo(constant.EndpointType(endpointType)); ok {
-			requestPath = endpointInfo.Path
-		}
-	} else {
-		// 如果没有指定端点类型，使用原有的自动检测逻辑
-
-		if strings.Contains(strings.ToLower(testModel), "rerank") {
-			requestPath = "/v1/rerank"
-		}
-
-		// 先判断是否为 Embedding 模型
-		if strings.Contains(strings.ToLower(testModel), "embedding") ||
-			strings.HasPrefix(testModel, "m3e") || // m3e 系列模型
-			strings.Contains(testModel, "bge-") || // bge 系列模型
-			strings.Contains(testModel, "embed") ||
-			channel.Type == constant.ChannelTypeMokaAI { // 其他 embedding 模型
-			requestPath = "/v1/embeddings" // 修改请求路径
-		}
-
-		// VolcEngine 图像生成模型
-		if channel.Type == constant.ChannelTypeVolcEngine && strings.Contains(testModel, "seedream") {
-			requestPath = "/v1/images/generations"
-		}
-
-		// responses-only models
-		if strings.Contains(strings.ToLower(testModel), "codex") {
-			requestPath = "/v1/responses"
-		}
-
-		// responses compaction models (must use /v1/responses/compact)
-		if strings.HasSuffix(testModel, ratio_setting.CompactModelSuffix) {
-			requestPath = "/v1/responses/compact"
-		}
-	}
+	endpointType, requestPath := channelTestEndpoint(channel, testModel, endpointType)
 	if strings.HasPrefix(requestPath, "/v1/responses/compact") {
 		testModel = ratio_setting.WithCompactModelSuffix(testModel)
 	}
 	if prompt != "" && strings.HasPrefix(requestPath, "/v1/responses/compact") {
 		return testResult{localErr: errors.New("智商测试不支持 Responses 压缩端点")}
 	}
-	if prompt != "" && !isChannelIQTestPath(requestPath) {
+	if prompt != "" && !supportsChannelIQTest(channel.Type, testModel, requestPath) {
 		return testResult{localErr: fmt.Errorf("智商测试仅支持文本生成模型")}
 	}
 
@@ -328,7 +437,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 		}
 	}
 
-	request := buildTestRequest(testModel, endpointType, channel, isStream, prompt)
+	request := buildTestRequestWithIQEngine(testModel, endpointType, channel, isStream, prompt, iqEngine)
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -567,10 +676,20 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(jsonData))
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
+		// Adaptors can fail while building URLs, headers or proxy clients, before sending.
+		upstreamStatus := 0
+		var transportErr *types.NewAPIError
+		if errors.As(err, &transportErr) && transportErr.GetErrorCode() == types.ErrorCodeDoRequestFailed {
+			upstreamStatus = http.StatusBadGateway
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+				upstreamStatus = http.StatusGatewayTimeout
+			}
+		}
 		return testResult{
-			context:     c,
-			localErr:    err,
-			newAPIError: types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError),
+			context:               c,
+			localErr:              err,
+			newAPIError:           types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError),
+			upstreamFailureStatus: upstreamStatus,
 		}
 	}
 	var httpResp *http.Response
@@ -592,9 +711,10 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 				err,
 			))
 			return testResult{
-				context:     c,
-				localErr:    err,
-				newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError),
+				context:               c,
+				localErr:              err,
+				newAPIError:           types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError),
+				upstreamFailureStatus: httpResp.StatusCode,
 			}
 		}
 	}
@@ -603,10 +723,16 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	}
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
+		// The Bedrock SDK performs the actual upstream call inside DoResponse.
+		upstreamStatus := 0
+		if respErr.GetErrorCode() == types.ErrorCodeAwsInvokeError {
+			upstreamStatus = respErr.StatusCode
+		}
 		return testResult{
-			context:     c,
-			localErr:    respErr,
-			newAPIError: respErr,
+			context:               c,
+			localErr:              respErr,
+			newAPIError:           respErr,
+			upstreamFailureStatus: upstreamStatus,
 		}
 	}
 	usage, usageErr := coerceTestUsage(usageA, isStream, info.GetEstimatePromptTokens())
@@ -642,14 +768,25 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	var finishReason string
 	if prompt != "" {
 		finishReason = extractChannelIQTestFinishReason(respBody)
-		generatedResponse = normalizeChannelIQTestHTML(extractChannelTestText(respBody))
-		if err := validateChannelIQTestHTML(generatedResponse, finishReason); err != nil {
+		generatedResponse = extractChannelTestText(respBody)
+		if iqEngine == channelIQTestEnginePelican {
+			generatedResponse = normalizeChannelIQTestHTML(generatedResponse)
+			if err := validateChannelIQTestHTML(generatedResponse, finishReason); err != nil {
+				return testResult{
+					context:          c,
+					localErr:         err,
+					newAPIError:      types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+					rawResponseBytes: len(respBody),
+					responseBytes:    len(generatedResponse),
+					finishReason:     finishReason,
+				}
+			}
+		} else if strings.TrimSpace(generatedResponse) == "" {
 			return testResult{
 				context:          c,
-				localErr:         err,
-				newAPIError:      types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+				localErr:         errors.New("指纹测试未返回文本内容"),
+				newAPIError:      types.NewOpenAIError(errors.New("fingerprint test returned empty text"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
 				rawResponseBytes: len(respBody),
-				responseBytes:    len(generatedResponse),
 				finishReason:     finishReason,
 			}
 		}
@@ -703,6 +840,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 		rawResponseBytes: len(respBody),
 		reasoningTokens:  usage.CompletionTokenDetails.ReasoningTokens,
 		finishReason:     finishReason,
+		iqEngine:         iqEngine,
 	}
 }
 
@@ -1102,11 +1240,12 @@ func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {
 	return message
 }
 
-func isChannelIQTestPath(requestPath string) bool {
-	return strings.Contains(requestPath, "/chat/completions") ||
-		strings.Contains(requestPath, "/messages") ||
-		strings.Contains(requestPath, "/responses") ||
-		strings.Contains(requestPath, "/generateContent")
+func supportsChannelIQTest(channelType int, modelName, requestPath string) bool {
+	if channelType == constant.ChannelTypeSora || channelType == constant.ChannelTypeJina || channelType == constant.ChannelTypeMokaAI || common.IsImageGenerationModel(modelName) {
+		return false
+	}
+	return requestPath == "/v1/chat/completions" || requestPath == "/v1/messages" ||
+		requestPath == "/v1/responses" || strings.HasSuffix(requestPath, ":generateContent")
 }
 
 func testPromptOrDefault(prompt string) string {
@@ -1117,7 +1256,11 @@ func testPromptOrDefault(prompt string) string {
 }
 
 func channelIQTestInstructions(prompt string) json.RawMessage {
-	if prompt == "" {
+	return channelIQTestInstructionsForEngine(prompt, true)
+}
+
+func channelIQTestInstructionsForEngine(prompt string, enabled bool) json.RawMessage {
+	if prompt == "" || !enabled {
 		return nil
 	}
 	data, err := common.Marshal(channelIQTestOutputContract)
@@ -1440,6 +1583,11 @@ parsed:
 }
 
 func buildTestRequest(model string, endpointType string, channel *model.Channel, isStream bool, prompt string) dto.Request {
+	return buildTestRequestWithIQEngine(model, endpointType, channel, isStream, prompt, channelIQTestEnginePelican)
+}
+
+func buildTestRequestWithIQEngine(model string, endpointType string, channel *model.Channel, isStream bool, prompt string, iqEngine string) dto.Request {
+	usePelicanContract := prompt != "" && normalizeChannelIQTestEngine(iqEngine) == channelIQTestEnginePelican
 	testResponsesInput := json.RawMessage(`[{"role":"user","content":"hi"}]`)
 	if prompt != "" {
 		promptData, err := common.Marshal([]map[string]string{{"role": "user", "content": testPromptOrDefault(prompt)}})
@@ -1478,7 +1626,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 			return &dto.OpenAIResponsesRequest{
 				Model:        model,
 				Input:        testResponsesInput,
-				Instructions: channelIQTestInstructions(prompt),
+				Instructions: channelIQTestInstructionsForEngine(prompt, usePelicanContract),
 				Stream:       lo.ToPtr(isStream),
 			}
 		case constant.EndpointTypeOpenAIResponseCompact:
@@ -1515,7 +1663,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 			messages := []dto.Message{
 				{Role: "user", Content: testPromptOrDefault(prompt)},
 			}
-			if prompt != "" {
+			if usePelicanContract {
 				messages = append([]dto.Message{{Role: "system", Content: channelIQTestOutputContract}}, messages...)
 			}
 			req := &dto.GeneralOpenAIRequest{
@@ -1565,7 +1713,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 		return &dto.OpenAIResponsesRequest{
 			Model:        model,
 			Input:        testResponsesInput,
-			Instructions: channelIQTestInstructions(prompt),
+			Instructions: channelIQTestInstructionsForEngine(prompt, usePelicanContract),
 			Stream:       lo.ToPtr(isStream),
 		}
 	}
@@ -1574,7 +1722,7 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 	messages := []dto.Message{
 		{Role: "user", Content: testPromptOrDefault(prompt)},
 	}
-	if prompt != "" {
+	if usePelicanContract {
 		messages = append([]dto.Message{{Role: "system", Content: channelIQTestOutputContract}}, messages...)
 	}
 	testRequest := &dto.GeneralOpenAIRequest{
@@ -1623,7 +1771,10 @@ func TestChannel(c *gin.Context) {
 			return
 		}
 	}
-	testModel := c.Query("model")
+	testModel := strings.TrimSpace(c.Query("model"))
+	if testModel == "" {
+		testModel = channel.GetTestModel()
+	}
 	endpointType := c.Query("endpoint_type")
 	isStream, _ := strconv.ParseBool(c.Query("stream"))
 	intelligenceTest, _ := strconv.ParseBool(c.Query("iq_test"))
@@ -1643,7 +1794,15 @@ func TestChannel(c *gin.Context) {
 			common.ApiError(c, errors.New("智商测试暂不支持流式输出"))
 			return
 		}
-		result = testChannelWithPrompt(requestCtx, channel, testUserID, testModel, endpointType, false, modelTestTokenName, "", channelIQTestPrompt)
+		switch normalizeChannelIQTestEngine(c.Query("iq_test_engine")) {
+		case channelIQTestEnginePelican:
+			result = testChannelWithPrompt(requestCtx, channel, testUserID, testModel, endpointType, false, modelTestTokenName, "", channelIQTestPrompt)
+		case channelIQTestEngineFingerprint:
+			result = testChannelWithFingerprint(requestCtx, channel, testUserID, testModel, endpointType, modelTestTokenName)
+		default:
+			common.ApiError(c, errors.New("无效的降智测试引擎"))
+			return
+		}
 	} else {
 		result = testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
 	}
@@ -1684,7 +1843,18 @@ func TestChannel(c *gin.Context) {
 		})
 		return
 	}
-	recoverChannelAfterSuccessfulTest(requestCtx, channel.Id, result.context)
+	if !intelligenceTest {
+		recoverChannelAfterSuccessfulTest(requestCtx, channel.Id, result.context)
+	} else if analysis := channelIQProbeAnalysis(result.fingerprintAnalysis); analysis != nil && testModel == channel.GetTestModel() {
+		usingKey := ""
+		if result.context != nil {
+			usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+		}
+		if err := service.CompleteManualChannelIQTest(requestCtx, channel.Id, testModel, usingKey, analysis); err != nil {
+			common.ApiError(c, fmt.Errorf("保存指纹测试结果失败: %w", err))
+			return
+		}
+	}
 	data := gin.H{
 		"response_time": milliseconds,
 		"ttft_ms":       result.ttftMs,
@@ -1693,10 +1863,19 @@ func TestChannel(c *gin.Context) {
 		data["response"] = result.response
 		data["response_bytes"] = result.responseBytes
 		data["finish_reason"] = result.finishReason
+		data["engine"] = result.iqEngine
+		if result.fingerprintAnalysis != nil {
+			data["analysis"] = result.fingerprintAnalysis
+			data["samples"] = result.fingerprintSamples
+		}
+	}
+	success, message := true, ""
+	if a := result.fingerprintAnalysis; a != nil && (a.Decision == "not_model" || a.Decision == "unscorable") {
+		success, message = false, a.Evidence.Reason
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
+		"success": success,
+		"message": message,
 		"time":    consumedTime,
 		"data":    data,
 	})

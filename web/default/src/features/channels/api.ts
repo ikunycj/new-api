@@ -24,6 +24,7 @@ import type {
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
+  ChannelIQTestEngine,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -211,6 +212,7 @@ export async function testChannel(
     endpoint_type?: string
     stream?: boolean
     iq_test?: boolean
+    iq_test_engine?: ChannelIQTestEngine
   },
   signal?: AbortSignal
 ): Promise<ChannelTestResponse> {

@@ -155,6 +155,7 @@ func TestChannelProbePolicyRequestContract(t *testing.T) {
 			"probe_period_minutes":       3,
 			"probe_random_delay_enabled": true,
 			"probe_stream_enabled":       true,
+			"iq_auto_disable_degraded":   enabled,
 			"probe_failure_auto_ban":     "retired",
 			"probe_success_auto_enable":  !enabled,
 			"models":                     "gpt-4o", "test_model": "gpt-4o", "group": "default",
@@ -173,11 +174,12 @@ func TestChannelProbePolicyRequestContract(t *testing.T) {
 		assert.Equal(t, float64(3), fields["probe_period_minutes"])
 		assert.Equal(t, true, fields["probe_random_delay_enabled"])
 		assert.Equal(t, true, fields["probe_stream_enabled"])
+		assert.Equal(t, enabled, fields["iq_auto_disable_degraded"])
 		assert.NotContains(t, fields, "probe_failure_auto_ban")
 		assert.NotContains(t, fields, "probe_success_auto_enable")
 		assert.ElementsMatch(t, []string{
 			"auto_probe_enabled", "probe_period_minutes", "probe_random_delay_enabled", "probe_stream_enabled",
-			"models", "test_model", "group",
+			"iq_auto_disable_degraded", "models", "test_model", "group",
 		}, channelUpdateColumns(requestData))
 	}
 }
@@ -188,6 +190,7 @@ func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 		"probe_period_minutes":       0,
 		"probe_random_delay_enabled": false,
 		"probe_stream_enabled":       false,
+		"iq_auto_disable_degraded":   false,
 		"notify_on_status_change":    false,
 		"price_multiplier":           0,
 		"price_multiplier_mode":      "",
@@ -202,6 +205,7 @@ func TestChannelUpdateColumnsIncludeExplicitZeroFields(t *testing.T) {
 		"probe_period_minutes",
 		"probe_random_delay_enabled",
 		"probe_stream_enabled",
+		"iq_auto_disable_degraded",
 		"notify_on_status_change",
 		"price_multiplier",
 		"price_multiplier_mode",

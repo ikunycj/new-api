@@ -340,6 +340,12 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
     values.probe_random_delay_enabled ||
     values.probe_stream_enabled ||
+    values.iq_probe_enabled ||
+    values.iq_auto_disable_degraded ||
+    values.iq_probe_period_minutes !==
+      CHANNEL_FORM_DEFAULT_VALUES.iq_probe_period_minutes ||
+    values.iq_probe_sample_count !==
+      CHANNEL_FORM_DEFAULT_VALUES.iq_probe_sample_count ||
     values.upstream_max_retries !== 0 ||
     values.max_concurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     values.price_multiplier !== 1 ||
@@ -780,6 +786,10 @@ export function ChannelMutateDrawer({
     'probe_random_delay_enabled'
   )
   const currentProbeStreamEnabled = form.watch('probe_stream_enabled')
+  const currentIqProbeEnabled = form.watch('iq_probe_enabled')
+  const currentIqAutoDisableDegraded = form.watch('iq_auto_disable_degraded')
+  const currentIqProbePeriodMinutes = form.watch('iq_probe_period_minutes')
+  const currentIqProbeSampleCount = form.watch('iq_probe_sample_count')
   const currentUpstreamMaxRetries = form.watch('upstream_max_retries')
   const currentMaxConcurrency = form.watch('max_concurrency')
   const currentPriceMultiplier = form.watch('price_multiplier')
@@ -788,6 +798,13 @@ export function ChannelMutateDrawer({
   const currentForcePriorityScope = form.watch('force_priority_scope')
   const previousDayProbeSuccessRate =
     channelData?.data?.previous_day_probe_success_rate ?? 100
+  const iqProbeAt = channelData?.data?.iq_probe_at ?? 0
+  const iqProbeModelConfidences =
+    channelData?.data?.iq_probe_model_confidences ?? {}
+  const iqTestConfidence =
+    iqProbeAt > 0 ? (iqProbeModelConfidences[currentTestModel.trim()] ?? 0) : 1
+  const iqProbePrediction = channelData?.data?.iq_probe_prediction
+  const iqProbeConfidence = channelData?.data?.iq_probe_confidence
   const currentTag = form.watch('tag')
   const currentRemark = form.watch('remark')
   const currentStatusCodeMapping = form.watch('status_code_mapping')
@@ -1056,6 +1073,12 @@ export function ChannelMutateDrawer({
       CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes ||
     currentProbeRandomDelayEnabled ||
     currentProbeStreamEnabled ||
+    currentIqProbeEnabled ||
+    currentIqProbePeriodMinutes !==
+      CHANNEL_FORM_DEFAULT_VALUES.iq_probe_period_minutes ||
+    currentIqProbeSampleCount !==
+      CHANNEL_FORM_DEFAULT_VALUES.iq_probe_sample_count ||
+    currentIqAutoDisableDegraded ||
     currentUpstreamMaxRetries !== 0 ||
     currentMaxConcurrency !== CHANNEL_FORM_DEFAULT_VALUES.max_concurrency ||
     currentPriceMultiplier !== 1 ||
@@ -3704,192 +3727,40 @@ export function ChannelMutateDrawer({
                                   </FormItem>
                                 )}
                               />
-                            </div>
-
-                            <div className='space-y-1'>
-                              <div className='flex items-start gap-4'>
-                                <FormField
-                                  control={form.control}
-                                  name='auto_probe_enabled'
-                                  render={({ field }) => (
-                                    <FormItem className='min-w-0 flex-1 gap-1'>
-                                      <div className='flex items-center justify-between gap-2'>
-                                        <FormLabel>自动探测</FormLabel>
-                                        <FormControl>
-                                          <Switch
-                                            className='shrink-0'
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                          />
-                                        </FormControl>
-                                      </div>
-                                      <FormDescription>
-                                        开启后定期探测，探测失败自动禁用
-                                      </FormDescription>
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name='auto_ban'
-                                  render={({ field }) => (
-                                    <FormItem className='min-w-0 flex-1 gap-1'>
-                                      <div className='flex items-center justify-between gap-2'>
-                                        <FormLabel>{t('Auto Ban')}</FormLabel>
-                                        <FormControl>
-                                          <Switch
-                                            className='shrink-0'
-                                            checked={field.value === 1}
-                                            onCheckedChange={(checked) =>
-                                              field.onChange(checked ? 1 : 0)
-                                            }
-                                          />
-                                        </FormControl>
-                                      </div>
-                                      <FormDescription>
-                                        {t(FIELD_DESCRIPTIONS.AUTO_BAN)}
-                                      </FormDescription>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
                               <FormField
                                 control={form.control}
-                                name='notify_on_status_change'
-                                render={({ field }) => (
-                                  <FormItem className='gap-1'>
-                                    <div className='flex items-center justify-between gap-2'>
-                                      <FormLabel>
-                                        渠道状态变化通知管理员
-                                      </FormLabel>
-                                      <FormControl>
-                                        <Switch
-                                          className='shrink-0'
-                                          checked={field.value}
-                                          onCheckedChange={field.onChange}
-                                        />
-                                      </FormControl>
-                                    </div>
-                                    <FormDescription>
-                                      开启后，渠道自动禁用或恢复启用时通知根管理员
-                                    </FormDescription>
-                                  </FormItem>
-                                )}
-                              />
-                              <Link
-                                to='/system-settings/models/$section'
-                                params={{ section: 'routing-reliability' }}
-                                className='text-primary focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-xs underline underline-offset-4 hover:no-underline focus-visible:ring-2 focus-visible:outline-none'
-                              >
-                                封禁规则设置
-                              </Link>
-                            </div>
-
-                            <FormField
-                              control={form.control}
-                              name='test_model'
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>{t('Test Model')}</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      placeholder={t(
-                                        FIELD_PLACEHOLDERS.TEST_MODEL
-                                      )}
-                                      {...field}
-                                    />
-                                  </FormControl>
-                                  <FormDescription>
-                                    {t(FIELD_DESCRIPTIONS.TEST_MODEL)}
-                                  </FormDescription>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-
-                            <div className='grid gap-4 sm:grid-cols-2'>
-                              <FormField
-                                control={form.control}
-                                name='probe_period_minutes'
+                                name='test_model'
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>探测周期</FormLabel>
+                                    <FormLabel className='flex w-full items-center justify-between gap-2'>
+                                      <span>测试模型 *</span>
+                                      <span className='text-muted-foreground text-xs font-normal tabular-nums'>
+                                        {iqTestConfidence == null
+                                          ? '置信度暂无'
+                                          : `置信度 ${(iqTestConfidence * 100).toFixed(1)}%`}
+                                      </span>
+                                    </FormLabel>
                                     <FormControl>
                                       <Input
-                                        type='number'
-                                        min={1}
-                                        max={10080}
-                                        step={1}
+                                        placeholder={t(
+                                          FIELD_PLACEHOLDERS.TEST_MODEL
+                                        )}
                                         {...field}
-                                        disabled={!currentAutoProbeEnabled}
-                                        onChange={(event) =>
-                                          field.onChange(
-                                            Number(event.target.value)
-                                          )
-                                        }
                                       />
                                     </FormControl>
                                     <FormDescription>
-                                      以分钟为单位；相同周期的渠道按组统一计数
+                                      可用性探测和降智探测都使用此模型。
                                     </FormDescription>
+                                    <p className='text-muted-foreground text-xs'>
+                                      最近一次指纹测试最高置信度模型：
+                                      {iqProbeAt > 0 && iqProbePrediction
+                                        ? `${iqProbePrediction} · ${iqProbeConfidence == null ? '置信度暂无' : `${(iqProbeConfidence * 100).toFixed(1)}%`}`
+                                        : '暂无测试数据'}
+                                    </p>
                                     <FormMessage />
                                   </FormItem>
                                 )}
                               />
-                              <div className='grid gap-3'>
-                                <FormField
-                                  control={form.control}
-                                  name='probe_random_delay_enabled'
-                                  render={({ field }) => (
-                                    <FormItem className='rounded-md border p-3'>
-                                      <div className='flex items-center justify-between gap-3'>
-                                        <div className='min-w-0 space-y-1'>
-                                          <FormLabel>开启随机延迟</FormLabel>
-                                          <FormDescription>
-                                            周期触发后在 0–60 秒内随机开始
-                                          </FormDescription>
-                                        </div>
-                                        <FormControl>
-                                          <Switch
-                                            className='shrink-0'
-                                            checked={field.value}
-                                            disabled={!currentAutoProbeEnabled}
-                                            onCheckedChange={field.onChange}
-                                          />
-                                        </FormControl>
-                                      </div>
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name='probe_stream_enabled'
-                                  render={({ field }) => (
-                                    <FormItem className='rounded-md border p-3'>
-                                      <div className='flex items-center justify-between gap-3'>
-                                        <div className='min-w-0 space-y-1'>
-                                          <FormLabel>流式探测</FormLabel>
-                                          <FormDescription>
-                                            使用流式请求检查渠道响应
-                                          </FormDescription>
-                                        </div>
-                                        <FormControl>
-                                          <Switch
-                                            className='shrink-0'
-                                            checked={field.value}
-                                            disabled={!currentAutoProbeEnabled}
-                                            onCheckedChange={field.onChange}
-                                          />
-                                        </FormControl>
-                                      </div>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <p className='text-muted-foreground text-xs sm:col-span-2'>
-                                系统每 60
-                                秒推进一次周期；周期到达时，同组内所有启用或自动禁用渠道会同时异步探测，不设置并发上限。
-                              </p>
                               <FormField
                                 control={form.control}
                                 name='upstream_max_retries'
@@ -3952,9 +3823,6 @@ export function ChannelMutateDrawer({
                                   </FormItem>
                                 )}
                               />
-                            </div>
-
-                            <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
                                 name='price_multiplier'
@@ -4029,9 +3897,6 @@ export function ChannelMutateDrawer({
                                   </FormItem>
                                 )}
                               />
-                            </div>
-
-                            <div className='grid gap-4 sm:grid-cols-2'>
                               <FormField
                                 control={form.control}
                                 name='force_priority'
@@ -4104,6 +3969,297 @@ export function ChannelMutateDrawer({
                                   </FormItem>
                                 )}
                               />
+                            </div>
+
+                            <div className='border-border/60 mt-2 border-t pt-4'>
+                              <SubHeading
+                                title='探测'
+                                icon={<RefreshCw className='h-3.5 w-3.5' />}
+                                iconTone='chart-3'
+                              />
+                            </div>
+
+                            <div className='border-border/60 rounded-md border p-4'>
+                              <h4 className='mb-3 text-sm font-medium'>
+                                可用性探测
+                              </h4>
+                              <div className='grid gap-4 sm:grid-cols-2'>
+                                <FormField
+                                  control={form.control}
+                                  name='auto_probe_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <FormLabel>自动探测</FormLabel>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                      <FormDescription>
+                                        使用路由策略中的测试模型定期检查渠道可用性。
+                                      </FormDescription>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='auto_ban'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <FormLabel>{t('Auto Ban')}</FormLabel>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value === 1}
+                                            onCheckedChange={(checked) =>
+                                              field.onChange(checked ? 1 : 0)
+                                            }
+                                          />
+                                        </FormControl>
+                                      </div>
+                                      <FormDescription>
+                                        {t(FIELD_DESCRIPTIONS.AUTO_BAN)}
+                                      </FormDescription>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='notify_on_status_change'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <FormLabel>
+                                          渠道状态变化通知管理员
+                                        </FormLabel>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                      <FormDescription>
+                                        开启后，渠道自动禁用或恢复启用时通知根管理员。
+                                      </FormDescription>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='probe_period_minutes'
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>
+                                        可用性探测周期（分钟）
+                                      </FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type='number'
+                                          min={1}
+                                          max={10080}
+                                          step={1}
+                                          {...field}
+                                          disabled={!currentAutoProbeEnabled}
+                                          onChange={(event) =>
+                                            field.onChange(
+                                              Number(event.target.value)
+                                            )
+                                          }
+                                        />
+                                      </FormControl>
+                                      <FormDescription>
+                                        默认 5
+                                        分钟；相同周期的渠道按组统一计数。
+                                      </FormDescription>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='probe_random_delay_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-3'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>随机延迟</FormLabel>
+                                          <FormDescription>
+                                            周期触发后在 0–60 秒内随机开始。
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            disabled={!currentAutoProbeEnabled}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='probe_stream_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-3'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>流式探测</FormLabel>
+                                          <FormDescription>
+                                            使用流式请求检查渠道响应。
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            disabled={!currentAutoProbeEnabled}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className='mt-3 flex flex-wrap items-center gap-x-2 gap-y-1'>
+                                <Link
+                                  to='/system-settings/models/$section'
+                                  params={{ section: 'routing-reliability' }}
+                                  className='text-primary focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-xs underline underline-offset-4 hover:no-underline focus-visible:ring-2 focus-visible:outline-none'
+                                >
+                                  封禁规则设置
+                                </Link>
+                                <span className='text-muted-foreground text-xs'>
+                                  系统每 60
+                                  秒推进一次周期；周期到达后按配置异步探测。
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className='border-border/60 rounded-md border p-4'>
+                              <h4 className='mb-3 text-sm font-medium'>
+                                降智探测
+                              </h4>
+                              <div className='grid gap-4 sm:grid-cols-2'>
+                                <FormField
+                                  control={form.control}
+                                  name='iq_probe_sample_count'
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>指纹测试数量</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type='number'
+                                          min={1}
+                                          max={3}
+                                          step={1}
+                                          {...field}
+                                          disabled={!currentIqProbeEnabled}
+                                          onChange={(event) =>
+                                            field.onChange(
+                                              Number(event.target.value)
+                                            )
+                                          }
+                                        />
+                                      </FormControl>
+                                      <FormDescription>
+                                        1–2 份仅提供初步排名；3 份有效样本才能计算置信度并参与降智判定。
+                                      </FormDescription>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='iq_probe_period_minutes'
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>
+                                        降智探测周期（分钟）
+                                      </FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type='number'
+                                          min={1}
+                                          max={10080}
+                                          step={1}
+                                          {...field}
+                                          disabled={!currentIqProbeEnabled}
+                                          onChange={(event) =>
+                                            field.onChange(
+                                              Number(event.target.value)
+                                            )
+                                          }
+                                        />
+                                      </FormControl>
+                                      <FormDescription>
+                                        默认 60
+                                        分钟；固定使用指纹测试和路由策略中的测试模型。
+                                      </FormDescription>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='iq_probe_enabled'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>降智探测开关</FormLabel>
+                                          <FormDescription>
+                                            开启后按周期运行降智探测。
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name='iq_auto_disable_degraded'
+                                  render={({ field }) => (
+                                    <FormItem className='rounded-md border p-3'>
+                                      <div className='flex items-center justify-between gap-2'>
+                                        <div className='min-w-0 space-y-1'>
+                                          <FormLabel>降智后自动禁用</FormLabel>
+                                          <FormDescription>
+                                            降智探测发现实际最可能模型与测试模型不一致时自动禁用渠道。
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            className='shrink-0'
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <p className='text-muted-foreground mt-3 text-xs'>
+                                只有获得校准评分或确认上游请求失败，才会计入可用性。未评分不会改变渠道状态。
+                              </p>
                             </div>
 
                             <div className='border-border/60 bg-muted/20 rounded-md border p-3'>

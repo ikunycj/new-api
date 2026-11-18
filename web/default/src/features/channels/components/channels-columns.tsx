@@ -46,8 +46,14 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { toIntlLocale } from '@/i18n/languages'
+import {
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  hasPermission,
+} from '@/lib/admin-permissions'
 import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
 import {
@@ -73,6 +79,7 @@ import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
 import { NumericSpinnerInput } from './numeric-spinner-input'
+import { TestModelEditor } from './test-model-editor'
 
 function parseIonetMeta(otherInfo: string | null | undefined): null | {
   source?: string
@@ -420,13 +427,16 @@ export function useChannelsColumns(
 ): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
+  const canWrite = useAuthStore((s) =>
+    hasPermission(
+      s.auth.user,
+      ADMIN_PERMISSION_RESOURCES.CHANNEL,
+      ADMIN_PERMISSION_ACTIONS.WRITE
+    )
+  )
   const enableSelection = options.enableSelection ?? true
-  const groupLabels = options.groupLabels ?? {}
+  const groupLabels = options.groupLabels
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  // The column definitions only depend on the translation function, the active
-  // locale, and sensitive-data visibility. Memoizing keeps the array (and every
-  // cell renderer reference) stable across unrelated re-renders, so react-table
-  // does not invalidate the whole row model on each parent render.
   return useMemo<ColumnDef<Channel>[]>(
     () => [
       // Checkbox column
@@ -899,7 +909,7 @@ export function useChannelsColumns(
                   group={g}
                   // Keep the internal key in the data model while showing the
                   // administrator-configured label in the channel table.
-                  label={sensitiveVisible ? groupLabels[g] : SENSITIVE_MASK}
+                  label={sensitiveVisible ? groupLabels?.[g] : SENSITIVE_MASK}
                   size='sm'
                 />
               ))}
@@ -1113,6 +1123,11 @@ export function useChannelsColumns(
           if (isTagAggregateRow(row.original)) {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
+          if (canWrite) {
+            return (
+              <TestModelEditor key={row.original.id} channel={row.original} />
+            )
+          }
           const testModel = row.original.test_model?.trim()
           return testModel ? (
             <TruncatedText
@@ -1194,6 +1209,6 @@ export function useChannelsColumns(
         meta: { pinned: 'right' as const },
       },
     ],
-    [enableSelection, groupLabels, t, locale, sensitiveVisible]
+    [canWrite, enableSelection, groupLabels, t, locale, sensitiveVisible]
   )
 }

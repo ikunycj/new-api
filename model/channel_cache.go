@@ -263,6 +263,7 @@ func enrichPreviousDayChannelRuntimeMetrics(channels []*Channel, now time.Time) 
 	if len(channels) == 0 {
 		return
 	}
+	EnrichChannelIQProbeMetrics(channels)
 	channelIDs := make([]int, 0, len(channels))
 	for _, channel := range channels {
 		if channel != nil && channel.Id > 0 {
@@ -461,6 +462,7 @@ func CacheUpdateChannel(channel *Channel) {
 	if !common.MemoryCacheEnabled {
 		return
 	}
+	EnrichChannelIQProbeMetrics([]*Channel{channel})
 	channelSyncLock.Lock()
 	if channel == nil {
 		channelSyncLock.Unlock()
@@ -504,6 +506,7 @@ func SyncChannelCacheEntry(channel *Channel) {
 	if !common.MemoryCacheEnabled || channel == nil || channel.Id <= 0 {
 		return
 	}
+	EnrichChannelIQProbeMetrics([]*Channel{channel})
 	var abilities []Ability
 	if channel.Status == common.ChannelStatusEnabled {
 		if err := DB.Where("channel_id = ? AND enabled = ?", channel.Id, true).Find(&abilities).Error; err != nil {

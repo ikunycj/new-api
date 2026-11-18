@@ -47,15 +47,41 @@ type PricingGroupRetryPolicy struct {
 // PricingGroupRoutingStrategy is an independent strategy definition. Strategy
 // contains the stable catalog ID for runtime use and is intentionally omitted
 // from JSON; the ID is the key in PricingGroupRoutingConfiguration.Strategies.
-// Weights are percentages and must add up to 100.
+// Weights are relative values and are stored as entered.
 type PricingGroupRoutingStrategy struct {
-	Strategy             string  `json:"-"`
-	Name                 string  `json:"name"`
-	PriceWeight          float64 `json:"price_weight"`
-	AvailabilityWeight   float64 `json:"availability_weight"`
-	LoadWeight           float64 `json:"load_weight"`
-	TTFTWeight           float64 `json:"ttft_weight"`
-	RecentTestTTFTWeight float64 `json:"recent_test_ttft_weight"`
+	Strategy               string  `json:"-"`
+	Name                   string  `json:"name"`
+	PriceWeight            float64 `json:"price_weight"`
+	AvailabilityWeight     float64 `json:"availability_weight"`
+	LoadWeight             float64 `json:"load_weight"`
+	TTFTWeight             float64 `json:"ttft_weight"`
+	RecentTestTTFTWeight   float64 `json:"recent_test_ttft_weight"`
+	IQTestConfidenceWeight float64 `json:"iq_test_confidence_weight"`
+}
+
+// WithNormalizedWeights returns a copy on the 100-point scale used for routing scores.
+func (s PricingGroupRoutingStrategy) WithNormalizedWeights() (PricingGroupRoutingStrategy, error) {
+	weights := [...]*float64{&s.PriceWeight, &s.AvailabilityWeight, &s.LoadWeight, &s.TTFTWeight, &s.RecentTestTTFTWeight, &s.IQTestConfidenceWeight}
+	var largest float64
+	for _, w := range weights {
+		if *w < 0 || math.IsNaN(*w) || math.IsInf(*w, 0) {
+			return PricingGroupRoutingStrategy{}, errors.New("策略 " + s.Strategy + " 的调度权重必须是有限的非负数")
+		}
+		largest = max(largest, *w)
+	}
+	if largest == 0 {
+		return PricingGroupRoutingStrategy{}, errors.New("策略 " + s.Strategy + " 至少需要一项大于 0 的调度权重")
+	}
+	// Scale first: individually finite weights can overflow when added directly.
+	var total float64
+	for _, w := range weights {
+		*w /= largest
+		total += *w
+	}
+	for _, w := range weights {
+		*w = *w / total * 100
+	}
+	return s, nil
 }
 
 // PricingGroupRoutingConfiguration stores the strategy catalog separately
@@ -68,12 +94,13 @@ type PricingGroupRoutingConfiguration struct {
 
 func DefaultPricingGroupRoutingStrategy() PricingGroupRoutingStrategy {
 	return PricingGroupRoutingStrategy{
-		Strategy:             PricingGroupRoutingStrategyBalanced,
-		PriceWeight:          40,
-		AvailabilityWeight:   40,
-		LoadWeight:           20,
-		TTFTWeight:           0,
-		RecentTestTTFTWeight: 0,
+		Strategy:               PricingGroupRoutingStrategyBalanced,
+		PriceWeight:            40,
+		AvailabilityWeight:     40,
+		LoadWeight:             20,
+		TTFTWeight:             0,
+		RecentTestTTFTWeight:   0,
+		IQTestConfidenceWeight: 0,
 	}
 }
 
@@ -82,10 +109,10 @@ func PricingGroupRoutingStrategyPreset(strategy string) PricingGroupRoutingStrat
 	switch strings.TrimSpace(strategy) {
 	case PricingGroupRoutingStrategyPriceFirst:
 		result.Strategy = PricingGroupRoutingStrategyPriceFirst
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight = 65, 20, 15, 0, 0
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight, result.IQTestConfidenceWeight = 65, 20, 15, 0, 0, 0
 	case PricingGroupRoutingStrategyStable:
 		result.Strategy = PricingGroupRoutingStrategyStable
-		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight = 20, 60, 20, 0, 0
+		result.PriceWeight, result.AvailabilityWeight, result.LoadWeight, result.TTFTWeight, result.RecentTestTTFTWeight, result.IQTestConfidenceWeight = 20, 60, 20, 0, 0, 0
 	}
 	return result
 }
@@ -961,12 +988,13 @@ func ParsePricingGroupRoutingConfiguration(
 	groupRatios map[string]float64,
 ) (PricingGroupRoutingConfiguration, error) {
 	type rawRoutingStrategy struct {
-		Name                 *string  `json:"name"`
-		PriceWeight          *float64 `json:"price_weight"`
-		AvailabilityWeight   *float64 `json:"availability_weight"`
-		LoadWeight           *float64 `json:"load_weight"`
-		TTFTWeight           *float64 `json:"ttft_weight"`
-		RecentTestTTFTWeight *float64 `json:"recent_test_ttft_weight"`
+		Name                   *string  `json:"name"`
+		PriceWeight            *float64 `json:"price_weight"`
+		AvailabilityWeight     *float64 `json:"availability_weight"`
+		LoadWeight             *float64 `json:"load_weight"`
+		TTFTWeight             *float64 `json:"ttft_weight"`
+		RecentTestTTFTWeight   *float64 `json:"recent_test_ttft_weight"`
+		IQTestConfidenceWeight *float64 `json:"iq_test_confidence_weight"`
 	}
 	type rawConfiguration struct {
 		Strategies    map[string]rawRoutingStrategy `json:"strategies"`
@@ -1016,20 +1044,22 @@ func ParsePricingGroupRoutingConfiguration(
 		if definition.RecentTestTTFTWeight != nil {
 			recentTestTTFTWeight = *definition.RecentTestTTFTWeight
 		}
-		strategy := PricingGroupRoutingStrategy{
-			Strategy:             strategyID,
-			Name:                 name,
-			PriceWeight:          *definition.PriceWeight,
-			AvailabilityWeight:   *definition.AvailabilityWeight,
-			LoadWeight:           *definition.LoadWeight,
-			TTFTWeight:           ttftWeight,
-			RecentTestTTFTWeight: recentTestTTFTWeight,
+		iqTestConfidenceWeight := float64(0)
+		if definition.IQTestConfidenceWeight != nil {
+			iqTestConfidenceWeight = *definition.IQTestConfidenceWeight
 		}
-		if strategy.PriceWeight < 0 || strategy.AvailabilityWeight < 0 || strategy.LoadWeight < 0 || strategy.TTFTWeight < 0 || strategy.RecentTestTTFTWeight < 0 ||
-			math.IsNaN(strategy.PriceWeight) || math.IsNaN(strategy.AvailabilityWeight) || math.IsNaN(strategy.LoadWeight) || math.IsNaN(strategy.TTFTWeight) || math.IsNaN(strategy.RecentTestTTFTWeight) ||
-			math.IsInf(strategy.PriceWeight, 0) || math.IsInf(strategy.AvailabilityWeight, 0) || math.IsInf(strategy.LoadWeight, 0) || math.IsInf(strategy.TTFTWeight, 0) || math.IsInf(strategy.RecentTestTTFTWeight, 0) ||
-			math.Abs(strategy.PriceWeight+strategy.AvailabilityWeight+strategy.LoadWeight+strategy.TTFTWeight+strategy.RecentTestTTFTWeight-100) > 0.0001 {
-			return PricingGroupRoutingConfiguration{}, errors.New("策略 " + strategyID + " 的调度权重总和必须为 100")
+		strategy := PricingGroupRoutingStrategy{
+			Strategy:               strategyID,
+			Name:                   name,
+			PriceWeight:            *definition.PriceWeight,
+			AvailabilityWeight:     *definition.AvailabilityWeight,
+			LoadWeight:             *definition.LoadWeight,
+			TTFTWeight:             ttftWeight,
+			RecentTestTTFTWeight:   recentTestTTFTWeight,
+			IQTestConfidenceWeight: iqTestConfidenceWeight,
+		}
+		if _, err := strategy.WithNormalizedWeights(); err != nil {
+			return PricingGroupRoutingConfiguration{}, err
 		}
 		strategies[strategyID] = strategy
 	}

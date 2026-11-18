@@ -34,11 +34,12 @@ func (channelProbeHandler) Interval() time.Duration { return 10 * time.Second }
 func (channelProbeHandler) NewPayload() any         { return nil }
 
 type channelProbeSummary struct {
-	Checked   int `json:"checked"`
-	Succeeded int `json:"succeeded"`
-	Failed    int `json:"failed"`
-	Disabled  int `json:"disabled"`
-	Enabled   int `json:"enabled"`
+	Checked      int `json:"checked"`
+	Succeeded    int `json:"succeeded"`
+	Failed       int `json:"failed"`
+	Inconclusive int `json:"inconclusive,omitempty"`
+	Disabled     int `json:"disabled"`
+	Enabled      int `json:"enabled"`
 }
 
 func shouldRunChannelProbe(channel *model.Channel) bool {
@@ -312,6 +313,150 @@ func (executor channelProbeExecutor) run(ctx context.Context, channelID int) cha
 		summary.Succeeded = 1
 	} else {
 		summary.Failed = 1
+	}
+	if changed && status == common.ChannelStatusEnabled {
+		summary.Enabled = 1
+	} else if changed && status == common.ChannelStatusAutoDisabled {
+		summary.Disabled = 1
+	}
+	return channelProbeResult{summary: summary}
+}
+
+// channelIQProbeHandler runs one due-channel pass per scheduler invocation.
+// A minute-level task cadence keeps the per-channel IQ period independent from
+// the system task interval while avoiding a second long-lived dispatcher.
+type channelIQProbeHandler struct{}
+
+func (channelIQProbeHandler) Type() string { return model.SystemTaskTypeChannelIQProbe }
+
+func (channelIQProbeHandler) Enabled() bool {
+	return common.GetEnvOrDefaultBool("CHANNEL_IQ_PROBE_TASK_ENABLED", true)
+}
+
+func (channelIQProbeHandler) Interval() time.Duration { return time.Minute }
+func (channelIQProbeHandler) NewPayload() any         { return nil }
+
+func shouldRunChannelIQProbe(channel *model.Channel) bool {
+	if channel == nil || !channel.ShouldIQProbe() || !supportsChannelTest(channel.Type) || channel.GetTestModel() == "" {
+		return false
+	}
+	_, path := channelTestEndpoint(channel, channel.GetTestModel(), "")
+	return (channel.Status == common.ChannelStatusEnabled || channel.Status == common.ChannelStatusAutoDisabled) &&
+		supportsChannelIQTest(channel.Type, channel.GetTestModel(), path)
+}
+
+func (h channelIQProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	testUserID, err := resolveChannelTestUserID(nil)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	candidates, err := model.GetChannelIQProbeCandidates(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	summary := channelProbeSummary{}
+	now := common.GetTimestamp()
+	for _, candidate := range candidates {
+		if ctx.Err() != nil {
+			finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, summary, ctx.Err())
+			return
+		}
+		if !shouldRunChannelIQProbe(candidate) || !candidateProbeDue(candidate, now) {
+			continue
+		}
+		result := runChannelIQProbe(ctx, candidate.Id, testUserID)
+		summary.Checked += result.summary.Checked
+		summary.Succeeded += result.summary.Succeeded
+		summary.Failed += result.summary.Failed
+		summary.Inconclusive += result.summary.Inconclusive
+		summary.Disabled += result.summary.Disabled
+		summary.Enabled += result.summary.Enabled
+		if result.err != nil {
+			common.SysError(fmt.Sprintf("channel IQ probe worker failed: channel=%d error=%v", candidate.Id, result.err))
+		}
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+func candidateProbeDue(channel *model.Channel, now int64) bool {
+	if channel == nil {
+		return false
+	}
+	// Candidate rows are selected without credentials and therefore do not carry
+	// probe state. Load the state lazily only for the channels that are enabled
+	// for IQ probing; missing state means the first probe is due immediately.
+	state, err := model.GetChannelProbeState(channel.Id)
+	if err != nil {
+		common.SysError(fmt.Sprintf("load channel IQ probe state failed: channel=%d error=%v", channel.Id, err))
+		return false
+	}
+	if state.LastIQProbeAt <= 0 {
+		return true
+	}
+	return now-state.LastIQProbeAt >= int64(channel.GetIQProbePeriodMinutes())*60
+}
+
+func runChannelIQProbe(ctx context.Context, channelID, testUserID int) channelProbeResult {
+	if ctx.Err() != nil {
+		return channelProbeResult{}
+	}
+	now := common.GetTimestamp()
+	leaseUntil := now + channelProbeLeaseSeconds
+	claimed, err := model.ClaimChannelIQProbe(channelID, now, channelProbeLeaseSeconds)
+	if err != nil || !claimed {
+		return channelProbeResult{err: err}
+	}
+	defer func() {
+		if err := model.ReleaseChannelIQProbe(channelID, leaseUntil); err != nil {
+			common.SysError(fmt.Sprintf("release channel IQ probe lease failed: channel=%d error=%v", channelID, err))
+		}
+	}()
+
+	channel, err := model.GetChannelById(channelID, true)
+	if err != nil {
+		return channelProbeResult{err: err}
+	}
+	if !shouldRunChannelIQProbe(channel) || ctx.Err() != nil {
+		return channelProbeResult{}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, channelProbeTimeout)
+	defer cancel()
+	started := time.Now()
+	result := testChannelWithFingerprint(probeCtx, channel, testUserID, channel.GetTestModel(), "", channelProbeTokenName)
+	if ctx.Err() != nil {
+		return channelProbeResult{}
+	}
+	return completeFingerprintProbe(ctx, channelID, channel.GetTestModel(), leaseUntil, result, time.Since(started))
+}
+
+func completeFingerprintProbe(ctx context.Context, channelID int, testModel string, leaseUntil int64, result testResult, elapsed time.Duration) channelProbeResult {
+	analysis := channelIQProbeAnalysis(result.fingerprintAnalysis)
+	summary := channelProbeSummary{Checked: 1}
+	var availability *model.ChannelProbeHistory
+	switch {
+	case result.upstreamFailureStatus != 0:
+		availability = &model.ChannelProbeHistory{LatencyMs: elapsed.Milliseconds(), StatusCode: result.upstreamFailureStatus, ErrorMessage: result.localErr.Error()}
+		summary.Failed = 1
+	case result.localErr != nil:
+		common.SysError(fmt.Sprintf("channel IQ probe could not complete: channel=%d error=%v", channelID, result.localErr))
+		summary.Failed = 1
+	case analysis == nil:
+		a := result.fingerprintAnalysis
+		common.SysLog(fmt.Sprintf("channel IQ probe has no calibrated score: channel=%d decision=%s reason=%s", channelID, a.Decision, a.Evidence.Reason))
+		summary.Inconclusive = 1
+	default:
+		availability = &model.ChannelProbeHistory{Success: true, LatencyMs: elapsed.Milliseconds()}
+		summary.Succeeded = 1
+	}
+	usingKey := ""
+	if result.context != nil {
+		usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+	}
+	status, changed, err := service.CompleteChannelIQProbe(ctx, channelID, availability, leaseUntil, usingKey, testModel, analysis)
+	if err != nil {
+		return channelProbeResult{err: err}
 	}
 	if changed && status == common.ChannelStatusEnabled {
 		summary.Enabled = 1

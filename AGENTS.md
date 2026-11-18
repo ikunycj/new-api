@@ -172,8 +172,9 @@ When AI assistance starts or deploys the project, first check whether the Postgr
 - The Go backend uses `http://127.0.0.1:3000`.
 - Frontend development ports are branch-scoped: use `http://localhost:5173` for the main-style branch (`feature/docs-perfect`) and `http://localhost:5173` when no branch-specific port is specified.
 - Start the frontend from `web/default/` with `bun run dev` and keep `strictPort: true`; do not silently fall through to another port.
-- Before starting the frontend, check the port assigned to the current branch and reuse a healthy server for this workspace. If it is occupied by an unrelated or unhealthy process, identify the owning process and report the conflict. Do not terminate a user-owned process or switch ports without explicit approval.
-- Do not start a frontend server for checks that only require tests, type checking, linting, formatting, or a production build. When browser verification is required, use the branch-assigned URL above and keep it running for user review. No exceptions.
+- After each round of code changes, restart the affected local development services: the frontend for frontend changes, the Go backend for backend changes, or both if both are affected. Start any affected service that is not running. Hot reload and reusing the old process do not count. Verify the frontend at its branch URL or the backend at `/api/status`, as applicable, and leave each restarted service running for review.
+- Before starting or restarting a service, check its assigned port. Stop only a confirmed development process for this workspace. If the listener is unrelated or its ownership is unclear, report the conflict; do not kill it or switch ports. This rule does not authorize restarts in remote test or production environments.
+- Documentation-only edits and checks without code changes (tests, type checking, lint, format checks, or builds) do not require a service restart. For browser review without code changes, reuse a healthy frontend for this workspace or start it on the assigned port if needed.
 
 **Pull requests:** When creating a pull request:
 

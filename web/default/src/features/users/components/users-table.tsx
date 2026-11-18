@@ -30,7 +30,7 @@ import {
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
-import { getUsers, searchUsers } from '../api'
+import { getGroups, getUsers, searchUsers } from '../api'
 import {
   USER_STATUS,
   getUserStatusOptions,
@@ -70,7 +70,14 @@ export function UsersTable() {
     columnFilters: [
       { columnId: 'status', searchKey: 'status', type: 'array' },
       { columnId: 'role', searchKey: 'role', type: 'array' },
-      { columnId: 'group', searchKey: 'group', type: 'string' },
+      {
+        columnId: 'group',
+        searchKey: 'group',
+        type: 'array',
+        serialize: (value) => (Array.isArray(value) ? value[0] : undefined),
+        deserialize: (value) =>
+          typeof value === 'string' && value ? [value] : [],
+      },
     ],
   })
   const statusFilter =
@@ -82,8 +89,17 @@ export function UsersTable() {
       | string[]
       | undefined) ?? []
   const groupFilter =
-    (columnFilters.find((filter) => filter.id === 'group')?.value as string) ??
-    ''
+    (
+      columnFilters.find((filter) => filter.id === 'group')?.value as
+        | string[]
+        | undefined
+    )?.[0] ?? ''
+
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups'],
+    queryFn: getGroups,
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Fetch data with React Query
   const { data, isLoading, isFetching } = useQuery({
@@ -189,6 +205,15 @@ export function UsersTable() {
             columnId: 'role',
             title: t('Role'),
             options: getUserRoleOptions(t),
+            singleSelect: true,
+          },
+          {
+            columnId: 'group',
+            title: t('Group'),
+            options: (groupsData?.data ?? []).map((group) => ({
+              label: group,
+              value: group,
+            })),
             singleSelect: true,
           },
         ],

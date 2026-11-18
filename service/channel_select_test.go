@@ -761,6 +761,33 @@ func TestDynamicRoutingUsesConfiguredStrategyWeights(t *testing.T) {
 	assert.Greater(t, expensiveAvailabilityScore, cheapAvailabilityScore)
 }
 
+func TestDynamicRoutingNormalizesRelativeStrategyWeights(t *testing.T) {
+	confidence := 0.25
+	candidate := dynamicChannelCandidate{
+		channel:         &model.Channel{PriceMultiplier: 1, IQTestConfidence: &confidence},
+		routeConfigured: true,
+		routeWeight:     1,
+	}
+	for _, tc := range []struct {
+		name      string
+		price, iq float64
+	}{
+		{"below 100", 1, 3},
+		{"percentage", 25, 75},
+		{"above 100", 200, 600},
+		{"sum exceeds float64", 5e307, 1.5e308},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			strategy := ratio_setting.PricingGroupRoutingStrategy{
+				Strategy: "relative", PriceWeight: tc.price, IQTestConfidenceWeight: tc.iq,
+			}
+			// 25 points for price plus 75 points weighted by 0.25 confidence.
+			assert.InDelta(t, 43.75, dynamicCandidateScore(candidate, 1, strategy), 1e-9)
+			assert.InDelta(t, 43.75, dynamicGroupScore([]dynamicChannelCandidate{candidate}, 1, strategy), 1e-9)
+		})
+	}
+}
+
 func TestDynamicRoutingUsesTTFTWeightAndNeutralMissingSamples(t *testing.T) {
 	fast := &model.Channel{Id: 94115, PreviousDayAverageTTFTMs: 100}
 	slow := &model.Channel{Id: 94116, PreviousDayAverageTTFTMs: 200}
@@ -820,6 +847,83 @@ func TestDynamicRoutingUsesRecentTestTTFTWeightAndNeutralMissingSamples(t *testi
 	assert.InDelta(t, 75, dynamicGroupScore(candidates[:2], 1, strategy, math.Inf(1), baseline), 0.0001)
 }
 
+func TestDynamicRoutingUsesIQTestConfidenceWeightAndNeutralMissingData(t *testing.T) {
+	confidence := 0.25
+	measured := &model.Channel{Id: 94121, IQTestConfidence: &confidence}
+	missing := &model.Channel{Id: 94122}
+	strategy := ratio_setting.PricingGroupRoutingStrategy{
+		Strategy:               "iq_confidence_only",
+		IQTestConfidenceWeight: 100,
+	}
+
+	measuredScore := dynamicCandidateScore(dynamicChannelCandidate{channel: measured}, 1, strategy)
+	missingScore := dynamicCandidateScore(dynamicChannelCandidate{channel: missing}, 1, strategy)
+	assert.InDelta(t, 25, measuredScore, 0.0001)
+	assert.InDelta(t, 100, missingScore, 0.0001)
+
+	groupScore := dynamicGroupScore([]dynamicChannelCandidate{
+		{channel: measured},
+		{channel: missing},
+	}, 1, strategy)
+	assert.InDelta(t, 62.5, groupScore, 0.0001)
+}
+
+func TestDynamicRoutingZeroConfidenceOnlyExcludesChannelInMatchingGroup(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousStrategies := ratio_setting.PricingGroupRoutingStrategy2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupRoutingStrategyByJSONString(previousStrategies))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"claude":1,"balanced":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupRoutingStrategyByJSONString(`{
+		"strategies":{
+			"confidence_only":{"name":"置信度优先","price_weight":0,"availability_weight":0,"load_weight":0,"ttft_weight":0,"recent_test_ttft_weight":0,"iq_test_confidence_weight":100},
+			"balanced":{"name":"均衡","price_weight":0,"availability_weight":100,"load_weight":0,"ttft_weight":0,"recent_test_ttft_weight":0,"iq_test_confidence_weight":0}
+		},
+		"group_bindings":{"claude":"confidence_only","balanced":"balanced"}
+	}`))
+
+	testModel := "test-model"
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[0].Id).Updates(map[string]any{
+		"group":      "claude,balanced",
+		"test_model": testModel,
+		"other_info": `{"iq_probe_at":123,"iq_probe_model_confidences":{"test-model":0}}`,
+	}).Error)
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channels[1].Id).Update("test_model", testModel).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "balanced", Model: "claude-test", ChannelId: channels[0].Id, Enabled: true, Weight: 100}).Error)
+	model.InitChannelCache()
+
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "balanced"})
+	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test", randomIntn: func(int) int { return 0 }}
+	require.True(t, param.HasNextRetry())
+	selected, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, "claude", group)
+	require.Equal(t, channels[1].Id, selected.Id)
+
+	param.MarkChannelAttempted(selected.Id)
+	param.HandleChannelFailure(selected.Id, "switch_channel")
+	require.True(t, param.HasNextRetry())
+	require.True(t, param.AdvanceRetry())
+	selected, group, err = CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, "balanced", group)
+	assert.Equal(t, channels[0].Id, selected.Id)
+
+	var zeroScoreChannel model.Channel
+	require.NoError(t, model.DB.First(&zeroScoreChannel, channels[0].Id).Error)
+	assert.Equal(t, common.ChannelStatusEnabled, zeroScoreChannel.Status)
+	var activeAbilities int64
+	require.NoError(t, model.DB.Model(&model.Ability{}).Where("channel_id = ? AND enabled", channels[0].Id).Count(&activeAbilities).Error)
+	assert.Equal(t, int64(2), activeAbilities)
+}
+
 func TestDynamicPriorityScoreUsesNormalizedPriceMultiplier(t *testing.T) {
 	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
 	candidates := []dynamicChannelCandidate{
@@ -865,6 +969,22 @@ func TestDynamicPriorityScoreUsesNormalizedPriceMultiplier(t *testing.T) {
 	assert.Equal(t, 94001, ranked[0].channel.Id)
 	assert.Equal(t, 94002, ranked[1].channel.Id)
 	assert.Equal(t, 94003, ranked[2].channel.Id)
+}
+
+func TestDynamicPriorityIgnoresIQDegradation(t *testing.T) {
+	strategy := ratio_setting.DefaultPricingGroupRoutingStrategy()
+	base := &model.Channel{
+		Id:                          94011,
+		PriceMultiplier:             1,
+		PreviousDayProbeSuccessRate: 95,
+		PreviousDayProbeSampleCount: 100,
+	}
+	baseScore := dynamicCandidateScore(dynamicChannelCandidate{channel: base}, 1, strategy)
+
+	degraded := *base
+	degraded.OtherInfo = `{"iq_probe_degraded":true}`
+	degradedScore := dynamicCandidateScore(dynamicChannelCandidate{channel: &degraded}, 1, strategy)
+	assert.InDelta(t, baseScore, degradedScore, 0.0001)
 }
 
 func TestDynamicRoutingRotatesEqualQualityGroups(t *testing.T) {

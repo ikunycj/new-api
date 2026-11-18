@@ -59,6 +59,7 @@ import {
   channelsQueryKeys,
   aggregateChannelsByTag,
   isTagAggregateRow,
+  isChannelIQDegraded,
   getChannelTypeIcon,
   getChannelTypeLabel,
 } from '../lib'
@@ -85,6 +86,10 @@ const CHANNEL_AUTO_DISABLED_ROW_DESKTOP =
   '[--data-table-card-bg:var(--table-channel-auto-disabled)] hover:[--data-table-card-bg:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)] hover:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:![background-color:var(--table-channel-auto-disabled)] [&>td]:![background-color:var(--table-channel-auto-disabled)] hover:[&>td]:![background-color:var(--table-channel-auto-disabled-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-auto-disabled)]'
 const CHANNEL_AUTO_DISABLED_ROW_MOBILE =
   '[--data-table-card-bg:var(--table-channel-auto-disabled)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-auto-disabled)] [background-color:var(--table-channel-auto-disabled)]'
+const CHANNEL_IQ_DEGRADED_ROW_DESKTOP =
+  '[--data-table-card-bg:var(--table-channel-iq-degraded)] hover:[--data-table-card-bg:var(--table-channel-iq-degraded-hover)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-iq-degraded)] [background-color:var(--table-channel-iq-degraded)] hover:![background-color:var(--table-channel-iq-degraded-hover)] data-[state=selected]:![background-color:var(--table-channel-iq-degraded)] [&>td]:![background-color:var(--table-channel-iq-degraded)] hover:[&>td]:![background-color:var(--table-channel-iq-degraded-hover)] data-[state=selected]:[&>td]:![background-color:var(--table-channel-iq-degraded)]'
+const CHANNEL_IQ_DEGRADED_ROW_MOBILE =
+  '[--data-table-card-bg:var(--table-channel-iq-degraded)] data-[state=selected]:![--data-table-card-bg:var(--table-channel-iq-degraded)] [background-color:var(--table-channel-iq-degraded)]'
 
 const CHANNEL_SORTABLE_COLUMNS = new Set<ChannelSortBy>([
   'id',
@@ -565,6 +570,11 @@ export function ChannelsTable() {
       getRowClassName={(row, { isMobile }) => {
         if (isTagAggregateRow(row.original)) {
           return undefined
+        }
+        if (isChannelIQDegraded(row.original)) {
+          return isMobile
+            ? CHANNEL_IQ_DEGRADED_ROW_MOBILE
+            : CHANNEL_IQ_DEGRADED_ROW_DESKTOP
         }
         if (row.original.status === CHANNEL_STATUS.AUTO_DISABLED) {
           return isMobile

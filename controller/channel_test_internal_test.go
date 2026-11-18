@@ -414,6 +414,7 @@ func TestChannelProbeExecutorCommitsOnlyFinalResult(t *testing.T) {
 		t.Run(fmt.Sprint(recoverOnRetry), func(t *testing.T) {
 			db, channel, userID, transport, _ := setupChannelRecoveryControllerDB(t)
 			channel.Status = common.ChannelStatusEnabled
+			channel.UpstreamMaxRetries = common.GetPointer(1)
 			require.NoError(t, db.Save(channel).Error)
 			require.NoError(t, db.Model(&model.Ability{}).Where("channel_id = ?", channel.Id).Update("enabled", true).Error)
 			attempts := 0

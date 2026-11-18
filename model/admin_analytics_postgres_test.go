@@ -104,7 +104,7 @@ func TestGetAdminConsoleStatsAggregatesPostgresData(t *testing.T) {
 	stats, err := getAdminConsoleStatsAt(now)
 	require.NoError(t, err)
 	assert.Equal(t, AdminConsoleKeyStats{Total: 3, Active: 2, Enabled: 2}, stats.APIKeys)
-	assert.Equal(t, AdminConsoleChannelStats{Total: 4, Enabled: 2, AutoDisabled: 1}, stats.Channels)
+	assert.Equal(t, AdminConsoleChannelStats{Total: 4, Enabled: 2, AutoDisabled: 1, Disabled: 1}, stats.Channels)
 	assert.Equal(t, AdminConsolePeriodStats{Today: 4, Month: 6, Total: 8}, stats.Requests)
 	assert.Equal(t, AdminConsoleUserStats{Today: 2, Total: 6, ActiveToday: 2, ActiveWeek: 4, ActiveMonth: 5}, stats.Users)
 	assert.Equal(t, AdminConsolePeriodStats{Today: 665, Month: 930, Total: 995}, stats.Tokens.AdminConsolePeriodStats)

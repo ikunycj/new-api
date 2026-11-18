@@ -27,6 +27,7 @@ export interface AdminConsoleChannelStats {
   total: number
   enabled: number
   auto_disabled: number
+  disabled: number
 }
 
 export interface AdminConsolePeriodStats {

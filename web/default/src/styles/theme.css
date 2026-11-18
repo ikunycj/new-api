@@ -185,6 +185,16 @@ For commercial licensing, please contact support@quantumnous.com
     var(--warning) 15%,
     var(--background)
   );
+  --table-channel-iq-degraded: color-mix(
+    in oklch,
+    var(--foreground) 7%,
+    var(--background)
+  );
+  --table-channel-iq-degraded-hover: color-mix(
+    in oklch,
+    var(--foreground) 11%,
+    var(--background)
+  );
   --table-header: color-mix(
     in oklch,
     var(--foreground) 1.5%,
@@ -293,6 +303,16 @@ For commercial licensing, please contact support@quantumnous.com
   --table-channel-auto-disabled-hover: color-mix(
     in oklch,
     var(--warning) 20%,
+    var(--background)
+  );
+  --table-channel-iq-degraded: color-mix(
+    in oklch,
+    var(--foreground) 13%,
+    var(--background)
+  );
+  --table-channel-iq-degraded-hover: color-mix(
+    in oklch,
+    var(--foreground) 18%,
     var(--background)
   );
   --table-header: color-mix(in oklch, var(--foreground) 6%, var(--background));

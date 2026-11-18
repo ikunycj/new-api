@@ -85,6 +85,33 @@ func TestMigrateChannelProbePeriodConvertsSecondsAndDropsObsoleteColumns(t *test
 	assert.Equal(t, []int{5, 1, 2}, []int{periods[0].ProbePeriodMinutes, periods[1].ProbePeriodMinutes, periods[2].ProbePeriodMinutes})
 }
 
+func TestNormalizeChannelIQProbeDefaultsBackfillsExistingRows(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &ChannelProbeState{})
+
+	require.NoError(t, DB.Create(&Channel{Id: 1, Key: "legacy"}).Error)
+	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: 1}).Error)
+	require.NoError(t, DB.Exec(`UPDATE channels SET iq_probe_enabled = NULL, iq_probe_period_minutes = NULL, iq_probe_sample_count = NULL, iq_probe_engine = NULL, iq_auto_disable_degraded = NULL WHERE id = ?`, 1).Error)
+	require.NoError(t, DB.Exec(`UPDATE channel_probe_states SET last_iq_probe_at = NULL, iq_lease_until = NULL WHERE channel_id = ?`, 1).Error)
+
+	require.NoError(t, normalizeChannelIQProbeDefaults())
+
+	var channel Channel
+	require.NoError(t, DB.First(&channel, 1).Error)
+	assert.False(t, channel.IQProbeEnabled)
+	assert.Equal(t, DefaultChannelIQProbePeriodMinutes, channel.IQProbePeriodMinutes)
+	assert.Equal(t, DefaultChannelIQProbeSampleCount, channel.IQProbeSampleCount)
+	assert.Equal(t, DefaultChannelIQProbeEngine, channel.IQProbeEngine)
+	assert.False(t, channel.IQAutoDisableDegraded)
+
+	// A worker from before the upgrade still inserts rows without IQ columns.
+	require.NoError(t, DB.Exec(`INSERT INTO channel_probe_states (channel_id, lease_until) VALUES (?, ?)`, 2, 500).Error)
+	for _, id := range []int{1, 2} {
+		claimed, err := ClaimChannelIQProbe(id, 100, 300)
+		require.NoError(t, err)
+		assert.True(t, claimed, "channel %d should accept its first IQ probe", id)
+	}
+}
+
 func TestClaimChannelProbeAllowsOnlyOneActiveLease(t *testing.T) {
 	db := setupChannelProbeTestDB(t)
 
