@@ -1,18 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Pencil } from 'lucide-react'
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 
 import { updateChannel } from '../api'
 import { ERROR_MESSAGES } from '../constants'
@@ -24,16 +16,35 @@ export function TestModelEditor({ channel }: { channel: Channel }) {
   const queryClient = useQueryClient()
   const listId = useId()
   const testModel = channel.test_model?.trim() ?? ''
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraft] = useState(testModel)
+  const [savedValue, setSavedValue] = useState(testModel)
   const [saving, setSaving] = useState(false)
-  const value = draft?.trim() ?? ''
-  const canSave = !saving && value !== '' && value !== testModel
+  const savingRef = useRef(false)
+  const value = draft.trim()
   const label = t('Test Model')
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!canSave) return
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraft(testModel)
+    setSavedValue(testModel)
+  }, [testModel])
 
+  async function save(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault()
+    if (savingRef.current) return
+    if (value === savedValue) {
+      if (draft !== savedValue) setDraft(savedValue)
+      return
+    }
+    if (value === '') {
+      setDraft(savedValue)
+      if (savedValue !== '') {
+        toast.error(t(ERROR_MESSAGES.REQUIRED_TEST_MODEL))
+      }
+      return
+    }
+
+    savingRef.current = true
     setSaving(true)
     try {
       const response = await updateChannel(channel.id, { test_model: value })
@@ -47,7 +58,8 @@ export function TestModelEditor({ channel }: { channel: Channel }) {
           queryKey: channelsQueryKeys.detail(channel.id),
         }),
       ])
-      setDraft(null)
+      setDraft(value)
+      setSavedValue(value)
       toast.success(
         t('{{field}} updated to {{value}}', { field: label, value })
       )
@@ -57,69 +69,35 @@ export function TestModelEditor({ channel }: { channel: Channel }) {
         : undefined
       toast.error(message || t(ERROR_MESSAGES.UPDATE_FAILED))
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
 
   return (
-    <Popover
-      open={draft !== null}
-      onOpenChange={(open) => {
-        if (!saving) setDraft(open ? testModel : null)
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <Button
-            variant='ghost'
-            size='xs'
-            className='max-w-full min-w-0 justify-start px-1'
-            title={testModel || label}
-          />
-        }
-      >
-        <span className='sr-only'>
-          {t('Edit')}: {label},{' '}
-        </span>
-        <span className='truncate font-mono font-normal'>
-          {testModel || '-'}
-        </span>
-        <Pencil aria-hidden className='text-muted-foreground' />
-      </PopoverTrigger>
-      <PopoverContent align='start'>
-        <PopoverTitle>{label}</PopoverTitle>
-        <form className='grid gap-2' onSubmit={save}>
-          <Input
-            aria-label={label}
-            list={listId}
-            placeholder={t('Select or enter model name')}
-            value={draft ?? ''}
-            onChange={(event) => setDraft(event.target.value)}
-            disabled={saving}
-          />
-          {draft !== null && (
-            <datalist id={listId}>
-              {parseModelsList(channel.models).map((model) => (
-                <option key={model} value={model} />
-              ))}
-            </datalist>
-          )}
-          <div className='flex justify-end gap-2'>
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              disabled={saving}
-              onClick={() => setDraft(null)}
-            >
-              {t('Cancel')}
-            </Button>
-            <Button type='submit' size='sm' disabled={!canSave}>
-              {t('Save')}
-            </Button>
-          </div>
-        </form>
-      </PopoverContent>
-    </Popover>
+    <form className='w-full min-w-0' onSubmit={save}>
+      <Input
+        aria-label={label}
+        list={listId}
+        placeholder={t('Select or enter model name')}
+        title={draft || label}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setDraft(savedValue)
+          }
+        }}
+        disabled={saving}
+        className='h-7 rounded-md px-2 font-mono text-xs'
+      />
+      <datalist id={listId}>
+        {parseModelsList(channel.models).map((model) => (
+          <option key={model} value={model} />
+        ))}
+      </datalist>
+    </form>
   )
 }
