@@ -33,10 +33,11 @@ type fingerprintTestRequest struct {
 }
 
 type fingerprintTestTransport struct {
-	mu       sync.Mutex
-	status   int
-	reply    string
-	requests []fingerprintTestRequest
+	mu           sync.Mutex
+	status       int
+	nextStatuses []int
+	reply        string
+	requests     []fingerprintTestRequest
 }
 
 func (transport *fingerprintTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -64,9 +65,13 @@ func (transport *fingerprintTestTransport) RoundTrip(request *http.Request) (*ht
 	}
 	transport.mu.Lock()
 	transport.requests = append(transport.requests, requestRecord)
+	status := transport.status
+	if len(transport.nextStatuses) > 0 {
+		status = transport.nextStatuses[0]
+		transport.nextStatuses = transport.nextStatuses[1:]
+	}
 	transport.mu.Unlock()
 
-	status := transport.status
 	if status == 0 {
 		status = http.StatusOK
 	}
@@ -184,20 +189,18 @@ func TestFingerprintTestPropagatesCancellation(t *testing.T) {
 
 func TestFingerprintTestPropagatesUpstreamFailure(t *testing.T) {
 	channel, userID, transport, _ := setupFingerprintTest(t, http.StatusServiceUnavailable)
-	channel.Status, channel.IQProbeEnabled = common.ChannelStatusEnabled, true
+	setupFingerprintTestDetector(t)
+	channel.Status, channel.IQProbeEnabled, channel.IQProbeSampleCount = common.ChannelStatusEnabled, true, 3
 	require.NoError(t, model.DB.Save(channel).Error)
 	require.NoError(t, model.DB.Model(&model.Ability{}).Where("channel_id = ?", channel.Id).Update("enabled", true).Error)
 	now := common.GetTimestamp()
 	before := model.ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: now + 300, LeaseUntil: now + 220, LastSuccess: true}
 	require.NoError(t, model.DB.Create(&before).Error)
 
-	result := testChannelWithPromptEngine(
-		context.Background(), channel, userID, "gpt-4o", "", false,
-		modelTestTokenName, "", "generate an integer sequence", channelIQTestEngineFingerprint,
-	)
+	result := testChannelWithFingerprint(t.Context(), channel, userID, "gpt-4o", "", channelProbeTokenName)
 	require.Error(t, result.localErr)
 	assert.Equal(t, http.StatusServiceUnavailable, result.upstreamFailureStatus)
-	assert.NotEmpty(t, transport.snapshot())
+	assert.Len(t, transport.snapshot(), 3)
 	completed := completeFingerprintProbe(context.Background(), channel.Id, channel.GetTestModel(), before.IQLeaseUntil, result, 123*time.Millisecond)
 	require.NoError(t, completed.err)
 	assert.Equal(t, channelProbeSummary{Checked: 1, Failed: 1, Disabled: 1}, completed.summary)
@@ -220,7 +223,7 @@ func TestFingerprintTestPropagatesUpstreamFailure(t *testing.T) {
 	assert.False(t, ability.Enabled)
 }
 
-func TestFingerprintProbeWithoutCalibratedResultPreservesAvailability(t *testing.T) {
+func TestFingerprintProbeWithoutScorePreservesAvailability(t *testing.T) {
 	inconclusive := channelProbeSummary{Checked: 1, Inconclusive: 1}
 	for _, tc := range []struct {
 		name    string
@@ -229,10 +232,8 @@ func TestFingerprintProbeWithoutCalibratedResultPreservesAvailability(t *testing
 		summary channelProbeSummary
 	}{
 		{"detector error", common.ChannelStatusEnabled, testResult{localErr: errors.New("detector data unavailable")}, channelProbeSummary{Checked: 1, Failed: 1}},
-		{"partial ranking", common.ChannelStatusAutoDisabled, testResult{fingerprintAnalysis: &lmfpd.Analysis{Decision: "partial", Prediction: "gpt-4o"}}, inconclusive},
 		{"unscorable", common.ChannelStatusAutoDisabled, testResult{fingerprintAnalysis: &lmfpd.Analysis{Decision: "unscorable"}}, inconclusive},
 		{"non model", common.ChannelStatusAutoDisabled, testResult{fingerprintAnalysis: &lmfpd.Analysis{Decision: "not_model"}}, inconclusive},
-		{"uncalibrated ranking", common.ChannelStatusAutoDisabled, testResult{fingerprintAnalysis: &lmfpd.Analysis{Decision: "scored", Prediction: "gpt-4o", ProbabilityStatus: "unavailable"}}, inconclusive},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, channel, _, _, _ := setupChannelRecoveryControllerDB(t)
@@ -249,6 +250,27 @@ func TestFingerprintProbeWithoutCalibratedResultPreservesAvailability(t *testing
 			result := completeFingerprintProbe(context.Background(), channel.Id, channel.GetTestModel(), before.IQLeaseUntil, tc.result, 123*time.Millisecond)
 			require.NoError(t, result.err)
 			assert.Equal(t, tc.summary, result.summary)
+			runs, total, err := model.ListChannelIQTestRuns(t.Context(), channel.Id, channel.GetTestModel(), 0, 10)
+			require.NoError(t, err)
+			require.EqualValues(t, 1, total)
+			require.Len(t, runs, 1)
+			assert.Equal(t, "automatic", runs[0].Source)
+			assert.Equal(t, common.GetPointer(int64(123)), runs[0].DurationMs)
+			if tc.result.localErr != nil {
+				assert.Equal(t, model.IQTestFailed, runs[0].Status)
+				assert.Equal(t, tc.result.localErr.Error(), runs[0].ErrorMessage)
+			} else {
+				assert.Equal(t, model.IQTestInconclusive, runs[0].Status)
+				var storedAnalysis lmfpd.Analysis
+				require.NoError(t, common.Unmarshal(runs[0].Analysis, &storedAnalysis))
+				assert.Equal(t, tc.result.fingerprintAnalysis.Decision, storedAnalysis.Decision)
+			}
+			// A second completion under the consumed lease must not duplicate history.
+			repeated := completeFingerprintProbe(t.Context(), channel.Id, channel.GetTestModel(), before.IQLeaseUntil, tc.result, 123*time.Millisecond)
+			require.ErrorContains(t, repeated.err, "lease is no longer owned")
+			var runCount int64
+			require.NoError(t, db.Model(&model.ChannelIQTestRun{}).Where("channel_id = ?", channel.Id).Count(&runCount).Error)
+			assert.EqualValues(t, 1, runCount)
 			state, err := model.GetChannelProbeState(channel.Id)
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, state.LastIQProbeAt, now)
@@ -304,6 +326,13 @@ func TestManualIQTestEngineSelection(t *testing.T) {
 			waitChannelRecoveryEffect(t, responseTimeUpdated)
 			assert.Equal(t, "pelican", response.Data.Engine)
 			assert.Equal(t, transport.reply, response.Data.Response)
+			runs, err := model.LatestChannelIQTestRuns(t.Context(), channel.Id, []string{channel.GetTestModel()})
+			require.NoError(t, err)
+			require.Len(t, runs, 1)
+			assert.Equal(t, "manual", runs[0].Source)
+			assert.Equal(t, "pelican", runs[0].Engine)
+			assert.Equal(t, model.IQTestSucceeded, runs[0].Status)
+			assert.Equal(t, transport.reply, runs[0].HTML)
 			require.Len(t, transport.snapshot(), 1)
 			var stored model.Channel
 			require.NoError(t, model.DB.First(&stored, channel.Id).Error)
@@ -313,12 +342,12 @@ func TestManualIQTestEngineSelection(t *testing.T) {
 	}
 }
 
-func TestFingerprintManualAndScheduledResults(t *testing.T) {
+func setupFingerprintTestDetector(t *testing.T) *lmfpd.Detector {
+	t.Helper()
 	dataDir := os.Getenv("TEST_LMFPD_DATA_DIR")
 	if dataDir == "" {
 		t.Skip("set TEST_LMFPD_DATA_DIR to a local calibrated detector bundle for the offline SDK integration test")
 	}
-	channel, userID, transport, responseTimeUpdated := setupFingerprintTest(t, http.StatusOK)
 	dataDir, err := filepath.Abs(dataDir)
 	require.NoError(t, err)
 	detector, err := lmfpd.Load(t.Context(), lmfpd.LoadOptions{Sources: []string{dataDir}})
@@ -332,6 +361,64 @@ func TestFingerprintManualAndScheduledResults(t *testing.T) {
 		fingerprintDetectorState.detector = previousDetector
 		fingerprintDetectorState.Unlock()
 	})
+	return detector
+}
+
+func TestFingerprintConfidenceByValidSampleCount(t *testing.T) {
+	detector := setupFingerprintTestDetector(t)
+	valid := lmfpd.Output{Text: strings.Repeat("27 139 264 75 316 188 43 251 ", 40), ExpectedCount: 300}
+	invalid := lmfpd.Output{Text: "not enough numbers", ExpectedCount: 300}
+	for _, tc := range []struct {
+		name     string
+		outputs  []lmfpd.Output
+		used     int
+		decision string
+	}{
+		{"one", []lmfpd.Output{valid}, 1, "scored"},
+		{"two", []lmfpd.Output{valid, valid}, 2, "scored"},
+		{"three", []lmfpd.Output{valid, valid, valid}, 3, "scored"},
+		{"one of three", []lmfpd.Output{invalid, valid, invalid}, 1, "scored"},
+		{"none", []lmfpd.Output{invalid, invalid, invalid}, 0, "unscorable"},
+		{"not a model", []lmfpd.Output{{Text: fingerprintTestNumberSequence(), ExpectedCount: 300}}, 1, "not_model"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			analysis, err := analyzeFingerprintSamples(detector, tc.outputs)
+			require.NoError(t, err)
+			assert.Equal(t, tc.used, analysis.UsedOutputs)
+			require.Equal(t, tc.decision, analysis.Decision)
+			if tc.decision != "scored" {
+				assert.Nil(t, analysis.Probability)
+				assert.Nil(t, channelIQProbeAnalysis(analysis))
+				return
+			}
+			if tc.used == 3 {
+				original, err := detector.Analyze(tc.outputs, true)
+				require.NoError(t, err)
+				assert.Equal(t, "reference_calibrated", analysis.ProbabilityStatus)
+				assert.Equal(t, original, analysis)
+			} else {
+				assert.Equal(t, "ranking_estimated", analysis.ProbabilityStatus)
+				assert.Nil(t, analysis.Calibration)
+			}
+			require.NotNil(t, analysis.Probability)
+			require.NotEmpty(t, analysis.Results)
+			assert.Equal(t, analysis.Results[0].Model, analysis.Prediction)
+			assert.Equal(t, analysis.Results[0].Probability, analysis.Probability)
+			var total float64
+			for _, candidate := range analysis.Results {
+				require.NotNil(t, candidate.Probability)
+				assert.GreaterOrEqual(t, *candidate.Probability, 0.0)
+				assert.LessOrEqual(t, *candidate.Probability, *analysis.Probability)
+				total += *candidate.Probability
+			}
+			assert.InDelta(t, 1, total, 1e-12)
+		})
+	}
+}
+
+func TestFingerprintManualAndScheduledResults(t *testing.T) {
+	channel, userID, transport, responseTimeUpdated := setupFingerprintTest(t, http.StatusOK)
+	setupFingerprintTestDetector(t)
 	require.NoError(t, model.LOG_DB.AutoMigrate(&model.Log{}))
 	previousExport := common.DataExportEnabled
 	common.DataExportEnabled, common.LogConsumeEnabled = false, true
@@ -359,23 +446,48 @@ func TestFingerprintManualAndScheduledResults(t *testing.T) {
 	require.True(t, response.Success, response.Message)
 	waitChannelRecoveryEffect(t, responseTimeUpdated)
 	assert.Equal(t, "fingerprint", response.Data.Engine)
-	assert.Equal(t, "partial", response.Data.Analysis.Decision)
-	assert.Nil(t, response.Data.Analysis.Probability)
+	analysis := response.Data.Analysis
+	require.Equal(t, "scored", analysis.Decision)
+	assert.Equal(t, 1, analysis.UsedOutputs)
+	require.NotNil(t, analysis.Probability)
 	var stored model.Channel
 	require.NoError(t, model.DB.First(&stored, channel.Id).Error)
-	assert.JSONEq(t, channel.OtherInfo, stored.OtherInfo)
+	model.EnrichChannelIQProbeMetrics([]*model.Channel{&stored})
+	assert.Greater(t, stored.IQProbeAt, int64(123))
+	assert.Equal(t, analysis.Prediction, stored.IQProbePrediction)
+	assert.Equal(t, analysis.Probability, stored.IQProbeConfidence)
+	assert.Equal(t, !strings.EqualFold(analysis.Prediction, channel.GetTestModel()), stored.IQProbeDegraded())
 
-	require.NoError(t, model.DB.Model(channel).Update("iq_probe_sample_count", 3).Error)
+	// Start from the old result again to verify that the scheduled run records its own successful sample.
+	require.NoError(t, model.DB.Model(channel).Updates(map[string]any{"iq_probe_sample_count": 3, "other_info": channel.OtherInfo}).Error)
+	transport.nextStatuses = []int{http.StatusServiceUnavailable, http.StatusOK, http.StatusServiceUnavailable}
 	completed := runChannelIQProbe(t.Context(), channel.Id, userID)
 	require.NoError(t, completed.err)
 	assert.Equal(t, channelProbeSummary{Checked: 1, Succeeded: 1}, completed.summary)
 	require.NoError(t, model.DB.First(&stored, channel.Id).Error)
 	model.EnrichChannelIQProbeMetrics([]*model.Channel{&stored})
 	assert.Greater(t, stored.IQProbeAt, int64(123))
-	assert.NotEmpty(t, stored.IQProbeModelConfidences)
+	require.NotNil(t, stored.IQProbeConfidence)
+	assert.Equal(t, *stored.IQProbeConfidence, stored.IQProbeModelConfidences[stored.IQProbePrediction])
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	var history []model.ChannelProbeHistory
+	require.NoError(t, model.DB.Where("channel_id = ?", channel.Id).Find(&history).Error)
+	require.Len(t, history, 1)
+	assert.True(t, history[0].Success)
+	assert.Len(t, transport.snapshot(), 4)
+	runs, total, err := model.ListChannelIQTestRuns(t.Context(), channel.Id, channel.GetTestModel(), 0, 10)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, total)
+	require.Len(t, runs, 2)
+	assert.Equal(t, "automatic", runs[0].Source)
+	assert.Equal(t, "manual", runs[1].Source)
+	var savedAnalysis lmfpd.Analysis
+	require.NoError(t, common.Unmarshal(runs[1].Analysis, &savedAnalysis))
+	assert.Equal(t, analysis.Prediction, savedAnalysis.Prediction)
+	assert.Equal(t, analysis.Probability, savedAnalysis.Probability)
 	var sources []string
 	require.NoError(t, model.LOG_DB.Model(&model.Log{}).Where("channel_id = ? AND type = ?", channel.Id, model.LogTypeConsume).Order("id").Pluck("token_name", &sources).Error)
-	assert.Equal(t, []string{modelTestTokenName, channelProbeTokenName, channelProbeTokenName, channelProbeTokenName}, sources)
+	assert.Equal(t, []string{modelTestTokenName, channelProbeTokenName}, sources)
 }
 
 func TestCopiedChannelStartsWithoutFingerprintHistory(t *testing.T) {

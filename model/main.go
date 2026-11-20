@@ -322,6 +322,7 @@ func migrateDB() error {
 		&ChannelMonitorHistory{},
 		&ChannelProbeState{},
 		&ChannelProbeHistory{},
+		&ChannelIQTestRun{},
 		&ChannelCostEntry{},
 		&BillingGroupRoute{},
 		&BillingGroupChannel{},
@@ -344,6 +345,9 @@ func migrateDB() error {
 		&AffiliateQuotaGrant{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := backfillChannelIQSnapshots(); err != nil {
 		return err
 	}
 	if err := normalizeChannelIQProbeDefaults(); err != nil {
@@ -414,6 +418,7 @@ func migrateDBFast() error {
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
 		{&ChannelProbeState{}, "ChannelProbeState"},
 		{&ChannelProbeHistory{}, "ChannelProbeHistory"},
+		{&ChannelIQTestRun{}, "ChannelIQTestRun"},
 		{&ChannelCostEntry{}, "ChannelCostEntry"},
 		{&BillingGroupRoute{}, "BillingGroupRoute"},
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
@@ -455,6 +460,9 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := backfillChannelIQSnapshots(); err != nil {
+		return err
 	}
 	if err := normalizeChannelIQProbeDefaults(); err != nil {
 		return err

@@ -77,8 +77,8 @@ func CompleteChannelProbe(ctx context.Context, channelID int, result model.Chann
 
 // CompleteChannelIQProbe commits an IQ result as probe history and reuses the
 // regular status notification path when auto-ban/recovery changes the channel.
-func CompleteChannelIQProbe(ctx context.Context, channelID int, result *model.ChannelProbeHistory, leaseUntil int64, usingKey, testModel string, analysis *model.ChannelIQProbeAnalysis) (int, bool, error) {
-	channel, changed, err := model.CompleteChannelIQProbe(ctx, channelID, result, leaseUntil, usingKey, testModel, analysis)
+func CompleteChannelIQProbe(ctx context.Context, run *model.ChannelIQTestRun, result *model.ChannelProbeHistory, leaseUntil int64, usingKey string, analysis *model.ChannelIQProbeAnalysis) (int, bool, error) {
+	channel, changed, err := model.CompleteChannelIQProbe(ctx, run, result, leaseUntil, usingKey, analysis)
 	if err != nil {
 		return 0, false, err
 	}
@@ -104,8 +104,8 @@ func RecoverChannelAfterTest(ctx context.Context, channelID int, usingKey string
 	return nil
 }
 
-func CompleteManualChannelIQTest(ctx context.Context, channelID int, testModel, usingKey string, analysis *model.ChannelIQProbeAnalysis) error {
-	channel, changed, err := model.CompleteManualChannelIQTest(ctx, channelID, testModel, usingKey, analysis)
+func CompleteManualChannelIQTest(ctx context.Context, run *model.ChannelIQTestRun, usingKey string, analysis *model.ChannelIQProbeAnalysis) error {
+	channel, changed, err := model.CompleteManualChannelIQTest(ctx, run, usingKey, analysis)
 	if err != nil {
 		return err
 	}

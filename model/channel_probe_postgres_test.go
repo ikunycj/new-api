@@ -64,8 +64,12 @@ func TestGetChannelProbeCandidatesFiltersAndOrdersPeriodGroups(t *testing.T) {
 	assert.Empty(t, candidates[1].Key)
 }
 
+func scoredTestRun(channelID int, testModel string) *ChannelIQTestRun {
+	return &ChannelIQTestRun{ChannelID: channelID, TestModel: testModel, Engine: "fingerprint", Status: IQTestSucceeded, CompletedAt: common.GetTimestamp()}
+}
+
 func TestSaveChannelIQProbeAnalysisPersistsManualTestConfidence(t *testing.T) {
-	setupPostgresAnalyticsTestDB(t, &Channel{}, &ChannelProbeHistory{})
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &ChannelProbeHistory{}, &ChannelIQTestRun{})
 	previousCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = false
 	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
@@ -75,7 +79,7 @@ func TestSaveChannelIQProbeAnalysisPersistsManualTestConfidence(t *testing.T) {
 	require.NoError(t, DB.Create(&channel).Error)
 	require.NoError(t, DB.Create(&ChannelProbeHistory{ChannelID: channel.Id, Success: true, CheckedAt: 100}).Error)
 
-	_, _, err := CompleteManualChannelIQTest(context.Background(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+	_, _, err := CompleteManualChannelIQTest(context.Background(), scoredTestRun(channel.Id, testModel), "", &ChannelIQProbeAnalysis{
 		Prediction: "model-a",
 		ModelConfidences: map[string]float64{
 			"model-a": 0.91,
@@ -100,7 +104,7 @@ func TestSaveChannelIQProbeAnalysisPersistsManualTestConfidence(t *testing.T) {
 	require.NotNil(t, stored.IQProbeConfidence)
 	assert.InDelta(t, 0.91, *stored.IQProbeConfidence, 0.0001)
 
-	_, _, err = CompleteManualChannelIQTest(context.Background(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+	_, _, err = CompleteManualChannelIQTest(context.Background(), scoredTestRun(channel.Id, testModel), "", &ChannelIQProbeAnalysis{
 		Prediction: "model-b",
 		ModelConfidences: map[string]float64{
 			"model-a": 0.02,
@@ -117,7 +121,7 @@ func TestSaveChannelIQProbeAnalysisPersistsManualTestConfidence(t *testing.T) {
 }
 
 func TestChannelEditPreservesLatestIQProbeResult(t *testing.T) {
-	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{})
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{}, &ChannelIQTestRun{})
 	testModel := "model-b"
 	channel := Channel{
 		Key: "test-key", Models: testModel, Group: "default", TestModel: &testModel,
@@ -128,7 +132,7 @@ func TestChannelEditPreservesLatestIQProbeResult(t *testing.T) {
 	edit := channel
 	lease := common.GetTimestamp() + 300
 	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: lease}).Error)
-	observed, changed, err := CompleteChannelIQProbe(t.Context(), channel.Id, &ChannelProbeHistory{Success: true}, lease, "", testModel, &ChannelIQProbeAnalysis{
+	observed, changed, err := CompleteChannelIQProbe(t.Context(), scoredTestRun(channel.Id, testModel), &ChannelProbeHistory{Success: true}, lease, "", &ChannelIQProbeAnalysis{
 		Prediction: "model-a", ModelConfidences: map[string]float64{"model-a": 0.95, testModel: 0.05},
 	})
 	require.NoError(t, err)
@@ -145,7 +149,7 @@ func TestChannelEditPreservesLatestIQProbeResult(t *testing.T) {
 	assert.Equal(t, "model-a", stored.IQProbePrediction)
 	assert.True(t, stored.IQProbeDegraded())
 	// Editing unrelated metadata must not remove the reason required for manual recovery.
-	recovered, changed, err := CompleteManualChannelIQTest(t.Context(), channel.Id, testModel, "", &ChannelIQProbeAnalysis{
+	recovered, changed, err := CompleteManualChannelIQTest(t.Context(), scoredTestRun(channel.Id, testModel), "", &ChannelIQProbeAnalysis{
 		Prediction: testModel, ModelConfidences: map[string]float64{testModel: 1},
 	})
 	require.NoError(t, err)
@@ -155,7 +159,7 @@ func TestChannelEditPreservesLatestIQProbeResult(t *testing.T) {
 }
 
 func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
-	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{})
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelIQTestRun{})
 	previousCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = false
 	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
@@ -172,7 +176,7 @@ func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
 		{ChannelId: 21, Group: "test", Model: testModel, Enabled: false},
 	}).Error)
 
-	stored, changed, err := CompleteManualChannelIQTest(context.Background(), 20, testModel, "", &ChannelIQProbeAnalysis{
+	stored, changed, err := CompleteManualChannelIQTest(context.Background(), scoredTestRun(20, testModel), "", &ChannelIQProbeAnalysis{
 		Prediction:       testModel,
 		ModelConfidences: map[string]float64{"model-a": 0.02, testModel: 0.88},
 	})
@@ -184,7 +188,7 @@ func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
 	require.NoError(t, DB.First(&recoveredAbility, "channel_id = ?", 20).Error)
 	assert.True(t, recoveredAbility.Enabled)
 
-	stored, changed, err = CompleteManualChannelIQTest(context.Background(), 21, testModel, "", &ChannelIQProbeAnalysis{
+	stored, changed, err = CompleteManualChannelIQTest(context.Background(), scoredTestRun(21, testModel), "", &ChannelIQProbeAnalysis{
 		Prediction:       "model-a",
 		ModelConfidences: map[string]float64{"model-a": 0.91, testModel: 0.04},
 	})
@@ -193,7 +197,7 @@ func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
 	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
 	// A later, matching result for another model is diagnostic only, even with regular probing on.
 	previous := stored.OtherInfo
-	_, changed, err = CompleteManualChannelIQTest(context.Background(), 21, "model-a", "", &ChannelIQProbeAnalysis{
+	_, changed, err = CompleteManualChannelIQTest(context.Background(), scoredTestRun(21, "model-a"), "", &ChannelIQProbeAnalysis{
 		Prediction: "model-a", ModelConfidences: map[string]float64{"model-a": 1},
 	})
 	require.NoError(t, err)
@@ -207,7 +211,7 @@ func TestSuccessfulManualIQTestRecoversDegradedChannel(t *testing.T) {
 }
 
 func TestCompleteChannelIQProbeAutoDisablesDegradedUntilAHealthyIQProbe(t *testing.T) {
-	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{})
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{}, &ChannelIQTestRun{})
 	previousCacheEnabled := common.MemoryCacheEnabled
 	common.MemoryCacheEnabled = false
 	t.Cleanup(func() { common.MemoryCacheEnabled = previousCacheEnabled })
@@ -227,7 +231,7 @@ func TestCompleteChannelIQProbeAutoDisablesDegradedUntilAHealthyIQProbe(t *testi
 	lease := common.GetTimestamp() + 300
 	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: lease}).Error)
 
-	stored, changed, err := CompleteChannelIQProbe(context.Background(), channel.Id, &ChannelProbeHistory{Success: true}, lease, "", testModel, &ChannelIQProbeAnalysis{
+	stored, changed, err := CompleteChannelIQProbe(context.Background(), scoredTestRun(channel.Id, testModel), &ChannelProbeHistory{Success: true}, lease, "", &ChannelIQProbeAnalysis{
 		Prediction:       "model-a",
 		ModelConfidences: map[string]float64{"model-a": 0.91, "model-b": 0.04},
 	})
@@ -252,7 +256,7 @@ func TestCompleteChannelIQProbeAutoDisablesDegradedUntilAHealthyIQProbe(t *testi
 
 	healthyIQLease := common.GetTimestamp() + 500
 	require.NoError(t, DB.Model(&ChannelProbeState{}).Where("channel_id = ?", channel.Id).Update("iq_lease_until", healthyIQLease).Error)
-	stored, changed, err = CompleteChannelIQProbe(context.Background(), channel.Id, &ChannelProbeHistory{Success: true}, healthyIQLease, "", testModel, &ChannelIQProbeAnalysis{
+	stored, changed, err = CompleteChannelIQProbe(context.Background(), scoredTestRun(channel.Id, testModel), &ChannelProbeHistory{Success: true}, healthyIQLease, "", &ChannelIQProbeAnalysis{
 		Prediction:       testModel,
 		ModelConfidences: map[string]float64{"model-a": 0.02, testModel: 0.88},
 	})

@@ -11,12 +11,12 @@ import (
 
 func setupChannelRoutingTables(t *testing.T) {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&Channel{}, &Ability{}, &BillingGroupRoute{}, &BillingGroupChannel{}, &ChannelProbeState{}, &ChannelProbeHistory{}))
-	for _, table := range []string{"channel_probe_histories", "channel_probe_states", "billing_group_channels", "billing_group_routes", "abilities", "channels"} {
+	require.NoError(t, DB.AutoMigrate(&Channel{}, &Ability{}, &BillingGroupRoute{}, &BillingGroupChannel{}, &ChannelProbeState{}, &ChannelProbeHistory{}, &ChannelIQTestRun{}))
+	for _, table := range []string{"channel_iq_test_runs", "channel_probe_histories", "channel_probe_states", "billing_group_channels", "billing_group_routes", "abilities", "channels"} {
 		require.NoError(t, DB.Exec("DELETE FROM "+table).Error)
 	}
 	t.Cleanup(func() {
-		for _, table := range []string{"channel_probe_histories", "channel_probe_states", "billing_group_channels", "billing_group_routes", "abilities", "channels"} {
+		for _, table := range []string{"channel_iq_test_runs", "channel_probe_histories", "channel_probe_states", "billing_group_channels", "billing_group_routes", "abilities", "channels"} {
 			_ = DB.Exec("DELETE FROM " + table).Error
 		}
 		InitChannelRoutingCache()
@@ -89,6 +89,7 @@ func TestDeleteDisabledChannelRemovesOwnedChannelRecords(t *testing.T) {
 	require.NoError(t, DB.Create(&Ability{Group: "claude", Model: "claude-test", ChannelId: channel.Id}).Error)
 	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id}).Error)
 	require.NoError(t, DB.Create(&ChannelProbeHistory{ChannelID: channel.Id, CheckedAt: 1}).Error)
+	require.NoError(t, DB.Create(&ChannelIQTestRun{ChannelID: channel.Id, TestModel: "claude-test", CompletedAt: 1}).Error)
 	require.NoError(t, DB.Create(&ChannelCostEntry{ChannelId: channel.Id, StartAt: 1, EndAt: 2, AmountUSD: 1, Currency: "USD", Source: "manual"}).Error)
 
 	deleted, err := DeleteDisabledChannel()
@@ -102,6 +103,7 @@ func TestDeleteDisabledChannelRemovesOwnedChannelRecords(t *testing.T) {
 		"ability":       &Ability{},
 		"probe state":   &ChannelProbeState{},
 		"probe history": &ChannelProbeHistory{},
+		"IQ run":        &ChannelIQTestRun{},
 		"cost entry":    &ChannelCostEntry{},
 	} {
 		var count int64

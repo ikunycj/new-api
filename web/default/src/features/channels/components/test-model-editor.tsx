@@ -4,14 +4,22 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { TruncatedText } from '@/components/truncated-text'
 import { Input } from '@/components/ui/input'
+import { formatPercent } from '@/lib/format'
 
 import { updateChannel } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import { channelsQueryKeys, parseModelsList } from '../lib'
 import type { Channel } from '../types'
 
-export function TestModelEditor({ channel }: { channel: Channel }) {
+export function TestModelEditor({
+  channel,
+  canWrite,
+}: {
+  channel: Channel
+  canWrite: boolean
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const listId = useId()
@@ -20,8 +28,17 @@ export function TestModelEditor({ channel }: { channel: Channel }) {
   const [savedValue, setSavedValue] = useState(testModel)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
-  const value = draft.trim()
+  const value = canWrite ? draft.trim() : testModel
   const label = t('Test Model')
+  const hasProbe = channel.iq_probe_at > 0
+  const confidences = channel.iq_probe_model_confidences
+  const prediction = channel.iq_probe_prediction
+  const topConfidence = channel.iq_probe_confidence
+  const confidence = hasProbe
+    ? formatPercent(
+        Object.hasOwn(confidences, value) ? confidences[value] * 100 : 0
+      )
+    : '-'
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -75,29 +92,61 @@ export function TestModelEditor({ channel }: { channel: Channel }) {
   }
 
   return (
-    <form className='w-full min-w-0' onSubmit={save}>
-      <Input
-        aria-label={label}
-        list={listId}
-        placeholder={t('Select or enter model name')}
-        title={draft || label}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => void save()}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            setDraft(savedValue)
-          }
-        }}
-        disabled={saving}
-        className='h-7 rounded-md px-2 font-mono text-xs'
-      />
-      <datalist id={listId}>
-        {parseModelsList(channel.models).map((model) => (
-          <option key={model} value={model} />
-        ))}
-      </datalist>
-    </form>
+    <div className='flex w-full min-w-0 flex-col gap-1 text-start [contain:inline-size]'>
+      <div className='flex min-w-0 items-center gap-1.5'>
+        {canWrite ? (
+          <form className='min-w-0 flex-1' onSubmit={save}>
+            <Input
+              aria-label={label}
+              aria-describedby={`${listId}-confidence`}
+              list={listId}
+              placeholder={t('Select or enter model name')}
+              title={draft || label}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => void save()}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setDraft(savedValue)
+                }
+              }}
+              disabled={saving}
+              className='h-7 rounded-md px-2 font-mono text-xs'
+            />
+            <datalist id={listId}>
+              {parseModelsList(channel.models).map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
+          </form>
+        ) : (
+          <TruncatedText
+            text={testModel || '-'}
+            className='font-mono text-xs'
+          />
+        )}
+        <span
+          id={`${listId}-confidence`}
+          className='shrink-0 text-xs tabular-nums'
+          title='当前测试模型的置信度'
+        >
+          <span className='sr-only'>当前测试模型的置信度：</span>
+          {confidence}
+        </span>
+      </div>
+      {hasProbe && prediction && (
+        <div
+          className='text-muted-foreground flex min-w-0 items-baseline gap-1 text-[11px]/4! *:text-[11px]/4!'
+          title={`最近一次指纹测试最高置信度模型：${prediction}`}
+        >
+          <span className='sr-only'>最近一次指纹测试最高置信度模型：</span>
+          <span className='truncate font-mono'>{prediction}</span>
+          <span className='shrink-0 tabular-nums'>
+            {formatPercent(topConfidence == null ? null : topConfidence * 100)}
+          </span>
+        </div>
+      )}
+    </div>
   )
 }

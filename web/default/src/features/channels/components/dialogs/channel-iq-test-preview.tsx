@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, Copy, Download } from 'lucide-react'
+import { Check, Copy, Download, Maximize2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,29 +31,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 
-import type { ChannelIQTestAnalysis } from '../../types'
-
-export type ChannelIQTestPreviewProps = {
-  open: boolean
-  channelName: string
-  model: string
-  result: Omit<ChannelIQTestResult, 'model' | 'response'> | null
-  source?: string
-  onOpenChange: (open: boolean) => void
-}
-
-export type ChannelIQTestResult = {
-  status: 'testing' | 'success' | 'error'
-  model: string
-  response?: string
-  responseBytes?: number
-  finishReason?: string
-  error?: string
-  responseTime?: number
-  completedAt?: number
-  engine?: string
-  analysis?: ChannelIQTestAnalysis
-}
+import type { ChannelIQTestAnalysis, ChannelIQTestRun } from '../../types'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -61,33 +39,112 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`
 }
 
-function buildSandboxedSrcDoc(source: string): string {
-  const cspContent =
-    "default-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; child-src 'none';"
-  if (typeof DOMParser !== 'undefined') {
-    const parsed = new DOMParser().parseFromString(source, 'text/html')
-    const meta = parsed.createElement('meta')
-    meta.httpEquiv = 'Content-Security-Policy'
-    meta.content = cspContent
-    parsed.head.prepend(meta)
-    return `<!doctype html>${parsed.documentElement.outerHTML}`
-  }
-  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${cspContent}"></head><body>${source}</body></html>`
+const pelicanCSP =
+  "default-src 'none'; base-uri 'none'; form-action 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; media-src data: blob:;"
+
+function PelicanFrame({
+  html,
+  thumbnail = false,
+}: {
+  html: string
+  thumbnail?: boolean
+}) {
+  // Parse the generated document only inside the sandbox, with its policy first.
+  const srcDoc = `<!doctype html><meta http-equiv="Content-Security-Policy" content="${pelicanCSP}">${html}`
+  return (
+    <iframe
+      className={
+        thumbnail
+          ? 'pointer-events-none absolute inset-0 h-[500%] w-[500%] origin-top-left scale-[0.2] border-0'
+          : 'aspect-video max-h-full min-h-0 w-full border-0'
+      }
+      sandbox='allow-scripts'
+      referrerPolicy='no-referrer'
+      loading={thumbnail ? 'lazy' : 'eager'}
+      tabIndex={thumbnail ? -1 : undefined}
+      aria-hidden={thumbnail || undefined}
+      srcDoc={srcDoc}
+      title={thumbnail ? '鹈鹕测试缩略图' : '鹈鹕测试预览'}
+    />
+  )
 }
 
-export function ChannelIQTestPreview(props: ChannelIQTestPreviewProps) {
+const confidenceFormat = new Intl.NumberFormat('zh-CN', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+})
+
+export function ChannelIQRunResult({
+  run,
+  onPreview,
+}: {
+  run: ChannelIQTestRun
+  onPreview: (run: ChannelIQTestRun) => void
+}) {
+  if (run.status === 'error') {
+    return (
+      <span
+        className='text-destructive line-clamp-2 text-xs break-all'
+        title={run.error_message}
+      >
+        失败{run.error_message && ` · ${run.error_message}`}
+      </span>
+    )
+  }
+  if (run.engine === 'fingerprint') {
+    const analysis = run.analysis
+    return (
+      <button
+        type='button'
+        className='focus-visible:outline-ring min-w-0 rounded-sm text-left text-sm break-all hover:underline'
+        onClick={() => onPreview(run)}
+      >
+        {analysis?.probability != null && analysis.prediction ? (
+          <>
+            {analysis.prediction}{' '}
+            <span className='whitespace-nowrap tabular-nums'>
+              {confidenceFormat.format(analysis.probability)}
+            </span>
+          </>
+        ) : (
+          '未评分'
+        )}
+      </button>
+    )
+  }
+  if (!run.html) {
+    return <span className='text-muted-foreground text-xs'>无预览</span>
+  }
+  return (
+    <div className='relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border bg-white'>
+      <PelicanFrame html={run.html} thumbnail />
+      <button
+        type='button'
+        className='group focus-visible:ring-ring absolute inset-0 rounded-md focus-visible:ring-2 focus-visible:ring-inset'
+        aria-label={`放大 ${run.model} 的鹈鹕测试结果`}
+        onClick={() => onPreview(run)}
+      >
+        <Maximize2
+          aria-hidden='true'
+          className='bg-background/90 absolute right-1 bottom-1 size-5 rounded p-1 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+        />
+      </button>
+    </div>
+  )
+}
+
+export function ChannelIQTestPreview(props: {
+  channelName: string
+  run: ChannelIQTestRun
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('preview')
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
-  const analysis = props.result?.analysis
-  const isFingerprint =
-    props.result?.engine === 'fingerprint' || Boolean(analysis)
-  const source = props.source ?? ''
-  const sourceBytes =
-    props.result?.responseBytes ?? new TextEncoder().encode(source).byteLength
-  const srcDoc = useMemo(
-    () => (activeTab === 'preview' ? buildSandboxedSrcDoc(source) : ''),
-    [activeTab, source]
+  const { analysis, engine, model, html: source = '' } = props.run
+  const sourceBytes = useMemo(
+    () => new TextEncoder().encode(source).byteLength,
+    [source]
   )
 
   const handleDownload = () => {
@@ -103,17 +160,25 @@ export function ChannelIQTestPreview(props: ChannelIQTestPreviewProps) {
   }
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='flex max-h-[min(86vh,720px)] w-[min(94vw,1200px)] max-w-none flex-col gap-3 overflow-hidden p-4 sm:p-5'>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+    >
+      <DialogContent className='flex max-h-[min(86vh,720px)] w-[min(94vw,1200px)] max-w-none flex-col gap-3 overflow-hidden p-4 sm:max-w-5xl sm:p-5'>
         <DialogHeader className='pr-9'>
           <DialogTitle>{t('IQ test result')}</DialogTitle>
           <DialogDescription>
-            {props.channelName} · {props.model}
+            {props.channelName} · {model}
           </DialogDescription>
         </DialogHeader>
 
-        {isFingerprint ? (
-          <FingerprintResult analysis={analysis} error={props.result?.error} />
+        {engine === 'fingerprint' ? (
+          <FingerprintResult
+            analysis={analysis}
+            error={props.run.error_message}
+          />
         ) : (
           <Tabs
             value={activeTab}
@@ -166,15 +231,10 @@ export function ChannelIQTestPreview(props: ChannelIQTestPreviewProps) {
             >
               <div className='flex h-full w-full items-center justify-center overflow-auto rounded-md border bg-white p-2 text-neutral-950'>
                 {source && activeTab === 'preview' ? (
-                  <iframe
-                    className='aspect-video max-h-full min-h-0 w-full border-0'
-                    sandbox='allow-scripts'
-                    srcDoc={srcDoc}
-                    title={t('Preview')}
-                  />
+                  <PelicanFrame html={source} />
                 ) : (
                   <p className='text-muted-foreground p-4 text-sm'>
-                    {props.result?.error ?? t('No result available')}
+                    {props.run.error_message ?? t('No result available')}
                   </p>
                 )}
               </div>
@@ -232,7 +292,11 @@ function FingerprintResult({
         />
         {probability !== null && probability !== undefined && (
           <ResultItem
-            label={t('Reference-set probability')}
+            label={
+              analysis.probability_status === 'ranking_estimated'
+                ? '估算置信度'
+                : t('Reference-set probability')
+            }
             value={`${(probability * 100).toFixed(1)}%`}
           />
         )}

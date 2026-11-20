@@ -1123,23 +1123,16 @@ export function useChannelsColumns(
           if (isTagAggregateRow(row.original)) {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
-          if (canWrite) {
-            return (
-              <TestModelEditor key={row.original.id} channel={row.original} />
-            )
-          }
-          const testModel = row.original.test_model?.trim()
-          return testModel ? (
-            <TruncatedText
-              text={testModel}
-              className='font-mono text-xs'
-              maxWidth='max-w-[160px]'
+          return (
+            <TestModelEditor
+              key={row.original.id}
+              channel={row.original}
+              canWrite={canWrite}
             />
-          ) : (
-            <span className='text-muted-foreground text-xs'>-</span>
           )
         },
-        size: 160,
+        size: 264,
+        minSize: 248,
         enableSorting: false,
       },
 

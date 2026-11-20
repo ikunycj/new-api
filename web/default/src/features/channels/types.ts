@@ -211,6 +211,27 @@ export interface GetChannelResponse {
 
 export type ChannelIQTestEngine = 'pelican' | 'fingerprint'
 
+export interface ChannelIQTestRun {
+  id: number
+  channel_id: number
+  model: string
+  engine: ChannelIQTestEngine
+  source: 'manual' | 'automatic' | 'snapshot'
+  completed_at: number
+  duration_ms?: number
+  status: 'success' | 'error' | 'inconclusive'
+  error_message?: string
+  analysis?: ChannelIQTestAnalysis
+  html?: string
+}
+
+export interface ChannelIQTestHistory {
+  page: number
+  page_size: number
+  total: number
+  items: ChannelIQTestRun[]
+}
+
 export interface ChannelTestResponse {
   success: boolean
   message?: string

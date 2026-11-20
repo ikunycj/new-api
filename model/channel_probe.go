@@ -35,8 +35,8 @@ type ChannelProbeHistory struct {
 	CheckedAt    int64  `json:"checked_at" gorm:"bigint;index:idx_channel_probe_history,priority:2;index"`
 }
 
-// ChannelIQProbeAnalysis carries the top detector prediction and calibrated
-// probabilities used by channel display and dynamic routing.
+// ChannelIQProbeAnalysis carries the top prediction and per-model confidence
+// used by channel display and dynamic routing.
 type ChannelIQProbeAnalysis struct {
 	Prediction       string
 	ModelConfidences map[string]float64
@@ -44,7 +44,7 @@ type ChannelIQProbeAnalysis struct {
 
 func setChannelIQProbeAnalysis(channel *Channel, testModel string, analysis *ChannelIQProbeAnalysis, checkedAt int64) error {
 	if analysis == nil {
-		return errors.New("IQ probe requires a calibrated result")
+		return errors.New("IQ probe requires a scored result")
 	}
 	prediction := strings.TrimSpace(analysis.Prediction)
 	confidences := make(map[string]float64, len(analysis.ModelConfidences))
@@ -78,7 +78,7 @@ func setChannelIQProbeAnalysis(channel *Channel, testModel string, analysis *Cha
 }
 
 // EnrichChannelIQProbeMetrics exposes the persisted detector result and gives
-// channels without a calibrated result the neutral 100% confidence score.
+// channels without a scored result the neutral 100% confidence score.
 func EnrichChannelIQProbeMetrics(channels []*Channel) {
 	for _, channel := range channels {
 		if channel == nil {
@@ -120,9 +120,9 @@ func EnrichChannelIQProbeMetrics(channels []*Channel) {
 	}
 }
 
-// CompleteManualChannelIQTest only stores a calibrated result for the current
-// test model. Recovery uses that very result under the same row lock.
-func CompleteManualChannelIQTest(ctx context.Context, channelID int, testModel, usingKey string, analysis *ChannelIQProbeAnalysis) (*Channel, bool, error) {
+// CompleteManualChannelIQTest records the run and applies any routing update under the same channel lock.
+func CompleteManualChannelIQTest(ctx context.Context, run *ChannelIQTestRun, usingKey string, analysis *ChannelIQProbeAnalysis) (*Channel, bool, error) {
+	channelID := run.ChannelID
 	channelStatusLock.Lock()
 	defer channelStatusLock.Unlock()
 	var channel Channel
@@ -131,10 +131,14 @@ func CompleteManualChannelIQTest(ctx context.Context, channelID int, testModel, 
 		if err := lockForUpdate(tx).Where("id = ?", channelID).First(&channel).Error; err != nil {
 			return err
 		}
-		if testModel != channel.GetTestModel() {
+		run.Source = "manual"
+		if err := tx.Create(run).Error; err != nil {
+			return err
+		}
+		if analysis == nil || run.TestModel != channel.GetTestModel() {
 			return nil
 		}
-		if err := setChannelIQProbeAnalysis(&channel, testModel, analysis, common.GetTimestamp()); err != nil {
+		if err := setChannelIQProbeAnalysis(&channel, run.TestModel, analysis, run.CompletedAt); err != nil {
 			return err
 		}
 		saved = true
@@ -239,8 +243,9 @@ func CompleteChannelProbe(ctx context.Context, channelID int, result ChannelProb
 }
 
 // A nil availability result consumes only the IQ schedule slot. It must not
-// become an availability observation or overwrite a previous calibrated result.
-func CompleteChannelIQProbe(ctx context.Context, channelID int, result *ChannelProbeHistory, leaseUntil int64, usingKey, testModel string, analysis *ChannelIQProbeAnalysis) (*Channel, bool, error) {
+// become an availability observation or overwrite a previous scored result.
+func CompleteChannelIQProbe(ctx context.Context, run *ChannelIQTestRun, result *ChannelProbeHistory, leaseUntil int64, usingKey string, analysis *ChannelIQProbeAnalysis) (*Channel, bool, error) {
+	channelID := run.ChannelID
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -262,10 +267,15 @@ func CompleteChannelIQProbe(ctx context.Context, channelID int, result *ChannelP
 			return errors.New("IQ probe lease is no longer owned")
 		}
 
+		run.Source = "automatic"
+		if err := tx.Create(run).Error; err != nil {
+			return err
+		}
+
 		stateValues := map[string]any{"last_iq_probe_at": now, "iq_lease_until": 0}
-		if result != nil && channel.ShouldIQProbe() && channel.GetTestModel() == testModel {
+		if result != nil && channel.ShouldIQProbe() && channel.GetTestModel() == run.TestModel {
 			if result.Success {
-				if err := setChannelIQProbeAnalysis(&channel, testModel, analysis, now); err != nil {
+				if err := setChannelIQProbeAnalysis(&channel, run.TestModel, analysis, run.CompletedAt); err != nil {
 					return err
 				}
 				analysisUpdated = true

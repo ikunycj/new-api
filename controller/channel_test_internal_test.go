@@ -110,7 +110,7 @@ func setupChannelRecoveryControllerDB(t *testing.T) (*gorm.DB, *model.Channel, i
 		common.ChannelDisableThreshold = previousThreshold
 		constant.NotifyLimitCount = previousNotifyLimit
 	})
-	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.ChannelProbeState{}, &model.ChannelProbeHistory{}))
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.ChannelProbeState{}, &model.ChannelProbeHistory{}, &model.ChannelIQTestRun{}))
 	if service.GetHttpClient() == nil {
 		service.InitHttpClient()
 	}

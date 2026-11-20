@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -61,6 +62,7 @@ const (
 	channelIQTestTimeout           = 90 * time.Second
 	channelIQTestEnginePelican     = "pelican"
 	channelIQTestEngineFingerprint = "fingerprint"
+	fingerprintEstimatedConfidence = "ranking_estimated"
 )
 
 var fingerprintDetectorState struct {
@@ -114,16 +116,19 @@ func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, tes
 
 	outputs := make([]lmfpd.Output, 0, len(challenges))
 	samples := make([]channelIQTestSample, 0, len(challenges))
-	var lastResult testResult
+	var lastSuccess, lastFailure testResult
 	responseBytes, rawResponseBytes, reasoningTokens := 0, 0, 0
 	for _, challenge := range challenges {
 		if err := ctx.Err(); err != nil {
-			return testResult{localErr: err, iqEngine: channelIQTestEngineFingerprint}
+			if lastFailure.localErr == nil {
+				lastFailure.localErr = err
+			}
+			break
 		}
 		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint)
 		if result.localErr != nil {
-			result.iqEngine = channelIQTestEngineFingerprint
-			return result
+			lastFailure = result
+			continue
 		}
 		outputs = append(outputs, lmfpd.Output{Text: result.response, ExpectedCount: challenge.ExpectedCount})
 		samples = append(samples, channelIQTestSample{
@@ -132,24 +137,66 @@ func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, tes
 		responseBytes += result.responseBytes
 		rawResponseBytes += result.rawResponseBytes
 		reasoningTokens += result.reasoningTokens
-		lastResult = result
+		lastSuccess = result
 	}
-	// Short runs can rank models, but only three valid samples yield calibrated probabilities.
-	analysis, err := detector.Analyze(outputs, len(challenges) == model.MaxChannelIQProbeSampleCount)
+	if len(outputs) == 0 {
+		lastFailure.iqEngine = channelIQTestEngineFingerprint
+		return lastFailure
+	}
+	analysis, err := analyzeFingerprintSamples(detector, outputs)
 	if err != nil {
 		return testResult{localErr: fmt.Errorf("analyze fingerprint test responses: %w", err), iqEngine: channelIQTestEngineFingerprint}
 	}
-	if analysis == nil {
-		return testResult{localErr: errors.New("fingerprint test returned no analysis"), iqEngine: channelIQTestEngineFingerprint}
+	lastSuccess.iqEngine = channelIQTestEngineFingerprint
+	lastSuccess.fingerprintAnalysis = analysis
+	lastSuccess.fingerprintSamples = samples
+	lastSuccess.response = analysis.PredictionName
+	lastSuccess.responseBytes = responseBytes
+	lastSuccess.rawResponseBytes = rawResponseBytes
+	lastSuccess.reasoningTokens = reasoningTokens
+	return lastSuccess
+}
+
+func analyzeFingerprintSamples(detector *lmfpd.Detector, outputs []lmfpd.Output) (*lmfpd.Analysis, error) {
+	// Strict mode preserves the original three-answer scoring; non-strict mode trims excess numbers.
+	strict := len(outputs) == model.MaxChannelIQProbeSampleCount
+	analysis, err := detector.Analyze(outputs, strict)
+	if err != nil {
+		return nil, err
 	}
-	lastResult.iqEngine = channelIQTestEngineFingerprint
-	lastResult.fingerprintAnalysis = analysis
-	lastResult.fingerprintSamples = samples
-	lastResult.response = analysis.PredictionName
-	lastResult.responseBytes = responseBytes
-	lastResult.rawResponseBytes = rawResponseBytes
-	lastResult.reasoningTokens = reasoningTokens
-	return lastResult
+	if strict && analysis.Decision == "unscorable" && analysis.UsedOutputs > 0 {
+		analysis, err = detector.Analyze(outputs, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if analysis.Decision == "unscorable" {
+		analysis.Evidence.Reason = "No valid fingerprint samples."
+		analysis.Evidence.Method = "valid-sample-count"
+	}
+	if len(analysis.Results) == 0 || analysis.Probability != nil {
+		return analysis, nil
+	}
+
+	// The SDK sorts candidates by descending finite score. Softmax gives relative weights, not a calibrated probability.
+	maxScore := analysis.Results[0].Score
+	var sum float64
+	for i, candidate := range analysis.Results {
+		weight := math.Exp(candidate.Score - maxScore)
+		analysis.Results[i].Probability = &weight
+		sum += weight
+	}
+	for _, candidate := range analysis.Results {
+		*candidate.Probability /= sum
+	}
+	analysis.Decision = "scored"
+	analysis.Probability = analysis.Results[0].Probability
+	analysis.ProbabilityStatus = fingerprintEstimatedConfidence
+	analysis.ProbabilityScope = common.GetPointer("reference-closed-set")
+	analysis.Evidence.Label = "Uncalibrated ranking"
+	analysis.Evidence.Reason = "Confidence is estimated from relative ranking scores within the reference bank."
+	analysis.Evidence.Method = "ranking-softmax"
+	return analysis, nil
 }
 
 type testResponseBody struct {
@@ -164,7 +211,7 @@ type channelIQTestSample struct {
 }
 
 func channelIQProbeAnalysis(analysis *lmfpd.Analysis) *model.ChannelIQProbeAnalysis {
-	if analysis == nil || analysis.Decision != "scored" || analysis.ProbabilityStatus != "reference_calibrated" {
+	if analysis == nil || analysis.Decision != "scored" || analysis.Probability == nil {
 		return nil
 	}
 	result := &model.ChannelIQProbeAnalysis{
@@ -1789,12 +1836,18 @@ func TestChannel(c *gin.Context) {
 		requestCtx = c.Request.Context()
 	}
 	var result testResult
+	var milliseconds int64
 	if intelligenceTest {
 		if isStream {
 			common.ApiError(c, errors.New("智商测试暂不支持流式输出"))
 			return
 		}
-		switch normalizeChannelIQTestEngine(c.Query("iq_test_engine")) {
+		if testModel == "" {
+			common.ApiErrorMsg(c, "请选择智商测试模型")
+			return
+		}
+		engine := normalizeChannelIQTestEngine(c.Query("iq_test_engine"))
+		switch engine {
 		case channelIQTestEnginePelican:
 			result = testChannelWithPrompt(requestCtx, channel, testUserID, testModel, endpointType, false, modelTestTokenName, "", channelIQTestPrompt)
 		case channelIQTestEngineFingerprint:
@@ -1803,8 +1856,27 @@ func TestChannel(c *gin.Context) {
 			common.ApiError(c, errors.New("无效的降智测试引擎"))
 			return
 		}
+		elapsed := time.Since(tik)
+		milliseconds = elapsed.Milliseconds()
+		run, err := result.iqTestRun(channel.Id, testModel, engine, elapsed)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		usingKey := ""
+		if result.context != nil {
+			usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
+		}
+		// Closing the dialog can cancel the upstream call. Still record its actual outcome.
+		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), 10*time.Second)
+		defer cancel()
+		if err := service.CompleteManualChannelIQTest(saveCtx, run, usingKey, channelIQProbeAnalysis(result.fingerprintAnalysis)); err != nil {
+			common.ApiError(c, fmt.Errorf("保存智商测试结果失败: %w", err))
+			return
+		}
 	} else {
 		result = testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
+		milliseconds = time.Since(tik).Milliseconds()
 	}
 	if result.localErr != nil {
 		if intelligenceTest {
@@ -1830,8 +1902,6 @@ func TestChannel(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
-	tok := time.Now()
-	milliseconds := tok.Sub(tik).Milliseconds()
 	go channel.UpdateResponseTime(milliseconds)
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
@@ -1845,15 +1915,6 @@ func TestChannel(c *gin.Context) {
 	}
 	if !intelligenceTest {
 		recoverChannelAfterSuccessfulTest(requestCtx, channel.Id, result.context)
-	} else if analysis := channelIQProbeAnalysis(result.fingerprintAnalysis); analysis != nil && testModel == channel.GetTestModel() {
-		usingKey := ""
-		if result.context != nil {
-			usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
-		}
-		if err := service.CompleteManualChannelIQTest(requestCtx, channel.Id, testModel, usingKey, analysis); err != nil {
-			common.ApiError(c, fmt.Errorf("保存指纹测试结果失败: %w", err))
-			return
-		}
 	}
 	data := gin.H{
 		"response_time": milliseconds,

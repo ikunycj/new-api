@@ -162,6 +162,10 @@ function ChannelCardComponent({
             {nameCell}
           </div>
 
+          <ChannelMetric label={fieldLabels.test_model}>
+            {testModelCell}
+          </ChannelMetric>
+
           <div className='grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2'>
             <ChannelMetric label={fieldLabels.previous_day_probe_success_rate}>
               {previousDayProbeSuccessRateCell}
@@ -177,9 +181,6 @@ function ChannelCardComponent({
             </ChannelMetric>
             <ChannelMetric label={fieldLabels.daily_tokens}>
               {tokenUsageCell}
-            </ChannelMetric>
-            <ChannelMetric label={fieldLabels.test_model}>
-              {testModelCell}
             </ChannelMetric>
             <ChannelMetric label={t('Weight')}>{weightCell}</ChannelMetric>
             <ChannelMetric label={fieldLabels.response_time}>

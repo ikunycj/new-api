@@ -940,12 +940,18 @@ func ensureChannelsCanBeDeleted(db *gorm.DB, ids []int) error {
 // references are intentionally not deleted here; callers must reject those
 // channels first so a saved billing-group route cannot be silently changed.
 func deleteChannelRecords(tx *gorm.DB, ids []int) error {
+	deleteIQRuns := tx.Migrator().HasTable(&ChannelIQTestRun{})
 	deleteProbeHistory := tx.Migrator().HasTable(&ChannelProbeHistory{})
 	deleteProbeState := tx.Migrator().HasTable(&ChannelProbeState{})
 	deleteCostEntries := tx.Migrator().HasTable(&ChannelCostEntry{})
 	for _, chunk := range lo.Chunk(ids, 200) {
 		if deleteCostEntries {
 			if err := tx.Where("channel_id IN ?", chunk).Delete(&ChannelCostEntry{}).Error; err != nil {
+				return err
+			}
+		}
+		if deleteIQRuns {
+			if err := tx.Where("channel_id IN ?", chunk).Delete(&ChannelIQTestRun{}).Error; err != nil {
 				return err
 			}
 		}

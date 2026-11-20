@@ -444,7 +444,7 @@ func completeFingerprintProbe(ctx context.Context, channelID int, testModel stri
 		summary.Failed = 1
 	case analysis == nil:
 		a := result.fingerprintAnalysis
-		common.SysLog(fmt.Sprintf("channel IQ probe has no calibrated score: channel=%d decision=%s reason=%s", channelID, a.Decision, a.Evidence.Reason))
+		common.SysLog(fmt.Sprintf("channel IQ probe has no score: channel=%d decision=%s reason=%s", channelID, a.Decision, a.Evidence.Reason))
 		summary.Inconclusive = 1
 	default:
 		availability = &model.ChannelProbeHistory{Success: true, LatencyMs: elapsed.Milliseconds()}
@@ -454,7 +454,11 @@ func completeFingerprintProbe(ctx context.Context, channelID int, testModel stri
 	if result.context != nil {
 		usingKey = common.GetContextKeyString(result.context, constant.ContextKeyChannelKey)
 	}
-	status, changed, err := service.CompleteChannelIQProbe(ctx, channelID, availability, leaseUntil, usingKey, testModel, analysis)
+	run, err := result.iqTestRun(channelID, testModel, channelIQTestEngineFingerprint, elapsed)
+	if err != nil {
+		return channelProbeResult{err: err}
+	}
+	status, changed, err := service.CompleteChannelIQProbe(ctx, run, availability, leaseUntil, usingKey, analysis)
 	if err != nil {
 		return channelProbeResult{err: err}
 	}

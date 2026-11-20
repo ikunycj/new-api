@@ -25,6 +25,8 @@ import type {
   Channel,
   ChannelBalanceResponse,
   ChannelIQTestEngine,
+  ChannelIQTestHistory,
+  ChannelIQTestRun,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -221,6 +223,38 @@ export async function testChannel(
     channelActionConfig({ params, signal })
   )
   return res.data
+}
+
+export async function getLatestChannelIQTestRuns(
+  id: number,
+  models: string[],
+  signal: AbortSignal
+): Promise<ChannelIQTestRun[]> {
+  const { data } = await api.post(
+    `/api/channel/${id}/iq_tests/latest`,
+    { models },
+    channelActionConfig({ signal })
+  )
+  if (!data.success) throw new Error(data.message || '读取智商测试结果失败')
+  return data.data
+}
+
+export async function getChannelIQTestHistory(
+  id: number,
+  model: string,
+  page: number,
+  signal: AbortSignal
+): Promise<ChannelIQTestHistory> {
+  const { data } = await api.get(
+    `/api/channel/${id}/iq_tests`,
+    channelActionConfig({
+      params: { model, p: page, page_size: 10 },
+      signal,
+      disableDuplicate: true,
+    })
+  )
+  if (!data.success) throw new Error(data.message || '读取智商测试历史失败')
+  return data.data
 }
 
 /**

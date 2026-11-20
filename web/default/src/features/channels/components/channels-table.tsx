@@ -471,7 +471,10 @@ export function ChannelsTable() {
       )}
       cardGridClassName='grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-3'
       applyHeaderSize
-      getColumnClassName={(_, part) => (part === 'cell' ? 'py-1.5' : undefined)}
+      getColumnClassName={(columnId, part) => {
+        if (part === 'cell') return 'py-1.5'
+        if (columnId === 'test_model') return 'min-w-[248px]'
+      }}
       toolbarProps={{
         searchPlaceholder: t('Filter by name, ID, or key...'),
         searchDebounceMs: 500,

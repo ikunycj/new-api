@@ -4172,9 +4172,6 @@ export function ChannelMutateDrawer({
                                           }
                                         />
                                       </FormControl>
-                                      <FormDescription>
-                                        1–2 份仅提供初步排名；3 份有效样本才能计算置信度并参与降智判定。
-                                      </FormDescription>
                                       <FormMessage />
                                     </FormItem>
                                   )}
@@ -4202,10 +4199,6 @@ export function ChannelMutateDrawer({
                                           }
                                         />
                                       </FormControl>
-                                      <FormDescription>
-                                        默认 60
-                                        分钟；固定使用指纹测试和路由策略中的测试模型。
-                                      </FormDescription>
                                       <FormMessage />
                                     </FormItem>
                                   )}

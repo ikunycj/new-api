@@ -47,6 +47,8 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodDelete, path: "/:id/reconciliation/costs/:cost_id", permission: authz.ChannelWrite, handler: controller.DeleteChannelCostEntry},
 	{method: http.MethodGet, path: "/test", permission: authz.ChannelOperate, handler: controller.TestAllChannels},
 	{method: http.MethodGet, path: "/test/:id", permission: authz.ChannelOperate, handler: controller.TestChannel},
+	{method: http.MethodPost, path: "/:id/iq_tests/latest", permission: authz.ChannelOperate, handler: controller.GetLatestChannelIQTestRuns},
+	{method: http.MethodGet, path: "/:id/iq_tests", permission: authz.ChannelOperate, handler: controller.GetChannelIQTestHistory},
 	{method: http.MethodGet, path: "/update_balance", permission: authz.ChannelOperate, handler: controller.UpdateAllChannelsBalance},
 	{method: http.MethodGet, path: "/update_balance/:id", permission: authz.ChannelOperate, handler: controller.UpdateChannelBalance},
 	{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddChannel},
