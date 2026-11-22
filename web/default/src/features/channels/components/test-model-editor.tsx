@@ -34,11 +34,12 @@ export function TestModelEditor({
   const confidences = channel.iq_probe_model_confidences
   const prediction = channel.iq_probe_prediction
   const topConfidence = channel.iq_probe_confidence
-  const confidence = hasProbe
-    ? formatPercent(
-        Object.hasOwn(confidences, value) ? confidences[value] * 100 : 0
-      )
-    : '-'
+  const draftConfidence = Object.hasOwn(confidences, value)
+    ? confidences[value]
+    : 0
+  const modelConfidence =
+    value === testModel ? channel.iq_test_confidence : draftConfidence
+  const confidence = hasProbe ? formatPercent(modelConfidence * 100) : '-'
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

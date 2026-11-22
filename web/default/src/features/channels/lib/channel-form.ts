@@ -485,7 +485,9 @@ export function transformChannelToFormDefaults(
       channel.probe_period_minutes == null || channel.probe_period_minutes <= 0
         ? CHANNEL_FORM_DEFAULT_VALUES.probe_period_minutes
         : channel.probe_period_minutes,
-    probe_random_delay_enabled: channel.probe_random_delay_enabled ?? false,
+    probe_random_delay_enabled:
+      channel.probe_random_delay_enabled ??
+      CHANNEL_FORM_DEFAULT_VALUES.probe_random_delay_enabled,
     probe_stream_enabled: channel.probe_stream_enabled ?? false,
     iq_probe_enabled:
       channel.iq_probe_enabled ?? CHANNEL_FORM_DEFAULT_VALUES.iq_probe_enabled,

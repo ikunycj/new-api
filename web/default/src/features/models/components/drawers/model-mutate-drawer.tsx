@@ -206,6 +206,7 @@ export function ModelMutateDrawer({
       AutomaticDisableStatusCodes: '401',
       AutomaticRetryStatusCodes:
         '100-199,300-399,401-407,409-499,500-503,505-523,525-599',
+      FingerprintTestModelAliases: '[]',
       'channel_affinity_setting.enabled': false,
       'channel_affinity_setting.switch_on_success': true,
       'channel_affinity_setting.keep_on_channel_disabled': false,

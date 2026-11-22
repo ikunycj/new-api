@@ -54,6 +54,8 @@ const numericString = z.string().refine((value) => {
   return !Number.isNaN(Number(trimmed)) && Number(trimmed) >= 0
 }, 'Enter a non-negative number or leave empty')
 
+const fingerprintModelAliasGroups = z.array(z.array(z.string()))
+
 const routingReliabilitySchema = z
   .object({
     ChannelDisableThreshold: numericString,
@@ -61,6 +63,7 @@ const routingReliabilitySchema = z
     AutomaticDisableKeywords: z.string(),
     AutomaticDisableStatusCodes: z.string(),
     AutomaticRetryStatusCodes: z.string(),
+    FingerprintTestModelAliases: z.string(),
   })
   .superRefine((values, ctx) => {
     const disableParsed = parseHttpStatusCodeRules(
@@ -93,30 +96,12 @@ const routingReliabilitySchema = z
 type RoutingReliabilityFormValues = z.output<typeof routingReliabilitySchema>
 type RoutingReliabilityFormInput = z.input<typeof routingReliabilitySchema>
 
-type RoutingReliabilitySectionProps = {
-  defaultValues: {
-    ChannelDisableThreshold: string
-    AutomaticDisableChannelEnabled: boolean
-    AutomaticDisableKeywords: string
-    AutomaticDisableStatusCodes: string
-    AutomaticRetryStatusCodes: string
-  }
-}
-
 function normalizeLineEndings(value: string) {
   return value.replaceAll('\r\n', '\n')
 }
 
-type NormalizedRoutingReliabilityValues = {
-  ChannelDisableThreshold: string
-  AutomaticDisableChannelEnabled: boolean
-  AutomaticDisableKeywords: string
-  AutomaticDisableStatusCodes: string
-  AutomaticRetryStatusCodes: string
-}
-
 const buildFormDefaults = (
-  defaults: RoutingReliabilitySectionProps['defaultValues']
+  defaults: RoutingReliabilityFormInput
 ): RoutingReliabilityFormInput => ({
   ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
@@ -125,27 +110,25 @@ const buildFormDefaults = (
   ),
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
-})
-
-const normalizeDefaults = (
-  defaults: RoutingReliabilitySectionProps['defaultValues']
-): NormalizedRoutingReliabilityValues => ({
-  ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
-  AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
-  AutomaticDisableKeywords: normalizeLineEndings(
-    defaults.AutomaticDisableKeywords ?? ''
-  ),
-  AutomaticDisableStatusCodes: parseHttpStatusCodeRules(
-    defaults.AutomaticDisableStatusCodes ?? ''
-  ).normalized,
-  AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
-    defaults.AutomaticRetryStatusCodes ?? ''
-  ).normalized,
+  FingerprintTestModelAliases: fingerprintModelAliasGroups
+    .parse(JSON.parse(defaults.FingerprintTestModelAliases))
+    .map((group) => group.join(', '))
+    .join('\n'),
 })
 
 const normalizeFormValues = (
   values: RoutingReliabilityFormValues
-): NormalizedRoutingReliabilityValues => ({
+): RoutingReliabilityFormValues => ({
+  FingerprintTestModelAliases: JSON.stringify(
+    values.FingerprintTestModelAliases.split(/\r?\n/)
+      .map((line) =>
+        line
+          .split(/[,，、]/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+      )
+      .filter((group) => group.length > 0)
+  ),
   ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
   AutomaticDisableKeywords: normalizeLineEndings(
@@ -161,17 +144,17 @@ const normalizeFormValues = (
 
 export function RoutingReliabilitySection({
   defaultValues,
-}: RoutingReliabilitySectionProps) {
+}: {
+  defaultValues: RoutingReliabilityFormInput
+}) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const baselineRef = useRef<NormalizedRoutingReliabilityValues>(
-    normalizeDefaults(defaultValues)
-  )
 
   const formDefaults = useMemo(
     () => buildFormDefaults(defaultValues),
     [defaultValues]
   )
+  const baselineRef = useRef(normalizeFormValues(formDefaults))
 
   const form = useForm<
     RoutingReliabilityFormInput,
@@ -198,7 +181,7 @@ export function RoutingReliabilitySection({
   const onSubmit = async (values: RoutingReliabilityFormValues) => {
     const normalized = normalizeFormValues(values)
     const updates = (
-      Object.keys(normalized) as Array<keyof NormalizedRoutingReliabilityValues>
+      Object.keys(normalized) as Array<keyof RoutingReliabilityFormValues>
     ).filter((key) => normalized[key] !== baselineRef.current[key])
 
     if (updates.length === 0) {
@@ -208,13 +191,20 @@ export function RoutingReliabilitySection({
 
     for (const key of updates) {
       const value = normalized[key]
-      await updateOption.mutateAsync({
-        key,
-        value,
-      })
+      try {
+        await updateOption.mutateAsync({ key, value })
+      } catch (error) {
+        if (key === 'FingerprintTestModelAliases' && error instanceof Error) {
+          form.setError(
+            key,
+            { type: 'server', message: error.message },
+            { shouldFocus: true }
+          )
+        }
+        return
+      }
+      baselineRef.current = { ...baselineRef.current, [key]: value }
     }
-
-    baselineRef.current = normalized
   }
 
   return (
@@ -371,6 +361,34 @@ export function RoutingReliabilitySection({
               />
             </div>
           </div>
+          <Separator />
+
+          <section className='flex min-w-0 flex-col gap-4'>
+            <h4 className='text-sm font-medium'>降智测试规则</h4>
+            <FormField
+              control={form.control}
+              name='FingerprintTestModelAliases'
+              render={({ field }) => (
+                <FormItem className='w-full max-w-2xl'>
+                  <FormLabel>指纹测试模型别名</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={4}
+                      spellCheck={false}
+                      placeholder={
+                        'deepseek-v4.1-flash-1017, deepseek-flash\ngpt-6.1-sol, gpt-6.1-astra, gpt-6.2-astra'
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription className='sr-only'>
+                    每行一组，用逗号分隔模型名。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </section>
         </SettingsForm>
       </Form>
     </SettingsSection>

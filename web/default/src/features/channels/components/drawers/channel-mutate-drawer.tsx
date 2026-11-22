@@ -798,13 +798,16 @@ export function ChannelMutateDrawer({
   const currentForcePriorityScope = form.watch('force_priority_scope')
   const previousDayProbeSuccessRate =
     channelData?.data?.previous_day_probe_success_rate ?? 100
-  const iqProbeAt = channelData?.data?.iq_probe_at ?? 0
-  const iqProbeModelConfidences =
-    channelData?.data?.iq_probe_model_confidences ?? {}
-  const iqTestConfidence =
-    iqProbeAt > 0 ? (iqProbeModelConfidences[currentTestModel.trim()] ?? 0) : 1
-  const iqProbePrediction = channelData?.data?.iq_probe_prediction
-  const iqProbeConfidence = channelData?.data?.iq_probe_confidence
+  const channelDetail = channelData?.data
+  const iqProbeAt = channelDetail?.iq_probe_at ?? 0
+  const testModelName = currentTestModel.trim()
+  const modelConfidence =
+    testModelName === channelDetail?.test_model?.trim()
+      ? channelDetail.iq_test_confidence
+      : (channelDetail?.iq_probe_model_confidences?.[testModelName] ?? 0)
+  const iqTestConfidence = iqProbeAt > 0 ? modelConfidence : 1
+  const iqProbePrediction = channelDetail?.iq_probe_prediction
+  const iqProbeConfidence = channelDetail?.iq_probe_confidence
   const currentTag = form.watch('tag')
   const currentRemark = form.watch('remark')
   const currentStatusCodeMapping = form.watch('status_code_mapping')

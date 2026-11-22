@@ -159,7 +159,7 @@ describe('channel form API mapping', () => {
     assert.equal(defaults.notify_on_status_change, false)
     assert.equal(defaults.auto_probe_enabled, false)
     assert.equal(defaults.probe_period_minutes, 5)
-    assert.equal(defaults.probe_random_delay_enabled, false)
+    assert.equal(defaults.probe_random_delay_enabled, true)
     assert.equal(defaults.probe_stream_enabled, false)
     assert.equal(defaults.iq_probe_enabled, true)
     assert.equal(defaults.iq_auto_disable_degraded, false)
@@ -183,6 +183,19 @@ describe('channel form API mapping', () => {
         .iq_probe_enabled,
       false
     )
+  })
+
+  test('preserves explicitly disabled random delay when saving a channel', () => {
+    const defaults = transformChannelToFormDefaults(
+      channel({ probe_random_delay_enabled: false })
+    )
+    assert.equal(defaults.probe_random_delay_enabled, false)
+
+    const values = channelFormSchema.parse(defaults)
+    const created = transformFormDataToCreatePayload(values).channel
+    const updated = transformFormDataToUpdatePayload(values, 42)
+    assert.equal(created.probe_random_delay_enabled, false)
+    assert.equal(updated.probe_random_delay_enabled, false)
   })
 
   test('channel status notifications default off and round-trip the selection', () => {

@@ -267,6 +267,84 @@ func TestCompleteChannelIQProbeAutoDisablesDegradedUntilAHealthyIQProbe(t *testi
 	assert.True(t, ability.Enabled)
 }
 
+func TestFingerprintModelAliasesApplyToManualAndScheduledIQTests(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Option{}, &Channel{}, &Ability{}, &ChannelProbeState{}, &ChannelProbeHistory{}, &ChannelIQTestRun{})
+	previousCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	common.OptionMapRWMutex.RLock()
+	previousOption, hadOption := common.OptionMap[fingerprintModelAliasesOptionKey]
+	previousAliases := fingerprintModelAliases
+	common.OptionMapRWMutex.RUnlock()
+	t.Cleanup(func() {
+		common.MemoryCacheEnabled = previousCacheEnabled
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		fingerprintModelAliases = previousAliases
+		if hadOption {
+			common.OptionMap[fingerprintModelAliasesOptionKey] = previousOption
+		} else {
+			delete(common.OptionMap, fingerprintModelAliasesOptionKey)
+		}
+	})
+
+	testModel, prediction := "deepseek-v4.1-flash-1017", "deepseek-flash"
+	channel := Channel{
+		Id:                    12,
+		Key:                   "channel-key",
+		TestModel:             &testModel,
+		Status:                common.ChannelStatusEnabled,
+		IQProbeEnabled:        true,
+		IQAutoDisableDegraded: true,
+	}
+	require.NoError(t, DB.Create(&channel).Error)
+	require.NoError(t, DB.Create(&Ability{ChannelId: channel.Id, Group: "test", Model: testModel, Enabled: true}).Error)
+	lease := common.GetTimestamp() + 300
+	require.NoError(t, DB.Create(&ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: lease}).Error)
+	analysis := &ChannelIQProbeAnalysis{
+		Prediction:       prediction,
+		ModelConfidences: map[string]float64{prediction: 0.91, testModel: 0.04, "other-model": 0.05},
+	}
+
+	require.NoError(t, UpdateOption(fingerprintModelAliasesOptionKey, "[]"))
+	stored, changed, err := CompleteChannelIQProbe(t.Context(), scoredTestRun(channel.Id, testModel), &ChannelProbeHistory{Success: true}, lease, "", analysis)
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.True(t, stored.IQProbeDegraded())
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+
+	require.NoError(t, UpdateOption(fingerprintModelAliasesOptionKey, testFingerprintAliases))
+	invalidOption := `[["deepseek-v4.1-flash-1017","deepseek-flash"],["DEEPSEEK-FLASH","other-model"]]`
+	require.Error(t, UpdateOption(fingerprintModelAliasesOptionKey, invalidOption))
+	var option Option
+	require.NoError(t, DB.First(&option, "key = ?", fingerprintModelAliasesOptionKey).Error)
+	assert.Equal(t, testFingerprintAliases, option.Value)
+	require.NoError(t, DB.First(stored, channel.Id).Error)
+	assert.True(t, stored.IQProbeDegraded(), "saving aliases must not rewrite the last test result")
+	assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
+
+	stored, changed, err = CompleteManualChannelIQTest(t.Context(), scoredTestRun(channel.Id, testModel), "", analysis)
+	require.NoError(t, err)
+	assert.True(t, changed)
+	assert.False(t, stored.IQProbeDegraded())
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	EnrichChannelIQProbeMetrics([]*Channel{stored})
+	assert.Equal(t, prediction, stored.IQProbePrediction)
+	assert.Equal(t, analysis.ModelConfidences, stored.IQProbeModelConfidences)
+	require.NotNil(t, stored.IQTestConfidence)
+	assert.Equal(t, 0.91, *stored.IQTestConfidence)
+
+	lease++
+	require.NoError(t, DB.Model(&ChannelProbeState{}).Where("channel_id = ?", channel.Id).Update("iq_lease_until", lease).Error)
+	stored, changed, err = CompleteChannelIQProbe(t.Context(), scoredTestRun(channel.Id, testModel), &ChannelProbeHistory{Success: true}, lease, "", analysis)
+	require.NoError(t, err)
+	assert.False(t, changed)
+	assert.False(t, stored.IQProbeDegraded())
+	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	var ability Ability
+	require.NoError(t, DB.First(&ability, "channel_id = ?", channel.Id).Error)
+	assert.True(t, ability.Enabled)
+}
+
 func TestEligibleChannelsIncludeIQConfidenceForDynamicRouting(t *testing.T) {
 	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &ChannelProbeHistory{}, &Log{})
 	previousCacheEnabled := common.MemoryCacheEnabled

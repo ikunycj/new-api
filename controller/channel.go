@@ -725,7 +725,10 @@ type AddChannelRequest struct {
 	Mode                      string                `json:"mode"`
 	MultiKeyMode              constant.MultiKeyMode `json:"multi_key_mode"`
 	BatchAddSetKeyPrefix2Name bool                  `json:"batch_add_set_key_prefix_2_name"`
-	Channel                   *model.Channel        `json:"channel"`
+	Channel                   *struct {
+		model.Channel
+		ProbeRandomDelayEnabled *bool `json:"probe_random_delay_enabled"`
+	} `json:"channel"`
 }
 
 func getVertexArrayKeys(keys string) ([]string, error) {
@@ -768,8 +771,14 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
+	var channel *model.Channel
+	if input := addChannelRequest.Channel; input != nil {
+		channel = &input.Channel
+		channel.ProbeRandomDelayEnabled = input.ProbeRandomDelayEnabled == nil || *input.ProbeRandomDelayEnabled
+	}
+
 	// 使用统一的校验函数
-	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
+	if err := validateChannel(channel, true); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -777,14 +786,14 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
+	channel.CreatedTime = common.GetTimestamp()
 	keys := make([]string, 0)
 	switch addChannelRequest.Mode {
 	case "multi_to_single":
-		addChannelRequest.Channel.ChannelInfo.IsMultiKey = true
-		addChannelRequest.Channel.ChannelInfo.MultiKeyMode = addChannelRequest.MultiKeyMode
-		if addChannelRequest.Channel.Type == constant.ChannelTypeVertexAi && addChannelRequest.Channel.GetOtherSettings().VertexKeyType != dto.VertexKeyTypeAPIKey {
-			array, err := getVertexArrayKeys(addChannelRequest.Channel.Key)
+		channel.ChannelInfo.IsMultiKey = true
+		channel.ChannelInfo.MultiKeyMode = addChannelRequest.MultiKeyMode
+		if channel.Type == constant.ChannelTypeVertexAi && channel.GetOtherSettings().VertexKeyType != dto.VertexKeyTypeAPIKey {
+			array, err := getVertexArrayKeys(channel.Key)
 			if err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
@@ -792,25 +801,25 @@ func AddChannel(c *gin.Context) {
 				})
 				return
 			}
-			addChannelRequest.Channel.ChannelInfo.MultiKeySize = len(array)
-			addChannelRequest.Channel.Key = strings.Join(array, "\n")
+			channel.ChannelInfo.MultiKeySize = len(array)
+			channel.Key = strings.Join(array, "\n")
 		} else {
 			cleanKeys := make([]string, 0)
-			for _, key := range strings.Split(addChannelRequest.Channel.Key, "\n") {
+			for _, key := range strings.Split(channel.Key, "\n") {
 				if key == "" {
 					continue
 				}
 				key = strings.TrimSpace(key)
 				cleanKeys = append(cleanKeys, key)
 			}
-			addChannelRequest.Channel.ChannelInfo.MultiKeySize = len(cleanKeys)
-			addChannelRequest.Channel.Key = strings.Join(cleanKeys, "\n")
+			channel.ChannelInfo.MultiKeySize = len(cleanKeys)
+			channel.Key = strings.Join(cleanKeys, "\n")
 		}
-		keys = []string{addChannelRequest.Channel.Key}
+		keys = []string{channel.Key}
 	case "batch":
-		if addChannelRequest.Channel.Type == constant.ChannelTypeVertexAi && addChannelRequest.Channel.GetOtherSettings().VertexKeyType != dto.VertexKeyTypeAPIKey {
+		if channel.Type == constant.ChannelTypeVertexAi && channel.GetOtherSettings().VertexKeyType != dto.VertexKeyTypeAPIKey {
 			// multi json
-			keys, err = getVertexArrayKeys(addChannelRequest.Channel.Key)
+			keys, err = getVertexArrayKeys(channel.Key)
 			if err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
@@ -819,10 +828,10 @@ func AddChannel(c *gin.Context) {
 				return
 			}
 		} else {
-			keys = strings.Split(addChannelRequest.Channel.Key, "\n")
+			keys = strings.Split(channel.Key, "\n")
 		}
 	case "single":
-		keys = []string{addChannelRequest.Channel.Key}
+		keys = []string{channel.Key}
 	default:
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -836,7 +845,7 @@ func AddChannel(c *gin.Context) {
 		if key == "" {
 			continue
 		}
-		localChannel := addChannelRequest.Channel
+		localChannel := channel
 		localChannel.Key = key
 		if addChannelRequest.BatchAddSetKeyPrefix2Name && len(keys) > 1 {
 			keyPrefix := localChannel.Key
@@ -854,8 +863,8 @@ func AddChannel(c *gin.Context) {
 	}
 	service.ResetProxyClientCache()
 	recordManageAudit(c, "channel.create", map[string]interface{}{
-		"name":  addChannelRequest.Channel.Name,
-		"type":  addChannelRequest.Channel.Type,
+		"name":  channel.Name,
+		"type":  channel.Type,
 		"count": len(channels),
 	})
 	c.JSON(http.StatusOK, gin.H{

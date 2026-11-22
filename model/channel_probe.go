@@ -64,10 +64,11 @@ func setChannelIQProbeAnalysis(channel *Channel, testModel string, analysis *Cha
 		return err
 	}
 	info["iq_probe_engine"] = DefaultChannelIQProbeEngine
-	info["iq_probe_test_model"] = strings.TrimSpace(testModel)
+	testModel = strings.TrimSpace(testModel)
+	info["iq_probe_test_model"] = testModel
 	info["iq_probe_at"] = checkedAt
 	info["iq_probe_prediction"] = prediction
-	info["iq_probe_degraded"] = !strings.EqualFold(prediction, strings.TrimSpace(testModel))
+	info["iq_probe_degraded"] = !currentFingerprintModelAliases().sameModel(testModel, prediction)
 	if confidence, ok := confidences[prediction]; ok {
 		info["iq_probe_confidence"] = confidence
 	} else {
@@ -80,6 +81,7 @@ func setChannelIQProbeAnalysis(channel *Channel, testModel string, analysis *Cha
 // EnrichChannelIQProbeMetrics exposes the persisted detector result and gives
 // channels without a scored result the neutral 100% confidence score.
 func EnrichChannelIQProbeMetrics(channels []*Channel) {
+	aliases := currentFingerprintModelAliases()
 	for _, channel := range channels {
 		if channel == nil {
 			continue
@@ -111,9 +113,15 @@ func EnrichChannelIQProbeMetrics(channels []*Channel) {
 			channel.IQProbeConfidence = &confidence
 		}
 		if channel.IQProbeAt > 0 {
-			confidence := float64(0)
-			if measuredConfidence, ok := channel.IQProbeModelConfidences[channel.GetTestModel()]; ok {
-				confidence = measuredConfidence
+			testModel := channel.GetTestModel()
+			confidence := channel.IQProbeModelConfidences[testModel]
+			if _, grouped := aliases[strings.ToLower(testModel)]; grouped {
+				// Use the strongest matching score without altering the detector's ranking.
+				for modelName, measured := range channel.IQProbeModelConfidences {
+					if aliases.sameModel(testModel, modelName) {
+						confidence = max(confidence, measured)
+					}
+				}
 			}
 			channel.IQTestConfidence = &confidence
 		}

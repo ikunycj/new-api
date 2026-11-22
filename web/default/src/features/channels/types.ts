@@ -62,7 +62,7 @@ export const channelSchema = z.object({
   notify_on_status_change: z.boolean().nullish(),
   auto_probe_enabled: z.boolean().nullish(),
   probe_period_minutes: z.number().default(5),
-  probe_random_delay_enabled: z.boolean().default(false),
+  probe_random_delay_enabled: z.boolean().default(true),
   probe_stream_enabled: z.boolean().default(false),
   iq_probe_enabled: z.boolean().default(true),
   iq_auto_disable_degraded: z.boolean().default(false),

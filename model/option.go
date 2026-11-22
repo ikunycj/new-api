@@ -297,6 +297,8 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
+	common.OptionMap[fingerprintModelAliasesOptionKey] = "[]"
+	fingerprintModelAliases = nil
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
 
 	// 自动添加所有注册的模型配置
@@ -385,13 +387,9 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
-	if key == common.ChannelErrorWhitelistOptionKey {
-		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
-			return err
-		}
-	}
-	if isRetiredOptionKey(key) {
-		return errRetiredOption
+	aliases, err := prepareOptionUpdate(key, value)
+	if err != nil {
+		return err
 	}
 	if isPricingGroupOptionKey(key) {
 		return errPricingGroupOptionRequiresAtomicUpdate
@@ -418,7 +416,7 @@ func UpdateOption(key string, value string) error {
 		return err
 	}
 	// Update OptionMap
-	return updateOptionMap(key, value)
+	return applyOptionMap(key, value, aliases)
 }
 
 func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, optionalJSON ...string) error {
@@ -489,11 +487,6 @@ func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrde
 // is touched — safe for callers that must commit a set of related options
 // atomically (e.g. payment gateway binding).
 func UpdateOptionsBulk(values map[string]string) error {
-	if value, ok := values[common.ChannelErrorWhitelistOptionKey]; ok {
-		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
-			return err
-		}
-	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -502,9 +495,14 @@ func UpdateOptionsBulk(values map[string]string) error {
 			return err
 		}
 	}
-	for key := range values {
-		if isRetiredOptionKey(key) {
-			return errRetiredOption
+	var aliases fingerprintModelAliasGroups
+	for key, value := range values {
+		prepared, err := prepareOptionUpdate(key, value)
+		if err != nil {
+			return err
+		}
+		if key == fingerprintModelAliasesOptionKey {
+			aliases = prepared
 		}
 		if isPricingGroupOptionKey(key) {
 			return errPricingGroupOptionRequiresAtomicUpdate
@@ -527,30 +525,46 @@ func UpdateOptionsBulk(values map[string]string) error {
 		return err
 	}
 	for k, v := range values {
-		if err := updateOptionMap(k, v); err != nil {
+		if err := applyOptionMap(k, v, aliases); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func updateOptionMap(key string, value string) (err error) {
-	// Persisted configuration is an independent input boundary on refresh.
-	// Reject malformed rules before replacing the last valid public policy.
+func updateOptionMap(key string, value string) error {
+	// Values reloaded from the database cross a separate validation boundary.
+	aliases, err := prepareOptionUpdate(key, value)
+	if err != nil {
+		return err
+	}
+	return applyOptionMap(key, value, aliases)
+}
+
+func prepareOptionUpdate(key, value string) (fingerprintModelAliasGroups, error) {
 	if key == common.ChannelErrorWhitelistOptionKey {
-		if err := console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist"); err != nil {
-			return err
-		}
+		return nil, console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist")
 	}
 	if isRetiredOptionKey(key) {
-		return errRetiredOption
+		return nil, errRetiredOption
 	}
+	if key == fingerprintModelAliasesOptionKey {
+		return parseFingerprintModelAliases(value)
+	}
+	return nil, nil
+}
+
+func applyOptionMap(key, value string, aliases fingerprintModelAliasGroups) (err error) {
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
 	if common.OptionMap == nil {
 		common.OptionMap = make(map[string]string)
 	}
 	common.OptionMap[key] = value
+	if key == fingerprintModelAliasesOptionKey {
+		fingerprintModelAliases = aliases
+		return nil
+	}
 
 	// 检查是否是模型配置 - 使用更规范的方式处理
 	if handleConfigUpdate(key, value) {
