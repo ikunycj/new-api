@@ -126,7 +126,7 @@ func TestFingerprintChallengesUseRelayMappingAndHeaders(t *testing.T) {
 	for _, challenge := range challenges {
 		result := testChannelWithPromptEngine(
 			context.Background(), channel, userID, "gpt-4o", "", false,
-			modelTestTokenName, "", challenge.Prompt, channelIQTestEngineFingerprint,
+			modelTestTokenName, "", challenge.Prompt, channelIQTestEngineFingerprint, nil,
 		)
 		require.NoError(t, result.localErr)
 		require.NotEmpty(t, result.response)

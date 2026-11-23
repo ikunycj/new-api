@@ -125,7 +125,7 @@ func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, tes
 			}
 			break
 		}
-		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint)
+		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint, nil)
 		if result.localErr != nil {
 			lastFailure = result
 			continue
@@ -349,10 +349,10 @@ func testChannelWithTokenName(ctx context.Context, channel *model.Channel, testU
 }
 
 func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string, prompt string) testResult {
-	return testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, isStream, tokenName, pricingGroup, prompt, channelIQTestEnginePelican)
+	return testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, isStream, tokenName, pricingGroup, prompt, channelIQTestEnginePelican, nil)
 }
 
-func testChannelWithPromptEngine(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string, prompt string, iqEngine string) testResult {
+func testChannelWithPromptEngine(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, tokenName string, pricingGroup string, prompt string, iqEngine string, logGroupRatio *float64) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -840,6 +840,14 @@ func testChannelWithPromptEngine(ctx context.Context, channel *model.Channel, te
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
 
+	if logGroupRatio != nil {
+		ratio := *logGroupRatio
+		priceData.GroupRatioInfo.GroupRatio = ratio
+		if snapshot := info.TieredBillingSnapshot; snapshot != nil {
+			snapshot.GroupRatio = ratio
+			snapshot.EstimatedQuotaAfterGroup = common.QuotaRound(snapshot.EstimatedQuotaBeforeGroup * ratio)
+		}
+	}
 	quota, tieredResult := settleTestQuota(info, priceData, usage)
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()

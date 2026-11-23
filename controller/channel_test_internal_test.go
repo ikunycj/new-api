@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -387,9 +388,19 @@ func TestChannelProbeExecutorRecoversMultiKeyWithoutChangingIsolation(t *testing
 	channel.Key = "first\nsecond"
 	channel.ChannelInfo = model.ChannelInfo{IsMultiKey: true, MultiKeySize: 2, MultiKeyStatusList: map[int]int{1: common.ChannelStatusAutoDisabled}}
 	require.NoError(t, db.Save(channel).Error)
-	executor := channelProbeExecutor{testUserID: userID, request: func(ctx context.Context, channel *model.Channel, userID int) testResult {
-		return testChannelWithTokenName(ctx, channel, userID, "", "", false, channelProbeTokenName, "")
-	}}
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	previousExport := common.DataExportEnabled
+	previousBillingRate := operation_setting.BillingUSDToCNYRate
+	previousPrices := ratio_setting.ModelPrice2JSONString()
+	common.DataExportEnabled, common.LogConsumeEnabled = false, true
+	operation_setting.BillingUSDToCNYRate = 1
+	t.Cleanup(func() {
+		common.DataExportEnabled = previousExport
+		operation_setting.BillingUSDToCNYRate = previousBillingRate
+		assert.NoError(t, ratio_setting.UpdateModelPriceByJSONString(previousPrices))
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-4o":0.125}`))
+	executor := channelProbeExecutor{testUserID: userID, request: testChannelHealth}
 	result := executor.run(context.Background(), channel.Id)
 	require.NoError(t, result.err)
 	assert.Equal(t, channelProbeSummary{Checked: 1, Succeeded: 1, Enabled: 1}, result.summary)
@@ -398,6 +409,14 @@ func TestChannelProbeExecutorRecoversMultiKeyWithoutChangingIsolation(t *testing
 	require.NoError(t, db.First(&stored, channel.Id).Error)
 	assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
 	assert.Equal(t, channel.ChannelInfo, stored.ChannelInfo)
+	var log model.Log
+	require.NoError(t, db.Where("channel_id = ? AND token_name = ?", channel.Id, channelProbeTokenName).First(&log).Error)
+	var pricing struct {
+		GroupRatio float64 `json:"group_ratio"`
+	}
+	require.NoError(t, common.UnmarshalJsonStr(log.Other, &pricing))
+	assert.Equal(t, 0.01, pricing.GroupRatio)
+	assert.Equal(t, 625, log.Quota)
 }
 
 func TestPricingGroupMonitorSuccessDoesNotRecoverChannel(t *testing.T) {
