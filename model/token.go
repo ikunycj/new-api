@@ -303,6 +303,9 @@ func GetTokenById(id int) (*Token, error) {
 }
 
 func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
+	if strings.HasPrefix(key, common.AccountUsageCredentialPrefix) {
+		return nil, gorm.ErrRecordNotFound
+	}
 	defer func() {
 		// Update Redis cache asynchronously on successful DB read
 		if shouldUpdateRedis(fromDB, err) && token != nil {

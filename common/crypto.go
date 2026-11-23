@@ -8,6 +8,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const AccountUsageCredentialPrefix = "account_usage_v1."
+
 func GenerateHMACWithKey(key []byte, data string) string {
 	h := hmac.New(sha256.New, key)
 	h.Write([]byte(data))

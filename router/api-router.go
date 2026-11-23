@@ -261,6 +261,7 @@ func SetApiRouter(router *gin.Engine) {
 		registerChannelRoutes(apiRouter)
 		registerChannelMonitorRoutes(apiRouter)
 		registerAuthzRoutes(apiRouter)
+		apiRouter.POST("/token/:id/usage-authorization", middleware.DisableCache(), middleware.CriticalRateLimit(), middleware.UserSessionAuth(), controller.AuthorizeAccountUsage)
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
 		{
@@ -278,6 +279,7 @@ func SetApiRouter(router *gin.Engine) {
 		usageRoute := apiRouter.Group("/usage")
 		usageRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
+			usageRoute.GET("/account/", middleware.DisableCache(), controller.GetAccountUsage)
 			tokenUsageRoute := usageRoute.Group("/token")
 			tokenUsageRoute.Use(middleware.TokenAuthReadOnly())
 			{

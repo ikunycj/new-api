@@ -25,7 +25,7 @@ import {
   ReloadIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useQuery } from '@tanstack/react-query'
+import { skipToken, useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -65,14 +65,16 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { useStatus } from '@/hooks/use-status'
 import { getUserGroups } from '@/lib/api'
 import { getPreferredModelOrder } from '@/lib/model-preferences'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import type { ApiKeyModelsResult } from '../../api'
+import { authorizeCCSwitchUsage, type ApiKeyModelsResult } from '../../api'
 import { useApiKeyModelCatalog } from '../../hooks/use-api-key-model-catalog'
 import {
   buildCCSwitchImportUrl,
+  getCCSwitchUsageBaseUrl,
   resolveCCSwitchDefaultName,
 } from '../../lib/cc-switch-import'
 import { selectSuggestedModel } from '../../lib/cc-switch-model-selection'
@@ -146,6 +148,7 @@ export function CCSwitchDialog(props: CCSwitchDialogProps) {
 
 function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   const { t } = useTranslation()
+  const { status } = useStatus()
   const preferredModels = useSystemConfigStore(
     (state) => state.config.preferredModels
   )
@@ -166,6 +169,25 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     normalizedServerAddress &&
     props.apiBaseUrl.trim()
   )
+  const supportsUsageQuery = Boolean(
+    getCCSwitchUsageBaseUrl(normalizedServerAddress)
+  )
+  const usageTokenId =
+    props.open && isConfigurationReady && supportsUsageQuery
+      ? props.apiKey?.id
+      : undefined
+  const usageAuthorization = useQuery({
+    queryKey: ['cc-switch-usage-authorization', usageTokenId],
+    queryFn: usageTokenId
+      ? ({ signal }) => authorizeCCSwitchUsage(usageTokenId, signal)
+      : skipToken,
+    // Keep the credential in memory for this open dialog only.
+    gcTime: 0,
+    staleTime: Infinity,
+    retry: false,
+  })
+  const canImport =
+    isConfigurationReady && (!supportsUsageQuery || !!usageAuthorization.data)
   const modelsQuery = useApiKeyModelCatalog({
     apiBaseUrl: props.apiBaseUrl,
     apiKey: props.apiKey,
@@ -269,7 +291,7 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   }
 
   const handleSubmit = () => {
-    if (!isConfigurationReady || launchState !== 'idle') return
+    if (!canImport || launchState !== 'idle') return
     if (primaryField.required && !primaryModelValue) {
       setPrimaryModelError(true)
       requestAnimationFrame(() => primaryModelRef.current?.focus())
@@ -286,6 +308,8 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
       models,
       name: currentDraft.name.trim() || currentDefaultName,
       serverAddress: normalizedServerAddress,
+      logoUrl: status?.logo,
+      usageAuthorization: usageAuthorization.data,
     })
 
     setLaunchState('opening')
@@ -391,9 +415,9 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={launchState === 'opening' || !isConfigurationReady}
+            disabled={launchState === 'opening' || !canImport}
           >
-            {launchState === 'opening' ? (
+            {launchState === 'opening' || usageAuthorization.isFetching ? (
               <Spinner data-icon='inline-start' aria-label={t('Loading')} />
             ) : null}
             {t('One-click import')}
@@ -432,6 +456,39 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
           <AlertDescription>
             {t('The API key or server address is missing.')}
           </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {usageAuthorization.isError ? (
+        <Alert variant='destructive'>
+          <HugeiconsIcon icon={AlertCircleIcon} aria-hidden='true' />
+          <AlertTitle>
+            {t('Failed to prepare the CC Switch usage query')}
+          </AlertTitle>
+          <AlertAction>
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              aria-label={t('Retry')}
+              disabled={usageAuthorization.isFetching}
+              onClick={() => void usageAuthorization.refetch()}
+            >
+              {usageAuthorization.isFetching ? (
+                <Spinner aria-label={t('Loading')} />
+              ) : (
+                <HugeiconsIcon icon={ReloadIcon} aria-hidden='true' />
+              )}
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
+
+      {isConfigurationReady && !supportsUsageQuery ? (
+        <Alert>
+          <HugeiconsIcon icon={InformationCircleIcon} aria-hidden='true' />
+          <AlertTitle>
+            {t('CC Switch usage queries require an HTTPS server address')}
+          </AlertTitle>
         </Alert>
       ) : null}
 

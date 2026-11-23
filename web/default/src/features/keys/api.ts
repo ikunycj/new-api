@@ -16,8 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { z } from 'zod'
+
 import { api } from '@/lib/api'
 
+import type { CCSwitchUsageAuthorization } from './lib/cc-switch-import'
 import {
   apiKeySchema,
   type ApiKey,
@@ -709,6 +712,35 @@ export async function fetchTokenKey(
 ): Promise<{ success: boolean; message?: string; data?: { key: string } }> {
   const res = await api.post(`/api/token/${id}/key`)
   return res.data
+}
+
+const ccSwitchUsageAuthorizationResponse = z.object({
+  success: z.literal(true),
+  data: z.object({
+    access_token: z.string().min(1),
+    user_id: z.number().int().positive(),
+  }),
+})
+
+export async function authorizeCCSwitchUsage(
+  id: number,
+  signal: AbortSignal
+): Promise<CCSwitchUsageAuthorization> {
+  const res = await api.post<unknown>(
+    `/api/token/${id}/usage-authorization`,
+    undefined,
+    {
+      signal,
+      timeout: 15_000,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  const response = ccSwitchUsageAuthorizationResponse.safeParse(res.data)
+  if (!response.success) {
+    throw new Error('Invalid account usage authorization response')
+  }
+  return response.data.data
 }
 
 // Batch fetch real (unmasked) keys for multiple tokens

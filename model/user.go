@@ -991,7 +991,13 @@ func ValidateAccessToken(token string) (*User, error) {
 	if token == "" {
 		return nil, nil
 	}
+	if scheme, value, ok := strings.Cut(token, " "); ok && strings.EqualFold(scheme, "Bearer") && strings.HasPrefix(value, common.AccountUsageCredentialPrefix) {
+		return nil, nil
+	}
 	token = strings.Replace(token, "Bearer ", "", 1)
+	if strings.HasPrefix(token, common.AccountUsageCredentialPrefix) {
+		return nil, nil
+	}
 	user := &User{}
 	err := DB.Where("access_token = ?", token).First(user).Error
 	if err != nil {

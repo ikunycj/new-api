@@ -208,6 +208,15 @@ func UserAuth() func(c *gin.Context) {
 	}
 }
 
+func UserSessionAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelper(c, authOptions{
+			minRole:       common.RoleCommonUser,
+			requireUserID: true,
+		})
+	}
+}
+
 func AdminAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelper(c, authOptions{

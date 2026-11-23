@@ -5,6 +5,10 @@ const LOCALES_DIR = path.resolve('src/i18n/locales')
 
 const newKeys = {
   en: {
+    'Failed to prepare the CC Switch usage query':
+      'Failed to prepare the CC Switch usage query',
+    'CC Switch usage queries require an HTTPS server address':
+      'CC Switch usage queries require an HTTPS server address',
     '一直重连，等待网络': 'Constantly reconnecting, waiting for network',
     用户网络故障: 'User network failure',
     检查网络是否连通: 'Check whether the network is connected',
@@ -221,6 +225,10 @@ const newKeys = {
     'Result not retained; run again': 'Result not retained; run again',
   },
   zh: {
+    'Failed to prepare the CC Switch usage query':
+      '无法配置 CC Switch 用量查询',
+    'CC Switch usage queries require an HTTPS server address':
+      'CC Switch 用量查询需要 HTTPS 服务器地址',
     'Automatically disable channels when tests fail':
       '当对渠道的批量测试失败/普通请求失败时，自动禁用对应渠道',
     'Authentication email templates': '认证邮件模板',
@@ -431,6 +439,10 @@ const newKeys = {
     'Result not retained; run again': '结果未保留，请重新测试',
   },
   fr: {
+    'Failed to prepare the CC Switch usage query':
+      'Impossible de configurer la consultation de l’utilisation dans CC Switch',
+    'CC Switch usage queries require an HTTPS server address':
+      'La consultation de l’utilisation dans CC Switch nécessite une adresse de serveur HTTPS',
     'Authentication email templates': 'Modèles d’e-mails d’authentification',
     'Available placeholders': 'Variables disponibles',
     'Verification email subject': 'Objet de l’e-mail de vérification',
@@ -652,6 +664,10 @@ const newKeys = {
       'Résultat non conservé ; relancez le test',
   },
   ja: {
+    'Failed to prepare the CC Switch usage query':
+      'CC Switch の使用量クエリを設定できませんでした',
+    'CC Switch usage queries require an HTTPS server address':
+      'CC Switch の使用量クエリには HTTPS のサーバーアドレスが必要です',
     'Authentication email templates': '認証メールテンプレート',
     'Available placeholders': '使用できるプレースホルダー',
     'Verification email subject': '認証メールの件名',
@@ -865,6 +881,10 @@ const newKeys = {
       '結果を保持できませんでした。もう一度実行してください',
   },
   ru: {
+    'Failed to prepare the CC Switch usage query':
+      'Не удалось настроить запрос расхода в CC Switch',
+    'CC Switch usage queries require an HTTPS server address':
+      'Для запроса расхода в CC Switch нужен HTTPS-адрес сервера',
     'Authentication email templates': 'Шаблоны писем для аутентификации',
     'Available placeholders': 'Доступные подстановки',
     'Verification email subject': 'Тема письма с кодом подтверждения',
@@ -1082,6 +1102,10 @@ const newKeys = {
       'Результат не сохранён; запустите тест снова',
   },
   vi: {
+    'Failed to prepare the CC Switch usage query':
+      'Không thể thiết lập truy vấn mức sử dụng trong CC Switch',
+    'CC Switch usage queries require an HTTPS server address':
+      'Truy vấn mức sử dụng trong CC Switch cần địa chỉ máy chủ HTTPS',
     'Authentication email templates': 'Mẫu email xác thực',
     'Available placeholders': 'Biến thay thế khả dụng',
     'Verification email subject': 'Tiêu đề email xác minh',
@@ -1295,6 +1319,10 @@ const newKeys = {
     'Result not retained; run again': 'Kết quả không được lưu; hãy chạy lại',
   },
   'zh-TW': {
+    'Failed to prepare the CC Switch usage query':
+      '無法設定 CC Switch 用量查詢',
+    'CC Switch usage queries require an HTTPS server address':
+      'CC Switch 用量查詢需要 HTTPS 伺服器位址',
     'Automatically disable channels when tests fail':
       '當對渠道的批量測試失敗/普通請求失敗時，自動停用對應渠道',
     'Cumulative:': '累計：',
