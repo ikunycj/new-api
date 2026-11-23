@@ -16,9 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Radio } from '@base-ui/react/radio'
 import {
-  Alert02Icon,
   AlertCircleIcon,
+  ArrowDown01Icon,
+  ArrowUpRight01Icon,
   InformationCircleIcon,
   ReloadIcon,
 } from '@hugeicons/core-free-icons'
@@ -35,8 +37,22 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Field,
   FieldError,
@@ -46,9 +62,9 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { RadioGroup } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getUserGroups } from '@/lib/api'
 import { getPreferredModelOrder } from '@/lib/model-preferences'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -60,39 +76,20 @@ import {
   resolveCCSwitchDefaultName,
 } from '../../lib/cc-switch-import'
 import { selectSuggestedModel } from '../../lib/cc-switch-model-selection'
-import type { CCSwitchApp, CCSwitchModelField } from '../../lib/model-catalog'
+import {
+  CC_SWITCH_APPS,
+  type CCSwitchApp,
+  type CCSwitchModelField,
+} from '../../lib/model-catalog'
 import type { ApiKey } from '../../types'
 import {
   ApiKeyModelCombobox,
   type ApiKeyModelSelectionSource,
 } from '../api-key-model-combobox'
+import { CCSwitchAppIcon } from '../cc-switch-app-icon'
 
-const CCSWITCH_RELEASES_URL = 'https://github.com/farion1231/cc-switch/releases'
-
-const APP_CONFIGS = {
-  claude: {
-    modelFields: [
-      { key: 'model', required: true },
-      { key: 'haikuModel', required: false },
-      { key: 'sonnetModel', required: false },
-      { key: 'opusModel', required: false },
-    ],
-  },
-  codex: {
-    modelFields: [{ key: 'model', required: true }],
-  },
-  gemini: {
-    modelFields: [{ key: 'model', required: true }],
-  },
-} as const satisfies Record<
-  CCSwitchApp,
-  {
-    modelFields: readonly {
-      key: CCSwitchModelField
-      required: boolean
-    }[]
-  }
->
+const CCSWITCH_WEBSITE = 'https://ccswitch.io/'
+const APP_IDS = Object.keys(CC_SWITCH_APPS) as CCSwitchApp[]
 
 type ModelSelection = {
   source: ApiKeyModelSelectionSource
@@ -113,32 +110,6 @@ type CCSwitchDialogProps = {
   tokenKey: string
 }
 
-function getAppLabel(t: TFunction, app: CCSwitchApp): string {
-  switch (app) {
-    case 'claude':
-      return t('Claude')
-    case 'codex':
-      return t('Codex')
-    case 'gemini':
-      return t('Gemini')
-  }
-}
-
-function getDefaultName(
-  t: TFunction,
-  app: CCSwitchApp,
-  apiKeyName?: string | null
-): string {
-  switch (app) {
-    case 'claude':
-      return resolveCCSwitchDefaultName(apiKeyName, t('My Claude'))
-    case 'codex':
-      return resolveCCSwitchDefaultName(apiKeyName, t('My Codex'))
-    case 'gemini':
-      return resolveCCSwitchDefaultName(apiKeyName, t('My Gemini'))
-  }
-}
-
 function getModelFieldLabel(t: TFunction, field: CCSwitchModelField): string {
   switch (field) {
     case 'model':
@@ -149,17 +120,6 @@ function getModelFieldLabel(t: TFunction, field: CCSwitchModelField): string {
       return t('Sonnet Model')
     case 'opusModel':
       return t('Opus Model')
-  }
-}
-
-function createInitialDrafts(
-  t: TFunction,
-  apiKeyName?: string | null
-): Record<CCSwitchApp, AppDraft> {
-  return {
-    claude: { models: {}, name: getDefaultName(t, 'claude', apiKeyName) },
-    codex: { models: {}, name: getDefaultName(t, 'codex', apiKeyName) },
-    gemini: { models: {}, name: getDefaultName(t, 'gemini', apiKeyName) },
   }
 }
 
@@ -190,8 +150,8 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     (state) => state.config.preferredModels
   )
   const [app, setApp] = useState<CCSwitchApp>('claude')
-  const [drafts, setDrafts] = useState(() =>
-    createInitialDrafts(t, props.apiKey?.name)
+  const [drafts, setDrafts] = useState<Partial<Record<CCSwitchApp, AppDraft>>>(
+    {}
   )
   const [launchState, setLaunchState] = useState<'idle' | 'opening' | 'help'>(
     'idle'
@@ -224,9 +184,18 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
       info.desc || group,
     ])
   )
-  const currentConfig = APP_CONFIGS[app]
-  const currentDefaultName = getDefaultName(t, app, props.apiKey?.name)
-  const currentDraft = drafts[app]
+  const currentConfig = CC_SWITCH_APPS[app]
+  const [primaryField, ...optionalFields] = currentConfig.modelFields
+  const defaultNames: Partial<Record<CCSwitchApp, string>> = {
+    claude: t('My Claude'),
+    codex: t('My Codex'),
+    gemini: t('My Gemini'),
+  }
+  const currentDefaultName = resolveCCSwitchDefaultName(
+    props.apiKey?.name,
+    defaultNames[app] ?? currentConfig.label
+  )
+  const currentDraft = drafts[app] ?? { name: currentDefaultName, models: {} }
   const primarySelection = currentDraft.models.model
   const primaryModelValue = primarySelection?.value.trim() ?? ''
   const modelsCount = modelsQuery.data?.success
@@ -249,14 +218,21 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     setDrafts((current) => ({
       ...current,
       [app]: {
-        ...current[app],
+        name: current[app]?.name ?? currentDefaultName,
         models: {
-          ...current[app].models,
+          ...current[app]?.models,
           model: { source: 'catalog', value: suggestedModel },
         },
       },
     }))
-  }, [app, modelsQuery.data, primaryModelValue, preferredModels, props.open])
+  }, [
+    app,
+    currentDefaultName,
+    modelsQuery.data,
+    primaryModelValue,
+    preferredModels,
+    props.open,
+  ])
 
   useEffect(() => {
     return () => launchCleanupRef.current()
@@ -265,7 +241,7 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   const updateName = (name: string) => {
     setDrafts((current) => ({
       ...current,
-      [app]: { ...current[app], name },
+      [app]: { models: current[app]?.models ?? {}, name },
     }))
   }
 
@@ -277,9 +253,9 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     setDrafts((current) => ({
       ...current,
       [app]: {
-        ...current[app],
+        name: current[app]?.name ?? currentDefaultName,
         models: {
-          ...current[app].models,
+          ...current[app]?.models,
           [field]: { source, value },
         },
       },
@@ -287,26 +263,18 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     if (field === 'model' && value.trim()) setPrimaryModelError(false)
   }
 
-  const handleAppChange = (values: string[]) => {
-    const nextApp = values[0]
-    if (nextApp !== 'claude' && nextApp !== 'codex' && nextApp !== 'gemini') {
-      return
-    }
-
-    launchCleanupRef.current()
-    setLaunchState('idle')
+  const handleAppChange = (nextApp: CCSwitchApp) => {
     setPrimaryModelError(false)
     setApp(nextApp)
   }
 
   const handleSubmit = () => {
-    if (!primarySelection?.value.trim()) {
+    if (!isConfigurationReady || launchState !== 'idle') return
+    if (primaryField.required && !primaryModelValue) {
       setPrimaryModelError(true)
       requestAnimationFrame(() => primaryModelRef.current?.focus())
       return
     }
-    if (!isConfigurationReady) return
-
     const models = Object.fromEntries(
       Object.entries(currentDraft.models)
         .map(([field, selection]) => [field, selection?.value.trim() ?? ''])
@@ -320,18 +288,31 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
       serverAddress: normalizedServerAddress,
     })
 
-    launchCleanupRef.current()
     setLaunchState('opening')
 
-    const timerId = window.setTimeout(() => {
-      launchCleanupRef.current = () => {}
-      setLaunchState('help')
-    }, 1800)
     const cleanup = () => {
       window.clearTimeout(timerId)
+      window.removeEventListener('blur', finishLaunch)
+      window.removeEventListener('pagehide', finishLaunch)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       launchCleanupRef.current = () => {}
     }
+    const finishLaunch = () => {
+      cleanup()
+      setLaunchState('idle')
+    }
+    const handleVisibilityChange = () => {
+      if (document.hidden) finishLaunch()
+    }
+    // Browsers expose focus changes, but no confirmation from the protocol handler.
+    const timerId = window.setTimeout(() => {
+      cleanup()
+      setLaunchState('help')
+    }, 2000)
     launchCleanupRef.current = cleanup
+    window.addEventListener('blur', finishLaunch)
+    window.addEventListener('pagehide', finishLaunch)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     const link = document.createElement('a')
     link.href = url
@@ -395,15 +376,12 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     )
   }
 
-  const primaryField = currentConfig.modelFields[0]
-  const optionalFields = currentConfig.modelFields.slice(1)
-
   return (
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
       title={t('Import to CC Switch')}
-      contentClassName='sm:max-w-xl'
+      contentClassName='sm:max-w-2xl'
       contentHeight='auto'
       bodyClassName='space-y-5'
       footer={
@@ -418,7 +396,7 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
             {launchState === 'opening' ? (
               <Spinner data-icon='inline-start' aria-label={t('Loading')} />
             ) : null}
-            {launchState === 'help' ? t('Retry') : t('Open CC Switch')}
+            {t('One-click import')}
           </Button>
         </>
       }
@@ -495,19 +473,24 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
       <FieldGroup>
         <FieldSet disabled={launchState === 'opening'}>
           <FieldLegend variant='label'>{t('Application')}</FieldLegend>
-          <ToggleGroup
-            value={[app]}
+          <RadioGroup
+            value={app}
             onValueChange={handleAppChange}
             aria-label={t('Application')}
-            variant='outline'
-            className='grid w-full grid-cols-3'
+            disabled={launchState === 'opening'}
+            className='flex flex-wrap gap-2'
           >
-            {(Object.keys(APP_CONFIGS) as CCSwitchApp[]).map((appKey) => (
-              <ToggleGroupItem key={appKey} value={appKey} className='w-full'>
-                {getAppLabel(t, appKey)}
-              </ToggleGroupItem>
+            {APP_IDS.map((appKey) => (
+              <Radio.Root
+                key={appKey}
+                value={appKey}
+                className='border-input bg-background text-foreground hover:bg-muted data-checked:border-primary data-checked:bg-primary/10 focus-visible:ring-ring/50 inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none'
+              >
+                <CCSwitchAppIcon app={appKey} />
+                {CC_SWITCH_APPS[appKey].label}
+              </Radio.Root>
             ))}
-          </ToggleGroup>
+          </RadioGroup>
         </FieldSet>
 
         <Field data-disabled={launchState === 'opening'}>
@@ -524,49 +507,62 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
         {renderModelField(primaryField)}
 
         {optionalFields.length > 0 ? (
-          <FieldSet disabled={launchState === 'opening'}>
-            <FieldLegend variant='label'>
+          <Collapsible className='border-border border-t pt-2'>
+            <CollapsibleTrigger
+              disabled={launchState === 'opening'}
+              render={
+                <Button variant='ghost' size='sm' className='group -ml-2' />
+              }
+            >
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                data-icon='inline-start'
+                className='group-data-[panel-open]:rotate-180'
+                aria-hidden='true'
+              />
               {t('Claude model mapping')}
-              <span className='text-muted-foreground ml-1 font-normal'>
+              <span className='text-muted-foreground font-normal'>
                 ({t('Optional')})
               </span>
-            </FieldLegend>
-            <FieldGroup>{optionalFields.map(renderModelField)}</FieldGroup>
-          </FieldSet>
+            </CollapsibleTrigger>
+            <CollapsibleContent className='pt-3'>
+              <FieldGroup>{optionalFields.map(renderModelField)}</FieldGroup>
+            </CollapsibleContent>
+          </Collapsible>
         ) : null}
       </FieldGroup>
 
-      {launchState === 'help' ? (
-        <Alert>
-          <HugeiconsIcon
-            icon={Alert02Icon}
-            aria-hidden='true'
-            className='text-amber-600 dark:text-amber-400'
-          />
-          <AlertTitle>{t('Having trouble opening CC Switch?')}</AlertTitle>
-          <AlertDescription className='flex flex-col items-start gap-2'>
-            <span>
+      <AlertDialog
+        open={launchState === 'help'}
+        onOpenChange={(open) => !open && setLaunchState('idle')}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('CC Switch did not open')}</AlertDialogTitle>
+            <AlertDialogDescription>
               {t(
-                'If CC Switch did not open, install it or check that the ccswitch:// protocol is registered, then try again.'
+                'CC Switch may not be installed. Download it and try importing again.'
               )}
-            </span>
-            <Button
-              variant='outline'
-              size='sm'
-              nativeButton={false}
-              render={
-                <a
-                  href={CCSWITCH_RELEASES_URL}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
-              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('Close')}</AlertDialogCancel>
+            <a
+              className={buttonVariants()}
+              href={CCSWITCH_WEBSITE}
+              target='_blank'
+              rel='noopener noreferrer'
             >
-              {t('Download CC Switch')}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
+              {t('Download from the CC Switch website')}
+              <HugeiconsIcon
+                icon={ArrowUpRight01Icon}
+                data-icon='inline-end'
+                aria-hidden='true'
+              />
+            </a>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

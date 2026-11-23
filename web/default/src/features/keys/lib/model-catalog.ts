@@ -18,13 +18,73 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { ApiKeyModel, ApiKeyModelEndpoint } from '../api'
 
-export type CCSwitchApp = 'claude' | 'codex' | 'gemini'
-
 export type CCSwitchModelField =
   | 'model'
   | 'haikuModel'
   | 'sonnetModel'
   | 'opusModel'
+
+type CCSwitchAppConfig = {
+  label: string
+  modelFields: readonly { key: CCSwitchModelField; required: boolean }[]
+  apiFormat: 'anthropic' | 'openai_chat' | 'openai_responses' | 'gemini_native'
+  endpointPath: '' | '/v1' | '/v1/chat/completions'
+}
+
+const PRIMARY_MODEL_FIELDS = [{ key: 'model', required: true }] as const
+const CLAUDE_MODEL_FIELDS = [
+  ...PRIMARY_MODEL_FIELDS,
+  { key: 'haikuModel', required: false },
+  { key: 'sonnetModel', required: false },
+  { key: 'opusModel', required: false },
+] as const
+
+const ANTHROPIC = {
+  modelFields: CLAUDE_MODEL_FIELDS,
+  apiFormat: 'anthropic',
+  endpointPath: '',
+} as const
+const OPENAI_RESPONSES = {
+  modelFields: PRIMARY_MODEL_FIELDS,
+  apiFormat: 'openai_responses',
+  endpointPath: '/v1',
+} as const
+const GEMINI_NATIVE = {
+  modelFields: PRIMARY_MODEL_FIELDS,
+  apiFormat: 'gemini_native',
+  endpointPath: '',
+} as const
+const OPENAI_CHAT = {
+  modelFields: PRIMARY_MODEL_FIELDS,
+  apiFormat: 'openai_chat',
+  endpointPath: '/v1',
+} as const
+
+// The CC Switch v4.0.39 provider parser defines the deeplink application IDs.
+export const CC_SWITCH_APPS = {
+  claude: { label: 'Claude Code', ...ANTHROPIC },
+  codex: { label: 'Codex', ...OPENAI_RESPONSES },
+  gemini: { label: 'Gemini CLI', ...GEMINI_NATIVE },
+  'claude-desktop': { label: 'Claude Desktop', ...ANTHROPIC },
+  grokbuild: { label: 'Grok Build', ...OPENAI_RESPONSES },
+  agy: { label: 'Antigravity CLI', ...GEMINI_NATIVE },
+  copilot: { label: 'Copilot CLI', ...OPENAI_CHAT },
+  opencode: { label: 'OpenCode', ...OPENAI_CHAT },
+  openclaw: { label: 'OpenClaw', ...OPENAI_CHAT },
+  hermes: { label: 'Hermes', ...OPENAI_CHAT },
+  pi: { label: 'Pi', ...OPENAI_CHAT },
+  mcode: { label: 'MiniMax Code', ...OPENAI_CHAT },
+  kimi: { label: 'Kimi Code', ...OPENAI_CHAT },
+  dsh: { label: 'DeepSeek Harness', ...OPENAI_CHAT },
+  omp: { label: 'Oh My Pi', ...OPENAI_CHAT },
+  workbuddy: {
+    label: 'WorkBuddy',
+    ...OPENAI_CHAT,
+    endpointPath: '/v1/chat/completions',
+  },
+} as const satisfies Record<string, CCSwitchAppConfig>
+
+export type CCSwitchApp = keyof typeof CC_SWITCH_APPS
 
 export type CCSwitchModelGroupKind = 'protocol' | 'gateway' | 'other'
 
@@ -43,6 +103,22 @@ const SPECIALIZED_ENDPOINTS = new Set<ApiKeyModelEndpoint>([
 const CLAUDE_OWNERS = ['anthropic', 'claude']
 const CODEX_OWNERS = ['openai']
 const GEMINI_OWNERS = ['gemini', 'google']
+
+const PROTOCOL_ENDPOINTS: Record<
+  CCSwitchAppConfig['apiFormat'],
+  ApiKeyModelEndpoint
+> = {
+  anthropic: 'anthropic',
+  openai_chat: 'openai',
+  openai_responses: 'openai-response',
+  gemini_native: 'gemini',
+}
+
+export function getCCSwitchModelEndpoint(
+  app: CCSwitchApp
+): ApiKeyModelEndpoint {
+  return PROTOCOL_ENDPOINTS[CC_SWITCH_APPS[app].apiFormat]
+}
 
 function includesEndpoint(
   model: ApiKeyModel,
@@ -79,22 +155,15 @@ function getModelGroupKind(
 ): CCSwitchModelGroupKind {
   if (isSpecializedModel(model) || isCompactOnlyModel(model)) return 'other'
 
-  if (app === 'claude') {
-    if (includesEndpoint(model, 'anthropic')) return 'protocol'
-    if (hasAnyEndpoint(model, ['openai', 'gemini'])) return 'gateway'
-    return 'other'
-  }
+  const endpoint = getCCSwitchModelEndpoint(app)
+  if (includesEndpoint(model, endpoint)) return 'protocol'
 
-  if (app === 'codex') {
-    if (includesEndpoint(model, 'openai-response')) return 'protocol'
-    if (hasAnyEndpoint(model, ['openai', 'anthropic', 'gemini'])) {
-      return 'gateway'
-    }
-    return 'other'
+  if (hasAnyEndpoint(model, ['openai', 'anthropic', 'gemini'])) {
+    return 'gateway'
   }
-
-  if (includesEndpoint(model, 'gemini')) return 'protocol'
-  if (hasAnyEndpoint(model, ['openai', 'anthropic'])) return 'gateway'
+  if (endpoint === 'openai' && includesEndpoint(model, 'openai-response')) {
+    return 'gateway'
+  }
   return 'other'
 }
 
@@ -103,10 +172,13 @@ function matchesOwner(model: ApiKeyModel, owners: string[]): boolean {
   return owners.some((candidate) => owner.includes(candidate))
 }
 
-function matchesAppFamily(model: ApiKeyModel, app: CCSwitchApp): boolean {
+export function matchesCCSwitchModelFamily(
+  model: ApiKeyModel,
+  app: CCSwitchApp
+): boolean {
   const modelId = model.id.toLowerCase()
 
-  if (app === 'claude') {
+  if (app === 'claude' || app === 'claude-desktop') {
     return modelId.includes('claude') || matchesOwner(model, CLAUDE_OWNERS)
   }
 
@@ -119,7 +191,23 @@ function matchesAppFamily(model: ApiKeyModel, app: CCSwitchApp): boolean {
     )
   }
 
-  return modelId.includes('gemini') || matchesOwner(model, GEMINI_OWNERS)
+  switch (app) {
+    case 'gemini':
+    case 'agy':
+      return modelId.includes('gemini') || matchesOwner(model, GEMINI_OWNERS)
+    case 'grokbuild':
+      return modelId.includes('grok') || matchesOwner(model, ['xai'])
+    case 'mcode':
+      return modelId.includes('minimax') || matchesOwner(model, ['minimax'])
+    case 'kimi':
+      return (
+        modelId.includes('kimi') || matchesOwner(model, ['kimi', 'moonshot'])
+      )
+    case 'dsh':
+      return modelId.includes('deepseek') || matchesOwner(model, ['deepseek'])
+    default:
+      return false
+  }
 }
 
 function matchesFieldFamily(
@@ -160,7 +248,7 @@ export function groupCCSwitchModels(
     const groupedModels = indexedModels
       .filter(({ model }) => getModelGroupKind(model, app) === kind)
       .map(({ model, index }) => ({
-        appRank: matchesAppFamily(model, app) ? 0 : 1,
+        appRank: matchesCCSwitchModelFamily(model, app) ? 0 : 1,
         fieldRank: matchesFieldFamily(model, field) ? 0 : 1,
         index,
         model,

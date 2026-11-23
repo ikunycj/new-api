@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { CCSwitchApp, CCSwitchModelField } from './model-catalog'
+import {
+  CC_SWITCH_APPS,
+  type CCSwitchApp,
+  type CCSwitchModelField,
+} from './model-catalog'
 
 type CCSwitchImportConfig = {
   apiKey: string
@@ -37,16 +41,17 @@ export function buildCCSwitchImportUrl(config: CCSwitchImportConfig): string {
   const serverAddress = config.serverAddress.trim().replace(/\/+$/, '')
   const apiKey = config.apiKey.trim()
   const normalizedApiKey = apiKey.startsWith('sk-') ? apiKey : `sk-${apiKey}`
-  const endpoint =
-    config.app === 'codex' ? `${serverAddress}/v1` : serverAddress
+  const appConfig = CC_SWITCH_APPS[config.app]
   const params = new URLSearchParams()
 
   params.set('resource', 'provider')
   params.set('app', config.app)
   params.set('name', config.name)
-  params.set('endpoint', endpoint)
+  params.set('endpoint', `${serverAddress}${appConfig.endpointPath}`)
   params.set('apiKey', normalizedApiKey)
-  for (const [key, value] of Object.entries(config.models)) {
+  params.set('apiFormat', appConfig.apiFormat)
+  for (const { key } of appConfig.modelFields) {
+    const value = config.models[key]?.trim()
     if (value) params.set(key, value)
   }
   params.set('homepage', serverAddress)

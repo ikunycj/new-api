@@ -20,7 +20,12 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
 import type { ApiKeyModel, ApiKeyModelEndpoint } from '../api'
-import { groupCCSwitchModels } from './model-catalog'
+import {
+  CC_SWITCH_APPS,
+  groupCCSwitchModels,
+  type CCSwitchApp,
+  type CCSwitchModelField,
+} from './model-catalog'
 
 function model(
   id: string,
@@ -32,8 +37,8 @@ function model(
 
 function idsByGroup(
   models: ApiKeyModel[],
-  app: 'claude' | 'codex' | 'gemini',
-  field: 'model' | 'haikuModel' | 'sonnetModel' | 'opusModel' = 'model',
+  app: CCSwitchApp,
+  field: CCSwitchModelField = 'model',
   search = ''
 ): Record<string, string[]> {
   return Object.fromEntries(
@@ -56,7 +61,7 @@ describe('CC Switch model catalog grouping', () => {
   ]
 
   test('keeps every key-scoped model while only changing presentation groups', () => {
-    for (const app of ['claude', 'codex', 'gemini'] as const) {
+    for (const app of Object.keys(CC_SWITCH_APPS) as CCSwitchApp[]) {
       const groups = groupCCSwitchModels(models, app, 'model')
       const renderedIds = groups.flatMap((group) =>
         group.models.map((item) => item.id)

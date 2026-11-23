@@ -58,4 +58,29 @@ describe('CC Switch suggested model selection', () => {
       'gpt-5.3-codex'
     )
   })
+
+  test('uses a configured model for a new client regardless of its protocol', () => {
+    const models = result([
+      model('gemini-pro', ['gemini']),
+      model('custom-model', ['openai']),
+    ])
+
+    assert.equal(
+      selectSuggestedModel(models, 'agy', ['custom-model']),
+      'custom-model'
+    )
+  })
+
+  test('defaults new clients to the model family or protocol they consume', () => {
+    const models = result([
+      model('claude-sonnet', ['anthropic']),
+      model('custom-model', ['openai']),
+      model('grok-build', ['openai-response']),
+      model('gemini-pro', ['gemini']),
+    ])
+
+    assert.equal(selectSuggestedModel(models, 'grokbuild', []), 'grok-build')
+    assert.equal(selectSuggestedModel(models, 'agy', []), 'gemini-pro')
+    assert.equal(selectSuggestedModel(models, 'workbuddy', []), 'custom-model')
+  })
 })

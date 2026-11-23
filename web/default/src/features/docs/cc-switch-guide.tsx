@@ -24,6 +24,7 @@ import { GuideSteps } from './components/guide-steps'
 
 const CC_SWITCH_RELEASES_URL =
   'https://github.com/farion1231/cc-switch/releases'
+const CC_SWITCH_HOMEPAGE_URL = 'https://ccswitch.io'
 const CC_SWITCH_DOCS_URL = 'https://ccswitch.io/zh/docs'
 const CC_SWITCH_INSTALL_URL =
   'https://ccswitch.io/zh/docs?section=getting-started&item=installation'
@@ -116,7 +117,7 @@ export function DocsCcSwitch() {
       <section id='one-click-import' className='scroll-mt-28'>
         <h3 className='text-xl font-semibold'>2.1 一键导入 CC Switch 配置</h3>
         <p className='text-muted-foreground mt-3 leading-7'>
-          目前仅支持 Codex、Claude Code 和 Gemini。
+          一键导入支持 CC Switch v4.0.39 的全部 16 个供应商配置目标。
         </p>
         <GuideSteps
           items={[
@@ -145,12 +146,24 @@ export function DocsCcSwitch() {
               screenshots: [screenshots.apiKeyDetails],
             },
             {
-              content: '在密钥行的操作菜单中点击 CC Switch 图标。',
+              content: '点击密钥行的「一键导入」，选择要配置的客户端。',
               screenshots: [screenshots.importEntry],
             },
             {
-              content:
-                '确认导入信息无误后，允许浏览器打开 ccswitch:// 链接并点击导入。',
+              content: (
+                <>
+                  确认配置后，点击弹窗中的「一键导入」，并允许浏览器唤起应用。若应用未打开，可{' '}
+                  <a
+                    href={CC_SWITCH_HOMEPAGE_URL}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className={DOCS_LINK_CLASS}
+                  >
+                    前往 CC Switch 官网下载
+                  </a>{' '}
+                  并安装，完成后回到导入弹窗重试。
+                </>
+              ),
               screenshots: [screenshots.importDialog],
             },
             {

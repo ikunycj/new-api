@@ -23,6 +23,7 @@ import {
   buildCCSwitchImportUrl,
   resolveCCSwitchDefaultName,
 } from './cc-switch-import'
+import { CC_SWITCH_APPS, type CCSwitchApp } from './model-catalog'
 
 describe('CC Switch import URL', () => {
   test('uses the API key name as the default provider name', () => {
@@ -35,56 +36,71 @@ describe('CC Switch import URL', () => {
   })
 
   test('encodes every application endpoint and model mapping correctly', () => {
-    const cases = [
-      {
-        app: 'claude' as const,
-        apiKey: 'raw-token',
-        expectedApiKey: 'sk-raw-token',
-        expectedEndpoint: 'https://api.example.com',
-        models: {
-          model: 'claude-opus-4-8',
-          haikuModel: 'claude-haiku-4-5',
-          sonnetModel: '',
-        },
-      },
-      {
-        app: 'codex' as const,
-        apiKey: 'sk-existing-token',
-        expectedApiKey: 'sk-existing-token',
-        expectedEndpoint: 'https://api.example.com/v1',
-        models: { model: 'gpt-5.6-sol' },
-      },
-      {
-        app: 'gemini' as const,
-        apiKey: 'gemini-token',
-        expectedApiKey: 'sk-gemini-token',
-        expectedEndpoint: 'https://api.example.com',
-        models: { model: 'gemini-3-pro' },
-      },
-    ]
+    const providers: Record<CCSwitchApp, readonly [string, string]> = {
+      claude: ['', 'anthropic'],
+      'claude-desktop': ['', 'anthropic'],
+      codex: ['/v1', 'openai_responses'],
+      gemini: ['', 'gemini_native'],
+      grokbuild: ['/v1', 'openai_responses'],
+      agy: ['', 'gemini_native'],
+      copilot: ['/v1', 'openai_chat'],
+      opencode: ['/v1', 'openai_chat'],
+      openclaw: ['/v1', 'openai_chat'],
+      hermes: ['/v1', 'openai_chat'],
+      pi: ['/v1', 'openai_chat'],
+      mcode: ['/v1', 'openai_chat'],
+      kimi: ['/v1', 'openai_chat'],
+      dsh: ['/v1', 'openai_chat'],
+      omp: ['/v1', 'openai_chat'],
+      workbuddy: ['/v1/chat/completions', 'openai_chat'],
+    }
 
-    for (const item of cases) {
+    for (const app of Object.keys(CC_SWITCH_APPS) as CCSwitchApp[]) {
+      const [endpointPath, apiFormat] = providers[app]
+      const apiKey = app === 'codex' ? 'sk-existing-token' : 'raw-token'
       const url = new URL(
         buildCCSwitchImportUrl({
-          apiKey: item.apiKey,
-          app: item.app,
-          models: item.models,
+          apiKey,
+          app,
+          models: {
+            model: ' gateway-model ',
+            haikuModel: ' small-model ',
+            sonnetModel: '',
+            opusModel: 'large-model',
+          },
           name: '配置 & test',
           serverAddress: ' https://api.example.com/ ',
         })
       )
 
       assert.equal(url.protocol, 'ccswitch:')
+      assert.equal(url.hostname, 'v1')
       assert.equal(url.pathname, '/import')
       assert.equal(url.searchParams.get('resource'), 'provider')
-      assert.equal(url.searchParams.get('app'), item.app)
+      assert.equal(url.searchParams.get('app'), app)
       assert.equal(url.searchParams.get('name'), '配置 & test')
-      assert.equal(url.searchParams.get('endpoint'), item.expectedEndpoint)
+      assert.equal(
+        url.searchParams.get('endpoint'),
+        `https://api.example.com${endpointPath}`
+      )
       assert.equal(url.searchParams.get('homepage'), 'https://api.example.com')
-      assert.equal(url.searchParams.get('apiKey'), item.expectedApiKey)
+      assert.equal(
+        url.searchParams.get('apiKey'),
+        app === 'codex' ? 'sk-existing-token' : 'sk-raw-token'
+      )
+      assert.equal(url.searchParams.get('apiFormat'), apiFormat)
       assert.equal(url.searchParams.get('enabled'), 'true')
-      assert.equal(url.searchParams.get('model'), item.models.model)
+      assert.equal(url.searchParams.get('model'), 'gateway-model')
+      const supportsClaudeAliases = app === 'claude' || app === 'claude-desktop'
+      assert.equal(
+        url.searchParams.get('haikuModel'),
+        supportsClaudeAliases ? 'small-model' : null
+      )
       assert.equal(url.searchParams.has('sonnetModel'), false)
+      assert.equal(
+        url.searchParams.get('opusModel'),
+        supportsClaudeAliases ? 'large-model' : null
+      )
       assert.equal(url.searchParams.has('group'), false)
       assert.equal(url.searchParams.has('group_candidates'), false)
     }

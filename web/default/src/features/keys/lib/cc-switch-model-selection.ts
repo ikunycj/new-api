@@ -16,27 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type {
-  ApiKeyModel,
-  ApiKeyModelEndpoint,
-  ApiKeyModelsResult,
-} from '../api'
-import type { CCSwitchApp } from './model-catalog'
-
-const APP_ENDPOINT_TYPES: Record<CCSwitchApp, readonly ApiKeyModelEndpoint[]> =
-  {
-    claude: ['anthropic'],
-    // CC Switch Codex imports can target both native Responses channels and
-    // regular OpenAI-compatible channels.
-    codex: ['openai-response', 'openai'],
-    gemini: ['gemini'],
-  }
-
-function supportsAppEndpoint(model: ApiKeyModel, app: CCSwitchApp): boolean {
-  return APP_ENDPOINT_TYPES[app].some((endpoint) =>
-    model.supportedEndpointTypes.includes(endpoint)
-  )
-}
+import type { ApiKeyModelsResult } from '../api'
+import {
+  getCCSwitchModelEndpoint,
+  matchesCCSwitchModelFamily,
+  type CCSwitchApp,
+} from './model-catalog'
 
 export function selectSuggestedModel(
   models: ApiKeyModelsResult | undefined,
@@ -53,23 +38,21 @@ export function selectSuggestedModel(
   )
   if (preferredModel) return preferredModel
 
-  const preferredFamilies: Record<CCSwitchApp, string[]> = {
-    claude: ['claude', 'anthropic'],
-    codex: ['gpt-', 'codex', 'o1', 'o3', 'o4'],
-    gemini: ['gemini', 'google'],
-  }
-  const family = preferredFamilies[app]
-  const appModel = models.models.find((model) => {
-    const id = model.id.toLowerCase()
-    const owner = model.ownedBy?.toLowerCase() ?? ''
-    return (
-      supportsAppEndpoint(model, app) &&
-      family.some(
-        (candidate) => id.includes(candidate) || owner.includes(candidate)
-      )
-    )
-  })
+  const endpoint = getCCSwitchModelEndpoint(app)
+  const compatibleModels = models.models.filter(
+    (model) =>
+      model.supportedEndpointTypes.includes(endpoint) ||
+      // Codex can also use OpenAI-compatible channels through the gateway.
+      (app === 'codex' && model.supportedEndpointTypes.includes('openai'))
+  )
+  const appModel = compatibleModels.find((model) =>
+    matchesCCSwitchModelFamily(model, app)
+  )
   if (appModel) return appModel.id
+  if (app !== 'claude' && app !== 'codex' && app !== 'gemini') {
+    const protocolModel = compatibleModels[0]
+    if (protocolModel) return protocolModel.id
+  }
 
   const generalModel = models.models.find((model) =>
     model.supportedEndpointTypes.some(
