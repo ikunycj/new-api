@@ -34,6 +34,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       ERROR_LOG_ENABLED: ${ERROR_LOG_ENABLED:-true}
       BATCH_UPDATE_ENABLED: ${BATCH_UPDATE_ENABLED:-true}
+      GENERATE_DEFAULT_TOKEN: ${GENERATE_DEFAULT_TOKEN:-false}
       NODE_NAME: ${NODE_NAME:-new-api-node-1}
       NODE_TYPE: ${NODE_TYPE:-master}
 #      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值 （Streaming timeout in seconds, default is 120s. Increase if experiencing empty completions）

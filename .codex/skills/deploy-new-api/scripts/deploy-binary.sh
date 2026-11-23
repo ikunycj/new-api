@@ -5,12 +5,12 @@ usage() {
   cat <<'EOF'
 Usage: deploy-binary.sh \
   --archive PATH --archive-sha SHA256 --binary-sha SHA256 \
-  --commit FULL_SHA --release NAME [options]
+  --commit FULL_SHA --release NAME --compose-file PATH \
+  --postgres NAME --redis NAME [options]
 
 Options:
   --deploy-dir PATH       Deployment directory (default: /opt/new-api)
-  --compose-file PATH     Compose file relative to deploy dir
-                          (default: docker-compose.1panel.yml)
+  --compose-file PATH     Existing Compose file, absolute or relative to deploy dir
   --env-file PATH         Env file relative to deploy dir (default: .env)
   --image-tag TAG         Live image tag (default: new-api:local)
   --project-name NAME     Compose project name (optional)
@@ -32,15 +32,15 @@ BINARY_SHA=''
 COMMIT=''
 RELEASE=''
 DEPLOY_DIR='/opt/new-api'
-COMPOSE_FILE='docker-compose.1panel.yml'
+COMPOSE_FILE=''
 ENV_FILE='.env'
 IMAGE_TAG='new-api:local'
 PROJECT_NAME=''
 NETWORK=''
 SERVICE='new-api'
 CONTAINER='new-api'
-POSTGRES='1Panel-postgresql-2LOJ'
-REDIS='1Panel-redis-pDR8'
+POSTGRES=''
+REDIS=''
 LOCAL_URL='http://127.0.0.1:3000/api/status'
 PUBLIC_URL=''
 TIMEOUT=120
@@ -70,7 +70,7 @@ while (($#)); do
   esac
 done
 
-for value_name in ARCHIVE ARCHIVE_SHA BINARY_SHA COMMIT RELEASE; do
+for value_name in ARCHIVE ARCHIVE_SHA BINARY_SHA COMMIT RELEASE COMPOSE_FILE POSTGRES REDIS; do
   if [[ -z ${!value_name} ]]; then
     echo "Missing required argument: $value_name" >&2
     usage >&2
@@ -120,6 +120,11 @@ if [[ -n $PROJECT_NAME ]]; then
     exit 1
   }
 fi
+current_service=$(docker inspect "$CONTAINER" --format '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null || true)
+[[ $current_service == "$SERVICE" ]] || {
+  echo "Existing app container belongs to service ${current_service:-missing}, expected $SERVICE" >&2
+  exit 1
+}
 current_image=$(docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || true)
 [[ $current_image == "$IMAGE_TAG" ]] || {
   echo "Existing app container uses ${current_image:-missing}, expected $IMAGE_TAG" >&2

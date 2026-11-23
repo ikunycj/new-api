@@ -27,21 +27,21 @@ An OOM-triggered Docker restart can briefly restart the app, PostgreSQL, and Red
 Recover in dependency order:
 
 1. Confirm Docker is stable and not still restarting.
-2. Wait for the selected target's PostgreSQL container to become healthy (`1Panel-postgresql-2LOJ` for `alltokenapi`, `ikun-new-api-postgres` for `ikun.love`).
-3. Confirm the selected target's Redis container is running (`1Panel-redis-pDR8` for `alltokenapi`, `ikun-new-api-redis` for `ikun.love`).
-4. Start or recreate only `new-api` if it did not recover automatically.
+2. Wait for the application's existing PostgreSQL container to become healthy.
+3. Confirm the application's existing Redis container is running.
+4. Start or recreate only the app service if it did not recover automatically. Use the verified Compose files and project.
 5. Verify local `/api/status`, then public status.
 
 Do not recreate either data service and do not run `docker compose down`.
 
 ## Candidate fails local health
 
-The deploy script automatically retags the preserved rollback image as the selected live image tag (`new-api:local` for the default stack, `new-api:ikun` for `ikun.love`) and recreates only the app service. After rollback, verify:
+The deploy script automatically retags the preserved rollback image as the live app image identified during preflight and recreates only the app service. After rollback, use the verified app container name and local status URL to check the result.
 
 ```bash
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
-curl -fsS http://127.0.0.1:3000/api/status
-docker logs --tail 200 new-api
+docker inspect "$app_container" --format 'image={{.Image}} status={{.State.Status}} health={{.State.Health.Status}} restarts={{.RestartCount}}'
+curl -fsS "$local_status_url"
+docker logs --tail 200 "$app_container"
 ```
 
 Keep the failed candidate image for inspection until the cause is understood. Compare its revision label and binary SHA with the intended artifact.

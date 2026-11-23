@@ -9,7 +9,7 @@ Confirm the target before every deployment. The release branch is part of the ta
 | Environment | SSH alias | Host | Deployment scope |
 | --- | --- | --- | --- |
 | Development/test | `aliyun` | Verify from local SSH config | Deploy the configured development branch (normally `master`). The remote test service and local development process both use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis; keep those services isolated from production. |
-| Production | `alltokenapi` | `154.37.213.1` (verify live) | Deploy the configured `master` production branch using the existing 1Panel stack. |
+| Production | `alltokenapi` | `154.37.213.1` (verify live) | Deploy the configured `master` production branch using the verified application stack already running on the host. |
 | Production | `ikun.love` | `64.90.0.95` (verify live; SSH alias is authoritative) | Deploy only `origin/ikun.love` to `https://ikun.love` using the existing `ikun-new-api` Compose stack. |
 
 ## Service map
@@ -24,11 +24,11 @@ Confirm the target before every deployment. The release branch is part of the ta
 | App container/service | `new-api` | Recreate only this service. |
 | App image tag | `new-api:local` | Retag the current image before switching. |
 | App port | `127.0.0.1:3000` | Check `/api/status` locally. |
-| Compose file | `docker-compose.1panel.yml` | It should define only the app and reuse external services. |
+| Compose files and project | Discover from the running app | Use the existing files in order and retain the project name. Recreate only the app service. |
 | Runtime env | `.env`, mode `600` | Never display or replace secret values. |
-| Docker network | `1panel-network` | Reuse it; do not create a second database network. |
-| PostgreSQL | `1Panel-postgresql-2LOJ` | Must be healthy before switching the app. |
-| Redis | `1Panel-redis-pDR8` | Must be running before switching the app. |
+| Docker network | Discover from the running app | Preserve the existing network attachments. |
+| PostgreSQL | Verify which container the app uses | Must be healthy before switching the app. |
+| Redis | Verify which container the app uses | Must be running before switching the app. |
 
 ### `ikun.love`
 
@@ -41,7 +41,7 @@ The live inspection on 2026-09-05 found the following topology. Re-check it befo
 | Release branch | `ikun.love` | Fetch and compare local, tracking, and live `origin/ikun.love` SHAs; never substitute `master` or a feature branch. |
 | Public site | `https://ikun.love` | Verify `/api/status` and at least one changed public route after local health passes. |
 | Deploy directory | `/opt/new-api` | Preserve `.env`, `data`, and `logs`. |
-| Compose file | `docker-compose.1panel.yml` | Use `--no-build --no-deps`; recreate only the `new-api` service. |
+| Compose files | Discover from the running app | Use the existing files in order and recreate only the `new-api` service with `--no-build --no-deps`. |
 | Compose project | `ikun-new-api` | Do not change the project name or recreate its data services. |
 | App image tag | `new-api:ikun` | Preserve the current image under a rollback tag before switching. |
 | App service | `new-api` | Recreate only this service. |
@@ -67,31 +67,26 @@ These values are historical evidence, not defaults for the next release:
 
 ## Read-only baseline
 
-Run these before a deployment without expanding `.env`:
+List candidate containers with their Compose project and service labels. Set `app_container` to the verified application container and inspect only the relevant metadata. Check the Compose paths and working directory on the host. The binary release script applies to deployments defined by a single Compose file.
 
 ```bash
-cd /opt/new-api
-printf 'commit='; cat .deploy-commit 2>/dev/null || true
-printf 'release='; cat .deploy-release 2>/dev/null || true
-docker ps --filter name='^/new-api$' --format '{{.Names}} {{.Status}} {{.Image}}'
-docker inspect new-api --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
-docker inspect 1Panel-postgresql-2LOJ --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
-docker inspect 1Panel-redis-pDR8 --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
-docker image inspect new-api:local --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
-curl -fsS http://127.0.0.1:3000/api/status
+docker ps -a --format '{{.Names}} {{.Image}} {{.Status}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.service"}}'
+docker inspect "$app_container" --format 'project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}} workdir={{index .Config.Labels "com.docker.compose.project.working_dir"}} files={{index .Config.Labels "com.docker.compose.project.config_files"}}'
+docker inspect "$app_container" --format 'image={{.Config.Image}} {{range $network, $settings := .NetworkSettings.Networks}}network={{$network}} {{end}}'
+docker port "$app_container"
 ```
 
-For `ikun.love`, use the live names rather than the `alltokenapi` defaults:
+Identify the PostgreSQL and Redis containers used by the application using the existing deployment configuration and Docker network metadata without displaying `.env`, connection strings or credentials. With the deployment directory, app container, app image tag, dependency containers, and local status URL set to their verified values, check the release baseline.
 
 ```bash
-cd /opt/new-api
+cd "$deploy_dir"
 printf 'commit='; cat .deploy-commit 2>/dev/null || true
 printf 'release='; cat .deploy-release 2>/dev/null || true
-docker inspect ikun-new-api --format 'image={{.Config.Image}} id={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
-docker inspect ikun-new-api-postgres --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
-docker inspect ikun-new-api-redis --format 'status={{.State.Status}}'
-docker image inspect new-api:ikun --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
-curl -fsS http://127.0.0.1:3000/api/status
+docker inspect "$app_container" --format 'image={{.Config.Image}} id={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
+docker inspect "$postgres_container" --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+docker inspect "$redis_container" --format 'status={{.State.Status}}'
+docker image inspect "$app_image_tag" --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
+curl -fsS "$local_status_url"
 ```
 
 Do not use `docker compose down`. Do not restart Docker as part of a normal release.

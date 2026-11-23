@@ -52,10 +52,15 @@ AI 协助启动或部署前，应检查应用实际使用的日志库：设置�
 | `deploy/.env` | 原生部署环境配置，与本地 `.env` 独立 |
 | 服务器 `/opt/new-api/.env` | 服务器独立维护，普通发布不得替换 |
 | [docker-compose.dev.yml](../../docker-compose.dev.yml) | 独立容器开发栈，不应用于重建既有服务器数据服务 |
-| [docker-compose.yml](../../docker-compose.yml) | 自带依赖的完整编排，使用前明确数据服务归属 |
-| [docker-compose.1panel.yml](../../docker-compose.1panel.yml) | 应用编排，复用目标服务器已有数据库和缓存 |
+| [docker-compose.yml](../../docker-compose.yml) | 从当前分支构建 New API，同时启动 PostgreSQL 和 Redis |
 
 任何 `.env` 修改都需要指定环境的逐字段授权；前后只记录文件元数据和 SHA-256 指纹，不输出秘密值或配置 diff。不要在本地、`deploy/` 和服务器配置之间复制、同步或互相覆盖。`SESSION_SECRET` 与 `CRYPTO_SECRET` 应按环境稳定维护。
+
+## 全新部署
+
+部署官方发行版时，使用上游仓库的 `docker-compose.yml`，配置 PostgreSQL 和 Redis 密码及 `SESSION_SECRET` 后执行 `docker compose up -d`。官方模板同时启动 New API、PostgreSQL 和 Redis，生产环境应从官方 Releases 选定镜像版本。[New API 官方 Docker Compose 指南](https://docs.newapi.ai/en/docs/installation/deployment-methods/docker-compose-installation)
+
+运行当前分支的代码时，使用本仓库根目录的 `docker-compose.yml` 从源码构建镜像。根目录的 `docker-compose.yml` 和 `docker-compose.dev.yml` 均支持通过 `GENERATE_DEFAULT_TOKEN=true` 为账号密码注册的新用户创建初始 API 密钥。[README 的 Compose 步骤](../../README.md#docker-compose完整本地服务)
 
 ## 既有服务器发布
 
@@ -64,11 +69,11 @@ AI 协助启动或部署前，应检查应用实际使用的日志库：设置�
 1. 核实实时 DNS、SSH 目标、应用和数据服务归属；未经授权不得修改 `alltokenapi.com` DNS。
 2. 检查工作区并保留无关修改，按部署技能核对指定目标分支的本地、已获取远端和实时远端 SHA。
 3. 在工作站的干净工作树中安装锁定依赖、构建前端并交叉编译 Linux 二进制，生成摘要和归档；上传前核对提交和制品摘要。
-4. 上传制品和部署脚本，复用已有 Docker 镜像及数据网络；保留回滚镜像，只重建应用服务。
+4. 上传制品和部署脚本，使用应用当前的 Compose 文件和项目，指定已核实的 PostgreSQL、Redis 容器，复用已有 Docker 镜像及数据网络。保留回滚镜像，只重建应用服务。
 5. 核对二进制摘要、镜像修订、容器健康和重启次数、数据库与 Redis 状态、本机及公网 `/api/status`，再验证受影响页面或最小业务请求。
 6. 成功后记录版本和回滚信息，清理本次临时制品；失败时按部署脚本和流程执行回滚。
 
-生产主机不执行前端、Go 或多阶段 Docker 源码构建，不新增或重建 PostgreSQL、Redis。`aliyun` 内存有限，不运行 `docker system df`。`alltokenapi` 的基础设施由 `/opt/new-api-infra/docker-compose.yml` 管理，应用由 `/opt/new-api/docker-compose.1panel.yml` 管理。
+生产主机禁止执行前端、Go 或多阶段 Docker 源码构建，以及新增或重建 PostgreSQL、Redis。`aliyun` 内存有限，禁止运行 `docker system df`。
 
 ## 按改动选择验证
 

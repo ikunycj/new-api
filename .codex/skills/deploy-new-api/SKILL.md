@@ -13,7 +13,7 @@ Before every deployment, confirm the target SSH alias and environment with the u
 
 - `aliyun`: development/test server. Follow the test-topology constraints in `AGENTS.md`: the remote service and the local development process intentionally use `NODE_TYPE=master` and share the Aliyun test PostgreSQL/Redis, which remain isolated from production.
 - `alltokenapi`: production server. Deploy only the configured production branch (`master` unless the topology is deliberately changed), use the production authorization gate, verify live DNS, and run the rollback checks below.
-- `ikun.love`: production server for `https://ikun.love`. Deploy only `origin/ikun.love`; use the `new-api:ikun` image tag and the `ikun-new-api*` Compose containers documented in the topology reference. This target also requires the production authorization gate, live DNS verification, and rollback checks below.
+- `ikun.love`: production server for `https://ikun.love`. Deploy only `origin/ikun.love`. Verify the application's live Compose project, image, and data containers against the topology reference. This target also requires the production authorization gate, live DNS verification, and rollback checks below.
 
 ## Require the latest target branch
 
@@ -36,7 +36,7 @@ Stop if the local branch is missing, any SHA differs, the remote query fails, or
 1. Require the selected deployment host in the current conversation before any deployment. For `alltokenapi` and `ikun.love`, also require explicit authorization before a remote write, image retag, container recreation, or production restart. Read-only inspection and local builds are allowed after the host is selected.
 2. Inspect repository instructions and `git status` first. Preserve unrelated dirty files; build only the verified latest commit on the selected target branch from a detached clean worktree.
 3. Never print, upload, replace, or commit `.env` values. Never overwrite `/opt/new-api/.env`, `data`, or `logs`.
-4. Never add or recreate PostgreSQL or Redis. The app must reuse the selected target's existing data containers and Docker network documented in the topology reference.
+4. Use the selected target's verified Compose files, project, and existing PostgreSQL, Redis, and Docker network. Keep both data containers running during the release.
 5. Never run a source or multi-stage Docker build on the production host. Its memory is insufficient and a failed build can OOM-kill Docker.
 6. Keep a rollback image until the new release passes local and public checks.
 7. Verify every destructive cleanup target is inside the expected temporary directory before removal.
@@ -47,7 +47,7 @@ Stop if the local branch is missing, any SHA differs, the remote query fails, or
 2. Use `scripts/build-release.ps1` on Windows or `scripts/build-release.sh` on macOS/Linux to create a detached worktree, install the exact locked frontend dependencies in that worktree, build the frontend, cross-compile the Linux binary, and emit a SHA-256 manifest plus archive.
 3. Inspect the artifact's ELF magic, `go version -m` metadata, commit, and SHA. Upload only the artifact archive and remote deploy script.
 4. Verify the uploaded archive SHA before extraction. Run the binary with `--help` before wrapping it into an image.
-5. Use `scripts/deploy-binary.sh` on the host. It preserves the current image as a rollback tag, replaces `/new-api` in a stopped temporary container, commits a candidate image, smoke-tests it, recreates only the `new-api` service, and rolls back if local health fails.
+5. Use `scripts/deploy-binary.sh` on the host with the verified Compose files and dependency names. It preserves the current image as a rollback tag, replaces `/new-api` in a stopped temporary container, commits a candidate image, smoke-tests it, recreates only the app service, and rolls back if local health fails.
 6. Verify the image revision label, runtime binary SHA, container health/restart count, PostgreSQL health, Redis state, local `/api/status`, public `/api/status`, and the changed public route.
 7. Update only `.deploy-commit`, `.deploy-release`, and any deliberately maintained source snapshot after success. Remove temporary archives/worktrees only after verification; retain the rollback image.
 
@@ -80,13 +80,14 @@ Display remote deploy arguments:
 bash deploy-binary.sh --help
 ```
 
-For `ikun.love`, pass the live topology explicitly:
+For `ikun.love`, set `app_compose_file` to the verified live application Compose file and confirm the other values before using this example.
 
 ```bash
 bash deploy-binary.sh \
   --archive ./<archive-name> --archive-sha <archive-sha256> \
   --binary-sha <binary-sha256> --commit <full-commit-sha> \
-  --release <short-sha>-v1 --image-tag new-api:ikun \
+  --release <short-sha>-v1 --compose-file "$app_compose_file" \
+  --service new-api --image-tag new-api:ikun \
   --project-name ikun-new-api --network ikun-new-api-network \
   --container ikun-new-api --postgres ikun-new-api-postgres \
   --redis ikun-new-api-redis --public-url https://ikun.love/api/status

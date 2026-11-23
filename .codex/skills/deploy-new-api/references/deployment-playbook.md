@@ -111,20 +111,24 @@ Do not print `.env` while checking the directory.
 
 ## 5. Wrap and switch the image
 
-Invoke the uploaded script with full commit and hashes:
+Set the arguments from the read-only baseline. This script takes a single Compose file. Use it when that file fully defines the running application, and pass the full commit and hashes.
 
 ```bash
-cd /opt/new-api
+cd "$deploy_dir"
 bash ./deploy-binary.sh \
   --archive ./<archive-name> \
   --archive-sha <archive-sha256> \
   --binary-sha <binary-sha256> \
   --commit <full-commit-sha> \
   --release <short-sha>-v1 \
-  --public-url https://<selected-domain>/api/status
+  --deploy-dir "$deploy_dir" --compose-file "$app_compose_file" \
+  --project-name "$app_project" --service "$app_service" \
+  --container "$app_container" --image-tag "$app_image_tag" \
+  --postgres "$postgres_container" --redis "$redis_container" \
+  --local-url "$local_status_url" --public-url "$public_status_url"
 ```
 
-For `ikun.love`, add `--image-tag new-api:ikun --project-name ikun-new-api --network ikun-new-api-network --container ikun-new-api --postgres ikun-new-api-postgres --redis ikun-new-api-redis`.
+For `ikun.love`, use the example in [the deployment skill](../SKILL.md) after verifying the current Compose files and names. Pass `--network` when verifying a specific existing network and `--env-file` if the deployment uses an environment file besides `.env`.
 
 The script intentionally uses `docker create`, `docker cp`, and `docker commit` instead of `docker build`. It runs Compose with `--no-build --no-deps` so PostgreSQL and Redis are not recreated.
 
@@ -135,19 +139,19 @@ For remote multiline logic outside the script, encode the text locally as UTF-8/
 Do not stop at `docker ps`. Verify all of the following:
 
 ```bash
-docker inspect <selected-container> --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
-docker image inspect <selected-image-tag> --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
-docker cp <selected-container>:/new-api /tmp/new-api.runtime
+docker inspect "$app_container" --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}'
+docker image inspect "$app_image_tag" --format 'id={{.Id}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} release={{index .Config.Labels "com.new-api.release"}}'
+docker cp "$app_container:/new-api" /tmp/new-api.runtime
 sha256sum /tmp/new-api.runtime
 rm -f /tmp/new-api.runtime
-docker inspect <selected-postgres> --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
-docker inspect <selected-redis> --format '{{.State.Status}}'
-curl -fsS http://127.0.0.1:3000/api/status
-curl -fsS https://<selected-domain>/api/status
-curl -fsS -o /dev/null -w '%{http_code}\n' https://<selected-domain>/pricing
+docker inspect "$postgres_container" --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+docker inspect "$redis_container" --format '{{.State.Status}}'
+curl -fsS "$local_status_url"
+curl -fsS "$public_status_url"
+curl -fsS -o /dev/null -w '%{http_code}\n' "$public_route_url"
 ```
 
-For `ikun.love`, substitute `ikun-new-api`, `new-api:ikun`, `ikun-new-api-postgres`, and `ikun-new-api-redis`; also verify the app is attached to `ikun-new-api-network` and the Compose project is `ikun-new-api`. Use a GET request for `/api/status` (the public endpoint does not guarantee a successful HEAD response).
+Verify the app still belongs to its original Compose project and network. Use a GET request for `/api/status` (the public endpoint does not guarantee a successful HEAD response).
 
 The runtime binary hash must equal the local artifact hash. Check the specific public route changed by the release, not only `/api/status`.
 
