@@ -19,12 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import {
-  ENDPOINT_TYPES,
-  FILTER_ALL,
-  QUOTA_TYPES,
-  SORT_OPTIONS,
-} from '../constants'
+import { SORT_OPTIONS } from '../constants'
 import type { PricingModel } from '../types'
 import { filterAndSortModels, filterByGroup, sortModels } from './filters'
 
@@ -115,9 +110,6 @@ describe('pricing model sorting', () => {
         search: '',
         vendors: ['OpenAI'],
         groups: [],
-        quotaType: QUOTA_TYPES.ALL,
-        endpointType: ENDPOINT_TYPES.ALL,
-        tag: FILTER_ALL,
         sortBy: SORT_OPTIONS.RECOMMENDED,
       },
       ['claude-fable-5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']
@@ -134,18 +126,12 @@ describe('pricing model sorting', () => {
       search: 'fable',
       vendors: [],
       groups: [],
-      quotaType: QUOTA_TYPES.ALL,
-      endpointType: ENDPOINT_TYPES.ALL,
-      tag: FILTER_ALL,
       sortBy: SORT_OPTIONS.NAME,
     })
     const byVendor = filterAndSortModels(models, {
       search: 'anthro',
       vendors: [],
       groups: [],
-      quotaType: QUOTA_TYPES.ALL,
-      endpointType: ENDPOINT_TYPES.ALL,
-      tag: FILTER_ALL,
       sortBy: SORT_OPTIONS.NAME,
     })
     const byGroup = filterAndSortModels(
@@ -154,9 +140,6 @@ describe('pricing model sorting', () => {
         search: 'plus',
         vendors: [],
         groups: [],
-        quotaType: QUOTA_TYPES.ALL,
-        endpointType: ENDPOINT_TYPES.ALL,
-        tag: FILTER_ALL,
         sortBy: SORT_OPTIONS.NAME,
       }
     )
@@ -178,11 +161,11 @@ describe('pricing model sorting', () => {
       { ...models[1], audio_ratio: 8 },
       {
         ...models[2],
-        supported_endpoint_types: [ENDPOINT_TYPES.IMAGE_GENERATION],
+        supported_endpoint_types: ['image-generation'],
       },
       {
         ...models[3],
-        supported_endpoint_types: [ENDPOINT_TYPES.OPENAI_VIDEO],
+        supported_endpoint_types: ['openai-video'],
       },
     ]
 
@@ -190,9 +173,6 @@ describe('pricing model sorting', () => {
       search: '',
       vendors: [],
       groups: [],
-      quotaType: QUOTA_TYPES.ALL,
-      endpointType: ENDPOINT_TYPES.ALL,
-      tag: FILTER_ALL,
       sortBy: SORT_OPTIONS.NAME,
     })
 
@@ -245,9 +225,6 @@ describe('pricing model group filtering', () => {
       search: '',
       vendors: ['OpenAI', 'Anthropic'],
       groups: ['vip', 'enterprise'],
-      quotaType: QUOTA_TYPES.ALL,
-      endpointType: ENDPOINT_TYPES.ALL,
-      tag: FILTER_ALL,
       sortBy: SORT_OPTIONS.NAME,
     })
 

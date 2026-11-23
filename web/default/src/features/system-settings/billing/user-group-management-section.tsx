@@ -60,6 +60,7 @@ import {
   createUserGroup,
   deleteUserGroup,
   getPricingGroupCatalog,
+  PRICING_GROUP_CATALOG_QUERY_KEY,
   getUserGroupSummaries,
   updateUserGroup,
   type UpdateUserGroupRequest,
@@ -104,7 +105,7 @@ export function UserGroupManagementSection() {
   })
 
   const pricingGroupsQuery = useQuery({
-    queryKey: ['pricing-groups'],
+    queryKey: PRICING_GROUP_CATALOG_QUERY_KEY,
     queryFn: getPricingGroupCatalog,
   })
 
@@ -171,6 +172,7 @@ export function UserGroupManagementSection() {
         queryClient.invalidateQueries({ queryKey: USER_GROUP_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
         queryClient.invalidateQueries({ queryKey: ['users'] }),
+        queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
       ])
     },
     onError: (error) => {

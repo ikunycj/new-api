@@ -17,11 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { GroupOption, ModelOption } from '../../types'
-import { getPreferredModelOrder } from '../../../../lib/model-preferences'
 
 export function getModelFallback(
   models: ModelOption[],
-  currentModel: string
+  currentModel: string,
+  defaultModelOrder: readonly string[]
 ): string | null {
   const hasCurrentModel = models.some((model) => model.value === currentModel)
 
@@ -29,11 +29,11 @@ export function getModelFallback(
     return null
   }
 
-  const preferredModel = getPreferredModelOrder().find((preferred) =>
-    models.some((model) => model.value === preferred)
+  const rankedModel = defaultModelOrder.find((modelId) =>
+    models.some((model) => model.value === modelId)
   )
-  if (preferredModel) {
-    return preferredModel
+  if (rankedModel) {
+    return rankedModel
   }
 
   return models[0].value

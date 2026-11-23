@@ -46,24 +46,24 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
 
 function CardContentSkeleton() {
   return (
-    <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
-      {['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'].map((skeleton) => (
-        <div key={skeleton} className='rounded-xl border p-5'>
-          <div className='flex items-start justify-between gap-3'>
-            <div className='flex min-w-0 items-start gap-3'>
-              <Skeleton className='size-10 shrink-0 rounded-xl' />
+    <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((skeleton) => (
+        <div key={skeleton} className='min-h-76 rounded-lg border p-4'>
+          <div className='flex items-start justify-between gap-2'>
+            <div className='flex min-w-0 flex-1 items-start gap-2'>
+              <Skeleton className='size-10 shrink-0 rounded-lg' />
               <div className='min-w-0 flex-1 space-y-2'>
-                <Skeleton className='h-5 w-36' />
-                <Skeleton className='h-3.5 w-48' />
+                <Skeleton className='h-5 w-4/5' />
+                <Skeleton className='h-3.5 w-full' />
               </div>
             </div>
-            <Skeleton className='h-8 w-16 rounded-md' />
+            <Skeleton className='size-9 shrink-0 rounded-md' />
           </div>
-          <div className='mt-4 space-y-2'>
+          <div className='mt-3 space-y-2'>
             <Skeleton className='h-3.5 w-full' />
             <Skeleton className='h-3.5 w-4/5' />
           </div>
-          <div className='mt-4 flex items-center gap-2'>
+          <div className='mt-3 flex items-center gap-2'>
             <Skeleton className='h-4 w-24' />
             <Skeleton className='h-4 w-16' />
           </div>

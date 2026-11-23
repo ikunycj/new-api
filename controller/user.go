@@ -281,7 +281,6 @@ func Register(c *gin.Context) {
 			common.SysLog("failed to generate token key: " + err.Error())
 			return
 		}
-		// 生成默认令牌
 		token := model.Token{
 			UserId:             insertedUser.Id, // 使用插入后的用户ID
 			Name:               cleanUser.Username + "的初始令牌",
@@ -292,6 +291,12 @@ func Register(c *gin.Context) {
 			RemainQuota:        500000, // 示例额度
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
+		}
+		common.OptionMapRWMutex.RLock()
+		groups := common.OptionMap[common.DefaultAPITokenGroupOptionKey]
+		common.OptionMapRWMutex.RUnlock()
+		if err := applyDefaultAPITokenGroups(&token, insertedUser.Group, groups); err != nil {
+			common.SysError(fmt.Sprintf("default API token groups %q are unavailable, inheriting the account group: %v", groups, err))
 		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)

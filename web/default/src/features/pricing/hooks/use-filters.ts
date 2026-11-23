@@ -19,13 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { useSearch } from '@tanstack/react-router'
 import { useMemo, useCallback, useState } from 'react'
 
-import { useSystemConfigStore } from '@/stores/system-config-store'
+import {
+  useModelLeaderboards,
+  type ModelLeaderboardKind,
+} from '@/hooks/use-model-leaderboards'
 
 import {
-  FILTER_ALL,
   SORT_OPTIONS,
-  QUOTA_TYPES,
-  ENDPOINT_TYPES,
   DEFAULT_TOKEN_UNIT,
   DEFAULT_PRICING_CURRENCY,
   PRICING_CURRENCIES,
@@ -33,17 +33,15 @@ import {
   type PricingCurrency,
   type ViewMode,
 } from '../constants'
-import { filterAndSortModels, extractAllTags } from '../lib/filters'
+import { filterAndSortModels } from '../lib/filters'
 import type { PricingModel, TokenUnit } from '../types'
 
 type FilterState = {
   search?: string
   sort?: string
+  leaderboard?: ModelLeaderboardKind
   vendors?: string[]
   groups?: string[]
-  quotaType?: string
-  endpointType?: string
-  tag?: string
   tokenUnit?: TokenUnit
   currency?: PricingCurrency
   view?: ViewMode
@@ -65,18 +63,13 @@ function parseSearchValues(value?: string): string[] | undefined {
 }
 
 export function useFilters(models: PricingModel[]) {
-  const preferredModels = useSystemConfigStore(
-    (state) => state.config.preferredModels
-  )
+  const { data: leaderboards } = useModelLeaderboards()
   const search = useSearch({ from: '/pricing/' })
   const [filterState, setFilterState] = useState<FilterState>(() => ({
     search: search.search,
     sort: search.sort,
     vendors: parseSearchValues(search.vendor),
     groups: parseSearchValues(search.group),
-    quotaType: search.quotaType,
-    endpointType: search.endpointType,
-    tag: search.tag,
     tokenUnit: search.tokenUnit,
     currency: search.currency,
     view: search.view,
@@ -84,6 +77,19 @@ export function useFilters(models: PricingModel[]) {
 
   const searchInput = filterState.search || ''
   const sortBy = filterState.sort || SORT_OPTIONS.RECOMMENDED
+  const activeLeaderboard =
+    filterState.leaderboard ?? leaderboards?.default ?? 'coding'
+  const selectedLeaderboard =
+    sortBy === SORT_OPTIONS.RECOMMENDED ? activeLeaderboard : null
+  const leaderboardEntries = selectedLeaderboard
+    ? leaderboards?.boards[selectedLeaderboard]
+    : undefined
+  const rankedModelOrder = useMemo(() => {
+    const rankedEntries = [...(leaderboardEntries ?? [])].sort(
+      (a, b) => a.rank - b.rank
+    )
+    return [...new Set(rankedEntries.flatMap((entry) => entry.model_ids ?? []))]
+  }, [leaderboardEntries])
   const vendorFilters = useMemo(
     () => filterState.vendors ?? [],
     [filterState.vendors]
@@ -92,9 +98,6 @@ export function useFilters(models: PricingModel[]) {
     () => filterState.groups ?? [],
     [filterState.groups]
   )
-  const quotaTypeFilter = filterState.quotaType || QUOTA_TYPES.ALL
-  const endpointTypeFilter = filterState.endpointType || ENDPOINT_TYPES.ALL
-  const tagFilter = filterState.tag || FILTER_ALL
   const tokenUnit: TokenUnit =
     filterState.tokenUnit === 'K' ? 'K' : DEFAULT_TOKEN_UNIT
   const displayCurrency: PricingCurrency =
@@ -126,6 +129,11 @@ export function useFilters(models: PricingModel[]) {
       }),
     [updateFilters]
   )
+  const setLeaderboard = useCallback(
+    (value: ModelLeaderboardKind) =>
+      updateFilters({ leaderboard: value, sort: undefined }),
+    [updateFilters]
+  )
   const toggleSelection = useCallback(
     (key: 'vendors' | 'groups', value: string) => {
       setFilterState((previous) => {
@@ -147,22 +155,6 @@ export function useFilters(models: PricingModel[]) {
     (value: string) => toggleSelection('groups', value),
     [toggleSelection]
   )
-  const setQuotaTypeFilter = useCallback(
-    (v: string) =>
-      updateFilters({ quotaType: v === QUOTA_TYPES.ALL ? undefined : v }),
-    [updateFilters]
-  )
-  const setEndpointTypeFilter = useCallback(
-    (v: string) =>
-      updateFilters({
-        endpointType: v === ENDPOINT_TYPES.ALL ? undefined : v,
-      }),
-    [updateFilters]
-  )
-  const setTagFilter = useCallback(
-    (v: string) => updateFilters({ tag: v === FILTER_ALL ? undefined : v }),
-    [updateFilters]
-  )
   const setTokenUnit = useCallback(
     (v: TokenUnit) =>
       updateFilters({ tokenUnit: v === DEFAULT_TOKEN_UNIT ? undefined : v }),
@@ -181,11 +173,6 @@ export function useFilters(models: PricingModel[]) {
     [updateFilters]
   )
 
-  const availableTags = useMemo(() => {
-    if (!models || models.length === 0) return []
-    return extractAllTags(models)
-  }, [models])
-
   const filteredModels = useMemo(() => {
     if (!models || models.length === 0) return []
 
@@ -195,64 +182,25 @@ export function useFilters(models: PricingModel[]) {
         search: searchInput,
         vendors: vendorFilters,
         groups: groupFilters,
-        quotaType: quotaTypeFilter,
-        endpointType: endpointTypeFilter,
-        tag: tagFilter,
         sortBy,
       },
-      preferredModels
+      rankedModelOrder
     )
   }, [
     models,
     searchInput,
     vendorFilters,
     groupFilters,
-    quotaTypeFilter,
-    endpointTypeFilter,
-    tagFilter,
     sortBy,
-    preferredModels,
+    rankedModelOrder,
   ])
 
-  const hasActiveFilters = useMemo(
-    () =>
-      vendorFilters.length > 0 ||
-      groupFilters.length > 0 ||
-      quotaTypeFilter !== QUOTA_TYPES.ALL ||
-      endpointTypeFilter !== ENDPOINT_TYPES.ALL ||
-      tagFilter !== FILTER_ALL,
-    [
-      vendorFilters,
-      groupFilters,
-      quotaTypeFilter,
-      endpointTypeFilter,
-      tagFilter,
-    ]
-  )
-
-  const activeFilterCount = useMemo(
-    () =>
-      vendorFilters.length +
-      groupFilters.length +
-      (quotaTypeFilter !== QUOTA_TYPES.ALL ? 1 : 0) +
-      (endpointTypeFilter !== ENDPOINT_TYPES.ALL ? 1 : 0) +
-      (tagFilter !== FILTER_ALL ? 1 : 0),
-    [
-      vendorFilters,
-      groupFilters,
-      quotaTypeFilter,
-      endpointTypeFilter,
-      tagFilter,
-    ]
-  )
+  const hasActiveFilters = vendorFilters.length > 0 || groupFilters.length > 0
 
   const clearFilters = useCallback(() => {
     updateFilters({
       vendors: undefined,
       groups: undefined,
-      quotaType: undefined,
-      endpointType: undefined,
-      tag: undefined,
     })
   }, [updateFilters])
 
@@ -263,28 +211,22 @@ export function useFilters(models: PricingModel[]) {
   return {
     searchInput,
     sortBy,
+    selectedLeaderboard,
     vendorFilters,
     groupFilters,
-    quotaTypeFilter,
-    endpointTypeFilter,
-    tagFilter,
     tokenUnit,
     displayCurrency,
     viewMode,
     setSearchInput,
     setSortBy,
+    setLeaderboard,
     toggleVendorFilter,
     toggleGroupFilter,
-    setQuotaTypeFilter,
-    setEndpointTypeFilter,
-    setTagFilter,
     setTokenUnit,
     setDisplayCurrency,
     setViewMode,
     filteredModels,
     hasActiveFilters,
-    activeFilterCount,
-    availableTags,
     clearFilters,
     clearSearch,
   }

@@ -39,7 +39,6 @@ const MODELS_SECTIONS = [
             settings['global.thinking_model_blacklist'],
           'global.chat_completions_to_responses_policy':
             settings['global.chat_completions_to_responses_policy'],
-          PreferredModels: settings.PreferredModels,
           'general_setting.ping_interval_enabled':
             settings['general_setting.ping_interval_enabled'],
           'general_setting.ping_interval_seconds':

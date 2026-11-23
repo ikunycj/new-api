@@ -31,11 +31,12 @@ import { getGroupDefaults, getModelDefaults } from './settings-defaults'
 const BILLING_SECTIONS = [
   {
     id: 'quota',
-    titleKey: 'Quota Settings',
+    titleKey: 'User Defaults',
     build: (settings: BillingSettings) => (
       <QuotaSettingsSection
         defaultValues={{
           QuotaForNewUser: settings.QuotaForNewUser,
+          DefaultAPITokenGroup: settings.DefaultAPITokenGroup,
           PreConsumedQuota: settings.PreConsumedQuota,
           quota_setting: {
             enable_free_model_pre_consume:

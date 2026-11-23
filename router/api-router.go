@@ -35,6 +35,7 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
+		apiRouter.GET("/model_leaderboards", middleware.HeaderNavModuleAuth("pricing"), controller.GetPublicModelLeaderboards)
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.HeaderNavModulePublicOrUserAuth("pricing"))
 		{
@@ -217,6 +218,9 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			optionRoute.GET("/", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
+			optionRoute.GET("/model_leaderboards", controller.GetAdminModelLeaderboards)
+			optionRoute.PUT("/model_leaderboards", controller.UpdateModelLeaderboardSettings)
+			optionRoute.POST("/model_leaderboards/sync", controller.SyncModelLeaderboards)
 			optionRoute.PUT("/pricing-groups", controller.UpdatePricingGroupConfiguration)
 			optionRoute.GET("/pricing-groups/models", controller.GetPricingGroupModelAllowlistCandidates)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)

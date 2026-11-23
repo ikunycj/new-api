@@ -25,12 +25,11 @@ import {
 } from './global-settings-form'
 
 describe('global model settings form mapping', () => {
-  test('normalizes legacy JSON lists while preserving preferred model order', () => {
+  test('normalizes persisted thinking model blacklist entries', () => {
     const values = parseGlobalModelSettings({
       'global.pass_through_request_enabled': 'true' as unknown as boolean,
       'global.thinking_model_blacklist':
         '[" kimi-k2-thinking ","",2,"kimi-k2-thinking"]',
-      PreferredModels: '[" claude-fable-5 ","gpt-5.6-sol","claude-fable-5"]',
       'global.chat_completions_to_responses_policy': '{}',
       'general_setting.ping_interval_enabled': false,
       'general_setting.ping_interval_seconds': 60,
@@ -40,7 +39,6 @@ describe('global model settings form mapping', () => {
     assert.deepEqual(values.global.thinking_model_blacklist, [
       'kimi-k2-thinking',
     ])
-    assert.deepEqual(values.PreferredModels, ['claude-fable-5', 'gpt-5.6-sol'])
     assert.deepEqual(
       values.global.chat_completions_to_responses_policy,
       DEFAULT_CHAT_COMPLETIONS_TO_RESPONSES_POLICY
@@ -50,7 +48,6 @@ describe('global model settings form mapping', () => {
   test('falls back safely when persisted JSON is malformed', () => {
     const values = parseGlobalModelSettings({
       'global.thinking_model_blacklist': '{not-json',
-      PreferredModels: 'not-json',
       'global.chat_completions_to_responses_policy': '[1,2,3]',
       'general_setting.ping_interval_seconds': Number.NaN,
     })
@@ -59,7 +56,6 @@ describe('global model settings form mapping', () => {
       'moonshotai/kimi-k2-thinking',
       'kimi-k2-thinking',
     ])
-    assert.deepEqual(values.PreferredModels, ['gpt-5.6-sol', 'claude-fable-5'])
     assert.deepEqual(
       values.global.chat_completions_to_responses_policy,
       DEFAULT_CHAT_COMPLETIONS_TO_RESPONSES_POLICY

@@ -62,6 +62,8 @@ AI 协助启动或部署前，应检查应用实际使用的日志库：设置�
 
 运行当前分支的代码时，使用本仓库根目录的 `docker-compose.yml` 从源码构建镜像。根目录的 `docker-compose.yml` 和 `docker-compose.dev.yml` 均支持通过 `GENERATE_DEFAULT_TOKEN=true` 为账号密码注册的新用户创建初始 API 密钥。[README 的 Compose 步骤](../../README.md#docker-compose完整本地服务)
 
+在「系统管理 → 计费与支付 → 用户初始值」中，可以通过「默认 API 分组」为自动创建的初始密钥添加多个定价分组，并调整优先顺序。默认选项为「跟随用户分组」。
+
 ## 既有服务器发布
 
 先明确目标主机、目标分支及当前授权范围，再读取 [部署流程](../../.codex/skills/deploy-new-api/references/deployment-playbook.md) 和 [环境拓扑](../../.codex/skills/deploy-new-api/references/production-topology.md)。拓扑文件中的历史地址和容器名必须在发布前核实，不能直接作为当前状态。

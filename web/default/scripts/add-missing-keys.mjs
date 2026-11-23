@@ -1544,7 +1544,6 @@ const globalModelSettingsTranslations = {
       'Convert selected Chat Completions requests to the Responses API without editing a policy object.',
     'Delete {{value}}': 'Delete {{value}}',
     'Enable this policy': 'Enable this policy',
-    'Enter a model name': 'Enter a model name',
     'Enter a model regular expression': 'Enter a model regular expression',
     'Enter a valid regular expression': 'Enter a valid regular expression',
     'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.':
@@ -1560,9 +1559,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       'No model patterns. Add at least one to enable matching.',
     'No models added': 'No models added',
-    'No preferred models. The default order will be used.':
-      'No preferred models. The default order will be used.',
-    'Preferred model {{index}}': 'Preferred model {{index}}',
     'Response conversion policy': 'Response conversion policy',
     'Search by channel name or ID': 'Search by channel name or ID',
     'Select channel types': 'Select channel types',
@@ -1574,8 +1570,6 @@ const globalModelSettingsTranslations = {
       'A request matches when its channel ID or type is selected.',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       'This feature is experimental. The client request must still match the selected upstream protocol.',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      'Models are tried in this order when selecting a default model. Add one model per row.',
   },
   zh: {
     'Add a model name': '添加模型名称',
@@ -1595,7 +1589,6 @@ const globalModelSettingsTranslations = {
       '将选定的 Chat Completions 请求转换为 Responses API，无需编辑策略对象。',
     'Delete {{value}}': '删除 {{value}}',
     'Enable this policy': '启用此策略',
-    'Enter a model name': '输入模型名称',
     'Enter a model regular expression': '输入模型正则表达式',
     'Enter a valid regular expression': '请输入有效的正则表达式',
     'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.':
@@ -1610,9 +1603,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       '暂无模型规则。至少添加一条规则才能匹配。',
     'No models added': '尚未添加模型',
-    'No preferred models. The default order will be used.':
-      '暂无偏好模型，将使用默认顺序。',
-    'Preferred model {{index}}': '偏好模型 {{index}}',
     'Response conversion policy': '响应转换策略',
     'Search by channel name or ID': '按渠道名称或 ID 搜索',
     'Select channel types': '选择渠道类型',
@@ -1624,8 +1614,6 @@ const globalModelSettingsTranslations = {
       '请求的渠道 ID 或渠道类型命中任一选项时即匹配。',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       '此功能仍处于实验阶段，客户端请求仍需符合所选上游协议。',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      '选择默认模型时会按此顺序尝试。每行添加一个模型。',
   },
   fr: {
     'Add a model name': 'Ajouter un nom de modèle',
@@ -1646,7 +1634,6 @@ const globalModelSettingsTranslations = {
       'Convertir les requêtes Chat Completions sélectionnées vers l’API Responses sans modifier une stratégie.',
     'Delete {{value}}': 'Supprimer {{value}}',
     'Enable this policy': 'Activer cette stratégie',
-    'Enter a model name': 'Saisir un nom de modèle',
     'Enter a model regular expression':
       'Saisir une expression régulière de modèle',
     'Enter a valid regular expression':
@@ -1664,9 +1651,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       'Aucun motif de modèle. Ajoutez-en au moins un pour activer la correspondance.',
     'No models added': 'Aucun modèle ajouté',
-    'No preferred models. The default order will be used.':
-      'Aucun modèle préféré. L’ordre par défaut sera utilisé.',
-    'Preferred model {{index}}': 'Modèle préféré {{index}}',
     'Response conversion policy': 'Stratégie de conversion des réponses',
     'Search by channel name or ID':
       'Rechercher par nom ou identifiant de canal',
@@ -1679,8 +1663,6 @@ const globalModelSettingsTranslations = {
       'Une requête correspond lorsque son identifiant ou son type de canal est sélectionné.',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       'Cette fonctionnalité est expérimentale. La requête cliente doit respecter le protocole amont sélectionné.',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      'Les modèles sont essayés dans cet ordre lors du choix d’un modèle par défaut. Ajoutez un modèle par ligne.',
   },
   ja: {
     'Add a model name': 'モデル名を追加',
@@ -1700,7 +1682,6 @@ const globalModelSettingsTranslations = {
       'ポリシーを編集せず、選択した Chat Completions リクエストを Responses API に変換します。',
     'Delete {{value}}': '{{value}} を削除',
     'Enable this policy': 'このポリシーを有効化',
-    'Enter a model name': 'モデル名を入力',
     'Enter a model regular expression': 'モデルの正規表現を入力',
     'Enter a valid regular expression': '有効な正規表現を入力してください',
     'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.':
@@ -1716,9 +1697,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       'モデルパターンがありません。一致判定には少なくとも 1 つ追加してください。',
     'No models added': 'モデルは未追加です',
-    'No preferred models. The default order will be used.':
-      '優先モデルはありません。既定の順序を使用します。',
-    'Preferred model {{index}}': '優先モデル {{index}}',
     'Response conversion policy': 'レスポンス変換ポリシー',
     'Search by channel name or ID': 'チャンネル名または ID で検索',
     'Select channel types': 'チャンネル種別を選択',
@@ -1730,8 +1708,6 @@ const globalModelSettingsTranslations = {
       'チャンネル ID または種別が選択項目と一致するとリクエストに適用されます。',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       'この機能は試験中です。クライアントのリクエストは選択した上流プロトコルに一致する必要があります。',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      '既定モデルの選択時はこの順序で試行します。1 行に 1 モデルを追加してください。',
   },
   ru: {
     'Add a model name': 'Добавьте название модели',
@@ -1751,7 +1727,6 @@ const globalModelSettingsTranslations = {
       'Преобразовывать выбранные запросы Chat Completions в Responses API без редактирования политики.',
     'Delete {{value}}': 'Удалить {{value}}',
     'Enable this policy': 'Включить эту политику',
-    'Enter a model name': 'Введите название модели',
     'Enter a model regular expression': 'Введите регулярное выражение модели',
     'Enter a valid regular expression':
       'Введите корректное регулярное выражение',
@@ -1768,9 +1743,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       'Шаблоны моделей отсутствуют. Добавьте хотя бы один для сопоставления.',
     'No models added': 'Модели не добавлены',
-    'No preferred models. The default order will be used.':
-      'Предпочтительные модели не заданы. Будет использован порядок по умолчанию.',
-    'Preferred model {{index}}': 'Предпочтительная модель {{index}}',
     'Response conversion policy': 'Политика преобразования ответов',
     'Search by channel name or ID': 'Поиск по имени или ID канала',
     'Select channel types': 'Выберите типы каналов',
@@ -1782,8 +1754,6 @@ const globalModelSettingsTranslations = {
       'Запрос подходит, если выбран его ID или тип канала.',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       'Функция экспериментальная. Запрос клиента должен соответствовать выбранному протоколу upstream.',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      'При выборе модели по умолчанию модели проверяются в этом порядке. Добавляйте по одной модели в строке.',
   },
   vi: {
     'Add a model name': 'Thêm tên mô hình',
@@ -1803,7 +1773,6 @@ const globalModelSettingsTranslations = {
       'Chuyển các yêu cầu Chat Completions đã chọn sang Responses API mà không cần sửa chính sách.',
     'Delete {{value}}': 'Xóa {{value}}',
     'Enable this policy': 'Bật chính sách này',
-    'Enter a model name': 'Nhập tên mô hình',
     'Enter a model regular expression': 'Nhập biểu thức chính quy của mô hình',
     'Enter a valid regular expression': 'Nhập biểu thức chính quy hợp lệ',
     'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.':
@@ -1819,9 +1788,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       'Chưa có mẫu mô hình. Thêm ít nhất một mẫu để bật khớp.',
     'No models added': 'Chưa thêm mô hình',
-    'No preferred models. The default order will be used.':
-      'Chưa có mô hình ưu tiên. Sẽ dùng thứ tự mặc định.',
-    'Preferred model {{index}}': 'Mô hình ưu tiên {{index}}',
     'Response conversion policy': 'Chính sách chuyển đổi phản hồi',
     'Search by channel name or ID': 'Tìm theo tên hoặc ID kênh',
     'Select channel types': 'Chọn loại kênh',
@@ -1833,8 +1799,6 @@ const globalModelSettingsTranslations = {
       'Yêu cầu khớp khi ID hoặc loại kênh của nó được chọn.',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       'Tính năng này đang thử nghiệm. Yêu cầu từ máy khách vẫn phải phù hợp với giao thức upstream đã chọn.',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      'Khi chọn mô hình mặc định, các mô hình được thử theo thứ tự này. Thêm một mô hình mỗi dòng.',
   },
   'zh-TW': {
     'Add a model name': '新增模型名稱',
@@ -1854,7 +1818,6 @@ const globalModelSettingsTranslations = {
       '將選取的 Chat Completions 請求轉換為 Responses API，不需要編輯策略物件。',
     'Delete {{value}}': '刪除 {{value}}',
     'Enable this policy': '啟用此策略',
-    'Enter a model name': '輸入模型名稱',
     'Enter a model regular expression': '輸入模型正規表示式',
     'Enter a valid regular expression': '請輸入有效的正規表示式',
     'Keep the original request body for supported relay endpoints. Authentication, routing, billing, and response handling still run.':
@@ -1869,9 +1832,6 @@ const globalModelSettingsTranslations = {
     'No model patterns. Add at least one to enable matching.':
       '尚無模型規則。至少新增一條規則才能進行比對。',
     'No models added': '尚未新增模型',
-    'No preferred models. The default order will be used.':
-      '尚無偏好模型，將使用預設順序。',
-    'Preferred model {{index}}': '偏好模型 {{index}}',
     'Response conversion policy': '回應轉換策略',
     'Search by channel name or ID': '依頻道名稱或 ID 搜尋',
     'Select channel types': '選取頻道類型',
@@ -1883,8 +1843,6 @@ const globalModelSettingsTranslations = {
       '請求的頻道 ID 或類型符合任一選項時即套用。',
     'This feature is experimental. The client request must still match the selected upstream protocol.':
       '此功能仍在實驗階段，客戶端請求仍須符合所選的上游協定。',
-    'Models are tried in this order when selecting a default model. Add one model per row.':
-      '選取預設模型時會依此順序嘗試，每列新增一個模型。',
   },
 }
 
@@ -1895,6 +1853,48 @@ Object.assign(newKeys.ja, globalModelSettingsTranslations.ja)
 Object.assign(newKeys.ru, globalModelSettingsTranslations.ru)
 Object.assign(newKeys.vi, globalModelSettingsTranslations.vi)
 Object.assign(newKeys['zh-TW'], globalModelSettingsTranslations['zh-TW'])
+
+const leaderboardTranslations = {
+  en: [
+    'Sorting rules',
+    'Agent capability',
+    'Coding capability',
+    'Chat capability',
+  ],
+  zh: ['排序规则', 'Agent能力', 'Coding能力', 'Chat能力'],
+  'zh-TW': ['排序規則', 'Agent 能力', 'Coding 能力', 'Chat 能力'],
+  fr: [
+    'Critères de tri',
+    'Capacité d’agent',
+    'Capacité de programmation',
+    'Capacité conversationnelle',
+  ],
+  ja: [
+    '並び替えルール',
+    'エージェント能力',
+    'コーディング能力',
+    'チャット能力',
+  ],
+  ru: [
+    'Правила сортировки',
+    'Возможности агента',
+    'Написание кода',
+    'Ведение диалога',
+  ],
+  vi: [
+    'Quy tắc sắp xếp',
+    'Năng lực tác tử',
+    'Năng lực lập trình',
+    'Năng lực hội thoại',
+  ],
+}
+for (const [locale, values] of Object.entries(leaderboardTranslations)) {
+  const keys = leaderboardTranslations.en
+  Object.assign(
+    newKeys[locale],
+    Object.fromEntries(keys.map((key, index) => [key, values[index]]))
+  )
+}
 
 const errorSelfCheckTranslations = {
   en: {
@@ -4352,6 +4352,11 @@ for (const [locale, translations] of Object.entries(inviteInfoTranslations)) {
 }
 
 const retiredKeys = new Set([
+  'Enter a model name',
+  'Models are tried in this order when selecting a default model. Add one model per row.',
+  'No preferred models. The default order will be used.',
+  'Preferred Models',
+  'Preferred model {{index}}',
   'Documentation Link',
   'https://docs.example.com',
   'Link to your documentation site',

@@ -60,28 +60,22 @@ export function Pricing() {
   const {
     searchInput,
     sortBy,
+    selectedLeaderboard,
     vendorFilters,
     groupFilters,
-    quotaTypeFilter,
-    endpointTypeFilter,
-    tagFilter,
     tokenUnit,
     displayCurrency,
     viewMode,
     setSearchInput,
     setSortBy,
+    setLeaderboard,
     toggleVendorFilter,
     toggleGroupFilter,
-    setQuotaTypeFilter,
-    setEndpointTypeFilter,
-    setTagFilter,
     setTokenUnit,
     setDisplayCurrency,
     setViewMode,
     filteredModels,
     hasActiveFilters,
-    activeFilterCount,
-    availableTags,
     clearFilters,
     clearSearch,
   } = useFilters(models || [])
@@ -164,7 +158,7 @@ export function Pricing() {
   if (isLoading) {
     return (
       <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
-        <div className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 sm:pt-24 lg:px-8'>
+        <div className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 lg:px-8'>
           <LoadingSkeleton viewMode={viewMode} />
         </div>
       </PublicLayout>
@@ -173,8 +167,8 @@ export function Pricing() {
 
   return (
     <PublicLayout showMainContainer={false} showCustomerServiceInfo={false}>
-      <PageTransition className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 sm:pt-24 lg:px-8'>
-        <header className='mb-8 pt-5 sm:mb-10 sm:pt-8'>
+      <PageTransition className='mx-auto w-full max-w-[1280px] px-4 pt-20 pb-10 sm:px-6 lg:px-8'>
+        <header className='mb-4'>
           <h1 className='text-3xl leading-tight font-bold sm:text-4xl'>
             {t('Model Square')}
           </h1>
@@ -187,31 +181,23 @@ export function Pricing() {
             onClearSearch={clearSearch}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            selectedLeaderboard={selectedLeaderboard}
+            onLeaderboardChange={setLeaderboard}
             tokenUnit={tokenUnit}
             onTokenUnitChange={setTokenUnit}
             displayCurrency={displayCurrency}
             onCurrencyChange={setDisplayCurrency}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            quotaTypeFilter={quotaTypeFilter}
-            endpointTypeFilter={endpointTypeFilter}
             vendorFilters={vendorFilters}
             groupFilters={groupFilters}
-            tagFilter={tagFilter}
-            onQuotaTypeChange={setQuotaTypeFilter}
-            onEndpointTypeChange={setEndpointTypeFilter}
             onVendorToggle={toggleVendorFilter}
             onGroupToggle={toggleGroupFilter}
-            onTagChange={setTagFilter}
             vendors={vendors || []}
             groups={availableGroups}
             groupLabels={catalogGroups || {}}
             groupRatios={groupRatio || {}}
-            tags={availableTags}
             models={models || []}
-            hasActiveFilters={hasActiveFilters}
-            activeFilterCount={activeFilterCount}
-            onClearFilters={clearFilters}
           />
 
           {renderPricingContent()}

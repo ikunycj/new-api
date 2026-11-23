@@ -20,6 +20,7 @@ import type { BillingSettings } from '../types'
 
 export const defaultBillingSettings: BillingSettings = {
   QuotaForNewUser: 0,
+  DefaultAPITokenGroup: '',
   PreConsumedQuota: 0,
   'quota_setting.enable_free_model_pre_consume': true,
   QuotaPerUnit: 500000,

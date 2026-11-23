@@ -120,6 +120,8 @@ var TurnstileSecretKey = ""
 var TelegramBotToken = ""
 var TelegramBotName = ""
 
+const DefaultAPITokenGroupOptionKey = "DefaultAPITokenGroup"
+
 var QuotaForNewUser = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false

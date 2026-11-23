@@ -67,7 +67,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useStatus } from '@/hooks/use-status'
 import { getUserGroups } from '@/lib/api'
-import { getPreferredModelOrder } from '@/lib/model-preferences'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { authorizeCCSwitchUsage, type ApiKeyModelsResult } from '../../api'
@@ -149,9 +148,10 @@ export function CCSwitchDialog(props: CCSwitchDialogProps) {
 function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const preferredModels = useSystemConfigStore(
-    (state) => state.config.preferredModels
+  const defaultModelOrder = useSystemConfigStore(
+    (state) => state.config.defaultModelOrder
   )
+  const isSystemConfigLoading = useSystemConfigStore((state) => state.loading)
   const [app, setApp] = useState<CCSwitchApp>('claude')
   const [drafts, setDrafts] = useState<Partial<Record<CCSwitchApp, AppDraft>>>(
     {}
@@ -227,13 +227,15 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
     modelsQuery.data?.success === false ? modelsQuery.data : null
 
   useEffect(() => {
-    if (!props.open || !modelsQuery.data?.success) return
+    if (!props.open || isSystemConfigLoading || !modelsQuery.data?.success) {
+      return
+    }
     if (primaryModelValue) return
 
     const suggestedModel = selectSuggestedModel(
       modelsQuery.data,
       app,
-      getPreferredModelOrder()
+      defaultModelOrder
     )
     if (!suggestedModel) return
 
@@ -250,9 +252,10 @@ function CCSwitchDialogContent(props: CCSwitchDialogProps) {
   }, [
     app,
     currentDefaultName,
+    defaultModelOrder,
+    isSystemConfigLoading,
     modelsQuery.data,
     primaryModelValue,
-    preferredModels,
     props.open,
   ])
 

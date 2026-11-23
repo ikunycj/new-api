@@ -48,10 +48,7 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
-import {
-  GlobalPolicyEditor,
-  PreferredModelsEditor,
-} from './global-settings-fields'
+import { GlobalPolicyEditor } from './global-settings-fields'
 import {
   canonicalizeGlobalModelSettings,
   globalModelSettingsFormSchema,
@@ -61,6 +58,7 @@ import {
   type GlobalModelSettingsFormValues,
   type GlobalModelSettingsRawValues,
 } from './global-settings-form'
+import { ModelLeaderboardsSection } from './model-leaderboards-section'
 
 type GlobalSettingsCardProps = {
   defaultValues: GlobalModelSettingsRawValues
@@ -87,7 +85,6 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
     props.defaultValues['global.thinking_model_blacklist']
   const defaultResponsePolicy =
     props.defaultValues['global.chat_completions_to_responses_policy']
-  const defaultPreferredModels = props.defaultValues.PreferredModels
   const defaultPingEnabled =
     props.defaultValues['general_setting.ping_interval_enabled']
   const defaultPingInterval =
@@ -98,7 +95,6 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
         'global.pass_through_request_enabled': defaultPassThrough,
         'global.thinking_model_blacklist': defaultThinkingBlacklist,
         'global.chat_completions_to_responses_policy': defaultResponsePolicy,
-        PreferredModels: defaultPreferredModels,
         'general_setting.ping_interval_enabled': defaultPingEnabled,
         'general_setting.ping_interval_seconds': defaultPingInterval,
       }),
@@ -106,7 +102,6 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
       defaultPassThrough,
       defaultThinkingBlacklist,
       defaultResponsePolicy,
-      defaultPreferredModels,
       defaultPingEnabled,
       defaultPingInterval,
     ]
@@ -172,6 +167,8 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
 
   return (
     <SettingsSection title={t('Global Model Configuration')}>
+      <ModelLeaderboardsSection />
+      <Separator />
       <Form {...form}>
         <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
           <SettingsPageFormActions
@@ -225,38 +222,6 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
                   <FormDescription>
                     {t(
                       'Models listed here will not automatically append or remove -thinking / -nothinking suffixes.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='PreferredModels'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Preferred Models')}</FormLabel>
-                  <FormControl>
-                    <PreferredModelsEditor
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder={t('Enter a model name')}
-                      emptyLabel={t(
-                        'No preferred models. The default order will be used.'
-                      )}
-                      deleteAriaLabel={(model) =>
-                        t('Delete {{value}}', { value: model })
-                      }
-                      dragAriaLabel={(model) =>
-                        t('Drag to reorder {{group}}', { group: model })
-                      }
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Models are tried in this order when selecting a default model. Add one model per row.'
                     )}
                   </FormDescription>
                   <FormMessage />

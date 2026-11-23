@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -43,6 +44,15 @@ func TestStatus(c *gin.Context) {
 }
 
 func GetStatus(c *gin.Context) {
+	defaultModelOrder := []string{}
+	entries, err := model.CachedDefaultModelLeaderboard()
+	if err != nil {
+		common.SysError("read default model order: " + err.Error())
+	} else if len(entries) > 0 {
+		for _, entry := range service.MatchModelLeaderboardEntries(entries, model.GetPricing()) {
+			defaultModelOrder = append(defaultModelOrder, entry.ModelIDs...)
+		}
+	}
 
 	cs := console_setting.GetConsoleSetting()
 	common.OptionMapRWMutex.RLock()
@@ -50,10 +60,6 @@ func GetStatus(c *gin.Context) {
 
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
-	preferredModels := []string{}
-	if err := common.UnmarshalJsonStr(common.OptionMap["PreferredModels"], &preferredModels); err != nil {
-		preferredModels = []string{}
-	}
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -72,7 +78,7 @@ func GetStatus(c *gin.Context) {
 		"telegram_oauth":              common.TelegramOAuthEnabled,
 		"telegram_bot_name":           common.TelegramBotName,
 		"system_name":                 common.SystemName,
-		"preferred_models":            preferredModels,
+		"default_model_order":         defaultModelOrder,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
 		"customer_service":            common.OptionMap["CustomerService"],

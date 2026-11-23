@@ -26,7 +26,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { Reorder, useDragControls } from 'motion/react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -64,9 +64,13 @@ export type ApiKeyRoutingGroupOption = {
   ratio?: number | string
 }
 
-type ApiKeyRoutingGroupsFieldProps = {
-  isLoadingModels: boolean
-  modelsByGroup: Record<string, string[]>
+type ApiKeyRoutingGroupsFieldProps = Pick<
+  ComponentProps<typeof Button>,
+  'id' | 'aria-describedby' | 'aria-invalid' | 'onBlur' | 'ref'
+> & {
+  disabled?: boolean
+  isLoadingModels?: boolean
+  modelsByGroup?: Record<string, string[]>
   onValueChange: (value: string[]) => void
   options: ApiKeyRoutingGroupOption[]
   value: string[]
@@ -83,10 +87,11 @@ function GroupRatioBadge(props: { ratio?: number | string }) {
 }
 
 type RoutingGroupRowProps = {
+  disabled?: boolean
   group: string
   index: number
-  isLoadingModels: boolean
-  modelCount: number
+  isLoadingModels?: boolean
+  modelCount?: number
   onMove: (index: number, direction: -1 | 1) => void
   onMoveTo: (group: string, targetIndex: number) => void
   onRemove: (group: string) => void
@@ -99,7 +104,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
   const dragControls = useDragControls()
   const [isDragging, setIsDragging] = useState(false)
   const groupLabel = props.option?.label ?? props.group
-  const canReorder = props.total > 1
+  const canReorder = !props.disabled && props.total > 1
   const orderLabel = t('Order for {{group}}', { group: groupLabel })
 
   return (
@@ -187,17 +192,19 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
           <span className='truncate font-medium'>{groupLabel}</span>
           <GroupRatioBadge ratio={props.option?.ratio} />
         </div>
-        <div className='text-muted-foreground mt-0.5 flex items-center gap-2 text-xs'>
-          {props.option?.desc && (
-            <span className='truncate'>{props.option.desc}</span>
-          )}
-          {props.isLoadingModels && <Skeleton className='h-3 w-16' />}
-          {!props.isLoadingModels && (
-            <span className='shrink-0'>
-              {t('{{count}} models', { count: props.modelCount })}
-            </span>
-          )}
-        </div>
+        {(props.option?.desc || props.modelCount !== undefined) && (
+          <div className='text-muted-foreground mt-0.5 flex items-center gap-2 text-xs'>
+            {props.option?.desc && (
+              <span className='truncate'>{props.option.desc}</span>
+            )}
+            {props.isLoadingModels && <Skeleton className='h-3 w-16' />}
+            {!props.isLoadingModels && props.modelCount !== undefined && (
+              <span className='shrink-0'>
+                {t('{{count}} models', { count: props.modelCount })}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <Tooltip>
@@ -209,6 +216,7 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
               size='icon-sm'
               className='col-start-4 row-start-1 size-10 sm:col-auto sm:row-auto sm:size-7'
               aria-label={t('Remove {{group}}', { group: groupLabel })}
+              disabled={props.disabled}
               onClick={() => props.onRemove(props.group)}
             />
           }
@@ -223,8 +231,8 @@ function RoutingGroupRow(props: RoutingGroupRowProps) {
 
 export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   const { t } = useTranslation()
-  const preferredModels = useSystemConfigStore(
-    (state) => state.config.preferredModels
+  const defaultModelOrder = useSystemConfigStore(
+    (state) => state.config.defaultModelOrder
   )
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
@@ -255,6 +263,8 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
   }, [options, searchValue])
 
   const conflicts = useMemo(() => {
+    if (!props.modelsByGroup) return []
+
     const modelGroups = new Map<string, string[]>()
     for (const group of props.value) {
       for (const model of props.modelsByGroup[group] ?? []) {
@@ -263,17 +273,17 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
         modelGroups.set(model, groups)
       }
     }
-    const preferredRank = new Map(
-      preferredModels.map((model, index) => [model, index])
+    const defaultRanks = new Map(
+      defaultModelOrder.map((model, index) => [model, index])
     )
     return [...modelGroups.entries()]
       .filter(([, groups]) => groups.length > 1)
       .sort(
         ([leftModel], [rightModel]) =>
-          (preferredRank.get(leftModel) ?? preferredModels.length) -
-          (preferredRank.get(rightModel) ?? preferredModels.length)
+          (defaultRanks.get(leftModel) ?? defaultModelOrder.length) -
+          (defaultRanks.get(rightModel) ?? defaultModelOrder.length)
       )
-  }, [preferredModels, props.modelsByGroup, props.value])
+  }, [defaultModelOrder, props.modelsByGroup, props.value])
 
   const firstConflict = conflicts[0]
 
@@ -344,7 +354,13 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
               variant='outline'
               role='combobox'
               aria-expanded={open}
-              aria-label={t('Available groups')}
+              aria-label={props.id ? undefined : t('Available groups')}
+              aria-describedby={props['aria-describedby']}
+              aria-invalid={props['aria-invalid']}
+              id={props.id}
+              onBlur={props.onBlur}
+              ref={props.ref}
+              disabled={props.disabled}
               className='h-10 w-full justify-between px-3'
             />
           }
@@ -378,6 +394,11 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
                     <CommandItem
                       key={option.value}
                       value={option.value}
+                      disabled={
+                        props.disabled ||
+                        (!selected &&
+                          props.value.length >= MAX_GROUP_CANDIDATES)
+                      }
                       onSelect={() => handleSelect(option.value)}
                       className='items-start gap-3 px-3 py-3'
                     >
@@ -421,8 +442,11 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
             group={group}
             index={index}
             total={props.value.length}
+            disabled={props.disabled}
             option={optionByValue.get(group)}
-            modelCount={props.modelsByGroup[group]?.length ?? 0}
+            modelCount={
+              props.modelsByGroup && (props.modelsByGroup[group]?.length ?? 0)
+            }
             isLoadingModels={props.isLoadingModels}
             onMove={moveGroup}
             onMoveTo={moveGroupTo}
@@ -463,19 +487,21 @@ export function ApiKeyRoutingGroupsField(props: ApiKeyRoutingGroupsFieldProps) {
         </Alert>
       )}
 
-      <Alert role='status'>
-        {props.value.length > 1 ? (
-          <Route aria-hidden='true' />
-        ) : (
-          <CircleDollarSign aria-hidden='true' />
-        )}
-        <AlertTitle>{t('Billing follows the successful group')}</AlertTitle>
-        <AlertDescription>
-          {t(
-            'This API Key shares one quota balance. Each successful request uses the multiplier of the group that served it.'
+      {props.modelsByGroup && (
+        <Alert role='status'>
+          {props.value.length > 1 ? (
+            <Route aria-hidden='true' />
+          ) : (
+            <CircleDollarSign aria-hidden='true' />
           )}
-        </AlertDescription>
-      </Alert>
+          <AlertTitle>{t('Billing follows the successful group')}</AlertTitle>
+          <AlertDescription>
+            {t(
+              'This API Key shares one quota balance. Each successful request uses the multiplier of the group that served it.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }

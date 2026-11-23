@@ -24,7 +24,6 @@ import {
   LEGACY_DEFAULT_LOGO,
 } from '@/lib/constants'
 import { applyFaviconToDom } from '@/lib/dom-utils'
-import { setPreferredModelOrder } from '@/lib/model-preferences'
 import {
   useSystemConfigStore,
   type CurrencyConfig,
@@ -45,7 +44,7 @@ interface StatusApiResponse {
     usd_exchange_rate?: number
     custom_currency_symbol?: string
     custom_currency_exchange_rate?: number
-    preferred_models?: string[]
+    default_model_order?: string[]
   }
 }
 
@@ -66,8 +65,6 @@ export function mapStatusDataToConfig(
 ): Partial<SystemConfig> {
   if (!data) return {}
 
-  setPreferredModelOrder(data.preferred_models)
-
   const has = (key: keyof StatusApiResponse['data']) => Object.hasOwn(data, key)
   const nextConfig: Partial<SystemConfig> = {}
 
@@ -81,8 +78,8 @@ export function mapStatusDataToConfig(
   if (has('display_token_stat_enabled')) {
     nextConfig.displayTokenStatEnabled = data.display_token_stat_enabled
   }
-  if (has('preferred_models')) {
-    nextConfig.preferredModels = data.preferred_models ?? []
+  if (has('default_model_order')) {
+    nextConfig.defaultModelOrder = data.default_model_order ?? []
   }
 
   const currencyFields: (keyof StatusApiResponse['data'])[] = [

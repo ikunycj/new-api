@@ -382,12 +382,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   return (
     <article
       className={cn(
-        'group flex min-h-[340px] flex-col rounded-lg border p-4 transition-colors sm:p-5',
+        'group flex min-h-76 flex-col rounded-lg border p-4 transition-colors',
         'hover:bg-muted/20'
       )}
     >
-      <header className='flex items-start justify-between gap-3'>
-        <div className='flex min-w-0 items-start gap-3'>
+      <header className='flex items-start justify-between gap-2'>
+        <div className='flex min-w-0 items-start gap-2'>
           <div className='bg-muted/50 flex size-10 shrink-0 items-center justify-center rounded-lg'>
             {modelIcon || (
               <span className='text-muted-foreground text-sm font-bold'>
@@ -401,10 +401,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 {props.model.vendor_name}
               </p>
             )}
-            <h3 className='text-foreground truncate text-lg leading-tight font-semibold'>
+            <h3 className='text-foreground line-clamp-2 text-base leading-tight font-semibold wrap-anywhere'>
               {props.model.model_name}
             </h3>
-            <code className='text-muted-foreground/70 mt-1 block truncate text-xs'>
+            <code
+              className='text-muted-foreground/70 mt-1 block truncate text-xs'
+              title={props.model.model_name}
+            >
               {props.model.model_name}
             </code>
           </div>
@@ -428,7 +431,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         </Tooltip>
       </header>
 
-      <div className='mt-4 flex min-h-6 flex-wrap items-center gap-1.5'>
+      <div className='mt-3 flex min-h-6 flex-wrap items-center gap-1.5'>
         {visibleBadges.map((item) => (
           <Badge key={item} variant='outline' className='font-normal'>
             {item}
@@ -439,7 +442,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         )}
       </div>
 
-      <div className='mt-4 grid grid-cols-3 gap-3'>
+      <div className='mt-3 grid grid-cols-3 gap-2'>
         {metadata.slice(0, 3).map((item) => (
           <div key={item.key} className='min-w-0'>
             <p className='text-muted-foreground truncate text-[11px]'>
@@ -450,12 +453,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         ))}
       </div>
 
-      <Separator className='my-4' />
+      <Separator className='my-3' />
 
-      <div className='flex min-h-24 flex-col gap-1.5'>{pricingContent}</div>
+      <div className='flex min-h-20 flex-col gap-1.5'>{pricingContent}</div>
 
-      <footer className='mt-auto flex items-center justify-between gap-3 pt-4'>
-        <div className='flex min-w-0 flex-1 flex-col gap-1.5'>
+      <footer className='mt-auto flex flex-col gap-1.5 pt-3'>
+        <div className='flex min-w-0 flex-col gap-1.5'>
           <div
             className={cn(
               'flex min-w-0 flex-col gap-1.5',
@@ -517,7 +520,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               return (
                 <div
                   key={group.group}
-                  className='flex items-center justify-between gap-2 text-xs'
+                  className='grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-center gap-2 text-xs'
                 >
                   <GroupBadge
                     group={group.group}
@@ -525,7 +528,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                     ratio={group.ratio}
                     size='sm'
                   />
-                  <span className='text-muted-foreground truncate'>
+                  <span
+                    className='text-muted-foreground truncate text-right'
+                    title={price}
+                  >
                     {price}
                   </span>
                 </div>
@@ -552,18 +558,20 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               />
             </Button>
           )}
-          <ModelBillingModeBadge model={props.model} />
         </div>
-        <Button
-          type='button'
-          variant='ghost'
-          size='lg'
-          className='shrink-0 px-3'
-          onClick={props.onClick}
-        >
-          {t('Details')}
-          <ChevronRight data-icon='inline-end' />
-        </Button>
+        <div className='flex items-center justify-between gap-2'>
+          <ModelBillingModeBadge model={props.model} />
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='shrink-0'
+            onClick={props.onClick}
+          >
+            {t('Details')}
+            <ChevronRight data-icon='inline-end' />
+          </Button>
+        </div>
       </footer>
     </article>
   )

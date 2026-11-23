@@ -72,6 +72,9 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
+		if model.IsModelLeaderboardOption(k) {
+			continue
+		}
 		value := common.Interface2String(v)
 		isSensitiveKey := strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
@@ -186,6 +189,17 @@ func UpdateOption(c *gin.Context) {
 			"message": "无效的参数",
 		})
 		return
+	}
+	if option.Key == common.DefaultAPITokenGroupOptionKey {
+		groups, ok := option.Value.(string)
+		if !ok {
+			common.ApiErrorMsg(c, "默认 API 分组必须是字符串")
+			return
+		}
+		if err := applyDefaultAPITokenGroups(&model.Token{}, defaultUserGroup, groups); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	switch option.Value.(type) {
 	case bool:

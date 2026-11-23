@@ -46,7 +46,7 @@ export interface SystemConfig {
   systemName: string
   logo: string
   displayTokenStatEnabled?: boolean
-  preferredModels: string[]
+  defaultModelOrder: string[]
   currency: CurrencyConfig
 }
 
@@ -84,7 +84,7 @@ export const useSystemConfigStore = create<SystemConfigState>()(
       config: {
         systemName: DEFAULT_SYSTEM_NAME,
         logo: DEFAULT_LOGO,
-        preferredModels: [],
+        defaultModelOrder: [],
         currency: { ...DEFAULT_CURRENCY_CONFIG },
       },
       loading: true,
@@ -109,9 +109,34 @@ export const useSystemConfigStore = create<SystemConfigState>()(
         typeof window === 'undefined' ? ssrStorage : window.localStorage
       ),
       partialize: (state) => ({
-        config: state.config,
+        config: {
+          systemName: state.config.systemName,
+          logo: state.config.logo,
+          displayTokenStatEnabled: state.config.displayTokenStatEnabled,
+          defaultModelOrder: state.config.defaultModelOrder,
+          currency: state.config.currency,
+        },
         loadedLogoUrl: state.loadedLogoUrl,
       }),
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<SystemConfigState> | undefined
+        return {
+          ...current,
+          loadedLogoUrl: saved?.loadedLogoUrl ?? current.loadedLogoUrl,
+          config: {
+            systemName: saved?.config?.systemName ?? current.config.systemName,
+            logo: saved?.config?.logo ?? current.config.logo,
+            displayTokenStatEnabled: saved?.config?.displayTokenStatEnabled,
+            defaultModelOrder:
+              saved?.config?.defaultModelOrder ??
+              current.config.defaultModelOrder,
+            currency: {
+              ...current.config.currency,
+              ...saved?.config?.currency,
+            },
+          },
+        }
+      },
     }
   )
 )

@@ -122,17 +122,28 @@ export async function getPricingGroupNames(): Promise<string[]> {
   return requireData(response.data)
 }
 
+export const PRICING_GROUP_CATALOG_QUERY_KEY = [
+  'pricing-groups',
+  'catalog',
+] as const
+
 export async function getPricingGroupCatalog(): Promise<{
   names: string[]
   displayNames: Record<string, string>
+  availableToNewUsers: string[]
 }> {
-  const res = await api.get<{
-    success: boolean
-    data?: string[]
-    display_names?: Record<string, string>
-  }>('/api/group/pricing-groups')
+  const res = await api.get<
+    ApiResponse<string[]> & {
+      display_names?: Record<string, string>
+      available_to_new_users?: string[]
+    }
+  >('/api/group/pricing-groups', {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
   return {
-    names: res.data.data ?? [],
+    names: requireData(res.data),
     displayNames: res.data.display_names ?? {},
+    availableToNewUsers: res.data.available_to_new_users ?? [],
   }
 }

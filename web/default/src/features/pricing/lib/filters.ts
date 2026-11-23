@@ -16,14 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getPreferredModelOrder } from '../../../lib/model-preferences'
-import {
-  SORT_OPTIONS,
-  FILTER_ALL,
-  QUOTA_TYPES,
-  QUOTA_TYPE_VALUES,
-  ENDPOINT_TYPES,
-} from '../constants'
+import { SORT_OPTIONS } from '../constants'
 import type { PricingModel } from '../types'
 
 // ----------------------------------------------------------------------------
@@ -33,10 +26,7 @@ import type { PricingModel } from '../types'
 /**
  * Filter models by search query
  */
-export function filterBySearch(
-  models: PricingModel[],
-  query: string
-): PricingModel[] {
+function filterBySearch(models: PricingModel[], query: string): PricingModel[] {
   if (!query) return models
 
   const lowerQuery = query.trim().toLowerCase()
@@ -53,7 +43,7 @@ export function filterBySearch(
 /**
  * Filter models by vendor
  */
-export function filterByVendor(
+function filterByVendor(
   models: PricingModel[],
   vendors: readonly string[]
 ): PricingModel[] {
@@ -77,34 +67,6 @@ export function filterByGroup(
 }
 
 /**
- * Filter models by quota type
- */
-export function filterByQuotaType(
-  models: PricingModel[],
-  quotaType: string
-): PricingModel[] {
-  if (quotaType === QUOTA_TYPES.ALL) return models
-  const targetType =
-    quotaType === QUOTA_TYPES.TOKEN
-      ? QUOTA_TYPE_VALUES.TOKEN
-      : QUOTA_TYPE_VALUES.REQUEST
-  return models.filter((m) => m.quota_type === targetType)
-}
-
-/**
- * Filter models by endpoint type
- */
-export function filterByEndpointType(
-  models: PricingModel[],
-  endpointType: string
-): PricingModel[] {
-  if (endpointType === ENDPOINT_TYPES.ALL) return models
-  return models.filter((m) =>
-    m.supported_endpoint_types?.includes(endpointType)
-  )
-}
-
-/**
  * Get model price for sorting
  */
 function getModelPrice(model: PricingModel): number {
@@ -117,20 +79,18 @@ function getModelPrice(model: PricingModel): number {
 export function sortModels(
   models: PricingModel[],
   sortBy: string,
-  preferredModelOrder = getPreferredModelOrder()
+  rankedModelOrder: readonly string[] = []
 ): PricingModel[] {
   const sorted = [...models]
 
   switch (sortBy) {
     case SORT_OPTIONS.RECOMMENDED:
-      const promotedModelRanks = new Map<string, number>(
-        preferredModelOrder.map((modelName, index) => [modelName, index])
+      const modelRanks = new Map<string, number>(
+        rankedModelOrder.map((modelName, index) => [modelName, index])
       )
       sorted.sort((a, b) => {
-        const aRank =
-          promotedModelRanks.get(a.model_name) ?? preferredModelOrder.length
-        const bRank =
-          promotedModelRanks.get(b.model_name) ?? preferredModelOrder.length
+        const aRank = modelRanks.get(a.model_name) ?? rankedModelOrder.length
+        const bRank = modelRanks.get(b.model_name) ?? rankedModelOrder.length
 
         return (
           aRank - bRank ||
@@ -163,22 +123,14 @@ export function filterAndSortModels(
     search: string
     vendors: readonly string[]
     groups: readonly string[]
-    quotaType: string
-    endpointType: string
-    tag: string
     sortBy: string
   },
-  preferredModelOrder = getPreferredModelOrder()
+  rankedModelOrder: readonly string[] = []
 ): PricingModel[] {
   let result = filterBySearch(models, filters.search)
   result = filterByVendor(result, filters.vendors)
   result = filterByGroup(result, filters.groups)
-  result = filterByQuotaType(result, filters.quotaType)
-  result = filterByEndpointType(result, filters.endpointType)
-  result = filterByTag(result, filters.tag)
-  result = sortModels(result, filters.sortBy, preferredModelOrder)
-
-  return result
+  return sortModels(result, filters.sortBy, rankedModelOrder)
 }
 
 /**
@@ -190,39 +142,4 @@ export function parseTags(tagsString?: string): string[] {
     .split(/[,;|\s]+/)
     .map((t) => t.trim())
     .filter(Boolean)
-}
-
-/**
- * Extract all unique tags from models
- */
-export function extractAllTags(models: PricingModel[]): string[] {
-  const tagSet = new Set<string>()
-
-  models.forEach((model) => {
-    if (model.tags) {
-      const tags = parseTags(model.tags)
-      tags.forEach((tag) => {
-        tagSet.add(tag.toLowerCase())
-      })
-    }
-  })
-
-  return [...tagSet].sort((a, b) => a.localeCompare(b))
-}
-
-/**
- * Filter models by tag
- */
-export function filterByTag(
-  models: PricingModel[],
-  tag: string
-): PricingModel[] {
-  if (tag === FILTER_ALL) return models
-
-  const tagLower = tag.toLowerCase()
-  return models.filter((m) => {
-    if (!m.tags) return false
-    const modelTags = parseTags(m.tags).map((t) => t.toLowerCase())
-    return modelTags.includes(tagLower)
-  })
 }

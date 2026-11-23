@@ -16,16 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowUpDown, Check, Filter, Grid2X2, Table2 } from 'lucide-react'
-import { useState } from 'react'
+import { Radio } from '@base-ui/react/radio'
+import {
+  ArrowUpDown,
+  Bot,
+  Check,
+  Code,
+  Grid2X2,
+  MessageSquare,
+  Table2,
+} from 'lucide-react'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  sideDrawerContentClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -34,17 +37,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { RadioGroup } from '@/components/ui/radio-group'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import type { ModelLeaderboardKind } from '@/hooks/use-model-leaderboards'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -58,7 +57,6 @@ import {
 } from '../constants'
 import { formatGroupRatio, getConfiguredGroupRatio } from '../lib/model-helpers'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
-import { PricingSidebar } from './pricing-sidebar'
 import { SearchBar } from './search-bar'
 
 type SegmentOption = {
@@ -74,31 +72,23 @@ export interface PricingToolbarProps {
   onClearSearch: () => void
   sortBy: string
   onSortChange: (value: string) => void
+  selectedLeaderboard: ModelLeaderboardKind | null
+  onLeaderboardChange: (value: ModelLeaderboardKind) => void
   tokenUnit: TokenUnit
   onTokenUnitChange: (value: TokenUnit) => void
   displayCurrency: PricingCurrency
   onCurrencyChange: (value: PricingCurrency) => void
   viewMode: ViewMode
   onViewModeChange: (value: ViewMode) => void
-  quotaTypeFilter: string
-  endpointTypeFilter: string
   vendorFilters: string[]
   groupFilters: string[]
-  tagFilter: string
-  onQuotaTypeChange: (value: string) => void
-  onEndpointTypeChange: (value: string) => void
   onVendorToggle: (value: string) => void
   onGroupToggle: (value: string) => void
-  onTagChange: (value: string) => void
   vendors: PricingVendor[]
   groups: string[]
   groupLabels: Record<string, string>
   groupRatios: Record<string, number>
-  tags: string[]
   models: PricingModel[]
-  hasActiveFilters: boolean
-  activeFilterCount: number
-  onClearFilters: () => void
 }
 
 function SegmentedControl(props: {
@@ -111,7 +101,7 @@ function SegmentedControl(props: {
     <div
       role='group'
       aria-label={props.ariaLabel}
-      className='bg-muted/60 inline-flex h-8 items-center rounded-lg border p-0.5'
+      className='bg-muted/60 inline-flex h-8 shrink-0 items-center rounded-lg border p-0.5'
     >
       {props.options.map((option) => {
         const Icon = option.icon
@@ -154,8 +144,13 @@ function SegmentedControl(props: {
 
 export function PricingToolbar(props: PricingToolbarProps) {
   const { t } = useTranslation()
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const sortingRulesLabelId = useId()
   const sortLabels = getSortLabels(t)
+  const leaderboardOptions = [
+    { value: 'agent', label: t('Agent capability'), icon: Bot },
+    { value: 'coding', label: t('Coding capability'), icon: Code },
+    { value: 'chat', label: t('Chat capability'), icon: MessageSquare },
+  ] as const
 
   const handleTokenUnitChange = (value: string) => {
     props.onTokenUnitChange(value as TokenUnit)
@@ -171,39 +166,36 @@ export function PricingToolbar(props: PricingToolbarProps) {
 
   return (
     <section className='flex flex-col gap-3'>
-      <div className='grid gap-3 md:grid-cols-[minmax(280px,1fr)_auto]'>
-        <SearchBar
-          value={props.searchInput}
-          onChange={props.onSearchChange}
-          onClear={props.onClearSearch}
-          placeholder={t('Search models, providers, and groups')}
-          className='min-w-0'
-        />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type='button'
-                variant='outline'
-                size='icon'
-                onClick={() => setMobileFiltersOpen(true)}
-                className='relative size-10'
-                aria-label={t('More filters')}
-              />
-            }
+      <div className='flex flex-col gap-3'>
+        <section className='space-y-2'>
+          <h2
+            id={sortingRulesLabelId}
+            className='text-muted-foreground text-xs font-semibold'
           >
-            <Filter />
-            {props.activeFilterCount > 0 && (
-              <Badge className='absolute -top-2 -right-2 size-5 justify-center p-0 text-[10px]'>
-                {props.activeFilterCount}
-              </Badge>
-            )}
-          </TooltipTrigger>
-          <TooltipContent>{t('More filters')}</TooltipContent>
-        </Tooltip>
-      </div>
+            {t('Sorting rules')}
+          </h2>
+          <RadioGroup
+            aria-labelledby={sortingRulesLabelId}
+            value={props.selectedLeaderboard}
+            onValueChange={props.onLeaderboardChange}
+            className='flex flex-wrap'
+          >
+            {leaderboardOptions.map(({ value, label, icon: Icon }) => (
+              <Radio.Root
+                key={value}
+                value={value}
+                className='group border-border/70 bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground data-checked:border-primary/50 data-checked:bg-primary/10 data-checked:text-foreground focus-visible:ring-ring/50 relative inline-flex min-h-9 items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-1'
+              >
+                <Icon
+                  aria-hidden='true'
+                  className='group-data-checked:text-primary size-4 shrink-0'
+                />
+                {label}
+              </Radio.Root>
+            ))}
+          </RadioGroup>
+        </section>
 
-      <div className='border-border/70 flex flex-col gap-3 border-t pt-3'>
         <section aria-label={t('Provider')} className='space-y-2'>
           <h2 className='text-muted-foreground text-xs font-semibold'>
             {t('Provider')}
@@ -287,28 +279,35 @@ export function PricingToolbar(props: PricingToolbarProps) {
         </section>
       </div>
 
-      <div className='border-border/70 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-end'>
+      <div className='border-border/70 flex flex-wrap items-center gap-2 border-t pt-3'>
+        <div className='flex min-w-0 grow basis-72 items-center justify-between gap-2'>
+          <SearchBar
+            value={props.searchInput}
+            onChange={props.onSearchChange}
+            onClear={props.onClearSearch}
+            className='w-full max-w-56 min-w-0'
+          />
+          <SegmentedControl
+            options={[
+              { value: PRICING_CURRENCIES.CNY, label: '¥ CNY' },
+              { value: PRICING_CURRENCIES.USD, label: '$ USD' },
+            ]}
+            value={props.displayCurrency}
+            onChange={handleCurrencyChange}
+            ariaLabel={t('Currency')}
+          />
+        </div>
+
         <div className='flex flex-wrap items-center gap-2'>
-          <div className='flex items-center gap-2'>
-            <SegmentedControl
-              options={[
-                { value: PRICING_CURRENCIES.CNY, label: '¥ CNY' },
-                { value: PRICING_CURRENCIES.USD, label: '$ USD' },
-              ]}
-              value={props.displayCurrency}
-              onChange={handleCurrencyChange}
-              ariaLabel={t('Currency')}
-            />
-            <SegmentedControl
-              options={[
-                { value: 'M', label: '/1M' },
-                { value: 'K', label: '/1K' },
-              ]}
-              value={props.tokenUnit}
-              onChange={handleTokenUnitChange}
-              ariaLabel={t('Token unit')}
-            />
-          </div>
+          <SegmentedControl
+            options={[
+              { value: 'M', label: '/1M' },
+              { value: 'K', label: '/1K' },
+            ]}
+            value={props.tokenUnit}
+            onChange={handleTokenUnitChange}
+            ariaLabel={t('Token unit')}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -362,32 +361,6 @@ export function PricingToolbar(props: PricingToolbarProps) {
           />
         </div>
       </div>
-
-      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-        <SheetContent
-          side='right'
-          className={sideDrawerContentClassName('sm:max-w-md')}
-        >
-          <SheetHeader className={sideDrawerHeaderClassName()}>
-            <SheetTitle>{t('Filter')}</SheetTitle>
-          </SheetHeader>
-          <div className={sideDrawerFormClassName('gap-0')}>
-            <PricingSidebar
-              quotaTypeFilter={props.quotaTypeFilter}
-              endpointTypeFilter={props.endpointTypeFilter}
-              tagFilter={props.tagFilter}
-              onQuotaTypeChange={props.onQuotaTypeChange}
-              onEndpointTypeChange={props.onEndpointTypeChange}
-              onTagChange={props.onTagChange}
-              tags={props.tags}
-              models={props.models}
-              hasActiveFilters={props.hasActiveFilters}
-              onClearFilters={props.onClearFilters}
-              className='border-0 bg-transparent p-0 shadow-none'
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
     </section>
   )
 }

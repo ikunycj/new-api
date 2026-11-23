@@ -22,6 +22,7 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(logRollupHandler{})
+	service.RegisterSystemTaskHandler(modelLeaderboardSyncHandler{})
 }
 
 type logRollupHandler struct{}

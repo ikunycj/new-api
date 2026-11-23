@@ -38,7 +38,6 @@ export type GlobalModelSettingsFormValues = {
     thinking_model_blacklist: string[]
     chat_completions_to_responses_policy: ChatCompletionsToResponsesPolicyValues
   }
-  PreferredModels: string[]
   general_setting: {
     ping_interval_enabled: boolean
     ping_interval_seconds: number
@@ -51,7 +50,6 @@ export type GlobalModelSettingsRawValues = {
   'global.pass_through_request_enabled': boolean
   'global.thinking_model_blacklist': string
   'global.chat_completions_to_responses_policy': string
-  PreferredModels: string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
 }
@@ -61,11 +59,6 @@ export type FlatGlobalModelSettings = GlobalModelSettingsRawValues
 export const DEFAULT_THINKING_MODEL_BLACKLIST = [
   'moonshotai/kimi-k2-thinking',
   'kimi-k2-thinking',
-] as const
-
-export const DEFAULT_PREFERRED_MODELS = [
-  'gpt-5.6-sol',
-  'claude-fable-5',
 ] as const
 
 export const DEFAULT_CHAT_COMPLETIONS_TO_RESPONSES_POLICY = {
@@ -143,7 +136,6 @@ export const globalModelSettingsFormSchema = z.object({
     chat_completions_to_responses_policy:
       chatCompletionsToResponsesPolicySchema,
   }),
-  PreferredModels: z.array(z.string().trim().min(1)),
   general_setting: z.object({
     ping_interval_enabled: z.boolean(),
     ping_interval_seconds: z.coerce.number().int().min(1),
@@ -263,10 +255,6 @@ export function parseThinkingModelBlacklist(value: unknown): string[] {
   return parseStringList(value, DEFAULT_THINKING_MODEL_BLACKLIST)
 }
 
-export function parsePreferredModels(value: unknown): string[] {
-  return parseStringList(value, DEFAULT_PREFERRED_MODELS)
-}
-
 export function normalizeChatCompletionsToResponsesPolicy(
   value: unknown,
   fallback: ChatCompletionsToResponsesPolicyValues = DEFAULT_CHAT_COMPLETIONS_TO_RESPONSES_POLICY
@@ -281,10 +269,6 @@ export function serializeStringList(value: readonly string[]): string {
 export function serializeThinkingModelBlacklist(
   value: readonly string[]
 ): string {
-  return serializeStringList(value)
-}
-
-export function serializePreferredModels(value: readonly string[]): string {
   return serializeStringList(value)
 }
 
@@ -327,7 +311,6 @@ export function parseGlobalModelSettings(
           values['global.chat_completions_to_responses_policy'] ?? ''
         ),
     },
-    PreferredModels: parsePreferredModels(values.PreferredModels ?? ''),
     general_setting: {
       ping_interval_enabled: parseBoolean(
         values['general_setting.ping_interval_enabled'],
@@ -358,7 +341,6 @@ export function serializeGlobalModelSettings(
       serializeChatCompletionsToResponsesPolicy(
         values.global.chat_completions_to_responses_policy
       ),
-    PreferredModels: serializePreferredModels(values.PreferredModels),
     'general_setting.ping_interval_enabled':
       values.general_setting.ping_interval_enabled,
     'general_setting.ping_interval_seconds': Math.max(

@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { getUserGroups, getUserModels } from '../api'
@@ -52,9 +53,10 @@ export function usePlaygroundOptions({
   updateConfig,
 }: UsePlaygroundOptionsParams) {
   const { t } = useTranslation()
-  const preferredModels = useSystemConfigStore(
-    (state) => state.config.preferredModels
+  const defaultModelOrder = useSystemConfigStore(
+    (state) => state.config.defaultModelOrder
   )
+  const isSystemConfigLoading = useSystemConfigStore((state) => state.loading)
 
   const {
     data: modelsData,
@@ -155,7 +157,13 @@ export function usePlaygroundOptions({
       }
     }
 
-    const fallback = getModelFallback(modelsData, currentModel)
+    if (isSystemConfigLoading) return
+
+    const fallback = getModelFallback(
+      modelsData,
+      currentModel,
+      defaultModelOrder
+    )
 
     if (fallback) {
       updateConfig('model', fallback)
@@ -168,15 +176,16 @@ export function usePlaygroundOptions({
   }, [
     candidateGroups.length,
     currentModel,
+    defaultModelOrder,
     hasLoadedGroups,
     hasResolvedPreferredGroup,
     isResolvingPreferredGroup,
+    isSystemConfigLoading,
     modelsData,
     preferredGroup,
     setModels,
     shouldResolvePreferredGroup,
     updateConfig,
-    preferredModels,
   ])
 
   useEffect(() => {

@@ -99,7 +99,7 @@ export interface SystemStatus {
     system_name?: string
     customer_service?: string
     footer_html?: string
-    preferred_models?: string[]
+    default_model_order?: string[]
     logo?: string
     github_oauth?: boolean
     github_client_id?: string

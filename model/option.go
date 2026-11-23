@@ -127,6 +127,7 @@ var retiredOptionKeys = []string{
 	"monitor_setting.auto_test_channel_minutes",
 	"monitor_setting.channel_test_mode",
 	"UserUsableGroups",
+	"PreferredModels",
 }
 
 func isRetiredOptionKey(key string) bool {
@@ -263,6 +264,7 @@ func InitOptionMap() {
 	common.OptionMap["TurnstileSiteKey"] = ""
 	common.OptionMap["TurnstileSecretKey"] = ""
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
+	common.OptionMap[common.DefaultAPITokenGroupOptionKey] = ""
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -271,7 +273,6 @@ func InitOptionMap() {
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
 	common.OptionMap["ModelPrice"] = ratio_setting.ModelPrice2JSONString()
-	common.OptionMap["PreferredModels"] = `["gpt-5.6-sol","claude-fable-5"]`
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
 	common.OptionMap["CreateCacheRatio"] = ratio_setting.CreateCacheRatio2JSONString()
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
@@ -351,6 +352,10 @@ func loadOptionsFromDatabase() {
 	}
 	for _, option := range options {
 		if isRetiredOptionKey(option.Key) {
+			continue
+		}
+		if IsModelLeaderboardOption(option.Key) {
+			_ = applyOptionMap(option.Key, option.Value, nil)
 			continue
 		}
 		if isPricingGroupOptionKey(option.Key) {
@@ -584,6 +589,9 @@ func prepareOptionUpdate(key, value string) (fingerprintModelAliasGroups, error)
 	}
 	if isRetiredOptionKey(key) {
 		return nil, errRetiredOption
+	}
+	if IsModelLeaderboardOption(key) {
+		return nil, errors.New("请使用模型排序榜单设置接口")
 	}
 	if key == fingerprintModelAliasesOptionKey {
 		return parseFingerprintModelAliases(value)

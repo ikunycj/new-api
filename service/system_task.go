@@ -46,6 +46,13 @@ type ScheduledSystemTaskHandler interface {
 	NewPayload() any
 }
 
+// CalendarSystemTaskHandler schedules by a wall-clock boundary rather than
+// by the elapsed time since the previous run.
+type CalendarSystemTaskHandler interface {
+	ScheduledSystemTaskHandler
+	Due(now time.Time, latest *model.SystemTask) bool
+}
+
 var (
 	systemTaskHandlersMu sync.RWMutex
 	systemTaskHandlers   = map[string]SystemTaskHandler{}
@@ -280,13 +287,15 @@ func runSystemTaskScheduler() {
 	}
 	for _, scheduled := range scheduledHandlers {
 		latest := latestTasks[scheduled.Type()]
-		if latest != nil {
-			if latest.Status == model.SystemTaskStatusPending || latest.Status == model.SystemTaskStatusRunning {
-				continue // an active row already exists
+		if latest != nil && (latest.Status == model.SystemTaskStatusPending || latest.Status == model.SystemTaskStatusRunning) {
+			continue
+		}
+		if calendar, ok := scheduled.(CalendarSystemTaskHandler); ok {
+			if !calendar.Due(time.Unix(now, 0), latest) {
+				continue
 			}
-			if now-latest.UpdatedAt < int64(scheduled.Interval().Seconds()) {
-				continue // not due yet
-			}
+		} else if latest != nil && now-latest.UpdatedAt < int64(scheduled.Interval().Seconds()) {
+			continue
 		}
 		if _, err := model.CreateSystemTask(scheduled.Type(), scheduled.NewPayload(), nil); err != nil {
 			activeTask, activeErr := model.GetActiveSystemTask(scheduled.Type())

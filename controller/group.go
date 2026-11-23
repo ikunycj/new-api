@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +45,23 @@ func GetGroups(c *gin.Context) {
 	})
 }
 
+func applyDefaultAPITokenGroups(token *model.Token, userGroup, value string) error {
+	if value == "" {
+		return nil
+	}
+	groups := []string{value}
+	// A configured literal group name may start with '[' in an older setting.
+	if strings.HasPrefix(strings.TrimSpace(value), "[") && !ratio_setting.ContainsGroupRatio(value) {
+		if err := common.UnmarshalJsonStr(value, &groups); err != nil {
+			return errors.New("默认 API 分组必须是分组名称或 JSON 字符串数组")
+		}
+	}
+	if slices.Contains(groups, setting.AllPricingGroups) {
+		return errors.New("请选择具体的定价分组")
+	}
+	return applyTokenGroupSelection(token, userGroup, &groups)
+}
+
 func GetPricingGroups(c *gin.Context) {
 	groups, err := model.GetPricingGroupNames()
 	if err != nil {
@@ -49,14 +69,19 @@ func GetPricingGroups(c *gin.Context) {
 		return
 	}
 	displayNames := make(map[string]string, len(groups))
+	availableToNewUsers := make([]string, 0, len(groups))
 	for _, group := range groups {
 		displayNames[group] = ratio_setting.GetPricingGroupDisplayNameOrName(group)
+		if service.ValidateTokenGroup(defaultUserGroup, group) == nil {
+			availableToNewUsers = append(availableToNewUsers, group)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"message":       "",
-		"data":          groups,
-		"display_names": displayNames,
+		"success":                true,
+		"message":                "",
+		"data":                   groups,
+		"display_names":          displayNames,
+		"available_to_new_users": availableToNewUsers,
 	})
 }
 
