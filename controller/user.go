@@ -701,17 +701,27 @@ func GetUserModels(c *gin.Context) {
 			return
 		}
 
+		models, err := model.GetGroupEnabledModels(group)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "",
-			"data":    model.GetGroupEnabledModels(group),
+			"data":    models,
 		})
 		return
 	}
 
 	var models []string
 	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
+		groupModels, err := model.GetGroupEnabledModels(group)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		for _, g := range groupModels {
 			if !common.StringsContains(models, g) {
 				models = append(models, g)
 			}

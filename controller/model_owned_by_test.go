@@ -65,9 +65,7 @@ func TestGetModelListGroupsUsesUserGroupWhenTokenGroupIsEmpty(t *testing.T) {
 	groups, err := getModelListGroups(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, "default", groups.userGroup)
-	require.Empty(t, groups.tokenGroup)
-	require.Equal(t, []string{"default"}, groups.ownerGroups)
+	require.Equal(t, []string{"default"}, groups)
 }
 
 func TestGetModelListGroupsUsesExplicitTokenGroup(t *testing.T) {
@@ -79,9 +77,7 @@ func TestGetModelListGroupsUsesExplicitTokenGroup(t *testing.T) {
 	groups, err := getModelListGroups(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, "default", groups.userGroup)
-	require.Equal(t, "vip", groups.tokenGroup)
-	require.Equal(t, []string{"vip"}, groups.ownerGroups)
+	require.Equal(t, []string{"vip"}, groups)
 }
 
 func TestGetModelListGroupsUsesOrderedTokenCandidates(t *testing.T) {
@@ -94,7 +90,5 @@ func TestGetModelListGroupsUsesOrderedTokenCandidates(t *testing.T) {
 	groups, err := getModelListGroups(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, "default", groups.userGroup)
-	require.Equal(t, "auto", groups.tokenGroup)
-	require.Equal(t, []string{"claude-low", "openai-low"}, groups.ownerGroups)
+	require.Equal(t, []string{"claude-low", "openai-low"}, groups)
 }

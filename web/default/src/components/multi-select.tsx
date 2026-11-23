@@ -62,6 +62,8 @@ interface MultiSelectProps {
   id?: string
   /** Disable the entire control. */
   disabled?: boolean
+  /** Hide selected values from the dropdown when they are absent from options. */
+  hideUnlistedSelectedItems?: boolean
   /**
    * Limits rendered chips while keeping all values selected.
    * Hidden values remain searchable/removable from the dropdown.
@@ -153,19 +155,25 @@ export function MultiSelect(props: MultiSelectProps) {
     trimmedInput.length > 0 &&
     !inputMatchesExisting
 
-  // We expose all known option values + every currently selected value to Base
-  // UI's items list. This way Base UI filters them by the search query and the
-  // user can still see the chip labels mapped correctly.
+  // Include unlisted selections by default so users can find them by search.
   const items = React.useMemo(() => {
     const set = new Set<string>(props.options.map((option) => option.value))
-    for (const value of props.selected) {
-      set.add(value)
+    if (!props.hideUnlistedSelectedItems) {
+      for (const value of props.selected) {
+        set.add(value)
+      }
     }
     if (canCreate) {
       set.add(trimmedInput)
     }
     return [...set]
-  }, [props.options, props.selected, canCreate, trimmedInput])
+  }, [
+    props.options,
+    props.selected,
+    props.hideUnlistedSelectedItems,
+    canCreate,
+    trimmedInput,
+  ])
 
   const addValues = React.useCallback(
     (values: string[]) => {

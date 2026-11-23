@@ -3,6 +3,7 @@ package model
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +51,93 @@ func TestResolveBillingGroupRouteReturnsStrategyForUnconfiguredGroup(t *testing.
 	assert.False(t, configured)
 	assert.Empty(t, channels)
 	assert.Equal(t, ratio_setting.DefaultPricingGroupRoutingStrategy(), policy.RoutingStrategy)
+}
+
+func TestPricingGroupModelAllowlistCandidatesFollowEnabledRouteMembershipPostgres(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Channel{}, &Ability{}, &BillingGroupRoute{}, &BillingGroupChannel{})
+	preservePricingGroupConfiguration(t)
+	require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(
+		`{"default":["selected","unbound","zero-weight","disabled-channel"]}`,
+	))
+	channelRoutingLookup.Lock()
+	previousRouting := channelRoutingLookup.value
+	channelRoutingLookup.Unlock()
+	t.Cleanup(func() {
+		channelRoutingLookup.Lock()
+		channelRoutingLookup.value = previousRouting
+		channelRoutingLookup.Unlock()
+	})
+
+	require.NoError(t, DB.Create(&[]Channel{
+		{Id: 1, Name: "packed", Status: common.ChannelStatusEnabled},
+		{Id: 2, Name: "unbound", Status: common.ChannelStatusEnabled},
+		{Id: 3, Name: "zero-weight", Status: common.ChannelStatusEnabled},
+		{Id: 4, Name: "forced", Status: common.ChannelStatusEnabled, ForcePriority: common.GetPointer(true)},
+		{Id: 5, Name: "disabled", Status: common.ChannelStatusManuallyDisabled},
+	}).Error)
+	require.NoError(t, DB.Create(&[]Ability{
+		{Group: "default", Model: "also-available", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "selected", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "selected", ChannelId: 2, Enabled: true},
+		{Group: "default", Model: "unbound", ChannelId: 2, Enabled: true},
+		{Group: "default", Model: "zero-weight", ChannelId: 3, Enabled: true},
+		{Group: "default", Model: "forced", ChannelId: 4, Enabled: true},
+		{Group: "default", Model: "disabled-channel", ChannelId: 5, Enabled: true},
+		{Group: "default", Model: "disabled-ability", ChannelId: 1, Enabled: false},
+		{Group: "another", Model: "another-group", ChannelId: 1, Enabled: true},
+	}).Error)
+	InitChannelRoutingCache()
+	models, err := GetPricingGroupModelAllowlistCandidates("default")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"also-available", "forced", "selected", "unbound", "zero-weight"}, models)
+	visibleModels, err := GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"selected", "unbound", "zero-weight"}, visibleModels)
+
+	route := BillingGroupRoute{BillingGroup: "default", Enabled: true}
+	require.NoError(t, DB.Create(&route).Error)
+	require.NoError(t, DB.Create(&[]BillingGroupChannel{
+		{BillingGroupRouteId: route.Id, ChannelId: 1, Weight: 10, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 2, Weight: 10, Enabled: false},
+		{BillingGroupRouteId: route.Id, ChannelId: 3, Weight: 0, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 4, Weight: 0, Enabled: true},
+		{BillingGroupRouteId: route.Id, ChannelId: 5, Weight: 10, Enabled: true},
+	}).Error)
+	InitChannelRoutingCache()
+	models, err = GetPricingGroupModelAllowlistCandidates("default")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"also-available", "forced", "selected"}, models)
+	visibleModels, err = GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"selected"}, visibleModels)
+
+	routeMember := DB.Model(&BillingGroupChannel{}).Where("billing_group_route_id = ? AND channel_id = ?", route.Id, 1)
+	require.NoError(t, routeMember.Update("enabled", false).Error)
+	InitChannelRoutingCache()
+	visibleModels, err = GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.Empty(t, visibleModels)
+
+	require.NoError(t, routeMember.Update("enabled", true).Error)
+	InitChannelRoutingCache()
+	visibleModels, err = GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"selected"}, visibleModels)
+
+	channel := DB.Model(&Channel{}).Where("id = ?", 1)
+	require.NoError(t, channel.Update("status", common.ChannelStatusManuallyDisabled).Error)
+	visibleModels, err = GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.Empty(t, visibleModels)
+
+	require.NoError(t, channel.Update("status", common.ChannelStatusEnabled).Error)
+	visibleModels, err = GetGroupEnabledModels("default")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"selected"}, visibleModels)
+
+	models, err = GetPricingGroupModelAllowlistCandidates("empty")
+	require.NoError(t, err)
+	assert.Equal(t, []string{}, models)
 }
 
 func TestDeleteBoundChannelRequiresRemovingItFromRouting(t *testing.T) {

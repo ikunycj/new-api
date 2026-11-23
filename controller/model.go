@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -128,28 +127,6 @@ func channelOwnerName(channelType int) string {
 	return strings.ToLower(constant.GetChannelTypeName(channelType))
 }
 
-func getPreferredModelOwners(modelNames []string, groups []string) map[string]string {
-	channelTypes, err := model.GetPreferredModelOwnerChannelTypes(modelNames, groups)
-	if err != nil {
-		common.SysLog(fmt.Sprintf("GetPreferredModelOwnerChannelTypes error: %v", err))
-		return map[string]string{}
-	}
-
-	ownerByChannelType := make(map[int]string)
-	owners := make(map[string]string, len(channelTypes))
-	for modelName, channelType := range channelTypes {
-		owner, ok := ownerByChannelType[channelType]
-		if !ok {
-			owner = channelOwnerName(channelType)
-			ownerByChannelType[channelType] = owner
-		}
-		if owner != "" {
-			owners[modelName] = owner
-		}
-	}
-	return owners
-}
-
 func buildOpenAIModel(modelName string, ownerByModel map[string]string, supportedEndpointTypes []constant.EndpointType) dto.OpenAIModels {
 	var oaiModel dto.OpenAIModels
 	if staticModel, ok := openAIModelsMap[modelName]; ok {
@@ -169,52 +146,31 @@ func buildOpenAIModel(modelName string, ownerByModel map[string]string, supporte
 	return oaiModel
 }
 
-type modelListGroups struct {
-	userGroup   string
-	tokenGroup  string
-	ownerGroups []string
-}
-
-func getModelListGroups(c *gin.Context) (modelListGroups, error) {
+func getModelListGroups(c *gin.Context) ([]string, error) {
 	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
 	groupCandidates := common.GetContextKeyStringSlice(c, constant.ContextKeyTokenGroupCandidates)
+	if len(groupCandidates) > 0 {
+		return groupCandidates, nil
+	}
+	if tokenGroup == "auto" {
+		return nil, nil
+	}
+	if tokenGroup != "" {
+		return []string{tokenGroup}, nil
+	}
+
 	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-	if userGroup == "" && (tokenGroup == "" || tokenGroup == "auto") {
+	if userGroup == "" {
 		var err error
 		userGroup, err = model.GetUserGroup(c.GetInt("id"), false)
 		if err != nil {
-			return modelListGroups{}, err
+			return nil, err
 		}
 	}
-
-	if len(groupCandidates) > 0 {
-		return modelListGroups{
-			userGroup:   userGroup,
-			tokenGroup:  tokenGroup,
-			ownerGroups: groupCandidates,
-		}, nil
-	}
-
-	if tokenGroup == "auto" {
-		return modelListGroups{
-			userGroup:   userGroup,
-			tokenGroup:  tokenGroup,
-			ownerGroups: []string{},
-		}, nil
-	}
-
-	group := userGroup
-	if tokenGroup != "" {
-		group = tokenGroup
-	}
-	return modelListGroups{
-		userGroup:   userGroup,
-		tokenGroup:  tokenGroup,
-		ownerGroups: []string{group},
-	}, nil
+	return []string{userGroup}, nil
 }
 
-func ListModels(c *gin.Context, modelType int) {
+func getTokenVisibleModels(c *gin.Context) ([]string, map[string][]string, error) {
 	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
 	if !acceptUnsetRatioModel {
 		userId := c.GetInt("id")
@@ -228,63 +184,56 @@ func ListModels(c *gin.Context, modelType int) {
 
 	groups, err := getModelListGroups(c)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "get user group failed",
-		})
-		return
-	}
-	ownerGroups := groups.ownerGroups
-	groupModelNames := make([]string, 0)
-	seenModelNames := make(map[string]struct{})
-	for _, group := range ownerGroups {
-		models := model.GetGroupEnabledModels(group)
-		sort.Strings(models)
-		for _, modelName := range models {
-			if _, seen := seenModelNames[modelName]; seen {
-				continue
-			}
-			seenModelNames[modelName] = struct{}{}
-			groupModelNames = append(groupModelNames, modelName)
-		}
+		return nil, nil, err
 	}
 
 	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
-	tokenModelLimit := map[string]bool{}
+	var tokenModelLimit map[string]bool
 	if modelLimitEnable {
-		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
-		if ok {
-			tokenModelLimit, _ = s.(map[string]bool)
-			if tokenModelLimit == nil {
-				tokenModelLimit = map[string]bool{}
-			}
-		}
+		limits, _ := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
+		tokenModelLimit, _ = limits.(map[string]bool)
 	}
 
-	userModelNames := make([]string, 0, len(groupModelNames))
-	for _, modelName := range groupModelNames {
-		if modelLimitEnable && !tokenModelLimit[modelName] {
-			continue
+	modelNames := make([]string, 0)
+	modelGroups := make(map[string][]string)
+	for _, group := range groups {
+		models, err := model.GetGroupEnabledModels(group)
+		if err != nil {
+			return nil, nil, err
 		}
-		if !acceptUnsetRatioModel {
-			if !helper.HasModelBillingConfig(modelName) {
+		for _, modelName := range models {
+			if modelLimitEnable && !tokenModelLimit[modelName] {
 				continue
 			}
+			if modelGroups[modelName] == nil {
+				if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
+					continue
+				}
+				modelNames = append(modelNames, modelName)
+			}
+			modelGroups[modelName] = append(modelGroups[modelName], group)
 		}
-		userModelNames = append(userModelNames, modelName)
 	}
+	return modelNames, modelGroups, nil
+}
 
-	ownerByModel := map[string]string{}
-	if len(ownerGroups) > 0 {
-		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
+func ListModels(c *gin.Context, modelType int) {
+	userModelNames, modelGroups, err := getTokenVisibleModels(c)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to load model list: %v", err))
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "get models failed",
+		})
+		return
 	}
 	if len(userModelNames) > 0 {
 		model.GetPricing()
 	}
 	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
 	for _, modelName := range userModelNames {
-		endpointTypes := model.GetModelSupportEndpointTypesForGroups(modelName, ownerGroups)
-		modelItem := buildOpenAIModel(modelName, ownerByModel, endpointTypes)
+		endpointTypes := model.GetModelSupportEndpointTypesForGroups(modelName, modelGroups[modelName])
+		modelItem := buildOpenAIModel(modelName, nil, endpointTypes)
 		modelItem.OwnedBy = "gateway"
 		userOpenAiModels = append(userOpenAiModels, modelItem)
 	}
@@ -355,7 +304,18 @@ func EnabledListModels(c *gin.Context) {
 
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
-	if aiModel, ok := openAIModelsMap[modelId]; ok {
+	_, modelGroups, err := getTokenVisibleModels(c)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to load model detail: %v", err))
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "get models failed",
+		})
+		return
+	}
+	if groups, ok := modelGroups[modelId]; ok {
+		model.GetPricing()
+		aiModel := buildOpenAIModel(modelId, nil, model.GetModelSupportEndpointTypesForGroups(modelId, groups))
 		aiModel.OwnedBy = "gateway"
 		switch modelType {
 		case constant.ChannelTypeAnthropic:

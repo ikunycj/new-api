@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -87,6 +88,15 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 	}
 	if ch.Status != common.ChannelStatusEnabled {
 		return service.TaskErrorWrapperLocal(errors.New("the channel of the origin task is disabled"), "task_channel_disable", http.StatusBadRequest)
+	}
+	selectedGroup, err := service.ResolvePinnedPricingGroup(c, info.UsingGroup, info.OriginModelName, ch.Id, originTask.Group)
+	if err != nil {
+		return service.TaskErrorWrapperLocal(errors.New(i18n.T(c, i18n.MsgDistributorGroupModelForbidden)), string(types.ErrorCodeAccessDenied), http.StatusForbidden)
+	}
+	if selectedGroup != info.UsingGroup {
+		common.SetContextKey(c, constant.ContextKeyAutoGroup, selectedGroup)
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, selectedGroup)
+		info.UsingGroup = selectedGroup
 	}
 	info.LockedChannel = ch
 

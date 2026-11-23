@@ -3,12 +3,14 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -39,11 +41,40 @@ func GetAllEnableAbilityWithChannels() ([]AbilityWithChannel, error) {
 	return abilities, err
 }
 
-func GetGroupEnabledModels(group string) []string {
-	var models []string
-	// Find distinct models
-	DB.Table("abilities").Where(commonGroupCol+" = ? and enabled = ?", group, true).Distinct("model").Pluck("model", &models)
-	return models
+func GetGroupEnabledModels(group string) ([]string, error) {
+	models, err := GetPricingGroupModelAllowlistCandidates(group)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(models, func(modelName string) bool {
+		return !ratio_setting.PricingGroupAllowsModel(group, modelName)
+	}), nil
+}
+
+// GetPricingGroupModelAllowlistCandidates lists the group's configured model
+// capabilities before applying its current allowlist.
+func GetPricingGroupModelAllowlistCandidates(group string) ([]string, error) {
+	models := make([]string, 0)
+	query := DB.Table("abilities").
+		Joins("JOIN channels ON channels.id = abilities.channel_id").
+		Where("abilities."+commonGroupCol+" = ? AND abilities.enabled = ? AND channels.status = ?", group, true, common.ChannelStatusEnabled)
+	if _, entries, configured := ResolveBillingGroupRoute(group); configured {
+		if len(entries) == 0 {
+			return models, nil
+		}
+		var channelIDs, forcePriorityIDs []int
+		for _, entry := range entries {
+			if entry.Weight == 0 {
+				forcePriorityIDs = append(forcePriorityIDs, entry.ChannelId)
+			} else {
+				channelIDs = append(channelIDs, entry.ChannelId)
+			}
+		}
+		query = query.Where(DB.Where("abilities.channel_id IN ?", channelIDs).
+			Or("abilities.channel_id IN ? AND channels.force_priority = ?", forcePriorityIDs, true))
+	}
+	err := query.Distinct("abilities.model").Order("abilities.model").Pluck("abilities.model", &models).Error
+	return models, err
 }
 
 func GetEnabledModels() []string {

@@ -31,6 +31,7 @@ type GroupFormValues = {
   PricingGroupEnabled: string
   PricingGroupDisplayName: string
   PricingGroupRemark: string
+  PricingGroupModelAllowlist: string
   PricingGroupOrder: string
   PricingGroupRetryPolicy: string
   PricingGroupRoutingStrategy: string
@@ -39,23 +40,23 @@ type GroupFormValues = {
 type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   savedGroupRatio: string
-  onSave: (values: GroupFormValues) => Promise<void>
-  isSaving: boolean
+  onSave: (values: GroupFormValues) => Promise<string | undefined>
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   savedGroupRatio,
   onSave,
-  isSaving,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [isEditorValid, setIsEditorValid] = useState(true)
+  const [saveError, setSaveError] = useState<string>()
   const [
     groupRatio,
     pricingGroupEnabled,
     pricingGroupDisplayName,
     pricingGroupRemark,
+    pricingGroupModelAllowlist,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy,
@@ -66,12 +67,26 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       'PricingGroupEnabled',
       'PricingGroupDisplayName',
       'PricingGroupRemark',
+      'PricingGroupModelAllowlist',
       'PricingGroupOrder',
       'PricingGroupRetryPolicy',
       'PricingGroupRoutingStrategy',
     ],
   })
-  const { isValid } = useFormState({ control: form.control })
+  const { isSubmitting, isValid } = useFormState({ control: form.control })
+  const isSaveDisabled = isSubmitting || !isEditorValid || !isValid
+
+  const submit = useCallback(
+    (onSaved?: () => void) => {
+      void form.handleSubmit(async (values) => {
+        setSaveError(undefined)
+        const error = await onSave(values)
+        setSaveError(error)
+        if (!error) onSaved?.()
+      })()
+    },
+    [form, onSave]
+  )
 
   const handleFieldChange = useCallback(
     (field: keyof GroupFormValues, value: string) => {
@@ -89,10 +104,10 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         <Button
           type='button'
           size='sm'
-          onClick={form.handleSubmit(onSave)}
-          disabled={isSaving || !isEditorValid || !isValid}
+          onClick={() => submit()}
+          disabled={isSaveDisabled}
         >
-          {isSaving ? t('Saving...') : t('Save')}
+          {isSubmitting ? t('Saving...') : t('Save')}
         </Button>
       </SettingsPageActionsPortal>
       <GroupRatioVisualEditor
@@ -100,10 +115,15 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         pricingGroupEnabled={pricingGroupEnabled}
         pricingGroupDisplayName={pricingGroupDisplayName}
         pricingGroupRemark={pricingGroupRemark}
+        pricingGroupModelAllowlist={pricingGroupModelAllowlist}
         pricingGroupOrder={pricingGroupOrder}
         pricingGroupRetryPolicy={pricingGroupRetryPolicy}
         pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
         savedGroupRatio={savedGroupRatio}
+        isSaving={isSubmitting}
+        isSaveDisabled={isSaveDisabled}
+        saveError={saveError}
+        onSave={submit}
         onValidationChange={setIsEditorValid}
         onChange={(field, value) =>
           handleFieldChange(field as keyof GroupFormValues, value)

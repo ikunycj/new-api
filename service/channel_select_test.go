@@ -166,6 +166,47 @@ func TestRuntimeRoutingRejectsDisabledPricingGroup(t *testing.T) {
 	assert.Equal(t, "active", group)
 }
 
+func TestPricingGroupModelAllowlistControlsSelectionAndRetry(t *testing.T) {
+	channels := setupChannelRoute(t)
+	previousAllowlist := ratio_setting.PricingGroupModelAllowlist2JSONString()
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(previousAllowlist))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"claude":1,"economy":1}`))
+	require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(`{"claude":["another-model"],"economy":["claude-test"]}`))
+	require.NoError(t, model.DB.Create(&model.Ability{
+		Group:     "economy",
+		Model:     "claude-test",
+		ChannelId: channels[0].Id,
+		Enabled:   true,
+		Weight:    100,
+	}).Error)
+	model.InitChannelCache()
+
+	ctx, _ := gin.CreateTestContext(nil)
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, []string{"claude", "economy"})
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: "claude-test"}
+	selected, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, channels[0].Id, selected.Id)
+	assert.Equal(t, "economy", group)
+
+	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+	param.MarkChannelAttempted(selected.Id)
+	param.HandleChannelFailure(selected.Id, "switch_channel")
+	assert.False(t, param.HasNextRetry())
+	assert.False(t, param.AdvanceRetry())
+
+	pinnedGroup, err := ResolvePinnedPricingGroup(ctx, "auto", "claude-test", channels[0].Id, "claude")
+	require.NoError(t, err)
+	assert.Equal(t, "economy", pinnedGroup)
+	_, err = ResolvePinnedPricingGroup(ctx, "auto", "claude-test", channels[1].Id, "claude")
+	assert.ErrorIs(t, err, ErrPricingGroupModelForbidden)
+}
+
 func TestCrossGroupRetryExhaustsEarlierGroupsFirst(t *testing.T) {
 	channels := setupChannelRoute(t)
 	weight := uint(100)

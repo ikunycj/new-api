@@ -18,6 +18,7 @@ func preservePricingGroupConfiguration(t *testing.T) {
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupEnabled2JSONString(), &configuration.GroupEnabled))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupDisplayName2JSONString(), &configuration.GroupDisplayNames))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRemark2JSONString(), &configuration.GroupRemarks))
+	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupModelAllowlist2JSONString(), &configuration.GroupModelAllowlist))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupOrder2JSONString(), &configuration.GroupOrder))
 	require.NoError(t, common.UnmarshalJsonStr(ratio_setting.PricingGroupRetryPolicy2JSONString(), &configuration.RetryPolicies))
 	var routingConfiguration ratio_setting.PricingGroupRoutingConfiguration
@@ -168,7 +169,7 @@ func TestUpdatePricingGroupConfigurationPersistsAllSettings(t *testing.T) {
 
 	var stored []Option
 	require.NoError(t, DB.Where(commonKeyCol+" IN ?", pricingGroupOptionKeys).Find(&stored).Error)
-	require.Len(t, stored, 7)
+	require.Len(t, stored, len(pricingGroupOptionKeys))
 	var retryPolicyValue string
 	var enabledValue string
 	for _, option := range stored {
@@ -303,4 +304,43 @@ func TestLoadOptionsPublishesCompletePricingGroupConfiguration(t *testing.T) {
 	assert.JSONEq(t, `{"alpha":true,"beta":true}`, storedEnabled)
 	assert.True(t, ratio_setting.IsPricingGroupEnabled("alpha"))
 	assert.True(t, ratio_setting.IsPricingGroupEnabled("beta"))
+}
+
+func TestPricingGroupModelAllowlistPersistsReloadsAndSurvivesOmittedUpdatePostgres(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Option{}, &ChannelMonitor{}, &ChannelMonitorHistory{})
+	preservePricingGroupConfiguration(t)
+
+	initialRatios := `{"alpha":1,"beta":2}`
+	initialEnabled := `{"alpha":true,"beta":true}`
+	initialOrder := `["alpha","beta"]`
+	initialRetryPolicies := `{"alpha":{"mode":"follow_channels"},"beta":{"mode":"follow_channels"}}`
+
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		initialRatios, initialEnabled, initialOrder, initialRetryPolicies, `{}`,
+		`{}`, `{}`, `{"alpha":["model-b","model-a"],"beta":["model-c"]}`,
+	))
+	assert.True(t, ratio_setting.PricingGroupAllowsModel("alpha", "model-a"))
+	assert.False(t, ratio_setting.PricingGroupAllowsModel("alpha", "Model-a"))
+	assert.False(t, ratio_setting.PricingGroupAllowsModel("alpha", "model-c"))
+
+	// A second node can commit a new allowlist before this node refreshes its options.
+	var stored Option
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", pricingGroupModelAllowlistOptionKey).First(&stored).Error)
+	assert.JSONEq(t, `{"alpha":["model-a","model-b"],"beta":["model-c"]}`, stored.Value)
+	require.NoError(t, DB.Model(&stored).Update("value", `{"alpha":["model-d"],"beta":["model-c"]}`).Error)
+	require.NoError(t, UpdatePricingGroupConfiguration(
+		`{"alpha":1}`, `{"alpha":true}`, `["alpha"]`,
+		`{"alpha":{"mode":"follow_channels"}}`, `{}`,
+	))
+	require.NoError(t, DB.Where(commonKeyCol+" = ?", pricingGroupModelAllowlistOptionKey).First(&stored).Error)
+	assert.JSONEq(t, `{"alpha":["model-d"]}`, stored.Value)
+
+	// Older versions may remove a group without removing its allowlist entry.
+	require.NoError(t, DB.Model(&stored).Update("value", `{"alpha":["model-d"],"beta":["model-c"]}`).Error)
+	require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(`{}`))
+	loadOptionsFromDatabase()
+	assert.True(t, ratio_setting.PricingGroupAllowsModel("alpha", "model-d"))
+	assert.False(t, ratio_setting.PricingGroupAllowsModel("alpha", "model-a"))
+	assert.True(t, ratio_setting.PricingGroupAllowsModel("beta", "model-a"))
+	assert.JSONEq(t, `{"alpha":["model-d"]}`, common.OptionMap[pricingGroupModelAllowlistOptionKey])
 }

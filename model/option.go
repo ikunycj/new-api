@@ -30,8 +30,9 @@ var errPricingGroupOptionRequiresAtomicUpdate = errors.New("pricing group option
 var pricingGroupConfigurationUpdateMutex sync.Mutex
 
 const (
-	pricingGroupDisplayNameOptionKey = "PricingGroupDisplayName"
-	pricingGroupRemarkOptionKey      = "PricingGroupRemark"
+	pricingGroupDisplayNameOptionKey    = "PricingGroupDisplayName"
+	pricingGroupRemarkOptionKey         = "PricingGroupRemark"
+	pricingGroupModelAllowlistOptionKey = "PricingGroupModelAllowlist"
 )
 
 var pricingGroupOptionKeys = []string{
@@ -42,6 +43,7 @@ var pricingGroupOptionKeys = []string{
 	"PricingGroupOrder",
 	"PricingGroupRetryPolicy",
 	"PricingGroupRoutingStrategy",
+	pricingGroupModelAllowlistOptionKey,
 }
 
 func isPricingGroupOptionKey(key string) bool {
@@ -89,15 +91,24 @@ func pricingGroupOptionValues(configuration *ratio_setting.PricingGroupConfigura
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{
-		"GroupRatio":                     string(ratioData),
-		"PricingGroupEnabled":            string(enabledData),
-		pricingGroupDisplayNameOptionKey: string(displayNameData),
-		"PricingGroupOrder":              string(orderData),
-		"PricingGroupRetryPolicy":        string(retryPolicyData),
-		"PricingGroupRoutingStrategy":    string(routingStrategyData),
-		pricingGroupRemarkOptionKey:      string(remarkData),
-	}, nil
+	values := map[string]string{
+		"GroupRatio":                        string(ratioData),
+		"PricingGroupEnabled":               string(enabledData),
+		pricingGroupDisplayNameOptionKey:    string(displayNameData),
+		"PricingGroupOrder":                 string(orderData),
+		"PricingGroupRetryPolicy":           string(retryPolicyData),
+		"PricingGroupRoutingStrategy":       string(routingStrategyData),
+		pricingGroupRemarkOptionKey:         string(remarkData),
+		pricingGroupModelAllowlistOptionKey: "{}",
+	}
+	if configuration.GroupModelAllowlist != nil {
+		modelAllowlistData, err := common.Marshal(configuration.GroupModelAllowlist)
+		if err != nil {
+			return nil, err
+		}
+		values[pricingGroupModelAllowlistOptionKey] = string(modelAllowlistData)
+	}
+	return values, nil
 }
 
 var retiredOptionKeys = []string{
@@ -266,6 +277,7 @@ func InitOptionMap() {
 	common.OptionMap["PricingGroupEnabled"] = ratio_setting.PricingGroupEnabled2JSONString()
 	common.OptionMap[pricingGroupDisplayNameOptionKey] = ratio_setting.PricingGroupDisplayName2JSONString()
 	common.OptionMap[pricingGroupRemarkOptionKey] = ratio_setting.PricingGroupRemark2JSONString()
+	common.OptionMap[pricingGroupModelAllowlistOptionKey] = ratio_setting.PricingGroupModelAllowlist2JSONString()
 	common.OptionMap["PricingGroupOrder"] = ratio_setting.PricingGroupOrder2JSONString()
 	common.OptionMap["PricingGroupRetryPolicy"] = ratio_setting.PricingGroupRetryPolicy2JSONString()
 	common.OptionMap["PricingGroupRoutingStrategy"] = ratio_setting.PricingGroupRoutingStrategy2JSONString()
@@ -324,11 +336,12 @@ func loadOptionsFromDatabase() {
 		return
 	}
 	pricingGroupValues := map[string]string{
-		"GroupRatio":                     ratio_setting.GroupRatio2JSONString(),
-		"PricingGroupEnabled":            "",
-		pricingGroupDisplayNameOptionKey: "{}",
-		pricingGroupRemarkOptionKey:      "{}",
-		"PricingGroupOrder":              ratio_setting.PricingGroupOrder2JSONString(),
+		"GroupRatio":                        ratio_setting.GroupRatio2JSONString(),
+		"PricingGroupEnabled":               "",
+		pricingGroupDisplayNameOptionKey:    "{}",
+		pricingGroupRemarkOptionKey:         "{}",
+		pricingGroupModelAllowlistOptionKey: "{}",
+		"PricingGroupOrder":                 ratio_setting.PricingGroupOrder2JSONString(),
 		// These settings were introduced with the unified pricing-group editor.
 		// An absent option is a fresh initialization, not a reason to reuse a
 		// possibly stale in-memory snapshot.
@@ -356,6 +369,7 @@ func loadOptionsFromDatabase() {
 		pricingGroupValues["PricingGroupRoutingStrategy"],
 		pricingGroupValues[pricingGroupRemarkOptionKey],
 		pricingGroupValues[pricingGroupDisplayNameOptionKey],
+		pricingGroupValues[pricingGroupModelAllowlistOptionKey],
 	)
 	if err != nil {
 		common.SysLog("failed to load pricing group configuration: " + err.Error())
@@ -428,14 +442,17 @@ func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrde
 	if len(optionalJSON) > 1 {
 		displayNameJSON = optionalJSON[1]
 	}
+	pricingGroupJSON := []string{remarkJSON, displayNameJSON}
+	if len(optionalJSON) > 2 {
+		pricingGroupJSON = append(pricingGroupJSON, optionalJSON[2])
+	}
 	configuration, err := ratio_setting.ParsePricingGroupConfiguration(
 		groupRatioJSON,
 		groupEnabledJSON,
 		groupOrderJSON,
 		retryPolicyJSON,
 		routingStrategyJSON,
-		remarkJSON,
-		displayNameJSON,
+		pricingGroupJSON...,
 	)
 	if err != nil {
 		return err
@@ -459,6 +476,25 @@ func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrde
 			var option Option
 			if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", key).First(&option).Error; err != nil {
 				return err
+			}
+			if key == pricingGroupModelAllowlistOptionKey && configuration.GroupModelAllowlist == nil {
+				// Read the locked row so an update from another node survives
+				// until this process next refreshes its in-memory options.
+				allowlist, err := ratio_setting.ParsePricingGroupModelAllowlist(option.Value, nil)
+				if err != nil {
+					return err
+				}
+				for group := range allowlist {
+					if _, exists := configuration.GroupRatios[group]; !exists {
+						delete(allowlist, group)
+					}
+				}
+				data, err := common.Marshal(allowlist)
+				if err != nil {
+					return err
+				}
+				configuration.GroupModelAllowlist = allowlist
+				values[key] = string(data)
 			}
 			if err := tx.Model(&option).Update("value", values[key]).Error; err != nil {
 				return err

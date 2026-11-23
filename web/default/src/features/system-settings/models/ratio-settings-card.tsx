@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +32,8 @@ import { resetModelRatios, updatePricingGroupConfiguration } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import type { UpdateOptionResponse } from '../types'
+import { canonicalizeJson } from './global-settings-form'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
@@ -144,6 +147,20 @@ const createGroupSchema = (t: Translate) =>
         !Array.isArray(value) &&
         Object.values(value).every((remark) => typeof remark === 'string'),
     }),
+    PricingGroupModelAllowlist: createJsonStringField(t, {
+      predicate: (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every(
+          (models) =>
+            Array.isArray(models) &&
+            models.length > 0 &&
+            models.every(
+              (model) => typeof model === 'string' && model.trim() !== ''
+            )
+        ),
+    }),
     PricingGroupOrder: createJsonStringField(t, {
       predicate: (value) =>
         Array.isArray(value) && value.every((item) => typeof item === 'string'),
@@ -202,24 +219,9 @@ export function RatioSettingsCard({
       toast.error(error.message || t('Failed to reset model ratios'))
     },
   })
-  const pricingGroupMutation = useMutation({
+  const { mutateAsync: savePricingGroupConfiguration } = useMutation({
     mutationFn: updatePricingGroupConfiguration,
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success('定价分组设置已保存')
-        queryClient.invalidateQueries({ queryKey: ['system-options'] })
-      } else {
-        toast.error(data.message || '定价分组设置保存失败')
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || '定价分组设置保存失败')
-    },
   })
-  const {
-    mutateAsync: savePricingGroupConfiguration,
-    isPending: isSavingPricingGroups,
-  } = pricingGroupMutation
 
   const initialModelValues = {
     ModelPrice: normalizeJsonString(modelDefaults.ModelPrice),
@@ -246,6 +248,9 @@ export function RatioSettingsCard({
       groupDefaults.PricingGroupDisplayName
     ),
     PricingGroupRemark: normalizeJsonString(groupDefaults.PricingGroupRemark),
+    PricingGroupModelAllowlist: canonicalizeJson(
+      groupDefaults.PricingGroupModelAllowlist
+    ),
     PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
     PricingGroupRetryPolicy: normalizeJsonString(
       groupDefaults.PricingGroupRetryPolicy
@@ -292,6 +297,9 @@ export function RatioSettingsCard({
       ),
       PricingGroupRemark: formatJsonForTextarea(
         groupDefaults.PricingGroupRemark
+      ),
+      PricingGroupModelAllowlist: formatJsonForTextarea(
+        groupDefaults.PricingGroupModelAllowlist
       ),
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
@@ -348,6 +356,9 @@ export function RatioSettingsCard({
         groupDefaults.PricingGroupDisplayName
       ),
       PricingGroupRemark: normalizeJsonString(groupDefaults.PricingGroupRemark),
+      PricingGroupModelAllowlist: canonicalizeJson(
+        groupDefaults.PricingGroupModelAllowlist
+      ),
       PricingGroupOrder: normalizeJsonString(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: normalizeJsonString(
         groupDefaults.PricingGroupRetryPolicy
@@ -368,6 +379,9 @@ export function RatioSettingsCard({
       ),
       PricingGroupRemark: formatJsonForTextarea(
         groupDefaults.PricingGroupRemark
+      ),
+      PricingGroupModelAllowlist: formatJsonForTextarea(
+        groupDefaults.PricingGroupModelAllowlist
       ),
       PricingGroupOrder: formatJsonForTextarea(groupDefaults.PricingGroupOrder),
       PricingGroupRetryPolicy: formatJsonForTextarea(
@@ -431,6 +445,9 @@ export function RatioSettingsCard({
           values.PricingGroupDisplayName
         ),
         PricingGroupRemark: normalizeJsonString(values.PricingGroupRemark),
+        PricingGroupModelAllowlist: canonicalizeJson(
+          values.PricingGroupModelAllowlist
+        ),
         PricingGroupOrder: normalizeJsonString(values.PricingGroupOrder),
         PricingGroupRetryPolicy: normalizeJsonString(
           values.PricingGroupRetryPolicy
@@ -448,28 +465,49 @@ export function RatioSettingsCard({
 
       if (updates.length === 0) return
 
-      const result = await savePricingGroupConfiguration({
-        group_ratio: normalized.GroupRatio,
-        pricing_group_enabled: normalized.PricingGroupEnabled,
-        pricing_group_display_name: normalized.PricingGroupDisplayName,
-        pricing_group_remark: normalized.PricingGroupRemark,
-        pricing_group_order: normalized.PricingGroupOrder,
-        pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
-        pricing_group_routing_strategy: normalized.PricingGroupRoutingStrategy,
-      })
-      if (!result.success) return
+      try {
+        const result = await savePricingGroupConfiguration({
+          group_ratio: normalized.GroupRatio,
+          pricing_group_enabled: normalized.PricingGroupEnabled,
+          pricing_group_display_name: normalized.PricingGroupDisplayName,
+          pricing_group_remark: normalized.PricingGroupRemark,
+          pricing_group_model_allowlist: updates.includes(
+            'PricingGroupModelAllowlist'
+          )
+            ? normalized.PricingGroupModelAllowlist
+            : undefined,
+          pricing_group_order: normalized.PricingGroupOrder,
+          pricing_group_retry_policy: normalized.PricingGroupRetryPolicy,
+          pricing_group_routing_strategy:
+            normalized.PricingGroupRoutingStrategy,
+        })
+        if (!result.success) {
+          return result.message || '保存定价分组失败，请重试。'
+        }
+      } catch (error) {
+        return (
+          (isAxiosError<UpdateOptionResponse>(error) &&
+            error.response?.data?.message) ||
+          '保存定价分组失败，请重试。'
+        )
+      }
+
+      groupNormalizedDefaults.current = normalized
+      setSavedGroupValues(normalized)
 
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['system-options'] }),
         queryClient.invalidateQueries({ queryKey: ['channel-monitors'] }),
         queryClient.invalidateQueries({ queryKey: ['group-status'] }),
         queryClient.invalidateQueries({ queryKey: ['pricing'] }),
         queryClient.invalidateQueries({ queryKey: ['pricing-groups'] }),
         queryClient.invalidateQueries({ queryKey: ['pricing-group-metrics'] }),
         queryClient.invalidateQueries({ queryKey: ['user-groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-models'] }),
+        queryClient.invalidateQueries({ queryKey: ['api-key-model-catalog'] }),
       ])
 
-      groupNormalizedDefaults.current = normalized
-      setSavedGroupValues(normalized)
+      toast.success('定价分组设置已保存')
     },
     [queryClient, savePricingGroupConfiguration]
   )
@@ -520,7 +558,6 @@ export function RatioSettingsCard({
           form={groupForm}
           savedGroupRatio={savedGroupValues.GroupRatio}
           onSave={saveGroupRatios}
-          isSaving={isSavingPricingGroups}
         />
       )
     }

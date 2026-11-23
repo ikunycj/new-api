@@ -17,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var ErrPricingGroupModelForbidden = errors.New("model is forbidden by the pricing group allowlist")
+
 // RetryParam is request-local routing state. Candidate ranking is performed
 // over the complete capability set.
 // BillingGroupChannel priority is used only as a final stable route-order
@@ -51,6 +53,7 @@ type RetryParam struct {
 	groupConfigured    map[string]bool
 	groups             []string
 	groupsInit         bool
+	groupsErr          error
 	randomIntn         func(int) int
 	pendingSchedule    *routingScheduleTicket
 }
@@ -523,7 +526,8 @@ func (p *RetryParam) channelGroupHasBudget(channelID int) bool {
 	if p == nil {
 		return false
 	}
-	return p.groupHasBudget(p.groupForChannel(channelID))
+	group := p.groupForChannel(channelID)
+	return ratio_setting.PricingGroupAllowsModel(group, p.ModelName) && p.groupHasBudget(group)
 }
 
 func (p *RetryParam) groupForChannel(channelID int) string {
@@ -556,14 +560,18 @@ func (p *RetryParam) AdvanceRetry() bool {
 	return len(p.availableCandidates(false)) > 0
 }
 
-func (p *RetryParam) candidateGroups() ([]string, error) {
+func (p *RetryParam) candidateGroups() (groups []string, err error) {
 	if p == nil {
 		return nil, errors.New("retry parameter is nil")
 	}
 	if p.groupsInit {
-		return p.groups, nil
+		return p.groups, p.groupsErr
 	}
 	p.groupsInit = true
+	defer func() {
+		p.groups = groups
+		p.groupsErr = err
+	}()
 	if p.TokenGroup != "auto" {
 		group := strings.TrimSpace(p.TokenGroup)
 		if group == "" {
@@ -572,17 +580,18 @@ func (p *RetryParam) candidateGroups() ([]string, error) {
 		if !p.AllowDisabledPricingGroups && ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
 			return nil, errors.New("pricing group is disabled: " + group)
 		}
-		p.groups = []string{group}
-		return p.groups, nil
+		if !ratio_setting.PricingGroupAllowsModel(group, p.ModelName) {
+			return nil, ErrPricingGroupModelForbidden
+		}
+		return []string{group}, nil
 	}
-	var groups []string
-	if candidates := common.GetContextKeyStringSlice(p.Ctx, constant.ContextKeyTokenGroupCandidates); len(candidates) > 0 {
-		groups = candidates
-	} else {
+	candidates := common.GetContextKeyStringSlice(p.Ctx, constant.ContextKeyTokenGroupCandidates)
+	if len(candidates) == 0 {
 		return nil, errors.New("auto group requires explicit candidates")
 	}
-	seen := make(map[string]struct{}, len(groups))
-	for _, raw := range groups {
+	seen := make(map[string]struct{}, len(candidates))
+	blockedByAllowlist := false
+	for _, raw := range candidates {
 		group := strings.TrimSpace(raw)
 		if group == "" {
 			continue
@@ -594,20 +603,59 @@ func (p *RetryParam) candidateGroups() ([]string, error) {
 			continue
 		}
 		seen[group] = struct{}{}
-		p.groups = append(p.groups, group)
+		if !ratio_setting.PricingGroupAllowsModel(group, p.ModelName) {
+			blockedByAllowlist = true
+			continue
+		}
+		groups = append(groups, group)
 	}
 	if selected := common.GetContextKeyString(p.Ctx, constant.ContextKeyAutoGroup); selected != "" {
-		for i, group := range p.groups {
+		for i, group := range groups {
 			if group == selected {
 				p.groupIndex = i
 				break
 			}
 		}
 	}
-	if len(p.groups) == 0 {
+	if len(groups) == 0 {
+		if blockedByAllowlist {
+			return nil, ErrPricingGroupModelForbidden
+		}
 		return nil, errors.New("no usable groups for token")
 	}
-	return p.groups, nil
+	return groups, nil
+}
+
+// ResolvePinnedPricingGroup checks the model policy when a request must stay
+// on a specific channel, such as a continuation of a previous task.
+func ResolvePinnedPricingGroup(c *gin.Context, group, modelName string, channelID int, preferredGroup string) (string, error) {
+	if group != "auto" {
+		if !ratio_setting.PricingGroupAllowsModel(group, modelName) {
+			return "", ErrPricingGroupModelForbidden
+		}
+		return group, nil
+	}
+	candidates := common.GetContextKeyStringSlice(c, constant.ContextKeyTokenGroupCandidates)
+	if !slices.ContainsFunc(candidates, ratio_setting.HasPricingGroupModelAllowlist) {
+		return group, nil
+	}
+	selected := ""
+	for _, candidate := range candidates {
+		if !ratio_setting.PricingGroupAllowsModel(candidate, modelName) ||
+			!model.IsChannelEnabledForGroupModel(candidate, modelName, channelID) {
+			continue
+		}
+		if candidate == preferredGroup {
+			return candidate, nil
+		}
+		if selected == "" {
+			selected = candidate
+		}
+	}
+	if selected == "" {
+		return "", ErrPricingGroupModelForbidden
+	}
+	return selected, nil
 }
 
 func (p *RetryParam) currentGroup() (string, error) {
@@ -806,6 +854,9 @@ func (p *RetryParam) dynamicCandidates(groups []string, groupIndices []int, comm
 	groupCandidates := make([][]dynamicChannelCandidate, len(groups))
 	for index, group := range groups {
 		if !p.AllowDisabledPricingGroups && ratio_setting.ContainsGroupRatio(group) && !ratio_setting.IsPricingGroupEnabled(group) {
+			continue
+		}
+		if !ratio_setting.PricingGroupAllowsModel(group, p.ModelName) {
 			continue
 		}
 		if !p.groupHasBudget(group) {

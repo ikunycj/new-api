@@ -117,6 +117,21 @@ type pricingGroupConfigurationUpdateRequest struct {
 	PricingGroupRetryPolicy     string  `json:"pricing_group_retry_policy"`
 	PricingGroupRoutingStrategy string  `json:"pricing_group_routing_strategy"`
 	PricingGroupRemark          *string `json:"pricing_group_remark"`
+	PricingGroupModelAllowlist  *string `json:"pricing_group_model_allowlist"`
+}
+
+func GetPricingGroupModelAllowlistCandidates(c *gin.Context) {
+	group := c.Query("group")
+	if group == "" || !ratio_setting.ContainsGroupRatio(group) {
+		common.ApiErrorMsg(c, "定价分组不存在")
+		return
+	}
+	models, err := model.GetPricingGroupModelAllowlistCandidates(group)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, models)
 }
 
 // PricingGroupRoutingStrategy CRUD is intentionally represented by the same
@@ -131,7 +146,7 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 		return
 	}
 	var optionalJSON []string
-	if request.PricingGroupRemark != nil || request.PricingGroupDisplayName != nil {
+	if request.PricingGroupRemark != nil || request.PricingGroupDisplayName != nil || request.PricingGroupModelAllowlist != nil {
 		remarkJSON := ratio_setting.PricingGroupRemark2JSONString()
 		if request.PricingGroupRemark != nil {
 			remarkJSON = *request.PricingGroupRemark
@@ -141,6 +156,9 @@ func UpdatePricingGroupConfiguration(c *gin.Context) {
 			displayNameJSON = *request.PricingGroupDisplayName
 		}
 		optionalJSON = []string{remarkJSON, displayNameJSON}
+	}
+	if request.PricingGroupModelAllowlist != nil {
+		optionalJSON = append(optionalJSON, *request.PricingGroupModelAllowlist)
 	}
 	if err := model.UpdatePricingGroupConfiguration(
 		request.GroupRatio,
@@ -183,7 +201,7 @@ func UpdateOption(c *gin.Context) {
 		common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
 		return
 	}
-	if option.Key == "GroupRatio" || option.Key == "PricingGroupEnabled" || option.Key == "PricingGroupRemark" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" {
+	if option.Key == "GroupRatio" || option.Key == "PricingGroupEnabled" || option.Key == "PricingGroupRemark" || option.Key == "PricingGroupOrder" || option.Key == "PricingGroupRetryPolicy" || option.Key == "PricingGroupRoutingStrategy" || option.Key == "PricingGroupModelAllowlist" {
 		common.ApiErrorMsg(c, "定价分组配置必须统一保存")
 		return
 	}

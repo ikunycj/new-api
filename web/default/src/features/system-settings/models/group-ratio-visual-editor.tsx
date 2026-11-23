@@ -31,6 +31,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import {
   sideDrawerContentClassName,
+  sideDrawerFooterClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
@@ -51,6 +52,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -82,6 +84,7 @@ import type {
 import { formatQuota } from '@/lib/format'
 
 import { safeJsonParse, tryJsonParse } from '../utils/json-parser'
+import { PricingGroupModelAllowlistField } from './pricing-group-model-allowlist-field'
 import {
   STRATEGY_WEIGHT_FIELDS,
   strategyWeightPercentages,
@@ -93,10 +96,15 @@ type GroupRatioVisualEditorProps = {
   pricingGroupEnabled: string
   pricingGroupDisplayName: string
   pricingGroupRemark: string
+  pricingGroupModelAllowlist: string
   pricingGroupOrder: string
   pricingGroupRetryPolicy: string
   pricingGroupRoutingStrategy: string
   savedGroupRatio: string
+  isSaving: boolean
+  isSaveDisabled: boolean
+  saveError?: string
+  onSave: (onSaved: () => void) => void
   onChange: (field: string, value: string) => void
   onValidationChange: (isValid: boolean) => void
 }
@@ -109,6 +117,7 @@ type GroupPricingRow = {
   name: string
   displayName: string
   remark: string
+  modelAllowlist: string[] | null
   enabled: boolean
   ratio: string
   retryMode: PricingGroupRetryMode
@@ -252,6 +261,15 @@ function parsePricingGroupOrder(value: string): string[] {
     fallback: [],
     silent: true,
   }).filter((name) => typeof name === 'string' && name.trim() !== '')
+}
+
+function parsePricingGroupModelAllowlist(value: string) {
+  return (
+    safeJsonParse<Record<string, string[]>>(value, {
+      fallback: {},
+      silent: true,
+    }) ?? {}
+  )
 }
 
 function parsePricingGroupRetryPolicy(
@@ -403,6 +421,7 @@ function isValidGroupPricingRow(
 ): boolean {
   if (!row.name.trim() || !isValidGroupRatio(row.ratio)) return false
   if (!strategyIds.has(row.strategyId)) return false
+  if (row.modelAllowlist?.length === 0) return false
   if (
     row.retryMode !== 'follow_channels' &&
     !isValidFixedRetryTimes(row.retryTimes)
@@ -454,6 +473,7 @@ function buildGroupPricingRows(
   pricingGroupEnabled: string,
   pricingGroupDisplayName: string,
   pricingGroupRemark: string,
+  pricingGroupModelAllowlist: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
   configuration: PricingGroupRoutingConfiguration
@@ -473,6 +493,9 @@ function buildGroupPricingRows(
     orderedNames
   )
   const retryPolicies = parsePricingGroupRetryPolicy(pricingGroupRetryPolicy)
+  const modelAllowlists = parsePricingGroupModelAllowlist(
+    pricingGroupModelAllowlist
+  )
 
   return orderedNames.map((name) => {
     const retryPolicy = retryPolicies[name] ?? {
@@ -485,6 +508,9 @@ function buildGroupPricingRows(
       name,
       displayName: displayNamesByName[name] ?? '',
       remark: remarksByName[name] ?? '',
+      modelAllowlist: Object.hasOwn(modelAllowlists, name)
+        ? modelAllowlists[name]
+        : null,
       enabled: enabledByName[name],
       ratio: String(normalizeRatio(ratioMap[name])),
       retryMode: retryPolicy.mode,
@@ -502,6 +528,7 @@ function serializeGroupPricingState(
   const pricingGroupEnabled: Record<string, boolean> = {}
   const pricingGroupDisplayName: Record<string, string> = {}
   const pricingGroupRemark: Record<string, string> = {}
+  const pricingGroupModelAllowlist = new Map<string, string[]>()
   const pricingGroupOrder: string[] = []
   const pricingGroupRetryPolicy: Record<string, PricingGroupRetryPolicy> = {}
   const pricingGroupRoutingStrategies: Record<
@@ -532,6 +559,9 @@ function serializeGroupPricingState(
     if (displayName) pricingGroupDisplayName[name] = displayName
     const remark = row.remark.trim()
     if (remark) pricingGroupRemark[name] = remark
+    if (row.modelAllowlist !== null) {
+      pricingGroupModelAllowlist.set(name, row.modelAllowlist)
+    }
     pricingGroupRetryPolicy[name] = {
       mode: row.retryMode,
       retry_times:
@@ -545,6 +575,15 @@ function serializeGroupPricingState(
     PricingGroupEnabled: JSON.stringify(pricingGroupEnabled, null, 2),
     PricingGroupDisplayName: JSON.stringify(pricingGroupDisplayName, null, 2),
     PricingGroupRemark: JSON.stringify(pricingGroupRemark, null, 2),
+    PricingGroupModelAllowlist: JSON.stringify(
+      Object.fromEntries(
+        [...pricingGroupModelAllowlist].sort(([left], [right]) =>
+          left < right ? -1 : Number(left > right)
+        )
+      ),
+      null,
+      2
+    ),
     PricingGroupOrder: JSON.stringify(pricingGroupOrder),
     PricingGroupRetryPolicy: JSON.stringify(pricingGroupRetryPolicy, null, 2),
     PricingGroupRoutingStrategy: JSON.stringify(
@@ -581,6 +620,9 @@ function groupPricingSignature(
       serialized.PricingGroupRemark,
       rows.map((row) => row.name.trim()).filter(Boolean)
     ),
+    modelAllowlist: parsePricingGroupModelAllowlist(
+      serialized.PricingGroupModelAllowlist
+    ),
     order: parsePricingGroupOrder(serialized.PricingGroupOrder),
     retryPolicies: parsePricingGroupRetryPolicy(
       serialized.PricingGroupRetryPolicy
@@ -594,6 +636,7 @@ function sourceGroupPricingSignature(
   pricingGroupEnabled: string,
   pricingGroupDisplayName: string,
   pricingGroupRemark: string,
+  pricingGroupModelAllowlist: string,
   pricingGroupOrder: string,
   pricingGroupRetryPolicy: string,
   pricingGroupRoutingStrategy: string
@@ -618,6 +661,7 @@ function sourceGroupPricingSignature(
     enabled: parsePricingGroupEnabled(pricingGroupEnabled, names),
     displayNames: parsePricingGroupDisplayName(pricingGroupDisplayName, names),
     remarks: parsePricingGroupRemark(pricingGroupRemark, names),
+    modelAllowlist: parsePricingGroupModelAllowlist(pricingGroupModelAllowlist),
     order: names,
     retryPolicies,
     routing,
@@ -636,10 +680,15 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   pricingGroupEnabled,
   pricingGroupDisplayName,
   pricingGroupRemark,
+  pricingGroupModelAllowlist,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
   pricingGroupRoutingStrategy,
   savedGroupRatio,
+  isSaving,
+  isSaveDisabled,
+  saveError,
+  onSave,
   onChange,
   onValidationChange,
 }: GroupRatioVisualEditorProps) {
@@ -649,41 +698,38 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       pricingGroupEnabled={pricingGroupEnabled}
       pricingGroupDisplayName={pricingGroupDisplayName}
       pricingGroupRemark={pricingGroupRemark}
+      pricingGroupModelAllowlist={pricingGroupModelAllowlist}
       pricingGroupOrder={pricingGroupOrder}
       pricingGroupRetryPolicy={pricingGroupRetryPolicy}
       pricingGroupRoutingStrategy={pricingGroupRoutingStrategy}
       savedGroupRatio={savedGroupRatio}
+      isSaving={isSaving}
+      isSaveDisabled={isSaveDisabled}
+      saveError={saveError}
+      onSave={onSave}
       onChange={onChange}
       onValidationChange={onValidationChange}
     />
   )
 })
 
-type GroupPricingTableProps = {
-  groupRatio: string
-  pricingGroupEnabled: string
-  pricingGroupDisplayName: string
-  pricingGroupRemark: string
-  pricingGroupOrder: string
-  pricingGroupRetryPolicy: string
-  pricingGroupRoutingStrategy: string
-  savedGroupRatio: string
-  onChange: (field: string, value: string) => void
-  onValidationChange: (isValid: boolean) => void
-}
-
 function GroupPricingTable({
   groupRatio,
   pricingGroupEnabled,
   pricingGroupDisplayName,
   pricingGroupRemark,
+  pricingGroupModelAllowlist,
   pricingGroupOrder,
   pricingGroupRetryPolicy,
   pricingGroupRoutingStrategy,
   savedGroupRatio,
+  isSaving,
+  isSaveDisabled,
+  saveError,
+  onSave,
   onChange,
   onValidationChange,
-}: GroupPricingTableProps) {
+}: GroupRatioVisualEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [editorState, setEditorState] = useState<GroupPricingEditorState>(
@@ -699,6 +745,7 @@ function GroupPricingTable({
           pricingGroupEnabled,
           pricingGroupDisplayName,
           pricingGroupRemark,
+          pricingGroupModelAllowlist,
           pricingGroupOrder,
           pricingGroupRetryPolicy,
           routingConfiguration
@@ -722,6 +769,7 @@ function GroupPricingTable({
     pricingGroupEnabled,
     pricingGroupDisplayName,
     pricingGroupRemark,
+    pricingGroupModelAllowlist,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy
@@ -738,6 +786,7 @@ function GroupPricingTable({
         pricingGroupEnabled,
         pricingGroupDisplayName,
         pricingGroupRemark,
+        pricingGroupModelAllowlist,
         pricingGroupOrder,
         pricingGroupRetryPolicy,
         routingConfiguration
@@ -749,6 +798,7 @@ function GroupPricingTable({
     pricingGroupEnabled,
     pricingGroupDisplayName,
     pricingGroupRemark,
+    pricingGroupModelAllowlist,
     pricingGroupOrder,
     pricingGroupRetryPolicy,
     pricingGroupRoutingStrategy,
@@ -847,6 +897,10 @@ function GroupPricingTable({
       onChange('PricingGroupEnabled', serialized.PricingGroupEnabled)
       onChange('PricingGroupDisplayName', serialized.PricingGroupDisplayName)
       onChange('PricingGroupRemark', serialized.PricingGroupRemark)
+      onChange(
+        'PricingGroupModelAllowlist',
+        serialized.PricingGroupModelAllowlist
+      )
       onChange('PricingGroupOrder', serialized.PricingGroupOrder)
       onChange('PricingGroupRetryPolicy', serialized.PricingGroupRetryPolicy)
       onChange(
@@ -858,18 +912,10 @@ function GroupPricingTable({
   )
 
   const updateRow = useCallback(
-    (
+    <Field extends Exclude<keyof GroupPricingRow, '_id' | 'identityName'>>(
       id: string,
-      field:
-        | 'name'
-        | 'displayName'
-        | 'remark'
-        | 'enabled'
-        | 'ratio'
-        | 'retryMode'
-        | 'retryTimes'
-        | 'strategyId',
-      value: string | boolean
+      field: Field,
+      value: GroupPricingRow[Field]
     ) => {
       const nextRows = currentRows.map((row) => {
         if (row._id !== id) return row
@@ -899,6 +945,7 @@ function GroupPricingTable({
           name,
           displayName: '',
           remark: '',
+          modelAllowlist: null,
           enabled: true,
           ratio: '1',
           retryMode: 'follow_channels',
@@ -1052,6 +1099,9 @@ function GroupPricingTable({
   const hasInvalidRetryTimes = currentRows.some(
     (row) =>
       row.retryMode === 'fixed' && !isValidFixedRetryTimes(row.retryTimes)
+  )
+  const hasEmptyModelAllowlist = currentRows.some(
+    (row) => row.modelAllowlist?.length === 0
   )
   const hasEmptyStrategyName = currentStrategies.some(
     (strategy) => strategy.name.trim() === ''
@@ -1509,6 +1559,11 @@ function GroupPricingTable({
               </div>
             </div>
 
+            {saveError && !detailRow && (
+              <p className='text-destructive text-sm' role='alert'>
+                {saveError}
+              </p>
+            )}
             {monitorsQuery.isError && (
               <p className='text-destructive text-sm'>
                 分组监控加载失败：{monitorsQuery.error.message}
@@ -1541,6 +1596,11 @@ function GroupPricingTable({
                 固定重试次数必须是 0 到 100 之间的整数
               </p>
             )}
+            {hasEmptyModelAllowlist && (
+              <p className='text-destructive text-sm'>
+                开启模型白名单的分组必须至少选择一个模型。
+              </p>
+            )}
             {(hasEmptyStrategyName || duplicateStrategyNames.size > 0) && (
               <p className='text-destructive text-sm'>
                 策略名称不能为空或重复。
@@ -1568,12 +1628,20 @@ function GroupPricingTable({
       <GroupDetailSheet
         row={detailRow}
         monitor={detailMonitor}
+        isSaving={isSaving}
+        isSaveDisabled={isSaveDisabled}
+        saveError={saveError}
+        onSave={() => onSave(() => setDetailRowId(null))}
         onOpenChange={(open) => {
-          if (!open) setDetailRowId(null)
+          if (!open && !isSaving) setDetailRowId(null)
         }}
         onChange={(field, value) => {
           if (!detailRow) return
           updateRow(detailRow._id, field, value)
+        }}
+        onModelAllowlistChange={(models) => {
+          if (!detailRow) return
+          updateRow(detailRow._id, 'modelAllowlist', models)
         }}
         isPersisted={
           detailRow !== null &&
@@ -1732,8 +1800,13 @@ type GroupDetailSheetProps = {
       | 'retryTimes',
     value: string | boolean
   ) => void
+  onModelAllowlistChange: (models: string[] | null) => void
   isPersisted: boolean
   nameInvalid: boolean
+  isSaving: boolean
+  isSaveDisabled: boolean
+  saveError?: string
+  onSave: () => void
 }
 
 function GroupDetailSheet(props: GroupDetailSheetProps) {
@@ -1750,7 +1823,7 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>编辑{displayName ? `：${displayName}` : ''}</SheetTitle>
           <SheetDescription>
-            修改分组状态、备注、倍率、重试策略和监控功能。
+            修改分组状态、模型白名单、倍率、重试和监控设置。
           </SheetDescription>
         </SheetHeader>
 
@@ -1850,6 +1923,11 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
                 }
               />
             </div>
+            <PricingGroupModelAllowlistField
+              groupName={props.isPersisted ? name.trim() : null}
+              value={props.row.modelAllowlist}
+              onChange={props.onModelAllowlistChange}
+            />
             <Separator />
             <section className='flex flex-col gap-3'>
               <ChannelMonitorFormCard
@@ -1868,6 +1946,31 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
             </section>
           </div>
         )}
+        {props.saveError && (
+          <p
+            className='text-destructive px-4 pb-3 text-sm sm:px-6'
+            role='alert'
+          >
+            {props.saveError}
+          </p>
+        )}
+        <SheetFooter className={sideDrawerFooterClassName()}>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => props.onOpenChange(false)}
+            disabled={props.isSaving}
+          >
+            {t('Close')}
+          </Button>
+          <Button
+            type='button'
+            onClick={props.onSave}
+            disabled={props.isSaveDisabled}
+          >
+            {props.isSaving ? t('Saving...') : t('Save')}
+          </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   )

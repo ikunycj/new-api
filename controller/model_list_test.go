@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -212,6 +213,11 @@ func decodeUserModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder)
 
 func TestGetUserModelsFiltersByRequestedGroup(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
+	previousAllowlist := ratio_setting.PricingGroupModelAllowlist2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(previousAllowlist))
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(`{"default":["zz-default-only-model"]}`))
 	require.NoError(t, db.Create(&model.User{
 		Id:       1002,
 		Username: "playground-model-user",
@@ -219,8 +225,10 @@ func TestGetUserModelsFiltersByRequestedGroup(t *testing.T) {
 		Group:    "default",
 		Status:   common.UserStatusEnabled,
 	}).Error)
+	require.NoError(t, db.Create(&model.Channel{Id: 1, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "zz-default-only-model", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "zz-default-blocked-model", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "zz-disabled-model", ChannelId: 1, Enabled: false},
 	}).Error)
 
@@ -263,6 +271,7 @@ func TestListModelsIncludesTieredBillingModel(t *testing.T) {
 		Group:    "default",
 		Status:   common.UserStatusEnabled,
 	}).Error)
+	require.NoError(t, db.Create(&model.Channel{Id: 1, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "zz-tiered-visible-model", ChannelId: 1, Enabled: true},
 		{Group: "default", Model: "zz-tiered-empty-expr-model", ChannelId: 1, Enabled: true},
@@ -473,10 +482,64 @@ func TestListModelsUsesOrderedTokenCandidatesForUnionAndOwner(t *testing.T) {
 	require.Equal(t, "gateway", secondPayload.Data[0].OwnedBy)
 }
 
+func TestPricingGroupAllowlistFiltersTokenModelListAndDetail(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+	previousAllowlist := ratio_setting.PricingGroupModelAllowlist2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(previousAllowlist))
+		model.InvalidatePricingCache()
+	})
+	require.NoError(t, ratio_setting.UpdatePricingGroupModelAllowlistByJSONString(`{"default":["tier-a-model"],"vip":["tier-b-model"]}`))
+	require.NoError(t, db.Create(&[]model.Channel{
+		{Id: 841, Type: constant.ChannelTypeJina, Name: "default-channel", Status: common.ChannelStatusEnabled},
+		{Id: 842, Type: constant.ChannelTypeOpenAI, Name: "vip-channel", Status: common.ChannelStatusEnabled},
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "tier-a-model", ChannelId: 841, Enabled: true},
+		{Group: "default", Model: "tier-b-model", ChannelId: 841, Enabled: true},
+		{Group: "vip", Model: "tier-b-model", ChannelId: 842, Enabled: true},
+		{Group: "vip", Model: "tier-c-model", ChannelId: 842, Enabled: true},
+	}).Error)
+	model.InvalidatePricingCache()
+
+	newContext := func(path string, groups ...string) (*httptest.ResponseRecorder, *gin.Context) {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, path, nil)
+		common.SetContextKey(ctx, constant.ContextKeyTokenGroup, "auto")
+		common.SetContextKey(ctx, constant.ContextKeyTokenGroupCandidates, groups)
+		return recorder, ctx
+	}
+	listRecorder, listContext := newContext("/v1/models", "default", "vip")
+	ListModels(listContext, constant.ChannelTypeOpenAI)
+	items := decodeListModelsPayload(t, listRecorder).Data
+	require.Len(t, items, 2)
+	assert.Equal(t, "tier-a-model", items[0].Id)
+	assert.Equal(t, "tier-b-model", items[1].Id)
+	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, items[1].SupportedEndpointTypes)
+
+	allowedRecorder, allowedContext := newContext("/v1/models/tier-b-model", "default", "vip")
+	allowedContext.Params = gin.Params{{Key: "model", Value: "tier-b-model"}}
+	RetrieveModel(allowedContext, constant.ChannelTypeOpenAI)
+	var details dto.OpenAIModels
+	require.NoError(t, common.Unmarshal(allowedRecorder.Body.Bytes(), &details))
+	assert.Equal(t, items[1], details)
+
+	blockedRecorder, blockedContext := newContext("/v1/models/tier-b-model", "default")
+	blockedContext.Params = gin.Params{{Key: "model", Value: "tier-b-model"}}
+	RetrieveModel(blockedContext, constant.ChannelTypeOpenAI)
+	assert.Contains(t, blockedRecorder.Body.String(), `"code":"model_not_found"`)
+}
+
 func TestListModelsOrdersEnabledModelsForEveryGroupMode(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
 
+	require.NoError(t, db.Create(&[]model.Channel{
+		{Id: 821, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled},
+		{Id: 822, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled},
+	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "zz-order-z-model", ChannelId: 821, Enabled: true},
 		{Group: "default", Model: "zz-order-a-model", ChannelId: 821, Enabled: true},
@@ -538,6 +601,11 @@ func TestListModelsIntersectsTokenModelLimitsWithCandidateGroups(t *testing.T) {
 	withSelfUseModeEnabled(t)
 	db := setupModelListControllerTestDB(t)
 
+	require.NoError(t, db.Create(&[]model.Channel{
+		{Id: 831, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled},
+		{Id: 832, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled},
+		{Id: 833, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled},
+	}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "first", Model: "zz-limit-a-shared-model", ChannelId: 831, Enabled: true},
 		{Group: "first", Model: "zz-limit-z-first-model", ChannelId: 831, Enabled: true},
@@ -638,6 +706,7 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 		"zz-token-tiered-empty-expr-model": "",
 	})
 	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.Channel{Id: 841, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled}).Error)
 	require.NoError(t, db.Create(&[]model.Ability{
 		{Group: "default", Model: "zz-token-tiered-visible-model", ChannelId: 841, Enabled: true},
 		{Group: "default", Model: "zz-token-tiered-empty-expr-model", ChannelId: 841, Enabled: true},

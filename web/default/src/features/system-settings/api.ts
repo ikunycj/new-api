@@ -170,6 +170,20 @@ export async function updatePricingGroupConfiguration(
   return res.data
 }
 
+export async function getPricingGroupModels(group: string): Promise<string[]> {
+  const res = await api.get<{
+    success: boolean
+    message: string
+    data: string[]
+  }>('/api/option/pricing-groups/models', {
+    params: { group },
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!res.data.success) throw new Error(res.data.message || '模型列表加载失败')
+  return res.data.data
+}
+
 export async function confirmPaymentCompliance() {
   const res = await api.post<ConfirmPaymentComplianceResponse>(
     '/api/option/payment_compliance',

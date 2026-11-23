@@ -72,6 +72,18 @@ func Distribute() func(c *gin.Context) {
 				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelDisabled))
 				return
 			}
+			if shouldSelectChannel {
+				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+				selectedGroup, err := service.ResolvePinnedPricingGroup(c, usingGroup, modelRequest.Model, channel.Id, "")
+				if err != nil {
+					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupModelForbidden), types.ErrorCodeAccessDenied)
+					return
+				}
+				if selectedGroup != usingGroup {
+					common.SetContextKey(c, constant.ContextKeyAutoGroup, selectedGroup)
+					common.SetContextKey(c, constant.ContextKeyUsingGroup, selectedGroup)
+				}
+			}
 		} else {
 			// Select a channel for the user
 			// check token model mapping
@@ -127,6 +139,10 @@ func Distribute() func(c *gin.Context) {
 					RequestPath: c.Request.URL.Path,
 					Retry:       common.GetPointer(0),
 				})
+				if errors.Is(err, service.ErrPricingGroupModelForbidden) {
+					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupModelForbidden), types.ErrorCodeAccessDenied)
+					return
+				}
 				if err != nil {
 					abortWithPublicChannelMessage(c, http.StatusServiceUnavailable)
 					return
