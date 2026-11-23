@@ -130,6 +130,7 @@ export type SiteSettings = {
   HomePageContent: string
   CustomerService: string
   ServerAddress: string
+  TopUpLink: string
   'legal.user_agreement': string
   'legal.privacy_policy': string
   HeaderNavModules: string
@@ -255,8 +256,6 @@ export type ModelSettings = {
 export type BillingSettings = {
   QuotaForNewUser: number
   PreConsumedQuota: number
-  TopUpLink: string
-  'general_setting.docs_link': string
   'quota_setting.enable_free_model_pre_consume': boolean
   QuotaPerUnit: number
   USDExchangeRate: number

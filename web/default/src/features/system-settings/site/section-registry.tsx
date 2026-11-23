@@ -43,6 +43,7 @@ const SITE_SECTIONS = [
           HomePageContent: settings.HomePageContent,
           CustomerService: settings.CustomerService,
           ServerAddress: settings.ServerAddress,
+          TopUpLink: settings.TopUpLink,
           legal: {
             user_agreement: settings['legal.user_agreement'],
             privacy_policy: settings['legal.privacy_policy'],

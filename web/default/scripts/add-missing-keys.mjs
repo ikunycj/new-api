@@ -4324,6 +4324,9 @@ for (const [locale, translations] of Object.entries(inviteInfoTranslations)) {
 }
 
 const retiredKeys = new Set([
+  'Documentation Link',
+  'https://docs.example.com',
+  'Link to your documentation site',
   'No About Content Set',
   'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.',
   'Static page describing the platform.',

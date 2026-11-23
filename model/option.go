@@ -117,6 +117,7 @@ var retiredOptionKeys = []string{
 	"DefaultUseAutoGroup",
 	"GroupGroupRatio",
 	"RetryTimes",
+	"general_setting.docs_link",
 	"group_ratio_setting.group_ratio",
 	"group_ratio_setting.group_group_ratio",
 	"group_ratio_setting.pricing_group_remark",

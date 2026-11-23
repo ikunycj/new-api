@@ -115,6 +115,7 @@ func TestRetiredOptionsAreRemovedAndCannotBeRestored(t *testing.T) {
 		"AutomaticEnableChannelEnabled",
 		"RetryTimes",
 		"UserUsableGroups",
+		"general_setting.docs_link",
 		"group_ratio_setting.group_ratio",
 		"group_ratio_setting.pricing_group_retry_policy",
 		"monitor_setting.auto_test_channel_enabled",
