@@ -20,7 +20,6 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity01Icon,
   Alert02Icon,
-  CheckmarkCircle02Icon,
   ClockIcon,
   RefreshIcon,
 } from '@hugeicons/core-free-icons'
@@ -121,15 +120,9 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
         )
       )
     : (userGroupsQuery.data?.data ?? {})
-  const operational = monitors.filter(
-    (monitor) => monitor.status === 'success'
-  ).length
-  const failed = monitors.filter(
-    (monitor) => monitor.status === 'failed'
-  ).length
 
   return (
-    <div className='space-y-3 border-t pt-4'>
+    <div className='space-y-3'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <div className='flex min-w-0 items-center gap-2'>
           <div className='bg-info/10 text-info grid size-7 shrink-0 place-items-center rounded-md'>
@@ -159,35 +152,6 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
           </TooltipTrigger>
           <TooltipContent>{t('Refresh')}</TooltipContent>
         </Tooltip>
-      </div>
-
-      <div className='divide-border bg-background grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4 sm:divide-x'>
-        <StatusSummary
-          label={t('Monitored groups')}
-          value={monitors.length}
-          icon={Activity01Icon}
-        />
-        <StatusSummary
-          label={t('Operational')}
-          value={operational}
-          icon={CheckmarkCircle02Icon}
-          tone='success'
-        />
-        <StatusSummary
-          label={t('Failed')}
-          value={failed}
-          icon={Alert02Icon}
-          tone='destructive'
-        />
-        <StatusSummary
-          label={t('Last refreshed')}
-          value={
-            statusQuery.dataUpdatedAt
-              ? new Date(statusQuery.dataUpdatedAt).toLocaleTimeString()
-              : '--'
-          }
-          icon={ClockIcon}
-        />
       </div>
 
       {statusQuery.isError && (
@@ -231,38 +195,6 @@ export function GroupStatusPanel(props: GroupStatusPanelProps) {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-type StatusSummaryProps = {
-  label: string
-  value: number | string
-  icon: typeof Activity01Icon
-  tone?: 'success' | 'destructive'
-}
-
-function StatusSummary(props: StatusSummaryProps) {
-  return (
-    <div className='flex min-h-20 items-center gap-3 px-4 py-3'>
-      <div className='bg-muted grid size-9 shrink-0 place-items-center rounded-lg'>
-        <HugeiconsIcon
-          icon={props.icon}
-          className={cn(
-            'text-muted-foreground',
-            props.tone === 'success' && 'text-success',
-            props.tone === 'destructive' && 'text-destructive'
-          )}
-        />
-      </div>
-      <div className='min-w-0'>
-        <p className='truncate text-base leading-none font-semibold tabular-nums'>
-          {props.value}
-        </p>
-        <p className='text-muted-foreground mt-1 truncate text-xs'>
-          {props.label}
-        </p>
-      </div>
     </div>
   )
 }
