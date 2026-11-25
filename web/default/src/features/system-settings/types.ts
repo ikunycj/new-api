@@ -400,10 +400,24 @@ export type AffiliateUserOverrideResponse = {
   data?: AffiliateUserOverrideView
 }
 
+export type AffiliateSubAgent = {
+  user_id: number
+  username: string
+  email: string
+  rate_bps: number
+}
+
+export type AffiliateSubAgentsResponse = {
+  success: boolean
+  message: string
+  data?: AffiliateSubAgent[]
+}
+
 export type AffiliateAgentUpdate = {
   user_id: number
   override: AffiliateUserOverride
   invitee_user_ids: number[]
+  sub_agents?: Pick<AffiliateSubAgent, 'user_id' | 'rate_bps'>[]
 }
 
 export type AffiliateAgentsResponse = {
@@ -417,6 +431,8 @@ export type AffiliateAdminReward = {
   inviter_user_id: number
   inviter_username: string
   inviter_email: string
+  source_agent_user_id?: number
+  source_agent_username?: string
   invitee_user_id: number
   invitee_username: string
   invitee_email: string

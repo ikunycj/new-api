@@ -20,9 +20,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { toast } from 'sonner'
 
+import { useAuthStore } from '@/stores/auth-store'
+
 import {
   createAffiliateBalanceTransfer,
   getAffiliateInviteeTopUps,
+  getAffiliateSubAgentRewards,
   getAffiliateSummary,
 } from '../api'
 import { generateAffiliateLink } from '../lib'
@@ -30,12 +33,30 @@ import type { AffiliateInviteeTopUpsQuery } from '../types'
 
 const affiliateSummaryKey = ['wallet', 'affiliate', 'summary'] as const
 const affiliateTopUpsKey = ['wallet', 'affiliate', 'invitee-topups'] as const
+const affiliateSubAgentRewardsKey = [
+  'wallet',
+  'affiliate',
+  'sub-agent-rewards',
+] as const
 interface AffiliateDetailsQuery {
   topUps: AffiliateInviteeTopUpsQuery
 }
 
 const defaultDetailsQuery: AffiliateDetailsQuery = {
   topUps: { page: 1, pageSize: 20, sort: 'recharge_time_desc' },
+}
+
+export function useAffiliateSubAgentRewards(
+  page: number,
+  pageSize: number,
+  enabled: boolean
+) {
+  const userId = useAuthStore((state) => state.auth.user?.id)
+  return useQuery({
+    queryKey: [...affiliateSubAgentRewardsKey, userId, page, pageSize],
+    queryFn: () => getAffiliateSubAgentRewards(page, pageSize),
+    enabled: enabled && userId !== undefined,
+  })
 }
 
 export function useAffiliate(
@@ -59,6 +80,7 @@ export function useAffiliate(
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: affiliateSummaryKey }),
       queryClient.invalidateQueries({ queryKey: affiliateTopUpsKey }),
+      queryClient.invalidateQueries({ queryKey: affiliateSubAgentRewardsKey }),
     ])
   }
 

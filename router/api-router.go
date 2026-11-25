@@ -158,6 +158,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			affiliateRoute.GET("/summary", controller.GetAffiliateSummary)
 			affiliateRoute.GET("/invitee-topups", controller.GetAffiliateInviteeTopUps)
+			affiliateRoute.GET("/sub-agent-rewards", controller.GetAffiliateSubAgentRewards)
 			affiliateRoute.GET("/balance-transfers", controller.GetAffiliateBalanceTransfers)
 			affiliateRoute.POST("/balance-transfers", middleware.CriticalRateLimit(), controller.CreateAffiliateBalanceTransfer)
 		}
@@ -168,6 +169,7 @@ func SetApiRouter(router *gin.Engine) {
 			affiliateAdminRoute.GET("/settings", controller.AdminGetAffiliateSettings)
 			affiliateAdminRoute.PUT("/settings", middleware.CriticalRateLimit(), controller.AdminUpdateAffiliateSettings)
 			affiliateAdminRoute.PUT("/agents", middleware.CriticalRateLimit(), controller.AdminSaveAffiliateAgents)
+			affiliateAdminRoute.GET("/agents/:user_id/sub-agents", controller.AdminGetAffiliateSubAgents)
 			affiliateAdminRoute.GET("/user-overrides", controller.AdminGetAffiliateUserOverrides)
 			affiliateAdminRoute.GET("/user-overrides/:user_id", controller.AdminGetAffiliateUserOverride)
 			affiliateAdminRoute.GET("/users/:user_id/invite-activities", controller.AdminGetAffiliateReferralActivities)

@@ -23,6 +23,7 @@ import type {
   AffiliateAgentsResponse,
   AffiliateSettings,
   AffiliateSettingsResponse,
+  AffiliateSubAgentsResponse,
   AffiliateAdminRewardsResponse,
   AffiliateAdjustmentResponse,
   AffiliateUserOverride,
@@ -91,6 +92,16 @@ export async function saveAffiliateAgents(agents: AffiliateAgentUpdate[]) {
     { agents }
   )
   return res.data
+}
+
+export async function getAffiliateSubAgents(userId: number) {
+  const res = await api.get<AffiliateSubAgentsResponse>(
+    `/api/affiliate/admin/agents/${userId}/sub-agents`
+  )
+  if (!res.data.success) {
+    throw new Error(res.data.message || '子代理加载失败')
+  }
+  return res.data.data ?? []
 }
 
 export async function deleteAffiliateUserOverride(userId: number) {

@@ -701,7 +701,7 @@ func setupPostgresAffiliateTestDB(t *testing.T) {
 		&AffiliateQuotaLedger{}, &AffiliateBalanceTransfer{}, &AffiliateAdjustment{},
 		&AffiliateTopUpEvent{}, &AffiliateCampaign{}, &AffiliateCashReward{},
 		&AffiliateCashAccount{}, &AffiliateCashLedger{}, &AffiliateCashTransfer{},
-		&AffiliateQuotaGrant{},
+		&AffiliateQuotaGrant{}, &AffiliateSubAgent{},
 	)
 }
 

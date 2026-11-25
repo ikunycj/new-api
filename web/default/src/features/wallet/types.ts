@@ -98,6 +98,7 @@ export interface AffiliateSummary {
   qualified_count: number
   next_available_at: number
   lifetime_campaign_bonus_quota: number
+  has_sub_agent_rewards: boolean
   rule: AffiliateEffectiveRule
   account: AffiliateAccount
   cash_account: AffiliateCashAccount
@@ -134,6 +135,18 @@ export interface AffiliateInviteeTopUp {
   transferred_reward_cents: number
   available_at: number
   status: AffiliateTopUpStatus
+}
+
+export interface AffiliateSubAgentReward {
+  id: number
+  source_agent_user_id: number
+  source_agent_username: string
+  rate_bps: number
+  reward_quota: number
+  reward_cents: number
+  status: Exclude<AffiliateTopUpStatus, 'unqualified'>
+  created_at: number
+  available_at: number
 }
 
 export interface AffiliateBalanceTransfer {

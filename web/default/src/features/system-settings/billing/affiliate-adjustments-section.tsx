@@ -267,6 +267,13 @@ export function AffiliateAdjustmentsSection() {
                 <TableCell className='whitespace-nowrap'>
                   {reward.inviter_email || reward.inviter_username || '-'}{' '}
                   {reward.inviter_user_id}
+                  {reward.source_agent_user_id ? (
+                    <div className='text-muted-foreground mt-1 text-xs'>
+                      来自子代理 ·{' '}
+                      {reward.source_agent_username ||
+                        reward.source_agent_user_id}
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell className='whitespace-nowrap'>
                   {reward.invitee_email || reward.invitee_username || '-'}{' '}

@@ -90,6 +90,10 @@ import type {
   AffiliateUserOverrideView,
 } from '../types'
 import { AffiliateAdjustmentsSection } from './affiliate-adjustments-section'
+import {
+  AffiliateSubAgentsDialog,
+  type AffiliateSubAgentDraft,
+} from './affiliate-sub-agents-dialog'
 
 const SECONDS_PER_DAY = 86_400
 const AFFILIATE_AGENTS_PAGE_SIZE = 20
@@ -105,6 +109,7 @@ type AgentConfigKey = 'rewardRate' | 'holdDays'
 type AgentDraft = {
   isNew: boolean
   invitees: AffiliateUserOverrideView[]
+  subAgents: Record<number, AffiliateSubAgentDraft>
   rewardRate: string
   holdDays: string
   affiliateDomain: string
@@ -152,6 +157,7 @@ function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
   return {
     isNew: !view.override,
     invitees: [],
+    subAgents: {},
     rewardRate: String(view.effective_rule.reward_rate_bps / 100),
     holdDays: String(view.effective_rule.hold_seconds / SECONDS_PER_DAY),
     affiliateDomain: affiliateDomainToSubdomain(
@@ -199,11 +205,19 @@ function hasAgentChanges(draft: AgentDraft): boolean {
   return (
     draft.isNew ||
     draft.invitees.length > 0 ||
+    Object.keys(draft.subAgents).length > 0 ||
     draft.domainDirty ||
     draft.dirty.rewardRate ||
     draft.dirty.holdDays ||
     draft.remarkDirty
   )
+}
+
+function parseSubAgentRateBps(ratePercent: string): number | null {
+  if (!/^(?:\d+|\d*\.\d{1,2})$/.test(ratePercent)) return null
+  const [whole, fraction = ''] = ratePercent.split('.')
+  const rateBps = Number(whole + fraction.padEnd(2, '0'))
+  return Number.isSafeInteger(rateBps) ? rateBps : null
 }
 
 function SettingNumberField(props: {
@@ -484,6 +498,8 @@ function PersonalizedAffiliateSettings() {
   const [rowDrafts, setRowDrafts] = useState<Record<number, AgentDraft>>({})
   const [inviteTarget, setInviteTarget] =
     useState<AffiliateUserOverrideView | null>(null)
+  const [subAgentTarget, setSubAgentTarget] =
+    useState<AffiliateUserOverrideView | null>(null)
   const [inviteSearch, setInviteSearch] = useState('')
   const [inviteKeyword, setInviteKeyword] = useState('')
   const inviteeQuery = useQuery({
@@ -588,6 +604,26 @@ function PersonalizedAffiliateSettings() {
     })
   }
 
+  function updateSubAgent(
+    parent: AffiliateUserOverrideView,
+    userId: number,
+    change: AffiliateSubAgentDraft | null
+  ) {
+    setRowDrafts((current) => {
+      const row = current[parent.user_id] ?? viewToAgentDraft(parent)
+      const subAgents = { ...row.subAgents }
+      if (change) {
+        subAgents[userId] = change
+      } else {
+        delete subAgents[userId]
+      }
+      return {
+        ...current,
+        [parent.user_id]: { ...row, subAgents },
+      }
+    })
+  }
+
   const saveMutation = useMutation({
     mutationFn: saveAffiliateAgents,
     onSuccess: async (response) => {
@@ -635,7 +671,7 @@ function PersonalizedAffiliateSettings() {
       setRemoveTarget(null)
       toast.success(t('Agent removed'))
       await queryClient.invalidateQueries({
-        queryKey: ['admin', 'affiliate', 'agents'],
+        queryKey: ['admin', 'affiliate'],
       })
     },
     onError: (error) => {
@@ -656,10 +692,25 @@ function PersonalizedAffiliateSettings() {
         toast.error(t('Check the agent settings and try again'))
         return
       }
+      const subAgents: NonNullable<AffiliateAgentUpdate['sub_agents']> = []
+      for (const child of Object.values(draft.subAgents)) {
+        const rateBps =
+          child.ratePercent === null
+            ? -1
+            : parseSubAgentRateBps(child.ratePercent)
+        if (rateBps === null) {
+          toast.error(
+            `请为子代理 ${child.username} 填写可精确保存的非负比例，最多两位小数。`
+          )
+          return
+        }
+        subAgents.push({ user_id: child.user_id, rate_bps: rateBps })
+      }
       requests.push({
         user_id: Number(userId),
         override,
         invitee_user_ids: draft.invitees.map((invitee) => invitee.user_id),
+        ...(subAgents.length > 0 ? { sub_agents: subAgents } : {}),
       })
     }
     if (requests.length > 0) saveMutation.mutate(requests)
@@ -828,6 +879,20 @@ function PersonalizedAffiliateSettings() {
                       {row.invitees.length > 0 ? (
                         <span className='text-muted-foreground text-xs'>
                           待添加 {row.invitees.length} 人
+                        </span>
+                      ) : null}
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled={disabled}
+                        onClick={() => setSubAgentTarget(view)}
+                      >
+                        管理子代理
+                      </Button>
+                      {Object.keys(row.subAgents).length > 0 ? (
+                        <span className='text-muted-foreground text-xs'>
+                          子代理待保存
                         </span>
                       ) : null}
                       <Button
@@ -1073,15 +1138,33 @@ function PersonalizedAffiliateSettings() {
             : null}
         </DialogContent>
       </Dialog>
+      {subAgentTarget ? (
+        <AffiliateSubAgentsDialog
+          key={subAgentTarget.user_id}
+          parent={subAgentTarget}
+          changes={rowDrafts[subAgentTarget.user_id]?.subAgents ?? {}}
+          otherStagedChildIDs={
+            new Set(
+              Object.entries(rowDrafts)
+                .filter(([id]) => Number(id) !== subAgentTarget.user_id)
+                .flatMap(([, row]) =>
+                  Object.values(row.subAgents).map((child) => child.user_id)
+                )
+            )
+          }
+          onChange={(userId, change) =>
+            updateSubAgent(subAgentTarget, userId, change)
+          }
+          onClose={() => setSubAgentTarget(null)}
+        />
+      ) : null}
       <ConfirmDialog
         open={Boolean(removeTarget)}
         onOpenChange={(open) => {
           if (!open && !removeMutation.isPending) setRemoveTarget(null)
         }}
         title={t('Remove agent')}
-        desc={t(
-          'Remove this agent configuration? Existing referral records will be kept.'
-        )}
+        desc='移除代理配置会解除其上级和子代理关系，历史邀请及返现记录会保留。'
         destructive
         confirmText={t('Remove')}
         handleConfirm={confirmRemoveAgent}

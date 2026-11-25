@@ -60,6 +60,7 @@ func TestMain(m *testing.M) {
 		&ChannelMonitorHistory{},
 		&AffiliateRuleVersion{},
 		&AffiliateUserOverride{},
+		&AffiliateSubAgent{},
 		&AffiliateReferral{},
 		&AffiliateReward{},
 		&AffiliateQuotaAccount{},
@@ -120,6 +121,7 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM affiliate_referrals")
 		DB.Exec("DELETE FROM affiliate_quota_accounts")
 		DB.Exec("DELETE FROM affiliate_rule_versions")
+		DB.Exec("DELETE FROM affiliate_sub_agents")
 		DB.Exec("DELETE FROM affiliate_user_overrides")
 	})
 }

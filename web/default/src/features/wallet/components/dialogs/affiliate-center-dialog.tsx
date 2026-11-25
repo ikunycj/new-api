@@ -16,20 +16,28 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+/// <reference lib="es2023.intl" />
+
 import {
   ArrowRightLeft,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ReceiptText,
   Search,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Dialog,
   DialogContent,
@@ -62,6 +70,11 @@ import {
 } from '@/components/ui/table'
 import { formatQuotaAsCNY, formatTimestampToDate } from '@/lib/format'
 
+import { useAffiliateSubAgentRewards } from '../../hooks/use-affiliate'
+import {
+  formatAffiliateAccountCashback,
+  formatAffiliateCashback,
+} from '../../lib/affiliate'
 import type {
   AffiliateBalanceTransferResponse,
   AffiliateInviteeTopUp,
@@ -70,13 +83,6 @@ import type {
   AffiliateTopUpSort,
   AffiliateTopUpStatus,
 } from '../../types'
-
-function formatCNY(cents: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'CNY',
-  }).format(cents / 100)
-}
 
 interface AffiliateCenterDialogProps {
   open: boolean
@@ -175,13 +181,139 @@ function getStatusClass(status: AffiliateTopUpStatus) {
   return 'border-border bg-background text-muted-foreground'
 }
 
+const SUB_AGENT_REWARD_PAGE_SIZE = 20
+
+function SubAgentRewards(props: { dialogOpen: boolean }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const rewards = useAffiliateSubAgentRewards(
+    page,
+    SUB_AGENT_REWARD_PAGE_SIZE,
+    props.dialogOpen && open
+  )
+  const items = rewards.data?.items ?? []
+
+  let content: ReactNode
+  if (rewards.isError) {
+    content = (
+      <Empty className='min-h-32'>
+        <EmptyHeader>
+          <EmptyTitle>{t('Loading failed')}</EmptyTitle>
+        </EmptyHeader>
+        <Button variant='outline' onClick={() => void rewards.refetch()}>
+          {t('Retry')}
+        </Button>
+      </Empty>
+    )
+  } else if (rewards.isLoading) {
+    content = (
+      <div className='flex min-h-32 items-center justify-center'>
+        <Spinner />
+      </div>
+    )
+  } else if (items.length === 0) {
+    content = (
+      <Empty className='min-h-32'>
+        <EmptyHeader>
+          <EmptyTitle>{t('No sub-agent cashback yet')}</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    )
+  } else {
+    const rateFormatter = new Intl.NumberFormat(undefined, {
+      style: 'percent',
+      maximumFractionDigits: 2,
+    })
+    content = (
+      <>
+        <div className='min-w-0 overflow-x-auto'>
+          <Table className='min-w-[650px]'>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('Sub-agent')}</TableHead>
+                <TableHead>{t('Cashback rate')}</TableHead>
+                <TableHead>{t('Cashback amount')}</TableHead>
+                <TableHead>{t('Status')}</TableHead>
+                <TableHead>{t('Created')}</TableHead>
+                <TableHead>{t('Unlock time')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((reward) => (
+                <TableRow
+                  key={`${reward.reward_cents > 0 ? 'cash' : 'quota'}-${reward.id}`}
+                >
+                  <TableCell className='font-medium'>
+                    {reward.source_agent_username ||
+                      `#${reward.source_agent_user_id}`}
+                  </TableCell>
+                  <TableCell className='tabular-nums'>
+                    {rateFormatter.format(
+                      `${reward.rate_bps}e-4` as `${number}`
+                    )}
+                  </TableCell>
+                  <TableCell className='tabular-nums'>
+                    {reward.reward_cents > 0
+                      ? formatAffiliateCashback(reward.reward_cents)
+                      : formatQuotaAsCNY(reward.reward_quota)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant='outline'
+                      className={getStatusClass(reward.status)}
+                    >
+                      {getStatusLabel(t, reward.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className='whitespace-nowrap'>
+                    {formatTimestampToDate(reward.created_at)}
+                  </TableCell>
+                  <TableCell className='whitespace-nowrap'>
+                    {reward.available_at <= reward.created_at
+                      ? t('Immediately available')
+                      : formatTimestampToDate(reward.available_at)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <ListPagination
+          page={page}
+          pageSize={SUB_AGENT_REWARD_PAGE_SIZE}
+          total={rewards.data?.total ?? 0}
+          onPageChange={setPage}
+        />
+      </>
+    )
+  }
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        render={<Button variant='outline' />}
+        className='group w-full justify-between'
+      >
+        {t('Sub-agent cashback')}
+        <ChevronDown
+          aria-hidden='true'
+          className='transition-transform group-aria-expanded:rotate-180'
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className='pt-3'>{content}</CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function getAvailableReward(topUp: AffiliateInviteeTopUp) {
   if (topUp.cash_reward_id > 0) return topUp.available_reward_cents
   return topUp.available_reward_quota ?? topUp.reward_quota
 }
 
 function formatReward(topUp: AffiliateInviteeTopUp, amount: number) {
-  return topUp.cash_reward_id > 0 ? formatCNY(amount) : formatQuotaAsCNY(amount)
+  return topUp.cash_reward_id > 0
+    ? formatAffiliateCashback(amount)
+    : formatQuotaAsCNY(amount)
 }
 
 function formatCashbackRule(
@@ -325,9 +457,6 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
     useState<AffiliateInviteeTopUp | null>(null)
   const account = props.summary?.account
   const cashAccount = props.summary?.cash_account
-  const useCashAccount =
-    (cashAccount?.lifetime_earned_cents ?? 0) > 0 ||
-    props.summary?.campaign.enabled === true
   const rule = props.summary?.rule
   const activeStatus = props.topUpQuery.status
   const activeSort = props.topUpQuery.sort ?? 'recharge_time_desc'
@@ -438,27 +567,19 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
           {[
             [
               t('Frozen cashback'),
-              useCashAccount
-                ? formatCNY(cashAccount?.pending_cents ?? 0)
-                : formatQuotaAsCNY(account?.pending_quota ?? 0),
+              formatAffiliateAccountCashback(props.summary, 'pending'),
             ],
             [
               t('Available to transfer'),
-              useCashAccount
-                ? formatCNY(cashAccount?.available_cents ?? 0)
-                : formatQuotaAsCNY(account?.available_quota ?? 0),
+              formatAffiliateAccountCashback(props.summary, 'available'),
             ],
             [
               t('Transferred'),
-              useCashAccount
-                ? formatCNY(cashAccount?.transferred_cents ?? 0)
-                : formatQuotaAsCNY(account?.transferred_quota ?? 0),
+              formatAffiliateAccountCashback(props.summary, 'transferred'),
             ],
             [
               t('Lifetime earned'),
-              useCashAccount
-                ? formatCNY(cashAccount?.lifetime_earned_cents ?? 0)
-                : formatQuotaAsCNY(account?.lifetime_earned_quota ?? 0),
+              formatAffiliateAccountCashback(props.summary, 'lifetime_earned'),
             ],
           ].map(([label, value]) => (
             <div key={String(label)} className='border-border border-l-2 pl-3'>
@@ -467,6 +588,10 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
             </div>
           ))}
         </div>
+
+        {props.summary?.has_sub_agent_rewards ? (
+          <SubAgentRewards dialogOpen={props.open} />
+        ) : null}
 
         {rule?.show_invitee_topups ? (
           <div className='min-w-0 space-y-4 pt-2'>
@@ -585,7 +710,7 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
                             {formatTimestampToDate(topUp.topup_at)}
                           </TableCell>
                           <TableCell className='whitespace-nowrap'>
-                            {formatCNY(topUp.paid_cents)}
+                            {formatAffiliateCashback(topUp.paid_cents)}
                           </TableCell>
                           <TableCell className='whitespace-nowrap'>
                             {formatCashbackRule(t, topUp)}
@@ -658,7 +783,7 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
           desc={t('Transfer {{amount}} to your account balance?', {
             amount: selectedReward
               ? formatReward(selectedReward, getAvailableReward(selectedReward))
-              : formatCNY(0),
+              : formatAffiliateCashback(0),
           })}
           confirmText={t('Transfer to account balance')}
           handleConfirm={confirmRewardTransfer}

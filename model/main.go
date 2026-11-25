@@ -330,6 +330,7 @@ func migrateDB() error {
 		&AuthzRole{},
 		&AffiliateRuleVersion{},
 		&AffiliateUserOverride{},
+		&AffiliateSubAgent{},
 		&AffiliateReferral{},
 		&AffiliateReward{},
 		&AffiliateQuotaAccount{},
@@ -345,6 +346,9 @@ func migrateDB() error {
 		&AffiliateQuotaGrant{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := migrateAffiliateCashRewardTopUpIndex(); err != nil {
 		return err
 	}
 	if err := backfillChannelIQSnapshots(); err != nil {
@@ -424,6 +428,7 @@ func migrateDBFast() error {
 		{&BillingGroupChannel{}, "BillingGroupChannel"},
 		{&AffiliateRuleVersion{}, "AffiliateRuleVersion"},
 		{&AffiliateUserOverride{}, "AffiliateUserOverride"},
+		{&AffiliateSubAgent{}, "AffiliateSubAgent"},
 		{&AffiliateReferral{}, "AffiliateReferral"},
 		{&AffiliateReward{}, "AffiliateReward"},
 		{&AffiliateQuotaAccount{}, "AffiliateQuotaAccount"},
@@ -460,6 +465,9 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := migrateAffiliateCashRewardTopUpIndex(); err != nil {
+		return err
 	}
 	if err := backfillChannelIQSnapshots(); err != nil {
 		return err

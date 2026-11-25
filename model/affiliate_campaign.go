@@ -2,7 +2,8 @@ package model
 
 import (
 	"errors"
-	"sort"
+	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -44,21 +45,23 @@ func (AffiliateCampaign) TableName() string {
 }
 
 type AffiliateCashReward struct {
-	ID               int    `json:"id"`
-	CampaignID       int    `json:"campaign_id" gorm:"index;not null"`
-	ReferralID       int    `json:"referral_id" gorm:"index;not null"`
-	TopUpID          int    `json:"topup_id" gorm:"uniqueIndex;not null"`
-	InviterUserID    int    `json:"inviter_user_id" gorm:"index;not null"`
-	InviteeUserID    int    `json:"invitee_user_id" gorm:"index;not null"`
-	PaidCents        int64  `json:"paid_cents" gorm:"type:bigint;not null"`
-	RewardRateBps    int64  `json:"reward_rate_bps" gorm:"type:bigint;not null"`
-	CashbackCents    int64  `json:"cashback_cents" gorm:"type:bigint;not null"`
-	TransferredCents int64  `json:"transferred_cents" gorm:"type:bigint;not null"`
-	Status           string `json:"status" gorm:"type:varchar(20);index;not null"`
-	AvailableAt      int64  `json:"available_at" gorm:"index;not null"`
-	IdempotencyKey   string `json:"-" gorm:"type:varchar(128);uniqueIndex;not null"`
-	CreatedAt        int64  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt        int64  `json:"updated_at" gorm:"autoUpdateTime"`
+	ID                  int    `json:"id"`
+	CampaignID          int    `json:"campaign_id" gorm:"index;not null"`
+	ReferralID          int    `json:"referral_id" gorm:"index;not null"`
+	TopUpID             int    `json:"topup_id" gorm:"uniqueIndex:idx_affiliate_cash_rewards_direct_top_up_id,where:source_reward_id IS NULL;not null"`
+	InviterUserID       int    `json:"inviter_user_id" gorm:"index;not null"`
+	InviteeUserID       int    `json:"invitee_user_id" gorm:"index;not null"`
+	PaidCents           int64  `json:"paid_cents" gorm:"type:bigint;not null"`
+	RewardRateBps       int64  `json:"reward_rate_bps" gorm:"type:bigint;not null"`
+	SourceRewardID      *int   `json:"source_reward_id,omitempty" gorm:"uniqueIndex"`
+	SourceRewardRateBps int64  `json:"source_reward_rate_bps,omitempty" gorm:"type:bigint;not null;default:0"`
+	CashbackCents       int64  `json:"cashback_cents" gorm:"type:bigint;not null"`
+	TransferredCents    int64  `json:"transferred_cents" gorm:"type:bigint;not null"`
+	Status              string `json:"status" gorm:"type:varchar(20);index;not null"`
+	AvailableAt         int64  `json:"available_at" gorm:"index;not null"`
+	IdempotencyKey      string `json:"-" gorm:"type:varchar(128);uniqueIndex;not null"`
+	CreatedAt           int64  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt           int64  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 type AffiliateCashAccount struct {
@@ -115,6 +118,16 @@ type AffiliateQuotaGrant struct {
 	Status         string `json:"status" gorm:"type:varchar(20);index;not null"`
 	IdempotencyKey string `json:"-" gorm:"type:varchar(128);uniqueIndex;not null"`
 	CreatedAt      int64  `json:"created_at" gorm:"autoCreateTime"`
+}
+
+func migrateAffiliateCashRewardTopUpIndex() error {
+	// AutoMigrate installs the direct-only index before retiring the legacy uniqueness rule.
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("ALTER TABLE affiliate_cash_rewards DROP CONSTRAINT IF EXISTS idx_affiliate_cash_rewards_top_up_id").Error; err != nil {
+			return err
+		}
+		return tx.Exec("DROP INDEX IF EXISTS idx_affiliate_cash_rewards_top_up_id").Error
+	})
 }
 
 func defaultAffiliateCampaign() AffiliateCampaign {
@@ -234,67 +247,54 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 	if rewardCents <= 0 || bonusQuota <= 0 {
 		return ErrAffiliateAmountInvalid
 	}
-	userIDs := []int{relation.InviterUserID, relation.InviteeUserID}
-	sort.Ints(userIDs)
-	var invitee User
-	for _, userID := range userIDs {
-		var user User
-		columns := []string{"id"}
-		if userID == relation.InviteeUserID {
-			columns = append(columns, "quota")
-		}
-		if err := lockForUpdate(tx).Select(columns).Where("id = ?", userID).First(&user).Error; err != nil {
-			return err
-		}
-		if userID == relation.InviteeUserID {
-			invitee = user
-		}
-	}
-
-	account, err := ensureAffiliateCashAccountWithTx(tx, relation.InviterUserID)
+	subAgent, err := affiliateSubAgentForTopUp(tx, relation.InviterUserID, event.CompletedAt)
 	if err != nil {
 		return err
 	}
-	availableAt := event.CompletedAt + campaign.HoldSeconds
+	var parentCents int64
+	userIDs := []int{relation.InviterUserID, relation.InviteeUserID}
+	if subAgent != nil && subAgent.ParentUserID != relation.InviteeUserID {
+		parentCents = calculateAffiliateSubAgentReward(rewardCents, subAgent, topUp.Id)
+		if parentCents > 0 {
+			userIDs = append(userIDs, subAgent.ParentUserID)
+		}
+	}
+	users, err := lockAffiliateSettlementUsersWithTx(tx, userIDs)
+	if err != nil {
+		return err
+	}
+	var invitee User
+	for _, user := range users {
+		if user.Id == relation.InviteeUserID {
+			invitee = user
+			break
+		}
+	}
+
 	status := AffiliateRewardStatusPending
 	if campaign.HoldSeconds == 0 {
 		status = AffiliateRewardStatusAvailable
 	}
-	reward := AffiliateCashReward{
+	cashback := AffiliateCashReward{
 		CampaignID: campaign.ID, ReferralID: relation.ID, TopUpID: topUp.Id,
 		InviterUserID: relation.InviterUserID, InviteeUserID: relation.InviteeUserID,
 		PaidCents: paidCents, RewardRateBps: campaign.InviterCashbackRateBps,
-		CashbackCents: rewardCents, Status: status, AvailableAt: availableAt,
+		CashbackCents: rewardCents, Status: status, AvailableAt: event.CompletedAt + campaign.HoldSeconds,
 		IdempotencyKey: "campaign-cash:" + strconv.Itoa(campaign.ID) + ":" + strconv.Itoa(topUp.Id),
 	}
-	if err := tx.Create(&reward).Error; err != nil {
+	reward, err := createAffiliateCashRewardWithTx(tx, cashback)
+	if err != nil {
 		return err
 	}
-	if status == AffiliateRewardStatusPending {
-		account.PendingCents += rewardCents
-	} else {
-		account.AvailableCents += rewardCents
-	}
-	account.LifetimeEarnedCents += rewardCents
-	if err := tx.Save(account).Error; err != nil {
-		return err
-	}
-	ledger := AffiliateCashLedger{
-		EntryType: AffiliateCashLedgerTypeRewardPending, ReferenceType: AffiliateCashReferenceReward,
-		ReferenceID: reward.ID, AmountCents: rewardCents,
-		IdempotencyKey: "campaign-cash-ledger:" + strconv.Itoa(reward.ID),
-	}
-	if status == AffiliateRewardStatusPending {
-		ledger.PendingDeltaCents = rewardCents
-	} else {
-		ledger.EntryType = AffiliateCashLedgerTypeRewardAvailable
-		ledger.AvailableDeltaCents = rewardCents
-	}
-	if err := appendAffiliateCashLedgerWithTx(tx, account, ledger); err != nil {
-		return err
-	}
-	if status == AffiliateRewardStatusAvailable {
-		if err := autoTransferAffiliateCashRewardWithTx(tx, reward.ID); err != nil {
+	if parentCents > 0 {
+		cashback.InviterUserID = subAgent.ParentUserID
+		cashback.SourceRewardID = &reward.ID
+		cashback.SourceRewardRateBps = subAgent.RateBps
+		cashback.CashbackCents = parentCents
+		cashback.IdempotencyKey = "sub-agent-campaign-cash:" + strconv.Itoa(reward.ID)
+		if _, err := createAffiliateCashRewardWithTx(tx, cashback); errors.Is(err, errAffiliateRewardCapacity) {
+			common.SysError(fmt.Sprintf("sub-agent cash reward for parent %d on top-up %d exceeds account capacity: %d", subAgent.ParentUserID, topUp.Id, parentCents))
+		} else if err != nil {
 			return err
 		}
 	}
@@ -330,6 +330,46 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 		return err
 	}
 	return tx.Save(event).Error
+}
+
+func createAffiliateCashRewardWithTx(tx *gorm.DB, reward AffiliateCashReward) (*AffiliateCashReward, error) {
+	account, err := ensureAffiliateCashAccountWithTx(tx, reward.InviterUserID)
+	if err != nil {
+		return nil, err
+	}
+	amount := reward.CashbackCents
+	if account.LifetimeEarnedCents > math.MaxInt64-amount {
+		return nil, errAffiliateRewardCapacity
+	}
+	if err := tx.Create(&reward).Error; err != nil {
+		return nil, err
+	}
+	ledger := AffiliateCashLedger{
+		ReferenceType: AffiliateCashReferenceReward, ReferenceID: reward.ID, AmountCents: amount,
+		IdempotencyKey: "campaign-cash-ledger:" + strconv.Itoa(reward.ID),
+	}
+	if reward.Status == AffiliateRewardStatusPending {
+		account.PendingCents += amount
+		ledger.EntryType = AffiliateCashLedgerTypeRewardPending
+		ledger.PendingDeltaCents = amount
+	} else {
+		account.AvailableCents += amount
+		ledger.EntryType = AffiliateCashLedgerTypeRewardAvailable
+		ledger.AvailableDeltaCents = amount
+	}
+	account.LifetimeEarnedCents += amount
+	if err := tx.Save(account).Error; err != nil {
+		return nil, err
+	}
+	if err := appendAffiliateCashLedgerWithTx(tx, account, ledger); err != nil {
+		return nil, err
+	}
+	if reward.Status == AffiliateRewardStatusAvailable {
+		if err := autoTransferAffiliateCashRewardWithTx(tx, reward.ID); err != nil {
+			return nil, err
+		}
+	}
+	return &reward, nil
 }
 
 func autoTransferAffiliateCashRewardWithTx(tx *gorm.DB, rewardID int) error {
@@ -371,13 +411,22 @@ func autoTransferAffiliateCashRewardWithTx(tx *gorm.DB, rewardID int) error {
 	if exchangeRate <= 0 {
 		exchangeRate = 1
 	}
-	creditedQuota, clamp := common.QuotaFromDecimalChecked(decimal.NewFromInt(amountCents).
+	quotaValue := decimal.NewFromInt(amountCents).
 		Div(decimal.NewFromInt(100)).Div(decimal.NewFromFloat(exchangeRate)).
-		Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
+		Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+	if reward.SourceRewardID != nil && quotaValue.Round(0).GreaterThanOrEqual(decimal.NewFromInt(common.MaxQuota)) {
+		// The full cash amount stays available for smaller transfers.
+		return nil
+	}
+	creditedQuota, clamp := common.QuotaFromDecimalChecked(quotaValue)
 	if clamp != nil {
 		return clamp
 	}
 	if creditedQuota <= 0 {
+		if reward.SourceRewardID != nil {
+			// Keep the cents available for transfer when they can convert to quota.
+			return nil
+		}
 		return ErrAffiliateAmountInvalid
 	}
 	if int64(user.Quota)+int64(creditedQuota) > int64(common.MaxQuota) {

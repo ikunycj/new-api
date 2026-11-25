@@ -35,6 +35,8 @@ import type {
   AffiliateBalanceTransferResponse,
   AffiliateInviteeTopUpsQuery,
   AffiliateBalanceTransfersQuery,
+  AffiliateSubAgentReward,
+  PaginatedData,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -210,6 +212,23 @@ export async function getAffiliateBalanceTransfers(
     params: { p: query.page, page_size: query.pageSize },
   })
   return res.data
+}
+
+export async function getAffiliateSubAgentRewards(
+  page: number,
+  pageSize: number
+): Promise<PaginatedData<AffiliateSubAgentReward>> {
+  const res = await api.get<
+    ApiResponse<PaginatedData<AffiliateSubAgentReward>>
+  >('/api/affiliate/sub-agent-rewards', {
+    params: { p: page, page_size: pageSize },
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.message || 'Failed to load sub-agent rewards')
+  }
+  return res.data.data
 }
 
 export async function createAffiliateBalanceTransfer(request: {

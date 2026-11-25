@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -71,6 +72,22 @@ func GetAffiliateInviteeTopUps(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(items)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func GetAffiliateSubAgentRewards(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	if pageInfo.Page < 1 || pageInfo.PageSize < 1 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	items, total, err := model.GetAffiliateSubAgentRewards(c.GetInt("id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -158,6 +175,20 @@ func AdminGetAffiliateUserOverrides(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminGetAffiliateSubAgents(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "代理人 ID 无效")
+		return
+	}
+	items, err := model.GetAffiliateAdminSubAgents(userID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, items)
 }
 
 func AdminGetAffiliateUserOverride(c *gin.Context) {
