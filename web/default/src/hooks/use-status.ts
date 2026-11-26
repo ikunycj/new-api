@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react'
 
 import type { SystemStatus } from '@/features/auth/types'
 import { getStatus } from '@/lib/api'
-import { getPublicBootstrap } from '@/lib/public-bootstrap'
+import { getInitialSiteTheme, getPublicBootstrap } from '@/lib/public-bootstrap'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { useHydrated } from './use-hydrated'
@@ -35,7 +35,12 @@ function getInitialStatus(): SystemStatus | undefined {
   try {
     if (typeof window !== 'undefined') {
       const saved = window.localStorage.getItem('status')
-      return saved ? (JSON.parse(saved) as SystemStatus) : undefined
+      if (saved) {
+        return {
+          ...(JSON.parse(saved) as SystemStatus),
+          site_theme_customization: getInitialSiteTheme(),
+        }
+      }
     }
   } catch {
     /* empty */

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { User } from '@/features/users/types'
+import type { ThemeCustomization } from '@/lib/theme-customization'
 
 // ============================================================================
 // API Payloads
@@ -143,6 +144,7 @@ export interface SystemStatus {
   }
   // Allow direct access to common properties
   version?: string
+  site_theme_customization?: ThemeCustomization
   build_commit?: string
   build_release?: string
   build_time?: string

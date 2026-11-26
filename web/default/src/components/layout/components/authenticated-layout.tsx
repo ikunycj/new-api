@@ -16,13 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { AnimatedOutlet } from '@/components/page-transition'
+import { useEffect, useState } from 'react'
+
 import { CommandMenu } from '@/components/command-menu'
+import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { LayoutProvider } from '@/context/layout-provider'
+import {
+  getSidebarLayoutSettings,
+  LayoutProvider,
+} from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
-import { getCookie } from '@/lib/cookies'
+import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { cn } from '@/lib/utils'
 
 import { AppHeader } from './app-header'
@@ -33,12 +38,22 @@ type AuthenticatedLayoutProps = {
 }
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
-  const defaultOpen = getCookie('sidebar_state') !== 'false'
+  const { customization } = useThemeCustomization()
+  const { defaultOpen } = getSidebarLayoutSettings(customization.layout)
+  const [open, setOpen] = useState(defaultOpen)
+
+  useEffect(() => {
+    setOpen(defaultOpen)
+  }, [customization.layout, defaultOpen])
 
   return (
     <LayoutProvider>
       <SearchProvider>
-        <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
+        <SidebarProvider
+          open={open}
+          onOpenChange={setOpen}
+          className='flex-col'
+        >
           <CommandMenu />
           <SkipToMain />
           <AppHeader />

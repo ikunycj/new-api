@@ -28,6 +28,18 @@ type Option struct {
 var errRetiredOption = errors.New("option has been retired")
 var errPricingGroupOptionRequiresAtomicUpdate = errors.New("pricing group options must be updated together")
 var pricingGroupConfigurationUpdateMutex sync.Mutex
+var siteThemeCustomization = system_setting.DefaultSiteThemeCustomization()
+
+type preparedOptionUpdate struct {
+	fingerprintAliases fingerprintModelAliasGroups
+	siteTheme          system_setting.SiteThemeCustomization
+}
+
+func GetSiteThemeCustomization() system_setting.SiteThemeCustomization {
+	common.OptionMapRWMutex.RLock()
+	defer common.OptionMapRWMutex.RUnlock()
+	return siteThemeCustomization
+}
 
 const (
 	pricingGroupDisplayNameOptionKey    = "PricingGroupDisplayName"
@@ -207,6 +219,8 @@ func InitOptionMap() {
 	common.OptionMap["SystemName"] = common.SystemName
 	common.OptionMap["Logo"] = common.Logo
 	common.OptionMap["ServerAddress"] = ""
+	common.OptionMap[system_setting.SiteThemeCustomizationOptionKey] = "{}"
+	siteThemeCustomization = system_setting.DefaultSiteThemeCustomization()
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
@@ -355,7 +369,7 @@ func loadOptionsFromDatabase() {
 			continue
 		}
 		if IsModelLeaderboardOption(option.Key) {
-			_ = applyOptionMap(option.Key, option.Value, nil)
+			_ = applyOptionMap(option.Key, option.Value, preparedOptionUpdate{})
 			continue
 		}
 		if isPricingGroupOptionKey(option.Key) {
@@ -407,7 +421,7 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
-	aliases, err := prepareOptionUpdate(key, value)
+	prepared, err := prepareOptionUpdate(key, value)
 	if err != nil {
 		return err
 	}
@@ -436,7 +450,7 @@ func UpdateOption(key string, value string) error {
 		return err
 	}
 	// Update OptionMap
-	return applyOptionMap(key, value, aliases)
+	return applyOptionMap(key, value, prepared)
 }
 
 func UpdatePricingGroupConfiguration(groupRatioJSON, groupEnabledJSON, groupOrderJSON, retryPolicyJSON, routingStrategyJSON string, optionalJSON ...string) error {
@@ -537,15 +551,13 @@ func UpdateOptionsBulk(values map[string]string) error {
 			return err
 		}
 	}
-	var aliases fingerprintModelAliasGroups
+	preparedOptions := make(map[string]preparedOptionUpdate, len(values))
 	for key, value := range values {
 		prepared, err := prepareOptionUpdate(key, value)
 		if err != nil {
 			return err
 		}
-		if key == fingerprintModelAliasesOptionKey {
-			aliases = prepared
-		}
+		preparedOptions[key] = prepared
 		if isPricingGroupOptionKey(key) {
 			return errPricingGroupOptionRequiresAtomicUpdate
 		}
@@ -567,7 +579,7 @@ func UpdateOptionsBulk(values map[string]string) error {
 		return err
 	}
 	for k, v := range values {
-		if err := applyOptionMap(k, v, aliases); err != nil {
+		if err := applyOptionMap(k, v, preparedOptions[k]); err != nil {
 			return err
 		}
 	}
@@ -576,41 +588,53 @@ func UpdateOptionsBulk(values map[string]string) error {
 
 func updateOptionMap(key string, value string) error {
 	// Values reloaded from the database cross a separate validation boundary.
-	aliases, err := prepareOptionUpdate(key, value)
+	prepared, err := prepareOptionUpdate(key, value)
 	if err != nil {
 		return err
 	}
-	return applyOptionMap(key, value, aliases)
+	return applyOptionMap(key, value, prepared)
 }
 
-func prepareOptionUpdate(key, value string) (fingerprintModelAliasGroups, error) {
+func prepareOptionUpdate(key, value string) (preparedOptionUpdate, error) {
+	var prepared preparedOptionUpdate
 	if key == logoImagesOptionKey {
-		return nil, errors.New("请使用徽标图片管理接口")
+		return prepared, errors.New("请使用徽标图片管理接口")
 	}
 	if key == common.ChannelErrorWhitelistOptionKey {
-		return nil, console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist")
+		return prepared, console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist")
 	}
 	if isRetiredOptionKey(key) {
-		return nil, errRetiredOption
+		return prepared, errRetiredOption
 	}
 	if IsModelLeaderboardOption(key) {
-		return nil, errors.New("请使用模型排序榜单设置接口")
+		return prepared, errors.New("请使用模型排序榜单设置接口")
 	}
-	if key == fingerprintModelAliasesOptionKey {
-		return parseFingerprintModelAliases(value)
+	switch key {
+	case fingerprintModelAliasesOptionKey:
+		aliases, err := parseFingerprintModelAliases(value)
+		prepared.fingerprintAliases = aliases
+		return prepared, err
+	case system_setting.SiteThemeCustomizationOptionKey:
+		theme, err := system_setting.ParseSiteThemeCustomization(value)
+		prepared.siteTheme = theme
+		return prepared, err
 	}
-	return nil, nil
+	return prepared, nil
 }
 
-func applyOptionMap(key, value string, aliases fingerprintModelAliasGroups) (err error) {
+func applyOptionMap(key, value string, prepared preparedOptionUpdate) (err error) {
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
 	if common.OptionMap == nil {
 		common.OptionMap = make(map[string]string)
 	}
 	common.OptionMap[key] = value
-	if key == fingerprintModelAliasesOptionKey {
-		fingerprintModelAliases = aliases
+	switch key {
+	case fingerprintModelAliasesOptionKey:
+		fingerprintModelAliases = prepared.fingerprintAliases
+		return nil
+	case system_setting.SiteThemeCustomizationOptionKey:
+		siteThemeCustomization = prepared.siteTheme
 		return nil
 	}
 

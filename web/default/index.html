@@ -14,6 +14,18 @@
     />
 
     <meta name="theme-color" content="#fff" />
+    <script>
+      (() => {
+        const root = document.documentElement
+        const mode = root.dataset.themeMode || 'system'
+        const isDark =
+          mode === 'dark' ||
+          (mode === 'system' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        root.classList.toggle('dark', isDark)
+        root.classList.toggle('light', !isDark)
+      })()
+    </script>
     <!--new-api-bootstrap-->
     <!--umami-->
     <!--Google Analytics-->

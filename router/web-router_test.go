@@ -16,12 +16,13 @@ import (
 
 func TestWebRouterStaticFallbackContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	indexPage := []byte(`<!doctype html><html lang="en"><head><!--new-api-bootstrap--></head><body><div id="root"></div></body></html>`)
 	buildFS := fstest.MapFS{
+		"web/default/dist/index.html": {Data: indexPage},
 		"web/default/dist/static/js/app.0123abcdef.js": {
 			Data: []byte("console.log('ok')"),
 		},
 	}
-	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
 	router := gin.New()
 	SetWebRouter(router, WebAssets{
 		BuildFS:   buildFS,
@@ -54,8 +55,20 @@ func TestWebRouterStaticFallbackContract(t *testing.T) {
 		router.ServeHTTP(recorder, request)
 
 		require.Equal(t, http.StatusOK, recorder.Code)
-		assert.Equal(t, string(indexPage), recorder.Body.String())
+		assert.Contains(t, recorder.Body.String(), `<div id="root"></div>`)
+		assert.Contains(t, recorder.Body.String(), `<html dir="ltr" data-theme-mode="system" lang="en">`)
+		assert.Contains(t, recorder.Body.String(), `data-theme-font="sans" data-theme-content-layout="full"`)
+		assert.Contains(t, recorder.Body.String(), `window.__NEW_API_SITE_THEME__={"preset":"default","font":"default","radius":"default","scale":"default","contentLayout":"full","mode":"system","sidebar":"inset","layout":"default","direction":"ltr"}`)
 		assert.Equal(t, "no-cache, must-revalidate", recorder.Header().Get("Cache-Control"))
+	})
+
+	t.Run("redirects direct index requests to the themed route", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/index.html", nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusMovedPermanently, recorder.Code)
+		assert.Equal(t, "./", recorder.Header().Get("Location"))
 	})
 }
 
@@ -108,7 +121,7 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 			Data: []byte(`{"version":1,"locales":{"zhCN":{"/docs":"introduction.0123abcdef.json","/docs/integrations":"integrations.0123abcdef.json","/docs/tools/codex":"codex.0123abcdef.json"}}}`),
 		},
 	}
-	indexPage := []byte("<!doctype html><div id=\"root\"></div>")
+	indexPage := []byte(`<!doctype html><head><!--new-api-bootstrap--></head><body><div id="root"></div></body>`)
 	engine := gin.New()
 	SetWebRouter(engine, WebAssets{
 		BuildFS:   buildFS,
@@ -127,6 +140,9 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		assert.Contains(t, body, `Test &lt;/script&gt;&lt;b&gt; Gateway`)
 		assert.Contains(t, body, `"home_page_content_loaded":true`)
 		assert.Contains(t, body, `"locale":"zhCN"`)
+		assert.Contains(t, body, `<html dir="ltr" data-theme-mode="system" lang="zhCN">`)
+		assert.Contains(t, body, `<body data-theme-font="sans" data-theme-content-layout="full">`)
+		assert.Contains(t, body, `"site_theme_customization":{"preset":"default","font":"default","radius":"default","scale":"default","contentLayout":"full","mode":"system","sidebar":"inset","layout":"default","direction":"ltr"}`)
 		assert.Contains(t, body, `"customer_service":"Contact us \u003csupport@example.com\u003e\nLine 2"`)
 		assert.Contains(t, body, `Test \u003c/script\u003e\u003cb\u003e Gateway`)
 		assert.NotContains(t, body, `window.__NEW_API_PUBLIC_BOOTSTRAP__={"home_page_content":"","home_page_content_loaded":true,"locale":"zhCN","setup":true,"status":{"HeaderNavModules":"{\"docs\":{\"enabled\":true}}","logo":"https://cdn.example/logo.png?x=1\u0026y=2","server_address":"https://api.example.com","system_name":"Test </script>`)
@@ -223,7 +239,9 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		engine.ServeHTTP(recorder, request)
 
 		require.Equal(t, http.StatusOK, recorder.Code)
-		assert.Equal(t, string(indexPage), recorder.Body.String())
+		assert.Contains(t, recorder.Body.String(), `<div id="root"></div>`)
+		assert.NotContains(t, recorder.Body.String(), `window.__NEW_API_PUBLIC_BOOTSTRAP__=`)
+		assert.Contains(t, recorder.Body.String(), `window.__NEW_API_SITE_THEME__=`)
 	})
 
 	t.Run("redirects public pages while setup is incomplete", func(t *testing.T) {
@@ -237,4 +255,12 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		require.Equal(t, http.StatusTemporaryRedirect, recorder.Code)
 		assert.Equal(t, "/setup", recorder.Header().Get("Location"))
 	})
+}
+
+func TestWebSiteThemeAppliesConfiguredAppearanceBeforeScriptsRun(t *testing.T) {
+	theme, err := system_setting.ParseSiteThemeCustomization(`{"preset":"anthropic","radius":"none","scale":"lg","contentLayout":"centered","mode":"dark","direction":"rtl"}`)
+	require.NoError(t, err)
+	page := applySiteThemeToHTML(`<!doctype html><html lang="fr"><body><main>Welcome</main></body></html>`, theme)
+	assert.Contains(t, page, `<html dir="rtl" data-theme-mode="dark" class="dark" lang="fr">`)
+	assert.Contains(t, page, `<body data-theme-font="serif" data-theme-content-layout="centered" data-theme-preset="anthropic" data-theme-radius="none" data-theme-scale="lg">`)
 }

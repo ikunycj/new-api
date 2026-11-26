@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,10 +15,11 @@ import (
 type statusReleaseResponse struct {
 	Success bool `json:"success"`
 	Data    struct {
-		BuildCommit     string `json:"build_commit"`
-		BuildRelease    string `json:"build_release"`
-		BuildTime       string `json:"build_time"`
-		CustomerService string `json:"customer_service"`
+		BuildCommit            string                                `json:"build_commit"`
+		BuildRelease           string                                `json:"build_release"`
+		BuildTime              string                                `json:"build_time"`
+		CustomerService        string                                `json:"customer_service"`
+		SiteThemeCustomization system_setting.SiteThemeCustomization `json:"site_theme_customization"`
 	} `json:"data"`
 }
 
@@ -41,6 +43,7 @@ func TestGetStatusExposesBuildMetadata(t *testing.T) {
 	assert.Equal(t, "abc123", response.Data.BuildCommit)
 	assert.Equal(t, "abc123-v1", response.Data.BuildRelease)
 	assert.Equal(t, "2026-08-02T00:00:00Z", response.Data.BuildTime)
+	assert.Equal(t, system_setting.DefaultSiteThemeCustomization(), response.Data.SiteThemeCustomization)
 }
 
 func TestGetStatusExposesCustomerService(t *testing.T) {

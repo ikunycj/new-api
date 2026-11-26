@@ -56,6 +56,7 @@ interface NotificationPopoverProps {
   noticeLoading: boolean
   announcementsLoading: boolean
   className?: string
+  compactInHeader?: boolean
 }
 
 /**
@@ -276,6 +277,7 @@ export function NotificationPopover({
   noticeLoading,
   announcementsLoading,
   className,
+  compactInHeader,
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
   return (
@@ -285,14 +287,20 @@ export function NotificationPopover({
           <Button
             variant='ghost'
             size='sm'
-            className={cn('relative h-9 px-2', className)}
+            className={cn(
+              'relative h-9 px-2',
+              compactInHeader && 'max-xl:w-8 max-xl:p-0',
+              className
+            )}
             aria-label={t('Announcements')}
           />
         }
       >
         <span className='flex items-center gap-1.5 text-xs font-medium'>
-          <Bell className='size-4' />
-          {t('Announcements')}
+          <Bell className='size-4' aria-hidden='true' />
+          <span className={cn(compactInHeader && 'max-xl:hidden')}>
+            {t('Announcements')}
+          </span>
         </span>
         {unreadCount > 0 ? (
           <Badge

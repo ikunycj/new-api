@@ -24,7 +24,9 @@ import {
 } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect, useState } from 'react'
 
+import { DirectionProvider } from '@/context/direction-provider'
 import { ThemeCustomizationProvider } from '@/context/theme-customization-provider'
+import { ThemeProvider } from '@/context/theme-provider'
 import { saveAffiliateCode } from '@/features/auth/lib/storage'
 import { GeneralError } from '@/features/errors/general-error'
 import { NotFoundError } from '@/features/errors/not-found-error'
@@ -32,7 +34,8 @@ import { getSetupStatus } from '@/features/setup/api'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { getPublicBootstrap } from '@/lib/public-bootstrap'
+import { getInitialSiteTheme, getPublicBootstrap } from '@/lib/public-bootstrap'
+import { DEFAULT_THEME_CUSTOMIZATION } from '@/lib/theme-customization'
 
 const NavigationProgress = lazy(() =>
   import('@/components/navigation-progress').then((module) => ({
@@ -59,8 +62,12 @@ function RootComponent() {
   const hydrated = useHydrated()
   const [enhancementsReady, setEnhancementsReady] = useState(false)
   // One shared React Query request owns status refresh and system config sync.
-  useStatus()
+  const { status } = useStatus()
   useSystemConfig()
+  const customization =
+    status?.site_theme_customization ??
+    getInitialSiteTheme() ??
+    DEFAULT_THEME_CUSTOMIZATION
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()
@@ -88,35 +95,39 @@ function RootComponent() {
   }, [hydrated])
 
   return (
-    <ThemeCustomizationProvider>
-      {enhancementsReady && (
-        <Suspense fallback={null}>
-          <NavigationProgress />
-        </Suspense>
-      )}
-      {import.meta.env.SSR ? (
-        <Suspense fallback={null}>
-          <Outlet />
-        </Suspense>
-      ) : (
-        <Outlet />
-      )}
-      {enhancementsReady && (
-        <Suspense fallback={null}>
-          <Toaster
-            closeButton
-            duration={5000}
-            position='top-center'
-            richColors
-          />
-        </Suspense>
-      )}
-      {enhancementsReady && import.meta.env.MODE === 'development' && (
-        <Suspense fallback={null}>
-          <ReactQueryDevtools buttonPosition='bottom-left' />
-          <TanStackRouterDevtools position='bottom-right' />
-        </Suspense>
-      )}
+    <ThemeCustomizationProvider customization={customization}>
+      <ThemeProvider mode={customization.mode}>
+        <DirectionProvider direction={customization.direction}>
+          {enhancementsReady && (
+            <Suspense fallback={null}>
+              <NavigationProgress />
+            </Suspense>
+          )}
+          {import.meta.env.SSR ? (
+            <Suspense fallback={null}>
+              <Outlet />
+            </Suspense>
+          ) : (
+            <Outlet />
+          )}
+          {enhancementsReady && (
+            <Suspense fallback={null}>
+              <Toaster
+                closeButton
+                duration={5000}
+                position='top-center'
+                richColors
+              />
+            </Suspense>
+          )}
+          {enhancementsReady && import.meta.env.MODE === 'development' && (
+            <Suspense fallback={null}>
+              <ReactQueryDevtools buttonPosition='bottom-left' />
+              <TanStackRouterDevtools position='bottom-right' />
+            </Suspense>
+          )}
+        </DirectionProvider>
+      </ThemeProvider>
     </ThemeCustomizationProvider>
   )
 }

@@ -41,9 +41,7 @@ import {
 import { showErrorToast } from '@/lib/toast'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
-import { ThemeProvider } from './context/theme-provider'
 import i18n, { i18nReady } from './i18n/config'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
@@ -100,10 +98,7 @@ const queryClient = new QueryClient({
         }
         // Optional/background queries may explicitly suppress the global
         // error handler. They must not take the entire application to /500.
-        if (
-          error.response?.status === 500 &&
-          !error.config?.skipErrorHandler
-        ) {
+        if (error.response?.status === 500 && !error.config?.skipErrorHandler) {
           showErrorToast(i18next.t('Internal Server Error!'))
           router.navigate({ to: '/500' })
         }
@@ -176,13 +171,9 @@ async function renderApp(): Promise<void> {
   const app = (
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <FontProvider>
-            <DirectionProvider>
-              <RouterProvider router={router} />
-            </DirectionProvider>
-          </FontProvider>
-        </ThemeProvider>
+        <FontProvider>
+          <RouterProvider router={router} />
+        </FontProvider>
       </QueryClientProvider>
     </StrictMode>
   )

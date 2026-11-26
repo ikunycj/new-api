@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { mapStatusDataToConfig } from '@/hooks/use-system-config'
+import type { ThemeCustomization } from '@/lib/theme-customization'
 import {
   useSystemConfigStore,
   type CurrencyDisplayType,
@@ -34,6 +35,7 @@ export interface PublicStatus {
   quota_display_type?: CurrencyDisplayType
   quota_per_unit?: number
   server_address?: string
+  site_theme_customization?: ThemeCustomization
   system_name?: string
   usd_exchange_rate?: number
 }
@@ -53,6 +55,7 @@ export interface PublicBootstrap {
 declare global {
   interface Window {
     __NEW_API_PUBLIC_BOOTSTRAP__?: PublicBootstrap
+    __NEW_API_SITE_THEME__?: ThemeCustomization
   }
 }
 
@@ -67,6 +70,13 @@ export function getPublicBootstrap(): PublicBootstrap | undefined {
     return window.__NEW_API_PUBLIC_BOOTSTRAP__
   }
   return prerenderBootstrap
+}
+
+export function getInitialSiteTheme(): ThemeCustomization | undefined {
+  return (
+    getPublicBootstrap()?.status.site_theme_customization ??
+    (typeof window === 'undefined' ? undefined : window.__NEW_API_SITE_THEME__)
+  )
 }
 
 export function initializePublicBootstrap(): void {

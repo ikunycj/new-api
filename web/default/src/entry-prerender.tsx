@@ -25,9 +25,7 @@ import {
 } from '@tanstack/react-router'
 import { renderToString } from 'react-dom/server'
 
-import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
-import { ThemeProvider } from './context/theme-provider'
 import type { DocsPayload, DocsRoutePath } from './features/docs/docs-page'
 import { DOCS_PRERENDER_SOURCES } from './features/docs/docs-prerender-sources'
 import {
@@ -105,11 +103,7 @@ function withPrerenderProviders(
 ) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <FontProvider>
-          <DirectionProvider>{children}</DirectionProvider>
-        </FontProvider>
-      </ThemeProvider>
+      <FontProvider>{children}</FontProvider>
     </QueryClientProvider>
   )
 }

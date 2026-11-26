@@ -55,6 +55,7 @@ func GetStatus(c *gin.Context) {
 	}
 
 	cs := console_setting.GetConsoleSetting()
+	siteTheme := model.GetSiteThemeCustomization()
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
 
@@ -82,6 +83,7 @@ func GetStatus(c *gin.Context) {
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
 		"customer_service":            common.OptionMap["CustomerService"],
+		"site_theme_customization":    siteTheme,
 		"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,
 		"wechat_login":                common.WeChatAuthEnabled,
 		"server_address":              system_setting.ServerAddress,

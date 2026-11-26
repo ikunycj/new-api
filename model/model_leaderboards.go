@@ -132,5 +132,5 @@ func saveModelLeaderboardOption(ctx context.Context, key string, value any) erro
 	}).Create(&Option{Key: key, Value: string(data)}).Error; err != nil {
 		return err
 	}
-	return applyOptionMap(key, string(data), nil)
+	return applyOptionMap(key, string(data), preparedOptionUpdate{})
 }

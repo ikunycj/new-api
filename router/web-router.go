@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/static"
@@ -26,6 +27,7 @@ var publicPageLocales = []string{"en", "zhCN", "zhTW", "fr", "ja", "ru", "vi"}
 const (
 	documentationLocale = "zhCN"
 	publicHomeFile      = "home.html"
+	webBootstrapMarker  = "<!--new-api-bootstrap-->"
 )
 
 var publicPageLanguageMatcher = language.NewMatcher([]language.Tag{
@@ -61,6 +63,38 @@ func matchesETag(header, etag string) bool {
 		}
 	}
 	return false
+}
+
+func applySiteThemeToHTML(pageHTML string, theme system_setting.SiteThemeCustomization) string {
+	document := `<html dir="` + theme.Direction + `" data-theme-mode="` + theme.Mode + `"`
+	if theme.Mode != "system" {
+		document += ` class="` + theme.Mode + `"`
+	}
+	pageHTML = strings.Replace(pageHTML, "<html", document, 1)
+
+	body := `<body data-theme-font="` + theme.ResolvedFont() + `" data-theme-content-layout="` + theme.ContentLayout + `"`
+	if theme.Preset != "default" {
+		body += ` data-theme-preset="` + theme.Preset + `"`
+	}
+	if theme.Radius != "default" {
+		body += ` data-theme-radius="` + theme.Radius + `"`
+	}
+	if theme.Scale != "default" {
+		body += ` data-theme-scale="` + theme.Scale + `"`
+	}
+	return strings.Replace(pageHTML, "<body>", body+">", 1)
+}
+
+func serveWebIndex(c *gin.Context, indexPage []byte, theme system_setting.SiteThemeCustomization) {
+	themeJSON, err := common.Marshal(theme)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	pageHTML := applySiteThemeToHTML(string(indexPage), theme)
+	pageHTML = strings.Replace(pageHTML, webBootstrapMarker, "<script>window.__NEW_API_SITE_THEME__="+string(themeJSON)+"</script>", 1)
+	c.Header("Cache-Control", "no-cache, must-revalidate")
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(pageHTML))
 }
 
 func SetWebRouter(router *gin.Engine, assets WebAssets) {
@@ -136,6 +170,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			c.Redirect(http.StatusTemporaryRedirect, "/docs/api/integration")
 			return
 		}
+		siteTheme := model.GetSiteThemeCustomization()
 		if _, isPublicPage := publicPageRoutes[canonicalPath]; isPublicPage {
 			if !constant.Setup {
 				c.Redirect(http.StatusTemporaryRedirect, "/setup")
@@ -148,8 +183,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			customerService := common.OptionMap["CustomerService"]
 			common.OptionMapRWMutex.RUnlock()
 			if canonicalPath == "/" && strings.TrimSpace(homePageContent) != "" {
-				c.Header("Cache-Control", "no-cache, must-revalidate")
-				c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
+				serveWebIndex(c, assets.IndexPage, siteTheme)
 				return
 			}
 
@@ -183,11 +217,12 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 					"locale":                   locale,
 					"setup":                    true,
 					"status": map[string]any{
-						"HeaderNavModules": headerNavModules,
-						"customer_service": customerService,
-						"logo":             logo,
-						"server_address":   serverAddress,
-						"system_name":      common.SystemName,
+						"HeaderNavModules":         headerNavModules,
+						"customer_service":         customerService,
+						"logo":                     logo,
+						"server_address":           serverAddress,
+						"site_theme_customization": siteTheme,
+						"system_name":              common.SystemName,
 					},
 				}
 				if fileName := manifest.Locales[locale][canonicalPath]; fileName != "" {
@@ -198,7 +233,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 				}
 				bootstrapJSON, err := common.Marshal(bootstrap)
 				if err == nil {
-					pageHTML := string(template)
+					pageHTML := applySiteThemeToHTML(string(template), siteTheme)
 					pageHTML = strings.ReplaceAll(pageHTML, "__NEW_API_SYSTEM_NAME__", html.EscapeString(common.SystemName))
 					pageHTML = strings.ReplaceAll(pageHTML, "__NEW_API_LOGO__", html.EscapeString(logo))
 					pageHTML = strings.NewReplacer(
@@ -207,7 +242,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 					).Replace(pageHTML)
 					pageHTML = strings.Replace(pageHTML, "<title>All Token API</title>", "<title>"+html.EscapeString(common.SystemName)+"</title>", 1)
 					pageHTML = strings.Replace(pageHTML, `<meta name="title" content="All Token API" />`, `<meta name="title" content="`+html.EscapeString(common.SystemName)+`" />`, 1)
-					pageHTML = strings.Replace(pageHTML, "<!--new-api-bootstrap-->", "<script>window.__NEW_API_PUBLIC_BOOTSTRAP__="+string(bootstrapJSON)+"</script>", 1)
+					pageHTML = strings.Replace(pageHTML, webBootstrapMarker, "<script>window.__NEW_API_PUBLIC_BOOTSTRAP__="+string(bootstrapJSON)+"</script>", 1)
 
 					c.Header("Cache-Control", "no-cache, must-revalidate")
 					c.Header("Vary", "Cookie, Accept-Language")
@@ -217,8 +252,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 			}
 		}
 
-		c.Header("Cache-Control", "no-cache, must-revalidate")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
+		serveWebIndex(c, assets.IndexPage, siteTheme)
 	})
 }
 

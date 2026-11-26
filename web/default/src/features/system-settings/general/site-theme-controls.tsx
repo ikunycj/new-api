@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Radio as RadioPrimitive } from '@base-ui/react/radio'
 import { RadioGroup as Radio } from '@base-ui/react/radio-group'
-import { CircleCheck, Palette, RotateCcw } from 'lucide-react'
+import { CircleCheck, RotateCcw } from 'lucide-react'
 import type { SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -32,102 +32,23 @@ import { IconSidebarSidebar } from '@/assets/custom/icon-sidebar-sidebar'
 import { IconThemeDark } from '@/assets/custom/icon-theme-dark'
 import { IconThemeLight } from '@/assets/custom/icon-theme-light'
 import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
-import {
-  sideDrawerContentClassName,
-  sideDrawerFooterClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
-import { useDirection } from '@/context/direction-provider'
-import { type Collapsible, useLayout } from '@/context/layout-provider'
-import { useThemeCustomization } from '@/context/theme-customization-provider'
-import { useTheme } from '@/context/theme-provider'
-import {
   type ContentLayout,
+  type Direction,
+  resolveThemeFont,
+  type SidebarLayout,
+  type SidebarStyle,
   THEME_PRESETS,
   type ThemeFont,
+  type ThemeMode,
   type ThemePreset,
   type ThemeRadius,
   type ThemeScale,
 } from '@/lib/theme-customization'
 import { cn } from '@/lib/utils'
 
-import { useSidebar } from './ui/sidebar'
-
 const Item = RadioPrimitive.Root
-
-export function ConfigDrawer() {
-  const { t } = useTranslation()
-  const { setOpen } = useSidebar()
-  const { resetDir } = useDirection()
-  const { resetTheme } = useTheme()
-  const { resetLayout } = useLayout()
-  const { resetCustomization } = useThemeCustomization()
-
-  const handleReset = () => {
-    setOpen(true)
-    resetDir()
-    resetTheme()
-    resetLayout()
-    resetCustomization()
-  }
-
-  return (
-    <Sheet>
-      <SheetTrigger
-        render={
-          <Button
-            size='icon'
-            variant='ghost'
-            aria-label={t('Open theme settings')}
-            aria-describedby='config-drawer-description'
-            className='max-md:hidden'
-          />
-        }
-      >
-        <Palette className='size-[1.2rem]' aria-hidden='true' />
-      </SheetTrigger>
-      <SheetContent className={sideDrawerContentClassName('sm:max-w-md')}>
-        <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>{t('Theme Settings')}</SheetTitle>
-          <SheetDescription id='config-drawer-description'>
-            {t('Adjust the appearance and layout to suit your preferences.')}
-          </SheetDescription>
-        </SheetHeader>
-        <div className={sideDrawerFormClassName()}>
-          <ThemeConfig />
-          <PresetConfig />
-          <FontConfig />
-          <RadiusConfig />
-          <ScaleConfig />
-          <SidebarConfig />
-          <LayoutConfig />
-          <ContentLayoutConfig />
-          <DirConfig />
-        </div>
-        <SheetFooter className={sideDrawerFooterClassName('grid-cols-1')}>
-          <Button
-            variant='destructive'
-            onClick={handleReset}
-            aria-label={t('Reset all settings to default values')}
-          >
-            {t('Reset')}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  )
-}
 
 function SectionTitle(props: {
   title: string
@@ -135,6 +56,8 @@ function SectionTitle(props: {
   onReset?: () => void
   className?: string
 }) {
+  const { t } = useTranslation()
+
   return (
     <div
       className={cn(
@@ -145,11 +68,12 @@ function SectionTitle(props: {
       {props.title}
       {props.showReset && props.onReset && (
         <Button
+          type='button'
           size='icon'
           variant='secondary'
           className='size-4'
           onClick={props.onReset}
-          aria-label='Reset'
+          aria-label={t('Reset')}
         >
           <RotateCcw className='size-3' aria-hidden='true' />
         </Button>
@@ -158,21 +82,21 @@ function SectionTitle(props: {
   )
 }
 
+type IllustratedOption<T extends string> = {
+  value: T
+  label: string
+  icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement
+}
+
 function RadioGroupItem(props: {
-  item: {
-    value: string
-    label: string
-    icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement
-  }
-  isTheme?: boolean
+  item: IllustratedOption<string>
+  preserveIconColors?: boolean
 }) {
-  const isTheme = props.isTheme ?? false
   return (
     <Item
       value={props.item.value}
       className={cn('group outline-none', 'transition duration-200 ease-in')}
-      aria-label={`Select ${props.item.label.toLowerCase()}`}
-      aria-describedby={`${props.item.value}-description`}
+      aria-label={props.item.label}
     >
       <div
         className={cn(
@@ -180,9 +104,7 @@ function RadioGroupItem(props: {
           'group-data-checked:ring-primary group-data-checked:shadow-2xl',
           'group-focus-visible:ring-2'
         )}
-        role='img'
-        aria-hidden='false'
-        aria-label={`${props.item.label} option preview`}
+        aria-hidden='true'
       >
         <CircleCheck
           className={cn(
@@ -194,70 +116,92 @@ function RadioGroupItem(props: {
         />
         <props.item.icon
           className={cn(
-            !isTheme &&
+            'w-full',
+            !props.preserveIconColors &&
               'stroke-primary fill-primary group-data-unchecked:stroke-muted-foreground group-data-unchecked:fill-muted-foreground'
           )}
           aria-hidden='true'
         />
       </div>
-      <div
-        className='mt-1 text-xs'
-        id={`${props.item.value}-description`}
-        aria-live='polite'
-      >
-        {props.item.label}
-      </div>
+      <div className='mt-1 text-xs'>{props.item.label}</div>
     </Item>
   )
 }
 
-function ThemeConfig() {
-  const { t } = useTranslation()
-  const { defaultTheme, theme, setTheme } = useTheme()
+type SiteThemeFieldProps<T extends string> = {
+  value: T
+  defaultValue: T
+  disabled: boolean
+  onChange: (value: T) => void
+}
+
+function IllustratedThemeConfig<T extends string>(
+  props: SiteThemeFieldProps<T> & {
+    title: string
+    options: IllustratedOption<T>[]
+    preserveIconColors?: boolean
+    className?: string
+  }
+) {
   return (
     <div>
       <SectionTitle
-        title={t('Theme')}
-        showReset={theme !== defaultTheme}
-        onReset={() => setTheme(defaultTheme)}
+        title={props.title}
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={theme}
-        onValueChange={setTheme}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label={t('Select theme preference')}
-        aria-describedby='theme-description'
+      <Radio<T>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
+        className={cn(
+          'grid w-full max-w-md grid-cols-3 gap-4',
+          props.className
+        )}
+        aria-label={props.title}
       >
-        {[
-          { value: 'system', label: t('System'), icon: IconThemeSystem },
-          { value: 'light', label: t('Light'), icon: IconThemeLight },
-          { value: 'dark', label: t('Dark'), icon: IconThemeDark },
-        ].map((item) => (
-          <RadioGroupItem key={item.value} item={item} isTheme />
+        {props.options.map((item) => (
+          <RadioGroupItem
+            key={item.value}
+            item={item}
+            preserveIconColors={props.preserveIconColors}
+          />
         ))}
       </Radio>
-      <div id='theme-description' className='sr-only'>
-        {t('Choose between system preference, light mode, or dark mode')}
-      </div>
     </div>
   )
 }
 
-function PresetConfig() {
+export function ModeConfig(props: SiteThemeFieldProps<ThemeMode>) {
+  return (
+    <IllustratedThemeConfig
+      {...props}
+      title='明暗模式'
+      preserveIconColors
+      options={[
+        { value: 'system', label: '跟随系统', icon: IconThemeSystem },
+        { value: 'light', label: '浅色', icon: IconThemeLight },
+        { value: 'dark', label: '深色', icon: IconThemeDark },
+      ]}
+    />
+  )
+}
+
+export function PresetConfig(props: SiteThemeFieldProps<ThemePreset>) {
   const { t } = useTranslation()
-  const { defaults, customization, setPreset } = useThemeCustomization()
   return (
     <div>
       <SectionTitle
-        title={t('Color preset')}
-        showReset={customization.preset !== defaults.preset}
-        onReset={() => setPreset(defaults.preset)}
+        title='配色方案'
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={customization.preset}
-        onValueChange={(v) => setPreset(v as ThemePreset)}
+      <Radio<ThemePreset>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
         className='grid w-full grid-cols-4 gap-3'
-        aria-label={t('Select color preset')}
+        aria-label='选择配色方案'
       >
         {THEME_PRESETS.map((preset) => (
           <Item
@@ -303,51 +247,43 @@ function PresetConfig() {
 }
 
 /**
- * Font options shown in the theme drawer.
+ * Font options shown in the theme settings.
  *
  * Each option renders a live "Aa" preview in the font it represents.
- * `Auto` deliberately leaves `fontFamily` undefined so the preview inherits
- * the currently active body font — that way the user sees what `Auto` will
- * actually look like for the active preset (Anthropic → serif glyphs,
- * everything else → sans glyphs) without us having to duplicate the
- * preset-default mapping in the UI.
+ * The automatic option previews the default font for the draft color preset.
  */
 const FONT_OPTIONS: {
   value: ThemeFont
   label: string
-  // CSS font-family applied to the "Aa" preview. `undefined` = inherit
-  // from the current theme (used by the `default` option).
-  preview?: string
 }[] = [
-  { value: 'default', label: 'Auto', preview: undefined },
-  { value: 'sans', label: 'Sans', preview: 'var(--font-sans)' },
-  { value: 'serif', label: 'Serif', preview: 'var(--font-serif)' },
+  { value: 'default', label: '自动' },
+  { value: 'sans', label: '无衬线' },
+  { value: 'serif', label: '衬线' },
 ]
 
-function FontConfig() {
-  const { t } = useTranslation()
-  const { defaults, customization, setFont } = useThemeCustomization()
+export function FontConfig(
+  props: SiteThemeFieldProps<ThemeFont> & { preset: ThemePreset }
+) {
   return (
     <div>
       <SectionTitle
-        title={t('Font')}
-        showReset={customization.font !== defaults.font}
-        onReset={() => setFont(defaults.font)}
+        title='字体'
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={customization.font}
-        onValueChange={(v) => setFont(v as ThemeFont)}
+      <Radio<ThemeFont>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
         className='grid w-full grid-cols-3 gap-4'
-        aria-label={t('Select body font')}
+        aria-label='选择正文字体'
       >
         {FONT_OPTIONS.map((option) => (
           <Item
             key={option.value}
             value={option.value}
             className='group flex flex-col items-stretch outline-none'
-            aria-label={
-              option.value === 'default' ? t('System default') : option.label
-            }
+            aria-label={option.label}
           >
             <div
               className={cn(
@@ -367,13 +303,9 @@ function FontConfig() {
               <span
                 aria-hidden='true'
                 className='text-foreground absolute inset-0 flex items-center justify-center text-lg leading-none font-medium'
-                style={
-                  option.preview
-                    ? { fontFamily: option.preview }
-                    : // `font: inherit` defers to the active theme so the
-                      // "Auto" tile previews what the resolved font will be.
-                      { font: 'inherit', fontSize: '1.125rem' }
-                }
+                style={{
+                  fontFamily: `var(--font-${resolveThemeFont(option.value, props.preset)})`,
+                }}
               >
                 Aa
               </span>
@@ -392,7 +324,7 @@ const RADIUS_OPTIONS: {
   // CSS border-radius value used to render the visual preview corner.
   preview: string
 }[] = [
-  { value: 'default', label: 'Auto', preview: '1rem' },
+  { value: 'default', label: '自动', preview: '1rem' },
   { value: 'none', label: '0', preview: '0' },
   { value: 'sm', label: '0.3', preview: '0.3rem' },
   { value: 'md', label: '0.5', preview: '0.5rem' },
@@ -400,30 +332,27 @@ const RADIUS_OPTIONS: {
   { value: 'xl', label: '1.0', preview: '1rem' },
 ]
 
-function RadiusConfig() {
-  const { t } = useTranslation()
-  const { defaults, customization, setRadius } = useThemeCustomization()
+export function RadiusConfig(props: SiteThemeFieldProps<ThemeRadius>) {
   return (
     <div>
       <SectionTitle
-        title={t('Border radius')}
-        showReset={customization.radius !== defaults.radius}
-        onReset={() => setRadius(defaults.radius)}
+        title='圆角'
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={customization.radius}
-        onValueChange={(v) => setRadius(v as ThemeRadius)}
+      <Radio<ThemeRadius>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
         className='grid w-full grid-cols-6 gap-2'
-        aria-label={t('Select border radius')}
+        aria-label='选择圆角'
       >
         {RADIUS_OPTIONS.map((option) => (
           <Item
             key={option.value}
             value={option.value}
             className='group flex flex-col items-stretch outline-none'
-            aria-label={
-              option.value === 'default' ? t('System default') : option.label
-            }
+            aria-label={option.label}
           >
             <div
               className={cn(
@@ -478,32 +407,31 @@ function ScalePreview(props: { rows: number; rowGap: string }) {
   )
 }
 
-function ScaleConfig() {
-  const { t } = useTranslation()
-  const { defaults, customization, setScale } = useThemeCustomization()
+export function ScaleConfig(props: SiteThemeFieldProps<ThemeScale>) {
   const scaleOptions: {
     value: ThemeScale
     label: string
     rows: number
     rowGap: string
   }[] = [
-    { value: 'sm', label: t('Compact'), rows: 4, rowGap: '3px' },
-    { value: 'default', label: t('Default'), rows: 3, rowGap: '6px' },
-    { value: 'lg', label: t('Comfortable'), rows: 2, rowGap: '10px' },
-    { value: 'xl', label: t('Super Large'), rows: 1, rowGap: '14px' },
+    { value: 'sm', label: '紧凑', rows: 4, rowGap: '3px' },
+    { value: 'default', label: '默认', rows: 3, rowGap: '6px' },
+    { value: 'lg', label: '舒适', rows: 2, rowGap: '10px' },
+    { value: 'xl', label: '超大', rows: 1, rowGap: '14px' },
   ]
   return (
     <div>
       <SectionTitle
-        title={t('Density')}
-        showReset={customization.scale !== defaults.scale}
-        onReset={() => setScale(defaults.scale)}
+        title='界面密度'
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={customization.scale}
-        onValueChange={(v) => setScale(v as ThemeScale)}
+      <Radio<ThemeScale>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
         className='grid w-full grid-cols-4 gap-3'
-        aria-label={t('Select interface density')}
+        aria-label='选择界面密度'
       >
         {scaleOptions.map((option) => (
           <Item
@@ -539,113 +467,52 @@ function ScaleConfig() {
   )
 }
 
-function SidebarConfig() {
-  const { t } = useTranslation()
-  const { defaultVariant, variant, setVariant } = useLayout()
+export function SidebarConfig(props: SiteThemeFieldProps<SidebarStyle>) {
   return (
-    <div className='max-md:hidden'>
-      <SectionTitle
-        title={t('Sidebar')}
-        showReset={defaultVariant !== variant}
-        onReset={() => setVariant(defaultVariant)}
-      />
-      <Radio
-        value={variant}
-        onValueChange={setVariant}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label={t('Select sidebar style')}
-        aria-describedby='sidebar-description'
-      >
-        {[
-          { value: 'inset', label: t('Inset'), icon: IconSidebarInset },
-          {
-            value: 'floating',
-            label: t('Floating'),
-            icon: IconSidebarFloating,
-          },
-          { value: 'sidebar', label: t('Sidebar'), icon: IconSidebarSidebar },
-        ].map((item) => (
-          <RadioGroupItem key={item.value} item={item} />
-        ))}
-      </Radio>
-      <div id='sidebar-description' className='sr-only'>
-        {t('Choose between inset, floating, or standard sidebar layout')}
-      </div>
-    </div>
+    <IllustratedThemeConfig
+      {...props}
+      title='侧边栏样式'
+      options={[
+        { value: 'inset', label: '内嵌', icon: IconSidebarInset },
+        { value: 'floating', label: '悬浮', icon: IconSidebarFloating },
+        { value: 'sidebar', label: '标准', icon: IconSidebarSidebar },
+      ]}
+    />
   )
 }
 
-function LayoutConfig() {
-  const { t } = useTranslation()
-  const { open, setOpen } = useSidebar()
-  const { defaultCollapsible, collapsible, setCollapsible } = useLayout()
-
-  const radioState = open ? 'default' : collapsible
-
+export function LayoutConfig(props: SiteThemeFieldProps<SidebarLayout>) {
   return (
-    <div className='max-md:hidden'>
-      <SectionTitle
-        title={t('Layout')}
-        showReset={radioState !== 'default'}
-        onReset={() => {
-          setOpen(true)
-          setCollapsible(defaultCollapsible)
-        }}
-      />
-      <Radio
-        value={radioState}
-        onValueChange={(v) => {
-          if (v === 'default') {
-            setOpen(true)
-            return
-          }
-          setOpen(false)
-          setCollapsible(v as Collapsible)
-        }}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label={t('Select layout style')}
-        aria-describedby='layout-description'
-      >
-        {[
-          { value: 'default', label: t('Default'), icon: IconLayoutDefault },
-          { value: 'icon', label: t('Compact'), icon: IconLayoutCompact },
-          {
-            value: 'offcanvas',
-            label: t('Full layout'),
-            icon: IconLayoutFull,
-          },
-        ].map((item) => (
-          <RadioGroupItem key={item.value} item={item} />
-        ))}
-      </Radio>
-      <div id='layout-description' className='sr-only'>
-        {t(
-          'Choose between default expanded, compact icon-only, or full layout mode'
-        )}
-      </div>
-    </div>
+    <IllustratedThemeConfig
+      {...props}
+      title='布局'
+      options={[
+        { value: 'default', label: '展开侧边栏', icon: IconLayoutDefault },
+        { value: 'icon', label: '仅显示图标', icon: IconLayoutCompact },
+        { value: 'offcanvas', label: '隐藏侧边栏', icon: IconLayoutFull },
+      ]}
+    />
   )
 }
 
-function ContentLayoutConfig() {
-  const { t } = useTranslation()
-  const { defaults, customization, setContentLayout } = useThemeCustomization()
+export function ContentLayoutConfig(props: SiteThemeFieldProps<ContentLayout>) {
   return (
-    <div className='max-md:hidden'>
+    <div>
       <SectionTitle
-        title={t('Content width')}
-        showReset={customization.contentLayout !== defaults.contentLayout}
-        onReset={() => setContentLayout(defaults.contentLayout)}
+        title='内容宽度'
+        showReset={props.value !== props.defaultValue}
+        onReset={() => props.onChange(props.defaultValue)}
       />
-      <Radio
-        value={customization.contentLayout}
-        onValueChange={(v) => setContentLayout(v as ContentLayout)}
+      <Radio<ContentLayout>
+        value={props.value}
+        disabled={props.disabled}
+        onValueChange={props.onChange}
         className='grid w-full grid-cols-2 gap-4'
-        aria-label={t('Select content width')}
+        aria-label='选择内容宽度'
       >
         {[
-          { value: 'full', label: t('Full width') },
-          { value: 'centered', label: t('Centered') },
+          { value: 'full', label: '全宽' },
+          { value: 'centered', label: '居中' },
         ].map((option) => (
           <Item
             key={option.value}
@@ -701,45 +568,24 @@ function ContentLayoutPreview(props: { centered: boolean }) {
   )
 }
 
-function DirConfig() {
-  const { t } = useTranslation()
-  const { defaultDir, dir, setDir } = useDirection()
+export function DirConfig(props: SiteThemeFieldProps<Direction>) {
   return (
-    <div>
-      <SectionTitle
-        title={t('Direction')}
-        showReset={defaultDir !== dir}
-        onReset={() => setDir(defaultDir)}
-      />
-      <Radio
-        value={dir}
-        onValueChange={setDir}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label={t('Select site direction')}
-        aria-describedby='direction-description'
-      >
-        {[
-          {
-            value: 'ltr',
-            label: t('Left to Right'),
-            icon: (props: SVGProps<SVGSVGElement>) => (
-              <IconDir dir='ltr' {...props} />
-            ),
-          },
-          {
-            value: 'rtl',
-            label: t('Right to Left'),
-            icon: (props: SVGProps<SVGSVGElement>) => (
-              <IconDir dir='rtl' {...props} />
-            ),
-          },
-        ].map((item) => (
-          <RadioGroupItem key={item.value} item={item} />
-        ))}
-      </Radio>
-      <div id='direction-description' className='sr-only'>
-        {t('Choose between left-to-right or right-to-left site direction')}
-      </div>
-    </div>
+    <IllustratedThemeConfig
+      {...props}
+      title='方向'
+      className='max-w-2xs grid-cols-2'
+      options={[
+        {
+          value: 'ltr',
+          label: '从左到右',
+          icon: (props) => <IconDir {...props} dir='ltr' />,
+        },
+        {
+          value: 'rtl',
+          label: '从右到左',
+          icon: (props) => <IconDir {...props} dir='rtl' />,
+        },
+      ]}
+    />
   )
 }

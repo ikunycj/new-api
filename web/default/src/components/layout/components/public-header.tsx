@@ -22,7 +22,6 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHydrated } from '@/hooks/use-hydrated'
@@ -62,7 +61,6 @@ export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
   mobileLinks?: TopNavLink[]
   navContent?: React.ReactNode
-  showThemeSwitch?: boolean
   showLanguageSwitcher?: boolean
   logo?: React.ReactNode
   siteName?: string
@@ -78,7 +76,6 @@ export interface PublicHeaderProps {
 export function PublicHeader(props: PublicHeaderProps) {
   const {
     navLinks = defaultTopNavLinks,
-    showThemeSwitch = true,
     showLanguageSwitcher = true,
     logo: customLogo,
     siteName: customSiteName,
@@ -323,14 +320,11 @@ export function PublicHeader(props: PublicHeaderProps) {
                 )
               })}
 
-              {(showLanguageSwitcher ||
-                showThemeSwitch ||
-                showNotifications) && (
+              {(showLanguageSwitcher || showNotifications) && (
                 <div className='bg-border/40 mx-2 h-4 w-px' />
               )}
 
               {showLanguageSwitcher && <LanguageSwitcher />}
-              {showThemeSwitch && <ThemeSwitch />}
               {showNotifications &&
                 (notifications.popoverOpen ? (
                   <Suspense fallback={notificationButton}>
@@ -362,9 +356,10 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Mobile: compact actions + hamburger */}
             <div className='flex items-center gap-2 sm:hidden'>
-              {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
-                <Suspense fallback={<Skeleton className='size-6 rounded-full' />}>
+                <Suspense
+                  fallback={<Skeleton className='size-6 rounded-full' />}
+                >
                   <ProfileDropdown />
                 </Suspense>
               )}

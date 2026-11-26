@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useThemeCustomization } from '@/context/theme-customization-provider'
+import type { ThemeCustomization } from '@/lib/theme-customization'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -45,6 +47,7 @@ import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { LogoImagesDialog } from './logo-images-dialog'
+import { SiteThemeCustomizationSection } from './site-theme-customization-section'
 
 const logoUrlSchema = z
   .union(
@@ -68,10 +71,37 @@ const _systemInfoSchema = z.object({
   }),
 })
 
-type SystemInfoFormValues = z.infer<typeof _systemInfoSchema>
+const _themeCustomizationSchema = z.object({
+  mode: z.enum(['system', 'light', 'dark']),
+  preset: z.enum([
+    'default',
+    'anthropic',
+    'simple-large',
+    'underground',
+    'rose-garden',
+    'lake-view',
+    'sunset-glow',
+    'forest-whisper',
+    'ocean-breeze',
+    'lavender-dream',
+    'ikun-love',
+  ]),
+  font: z.enum(['default', 'sans', 'serif']),
+  radius: z.enum(['default', 'none', 'sm', 'md', 'lg', 'xl']),
+  scale: z.enum(['default', 'sm', 'lg', 'xl']),
+  contentLayout: z.enum(['full', 'centered']),
+  sidebar: z.enum(['inset', 'floating', 'sidebar']),
+  layout: z.enum(['default', 'icon', 'offcanvas']),
+  direction: z.enum(['ltr', 'rtl']),
+})
+
+type SystemInfoSettingsValues = z.infer<typeof _systemInfoSchema>
+type SystemInfoFormValues = SystemInfoSettingsValues & {
+  siteThemeCustomization: z.infer<typeof _themeCustomizationSchema>
+}
 
 type SystemInfoSectionProps = {
-  defaultValues: SystemInfoFormValues
+  defaultValues: SystemInfoSettingsValues
 }
 
 function normalizeValue(value: unknown): string {
@@ -82,8 +112,9 @@ function normalizeValue(value: unknown): string {
 export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const themeCustomizationContext = useThemeCustomization()
 
-  const normalizedDefaults: SystemInfoFormValues = {
+  const normalizedSystemInfo: SystemInfoSettingsValues = {
     SystemName: normalizeValue(defaultValues.SystemName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     TopUpLink: normalizeValue(defaultValues.TopUpLink),
@@ -113,7 +144,13 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
       user_agreement: z.string().optional(),
       privacy_policy: z.string().optional(),
     }),
+    siteThemeCustomization: _themeCustomizationSchema,
   })
+
+  const normalizedDefaults: SystemInfoFormValues = {
+    ...normalizedSystemInfo,
+    siteThemeCustomization: themeCustomizationContext.customization,
+  }
 
   const { form, handleSubmit, handleReset, isDirty, isSubmitting } =
     useSettingsForm<SystemInfoFormValues>({
@@ -123,16 +160,32 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
         SystemInfoFormValues
       >,
       defaultValues: normalizedDefaults,
-      onSubmit: async (_data, changedFields) => {
+      onSubmit: async (data, changedFields) => {
+        const themeFieldPrefix = 'siteThemeCustomization.'
+        const themeCustomizationChanged = Object.keys(changedFields).some(
+          (key) => key.startsWith(themeFieldPrefix)
+        )
+
         for (const [key, value] of Object.entries(changedFields)) {
+          if (key.startsWith(themeFieldPrefix)) continue
+
           let v = normalizeValue(value)
           if (key === 'ServerAddress') {
             v = v.replace(/\/+$/, '')
           }
-          await updateOption.mutateAsync({
+          const response = await updateOption.mutateAsync({
             key,
             value: v,
           })
+          if (!response.success) return false
+        }
+
+        if (themeCustomizationChanged) {
+          const response = await updateOption.mutateAsync({
+            key: 'SiteThemeCustomization',
+            value: JSON.stringify(data.siteThemeCustomization),
+          })
+          if (!response.success) return false
         }
       },
     })
@@ -141,6 +194,23 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     control: form.control,
     name: 'ServerAddress',
   })
+  const siteThemeCustomization = useWatch({
+    control: form.control,
+    name: 'siteThemeCustomization',
+  })
+
+  function updateThemeCustomization<K extends keyof ThemeCustomization>(
+    key: K,
+    value: ThemeCustomization[K]
+  ) {
+    const fieldName =
+      `siteThemeCustomization.${key}` as `siteThemeCustomization.${keyof ThemeCustomization}`
+    const fieldValue =
+      value as SystemInfoFormValues['siteThemeCustomization'][keyof ThemeCustomization]
+    form.setValue(fieldName, fieldValue, {
+      shouldDirty: true,
+    })
+  }
 
   return (
     <>
@@ -391,6 +461,12 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                 )}
               />
             </SettingsFormGrid>
+            <SiteThemeCustomizationSection
+              value={siteThemeCustomization}
+              defaults={themeCustomizationContext.defaults}
+              disabled={isSubmitting || updateOption.isPending}
+              onChange={updateThemeCustomization}
+            />
           </SettingsForm>
         </Form>
       </SettingsSection>

@@ -27,7 +27,6 @@ type PublicLayoutProps = {
   navContent?: React.ReactNode
   headerProps?: Omit<PublicHeaderProps, 'navContent'>
   navLinks?: TopNavLink[]
-  showThemeSwitch?: boolean
   showAuthButtons?: boolean
   showNotifications?: boolean
   showSiteFooter?: boolean
@@ -49,7 +48,6 @@ export function PublicLayout(props: PublicLayoutProps) {
       <PublicHeader
         navContent={props.navContent}
         navLinks={props.navLinks}
-        showThemeSwitch={props.showThemeSwitch}
         showAuthButtons={props.showAuthButtons}
         showNotifications={props.showNotifications}
         logo={props.logo}

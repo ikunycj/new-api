@@ -7,9 +7,46 @@ import (
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSiteThemeOptionPersistsAndReloadsPostgres(t *testing.T) {
+	setupPostgresAnalyticsTestDB(t, &Option{})
+	key := system_setting.SiteThemeCustomizationOptionKey
+	previousLogoImages := logoImageSnapshot.Load()
+	common.OptionMapRWMutex.Lock()
+	previousTheme, previousOptionMap := siteThemeCustomization, common.OptionMap
+	common.OptionMap = make(map[string]string)
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		logoImageSnapshot.Store(previousLogoImages)
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		siteThemeCustomization, common.OptionMap = previousTheme, previousOptionMap
+	})
+	preservePricingGroupConfiguration(t)
+
+	const validTheme = `{"preset":"anthropic","font":"serif","radius":"none","scale":"lg","contentLayout":"centered","mode":"dark","sidebar":"floating","layout":"offcanvas","direction":"rtl"}`
+	const invalidTheme = `{"layout":"none"}`
+	expectedTheme := system_setting.SiteThemeCustomization{
+		Preset: "anthropic", Font: "serif", Radius: "none", Scale: "lg", ContentLayout: "centered",
+		Mode: "dark", Sidebar: "floating", Layout: "offcanvas", Direction: "rtl",
+	}
+	require.NoError(t, UpdateOption(key, validTheme))
+	assert.Equal(t, expectedTheme, GetSiteThemeCustomization())
+	require.Error(t, UpdateOption(key, invalidTheme))
+	assert.Equal(t, expectedTheme, GetSiteThemeCustomization())
+	var persisted Option
+	require.NoError(t, DB.Where(&Option{Key: key}).First(&persisted).Error)
+	assert.Equal(t, validTheme, persisted.Value)
+
+	require.NoError(t, updateOptionMap(key, `{}`))
+	assert.Equal(t, system_setting.DefaultSiteThemeCustomization(), GetSiteThemeCustomization())
+	loadOptionsFromDatabase()
+	assert.Equal(t, expectedTheme, GetSiteThemeCustomization())
+}
 
 func preservePricingGroupConfiguration(t *testing.T) {
 	t.Helper()
