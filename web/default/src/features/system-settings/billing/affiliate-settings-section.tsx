@@ -90,10 +90,8 @@ import type {
   AffiliateUserOverrideView,
 } from '../types'
 import { AffiliateAdjustmentsSection } from './affiliate-adjustments-section'
-import {
-  AffiliateSubAgentsDialog,
-  type AffiliateSubAgentDraft,
-} from './affiliate-sub-agents-dialog'
+import { formatSubAgentRatePercent } from './affiliate-sub-agent-rate'
+import { AffiliateSubAgentsDialog } from './affiliate-sub-agents-dialog'
 
 const SECONDS_PER_DAY = 86_400
 const AFFILIATE_AGENTS_PAGE_SIZE = 20
@@ -109,7 +107,6 @@ type AgentConfigKey = 'rewardRate' | 'holdDays'
 type AgentDraft = {
   isNew: boolean
   invitees: AffiliateUserOverrideView[]
-  subAgents: Record<number, AffiliateSubAgentDraft>
   rewardRate: string
   holdDays: string
   affiliateDomain: string
@@ -157,7 +154,6 @@ function viewToAgentDraft(view: AffiliateUserOverrideView): AgentDraft {
   return {
     isNew: !view.override,
     invitees: [],
-    subAgents: {},
     rewardRate: String(view.effective_rule.reward_rate_bps / 100),
     holdDays: String(view.effective_rule.hold_seconds / SECONDS_PER_DAY),
     affiliateDomain: affiliateDomainToSubdomain(
@@ -205,19 +201,11 @@ function hasAgentChanges(draft: AgentDraft): boolean {
   return (
     draft.isNew ||
     draft.invitees.length > 0 ||
-    Object.keys(draft.subAgents).length > 0 ||
     draft.domainDirty ||
     draft.dirty.rewardRate ||
     draft.dirty.holdDays ||
     draft.remarkDirty
   )
-}
-
-function parseSubAgentRateBps(ratePercent: string): number | null {
-  if (!/^(?:\d+|\d*\.\d{1,2})$/.test(ratePercent)) return null
-  const [whole, fraction = ''] = ratePercent.split('.')
-  const rateBps = Number(whole + fraction.padEnd(2, '0'))
-  return Number.isSafeInteger(rateBps) ? rateBps : null
 }
 
 function SettingNumberField(props: {
@@ -604,23 +592,35 @@ function PersonalizedAffiliateSettings() {
     })
   }
 
-  function updateSubAgent(
-    parent: AffiliateUserOverrideView,
-    userId: number,
-    change: AffiliateSubAgentDraft | null
-  ) {
+  function handleSubAgentsSaved(parent: AffiliateUserOverrideView) {
+    const userId = parent.user_id
+    const draft = rowDrafts[userId]
+    if (!draft?.isNew) {
+      setAddedAgents((current) =>
+        current[userId] ? { ...current, [userId]: parent } : current
+      )
+      return
+    }
+
+    const remaining = { ...draft, isNew: false }
+    const hasRemainingChanges = hasAgentChanges(remaining)
     setRowDrafts((current) => {
-      const row = current[parent.user_id] ?? viewToAgentDraft(parent)
-      const subAgents = { ...row.subAgents }
-      if (change) {
-        subAgents[userId] = change
+      const next = { ...current }
+      if (hasRemainingChanges) {
+        next[userId] = remaining
       } else {
-        delete subAgents[userId]
+        delete next[userId]
       }
-      return {
-        ...current,
-        [parent.user_id]: { ...row, subAgents },
+      return next
+    })
+    setAddedAgents((current) => {
+      const next = { ...current }
+      if (hasRemainingChanges) {
+        next[userId] = parent
+      } else {
+        delete next[userId]
       }
+      return next
     })
   }
 
@@ -692,25 +692,10 @@ function PersonalizedAffiliateSettings() {
         toast.error(t('Check the agent settings and try again'))
         return
       }
-      const subAgents: NonNullable<AffiliateAgentUpdate['sub_agents']> = []
-      for (const child of Object.values(draft.subAgents)) {
-        const rateBps =
-          child.ratePercent === null
-            ? -1
-            : parseSubAgentRateBps(child.ratePercent)
-        if (rateBps === null) {
-          toast.error(
-            `请为子代理 ${child.username} 填写可精确保存的非负同步返现比例，最多两位小数。`
-          )
-          return
-        }
-        subAgents.push({ user_id: child.user_id, rate_bps: rateBps })
-      }
       requests.push({
         user_id: Number(userId),
         override,
         invitee_user_ids: draft.invitees.map((invitee) => invitee.user_id),
-        ...(subAgents.length > 0 ? { sub_agents: subAgents } : {}),
       })
     }
     if (requests.length > 0) saveMutation.mutate(requests)
@@ -757,11 +742,12 @@ function PersonalizedAffiliateSettings() {
   } else {
     content = (
       <div className='min-w-0 overflow-x-auto rounded-lg border'>
-        <Table className='min-w-[1400px] table-fixed'>
+        <Table className='min-w-[1700px] table-fixed'>
           <TableHeader>
             <TableRow>
               <TableHead className='w-40'>{t('User')}</TableHead>
               <TableHead className='w-52'>{t('Email')}</TableHead>
+              <TableHead className='w-64'>子代理</TableHead>
               <TableHead className='w-56'>{t('Invite Info')}</TableHead>
               <TableHead className='w-40'>{t('Remark')}</TableHead>
               <TableHead className='w-64'>{t('Affiliate domain')}</TableHead>
@@ -775,7 +761,7 @@ function PersonalizedAffiliateSettings() {
           <TableBody>
             {agentItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className='h-36 text-center'>
+                <TableCell colSpan={9} className='h-36 text-center'>
                   <div className='mx-auto flex max-w-md flex-col items-center gap-1'>
                     <p className='font-medium'>{t('No agents')}</p>
                     <p className='text-muted-foreground text-sm'>
@@ -803,6 +789,31 @@ function PersonalizedAffiliateSettings() {
                   </TableCell>
                   <TableCell className='max-w-52 align-top'>
                     <CopyableText value={view.email} className='max-w-48' />
+                  </TableCell>
+                  <TableCell className='align-top'>
+                    {view.sub_agents?.length ? (
+                      <ul className='max-h-28 space-y-1 overflow-y-auto'>
+                        {view.sub_agents.map((subAgent) => (
+                          <li
+                            key={subAgent.user_id}
+                            className='flex items-center gap-2'
+                          >
+                            <CopyableText
+                              value={
+                                subAgent.email ||
+                                subAgent.username ||
+                                String(subAgent.user_id)
+                              }
+                            />
+                            <span className='text-muted-foreground shrink-0 tabular-nums'>
+                              {formatSubAgentRatePercent(subAgent.rate_bps)}%
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className='text-muted-foreground'>-</span>
+                    )}
                   </TableCell>
                   <TableCell className='align-top'>
                     <InviteInfoCell
@@ -890,11 +901,6 @@ function PersonalizedAffiliateSettings() {
                       >
                         管理子代理
                       </Button>
-                      {Object.keys(row.subAgents).length > 0 ? (
-                        <span className='text-muted-foreground text-xs'>
-                          子代理待保存
-                        </span>
-                      ) : null}
                       <Button
                         type='button'
                         size='sm'
@@ -1142,19 +1148,7 @@ function PersonalizedAffiliateSettings() {
         <AffiliateSubAgentsDialog
           key={subAgentTarget.user_id}
           parent={subAgentTarget}
-          changes={rowDrafts[subAgentTarget.user_id]?.subAgents ?? {}}
-          otherStagedChildIDs={
-            new Set(
-              Object.entries(rowDrafts)
-                .filter(([id]) => Number(id) !== subAgentTarget.user_id)
-                .flatMap(([, row]) =>
-                  Object.values(row.subAgents).map((child) => child.user_id)
-                )
-            )
-          }
-          onChange={(userId, change) =>
-            updateSubAgent(subAgentTarget, userId, change)
-          }
+          onSaved={handleSubAgentsSaved}
           onClose={() => setSubAgentTarget(null)}
         />
       ) : null}

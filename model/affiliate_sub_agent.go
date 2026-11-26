@@ -32,14 +32,37 @@ func GetAffiliateAdminSubAgents(parentUserID int) ([]AffiliateSubAgentView, erro
 	if parentUserID <= 0 {
 		return nil, errors.New("代理人 ID 无效")
 	}
-	items := make([]AffiliateSubAgentView, 0)
-	err := DB.Table("affiliate_sub_agents AS association").
-		Select("association.child_user_id AS user_id, COALESCE(child.username, '') AS username, COALESCE(child.email, '') AS email, association.rate_bps").
+	byParent, err := getAffiliateAdminSubAgentsByParent([]int{parentUserID})
+	if err != nil {
+		return nil, err
+	}
+	if items := byParent[parentUserID]; items != nil {
+		return items, nil
+	}
+	return []AffiliateSubAgentView{}, nil
+}
+
+func getAffiliateAdminSubAgentsByParent(parentUserIDs []int) (map[int][]AffiliateSubAgentView, error) {
+	if len(parentUserIDs) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		ParentUserID int
+		AffiliateSubAgentView
+	}
+	if err := DB.Table("affiliate_sub_agents AS association").
+		Select("association.parent_user_id, association.child_user_id AS user_id, COALESCE(child.username, '') AS username, COALESCE(child.email, '') AS email, association.rate_bps").
 		Joins("LEFT JOIN users AS child ON child.id = association.child_user_id").
-		Where("association.parent_user_id = ?", parentUserID).
+		Where("association.parent_user_id IN ?", parentUserIDs).
 		Order("association.child_user_id ASC").
-		Scan(&items).Error
-	return items, err
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	byParent := make(map[int][]AffiliateSubAgentView)
+	for _, row := range rows {
+		byParent[row.ParentUserID] = append(byParent[row.ParentUserID], row.AffiliateSubAgentView)
+	}
+	return byParent, nil
 }
 
 func saveAffiliateSubAgentsWithTx(tx *gorm.DB, parentUserID int, adminUserID int, updates []AffiliateSubAgentUpdate) error {

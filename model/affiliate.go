@@ -293,6 +293,7 @@ type AffiliateUserOverrideView struct {
 	Email             string                  `json:"email"`
 	Remark            string                  `json:"remark"`
 	InviteInfo        AffiliateUserInviteInfo `json:"invite_info"`
+	SubAgents         []AffiliateSubAgentView `json:"sub_agents,omitempty"`
 	UpdatedByUsername string                  `json:"updated_by_username"`
 	Override          *AffiliateUserOverride  `json:"override"`
 	GlobalRule        AffiliateEffectiveRule  `json:"global_rule"`
@@ -2144,12 +2145,17 @@ func SearchAffiliateUserOverrides(keyword string, startIdx int, limit int) ([]*A
 	if err != nil {
 		return nil, 0, err
 	}
+	subAgentsByParent, err := getAffiliateAdminSubAgentsByParent(userIDs)
+	if err != nil {
+		return nil, 0, err
+	}
 	inviteInfoByUserID := make(map[int]AffiliateUserInviteInfo, len(inviteInfos))
 	for _, inviteInfo := range inviteInfos {
 		inviteInfoByUserID[inviteInfo.UserID] = inviteInfo
 	}
 	for _, item := range items {
 		item.InviteInfo = inviteInfoByUserID[item.UserID]
+		item.SubAgents = subAgentsByParent[item.UserID]
 	}
 	return items, total, nil
 }

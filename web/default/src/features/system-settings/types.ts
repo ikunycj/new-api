@@ -375,6 +375,7 @@ export type AffiliateUserOverrideView = {
   invite_info?: InviteInfo
   updated_by_username: string
   override: AffiliateUserOverride | null
+  sub_agents?: AffiliateSubAgent[]
   global_rule: AffiliateSettings & { source: string }
   effective_rule: AffiliateSettings & { source: string }
 }

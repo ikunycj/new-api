@@ -16,15 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -40,33 +40,37 @@ import {
 } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
 
-import { getAffiliateSubAgents, searchAffiliateUserOverrides } from '../api'
+import {
+  getAffiliateSubAgents,
+  saveAffiliateAgents,
+  searchAffiliateUserOverrides,
+} from '../api'
 import type { AffiliateSubAgent, AffiliateUserOverrideView } from '../types'
+import {
+  formatSubAgentRatePercent,
+  parseSubAgentRateBps,
+} from './affiliate-sub-agent-rate'
 
-export type AffiliateSubAgentDraft = Omit<AffiliateSubAgent, 'rate_bps'> & {
+type AffiliateSubAgentDraft = Omit<AffiliateSubAgent, 'rate_bps'> & {
   ratePercent: string | null
-}
-
-function formatSubAgentRatePercent(rateBps: number): string {
-  const digits = String(rateBps).padStart(3, '0')
-  const whole = digits.slice(0, -2)
-  const fraction = digits.slice(-2).replace(/0+$/, '')
-  return fraction ? `${whole}.${fraction}` : whole
 }
 
 export function AffiliateSubAgentsDialog(props: {
   parent: AffiliateUserOverrideView
-  changes: Record<number, AffiliateSubAgentDraft>
-  otherStagedChildIDs: Set<number>
-  onChange: (userId: number, draft: AffiliateSubAgentDraft | null) => void
+  onSaved: (parent: AffiliateUserOverrideView) => void
   onClose: () => void
 }) {
+  const queryClient = useQueryClient()
   const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [changes, setChanges] = useState<
+    Record<number, AffiliateSubAgentDraft>
+  >({})
+  const [validationError, setValidationError] = useState('')
+  const bindingsKey = ['admin', 'affiliate', 'sub-agents', props.parent.user_id]
   const bindings = useQuery({
-    queryKey: ['admin', 'affiliate', 'sub-agents', props.parent.user_id],
+    queryKey: bindingsKey,
     queryFn: () => getAffiliateSubAgents(props.parent.user_id),
-    enabled: props.parent.override !== null,
   })
   const search = useQuery({
     queryKey: ['admin', 'affiliate', 'sub-agent-search', keyword],
@@ -83,16 +87,76 @@ export function AffiliateSubAgentsDialog(props: {
     },
     enabled: keyword !== '',
   })
+  const save = useMutation({
+    mutationFn: async (
+      subAgents: Pick<AffiliateSubAgent, 'user_id' | 'rate_bps'>[]
+    ) => {
+      const response = await saveAffiliateAgents([
+        {
+          user_id: props.parent.user_id,
+          override: {},
+          invitee_user_ids: [],
+          sub_agents: subAgents,
+        },
+      ])
+      const parent = response.data?.[0]
+      if (!response.success || !parent) {
+        throw new Error(response.message || '保存子代理失败，请重试。')
+      }
+      return parent
+    },
+    onSuccess: async (parent) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'affiliate'] }),
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
+      ])
+      props.onSaved({
+        ...parent,
+        sub_agents: queryClient.getQueryData<AffiliateSubAgent[]>(bindingsKey),
+      })
+      toast.success('子代理已保存')
+      props.onClose()
+    },
+  })
 
-  const saved = props.parent.override ? (bindings.data ?? []) : []
+  function updateDraft(userId: number, draft: AffiliateSubAgentDraft | null) {
+    setValidationError('')
+    save.reset()
+    setChanges((current) => {
+      const next = { ...current }
+      if (draft) {
+        next[userId] = draft
+      } else {
+        delete next[userId]
+      }
+      return next
+    })
+  }
+
+  function saveChanges() {
+    const updates: Pick<AffiliateSubAgent, 'user_id' | 'rate_bps'>[] = []
+    for (const row of Object.values(changes)) {
+      const rateBps =
+        row.ratePercent === null ? -1 : parseSubAgentRateBps(row.ratePercent)
+      if (rateBps === null) {
+        setValidationError(
+          `请为子代理 ${row.username} 填写非负同步返现比例，最多两位小数。`
+        )
+        return
+      }
+      updates.push({ user_id: row.user_id, rate_bps: rateBps })
+    }
+    setValidationError('')
+    save.mutate(updates)
+  }
+
+  const saved = bindings.data ?? []
   const savedByID = new Map(saved.map((item) => [item.user_id, item]))
   const rows = [
-    ...Object.values(props.changes).filter(
-      (item) => !savedByID.has(item.user_id)
-    ),
+    ...Object.values(changes).filter((item) => !savedByID.has(item.user_id)),
     ...saved.map(
       (item) =>
-        props.changes[item.user_id] ?? {
+        changes[item.user_id] ?? {
           user_id: item.user_id,
           username: item.username,
           email: item.email,
@@ -102,22 +166,22 @@ export function AffiliateSubAgentsDialog(props: {
   ]
   const loading = bindings.isLoading
   const failed = bindings.isError
+  const disabled = loading || failed || save.isPending
+  const error = validationError || save.error?.message
 
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !save.isPending) props.onClose()
       }}
     >
-      <DialogContent className='flex max-h-[90dvh] flex-col sm:max-w-2xl'>
+      <DialogContent
+        className='flex max-h-[90dvh] flex-col sm:max-w-2xl'
+        showCloseButton={!save.isPending}
+      >
         <DialogHeader>
           <DialogTitle>管理子代理 · {props.parent.username}</DialogTitle>
-          <DialogDescription>
-            同步返现按受邀用户本笔实付金额计算。子代理返现比例和同步返现比例均为
-            5% 时，受邀用户充值 ¥100，子代理和主代理各获得
-            ¥5。变更从页面保存后的新充值生效。
-          </DialogDescription>
         </DialogHeader>
         <div className='min-h-0 space-y-4 overflow-y-auto'>
           <form
@@ -142,13 +206,13 @@ export function AffiliateSubAgentsDialog(props: {
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder='用户 ID、名称或邮箱'
-                    disabled={loading || failed}
+                    disabled={disabled}
                   />
                   <InputGroupAddon align='inline-end'>
                     <InputGroupButton
                       type='submit'
                       aria-label='搜索用户'
-                      disabled={loading || failed}
+                      disabled={disabled}
                     >
                       <Search />
                     </InputGroupButton>
@@ -174,11 +238,9 @@ export function AffiliateSubAgentsDialog(props: {
                   unavailableReason = '当前代理'
                 } else if (
                   savedByID.has(user.user_id) ||
-                  props.changes[user.user_id]
+                  changes[user.user_id]
                 ) {
                   unavailableReason = '已选择'
-                } else if (props.otherStagedChildIDs.has(user.user_id)) {
-                  unavailableReason = '其他代理下有待保存变更'
                 }
                 return (
                   <div
@@ -199,9 +261,9 @@ export function AffiliateSubAgentsDialog(props: {
                       type='button'
                       size='sm'
                       variant='outline'
-                      disabled={loading || failed || Boolean(unavailableReason)}
+                      disabled={disabled || Boolean(unavailableReason)}
                       onClick={() => {
-                        props.onChange(user.user_id, {
+                        updateDraft(user.user_id, {
                           user_id: user.user_id,
                           username: user.username,
                           email: user.email,
@@ -247,7 +309,7 @@ export function AffiliateSubAgentsDialog(props: {
               <div className='divide-y rounded-md border'>
                 {rows.map((row) => {
                   const existing = savedByID.get(row.user_id)
-                  const staged = props.changes[row.user_id]
+                  const staged = changes[row.user_id]
                   const ratePercent = row.ratePercent
                   const removed = ratePercent === null
                   let actionLabel = existing ? '解除绑定' : '移除'
@@ -285,14 +347,14 @@ export function AffiliateSubAgentsDialog(props: {
                               inputMode='decimal'
                               placeholder='例如 5'
                               value={ratePercent}
-                              disabled={failed}
+                              disabled={disabled}
                               onChange={(event) => {
                                 const updatedRate = event.target.value
                                 const unchanged =
                                   existing &&
                                   updatedRate ===
                                     formatSubAgentRatePercent(existing.rate_bps)
-                                props.onChange(
+                                updateDraft(
                                   row.user_id,
                                   unchanged
                                     ? null
@@ -313,10 +375,10 @@ export function AffiliateSubAgentsDialog(props: {
                         size='sm'
                         variant='ghost'
                         className='self-end justify-self-start'
-                        disabled={failed}
+                        disabled={disabled}
                         aria-label={`${actionLabel} ${row.username}`}
                         onClick={() =>
-                          props.onChange(
+                          updateDraft(
                             row.user_id,
                             existing && !removed
                               ? { ...row, ratePercent: null }
@@ -333,9 +395,26 @@ export function AffiliateSubAgentsDialog(props: {
             ) : null}
           </section>
         </div>
+        {error ? (
+          <p role='alert' className='text-destructive'>
+            {error}
+          </p>
+        ) : null}
         <DialogFooter>
-          <Button type='button' onClick={props.onClose}>
-            完成
+          <Button
+            type='button'
+            variant='outline'
+            disabled={save.isPending}
+            onClick={props.onClose}
+          >
+            关闭
+          </Button>
+          <Button
+            type='button'
+            disabled={disabled || Object.keys(changes).length === 0}
+            onClick={saveChanges}
+          >
+            {save.isPending ? '保存中…' : '保存子代理'}
           </Button>
         </DialogFooter>
       </DialogContent>
