@@ -417,19 +417,19 @@ For commercial licensing, please contact support@quantumnous.com
  * only primary buttons. These derived tokens keep the app theme-aware without
  * duplicating per-component dark-mode overrides.
  *
- * NOTE: `:not()` contributes its argument's specificity, so this selector
- * resolves to (0,3,0). Presets that define bespoke surfaces below need to
- * either match that specificity or opt out here — the latter is cleaner.
+ * `:not()` contributes its argument's specificity. Presets that define
+ * their own surfaces and semantic colors opt out here.
  *
  * Opt-outs:
  *   - `default`: keeps neutral surfaces from :root.
  *   - `anthropic`: warm cream surfaces are a brand choice, NOT a primary-mix
  *     derivation (the Anthropic system deliberately uses warm neutrals for
  *     cards/borders rather than tinting them with the clay accent).
- *   - `simple-large`: keeps intentionally neutral, high-contrast surfaces. */
+ *   - `simple-large`: keeps intentionally neutral, high-contrast surfaces.
+ *   - `ikun-love`: uses warm surfaces, lime success, and cyan info. */
 [data-theme-preset]:not([data-theme-preset='default']):not(
   [data-theme-preset='anthropic']
-):not([data-theme-preset='simple-large']) {
+):not([data-theme-preset='simple-large']):not([data-theme-preset='ikun-love']) {
   --card: color-mix(in oklch, var(--primary) 3%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 5%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 7%, var(--background));
@@ -454,7 +454,9 @@ For commercial licensing, please contact support@quantumnous.com
 .dark
   [data-theme-preset]:not([data-theme-preset='default']):not(
     [data-theme-preset='anthropic']
-  ):not([data-theme-preset='simple-large']) {
+  ):not([data-theme-preset='simple-large']):not(
+    [data-theme-preset='ikun-love']
+  ) {
   --card: color-mix(in oklch, var(--primary) 8%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 12%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 12%, var(--background));
@@ -484,7 +486,7 @@ For commercial licensing, please contact support@quantumnous.com
  *
  * Anthropic is opted out of the semantic surface bridge above so these
  * bespoke warm-neutral surface tokens win the cascade. Without the opt-out,
- * the bridge selector (specificity 0,3,0 because of `:not()`) would override
+ * the bridge selector (more specific because of `:not()`) would override
  * this block (specificity 0,1,0) and tint every surface with the clay
  * accent — producing the peach/pink look that doesn't match Anthropic.
  *
@@ -610,6 +612,230 @@ For commercial licensing, please contact support@quantumnous.com
 
   --skeleton-base: oklch(0.305 0.004 60);
   --skeleton-highlight: oklch(0.41 0.004 60);
+}
+
+/* ── IKUN LOVE ─────────────────────────────────────────────────────────── */
+[data-theme-preset='ikun-love'] {
+  --background: oklch(0.987 0.0107 76.58);
+  --foreground: oklch(0.1948 0.0151 310.64);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+
+  --primary: oklch(0.5585 0.1828 35);
+  --primary-foreground: var(--card);
+  --secondary: oklch(0.9526 0.0159 73.67);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.9747 0.0192 72.57);
+  --muted-foreground: oklch(0.5461 0.0207 314.7);
+  --accent: var(--muted);
+  --accent-foreground: var(--primary);
+
+  --success: oklch(0.7805 0.178 126.49);
+  --success-foreground: var(--foreground);
+  --warning: oklch(0.8823 0.0956 85.29);
+  --warning-foreground: var(--foreground);
+  --info: oklch(0.7293 0.1063 215.98);
+  --info-foreground: var(--foreground);
+  --neutral: var(--muted-foreground);
+  --neutral-foreground: var(--card);
+
+  --border: oklch(0.9094 0.0192 67.59);
+  --input: oklch(0.8425 0.0291 65.71);
+  --ring: oklch(0.6652 0.1968 37.66);
+
+  --chart-1: var(--ring);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--primary);
+
+  --sidebar: var(--muted);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: color-mix(in oklch, var(--ring) 12%, var(--sidebar));
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  --landing-code: oklch(0.1948 0.0151 310.64);
+  --landing-code-panel: oklch(0.2336 0.0208 311.72);
+  --landing-code-active: oklch(0.6652 0.1968 37.66 / 18%);
+  --landing-code-foreground: oklch(0.9821 0.0141 74.42);
+  --landing-code-muted: oklch(0.7662 0.023 330.46);
+
+  --skeleton-base: var(--secondary);
+  --skeleton-highlight: var(--card);
+
+  /* Recompute the table colors on the body against the selected palette. */
+  --table-row: var(--card);
+  --table-channel-enabled: color-mix(
+    in oklch,
+    var(--success) 10%,
+    var(--background)
+  );
+  --table-channel-enabled-hover: color-mix(
+    in oklch,
+    var(--success) 15%,
+    var(--background)
+  );
+  --table-channel-disabled: color-mix(
+    in oklch,
+    var(--destructive) 8%,
+    var(--background)
+  );
+  --table-channel-disabled-hover: color-mix(
+    in oklch,
+    var(--destructive) 13%,
+    var(--background)
+  );
+  --table-channel-auto-disabled: color-mix(
+    in oklch,
+    var(--warning) 10%,
+    var(--background)
+  );
+  --table-channel-auto-disabled-hover: color-mix(
+    in oklch,
+    var(--warning) 15%,
+    var(--background)
+  );
+  --table-channel-iq-degraded: color-mix(
+    in oklch,
+    var(--foreground) 7%,
+    var(--background)
+  );
+  --table-channel-iq-degraded-hover: color-mix(
+    in oklch,
+    var(--foreground) 11%,
+    var(--background)
+  );
+  --table-header: color-mix(
+    in oklch,
+    var(--foreground) 1.5%,
+    var(--background)
+  );
+  --table-header-hover: color-mix(
+    in oklch,
+    var(--foreground) 3%,
+    var(--background)
+  );
+  --table-disabled: color-mix(
+    in oklch,
+    var(--foreground) 3%,
+    var(--background)
+  );
+  --table-disabled-hover: color-mix(
+    in oklch,
+    var(--foreground) 4.5%,
+    var(--background)
+  );
+  --table-disabled-border: color-mix(
+    in oklch,
+    var(--foreground) 16%,
+    var(--background)
+  );
+}
+.dark [data-theme-preset='ikun-love'] {
+  --background: oklch(0.1733 0.0193 304.76);
+  --foreground: oklch(0.9821 0.0141 74.42);
+  --card: oklch(0.2094 0.0267 305.32);
+  --popover: var(--muted);
+
+  --primary: var(--ring);
+  --primary-foreground: var(--background);
+  --secondary: var(--muted);
+  --muted: oklch(0.2414 0.0291 321.19);
+  --muted-foreground: oklch(0.7662 0.023 330.46);
+  --accent: color-mix(in oklch, var(--ring) 18%, var(--muted));
+  --accent-foreground: var(--foreground);
+
+  --success: oklch(0.8411 0.1639 123.48);
+  --success-foreground: var(--background);
+  --warning-foreground: var(--background);
+  --info: oklch(0.8053 0.0962 212.55);
+  --info-foreground: var(--background);
+  --neutral-foreground: var(--background);
+
+  --border: oklch(0.3314 0.0371 315.01);
+  --input: oklch(0.4073 0.0434 332.5);
+  --ring: oklch(0.7231 0.1739 34.14);
+  --chart-5: oklch(0.7812 0.1298 35.03);
+
+  --sidebar: oklch(0.2044 0.025 307.11);
+  --sidebar-accent: color-mix(in oklch, var(--ring) 18%, var(--sidebar));
+
+  --landing-code: var(--background);
+  --landing-code-active: oklch(0.7231 0.1739 34.14 / 22%);
+  --landing-code-foreground: var(--foreground);
+  --landing-code-muted: var(--muted-foreground);
+
+  --skeleton-base: var(--muted);
+  --skeleton-highlight: var(--input);
+
+  --table-row: var(--background);
+  --table-channel-enabled: color-mix(
+    in oklch,
+    var(--success) 14%,
+    var(--background)
+  );
+  --table-channel-enabled-hover: color-mix(
+    in oklch,
+    var(--success) 20%,
+    var(--background)
+  );
+  --table-channel-disabled: color-mix(
+    in oklch,
+    var(--destructive) 13%,
+    var(--background)
+  );
+  --table-channel-disabled-hover: color-mix(
+    in oklch,
+    var(--destructive) 19%,
+    var(--background)
+  );
+  --table-channel-auto-disabled: color-mix(
+    in oklch,
+    var(--warning) 14%,
+    var(--background)
+  );
+  --table-channel-auto-disabled-hover: color-mix(
+    in oklch,
+    var(--warning) 20%,
+    var(--background)
+  );
+  --table-channel-iq-degraded: color-mix(
+    in oklch,
+    var(--foreground) 13%,
+    var(--background)
+  );
+  --table-channel-iq-degraded-hover: color-mix(
+    in oklch,
+    var(--foreground) 18%,
+    var(--background)
+  );
+  --table-header: color-mix(in oklch, var(--foreground) 6%, var(--background));
+  --table-header-hover: color-mix(
+    in oklch,
+    var(--foreground) 9%,
+    var(--background)
+  );
+  --table-disabled: color-mix(
+    in oklch,
+    var(--foreground) 7%,
+    var(--background)
+  );
+  --table-disabled-hover: color-mix(
+    in oklch,
+    var(--foreground) 9.5%,
+    var(--background)
+  );
+  --table-disabled-border: color-mix(
+    in oklch,
+    var(--foreground) 24%,
+    var(--background)
+  );
 }
 
 /* ── Font axis ────────────────────────────────────────────────────────────

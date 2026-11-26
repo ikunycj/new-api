@@ -77,6 +77,11 @@ export const THEME_PRESETS = [
     name: 'Lavender Dream',
     swatches: ['oklch(0.5709 0.1808 306.89)', 'oklch(0.811 0.0589 201.14)'],
   },
+  {
+    value: 'ikun-love',
+    name: 'IKUN LOVE',
+    swatches: ['oklch(0.6652 0.1968 37.66)', 'oklch(0.7293 0.1063 215.98)'],
+  },
 ] as const
 
 export type ThemePreset = (typeof THEME_PRESETS)[number]['value']

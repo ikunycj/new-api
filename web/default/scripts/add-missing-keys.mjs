@@ -4699,6 +4699,10 @@ const retiredKeys = new Set([
   'decides which channels are used and which base ratio applies.',
 ])
 
+for (const translations of Object.values(newKeys)) {
+  translations['preset.ikun-love'] = 'IKUN LOVE'
+}
+
 const onlyKeysArgIndex = process.argv.indexOf('--only')
 const onlyKeys =
   onlyKeysArgIndex >= 0
