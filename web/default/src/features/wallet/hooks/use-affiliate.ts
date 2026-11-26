@@ -25,7 +25,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import {
   createAffiliateBalanceTransfer,
   getAffiliateInviteeTopUps,
-  getAffiliateSubAgentRewards,
   getAffiliateSummary,
 } from '../api'
 import { generateAffiliateLink } from '../lib'
@@ -33,30 +32,12 @@ import type { AffiliateInviteeTopUpsQuery } from '../types'
 
 const affiliateSummaryKey = ['wallet', 'affiliate', 'summary'] as const
 const affiliateTopUpsKey = ['wallet', 'affiliate', 'invitee-topups'] as const
-const affiliateSubAgentRewardsKey = [
-  'wallet',
-  'affiliate',
-  'sub-agent-rewards',
-] as const
 interface AffiliateDetailsQuery {
   topUps: AffiliateInviteeTopUpsQuery
 }
 
 const defaultDetailsQuery: AffiliateDetailsQuery = {
-  topUps: { page: 1, pageSize: 20, sort: 'recharge_time_desc' },
-}
-
-export function useAffiliateSubAgentRewards(
-  page: number,
-  pageSize: number,
-  enabled: boolean
-) {
-  const userId = useAuthStore((state) => state.auth.user?.id)
-  return useQuery({
-    queryKey: [...affiliateSubAgentRewardsKey, userId, page, pageSize],
-    queryFn: () => getAffiliateSubAgentRewards(page, pageSize),
-    enabled: enabled && userId !== undefined,
-  })
+  topUps: { page: 1 },
 }
 
 export function useAffiliate(
@@ -64,23 +45,24 @@ export function useAffiliate(
   detailsQuery: AffiliateDetailsQuery = defaultDetailsQuery
 ) {
   const queryClient = useQueryClient()
+  const userId = useAuthStore((state) => state.auth.user?.id)
   const summaryQuery = useQuery({
-    queryKey: affiliateSummaryKey,
+    queryKey: [...affiliateSummaryKey, userId],
     queryFn: getAffiliateSummary,
     select: (response) => response.data,
+    enabled: userId !== undefined,
   })
   const canViewTopUps = summaryQuery.data?.rule.show_invitee_topups === true
   const topUpsQuery = useQuery({
-    queryKey: [...affiliateTopUpsKey, detailsQuery.topUps],
+    queryKey: [...affiliateTopUpsKey, userId, detailsQuery.topUps],
     queryFn: () => getAffiliateInviteeTopUps(detailsQuery.topUps),
     select: (response) => response.data,
-    enabled: loadDetails && canViewTopUps,
+    enabled: loadDetails && userId !== undefined && canViewTopUps,
   })
   const invalidateAffiliate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: affiliateSummaryKey }),
       queryClient.invalidateQueries({ queryKey: affiliateTopUpsKey }),
-      queryClient.invalidateQueries({ queryKey: affiliateSubAgentRewardsKey }),
     ])
   }
 

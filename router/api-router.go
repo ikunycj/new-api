@@ -158,7 +158,6 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			affiliateRoute.GET("/summary", controller.GetAffiliateSummary)
 			affiliateRoute.GET("/invitee-topups", controller.GetAffiliateInviteeTopUps)
-			affiliateRoute.GET("/sub-agent-rewards", controller.GetAffiliateSubAgentRewards)
 			affiliateRoute.GET("/balance-transfers", controller.GetAffiliateBalanceTransfers)
 			affiliateRoute.POST("/balance-transfers", middleware.CriticalRateLimit(), controller.CreateAffiliateBalanceTransfer)
 		}

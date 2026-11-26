@@ -45,10 +45,10 @@ export function formatAffiliateAccountCashback(
 ): string {
   const cents = summary?.cash_account[`${field}_cents`] ?? 0
   const quota = summary?.account[`${field}_quota`] ?? 0
-  if (summary?.has_sub_agent_rewards && cents > 0 && quota > 0) {
+  if (cents > 0 && quota > 0) {
     return formatAffiliateCashback(cents, quota)
   }
-  if (summary?.has_sub_agent_rewards && quota > 0) {
+  if (quota > 0) {
     return formatQuotaAsCNY(quota)
   }
   const useCashAccount =

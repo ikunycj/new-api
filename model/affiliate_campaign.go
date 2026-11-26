@@ -55,6 +55,7 @@ type AffiliateCashReward struct {
 	RewardRateBps       int64  `json:"reward_rate_bps" gorm:"type:bigint;not null"`
 	SourceRewardID      *int   `json:"source_reward_id,omitempty" gorm:"uniqueIndex"`
 	SourceRewardRateBps int64  `json:"source_reward_rate_bps,omitempty" gorm:"type:bigint;not null;default:0"`
+	SourceRewardOnTopUp bool   `json:"-" gorm:"not null;default:false"`
 	CashbackCents       int64  `json:"cashback_cents" gorm:"type:bigint;not null"`
 	TransferredCents    int64  `json:"transferred_cents" gorm:"type:bigint;not null"`
 	Status              string `json:"status" gorm:"type:varchar(20);index;not null"`
@@ -254,7 +255,7 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 	var parentCents int64
 	userIDs := []int{relation.InviterUserID, relation.InviteeUserID}
 	if subAgent != nil && subAgent.ParentUserID != relation.InviteeUserID {
-		parentCents = calculateAffiliateSubAgentReward(rewardCents, subAgent, topUp.Id)
+		parentCents = calculateAffiliateSubAgentReward(decimal.NewFromInt(paidCents), decimal.NewFromInt(1), subAgent, topUp.Id)
 		if parentCents > 0 {
 			userIDs = append(userIDs, subAgent.ParentUserID)
 		}
@@ -290,6 +291,7 @@ func settleAffiliateCampaignTopUpWithTx(tx *gorm.DB, campaign *AffiliateCampaign
 		cashback.InviterUserID = subAgent.ParentUserID
 		cashback.SourceRewardID = &reward.ID
 		cashback.SourceRewardRateBps = subAgent.RateBps
+		cashback.SourceRewardOnTopUp = true
 		cashback.CashbackCents = parentCents
 		cashback.IdempotencyKey = "sub-agent-campaign-cash:" + strconv.Itoa(reward.ID)
 		if _, err := createAffiliateCashRewardWithTx(tx, cashback); errors.Is(err, errAffiliateRewardCapacity) {

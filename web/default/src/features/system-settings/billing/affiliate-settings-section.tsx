@@ -700,7 +700,7 @@ function PersonalizedAffiliateSettings() {
             : parseSubAgentRateBps(child.ratePercent)
         if (rateBps === null) {
           toast.error(
-            `请为子代理 ${child.username} 填写可精确保存的非负比例，最多两位小数。`
+            `请为子代理 ${child.username} 填写可精确保存的非负同步返现比例，最多两位小数。`
           )
           return
         }

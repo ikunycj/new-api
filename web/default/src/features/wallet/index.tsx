@@ -73,8 +73,6 @@ export function Wallet(props: WalletProps) {
   const [affiliateTopUpQuery, setAffiliateTopUpQuery] =
     useState<AffiliateInviteeTopUpsQuery>({
       page: 1,
-      pageSize: 20,
-      sort: 'recharge_time_desc',
     })
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
@@ -357,6 +355,7 @@ export function Wallet(props: WalletProps) {
       <AffiliateCenterDialog
         open={affiliateDialogOpen}
         onOpenChange={setAffiliateDialogOpen}
+        customerService={status?.customer_service?.trim()}
         summary={affiliateSummary}
         topUps={affiliateTopUps}
         topUpsTotal={affiliateTopUpsTotal}

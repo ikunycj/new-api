@@ -98,7 +98,6 @@ export interface AffiliateSummary {
   qualified_count: number
   next_available_at: number
   lifetime_campaign_bonus_quota: number
-  has_sub_agent_rewards: boolean
   rule: AffiliateEffectiveRule
   account: AffiliateAccount
   cash_account: AffiliateCashAccount
@@ -111,8 +110,6 @@ export type AffiliateTopUpStatus =
   | 'available'
   | 'transferred'
   | 'adjusted'
-
-export type AffiliateTopUpSort = 'recharge_time_desc' | 'recharge_time_asc'
 
 export interface AffiliateInviteeTopUp {
   id: number
@@ -135,18 +132,10 @@ export interface AffiliateInviteeTopUp {
   transferred_reward_cents: number
   available_at: number
   status: AffiliateTopUpStatus
-}
-
-export interface AffiliateSubAgentReward {
-  id: number
-  source_agent_user_id: number
-  source_agent_username: string
-  rate_bps: number
-  reward_quota: number
-  reward_cents: number
-  status: Exclude<AffiliateTopUpStatus, 'unqualified'>
-  created_at: number
-  available_at: number
+  source_agent_user_id?: number
+  source_agent_username?: string
+  source_agent_email?: string
+  legacy_sub_agent_rate: boolean
 }
 
 export interface AffiliateBalanceTransfer {
@@ -171,10 +160,8 @@ export interface PaginatedData<T> {
 
 export interface AffiliateInviteeTopUpsQuery {
   page: number
-  pageSize: number
   keyword?: string
   status?: AffiliateTopUpStatus
-  sort?: AffiliateTopUpSort
   startAt?: number
   endAt?: number
 }

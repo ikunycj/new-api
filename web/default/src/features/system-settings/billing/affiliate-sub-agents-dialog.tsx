@@ -114,8 +114,9 @@ export function AffiliateSubAgentsDialog(props: {
         <DialogHeader>
           <DialogTitle>管理子代理 · {props.parent.username}</DialogTitle>
           <DialogDescription>
-            子代理获得 ¥1 直接邀请返现时，设置 150% 则上级额外获得
-            ¥1.50。变更从页面保存后的新充值生效。
+            同步返现按受邀用户本笔实付金额计算。子代理返现比例和同步返现比例均为
+            5% 时，受邀用户充值 ¥100，子代理和主代理各获得
+            ¥5。变更从页面保存后的新充值生效。
           </DialogDescription>
         </DialogHeader>
         <div className='min-h-0 space-y-4 overflow-y-auto'>
@@ -275,14 +276,14 @@ export function AffiliateSubAgentsDialog(props: {
                       {!removed ? (
                         <Field>
                           <FieldLabel htmlFor={fieldId} className='text-xs'>
-                            上级分成
+                            同步返现比例
                           </FieldLabel>
                           <InputGroup>
                             <InputGroupInput
                               id={fieldId}
                               type='text'
                               inputMode='decimal'
-                              placeholder='例如 150'
+                              placeholder='例如 5'
                               value={ratePercent}
                               disabled={failed}
                               onChange={(event) => {

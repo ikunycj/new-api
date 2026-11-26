@@ -4351,7 +4351,120 @@ for (const [locale, translations] of Object.entries(inviteInfoTranslations)) {
   Object.assign(newKeys[locale], translations)
 }
 
+const legacySubAgentRateKey =
+  'This rate was applied to the sub-agent’s cashback.'
+const subAgentSearchKey = 'Search sub-agent, email, or recharge time'
+const automaticCashbackKey =
+  'Eligible cashback is transferred to your balance automatically.'
+const awaitingTransferKey = 'Awaiting transfer'
+const withdrawalContactKey =
+  'To withdraw, contact the administrator: {{contact}}'
+const withdrawalFallbackKey = 'To withdraw, contact the administrator.'
+const selectStatusKey = 'Select status'
+const subAgentHistoryTranslations = {
+  en: {
+    [legacySubAgentRateKey]: legacySubAgentRateKey,
+    [subAgentSearchKey]: subAgentSearchKey,
+    [automaticCashbackKey]: automaticCashbackKey,
+    [awaitingTransferKey]: awaitingTransferKey,
+    [withdrawalContactKey]: withdrawalContactKey,
+    [withdrawalFallbackKey]: withdrawalFallbackKey,
+    [selectStatusKey]: selectStatusKey,
+  },
+  zh: {
+    [legacySubAgentRateKey]: '该比例按子代理返现金额计算。',
+    [subAgentSearchKey]: '搜索子代理、邮箱或充值时间',
+    [automaticCashbackKey]: '返现满足到账条件后会自动转入账户余额。',
+    [awaitingTransferKey]: '待转入',
+    [withdrawalContactKey]: '如需提现请联系管理员：{{contact}}',
+    [withdrawalFallbackKey]: '如需提现请联系管理员。',
+    [selectStatusKey]: '状态选择',
+    Frozen: '冻结中',
+  },
+  'zh-TW': {
+    [legacySubAgentRateKey]: '此比例以子代理的返現金額計算。',
+    [subAgentSearchKey]: '搜尋子代理、電郵或儲值時間',
+    [automaticCashbackKey]: '返現符合入帳條件後會自動轉入帳戶餘額。',
+    [awaitingTransferKey]: '待轉入',
+    [withdrawalContactKey]: '如需提領，請聯絡管理員：{{contact}}',
+    [withdrawalFallbackKey]: '如需提領，請聯絡管理員。',
+    [selectStatusKey]: '狀態選擇',
+    Frozen: '凍結中',
+  },
+  fr: {
+    [legacySubAgentRateKey]:
+      'Ce taux a été appliqué au montant du cashback du sous-agent.',
+    [subAgentSearchKey]:
+      'Rechercher un sous-agent, un e-mail ou une date de recharge',
+    [automaticCashbackKey]:
+      'Le cashback éligible est automatiquement crédité sur votre solde.',
+    [awaitingTransferKey]: 'En attente de transfert',
+    [withdrawalContactKey]:
+      'Pour effectuer un retrait, contactez l’administrateur : {{contact}}',
+    [withdrawalFallbackKey]:
+      'Pour effectuer un retrait, contactez l’administrateur.',
+    [selectStatusKey]: 'Choisir un statut',
+  },
+  ja: {
+    [legacySubAgentRateKey]:
+      'この割合はサブ代理店のキャッシュバック額に適用されました。',
+    [subAgentSearchKey]: 'サブ代理店、メール、チャージ日時で検索',
+    [automaticCashbackKey]:
+      '条件を満たしたキャッシュバックは自動的に残高に反映されます。',
+    [awaitingTransferKey]: '振替待ち',
+    [withdrawalContactKey]:
+      '出金をご希望の場合は、管理者にご連絡ください：{{contact}}',
+    [withdrawalFallbackKey]: '出金をご希望の場合は、管理者にご連絡ください。',
+    [selectStatusKey]: 'ステータスを選択',
+  },
+  ru: {
+    [legacySubAgentRateKey]:
+      'Этот процент рассчитывался от суммы кешбэка субагента.',
+    [subAgentSearchKey]: 'Поиск по субагенту, почте или времени пополнения',
+    [automaticCashbackKey]:
+      'Кешбэк автоматически зачисляется на баланс после выполнения условий.',
+    [awaitingTransferKey]: 'Ожидает зачисления',
+    [withdrawalContactKey]:
+      'Для вывода средств обратитесь к администратору: {{contact}}',
+    [withdrawalFallbackKey]: 'Для вывода средств обратитесь к администратору.',
+    [selectStatusKey]: 'Выбрать статус',
+  },
+  vi: {
+    [legacySubAgentRateKey]:
+      'Tỷ lệ này được áp dụng trên số tiền hoàn của đại lý cấp dưới.',
+    [subAgentSearchKey]:
+      'Tìm theo đại lý cấp dưới, email hoặc thời gian nạp tiền',
+    [automaticCashbackKey]:
+      'Tiền hoàn đủ điều kiện sẽ được tự động cộng vào số dư của bạn.',
+    [awaitingTransferKey]: 'Chờ chuyển',
+    [withdrawalContactKey]:
+      'Để rút tiền, hãy liên hệ quản trị viên: {{contact}}',
+    [withdrawalFallbackKey]: 'Để rút tiền, hãy liên hệ quản trị viên.',
+    [selectStatusKey]: 'Chọn trạng thái',
+  },
+}
+
+for (const [locale, translations] of Object.entries(
+  subAgentHistoryTranslations
+)) {
+  Object.assign(newKeys[locale], translations)
+}
+
 const retiredKeys = new Set([
+  'Immediately available',
+  'Available now',
+  'Unlocks in {{count}} days',
+  'Sub-agent',
+  'Sub-agent cashback',
+  'No sub-agent cashback yet',
+  'Search email or recharge time',
+  'Invitee top-up records',
+  'Sorted by recharge time. Emails are masked for privacy.',
+  'Confirm cashback transfer',
+  'Transfer {{amount}} to your account balance?',
+  'Transfer to account balance',
+  'Transferred to balance',
+  'Transfer available cashback and review invitee top-ups.',
   'Enter a model name',
   'Models are tried in this order when selecting a default model. Add one model per row.',
   'No preferred models. The default order will be used.',

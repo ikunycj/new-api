@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
+import { AFFILIATE_TOP_UP_PAGE_SIZE } from './constants'
 import type {
   RedemptionRequest,
   PaymentRequest,
@@ -35,8 +36,6 @@ import type {
   AffiliateBalanceTransferResponse,
   AffiliateInviteeTopUpsQuery,
   AffiliateBalanceTransfersQuery,
-  AffiliateSubAgentReward,
-  PaginatedData,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -194,10 +193,9 @@ export async function getAffiliateInviteeTopUps(
   const res = await api.get('/api/affiliate/invitee-topups', {
     params: {
       p: query.page,
-      page_size: query.pageSize,
+      page_size: AFFILIATE_TOP_UP_PAGE_SIZE,
       keyword: query.keyword,
       status: query.status,
-      sort: query.sort,
       start_at: query.startAt,
       end_at: query.endAt,
     },
@@ -212,23 +210,6 @@ export async function getAffiliateBalanceTransfers(
     params: { p: query.page, page_size: query.pageSize },
   })
   return res.data
-}
-
-export async function getAffiliateSubAgentRewards(
-  page: number,
-  pageSize: number
-): Promise<PaginatedData<AffiliateSubAgentReward>> {
-  const res = await api.get<
-    ApiResponse<PaginatedData<AffiliateSubAgentReward>>
-  >('/api/affiliate/sub-agent-rewards', {
-    params: { p: page, page_size: pageSize },
-    skipBusinessError: true,
-    skipErrorHandler: true,
-  })
-  if (!res.data.success || !res.data.data) {
-    throw new Error(res.data.message || 'Failed to load sub-agent rewards')
-  }
-  return res.data.data
 }
 
 export async function createAffiliateBalanceTransfer(request: {

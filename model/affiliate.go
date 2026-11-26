@@ -57,7 +57,6 @@ var (
 	ErrAffiliateAmountInvalid    = errors.New("invalid affiliate amount")
 	errAffiliateRewardCapacity   = errors.New("affiliate reward exceeds account capacity")
 	ErrAffiliateBalance          = errors.New("insufficient available cashback balance")
-	ErrAffiliateTopUpsHidden     = errors.New("invitee top-up records are not available")
 	ErrAffiliateRewardNotFound   = errors.New("affiliate reward not found")
 	ErrAffiliateRuleInvalid      = errors.New("invalid affiliate rule")
 	ErrAffiliateTransferTooSmall = errors.New("cashback transfer is below the minimum")
@@ -139,6 +138,7 @@ type AffiliateReward struct {
 	RewardRateBps           int64   `json:"reward_rate_bps" gorm:"type:bigint;not null"`
 	SourceRewardID          *int    `json:"source_reward_id,omitempty" gorm:"uniqueIndex"`
 	SourceRewardRateBps     int64   `json:"source_reward_rate_bps,omitempty" gorm:"type:bigint;not null;default:0"`
+	SourceRewardOnTopUp     bool    `json:"-" gorm:"not null;default:false"`
 	FixedRewardQuota        int64   `json:"fixed_reward_quota" gorm:"type:bigint;not null"`
 	UnlimitedReward         bool    `json:"unlimited_reward" gorm:"not null"`
 	MaximumRewardQuota      int64   `json:"maximum_reward_quota" gorm:"type:bigint;not null"`
@@ -254,7 +254,6 @@ type AffiliateSummary struct {
 	QualifiedCount             int64                  `json:"qualified_count"`
 	NextAvailableAt            int64                  `json:"next_available_at"`
 	LifetimeCampaignBonusQuota int64                  `json:"lifetime_campaign_bonus_quota"`
-	HasSubAgentRewards         bool                   `json:"has_sub_agent_rewards"`
 	Rule                       AffiliateEffectiveRule `json:"rule"`
 	Account                    AffiliateQuotaAccount  `json:"account"`
 	CashAccount                AffiliateCashAccount   `json:"cash_account"`
@@ -268,6 +267,10 @@ type AffiliateInviteeTopUp struct {
 	MaskedEmail            string `json:"masked_email"`
 	InvitedAt              int64  `json:"invited_at"`
 	InvitationCode         string `json:"invitation_code"`
+	SourceAgentUserID      int    `json:"source_agent_user_id,omitempty"`
+	SourceAgentUsername    string `json:"source_agent_username,omitempty"`
+	SourceAgentEmail       string `json:"source_agent_email,omitempty"`
+	LegacySubAgentRate     bool   `json:"legacy_sub_agent_rate"`
 	TopUpID                int    `json:"topup_id"`
 	TopUpAt                int64  `json:"topup_at"`
 	PaidCents              int64  `json:"paid_cents"`
@@ -762,8 +765,10 @@ func calculateAffiliateCashbackQuota(baseCents int64, rule AffiliateEffectiveRul
 	return int64(quota), nil
 }
 
-func calculateAffiliateSubAgentReward(amount int64, subAgent *AffiliateSubAgent, topUpID int) int64 {
-	reward := decimal.NewFromInt(amount).Mul(decimal.NewFromInt(subAgent.RateBps)).Shift(-4).BigInt()
+func calculateAffiliateSubAgentReward(amount, divisor decimal.Decimal, subAgent *AffiliateSubAgent, topUpID int) int64 {
+	scaledAmount := amount.Mul(decimal.NewFromInt(subAgent.RateBps)).Shift(-4)
+	wholeReward, _ := scaledAmount.QuoRem(divisor, 0)
+	reward := wholeReward.BigInt()
 	if !reward.IsInt64() {
 		common.SysError(fmt.Sprintf("sub-agent reward for parent %d on top-up %d exceeds ledger range: %s", subAgent.ParentUserID, topUpID, reward))
 		return 0
@@ -879,10 +884,16 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 	if err != nil {
 		return err
 	}
+	exchangeRate := operation_setting.USDExchangeRate
+	if exchangeRate <= 0 {
+		exchangeRate = 1
+	}
 	var parentQuota int64
 	recipientIDs := []int{relation.InviterUserID}
 	if subAgent != nil && subAgent.ParentUserID != relation.InviteeUserID {
-		parentQuota = calculateAffiliateSubAgentReward(rewardQuota, subAgent, topUp.Id)
+		scaledPaidCents := decimal.NewFromInt(paidCents).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+		centsPerUnit := decimal.NewFromFloat(exchangeRate).Shift(2)
+		parentQuota = calculateAffiliateSubAgentReward(scaledPaidCents, centsPerUnit, subAgent, topUp.Id)
 		if parentQuota > 0 {
 			recipientIDs = append(recipientIDs, subAgent.ParentUserID)
 		}
@@ -893,10 +904,6 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 	status := AffiliateRewardStatusAvailable
 	if rule.HoldSeconds > 0 {
 		status = AffiliateRewardStatusPending
-	}
-	exchangeRate := operation_setting.USDExchangeRate
-	if exchangeRate <= 0 {
-		exchangeRate = 1
 	}
 	cashback := AffiliateReward{
 		ReferralID: relation.ID, InviterUserID: relation.InviterUserID,
@@ -919,6 +926,7 @@ func qualifyAffiliateTopUpWithTx(tx *gorm.DB, topUp *TopUp) error {
 		cashback.RecipientUserID = subAgent.ParentUserID
 		cashback.SourceRewardID = &reward.ID
 		cashback.SourceRewardRateBps = subAgent.RateBps
+		cashback.SourceRewardOnTopUp = true
 		cashback.ActualQuota = parentQuota
 		cashback.IdempotencyKey = "sub-agent-cashback:" + strconv.Itoa(reward.ID)
 		if _, err := createAffiliateRewardWithTx(tx, cashback); errors.Is(err, errAffiliateRewardCapacity) {
@@ -1239,10 +1247,6 @@ func GetAffiliateSummary(userID int) (*AffiliateSummary, error) {
 		Select("COALESCE(SUM(bonus_quota), 0)").Scan(&lifetimeCampaignBonusQuota).Error; err != nil {
 		return nil, err
 	}
-	hasSubAgentRewards, err := hasAffiliateSubAgentRewards(userID)
-	if err != nil {
-		return nil, err
-	}
 	if campaign.Enabled {
 		rule.Enabled = true
 		rule.RewardMode = operation_setting.AffiliateRewardModePercentage
@@ -1253,11 +1257,8 @@ func GetAffiliateSummary(userID int) (*AffiliateSummary, error) {
 		Enabled: rule.Enabled, ReferralCode: user.AffCode, Currency: "CNY",
 		ReferralCount: referralCount, QualifiedCount: qualifiedCount,
 		NextAvailableAt: nextAvailableAt, LifetimeCampaignBonusQuota: lifetimeCampaignBonusQuota,
-		HasSubAgentRewards: hasSubAgentRewards,
-		Rule:               rule,
-		Account:            *account,
-		CashAccount:        *cashAccount,
-		Campaign:           *campaign,
+		Rule: rule, Account: *account,
+		CashAccount: *cashAccount, Campaign: *campaign,
 	}, nil
 }
 
@@ -1500,26 +1501,23 @@ func GetAffiliateInviteeTopUps(userID int, status string, keyword string, startA
 }
 
 func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, sort string, startAt int64, endAt int64, startIdx int, limit int) ([]AffiliateInviteeTopUp, int64, error) {
-	rule, err := GetAffiliateEffectiveRule(userID)
-	if err != nil {
+	now := common.GetTimestamp()
+	if err := releaseDueAffiliateRewardsForUser(userID, now); err != nil {
 		return nil, 0, err
 	}
-	if !rule.ShowInviteeTopUps {
-		return nil, 0, ErrAffiliateTopUpsHidden
-	}
-	if err := releaseDueAffiliateRewardsForUser(userID, common.GetTimestamp()); err != nil {
-		return nil, 0, err
-	}
-	if err := releaseDueAffiliateCashRewardsForUser(userID, common.GetTimestamp()); err != nil {
+	if err := releaseDueAffiliateCashRewardsForUser(userID, now); err != nil {
 		return nil, 0, err
 	}
 	type row struct {
 		EventID              int
 		TopUpID              int
-		InviteeUserID        int
 		MaskedEmail          string
 		BoundAt              int64
 		CodeSnapshot         string
+		SourceAgentUserID    int
+		SourceAgentUsername  string
+		SourceAgentEmail     string
+		LegacySubAgentRate   bool
 		CompletedAt          int64
 		PaidCents            int64
 		Qualified            bool
@@ -1539,22 +1537,50 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 		CashAvailableAt      *int64
 		CashRewardStatus     *string
 	}
-	query := DB.Table("affiliate_top_up_events AS e").
-		Select("e.id AS event_id, e.top_up_id, e.invitee_user_id, e.masked_email, r.bound_at, r.code_snapshot, e.completed_at, e.paid_cents, e.qualified, e.reward_id, ar.reward_mode, ar.reward_rate_bps, ar.fixed_reward_quota, ar.actual_quota, ar.adjusted_quota, ar.transferred_quota, ar.available_at, ar.status AS reward_status, e.cash_reward_id, acr.reward_rate_bps AS cash_reward_rate_bps, acr.cashback_cents, acr.transferred_cents AS cash_transferred_cents, acr.available_at AS cash_available_at, acr.status AS cash_reward_status").
-		Joins("JOIN affiliate_referrals AS r ON r.id = e.referral_id").
+	quota := DB.Table("affiliate_rewards AS reward").
+		Select("e.id AS event_id, reward.id AS reward_id, NULL AS cash_reward_id, e.inviter_user_id AS source_agent_user_id").
+		Joins("JOIN affiliate_top_up_events AS e ON e.reward_id = reward.source_reward_id").
+		Where("reward.recipient_user_id = ? AND reward.source_reward_id IS NOT NULL", userID)
+	cash := DB.Table("affiliate_cash_rewards AS reward").
+		Select("e.id AS event_id, NULL AS reward_id, reward.id AS cash_reward_id, e.inviter_user_id AS source_agent_user_id").
+		Joins("JOIN affiliate_top_up_events AS e ON e.cash_reward_id = reward.source_reward_id").
+		Where("reward.inviter_user_id = ? AND reward.source_reward_id IS NOT NULL", userID)
+	direct := DB.Table("affiliate_top_up_events AS e").
+		Select("e.id AS event_id, e.reward_id, e.cash_reward_id, NULL AS source_agent_user_id").
 		Joins("JOIN users AS invitee ON invitee.id = e.invitee_user_id").
-		Joins("LEFT JOIN affiliate_rewards AS ar ON ar.id = e.reward_id").
-		Joins("LEFT JOIN affiliate_cash_rewards AS acr ON acr.id = e.cash_reward_id").
 		Where("e.inviter_user_id = ?", userID)
+	query := DB.Table("(? UNION ALL ? UNION ALL ?) AS history", direct, quota, cash).
+		Select(`e.id AS event_id, e.completed_at, e.paid_cents, e.qualified, e.masked_email, r.bound_at,
+CASE WHEN history.source_agent_user_id IS NULL THEN e.top_up_id ELSE 0 END AS top_up_id,
+CASE WHEN history.source_agent_user_id IS NULL THEN r.code_snapshot ELSE '' END AS code_snapshot,
+COALESCE(history.source_agent_user_id, 0) AS source_agent_user_id,
+COALESCE(source_agent.username, '') AS source_agent_username, COALESCE(source_agent.email, '') AS source_agent_email,
+history.source_agent_user_id IS NOT NULL AND NOT COALESCE(ar.source_reward_on_top_up, acr.source_reward_on_top_up, false) AS legacy_sub_agent_rate,
+history.reward_id, ar.reward_mode,
+CASE WHEN history.source_agent_user_id IS NOT NULL THEN ar.source_reward_rate_bps ELSE ar.reward_rate_bps END AS reward_rate_bps,
+ar.fixed_reward_quota, ar.actual_quota, ar.adjusted_quota, ar.transferred_quota, ar.available_at, ar.status AS reward_status,
+history.cash_reward_id,
+CASE WHEN history.source_agent_user_id IS NOT NULL THEN acr.source_reward_rate_bps ELSE acr.reward_rate_bps END AS cash_reward_rate_bps,
+acr.cashback_cents, acr.transferred_cents AS cash_transferred_cents, acr.available_at AS cash_available_at, acr.status AS cash_reward_status`).
+		Joins("JOIN affiliate_top_up_events AS e ON e.id = history.event_id").
+		Joins("JOIN affiliate_referrals AS r ON r.id = e.referral_id").
+		Joins("LEFT JOIN users AS source_agent ON source_agent.id = history.source_agent_user_id").
+		Joins("LEFT JOIN affiliate_rewards AS ar ON ar.id = history.reward_id").
+		Joins("LEFT JOIN affiliate_cash_rewards AS acr ON acr.id = history.cash_reward_id")
 	keyword = strings.TrimSpace(keyword)
 	if keyword != "" {
 		normalizedKeyword := strings.ToLower(keyword)
 		pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(normalizedKeyword, "!", "!!"), "%", "!%"), "_", "!_") + "%"
+		query = query.Joins("LEFT JOIN users AS invitee ON invitee.id = e.invitee_user_id AND history.source_agent_user_id IS NULL")
+		condition := `LOWER(source_agent.username) LIKE ? ESCAPE '!' OR LOWER(source_agent.email) LIKE ? ESCAPE '!'
+OR LOWER(e.masked_email) LIKE ? ESCAPE '!'
+OR (history.source_agent_user_id IS NULL AND (LOWER(invitee.email) LIKE ? ESCAPE '!' OR LOWER(r.code_snapshot) LIKE ? ESCAPE '!'))`
+		args := []any{pattern, pattern, pattern, pattern, pattern}
 		if rangeStart, rangeEnd, ok := affiliateTopUpTimeRange(keyword); ok {
-			query = query.Where("(LOWER(e.masked_email) LIKE ? ESCAPE '!' OR LOWER(invitee.email) LIKE ? ESCAPE '!' OR LOWER(r.code_snapshot) LIKE ? ESCAPE '!' OR (e.completed_at >= ? AND e.completed_at < ?))", pattern, pattern, pattern, rangeStart, rangeEnd)
-		} else {
-			query = query.Where("(LOWER(e.masked_email) LIKE ? ESCAPE '!' OR LOWER(invitee.email) LIKE ? ESCAPE '!' OR LOWER(r.code_snapshot) LIKE ? ESCAPE '!')", pattern, pattern, pattern)
+			condition += " OR (e.completed_at >= ? AND e.completed_at < ?)"
+			args = append(args, rangeStart, rangeEnd)
 		}
+		query = query.Where("("+condition+")", args...)
 	}
 	if startAt > 0 {
 		query = query.Where("e.completed_at >= ?", startAt)
@@ -1564,7 +1590,7 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 	}
 	switch status {
 	case "unqualified":
-		query = query.Where("e.qualified = ?", false)
+		query = query.Where("e.qualified = ? AND history.source_agent_user_id IS NULL", false)
 	case AffiliateRewardStatusPending, AffiliateRewardStatusAvailable, AffiliateRewardStatusTransferred, AffiliateRewardStatusAdjusted:
 		query = query.Where("(ar.status = ? OR acr.status = ?)", status, status)
 	}
@@ -1573,9 +1599,9 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 		return nil, 0, err
 	}
 	var rows []row
-	order := "e.completed_at desc, e.id desc"
+	order := "e.completed_at desc, e.id desc, COALESCE(history.source_agent_user_id, 0) asc"
 	if sort == "recharge_time_asc" {
-		order = "e.completed_at asc, e.id asc"
+		order = "e.completed_at asc, e.id asc, COALESCE(history.source_agent_user_id, 0) asc"
 	}
 	if err := query.Order(order).Offset(startIdx).Limit(limit).Scan(&rows).Error; err != nil {
 		return nil, 0, err
@@ -1586,6 +1612,8 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 			ID: current.EventID, MaskedEmail: current.MaskedEmail,
 			InvitedAt: current.BoundAt, InvitationCode: current.CodeSnapshot,
 			TopUpID: current.TopUpID, TopUpAt: current.CompletedAt, PaidCents: current.PaidCents,
+			SourceAgentUserID: current.SourceAgentUserID, SourceAgentUsername: current.SourceAgentUsername,
+			SourceAgentEmail: current.SourceAgentEmail, LegacySubAgentRate: current.LegacySubAgentRate,
 			Status: "unqualified",
 		}
 		if current.Qualified {
@@ -1645,6 +1673,10 @@ func GetAffiliateInviteeTopUpsSorted(userID int, status string, keyword string, 
 			if current.CashRewardStatus != nil {
 				item.Status = *current.CashRewardStatus
 			}
+		}
+		if item.SourceAgentUserID > 0 {
+			item.RewardMode = operation_setting.AffiliateRewardModePercentage
+			item.FixedRewardQuota = 0
 		}
 		items = append(items, item)
 	}

@@ -77,19 +77,19 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
   }
 
   const stats = [
-    [
-      t('Available'),
-      formatAffiliateAccountCashback(props.summary, 'available'),
-    ],
-    [
-      t('Frozen cashback'),
-      formatAffiliateAccountCashback(props.summary, 'pending'),
-    ],
-    [
-      t('Transferred'),
-      formatAffiliateAccountCashback(props.summary, 'transferred'),
-    ],
-    [t('Invites'), String(props.summary?.referral_count ?? 0)],
+    {
+      label: t('Frozen'),
+      value: formatAffiliateAccountCashback(props.summary, 'pending'),
+      unlockAt: props.summary?.next_available_at,
+    },
+    {
+      label: t('Transferred'),
+      value: formatAffiliateAccountCashback(props.summary, 'transferred'),
+    },
+    {
+      label: t('Invites'),
+      value: String(props.summary?.referral_count ?? 0),
+    },
   ]
 
   return (
@@ -114,8 +114,8 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4'>
-          {stats.map(([label, value], index) => (
+        <div className='grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3'>
+          {stats.map(({ label, value, unlockAt }) => (
             <div key={label} className='min-w-0'>
               <div className='text-muted-foreground truncate text-[10px] font-medium uppercase'>
                 {label}
@@ -123,12 +123,10 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
               <div className='mt-0.5 truncate text-sm font-semibold tabular-nums'>
                 {value}
               </div>
-              {index === 1 && props.summary?.next_available_at ? (
+              {unlockAt ? (
                 <div className='text-muted-foreground mt-0.5 truncate text-[10px]'>
                   {t('Unlocks {{time}}', {
-                    time: formatTimestampToDate(
-                      props.summary.next_available_at
-                    ),
+                    time: formatTimestampToDate(unlockAt),
                   })}
                 </div>
               ) : null}

@@ -20,24 +20,17 @@ For commercial licensing, please contact support@quantumnous.com
 
 import {
   ArrowRightLeft,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ReceiptText,
   Search,
   X,
 } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import {
   Dialog,
   DialogContent,
@@ -68,9 +61,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { formatQuotaAsCNY, formatTimestampToDate } from '@/lib/format'
 
-import { useAffiliateSubAgentRewards } from '../../hooks/use-affiliate'
+import { AFFILIATE_TOP_UP_PAGE_SIZE } from '../../constants'
 import {
   formatAffiliateAccountCashback,
   formatAffiliateCashback,
@@ -80,13 +78,13 @@ import type {
   AffiliateInviteeTopUp,
   AffiliateInviteeTopUpsQuery,
   AffiliateSummary,
-  AffiliateTopUpSort,
   AffiliateTopUpStatus,
 } from '../../types'
 
 interface AffiliateCenterDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  customerService?: string
   summary?: AffiliateSummary
   topUps: AffiliateInviteeTopUp[]
   topUpsTotal: number
@@ -97,14 +95,12 @@ interface AffiliateCenterDialogProps {
   onTransfer: (request: {
     amount_quota?: number
     cash_cents?: number
-    reward_id?: number
     request_key: string
   }) => Promise<AffiliateBalanceTransferResponse>
 }
 
 interface ListPaginationProps {
   page: number
-  pageSize: number
   total: number
   onPageChange: (page: number) => void
 }
@@ -113,13 +109,16 @@ function ListPagination(props: ListPaginationProps) {
   const { t } = useTranslation()
   if (props.total <= 0) return null
 
-  const totalPages = Math.max(1, Math.ceil(props.total / props.pageSize))
+  const totalPages = Math.max(
+    1,
+    Math.ceil(props.total / AFFILIATE_TOP_UP_PAGE_SIZE)
+  )
   return (
     <div className='border-border mt-4 flex items-center justify-between gap-3 border-t pt-3'>
       <div className='text-muted-foreground text-xs'>
-        {t('Showing')} {(props.page - 1) * props.pageSize + 1}-
-        {Math.min(props.page * props.pageSize, props.total)} {t('of')}{' '}
-        {props.total}
+        {t('Showing')} {(props.page - 1) * AFFILIATE_TOP_UP_PAGE_SIZE + 1}-
+        {Math.min(props.page * AFFILIATE_TOP_UP_PAGE_SIZE, props.total)}{' '}
+        {t('of')} {props.total}
       </div>
       <div className='flex items-center gap-2'>
         <Button
@@ -161,7 +160,7 @@ function getStatusLabel(
   const labels: Record<AffiliateTopUpStatus, string> = {
     unqualified: t('Not qualified'),
     pending: t('Frozen'),
-    available: t('Available to transfer'),
+    available: t('Awaiting transfer'),
     transferred: t('Transferred'),
     adjusted: t('Adjusted'),
   }
@@ -181,130 +180,6 @@ function getStatusClass(status: AffiliateTopUpStatus) {
   return 'border-border bg-background text-muted-foreground'
 }
 
-const SUB_AGENT_REWARD_PAGE_SIZE = 20
-
-function SubAgentRewards(props: { dialogOpen: boolean }) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const [page, setPage] = useState(1)
-  const rewards = useAffiliateSubAgentRewards(
-    page,
-    SUB_AGENT_REWARD_PAGE_SIZE,
-    props.dialogOpen && open
-  )
-  const items = rewards.data?.items ?? []
-
-  let content: ReactNode
-  if (rewards.isError) {
-    content = (
-      <Empty className='min-h-32'>
-        <EmptyHeader>
-          <EmptyTitle>{t('Loading failed')}</EmptyTitle>
-        </EmptyHeader>
-        <Button variant='outline' onClick={() => void rewards.refetch()}>
-          {t('Retry')}
-        </Button>
-      </Empty>
-    )
-  } else if (rewards.isLoading) {
-    content = (
-      <div className='flex min-h-32 items-center justify-center'>
-        <Spinner />
-      </div>
-    )
-  } else if (items.length === 0) {
-    content = (
-      <Empty className='min-h-32'>
-        <EmptyHeader>
-          <EmptyTitle>{t('No sub-agent cashback yet')}</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    )
-  } else {
-    const rateFormatter = new Intl.NumberFormat(undefined, {
-      style: 'percent',
-      maximumFractionDigits: 2,
-    })
-    content = (
-      <>
-        <div className='min-w-0 overflow-x-auto'>
-          <Table className='min-w-[650px]'>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('Sub-agent')}</TableHead>
-                <TableHead>{t('Cashback rate')}</TableHead>
-                <TableHead>{t('Cashback amount')}</TableHead>
-                <TableHead>{t('Status')}</TableHead>
-                <TableHead>{t('Created')}</TableHead>
-                <TableHead>{t('Unlock time')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((reward) => (
-                <TableRow
-                  key={`${reward.reward_cents > 0 ? 'cash' : 'quota'}-${reward.id}`}
-                >
-                  <TableCell className='font-medium'>
-                    {reward.source_agent_username ||
-                      `#${reward.source_agent_user_id}`}
-                  </TableCell>
-                  <TableCell className='tabular-nums'>
-                    {rateFormatter.format(
-                      `${reward.rate_bps}e-4` as `${number}`
-                    )}
-                  </TableCell>
-                  <TableCell className='tabular-nums'>
-                    {reward.reward_cents > 0
-                      ? formatAffiliateCashback(reward.reward_cents)
-                      : formatQuotaAsCNY(reward.reward_quota)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant='outline'
-                      className={getStatusClass(reward.status)}
-                    >
-                      {getStatusLabel(t, reward.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className='whitespace-nowrap'>
-                    {formatTimestampToDate(reward.created_at)}
-                  </TableCell>
-                  <TableCell className='whitespace-nowrap'>
-                    {reward.available_at <= reward.created_at
-                      ? t('Immediately available')
-                      : formatTimestampToDate(reward.available_at)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <ListPagination
-          page={page}
-          pageSize={SUB_AGENT_REWARD_PAGE_SIZE}
-          total={rewards.data?.total ?? 0}
-          onPageChange={setPage}
-        />
-      </>
-    )
-  }
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        render={<Button variant='outline' />}
-        className='group w-full justify-between'
-      >
-        {t('Sub-agent cashback')}
-        <ChevronDown
-          aria-hidden='true'
-          className='transition-transform group-aria-expanded:rotate-180'
-        />
-      </CollapsibleTrigger>
-      <CollapsibleContent className='pt-3'>{content}</CollapsibleContent>
-    </Collapsible>
-  )
-}
-
 function getAvailableReward(topUp: AffiliateInviteeTopUp) {
   if (topUp.cash_reward_id > 0) return topUp.available_reward_cents
   return topUp.available_reward_quota ?? topUp.reward_quota
@@ -314,6 +189,13 @@ function formatReward(topUp: AffiliateInviteeTopUp, amount: number) {
   return topUp.cash_reward_id > 0
     ? formatAffiliateCashback(amount)
     : formatQuotaAsCNY(amount)
+}
+
+function getTopUpRowKey(topUp: AffiliateInviteeTopUp): string {
+  if (topUp.source_agent_user_id) {
+    return `sub-agent:${topUp.id}:${topUp.reward_id}:${topUp.cash_reward_id}`
+  }
+  return `direct:${topUp.id}`
 }
 
 function formatCashbackRule(
@@ -330,83 +212,38 @@ function formatCashbackRule(
   }).format(topUp.reward_rate_bps / 100)}%`
 }
 
-function formatUnlockTime(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  topUp: AffiliateInviteeTopUp
-) {
-  if (topUp.status !== 'pending') {
-    return topUp.available_at <= topUp.topup_at
-      ? t('Immediately available')
-      : formatTimestampToDate(topUp.available_at)
-  }
-  const remainingSeconds = topUp.available_at - Math.floor(Date.now() / 1000)
-  if (remainingSeconds <= 0) {
-    return t('Available now')
-  }
-  return t('Unlocks in {{count}} days', {
-    count: Math.max(1, Math.ceil(remainingSeconds / 86400)),
-  })
-}
-
-function TransferAction(props: {
-  topUp: AffiliateInviteeTopUp
-  disabled: boolean
-  transferring: boolean
-  onTransfer: (topUp: AffiliateInviteeTopUp) => void
-}) {
+function CashbackRule(props: { topUp: AffiliateInviteeTopUp }) {
   const { t } = useTranslation()
-  const availableReward = getAvailableReward(props.topUp)
-  const isTransferring = props.transferring
-  const canTransfer = props.topUp.status === 'available' && availableReward > 0
-
-  if (props.topUp.status === 'transferred') {
-    return (
-      <Button
-        type='button'
-        variant='outline'
-        size='sm'
-        disabled
-        className='min-w-36'
-      >
-        {t('Transferred to balance')}
-      </Button>
-    )
+  const topUp = props.topUp
+  if (!topUp.source_agent_user_id) {
+    return formatCashbackRule(t, topUp)
   }
-
-  if (props.topUp.status === 'pending') {
-    return (
-      <Button
-        type='button'
-        variant='outline'
-        size='sm'
-        disabled
-        className='min-w-36'
-      >
-        <span className='flex flex-col items-center leading-tight'>
-          <span>{t('Transfer to account balance')}</span>
-          <span className='text-muted-foreground text-[11px]'>
-            {formatUnlockTime(t, props.topUp)}
-          </span>
-        </span>
-      </Button>
-    )
-  }
-
+  const rate = new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    maximumFractionDigits: 2,
+  }).format(`${topUp.reward_rate_bps}e-4` as `${number}`)
   return (
-    <Button
-      type='button'
-      size='sm'
-      className='min-w-36'
-      disabled={!canTransfer || props.disabled || isTransferring}
-      onClick={() => props.onTransfer(props.topUp)}
-    >
-      {isTransferring ? (
-        <Spinner data-icon='inline-start' />
+    <>
+      {topUp.legacy_sub_agent_rate ? (
+        <Tooltip>
+          <TooltipTrigger
+            type='button'
+            className='cursor-help underline decoration-dotted underline-offset-4'
+          >
+            {rate}
+          </TooltipTrigger>
+          <TooltipContent className='whitespace-normal'>
+            {t('This rate was applied to the sub-agent’s cashback.')}
+          </TooltipContent>
+        </Tooltip>
       ) : (
-        <ArrowRightLeft data-icon='inline-start' />
+        rate
       )}
-      {t('Transfer to account balance')}
-    </Button>
+      <div className='text-muted-foreground !text-xs'>
+        {topUp.source_agent_username || `#${topUp.source_agent_user_id}`}{' '}
+        {topUp.source_agent_email}
+      </div>
+    </>
   )
 }
 
@@ -450,20 +287,11 @@ function HiddenTopUpFallback(props: {
 export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
   const { t } = useTranslation()
   const [searchInput, setSearchInput] = useState(props.topUpQuery.keyword ?? '')
-  const [transferringRewardID, setTransferringRewardID] = useState<
-    number | null
-  >(null)
-  const [selectedReward, setSelectedReward] =
-    useState<AffiliateInviteeTopUp | null>(null)
   const account = props.summary?.account
   const cashAccount = props.summary?.cash_account
   const rule = props.summary?.rule
-  const activeStatus = props.topUpQuery.status
-  const activeSort = props.topUpQuery.sort ?? 'recharge_time_desc'
   const queryKeyword = props.topUpQuery.keyword ?? ''
-  const queryPageSize = props.topUpQuery.pageSize
   const queryStatus = props.topUpQuery.status
-  const querySort = props.topUpQuery.sort
   const queryStartAt = props.topUpQuery.startAt
   const queryEndAt = props.topUpQuery.endAt
   const onTopUpQueryChange = props.onTopUpQueryChange
@@ -474,10 +302,8 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
     const timeout = window.setTimeout(() => {
       onTopUpQueryChange({
         page: 1,
-        pageSize: queryPageSize,
         keyword: keyword || undefined,
         status: queryStatus,
-        sort: querySort,
         startAt: queryStartAt,
         endAt: queryEndAt,
       })
@@ -487,69 +313,34 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
     onTopUpQueryChange,
     queryEndAt,
     queryKeyword,
-    queryPageSize,
-    querySort,
     queryStartAt,
     queryStatus,
     searchInput,
   ])
 
-  async function confirmRewardTransfer() {
-    if (!selectedReward) return
-    setTransferringRewardID(selectedReward.id)
-    try {
-      const response = await props.onTransfer({
-        ...(selectedReward.cash_reward_id > 0
-          ? { cash_cents: selectedReward.available_reward_cents }
-          : { reward_id: selectedReward.reward_id }),
-        request_key: crypto.randomUUID(),
-      })
-      if (response.success) setSelectedReward(null)
-    } finally {
-      setTransferringRewardID(null)
-    }
-  }
-
   async function transferAllAvailable() {
     const availableCashCents = cashAccount?.available_cents ?? 0
     if (availableCashCents > 0) {
-      setTransferringRewardID(-1)
-      try {
-        await props.onTransfer({
-          cash_cents: availableCashCents,
-          request_key: crypto.randomUUID(),
-        })
-      } finally {
-        setTransferringRewardID(null)
-      }
+      await props.onTransfer({
+        cash_cents: availableCashCents,
+        request_key: crypto.randomUUID(),
+      })
       return
     }
     const availableQuota = account?.available_quota ?? 0
     if (availableQuota <= 0) return
-    setTransferringRewardID(-1)
-    try {
-      await props.onTransfer({
-        amount_quota: availableQuota,
-        request_key: crypto.randomUUID(),
-      })
-    } finally {
-      setTransferringRewardID(null)
-    }
+    await props.onTransfer({
+      amount_quota: availableQuota,
+      request_key: crypto.randomUUID(),
+    })
   }
 
   function selectStatus(status?: AffiliateTopUpStatus) {
     props.onTopUpQueryChange({
       ...props.topUpQuery,
       page: 1,
+      keyword: searchInput.trim() || undefined,
       status,
-    })
-  }
-
-  function selectSort(sort: AffiliateTopUpSort) {
-    props.onTopUpQueryChange({
-      ...props.topUpQuery,
-      page: 1,
-      sort,
     })
   }
 
@@ -558,29 +349,29 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
       <DialogContent className='max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-6xl'>
         <DialogHeader>
           <DialogTitle>{t('Referral Cashback')}</DialogTitle>
-          <DialogDescription>
-            {t('Transfer available cashback and review invitee top-ups.')}
+          <DialogDescription className='break-words whitespace-pre-wrap'>
+            {t(
+              'Eligible cashback is transferred to your balance automatically.'
+            )}{' '}
+            {props.customerService
+              ? t('To withdraw, contact the administrator: {{contact}}', {
+                  contact: props.customerService,
+                })
+              : t('To withdraw, contact the administrator.')}
           </DialogDescription>
         </DialogHeader>
 
-        <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
+        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
           {[
             [
-              t('Frozen cashback'),
+              t('Frozen'),
               formatAffiliateAccountCashback(props.summary, 'pending'),
-            ],
-            [
-              t('Available to transfer'),
-              formatAffiliateAccountCashback(props.summary, 'available'),
             ],
             [
               t('Transferred'),
               formatAffiliateAccountCashback(props.summary, 'transferred'),
             ],
-            [
-              t('Lifetime earned'),
-              formatAffiliateAccountCashback(props.summary, 'lifetime_earned'),
-            ],
+            [t('Invites'), String(props.summary?.referral_count ?? 0)],
           ].map(([label, value]) => (
             <div key={String(label)} className='border-border border-l-2 pl-3'>
               <div className='text-muted-foreground text-xs'>{label}</div>
@@ -589,122 +380,105 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
           ))}
         </div>
 
-        {props.summary?.has_sub_agent_rewards ? (
-          <SubAgentRewards dialogOpen={props.open} />
-        ) : null}
-
         {rule?.show_invitee_topups ? (
           <div className='min-w-0 space-y-4 pt-2'>
-            <div className='bg-muted/40 flex flex-wrap items-center gap-1 rounded-lg p-1'>
-              <span className='text-muted-foreground px-3 text-xs font-medium'>
-                {t('Record status')}
-              </span>
-              {(
-                [
-                  [undefined, t('All')],
-                  ['pending', t('Frozen')],
-                  ['available', t('Available to transfer')],
-                  ['transferred', t('Transferred')],
-                ] as const
-              ).map(([status, label]) => (
-                <Button
-                  key={status ?? 'all'}
-                  type='button'
-                  variant={activeStatus === status ? 'secondary' : 'ghost'}
-                  size='sm'
-                  className='h-8 px-3 text-xs'
-                  onClick={() => selectStatus(status)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-              <div>
-                <h3 className='text-base font-semibold'>
-                  {t('Invitee top-up records')}
-                </h3>
-                <p className='text-muted-foreground mt-1 text-xs'>
-                  {t('Sorted by recharge time. Emails are masked for privacy.')}
-                </p>
-              </div>
-              <div className='flex w-full gap-2 sm:w-auto'>
-                <InputGroup className='min-w-0 flex-1 sm:w-80'>
-                  <InputGroupAddon align='inline-start'>
-                    <Search aria-hidden='true' />
+            <div className='flex flex-wrap items-center gap-2'>
+              <InputGroup className='min-w-48 flex-1 lg:max-w-80'>
+                <InputGroupAddon align='inline-start'>
+                  <Search aria-hidden='true' />
+                </InputGroupAddon>
+                <InputGroupInput
+                  aria-label={t('Search sub-agent, email, or recharge time')}
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder={t('Search sub-agent, email, or recharge time')}
+                />
+                {searchInput ? (
+                  <InputGroupAddon align='inline-end'>
+                    <InputGroupButton
+                      type='button'
+                      aria-label={t('Clear search')}
+                      title={t('Clear search')}
+                      onClick={() => setSearchInput('')}
+                    >
+                      <X />
+                    </InputGroupButton>
                   </InputGroupAddon>
-                  <InputGroupInput
-                    aria-label={t('Search email or recharge time')}
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder={t('Search email or recharge time')}
-                  />
-                  {searchInput ? (
-                    <InputGroupAddon align='inline-end'>
-                      <InputGroupButton
-                        type='button'
-                        aria-label={t('Clear search')}
-                        title={t('Clear search')}
-                        onClick={() => setSearchInput('')}
-                      >
-                        <X />
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  ) : null}
-                </InputGroup>
-                <NativeSelect
-                  aria-label={t('Sort by recharge time')}
-                  value={activeSort}
-                  onChange={(event) =>
-                    selectSort(event.target.value as AffiliateTopUpSort)
-                  }
-                  className='w-36 shrink-0'
+                ) : null}
+              </InputGroup>
+              <div className='flex shrink-0 items-center gap-2'>
+                <label
+                  htmlFor='affiliate-top-up-status'
+                  className='text-muted-foreground text-xs sm:text-sm'
                 >
-                  <NativeSelectOption value='recharge_time_desc'>
-                    {t('Newest recharge')}
+                  {t('Select status')}
+                </label>
+                <NativeSelect
+                  id='affiliate-top-up-status'
+                  aria-label={t('Select status')}
+                  value={props.topUpQuery.status ?? ''}
+                  onChange={(event) =>
+                    selectStatus(
+                      (event.target.value || undefined) as
+                        | AffiliateTopUpStatus
+                        | undefined
+                    )
+                  }
+                  className='w-40 shrink-0'
+                >
+                  <NativeSelectOption value=''>{t('All')}</NativeSelectOption>
+                  <NativeSelectOption value='pending'>
+                    {t('Frozen')}
                   </NativeSelectOption>
-                  <NativeSelectOption value='recharge_time_asc'>
-                    {t('Oldest recharge')}
+                  <NativeSelectOption value='available'>
+                    {t('Awaiting transfer')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value='transferred'>
+                    {t('Transferred')}
                   </NativeSelectOption>
                 </NativeSelect>
               </div>
             </div>
 
             <div className='min-w-0 overflow-x-auto'>
-              <Table className='min-w-[980px]'>
+              <Table className='min-w-[800px]'>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('Invitee (privacy protected)')}</TableHead>
                     <TableHead>{t('Top-up time')}</TableHead>
                     <TableHead>{t('Paid amount')}</TableHead>
                     <TableHead>{t('Cashback rule')}</TableHead>
-                    <TableHead>{t('Available cashback')}</TableHead>
+                    <TableHead>{t('Cashback amount')}</TableHead>
                     <TableHead>{t('Unlock time')}</TableHead>
-                    <TableHead>{t('Action')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {props.loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className='h-32 text-center'>
+                      <TableCell colSpan={6} className='h-32 text-center'>
                         <Spinner className='mx-auto' />
                       </TableCell>
                     </TableRow>
                   ) : (
                     props.topUps.map((topUp) => {
                       const availableReward = getAvailableReward(topUp)
+                      const earnedReward =
+                        topUp.cash_reward_id > 0
+                          ? topUp.reward_cents
+                          : topUp.reward_quota
                       return (
-                        <TableRow key={topUp.id}>
+                        <TableRow key={getTopUpRowKey(topUp)}>
                           <TableCell>
                             <div className='font-medium whitespace-nowrap'>
                               {topUp.masked_email}
                             </div>
-                            <div className='text-muted-foreground text-xs whitespace-nowrap'>
-                              {t('Invited {{time}}', {
-                                time: formatTimestampToDate(topUp.invited_at),
-                              })}
-                            </div>
+                            {topUp.invited_at > 0 ? (
+                              <div className='text-muted-foreground !text-xs whitespace-nowrap'>
+                                {t('Invited {{time}}', {
+                                  time: formatTimestampToDate(topUp.invited_at),
+                                })}
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className='whitespace-nowrap'>
                             {formatTimestampToDate(topUp.topup_at)}
@@ -713,12 +487,19 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
                             {formatAffiliateCashback(topUp.paid_cents)}
                           </TableCell>
                           <TableCell className='whitespace-nowrap'>
-                            {formatCashbackRule(t, topUp)}
+                            <CashbackRule topUp={topUp} />
                           </TableCell>
                           <TableCell>
                             <div className='font-medium whitespace-nowrap'>
-                              {formatReward(topUp, availableReward)}
+                              {formatReward(topUp, earnedReward)}
                             </div>
+                            {topUp.status === 'available' &&
+                            availableReward < earnedReward ? (
+                              <div className='text-muted-foreground text-xs whitespace-nowrap'>
+                                {t('Available cashback')}{' '}
+                                {formatReward(topUp, availableReward)}
+                              </div>
+                            ) : null}
                             <Badge
                               variant='outline'
                               className={getStatusClass(topUp.status)}
@@ -727,15 +508,7 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
                             </Badge>
                           </TableCell>
                           <TableCell className='whitespace-nowrap'>
-                            {formatUnlockTime(t, topUp)}
-                          </TableCell>
-                          <TableCell>
-                            <TransferAction
-                              topUp={topUp}
-                              disabled={props.transferring}
-                              transferring={transferringRewardID === topUp.id}
-                              onTransfer={setSelectedReward}
-                            />
+                            {formatTimestampToDate(topUp.available_at)}
                           </TableCell>
                         </TableRow>
                       )
@@ -759,7 +532,6 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
             ) : null}
             <ListPagination
               page={props.topUpQuery.page}
-              pageSize={props.topUpQuery.pageSize}
               total={props.topUpsTotal}
               onPageChange={(page) =>
                 props.onTopUpQueryChange({ ...props.topUpQuery, page })
@@ -770,25 +542,10 @@ export function AffiliateCenterDialog(props: AffiliateCenterDialogProps) {
           <HiddenTopUpFallback
             availableQuota={account?.available_quota ?? 0}
             availableCashCents={cashAccount?.available_cents ?? 0}
-            transferring={props.transferring || transferringRewardID === -1}
+            transferring={props.transferring}
             onTransfer={transferAllAvailable}
           />
         )}
-        <ConfirmDialog
-          open={selectedReward !== null}
-          onOpenChange={(open) => {
-            if (!open && !props.transferring) setSelectedReward(null)
-          }}
-          title={t('Confirm cashback transfer')}
-          desc={t('Transfer {{amount}} to your account balance?', {
-            amount: selectedReward
-              ? formatReward(selectedReward, getAvailableReward(selectedReward))
-              : formatAffiliateCashback(0),
-          })}
-          confirmText={t('Transfer to account balance')}
-          handleConfirm={confirmRewardTransfer}
-          isLoading={props.transferring}
-        />
       </DialogContent>
     </Dialog>
   )

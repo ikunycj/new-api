@@ -1,13 +1,10 @@
 package controller
 
 import (
-	"errors"
-	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -68,26 +65,6 @@ func GetAffiliateInviteeTopUps(c *gin.Context) {
 		c.GetInt("id"), c.Query("status"), c.Query("keyword"), c.Query("sort"), startAt, endAt,
 		pageInfo.GetStartIdx(), pageInfo.GetPageSize(),
 	)
-	if errors.Is(err, model.ErrAffiliateTopUpsHidden) {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
-		return
-	}
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(items)
-	common.ApiSuccess(c, pageInfo)
-}
-
-func GetAffiliateSubAgentRewards(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	if pageInfo.Page < 1 || pageInfo.PageSize < 1 {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return
-	}
-	items, total, err := model.GetAffiliateSubAgentRewards(c.GetInt("id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
