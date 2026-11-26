@@ -47,7 +47,12 @@ import {
   startDocsBackgroundWarmup,
 } from './docs-loader'
 import { getPrerenderDocsPayload } from './docs-prerender-state'
-import { resolveDocsBaseUrl } from './hooks/use-docs-base-url'
+import {
+  PRERENDER_SERVER_ADDRESS,
+  PRERENDER_WEBSOCKET_ADDRESS,
+  resolveDocsWebSocketBaseUrl,
+  useDocsBaseUrl,
+} from './hooks/use-docs-base-url'
 
 export type { DocsRoutePath } from './docs-config'
 export type { DocsPayload } from './docs-loader'
@@ -259,26 +264,26 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;')
 }
 
-function getServerAddress(): string {
-  const configured = getPublicBootstrap()?.status.server_address
-  return resolveDocsBaseUrl(configured)
+function resolveDocsHtml(rawHtml: string, baseUrl: string): string {
+  return rawHtml
+    .replaceAll(PRERENDER_SERVER_ADDRESS, escapeHtml(baseUrl))
+    .replaceAll(
+      PRERENDER_WEBSOCKET_ADDRESS,
+      escapeHtml(resolveDocsWebSocketBaseUrl(baseUrl))
+    )
 }
 
-function resolveDocsHtml(rawHtml: string): string {
-  return rawHtml.replaceAll(
-    '__NEW_API_SERVER_ADDRESS__',
-    escapeHtml(getServerAddress())
-  )
+function restoreServerAddressMarkers(html: string, baseUrl: string): string {
+  if (!baseUrl) return html
+  return html
+    .replaceAll(escapeHtml(baseUrl), PRERENDER_SERVER_ADDRESS)
+    .replaceAll(
+      escapeHtml(resolveDocsWebSocketBaseUrl(baseUrl)),
+      PRERENDER_WEBSOCKET_ADDRESS
+    )
 }
 
-function restoreServerAddressMarker(html: string): string {
-  const serverAddress = getServerAddress()
-  return serverAddress
-    ? html.replaceAll(escapeHtml(serverAddress), '__NEW_API_SERVER_ADDRESS__')
-    : html
-}
-
-function getInitialState(route: DocsRoutePath): DocsPageState {
+function getInitialState(route: DocsRoutePath, baseUrl: string): DocsPageState {
   const cacheKey = `${DOCS_LOCALE}:${route}`
   const prerenderDocsPayload = getPrerenderDocsPayload()
   if (
@@ -301,7 +306,7 @@ function getInitialState(route: DocsRoutePath): DocsPageState {
         cacheKey,
         error: false,
         fileName: bootstrap.file_name,
-        rawHtml: restoreServerAddressMarker(host.innerHTML),
+        rawHtml: restoreServerAddressMarkers(host.innerHTML, baseUrl),
       }
     }
   }
@@ -312,9 +317,10 @@ function getInitialState(route: DocsRoutePath): DocsPageState {
 function CachedDocsPage(props: { route: DocsRoutePath }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const baseUrl = useDocsBaseUrl()
   const cacheKey = `${DOCS_LOCALE}:${props.route}`
   const [retryKey, setRetryKey] = useState(0)
-  const [initialPage] = useState(() => getInitialState(props.route))
+  const [initialPage] = useState(() => getInitialState(props.route, baseUrl))
   const [page, setPage] = useState<DocsPageState>(initialPage)
   const [isLoading, setIsLoading] = useState(!initialPage.rawHtml)
   const [hasError, setHasError] = useState(false)
@@ -483,7 +489,7 @@ function CachedDocsPage(props: { route: DocsRoutePath }) {
           onMouseOver={handleIntent}
           onFocusCapture={handleIntent}
           dangerouslySetInnerHTML={{
-            __html: resolveDocsHtml(visiblePage.rawHtml),
+            __html: resolveDocsHtml(visiblePage.rawHtml, baseUrl),
           }}
         />
         {(isLoading || hasError) && (

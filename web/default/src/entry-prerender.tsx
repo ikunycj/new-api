@@ -34,6 +34,7 @@ import {
   setPrerenderDocsPayload,
   type PrerenderDocsPayload,
 } from './features/docs/docs-prerender-state'
+import { PRERENDER_SERVER_ADDRESS } from './features/docs/hooks/use-docs-base-url'
 import i18n, { i18nReady } from './i18n/config'
 import {
   initializePublicBootstrap,
@@ -47,7 +48,7 @@ const PRERENDER_STATUS = {
   customer_service: '',
   footer_html: '',
   logo: '__NEW_API_LOGO__',
-  server_address: '__NEW_API_SERVER_ADDRESS__',
+  server_address: PRERENDER_SERVER_ADDRESS,
   system_name: '__NEW_API_SYSTEM_NAME__',
 }
 

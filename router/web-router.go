@@ -170,6 +170,12 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 					}
 					serverAddress = scheme + "://" + c.Request.Host
 				}
+				webSocketAddress := serverAddress
+				if host, ok := strings.CutPrefix(serverAddress, "https://"); ok {
+					webSocketAddress = "wss://" + host
+				} else if host, ok := strings.CutPrefix(serverAddress, "http://"); ok {
+					webSocketAddress = "ws://" + host
+				}
 
 				bootstrap := map[string]any{
 					"home_page_content":        "",
@@ -195,7 +201,10 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 					pageHTML := string(template)
 					pageHTML = strings.ReplaceAll(pageHTML, "__NEW_API_SYSTEM_NAME__", html.EscapeString(common.SystemName))
 					pageHTML = strings.ReplaceAll(pageHTML, "__NEW_API_LOGO__", html.EscapeString(logo))
-					pageHTML = strings.ReplaceAll(pageHTML, "__NEW_API_SERVER_ADDRESS__", html.EscapeString(serverAddress))
+					pageHTML = strings.NewReplacer(
+						"__NEW_API_SERVER_ADDRESS__", html.EscapeString(serverAddress),
+						"__NEW_API_WEBSOCKET_ADDRESS__", html.EscapeString(webSocketAddress),
+					).Replace(pageHTML)
 					pageHTML = strings.Replace(pageHTML, "<title>All Token API</title>", "<title>"+html.EscapeString(common.SystemName)+"</title>", 1)
 					pageHTML = strings.Replace(pageHTML, `<meta name="title" content="All Token API" />`, `<meta name="title" content="`+html.EscapeString(common.SystemName)+`" />`, 1)
 					pageHTML = strings.Replace(pageHTML, "<!--new-api-bootstrap-->", "<script>window.__NEW_API_PUBLIC_BOOTSTRAP__="+string(bootstrapJSON)+"</script>", 1)

@@ -99,7 +99,7 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 			Data: page("zhCN", "chinese-home"),
 		},
 		"web/default/dist/prerender/zhCN/docs/tools/codex.html": {
-			Data: page("zhCN", "chinese-codex"),
+			Data: page("zhCN", "chinese-codex __NEW_API_SERVER_ADDRESS__/v1 __NEW_API_WEBSOCKET_ADDRESS__/v1/realtime"),
 		},
 		"web/default/dist/prerender/zhCN/docs/integrations.html": {
 			Data: page("zhCN", "chinese-integrations"),
@@ -155,9 +155,27 @@ func TestWebRouterPublicSSRContract(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code)
 		body := recorder.Body.String()
 		assert.Contains(t, body, "chinese-codex")
+		assert.Contains(t, body, "https://api.example.com/v1")
+		assert.Contains(t, body, "wss://api.example.com/v1/realtime")
 		assert.Contains(t, body, `"home_page_content_loaded":false`)
 		assert.Contains(t, body, `"file_name":"codex.0123abcdef.json"`)
 		assert.Contains(t, body, `"locale":"zhCN"`)
+	})
+
+	t.Run("uses the request address in docs when the server address is blank", func(t *testing.T) {
+		serverAddress := system_setting.ServerAddress
+		system_setting.ServerAddress = ""
+		t.Cleanup(func() { system_setting.ServerAddress = serverAddress })
+
+		request := httptest.NewRequest(http.MethodGet, "http://gateway.example.com:8080/docs/tools/codex", nil)
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		body := recorder.Body.String()
+		assert.Contains(t, body, "http://gateway.example.com:8080/v1")
+		assert.Contains(t, body, "ws://gateway.example.com:8080/v1/realtime")
+		assert.Contains(t, body, `"server_address":"http://gateway.example.com:8080"`)
 	})
 
 	t.Run("serves the integrations guide without redirecting", func(t *testing.T) {

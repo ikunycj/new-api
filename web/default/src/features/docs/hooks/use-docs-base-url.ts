@@ -17,14 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useStatus } from '@/hooks/use-status'
+import { getPublicBootstrap } from '@/lib/public-bootstrap'
 
-export const DOCS_PRODUCTION_BASE_URL = 'https://alltokenapi.com'
+export const PRERENDER_SERVER_ADDRESS = '__NEW_API_SERVER_ADDRESS__'
+export const PRERENDER_WEBSOCKET_ADDRESS = '__NEW_API_WEBSOCKET_ADDRESS__'
 
-export function resolveDocsBaseUrl(configuredAddress?: unknown): string {
-  if (import.meta.env.PROD) {
-    return DOCS_PRODUCTION_BASE_URL
-  }
-
+function resolveDocsBaseUrl(configuredAddress?: unknown): string {
   if (
     typeof configuredAddress === 'string' &&
     configuredAddress.trim().length > 0
@@ -35,7 +33,14 @@ export function resolveDocsBaseUrl(configuredAddress?: unknown): string {
   return typeof window === 'undefined' ? '' : window.location.origin
 }
 
+export function resolveDocsWebSocketBaseUrl(baseUrl: string): string {
+  if (baseUrl === PRERENDER_SERVER_ADDRESS) return PRERENDER_WEBSOCKET_ADDRESS
+  return baseUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://')
+}
+
 export function useDocsBaseUrl(): string {
   const { status } = useStatus()
-  return resolveDocsBaseUrl(status?.server_address)
+  return resolveDocsBaseUrl(
+    getPublicBootstrap()?.status.server_address ?? status?.server_address
+  )
 }

@@ -22,7 +22,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 import { CodeBlock } from './components/code-block'
 import { DocsShell } from './components/docs-shell'
-import { useDocsBaseUrl } from './hooks/use-docs-base-url'
+import {
+  resolveDocsWebSocketBaseUrl,
+  useDocsBaseUrl,
+} from './hooks/use-docs-base-url'
 
 const DOC_LINK_CLASS =
   'text-primary font-medium underline-offset-4 hover:underline'
@@ -76,9 +79,7 @@ export function DocsApiMultimodal() {
 curl -L "${openAiBaseUrl}/videos/video_task_xxx/content" \\
   -H "Authorization: Bearer sk-your-api-key" \\
   --output result.mp4`
-  const websocketProtocol = baseUrl.startsWith('https://') ? 'wss' : 'ws'
-  const websocketHost = baseUrl.replace(/^https?:\/\//, '')
-  const websocketUrl = `${websocketProtocol}://${websocketHost}/v1/realtime?model=your-realtime-model-id`
+  const websocketUrl = `${resolveDocsWebSocketBaseUrl(baseUrl)}/v1/realtime?model=your-realtime-model-id`
 
   return (
     <DocsShell
