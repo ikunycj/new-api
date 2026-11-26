@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { Resolver } from 'react-hook-form'
+import { useWatch, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
@@ -44,12 +44,20 @@ import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { LogoImagesDialog } from './logo-images-dialog'
+
+const logoUrlSchema = z
+  .union(
+    [z.string().url(), z.string().regex(/^\/logo\/[^/?#]+$/), z.literal('')],
+    { error: '请输入完整的图片 URL 或 /logo/图片名' }
+  )
+  .optional()
 
 const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   TopUpLink: z.string(),
-  Logo: z.string().url().optional().or(z.literal('')),
+  Logo: logoUrlSchema,
   Footer: z.string().optional(),
   About: z.string().optional(),
   HomePageContent: z.string().optional(),
@@ -96,7 +104,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     }),
     ServerAddress: z.string().optional(),
     TopUpLink: z.string(),
-    Logo: z.string().url().optional().or(z.literal('')),
+    Logo: logoUrlSchema,
     Footer: z.string().optional(),
     About: z.string().optional(),
     HomePageContent: z.string().optional(),
@@ -128,6 +136,11 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
         }
       },
     })
+
+  const serverAddress = useWatch({
+    control: form.control,
+    name: 'ServerAddress',
+  })
 
   return (
     <>
@@ -206,12 +219,20 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('Logo URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('https://example.com/logo.png')}
-                        {...field}
+                    <div className='flex flex-wrap gap-2'>
+                      <FormControl>
+                        <Input
+                          className='min-w-0 flex-1'
+                          placeholder={t('https://example.com/logo.png')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <LogoImagesDialog
+                        serverAddress={serverAddress ?? ''}
+                        selectedUrl={field.value ?? ''}
+                        onSelect={field.onChange}
                       />
-                    </FormControl>
+                    </div>
                     <FormDescription>
                       {t('URL to your logo image (optional)')}
                     </FormDescription>

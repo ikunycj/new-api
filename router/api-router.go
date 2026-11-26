@@ -217,6 +217,9 @@ func SetApiRouter(router *gin.Engine) {
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{
+			optionRoute.GET("/logo-images", controller.ListLogoImages)
+			optionRoute.POST("/logo-images", controller.UploadLogoImage)
+			optionRoute.DELETE("/logo-images/:name", controller.DeleteLogoImage)
 			optionRoute.GET("/", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.GET("/model_leaderboards", controller.GetAdminModelLeaderboards)

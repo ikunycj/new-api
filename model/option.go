@@ -332,7 +332,7 @@ func loadOptionsFromDatabase() {
 	pricingGroupConfigurationUpdateMutex.Lock()
 	defer pricingGroupConfigurationUpdateMutex.Unlock()
 
-	options, err := AllOption()
+	options, err := loadOptionsWithLogoImages()
 	if err != nil {
 		common.SysLog("failed to load options from database: " + err.Error())
 		return
@@ -351,7 +351,7 @@ func loadOptionsFromDatabase() {
 		"PricingGroupRoutingStrategy": "",
 	}
 	for _, option := range options {
-		if isRetiredOptionKey(option.Key) {
+		if isRetiredOptionKey(option.Key) || option.Key == logoImagesOptionKey {
 			continue
 		}
 		if IsModelLeaderboardOption(option.Key) {
@@ -584,6 +584,9 @@ func updateOptionMap(key string, value string) error {
 }
 
 func prepareOptionUpdate(key, value string) (fingerprintModelAliasGroups, error) {
+	if key == logoImagesOptionKey {
+		return nil, errors.New("请使用徽标图片管理接口")
+	}
 	if key == common.ChannelErrorWhitelistOptionKey {
 		return nil, console_setting.ValidateConsoleSettings(value, "ChannelErrorWhitelist")
 	}
