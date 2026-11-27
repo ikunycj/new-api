@@ -18,6 +18,9 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -181,7 +184,7 @@ func TestFingerprintTestPropagatesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result := testChannelWithFingerprint(ctx, channel, userID, "gpt-4o", "", modelTestTokenName)
+	result := testChannelWithFingerprint(ctx, channel, userID, "gpt-4o", "", modelTestTokenName, nil)
 	require.Error(t, result.localErr)
 	assert.ErrorIs(t, result.localErr, context.Canceled)
 	assert.Empty(t, transport.snapshot())
@@ -197,7 +200,7 @@ func TestFingerprintTestPropagatesUpstreamFailure(t *testing.T) {
 	before := model.ChannelProbeState{ChannelID: channel.Id, IQLeaseUntil: now + 300, LeaseUntil: now + 220, LastSuccess: true}
 	require.NoError(t, model.DB.Create(&before).Error)
 
-	result := testChannelWithFingerprint(t.Context(), channel, userID, "gpt-4o", "", channelProbeTokenName)
+	result := testChannelWithFingerprint(t.Context(), channel, userID, "gpt-4o", "", channelProbeTokenName, common.GetPointer(channelProbeLogGroupRatio))
 	require.Error(t, result.localErr)
 	assert.Equal(t, http.StatusServiceUnavailable, result.upstreamFailureStatus)
 	assert.Len(t, transport.snapshot(), 3)
@@ -421,8 +424,23 @@ func TestFingerprintManualAndScheduledResults(t *testing.T) {
 	setupFingerprintTestDetector(t)
 	require.NoError(t, model.LOG_DB.AutoMigrate(&model.Log{}))
 	previousExport := common.DataExportEnabled
+	previousBillingRate := operation_setting.BillingUSDToCNYRate
+	previousGroupRatios := ratio_setting.GroupRatio2JSONString()
 	common.DataExportEnabled, common.LogConsumeEnabled = false, true
-	t.Cleanup(func() { common.DataExportEnabled = previousExport })
+	operation_setting.BillingUSDToCNYRate = 1
+	t.Cleanup(func() {
+		common.DataExportEnabled = previousExport
+		operation_setting.BillingUSDToCNYRate = previousBillingRate
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroupRatios))
+	})
+	groupRatios := ratio_setting.GetGroupRatioCopy()
+	groupRatios["default"] = 2
+	groupRatiosJSON, err := common.Marshal(groupRatios)
+	require.NoError(t, err)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(string(groupRatiosJSON)))
+	withTieredBillingConfig(t, map[string]string{"gpt-4o": billing_setting.BillingModeTieredExpr}, map[string]string{
+		"gpt-4o": `tier("base", p * 2 + c * 6)`,
+	})
 	channel.Status, channel.IQProbeEnabled, channel.IQProbeSampleCount = common.ChannelStatusEnabled, true, 1
 	channel.OtherInfo = `{"iq_probe_at":123,"iq_probe_prediction":"gpt-4o","iq_probe_model_confidences":{"gpt-4o":0.82}}`
 	require.NoError(t, model.DB.Save(channel).Error)
@@ -485,9 +503,27 @@ func TestFingerprintManualAndScheduledResults(t *testing.T) {
 	require.NoError(t, common.Unmarshal(runs[1].Analysis, &savedAnalysis))
 	assert.Equal(t, analysis.Prediction, savedAnalysis.Prediction)
 	assert.Equal(t, analysis.Probability, savedAnalysis.Probability)
-	var sources []string
-	require.NoError(t, model.LOG_DB.Model(&model.Log{}).Where("channel_id = ? AND type = ?", channel.Id, model.LogTypeConsume).Order("id").Pluck("token_name", &sources).Error)
-	assert.Equal(t, []string{modelTestTokenName, channelProbeTokenName}, sources)
+	var logs []model.Log
+	require.NoError(t, model.LOG_DB.Where("channel_id = ? AND type = ?", channel.Id, model.LogTypeConsume).Order("id").Find(&logs).Error)
+	require.Len(t, logs, 2)
+	for i, expected := range []struct {
+		tokenName  string
+		groupRatio float64
+		quota      int
+	}{
+		{modelTestTokenName, 2.0, 1922},
+		{channelProbeTokenName, 0.01, 10},
+	} {
+		var pricing struct {
+			BillingMode string  `json:"billing_mode"`
+			GroupRatio  float64 `json:"group_ratio"`
+		}
+		require.NoError(t, common.UnmarshalJsonStr(logs[i].Other, &pricing))
+		assert.Equal(t, expected.tokenName, logs[i].TokenName)
+		assert.Equal(t, billing_setting.BillingModeTieredExpr, pricing.BillingMode)
+		assert.Equal(t, expected.groupRatio, pricing.GroupRatio)
+		assert.Equal(t, expected.quota, logs[i].Quota)
+	}
 }
 
 func TestCopiedChannelStartsWithoutFingerprintHistory(t *testing.T) {

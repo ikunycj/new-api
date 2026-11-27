@@ -18,7 +18,7 @@ const (
 	channelProbeRandomDelayWindow = time.Minute
 	channelProbeTimeout           = 240 * time.Second
 	channelProbeLeaseSeconds      = int64(360)
-	channelHealthProbeGroupRatio  = 0.01
+	channelProbeLogGroupRatio     = 0.01
 )
 
 // One system-task lease owns this continuous dispatcher. Individual channel
@@ -102,7 +102,7 @@ func (h channelProbeHandler) Run(ctx context.Context, task *model.SystemTask, ru
 func testChannelHealth(ctx context.Context, channel *model.Channel, userID int) testResult {
 	return testChannelWithPromptEngine(
 		ctx, channel, userID, channel.GetTestModel(), "", shouldUseStreamForAutomaticChannelTest(channel),
-		channelProbeTokenName, "", "", channelIQTestEnginePelican, common.GetPointer(channelHealthProbeGroupRatio),
+		channelProbeTokenName, "", "", channelIQTestEnginePelican, common.GetPointer(channelProbeLogGroupRatio),
 	)
 }
 
@@ -430,7 +430,7 @@ func runChannelIQProbe(ctx context.Context, channelID, testUserID int) channelPr
 	probeCtx, cancel := context.WithTimeout(ctx, channelProbeTimeout)
 	defer cancel()
 	started := time.Now()
-	result := testChannelWithFingerprint(probeCtx, channel, testUserID, channel.GetTestModel(), "", channelProbeTokenName)
+	result := testChannelWithFingerprint(probeCtx, channel, testUserID, channel.GetTestModel(), "", channelProbeTokenName, common.GetPointer(channelProbeLogGroupRatio))
 	if ctx.Err() != nil {
 		return channelProbeResult{}
 	}

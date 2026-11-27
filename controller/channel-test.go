@@ -95,7 +95,7 @@ func loadFingerprintDetector(ctx context.Context) (*lmfpd.Detector, error) {
 	return detector, nil
 }
 
-func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, testUserID int, testModel, endpointType, tokenName string) testResult {
+func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, testUserID int, testModel, endpointType, tokenName string, logGroupRatio *float64) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -125,7 +125,7 @@ func testChannelWithFingerprint(ctx context.Context, channel *model.Channel, tes
 			}
 			break
 		}
-		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint, nil)
+		result := testChannelWithPromptEngine(ctx, channel, testUserID, testModel, endpointType, false, tokenName, "", challenge.Prompt, channelIQTestEngineFingerprint, logGroupRatio)
 		if result.localErr != nil {
 			lastFailure = result
 			continue
@@ -1859,7 +1859,7 @@ func TestChannel(c *gin.Context) {
 		case channelIQTestEnginePelican:
 			result = testChannelWithPrompt(requestCtx, channel, testUserID, testModel, endpointType, false, modelTestTokenName, "", channelIQTestPrompt)
 		case channelIQTestEngineFingerprint:
-			result = testChannelWithFingerprint(requestCtx, channel, testUserID, testModel, endpointType, modelTestTokenName)
+			result = testChannelWithFingerprint(requestCtx, channel, testUserID, testModel, endpointType, modelTestTokenName, nil)
 		default:
 			common.ApiError(c, errors.New("无效的降智测试引擎"))
 			return
