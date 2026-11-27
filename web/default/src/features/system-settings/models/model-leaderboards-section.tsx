@@ -16,131 +16,38 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { isAxiosError } from 'axios'
-import { useId, useState } from 'react'
-import { toast } from 'sonner'
+import { useId } from 'react'
 
 import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  MODEL_LEADERBOARDS_QUERY_KEY,
-  type ModelLeaderboards,
-} from '@/hooks/use-model-leaderboards'
-import { api } from '@/lib/api'
 
 import {
   SettingsSwitchContent,
   SettingsSwitchRow,
 } from '../components/settings-form-layout'
+import {
+  leaderboardErrorMessage,
+  type useModelLeaderboardSettings,
+} from './use-model-leaderboard-settings'
 
-type LeaderboardSettings = {
-  enabled: boolean
-  recommended_models: string[]
-}
-
-type LeaderboardResponse = {
-  success: boolean
-  message: string
-  data?: ModelLeaderboards & LeaderboardSettings
-}
-
-const leaderboardsPath = '/api/option/model_leaderboards'
-const settingsQueryKey = ['admin', 'model-leaderboards'] as const
 const beijingDateTime = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
   dateStyle: 'medium',
   timeStyle: 'short',
 })
 
-function readLeaderboardResponse(response: LeaderboardResponse) {
-  if (!response.success || !response.data) {
-    throw new Error(response.message || '无法读取模型排序榜单')
-  }
-  return response.data
+type ModelLeaderboardsSectionProps = {
+  settings: ReturnType<typeof useModelLeaderboardSettings>
+  isSaving: boolean
 }
 
-function leaderboardErrorMessage(error: Error, fallback: string) {
-  if (isAxiosError<LeaderboardResponse>(error)) {
-    return error.response?.data?.message || fallback
-  }
-  return error.message || fallback
-}
-
-export function ModelLeaderboardsSection() {
+export function ModelLeaderboardsSection(props: ModelLeaderboardsSectionProps) {
   const id = useId()
-  const queryClient = useQueryClient()
-  const [draft, setDraft] = useState<{
-    enabled?: boolean
-    recommendedModels?: string[]
-  }>({})
-  const query = useQuery({
-    queryKey: settingsQueryKey,
-    queryFn: async () => {
-      const { data } = await api.get<LeaderboardResponse>(leaderboardsPath, {
-        skipBusinessError: true,
-        skipErrorHandler: true,
-      })
-      return readLeaderboardResponse(data)
-    },
-  })
-
-  function refreshModelOrder(data: ModelLeaderboards & LeaderboardSettings) {
-    queryClient.setQueryData(settingsQueryKey, data)
-    return Promise.all([
-      queryClient.invalidateQueries({ queryKey: MODEL_LEADERBOARDS_QUERY_KEY }),
-      queryClient.invalidateQueries({ queryKey: ['status'] }),
-    ])
-  }
-
-  const save = useMutation({
-    mutationFn: async (settings: LeaderboardSettings) => {
-      const { data } = await api.put<LeaderboardResponse>(
-        leaderboardsPath,
-        settings,
-        { skipBusinessError: true, skipErrorHandler: true }
-      )
-      return readLeaderboardResponse(data)
-    },
-    onSuccess: (data) => {
-      setDraft({})
-      toast.success('已保存榜单设置')
-      return refreshModelOrder(data)
-    },
-    onError: (error) =>
-      toast.error(leaderboardErrorMessage(error, '保存榜单设置失败')),
-  })
-
-  const sync = useMutation({
-    mutationFn: async () => {
-      const { data } = await api.post<LeaderboardResponse>(
-        `${leaderboardsPath}/sync`,
-        undefined,
-        { timeout: 45_000, skipBusinessError: true, skipErrorHandler: true }
-      )
-      return readLeaderboardResponse(data)
-    },
-    onSuccess: (data) => {
-      toast.success('已同步三个能力榜单')
-      return refreshModelOrder(data)
-    },
-    // Keep the upstream failure visible in the section until the next attempt.
-    onError: () => {},
-  })
-
+  const { query, sync, enabled, recommendedModels, setDraft } = props.settings
   const saved = query.data
-  const enabled = draft.enabled ?? saved?.enabled
-  const savedRecommendedModels = saved?.recommended_models ?? []
-  const recommendedModels = draft.recommendedModels ?? savedRecommendedModels
-  const isBusy = save.isPending || sync.isPending
-  const hasChanges =
-    enabled !== saved?.enabled ||
-    recommendedModels.length !== savedRecommendedModels.length ||
-    recommendedModels.some(
-      (model, index) => model !== savedRecommendedModels[index]
-    )
+  const isBusy = props.isSaving || sync.isPending
 
   return (
     <section aria-labelledby={`${id}-title`} className='space-y-4'>
@@ -196,7 +103,7 @@ export function ModelLeaderboardsSection() {
               checked={enabled}
               disabled={isBusy}
               onCheckedChange={(checked) =>
-                setDraft({ ...draft, enabled: checked })
+                setDraft((current) => ({ ...current, enabled: checked }))
               }
             />
           </SettingsSwitchRow>
@@ -256,18 +163,6 @@ export function ModelLeaderboardsSection() {
               disabled={isBusy}
             />
           </div>
-
-          <Button
-            disabled={isBusy || !hasChanges}
-            onClick={() =>
-              save.mutate({
-                enabled,
-                recommended_models: recommendedModels,
-              })
-            }
-          >
-            {save.isPending ? '保存中…' : '保存榜单设置'}
-          </Button>
         </>
       )}
     </section>

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -59,6 +59,7 @@ import {
   type GlobalModelSettingsRawValues,
 } from './global-settings-form'
 import { ModelLeaderboardsSection } from './model-leaderboards-section'
+import { useModelLeaderboardSettings } from './use-model-leaderboard-settings'
 
 type GlobalSettingsCardProps = {
   defaultValues: GlobalModelSettingsRawValues
@@ -79,6 +80,10 @@ function appendUnknownOptions(
 export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const leaderboards = useModelLeaderboardSettings()
+  const [isSaving, setIsSaving] = useState(false)
+  const isLeaderboardSyncBlockingSave =
+    leaderboards.hasChanges && leaderboards.sync.isPending
   const defaultPassThrough =
     props.defaultValues['global.pass_through_request_enabled']
   const defaultThinkingBlacklist =
@@ -146,6 +151,8 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
   const pingEnabled = form.watch('general_setting.ping_interval_enabled')
 
   const onSubmit = async (values: GlobalModelSettingsFormValues) => {
+    if (isSaving || isLeaderboardSyncBlockingSave) return
+
     const flattenedDefaults = canonicalizeGlobalModelSettings(
       props.defaultValues
     )
@@ -155,25 +162,36 @@ export function GlobalSettingsCard(props: GlobalSettingsCardProps) {
         value !== flattenedDefaults[key as keyof GlobalModelSettingsRawValues]
     )
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && !leaderboards.hasChanges) {
       toast.info(t('No changes to save'))
       return
     }
 
-    for (const [key, value] of updates) {
-      await updateOption.mutateAsync({ key, value })
+    setIsSaving(true)
+    try {
+      for (const [key, value] of updates) {
+        await updateOption.mutateAsync({ key, value })
+      }
+      await leaderboards.saveChanges()
+    } catch {
+      // The mutations display save errors.
+    } finally {
+      setIsSaving(false)
     }
   }
 
+  const submit = form.handleSubmit(onSubmit)
+
   return (
     <SettingsSection title={t('Global Model Configuration')}>
-      <ModelLeaderboardsSection />
+      <ModelLeaderboardsSection settings={leaderboards} isSaving={isSaving} />
       <Separator />
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+        <SettingsForm onSubmit={submit}>
           <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
+            onSave={submit}
+            isSaving={isSaving}
+            isSaveDisabled={isLeaderboardSyncBlockingSave}
           />
 
           <div className='space-y-6 lg:col-span-2'>
