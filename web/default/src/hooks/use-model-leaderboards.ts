@@ -30,7 +30,7 @@ interface ModelLeaderboardEntry {
 }
 
 export interface ModelLeaderboards {
-  default: ModelLeaderboardKind
+  recommended_models: string[]
   updated_at?: string
   boards: Record<ModelLeaderboardKind, ModelLeaderboardEntry[]>
 }

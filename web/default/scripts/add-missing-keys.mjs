@@ -1860,32 +1860,37 @@ const leaderboardTranslations = {
     'Agent capability',
     'Coding capability',
     'Chat capability',
+    'Best Value',
   ],
-  zh: ['排序规则', 'Agent能力', 'Coding能力', 'Chat能力'],
-  'zh-TW': ['排序規則', 'Agent 能力', 'Coding 能力', 'Chat 能力'],
+  zh: ['排序规则', 'Agent能力', 'Coding能力', 'Chat能力', '性价比优先'],
+  'zh-TW': ['排序規則', 'Agent 能力', 'Coding 能力', 'Chat 能力', '性價比優先'],
   fr: [
     'Critères de tri',
     'Capacité d’agent',
     'Capacité de programmation',
     'Capacité conversationnelle',
+    'Meilleur rapport qualité-prix',
   ],
   ja: [
     '並び替えルール',
     'エージェント能力',
     'コーディング能力',
     'チャット能力',
+    'コスパ優先',
   ],
   ru: [
     'Правила сортировки',
     'Возможности агента',
     'Написание кода',
     'Ведение диалога',
+    'Лучшее соотношение цены и качества',
   ],
   vi: [
     'Quy tắc sắp xếp',
     'Năng lực tác tử',
     'Năng lực lập trình',
     'Năng lực hội thoại',
+    'Đáng tiền nhất',
   ],
 }
 for (const [locale, values] of Object.entries(leaderboardTranslations)) {
@@ -1895,6 +1900,10 @@ for (const [locale, values] of Object.entries(leaderboardTranslations)) {
     Object.fromEntries(keys.map((key, index) => [key, values[index]]))
   )
 }
+Object.assign(newKeys.zh, {
+  'Price: Low to High': '价格从低到高',
+  'Price: High to Low': '价格从高到低',
+})
 
 const errorSelfCheckTranslations = {
   en: {

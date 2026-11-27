@@ -16,8 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SORT_OPTIONS } from '../constants'
-import type { PricingModel } from '../types'
+import { QUOTA_TYPE_VALUES, SORT_OPTIONS, type SortOption } from '../constants'
+import type { PricingDisplayModel, PricingModel } from '../types'
+import { getDynamicPricingTiers, isDynamicPricingModel } from './dynamic-price'
+import { calculateTokenPrice } from './price'
 
 // ----------------------------------------------------------------------------
 // Filter Utilities
@@ -26,7 +28,10 @@ import type { PricingModel } from '../types'
 /**
  * Filter models by search query
  */
-function filterBySearch(models: PricingModel[], query: string): PricingModel[] {
+function filterBySearch(
+  models: PricingDisplayModel[],
+  query: string
+): PricingDisplayModel[] {
   if (!query) return models
 
   const lowerQuery = query.trim().toLowerCase()
@@ -44,9 +49,9 @@ function filterBySearch(models: PricingModel[], query: string): PricingModel[] {
  * Filter models by vendor
  */
 function filterByVendor(
-  models: PricingModel[],
+  models: PricingDisplayModel[],
   vendors: readonly string[]
-): PricingModel[] {
+): PricingDisplayModel[] {
   if (vendors.length === 0) return models
   const selectedVendors = new Set(vendors)
   return models.filter((model) => selectedVendors.has(model.vendor_name || ''))
@@ -55,10 +60,10 @@ function filterByVendor(
 /**
  * Filter models by group
  */
-export function filterByGroup(
-  models: PricingModel[],
+export function filterByGroup<T extends PricingModel>(
+  models: T[],
   groups: readonly string[]
-): PricingModel[] {
+): T[] {
   if (groups.length === 0) return models
   const selectedGroups = new Set(groups)
   return models.filter((model) =>
@@ -66,25 +71,55 @@ export function filterByGroup(
   )
 }
 
-/**
- * Get model price for sorting
- */
-function getModelPrice(model: PricingModel): number {
-  return model.quota_type === 0 ? model.model_ratio : model.model_price || 0
+function getModelInputPrice(model: PricingDisplayModel): number | undefined {
+  if (isDynamicPricingModel(model)) {
+    for (const tier of getDynamicPricingTiers(model)) {
+      // Use the first input price shown on the card. Zero token rates in
+      // parsed tiers also represent unconfigured fields and are not shown.
+      if (
+        tier.billingUnit === 'token' &&
+        typeof tier.inputPrice === 'number' &&
+        tier.inputPrice > 0
+      ) {
+        return tier.inputPrice * model.display_group_ratio
+      }
+    }
+    return undefined
+  }
+
+  if (model.quota_type === QUOTA_TYPE_VALUES.TOKEN) {
+    return calculateTokenPrice(model, 'input', model.display_group_ratio)
+  }
 }
 
 /**
  * Sort models by specified option
  */
 export function sortModels(
-  models: PricingModel[],
-  sortBy: string,
+  models: PricingDisplayModel[],
+  sortBy: SortOption,
   rankedModelOrder: readonly string[] = []
-): PricingModel[] {
+): PricingDisplayModel[] {
+  if (sortBy === SORT_OPTIONS.PRICE_LOW || sortBy === SORT_OPTIONS.PRICE_HIGH) {
+    const direction = sortBy === SORT_OPTIONS.PRICE_LOW ? 1 : -1
+    return models
+      .map((model) => ({ model, price: getModelInputPrice(model) }))
+      .sort((a, b) => {
+        if (a.price === b.price) return 0
+        if (a.price === undefined) return 1
+        if (b.price === undefined) return -1
+        return direction * (a.price - b.price)
+      })
+      .map(({ model }) => model)
+  }
+
   const sorted = [...models]
 
   switch (sortBy) {
-    case SORT_OPTIONS.RECOMMENDED:
+    case SORT_OPTIONS.AGENT:
+    case SORT_OPTIONS.CODING:
+    case SORT_OPTIONS.CHAT:
+    case SORT_OPTIONS.BEST_VALUE: {
       const modelRanks = new Map<string, number>(
         rankedModelOrder.map((modelName, index) => [modelName, index])
       )
@@ -98,16 +133,11 @@ export function sortModels(
         )
       })
       break
+    }
     case SORT_OPTIONS.NAME:
       sorted.sort((a, b) =>
         (a.model_name || '').localeCompare(b.model_name || '')
       )
-      break
-    case SORT_OPTIONS.PRICE_LOW:
-      sorted.sort((a, b) => getModelPrice(a) - getModelPrice(b))
-      break
-    case SORT_OPTIONS.PRICE_HIGH:
-      sorted.sort((a, b) => getModelPrice(b) - getModelPrice(a))
       break
   }
 
@@ -118,15 +148,15 @@ export function sortModels(
  * Apply all filters and sorting to models
  */
 export function filterAndSortModels(
-  models: PricingModel[],
+  models: PricingDisplayModel[],
   filters: {
     search: string
     vendors: readonly string[]
     groups: readonly string[]
-    sortBy: string
+    sortBy: SortOption
   },
   rankedModelOrder: readonly string[] = []
-): PricingModel[] {
+): PricingDisplayModel[] {
   let result = filterBySearch(models, filters.search)
   result = filterByVendor(result, filters.vendors)
   result = filterByGroup(result, filters.groups)

@@ -45,13 +45,11 @@ func TestStatus(c *gin.Context) {
 
 func GetStatus(c *gin.Context) {
 	defaultModelOrder := []string{}
-	entries, err := model.CachedDefaultModelLeaderboard()
+	recommendedModels, err := model.CachedRecommendedModels()
 	if err != nil {
 		common.SysError("read default model order: " + err.Error())
-	} else if len(entries) > 0 {
-		for _, entry := range service.MatchModelLeaderboardEntries(entries, model.GetPricing()) {
-			defaultModelOrder = append(defaultModelOrder, entry.ModelIDs...)
-		}
+	} else if len(recommendedModels) > 0 {
+		defaultModelOrder = service.MatchRecommendedModels(recommendedModels, model.GetPricing())
 	}
 
 	cs := console_setting.GetConsoleSetting()

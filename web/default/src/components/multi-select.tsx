@@ -16,7 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Add01Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, DragDropVerticalIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -60,6 +60,7 @@ interface MultiSelectProps {
   emptyText?: string
   /** Optional `id` to wire labels/aria-describedby to the input. */
   id?: string
+  'aria-describedby'?: string
   /** Disable the entire control. */
   disabled?: boolean
   /** Hide selected values from the dropdown when they are absent from options. */
@@ -79,6 +80,8 @@ interface MultiSelectProps {
    * instead of being inert. The remove (×) button keeps its own behaviour.
    */
   copyChipOnClick?: boolean
+  /** Enables reordering by drag handle or arrow keys with an accessible label. */
+  reorderLabel?: (label: string, position: number) => string
 }
 
 const COMMA_REGEX = /[,，\n]/
@@ -125,6 +128,7 @@ export function MultiSelect(props: MultiSelectProps) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
   const [expanded, setExpanded] = React.useState(false)
+  const [dropIndex, setDropIndex] = React.useState<number>()
 
   const selectedSet = React.useMemo(
     () => new Set(props.selected),
@@ -253,6 +257,31 @@ export function MultiSelect(props: MultiSelectProps) {
     }
   }
 
+  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = event.clipboardData.getData('text')
+    if (!text.includes('\n')) return
+    event.preventDefault()
+    addValues(text.split(COMMA_REGEX))
+    setInputValue('')
+  }
+
+  const moveChip = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= props.selected.length) return
+    const next = [...props.selected]
+    const moved = next.splice(from, 1)
+    next.splice(to, 0, ...moved)
+    props.onChange(next)
+  }
+
+  const chipIndexAtPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const chip = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-reorder-index]')
+    if (chip && chipsAnchorRef.current?.contains(chip)) {
+      return Number(chip.dataset.reorderIndex)
+    }
+  }
+
   return (
     <Combobox
       multiple
@@ -288,10 +317,81 @@ export function MultiSelect(props: MultiSelectProps) {
 
             return (
               <>
-                {visibleValues.map((value) => {
+                {visibleValues.map((value, index) => {
                   const label = labelMap.get(value) ?? value
                   return (
-                    <ComboboxChip key={value}>
+                    <ComboboxChip
+                      key={value}
+                      data-reorder-index={
+                        props.reorderLabel ? index : undefined
+                      }
+                      className={cn(
+                        props.reorderLabel && 'min-w-0 max-w-full',
+                        index === dropIndex && 'ring-ring ring-1'
+                      )}
+                    >
+                      {props.reorderLabel && (
+                        <button
+                          type='button'
+                          aria-label={props.reorderLabel(label, index + 1)}
+                          aria-keyshortcuts='ArrowLeft ArrowRight'
+                          disabled={props.disabled}
+                          className='text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-1 inline-flex size-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm select-none focus-visible:ring-2 active:cursor-grabbing'
+                          onKeyDown={(event) => {
+                            event.stopPropagation()
+                            if (
+                              event.key !== 'ArrowLeft' &&
+                              event.key !== 'ArrowRight'
+                            ) {
+                              return
+                            }
+                            event.preventDefault()
+                            moveChip(
+                              index,
+                              index + (event.key === 'ArrowLeft' ? -1 : 1)
+                            )
+                          }}
+                          onPointerDown={(event) => {
+                            if (!event.isPrimary || event.button !== 0) return
+                            event.stopPropagation()
+                            event.currentTarget.setPointerCapture(
+                              event.pointerId
+                            )
+                            setOpen(false)
+                          }}
+                          onPointerMove={(event) => {
+                            if (
+                              !event.currentTarget.hasPointerCapture(
+                                event.pointerId
+                              )
+                            ) {
+                              return
+                            }
+                            const target = chipIndexAtPointer(event)
+                            setDropIndex(target === index ? undefined : target)
+                          }}
+                          onPointerUp={(event) => {
+                            if (
+                              !event.currentTarget.hasPointerCapture(
+                                event.pointerId
+                              )
+                            ) {
+                              return
+                            }
+                            const target = chipIndexAtPointer(event)
+                            if (target !== undefined) moveChip(index, target)
+                            setDropIndex(undefined)
+                          }}
+                          onLostPointerCapture={() => setDropIndex(undefined)}
+                        >
+                          <HugeiconsIcon
+                            icon={DragDropVerticalIcon}
+                            strokeWidth={2}
+                            className='pointer-events-none size-3'
+                            aria-hidden='true'
+                          />
+                        </button>
+                      )}
                       {props.copyChipOnClick ? (
                         <button
                           type='button'
@@ -354,7 +454,11 @@ export function MultiSelect(props: MultiSelectProps) {
               : undefined
           }
           onKeyDown={handleKeyDown}
+          onPaste={
+            props.allowCreate && props.reorderLabel ? handlePaste : undefined
+          }
           aria-label={placeholder}
+          aria-describedby={props['aria-describedby']}
         />
       </ComboboxChips>
 

@@ -25,28 +25,34 @@ func modelLeaderboardResponse(c *gin.Context, admin bool) {
 		common.ApiError(c, err)
 		return
 	}
-	data := gin.H{"default": settings.Default, "boards": snapshot.Boards}
+	data := gin.H{
+		"boards":             snapshot.Boards,
+		"recommended_models": settings.RecommendedModels,
+	}
 	if snapshot.UpdatedAt != nil {
 		data["updated_at"] = snapshot.UpdatedAt
 	}
 	if admin {
 		data["enabled"] = settings.Enabled
-	} else if snapshot.UpdatedAt != nil {
+	} else if snapshot.UpdatedAt != nil || len(settings.RecommendedModels) > 0 {
 		pricing := model.GetPricing()
-		for name, entries := range snapshot.Boards {
-			snapshot.Boards[name] = service.MatchModelLeaderboardEntries(entries, pricing)
+		data["recommended_models"] = service.MatchRecommendedModels(settings.RecommendedModels, pricing)
+		if snapshot.UpdatedAt != nil {
+			for name, entries := range snapshot.Boards {
+				snapshot.Boards[name] = service.MatchModelLeaderboardEntries(entries, pricing)
+			}
 		}
 	}
 	common.ApiSuccess(c, data)
 }
 
 func UpdateModelLeaderboardSettings(c *gin.Context) {
-	var settings model.ModelLeaderboardSettings
-	if err := common.DecodeJson(c.Request.Body, &settings); err != nil || !settings.Valid() {
-		common.ApiErrorMsg(c, "请选择有效的默认榜单")
+	var settings *model.ModelLeaderboardSettings
+	if err := common.DecodeJson(c.Request.Body, &settings); err != nil || settings == nil {
+		common.ApiErrorMsg(c, "榜单设置格式不正确")
 		return
 	}
-	if err := model.SaveModelLeaderboardSettings(c.Request.Context(), settings); err != nil {
+	if err := model.SaveModelLeaderboardSettings(c.Request.Context(), *settings); err != nil {
 		common.ApiError(c, err)
 		return
 	}

@@ -19,10 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useSearch } from '@tanstack/react-router'
 import { useMemo, useCallback, useState } from 'react'
 
-import {
-  useModelLeaderboards,
-  type ModelLeaderboardKind,
-} from '@/hooks/use-model-leaderboards'
+import { useModelLeaderboards } from '@/hooks/use-model-leaderboards'
 
 import {
   SORT_OPTIONS,
@@ -31,15 +28,15 @@ import {
   PRICING_CURRENCIES,
   VIEW_MODES,
   type PricingCurrency,
+  type SortOption,
   type ViewMode,
 } from '../constants'
 import { filterAndSortModels } from '../lib/filters'
-import type { PricingModel, TokenUnit } from '../types'
+import type { PricingDisplayModel, TokenUnit } from '../types'
 
 type FilterState = {
   search?: string
-  sort?: string
-  leaderboard?: ModelLeaderboardKind
+  sort?: SortOption
   vendors?: string[]
   groups?: string[]
   tokenUnit?: TokenUnit
@@ -62,7 +59,7 @@ function parseSearchValues(value?: string): string[] | undefined {
   return values && values.length > 0 ? values : undefined
 }
 
-export function useFilters(models: PricingModel[]) {
+export function useFilters(models: PricingDisplayModel[]) {
   const { data: leaderboards } = useModelLeaderboards()
   const search = useSearch({ from: '/pricing/' })
   const [filterState, setFilterState] = useState<FilterState>(() => ({
@@ -76,20 +73,23 @@ export function useFilters(models: PricingModel[]) {
   }))
 
   const searchInput = filterState.search || ''
-  const sortBy = filterState.sort || SORT_OPTIONS.RECOMMENDED
-  const activeLeaderboard =
-    filterState.leaderboard ?? leaderboards?.default ?? 'coding'
-  const selectedLeaderboard =
-    sortBy === SORT_OPTIONS.RECOMMENDED ? activeLeaderboard : null
-  const leaderboardEntries = selectedLeaderboard
-    ? leaderboards?.boards[selectedLeaderboard]
-    : undefined
+  const sortBy = filterState.sort ?? SORT_OPTIONS.BEST_VALUE
+  const leaderboardEntries =
+    sortBy === SORT_OPTIONS.AGENT ||
+    sortBy === SORT_OPTIONS.CODING ||
+    sortBy === SORT_OPTIONS.CHAT
+      ? leaderboards?.boards[sortBy]
+      : undefined
+  const recommendedModels = leaderboards?.recommended_models
   const rankedModelOrder = useMemo(() => {
-    const rankedEntries = [...(leaderboardEntries ?? [])].sort(
+    if (sortBy === SORT_OPTIONS.BEST_VALUE) return recommendedModels ?? []
+    if (!leaderboardEntries) return []
+
+    const rankedEntries = [...leaderboardEntries].sort(
       (a, b) => a.rank - b.rank
     )
     return [...new Set(rankedEntries.flatMap((entry) => entry.model_ids ?? []))]
-  }, [leaderboardEntries])
+  }, [sortBy, recommendedModels, leaderboardEntries])
   const vendorFilters = useMemo(
     () => filterState.vendors ?? [],
     [filterState.vendors]
@@ -122,16 +122,8 @@ export function useFilters(models: PricingModel[]) {
     (v: string) => updateFilters({ search: v || undefined }),
     [updateFilters]
   )
-  const setSortBy = useCallback(
-    (v: string) =>
-      updateFilters({
-        sort: v === SORT_OPTIONS.RECOMMENDED ? undefined : v,
-      }),
-    [updateFilters]
-  )
-  const setLeaderboard = useCallback(
-    (value: ModelLeaderboardKind) =>
-      updateFilters({ leaderboard: value, sort: undefined }),
+  const setSortingRule = useCallback(
+    (sort: SortOption) => updateFilters({ sort }),
     [updateFilters]
   )
   const toggleSelection = useCallback(
@@ -210,16 +202,14 @@ export function useFilters(models: PricingModel[]) {
 
   return {
     searchInput,
-    sortBy,
-    selectedLeaderboard,
+    sortingRule: sortBy,
     vendorFilters,
     groupFilters,
     tokenUnit,
     displayCurrency,
     viewMode,
     setSearchInput,
-    setSortBy,
-    setLeaderboard,
+    setSortingRule,
     toggleVendorFilter,
     toggleGroupFilter,
     setTokenUnit,

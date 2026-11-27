@@ -21,13 +21,12 @@ import { isAxiosError } from 'axios'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
 
+import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import {
   MODEL_LEADERBOARDS_QUERY_KEY,
-  type ModelLeaderboardKind,
   type ModelLeaderboards,
 } from '@/hooks/use-model-leaderboards'
 import { api } from '@/lib/api'
@@ -39,7 +38,7 @@ import {
 
 type LeaderboardSettings = {
   enabled: boolean
-  default: ModelLeaderboardKind
+  recommended_models: string[]
 }
 
 type LeaderboardResponse = {
@@ -50,12 +49,6 @@ type LeaderboardResponse = {
 
 const leaderboardsPath = '/api/option/model_leaderboards'
 const settingsQueryKey = ['admin', 'model-leaderboards'] as const
-const leaderboardOptions = [
-  { kind: 'agent', label: 'Agent能力' },
-  { kind: 'coding', label: 'Coding能力' },
-  { kind: 'chat', label: 'Chat能力' },
-] as const
-
 const beijingDateTime = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
   dateStyle: 'medium',
@@ -79,7 +72,10 @@ function leaderboardErrorMessage(error: Error, fallback: string) {
 export function ModelLeaderboardsSection() {
   const id = useId()
   const queryClient = useQueryClient()
-  const [draft, setDraft] = useState<Partial<LeaderboardSettings>>({})
+  const [draft, setDraft] = useState<{
+    enabled?: boolean
+    recommendedModels?: string[]
+  }>({})
   const query = useQuery({
     queryKey: settingsQueryKey,
     queryFn: async () => {
@@ -136,10 +132,15 @@ export function ModelLeaderboardsSection() {
 
   const saved = query.data
   const enabled = draft.enabled ?? saved?.enabled
-  const defaultBoard = draft.default ?? saved?.default
+  const savedRecommendedModels = saved?.recommended_models ?? []
+  const recommendedModels = draft.recommendedModels ?? savedRecommendedModels
   const isBusy = save.isPending || sync.isPending
   const hasChanges =
-    enabled !== saved?.enabled || defaultBoard !== saved?.default
+    enabled !== saved?.enabled ||
+    recommendedModels.length !== savedRecommendedModels.length ||
+    recommendedModels.some(
+      (model, index) => model !== savedRecommendedModels[index]
+    )
 
   return (
     <section aria-labelledby={`${id}-title`} className='space-y-4'>
@@ -177,7 +178,7 @@ export function ModelLeaderboardsSection() {
         </div>
       )}
 
-      {saved && enabled !== undefined && defaultBoard && (
+      {saved && enabled !== undefined && (
         <>
           <SettingsSwitchRow>
             <SettingsSwitchContent>
@@ -200,53 +201,7 @@ export function ModelLeaderboardsSection() {
             />
           </SettingsSwitchRow>
 
-          <div className='space-y-2'>
-            <p id={`${id}-default`} className='text-sm font-medium'>
-              默认榜单
-            </p>
-            <RadioGroup
-              aria-labelledby={`${id}-default`}
-              value={defaultBoard}
-              className='grid-cols-1 sm:grid-cols-3'
-              disabled={isBusy}
-              onValueChange={(value) => {
-                const option = leaderboardOptions.find(
-                  ({ kind }) => kind === value
-                )
-                if (option) setDraft({ ...draft, default: option.kind })
-              }}
-            >
-              {leaderboardOptions.map(({ kind, label }) => (
-                <div
-                  key={kind}
-                  className='flex items-center gap-2 rounded-lg border px-3 py-2.5'
-                >
-                  <RadioGroupItem
-                    id={`${id}-${kind}`}
-                    value={kind}
-                    aria-describedby={`${id}-${kind}-count`}
-                  />
-                  <Label htmlFor={`${id}-${kind}`} className='cursor-pointer'>
-                    {label}
-                  </Label>
-                  <span
-                    id={`${id}-${kind}-count`}
-                    className='text-muted-foreground ml-auto text-xs tabular-nums'
-                  >
-                    {saved.boards[kind].length} 条
-                  </span>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-
           <div className='flex flex-wrap items-center gap-2'>
-            <Button
-              disabled={isBusy || !hasChanges}
-              onClick={() => save.mutate({ enabled, default: defaultBoard })}
-            >
-              {save.isPending ? '保存中…' : '保存榜单设置'}
-            </Button>
             <Button
               variant='outline'
               disabled={isBusy}
@@ -265,6 +220,54 @@ export function ModelLeaderboardsSection() {
               {leaderboardErrorMessage(sync.error, '同步榜单失败')}
             </p>
           )}
+
+          <div className='space-y-2 border-t pt-4'>
+            <Label
+              htmlFor={`${id}-recommended-models`}
+              className='font-semibold'
+            >
+              推荐模型榜单
+            </Label>
+            <p
+              id={`${id}-recommended-models-hint`}
+              className='text-muted-foreground text-xs'
+            >
+              输入模型 ID
+              后按回车添加。拖动标签左侧手柄，或聚焦手柄后按左右方向键调整顺序。模型广场按此顺序展示「性价比优先」的推荐模型。
+            </p>
+            <MultiSelect
+              id={`${id}-recommended-models`}
+              aria-describedby={`${id}-recommended-models-hint`}
+              selected={recommendedModels}
+              options={[]}
+              onChange={(models) =>
+                setDraft((current) => ({
+                  ...current,
+                  recommendedModels: models,
+                }))
+              }
+              allowCreate
+              placeholder='输入模型 ID'
+              createLabel='Add model "{{value}}"'
+              emptyText='暂无推荐模型'
+              reorderLabel={(label, position) =>
+                `移动 ${label}，第 ${position} 位`
+              }
+              disabled={isBusy}
+            />
+          </div>
+
+          <Button
+            disabled={isBusy || !hasChanges}
+            onClick={() =>
+              save.mutate({
+                enabled,
+                recommended_models: recommendedModels,
+              })
+            }
+          >
+            {save.isPending ? '保存中…' : '保存榜单设置'}
+          </Button>
         </>
       )}
     </section>

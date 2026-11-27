@@ -22,6 +22,23 @@ func SyncModelLeaderboards(ctx context.Context) error {
 	})
 }
 
+func MatchRecommendedModels(recommendedModels []string, pricing []model.Pricing) []string {
+	matched := make([]string, 0, len(recommendedModels))
+	if len(recommendedModels) == 0 {
+		return matched
+	}
+	catalog := make(map[string]struct{}, len(pricing))
+	for _, item := range pricing {
+		catalog[item.ModelName] = struct{}{}
+	}
+	for _, name := range recommendedModels {
+		if _, ok := catalog[name]; ok {
+			matched = append(matched, name)
+		}
+	}
+	return matched
+}
+
 // MatchModelLeaderboardEntries connects Arena display names to the current
 // catalog. Exact effort variants keep their rank. An unqualified catalog model
 // takes the best rank published for its base model.

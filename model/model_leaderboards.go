@@ -20,8 +20,8 @@ const (
 )
 
 type ModelLeaderboardSettings struct {
-	Enabled bool   `json:"enabled"`
-	Default string `json:"default"`
+	Enabled           bool     `json:"enabled"`
+	RecommendedModels []string `json:"recommended_models"`
 }
 
 type ModelLeaderboardEntry struct {
@@ -36,28 +36,20 @@ type ModelLeaderboardSnapshot struct {
 	Boards    map[string][]ModelLeaderboardEntry `json:"boards"`
 }
 
-func (s ModelLeaderboardSettings) Valid() bool {
-	switch s.Default {
-	case ModelLeaderboardAgent, ModelLeaderboardCoding, ModelLeaderboardChat:
-		return true
-	}
-	return false
-}
-
 func GetModelLeaderboardSettings(ctx context.Context) (ModelLeaderboardSettings, error) {
-	settings := ModelLeaderboardSettings{Default: ModelLeaderboardCoding}
+	settings := ModelLeaderboardSettings{RecommendedModels: []string{}}
 	err := readModelLeaderboardOption(ctx, modelLeaderboardSettingsKey, &settings)
 	return settings, err
 }
 
 func GetModelLeaderboards(ctx context.Context) (ModelLeaderboardSettings, ModelLeaderboardSnapshot, error) {
-	settings := ModelLeaderboardSettings{Default: ModelLeaderboardCoding}
+	settings := ModelLeaderboardSettings{RecommendedModels: []string{}}
 	snapshot := ModelLeaderboardSnapshot{Boards: map[string][]ModelLeaderboardEntry{
 		ModelLeaderboardAgent: {}, ModelLeaderboardCoding: {}, ModelLeaderboardChat: {},
 	}}
 	var options []Option
-	if err := DB.WithContext(ctx).Where(commonKeyCol+" IN ?", []string{
-		modelLeaderboardSettingsKey, modelLeaderboardSnapshotKey,
+	if err := DB.WithContext(ctx).Where(map[string]any{
+		"key": []string{modelLeaderboardSettingsKey, modelLeaderboardSnapshotKey},
 	}).Find(&options).Error; err != nil {
 		return settings, snapshot, err
 	}
@@ -74,6 +66,7 @@ func GetModelLeaderboards(ctx context.Context) (ModelLeaderboardSettings, ModelL
 }
 
 func SaveModelLeaderboardSettings(ctx context.Context, settings ModelLeaderboardSettings) error {
+	settings.RecommendedModels = normalizeLookupValues(settings.RecommendedModels)
 	return saveModelLeaderboardOption(ctx, modelLeaderboardSettingsKey, settings)
 }
 
@@ -85,30 +78,23 @@ func IsModelLeaderboardOption(key string) bool {
 	return key == modelLeaderboardSettingsKey || key == modelLeaderboardSnapshotKey
 }
 
-func CachedDefaultModelLeaderboard() ([]ModelLeaderboardEntry, error) {
+func CachedRecommendedModels() ([]string, error) {
 	common.OptionMapRWMutex.RLock()
 	settingsJSON := common.OptionMap[modelLeaderboardSettingsKey]
-	snapshotJSON := common.OptionMap[modelLeaderboardSnapshotKey]
 	common.OptionMapRWMutex.RUnlock()
-	if snapshotJSON == "" {
+	if settingsJSON == "" {
 		return nil, nil
 	}
-	settings := ModelLeaderboardSettings{Default: ModelLeaderboardCoding}
-	if settingsJSON != "" {
-		if err := common.UnmarshalJsonStr(settingsJSON, &settings); err != nil {
-			return nil, err
-		}
-	}
-	var snapshot ModelLeaderboardSnapshot
-	if err := common.UnmarshalJsonStr(snapshotJSON, &snapshot); err != nil {
+	var settings ModelLeaderboardSettings
+	if err := common.UnmarshalJsonStr(settingsJSON, &settings); err != nil {
 		return nil, err
 	}
-	return snapshot.Boards[settings.Default], nil
+	return settings.RecommendedModels, nil
 }
 
 func readModelLeaderboardOption(ctx context.Context, key string, target any) error {
 	var option Option
-	err := DB.WithContext(ctx).Where(commonKeyCol+" = ?", key).Take(&option).Error
+	err := DB.WithContext(ctx).Take(&option, &Option{Key: key}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}

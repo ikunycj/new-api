@@ -18,39 +18,32 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Radio } from '@base-ui/react/radio'
 import {
-  ArrowUpDown,
+  ArrowDownAZ,
+  ArrowDownNarrowWide,
+  ArrowDownWideNarrow,
   Bot,
-  Check,
   Code,
   Grid2X2,
   MessageSquare,
+  Star,
   Table2,
 } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { RadioGroup } from '@/components/ui/radio-group'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import type { ModelLeaderboardKind } from '@/hooks/use-model-leaderboards'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
 import {
   PRICING_CURRENCIES,
+  SORT_OPTIONS,
   VIEW_MODES,
-  getSortLabels,
   type PricingCurrency,
   type SortOption,
   type ViewMode,
@@ -70,10 +63,8 @@ export interface PricingToolbarProps {
   searchInput: string
   onSearchChange: (value: string) => void
   onClearSearch: () => void
-  sortBy: string
-  onSortChange: (value: string) => void
-  selectedLeaderboard: ModelLeaderboardKind | null
-  onLeaderboardChange: (value: ModelLeaderboardKind) => void
+  sortingRule: SortOption
+  onSortingRuleChange: (value: SortOption) => void
   tokenUnit: TokenUnit
   onTokenUnitChange: (value: TokenUnit) => void
   displayCurrency: PricingCurrency
@@ -145,11 +136,26 @@ function SegmentedControl(props: {
 export function PricingToolbar(props: PricingToolbarProps) {
   const { t } = useTranslation()
   const sortingRulesLabelId = useId()
-  const sortLabels = getSortLabels(t)
-  const leaderboardOptions = [
-    { value: 'agent', label: t('Agent capability'), icon: Bot },
-    { value: 'coding', label: t('Coding capability'), icon: Code },
-    { value: 'chat', label: t('Chat capability'), icon: MessageSquare },
+  const sortingOptions = [
+    { value: SORT_OPTIONS.BEST_VALUE, label: t('Best Value'), icon: Star },
+    { value: SORT_OPTIONS.AGENT, label: t('Agent capability'), icon: Bot },
+    { value: SORT_OPTIONS.CODING, label: t('Coding capability'), icon: Code },
+    {
+      value: SORT_OPTIONS.CHAT,
+      label: t('Chat capability'),
+      icon: MessageSquare,
+    },
+    {
+      value: SORT_OPTIONS.PRICE_LOW,
+      label: t('Price: Low to High'),
+      icon: ArrowDownNarrowWide,
+    },
+    {
+      value: SORT_OPTIONS.PRICE_HIGH,
+      label: t('Price: High to Low'),
+      icon: ArrowDownWideNarrow,
+    },
+    { value: SORT_OPTIONS.NAME, label: t('Name'), icon: ArrowDownAZ },
   ] as const
 
   const handleTokenUnitChange = (value: string) => {
@@ -176,11 +182,16 @@ export function PricingToolbar(props: PricingToolbarProps) {
           </h2>
           <RadioGroup
             aria-labelledby={sortingRulesLabelId}
-            value={props.selectedLeaderboard}
-            onValueChange={props.onLeaderboardChange}
+            value={props.sortingRule}
+            onValueChange={(value) => {
+              const option = sortingOptions.find(
+                (option) => option.value === value
+              )
+              if (option) props.onSortingRuleChange(option.value)
+            }}
             className='flex flex-wrap'
           >
-            {leaderboardOptions.map(({ value, label, icon: Icon }) => (
+            {sortingOptions.map(({ value, label, icon: Icon }) => (
               <Radio.Root
                 key={value}
                 value={value}
@@ -308,39 +319,6 @@ export function PricingToolbar(props: PricingToolbarProps) {
             onChange={handleTokenUnitChange}
             ariaLabel={t('Token unit')}
           />
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  className='h-8 gap-1.5 px-3 text-xs'
-                />
-              }
-            >
-              <ArrowUpDown className='size-3.5' />
-              <span>{sortLabels[props.sortBy as SortOption] || t('Sort')}</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-44'>
-              <DropdownMenuGroup>
-                {Object.entries(sortLabels).map(([value, label]) => (
-                  <DropdownMenuItem
-                    key={value}
-                    onClick={() => props.onSortChange(value)}
-                  >
-                    <Check
-                      className={cn(
-                        props.sortBy === value ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    {label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <SegmentedControl
             options={[

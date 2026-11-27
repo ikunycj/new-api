@@ -30,15 +30,10 @@ import {
   ModelCardGrid,
   ModelDetailsDrawer,
 } from './components'
-import {
-  EXCLUDED_GROUPS,
-  FILTER_ALL,
-  PRICING_CURRENCIES,
-  VIEW_MODES,
-} from './constants'
+import { PRICING_CURRENCIES, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
-import { expandModelsByGroup } from './lib/model-helpers'
+import { expandModelsByGroup, getCatalogGroups } from './lib/model-helpers'
 
 export function Pricing() {
   const { t } = useTranslation()
@@ -57,18 +52,26 @@ export function Pricing() {
     billingUSDToCNYRate,
   } = usePricingData()
 
+  const availableGroups = useMemo(
+    () => getCatalogGroups(catalogGroups),
+    [catalogGroups]
+  )
+  const displayModels = useMemo(
+    () =>
+      expandModelsByGroup(models, availableGroups, groupRatio, catalogGroups),
+    [models, availableGroups, groupRatio, catalogGroups]
+  )
+
   const {
     searchInput,
-    sortBy,
-    selectedLeaderboard,
+    sortingRule,
     vendorFilters,
     groupFilters,
     tokenUnit,
     displayCurrency,
     viewMode,
     setSearchInput,
-    setSortBy,
-    setLeaderboard,
+    setSortingRule,
     toggleVendorFilter,
     toggleGroupFilter,
     setTokenUnit,
@@ -78,7 +81,7 @@ export function Pricing() {
     hasActiveFilters,
     clearFilters,
     clearSearch,
-  } = useFilters(models || [])
+  } = useFilters(displayModels)
   const showPricesInCny = displayCurrency === PRICING_CURRENCIES.CNY
 
   const handleModelClick = useCallback((modelName: string) => {
@@ -95,32 +98,13 @@ export function Pricing() {
     [models, selectedModelName]
   )
 
-  const availableGroups = useMemo(
-    () =>
-      Object.keys(catalogGroups || {}).filter(
-        (group) => group !== FILTER_ALL && !EXCLUDED_GROUPS.includes(group)
-      ),
-    [catalogGroups]
-  )
-
-  const displayModels = useMemo(
-    () =>
-      expandModelsByGroup(
-        filteredModels,
-        availableGroups,
-        groupRatio || {},
-        catalogGroups || {}
-      ),
-    [availableGroups, catalogGroups, filteredModels, groupRatio]
-  )
-
   const handleClearAll = useCallback(() => {
     clearFilters()
     clearSearch()
   }, [clearFilters, clearSearch])
 
   const renderPricingContent = () => {
-    if (displayModels.length === 0) {
+    if (filteredModels.length === 0) {
       return (
         <EmptyState
           searchQuery={searchInput}
@@ -133,7 +117,7 @@ export function Pricing() {
     if (viewMode === VIEW_MODES.CARD) {
       return (
         <ModelCardGrid
-          models={displayModels}
+          models={filteredModels}
           onModelClick={handleModelClick}
           priceRate={priceRate}
           usdExchangeRate={billingUSDToCNYRate}
@@ -145,7 +129,7 @@ export function Pricing() {
 
     return (
       <PricingTable
-        models={displayModels}
+        models={filteredModels}
         priceRate={priceRate}
         usdExchangeRate={billingUSDToCNYRate}
         tokenUnit={tokenUnit}
@@ -179,10 +163,8 @@ export function Pricing() {
             searchInput={searchInput}
             onSearchChange={setSearchInput}
             onClearSearch={clearSearch}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            selectedLeaderboard={selectedLeaderboard}
-            onLeaderboardChange={setLeaderboard}
+            sortingRule={sortingRule}
+            onSortingRuleChange={setSortingRule}
             tokenUnit={tokenUnit}
             onTokenUnitChange={setTokenUnit}
             displayCurrency={displayCurrency}

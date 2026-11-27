@@ -16,8 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { TFunction } from 'i18next'
-
 import type { TokenUnit } from './types'
 
 // ----------------------------------------------------------------------------
@@ -26,7 +24,10 @@ import type { TokenUnit } from './types'
 
 /** Sort options for pricing models */
 export const SORT_OPTIONS = {
-  RECOMMENDED: 'recommended',
+  BEST_VALUE: 'best-value',
+  AGENT: 'agent',
+  CODING: 'coding',
+  CHAT: 'chat',
   NAME: 'name',
   PRICE_LOW: 'price-low',
   PRICE_HIGH: 'price-high',
@@ -34,21 +35,7 @@ export const SORT_OPTIONS = {
 
 export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
 
-export const SORT_OPTION_VALUES = [
-  SORT_OPTIONS.RECOMMENDED,
-  SORT_OPTIONS.NAME,
-  SORT_OPTIONS.PRICE_LOW,
-  SORT_OPTIONS.PRICE_HIGH,
-] as const
-
-export function getSortLabels(t: TFunction): Record<SortOption, string> {
-  return {
-    [SORT_OPTIONS.RECOMMENDED]: t('Recommended'),
-    [SORT_OPTIONS.NAME]: t('Name'),
-    [SORT_OPTIONS.PRICE_LOW]: t('Price: Low to High'),
-    [SORT_OPTIONS.PRICE_HIGH]: t('Price: High to Low'),
-  }
-}
+export const SORT_OPTION_VALUES = Object.values(SORT_OPTIONS)
 
 /**
  * Empty filter values represent "all" so a configured pricing group named
